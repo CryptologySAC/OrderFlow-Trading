@@ -1,7 +1,9 @@
 {
-    "name": "cryptology_binance_stream",
+    "name": "orderflow-trading",
     "version": "0.0.1",
-    "description": "Cryptology Binance Market Stream Listener",
+    "license": "MIT",
+    "author": "Cryptology",
+    "description": "Cryptology OrderFlow Trading",
     "private": true,
     "files": [
         "dist",

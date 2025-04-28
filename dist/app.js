@@ -30,7 +30,7 @@ class BinanceStream {
         this.symbol = process.env.SYMBOL ?? "ltcusdt"; // Default to ltcusdt if not provided
         this.storage = new storage_1.Storage();
         this.storageTime = (process.env.MAX_STORAGE_TIME ??
-            1000 * 60 * 60 * 24 * 90); // 24 hrs in ms
+            1000 * 60 * 60 * 8); // 8 hrs in ms
         // this.lastFeedState = this.storage.getLastFeedState();
         this.thresholdTime = Date.now() - this.storageTime; // >
         // this.lastFeedState.lastAggregatedTradeTime
