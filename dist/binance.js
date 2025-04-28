@@ -12,8 +12,6 @@ class BinanceDataFeed {
     streamClient;
     apiClient;
     configurationWebsocketStreams = {
-        // apiKey: process.env.API_KEY; "Uiavf9Y6ThQmWYPPzCaPPkFOnixSbjz5W95VhULs8dIL6plxlri35vXwWn4KHX07",
-        // apiSecret: process.env.API_SECRET; "rDOi9GBzE5qi1QDn8iwBclNE48IvuwfKhkbBPeoeuXF6iyMB7gY1oVOpijGyBTxD",
         wsURL: spot_1.SPOT_WS_STREAMS_PROD_URL,
         compression: true,
         mode: "pool",

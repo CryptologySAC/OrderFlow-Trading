@@ -18,7 +18,7 @@ class BinanceStream {
     storageTime;
     storage;
     aggTradeTemp = [];
-    //private readonly lastFeedState: FeedState;
+    // private readonly lastFeedState: FeedState;
     thresholdTime;
     orderFlowAnalyzer;
     app;
@@ -31,10 +31,9 @@ class BinanceStream {
         this.storage = new storage_1.Storage();
         this.storageTime = (process.env.MAX_STORAGE_TIME ??
             1000 * 60 * 60 * 24 * 90); // 24 hrs in ms
-        //this.lastFeedState = this.storage.getLastFeedState();
-        this.thresholdTime =
-            Date.now() - this.storageTime; //>
-        //this.lastFeedState.lastAggregatedTradeTime
+        // this.lastFeedState = this.storage.getLastFeedState();
+        this.thresholdTime = Date.now() - this.storageTime; // >
+        // this.lastFeedState.lastAggregatedTradeTime
         //    ? Date.now() - this.storageTime
         //    : this.lastFeedState.lastAggregatedTradeTime; // Max 24 hours or what is last stored
         this.orderFlowAnalyzer = new orderflow_1.OrderFlowAnalyzer(4, 0.003, 55, 20 * 60 * 1000, 0.0015, "LTCUSDT", (signal) => {

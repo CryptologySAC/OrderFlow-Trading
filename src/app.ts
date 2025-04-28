@@ -4,7 +4,7 @@ import { SpotWebsocketStreams, SpotWebsocketAPI } from "@binance/spot";
 import dotenv from "dotenv";
 import {
     PlotTrade,
-    //FeedState /*, MarketOrder, OrderType /*, AbsorptionLabel */,
+    // FeedState /*, MarketOrder, OrderType /*, AbsorptionLabel */,
     Signal,
 } from "./interfaces";
 import express from "express";
@@ -21,7 +21,7 @@ export class BinanceStream {
     private readonly storage: Storage;
     private aggTradeTemp: SpotWebsocketAPI.TradesAggregateResponseResultInner[] =
         [];
-    //private readonly lastFeedState: FeedState;
+    // private readonly lastFeedState: FeedState;
     private thresholdTime: number;
     private readonly orderFlowAnalyzer: OrderFlowAnalyzer;
     private readonly app: express.Application;
@@ -36,12 +36,11 @@ export class BinanceStream {
         this.storageTime = (process.env.MAX_STORAGE_TIME ??
             1000 * 60 * 60 * 24 * 90) as number; // 24 hrs in ms
 
-        //this.lastFeedState = this.storage.getLastFeedState();
-        this.thresholdTime =
-            Date.now() - this.storageTime ;//>
-            //this.lastFeedState.lastAggregatedTradeTime
-            //    ? Date.now() - this.storageTime
-            //    : this.lastFeedState.lastAggregatedTradeTime; // Max 24 hours or what is last stored
+        // this.lastFeedState = this.storage.getLastFeedState();
+        this.thresholdTime = Date.now() - this.storageTime; // >
+        // this.lastFeedState.lastAggregatedTradeTime
+        //    ? Date.now() - this.storageTime
+        //    : this.lastFeedState.lastAggregatedTradeTime; // Max 24 hours or what is last stored
         this.orderFlowAnalyzer = new OrderFlowAnalyzer(
             4,
             0.003,
