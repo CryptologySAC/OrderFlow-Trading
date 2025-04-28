@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chart.js Trade Plot</title>
+</head>
+<body>
+  <div id="chart-container">
+    <canvas id="tradeChart"></canvas>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation/dist/chartjs-plugin-annotation.min.js"></script>
+  <script type="module">
+    // Chart.js setup
+    const ctx = document.getElementById('tradeChart');
+    const chart = new Chart(ctx, {
+      type: 'scatter',
+      data: {
+        datasets: [{
+          label: 'Trades',
+          data: [],
+          backgroundColor: (context) => {
+            const trade = context.raw;
+            let color = trade && trade.orderType === 'BUY' ? 'rgba(2, 201, 128, 0.1)' : 'rgba(199,31,237,0.1)' ;
+            if (trade && trade.quantity > 500)
+            {
+              color = trade && trade.orderType === 'BUY' ? 'rgba(17,0,255, 0.6)' : 'rgba(184,0,225,0.6)' ;
+            } else if (trade && trade.quantity > 200)
+            {
+              color = trade && trade.orderType === 'BUY' ? 'rgba(0,255,8, 0.4)' : 'rgba(255,0,75,0.4)' ;
+            } else if (trade && trade.quantity > 75)
+            {
+              color = trade && trade.orderType === 'BUY' ? 'rgba(2,201,128, 0.2)' : 'rgba(199,31,237,0.2)' ;
+            } else if (trade && trade.quantity > 15)
+            {
+              color = trade && trade.orderType === 'BUY' ? 'rgba(2,201,128, 0.1)' : 'rgba(199,31,237,0.1)' ;
+            } 
+            return color;
+          },
+          pointRadius: (context) => {
+            const trade = context.raw;
+            let radius;
+            if (trade && trade.quantity > 500)
+            {
+              radius = 60;
+            } else if (trade && trade.quantity > 200)
+            {
+              radius = 40;
+            } else if (trade && trade.quantity > 75)
+            {
+              radius = 20;
+            } else if (trade && trade.quantity > 15)
+            {
+              radius = 15;
+            }  else if (trade)
+            {
+              radius = trade.quantity;
+            } else {
+              radius = 1;
+            }
+            return radius; 
+          },
+          hoverRadius: (context) => {
+            const trade = context.raw;
+            let radius;
+            if (trade && trade.quantity > 500)
+            {
+              radius = 60;
+            } else if (trade && trade.quantity > 200)
+            {
+              radius = 40;
+            } else if (trade && trade.quantity > 75)
+            {
+              radius = 20;
+            } else if (trade && trade.quantity > 15)
+            {
+              radius = 15;
+            }  else if (trade)
+            {
+              radius = trade.quantity;
+            } else {
+              radius = 1;
+            }
+            return radius; 
+          },
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        scales: {
+          x: { type: 'time', time: { unit: 'second', round: true, displayFormats:{second:'HH:mm:ss'} }, title: { display: false, text: 'Time' } },
+          y: { type: 'linear',  ticks:{stepsize: 0.1}, title: { display: true, text: 'USDT' }, position: 'right'  }
+        },
+        plugins: {
+          annotation: {
+            annotations: []
+          },
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                const trade = context.raw;
+                return trade ? `Price: ${trade.y}, Qty: ${trade.quantity}, Type: ${trade.orderType}` : '';
+              }
+            }
+          }
+        }
+      }
+    });
+
+    chart.options.animation = false;
+
+    // WebSocket for real-time trade updates
+    const ws = new WebSocket('ws://cryptology-mini.local:3001');
+    const trades = [];
+    const maxTrades = 4000;
+    let annotationId = 0;
+
+    ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      if (message.type === 'backlog'){ 
+        console.log('%s backlog trades received.', message.data.length);
+        
+        message.data.forEach(t => {
+          const time = t.time; // Assuming time is in milliseconds
+          const price = t.price;
+          const quantity = t.quantity;
+          const orderType = t.orderType;
+
+          // Add trade with x, y, and custom properties
+          trades.push({ x: time, y: price, quantity, orderType });
+          
+        });
+        while (trades.length > maxTrades) trades.shift();
+        console.log('%s backlog trades processed.', trades.length);
+      } else if (message.type === 'trade') {
+        const trade = message.data;
+        const time = trade.time; // Assuming time is in milliseconds
+        const price = trade.price;
+        const quantity = trade.quantity;
+        const orderType = trade.orderType;
+
+        // Add trade with x, y, and custom properties
+        trades.push({ x: time, y: price, quantity, orderType });
+      } else if (message.type === 'absorption') {
+        const label = message.data;
+        chart.options.plugins.annotation.annotations.push({
+          type: 'label',
+          xValue: label.time,
+          yValue: label.price,
+          content: label.label,
+          backgroundColor: 'rgba(0, 0, 255, 0.2)',
+          font: { size: 12 },
+          padding: 6,
+          id: `absorption-${annotationId++}`
+        });
+        chart.update();
+      }
+
+      // Limit to last 1000 trades
+      if (trades.length > maxTrades) trades.shift();
+
+      // Update chart
+      chart.data.datasets[0].data = trades;
+      chart.update();
+    };
+
+    ws.onopen = () => console.log('Connected to WebSocket');
+    ws.onerror = (error) => console.error('WebSocket error:', error);
+    ws.onclose = () => console.log('WebSocket closed');
+  </script>
+</body>
+</html>

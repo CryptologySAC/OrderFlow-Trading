@@ -1,0 +1,13 @@
+#!/usr/bin/env node
+
+import { BinanceStream } from "../dist/index.js";
+const binanceStream = new BinanceStream();
+ 
+try {
+    await binanceStream.main();
+    
+ }  catch (error) {
+    // Handle any errors that occur during the process
+    console.error('Binance Stream:', error);
+    process.exit(1); // Exit with a non-zero status code to indicate failure
+}

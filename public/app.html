@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chart.js Trade Plot with Range Selector</title>
+  <style>
+  
+    div.chartAreaWrapper {
+      position: relative;
+      height: 1200px;
+      padding: 10px;
+    }
+    div.rangeSelector {
+      margin: 10px;
+      text-align: center;
+    }
+    div.rangeSelector button {
+      margin: 0 5px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="rangeSelector">
+    <button onclick="setRange(60000)">1m</button>
+    <button onclick="setRange(5 * 60000)">5m</button>
+    <button onclick="setRange(13 * 60000)">13m</button>
+    <button onclick="setRange(89 * 60000)">89m</button>
+    <button onclick="setRange(null)">All</button>
+  </div>
+  <div class="chartWrapper">
+    <div class="chartAreaWrapper">
+      <canvas id="tradeChart"></canvas>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation/dist/chartjs-plugin-annotation.min.js"></script>
+  <script>
+    // Chart.js setup
+    const ctx = document.getElementById('tradeChart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'scatter',
+      data: {
+        datasets: [{
+          label: 'Trades',
+          data: [],
+          backgroundColor: (context) => {
+            const trade = context.raw;
+            let color = trade && trade.orderType === 'BUY' ? 'rgba(0, 255, 30, 0.3)' : 'rgba(255,0,90,0.3)';
+            if (trade && trade.quantity > 500) {
+              color = trade && trade.orderType === 'BUY' ? 'rgba(0,255,25, 0.6)' : 'rgba(255,50,200,0.6)';
+            } else if (trade && trade.quantity > 200) {
+              color = trade && trade.orderType === 'BUY' ? 'rgba(0,100,25, 0.6)' : 'rgba(255,0,20,0.6)';
+            } else if (trade && trade.quantity > 75) {
+              color = trade && trade.orderType === 'BUY' ? 'rgba(0,255,30, 0.4)' : 'rgba(255,0,90,0.4)';
+            } else if (trade && trade.quantity > 15) {
+              color = trade && trade.orderType === 'BUY' ? 'rgba(0,255,30, 0.3)' : 'rgba(255,0,90,0.3)';
+            }
+            return color;
+          },
+          pointRadius: (context) => {
+            const trade = context.raw;
+            let radius;
+            if (trade && trade.quantity > 500) {
+              radius = 60;
+            } else if (trade && trade.quantity > 200) {
+              radius = 40;
+            } else if (trade && trade.quantity > 75) {
+              radius = 20;
+            } else if (trade && trade.quantity > 15) {
+              radius = 15;
+            } else if (trade) {
+              radius = trade.quantity;
+            } else {
+              radius = 1;
+            }
+            return radius;
+          },
+          hoverRadius: (context) => {
+            const trade = context.raw;
+            let radius;
+            if (trade && trade.quantity > 500) {
+              radius = 60;
+            } else if (trade && trade.quantity > 200) {
+              radius = 40;
+            } else if (trade && trade.quantity > 75) {
+              radius = 20;
+            } else if (trade && trade.quantity > 15) {
+              radius = 15;
+            } else if (trade) {
+              radius = trade.quantity;
+            } else {
+              radius = 1;
+            }
+            return radius;
+          }
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        layout: {
+          padding: {
+            right: 20, // Margin between plot area and right Y-axis
+            left: 20 // Margin for left boundary
+          }
+        },
+        scales: {
+          x: {
+            type: 'time',
+            time: { unit: 'second', round: true, displayFormats: { second: 'HH:mm:ss' } },
+            title: { display: false, text: 'Time' },
+            bounds: 'data',
+            ticks: { source: 'auto' }
+          },
+          y: {
+            type: 'linear',
+            ticks: { stepSize: 0.01, precision: 2, },
+            title: { display: true, text: 'USDT' },
+            position: 'right',
+            grace: 0.05,
+            offset: true,
+          }
+        },
+        plugins: {
+          annotation: {
+            annotations: {
+              lastPriceLine: {
+                type: 'line',
+                yMin: undefined,
+                yMax: undefined,
+                borderColor: 'blue',
+                borderWidth: 1,
+                drawTime: 'afterDatasetsDraw',
+                label: {
+                  display: true,
+                  content: (ctx) => {
+                    const yValue = ctx.chart.options.plugins.annotation.annotations.lastPriceLine.yMin;
+                    return yValue ? `${yValue.toFixed(2)}` : '';
+                  },
+                  position: 'end',
+                  xAdjust: -50, // Adjusted for padding
+                  yAdjust: 0,
+                  backgroundColor: 'rgba(0, 0, 255, 1)',
+                  borderColor: 'blue',
+                  borderWidth: 2,
+                  font: { size: 12 },
+                  color: 'white',
+                  padding: 6
+                }
+              }
+            }
+          },
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                const trade = context.raw;
+                return trade ? `Price: ${trade.y}, Qty: ${trade.quantity}, Type: ${trade.orderType}` : '';
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // Data and state
+    const trades = [];
+    const maxTrades = 20000;
+    let annotationId = 0;
+    let activeRange = null;
+    const paddingTime = 20000; // 20 seconds margin for latest marker
+
+    // Validate trade data
+    function isValidTrade(trade) {
+      if (!trade) {
+        console.warn('Invalid trade: null or undefined');
+        return false;
+      }
+      if (typeof trade.time !== 'number' || isNaN(trade.time) || !isFinite(trade.time)) {
+        console.warn('Invalid trade time:', trade.time);
+        return false;
+      }
+      if (typeof trade.price !== 'number' || isNaN(trade.price) || !isFinite(trade.price)) {
+        console.warn('Invalid trade price:', trade.price);
+        return false;
+      }
+      if (typeof trade.quantity !== 'number' || isNaN(trade.quantity) || !isFinite(trade.quantity)) {
+        console.warn('Invalid trade quantity:', trade.quantity);
+        return false;
+      }
+      if (!['BUY', 'SELL'].includes(trade.orderType)) {
+        console.warn('Invalid trade orderType:', trade.orderType);
+        return false;
+      }
+      return true;
+    }
+
+    // Set X-axis range and track duration
+    function setRange(duration) {
+      activeRange = duration;
+      const now = Date.now();
+      if (duration) {
+        chart.options.scales.x.min = now - duration;
+        chart.options.scales.x.max = now + paddingTime; // Add margin
+      } else {
+        chart.options.scales.x.min = undefined;
+        chart.options.scales.x.max = undefined;
+      }
+      chart.update();
+    }
+
+    // WebSocket for real-time trade updates
+    const ws = new WebSocket('ws://localhost:3001');
+    ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      if (message.type === 'backlog') {
+        console.log('%s backlog trades received.', message.data.length);
+        trades.length = 0;
+        message.data.forEach(t => {
+          if (isValidTrade(t)) {
+            trades.push({ x: t.time, y: t.price, quantity: t.quantity, orderType: t.orderType });
+          }
+        });
+        while (trades.length > maxTrades) trades.shift();
+        console.log('%s backlog trades processed.', trades.length);
+        chart.data.datasets[0].data = trades;
+        if (trades.length > 0) {
+          const latestPrice = trades[trades.length - 1].y;
+          chart.options.plugins.annotation.annotations.lastPriceLine.yMin = latestPrice;
+          chart.options.plugins.annotation.annotations.lastPriceLine.yMax = latestPrice;
+          if (activeRange !== null) {
+            const latestTime = trades[trades.length - 1].x;
+            chart.options.scales.x.min = latestTime - activeRange;
+            chart.options.scales.x.max = latestTime + paddingTime;
+          }
+        }
+        chart.update();
+      } else if (message.type === 'trade') {
+        const trade = message.data;
+        if (isValidTrade(trade)) {
+          trades.push({ x: trade.time, y: trade.price, quantity: trade.quantity, orderType: trade.orderType });
+          while (trades.length > maxTrades) trades.shift();
+          chart.data.datasets[0].data = trades;
+          chart.options.plugins.annotation.annotations.lastPriceLine.yMin = trade.price;
+          chart.options.plugins.annotation.annotations.lastPriceLine.yMax = trade.price;
+          if (activeRange !== null) {
+            chart.options.scales.x.max = trade.time + paddingTime; // Add margin
+            chart.options.scales.x.min = trade.time - activeRange;
+          }
+          chart.update('none');
+        }
+      } else if (message.type === 'signal') {
+        const label = message.data;
+          chart.options.plugins.annotation.annotations[label.tradeIndex] = {
+            type: 'label',
+            xValue: label.time,
+            yValue: label.price,
+            content: label.type+" | "+label.status,
+            backgroundColor: 'rgba(90, 50, 255, 1)',
+            color: 'white',
+            font: { size: 14 },
+            padding: 8,
+            id: label.tradeIndex
+          };
+          chart.update('none');
+          console.log('Signal label added:', label);
+      }
+    };
+
+    ws.onopen = () => console.log('Connected to WebSocket');
+    ws.onerror = (error) => console.error('WebSocket error:', error);
+    ws.onclose = () => console.log('WebSocket closed');
+  </script>
+</body>
+</html>
