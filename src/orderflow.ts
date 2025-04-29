@@ -15,11 +15,11 @@ export class OrderFlowAnalyzer {
     private callback?: (signal: Signal) => void;
 
     constructor(
-        absorptionWindow: number = 4,
-        priceRange: number = 0.003,
-        minLargeOrder: number = 55,
-        volumeWindow: number = 20 * 60 * 1000,
-        confirmThreshold: number = 0.0025,
+        absorptionWindow: number = 5,
+        priceRange: number = 0.005,
+        minLargeOrder: number = 50,
+        volumeWindow: number = 15 * 60 * 1000,
+        confirmThreshold: number = 0.003,
         symbol: string = "LTCUSDT",
         callback?: (signal: Signal) => void
     ) {
