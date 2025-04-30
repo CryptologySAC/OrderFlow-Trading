@@ -1,0 +1,686 @@
+# Version 1.6: Enhanced Take Profit and Volume Filter (20250429_200000)
+# Changes from Version 1.5.2 (20250429_190002):
+# - Updated VERSION to 20250429_200000
+# - Reduced minLargeOrderCount from 5 to 3 to increase signals
+# - Adjusted dynamic trailing stop scaling (0.75x–2x)
+# - Updated grid search: trailingStopPcts=[0.004, 0.007, 0.01], confirmThresholds=[0.003, 0.004], takeProfits=[0.015, 0.02]
+# - Added fee sensitivity analysis in results output
+# Changes from Version 1.5.1:
+# - Fixed transaction_fee definition in SMA crossover baseline
+# - Updated transaction fee to 0.1% per trade (no BNB discount)
+# Changes from Version 1.5:
+# - Reduced transaction fee to 0.075% per trade (reverted to 0.1% in 1.5.2)
+# - Lowered order flow volume filter threshold to 50th percentile and added minimum large order count
+# - Added dynamic trailing stop scaling based on order flow intensity and minimum stop distance
+# - Added confirmThreshold to grid search
+# - Fixed parameters to Version 1.3 best daytime configuration
+# Baseline: Order flow analysis for LTCUSDT with 6 AM–10 PM Daytime, 10 PM–6 AM Nighttime
+
+import pandas as pd
+import numpy as np
+from collections import deque
+from datetime import timedelta, datetime
+import itertools
+import multiprocessing as mp
+import torch
+import sqlite3
+import pytz
+
+VERSION = "20250429_200000"  # Enhanced Take Profit, April 29, 2025, 20:00:00
+
+# Define Lima timezone (PET, UTC-5)
+lima_tz = pytz.timezone('America/Lima')
+
+# Define the OrderFlowAnalyzer class with trade-based dynamic stop-loss
+class OrderFlowAnalyzer:
+    def __init__(self, absorptionWindow=5, priceRange=0.005, minLargeOrder=50, volumeWindow=15*60*1000, 
+                 confirmThreshold=0.003, trailingStopPct=0.003, takeProfit=0.015):
+        self.absorptionWindow = absorptionWindow
+        self.priceRange = priceRange
+        self.minLargeOrder = minLargeOrder
+        self.volumeWindow = pd.Timedelta(milliseconds=volumeWindow)
+        self.confirmThreshold = confirmThreshold
+        self.trailingStopPct = trailingStopPct
+        self.takeProfit = takeProfit
+        self.priceBins = {}
+        self.signals = []
+        self.recentTrades = deque()
+        self.activeTrade = None
+        self.bestPrice = None
+        self.largeOrderVolumes = deque()
+        self.minStopDistance = 0.001  # Minimum 0.1% stop distance
+        self.minLargeOrderCount = 3  # Reduced from 5 to increase signals
+
+    def resetTrade(self):
+        self.bestPrice = None
+
+    def processTrades(self, df):
+        self.resetTrade()
+        for _, trade in df.iterrows():
+            self.updateRecentTrades(trade)
+            self.processTrade(trade)
+
+    def updateRecentTrades(self, trade):
+        current_time = trade['timestamp']
+        while self.recentTrades and current_time - self.recentTrades[0]['timestamp'] > pd.Timedelta(seconds=self.absorptionWindow):
+            self.recentTrades.popleft()
+        self.recentTrades.append(trade)
+
+        while self.largeOrderVolumes and current_time - self.largeOrderVolumes[0]['timestamp'] > self.volumeWindow:
+            self.largeOrderVolumes.popleft()
+        if trade['quantity'] >= self.minLargeOrder:
+            self.largeOrderVolumes.append({'timestamp': current_time, 'volume': trade['quantity'], 'price': trade['price']})
+
+    def checkInvalidation(self, signal_timestamp, signal_price, is_buy_signal):
+        buy_volume = 0
+        sell_volume = 0
+        min_price = signal_price
+        max_price = signal_price
+        invalidation_window = pd.Timedelta(seconds=5)
+
+        for trade in self.recentTrades:
+            if signal_timestamp < trade['timestamp'] <= signal_timestamp + invalidation_window:
+                if trade['isBuyer']:
+                    buy_volume += trade['quantity']
+                else:
+                    sell_volume += trade['quantity']
+                min_price = min(min_price, trade['price'])
+                max_price = max(max_price, trade['price'])
+
+        if is_buy_signal:
+            volume_condition = sell_volume > 2 * buy_volume and sell_volume > 0
+            price_condition = min_price <= signal_price * (1 - 0.002)
+            return volume_condition or price_condition
+        else:
+            volume_condition = buy_volume > 2 * sell_volume and buy_volume > 0
+            price_condition = max_price >= signal_price * (1 + 0.002)
+            return volume_condition or price_condition
+
+    def closeActiveTrade(self, exit_price, exit_timestamp, trade_index, reason='opposite_signal'):
+        if not self.activeTrade:
+            return
+        trade = {
+            'type': self.activeTrade['type'],
+            'entry_timestamp': self.activeTrade['timestamp'],
+            'entry_price': self.activeTrade['price'],
+            'exit_timestamp': exit_timestamp,
+            'exit_price': exit_price,
+            'trade_index': trade_index,
+            'is_invalidated': self.activeTrade['is_invalidated'],
+            'close_reason': reason
+        }
+        self.signals.append(trade)
+        self.activeTrade = None
+        self.resetTrade()
+
+    def calculate_return(self, exit_price):
+        if not self.activeTrade:
+            return 0
+        entry_price = self.activeTrade['price']
+        if self.activeTrade['type'] == 'sell_absorption':
+            return (exit_price / entry_price) - 1
+        else:
+            return (entry_price / exit_price) - 1
+
+    def get_dynamic_trailing_stop(self):
+        if not self.largeOrderVolumes:
+            return self.trailingStopPct
+        avg_quantity = np.mean([v['volume'] for v in self.largeOrderVolumes])
+        scale_factor = min(2.0, max(0.75, avg_quantity / self.minLargeOrder))  # Adjusted scaling: 0.75x–2x
+        return self.trailingStopPct * scale_factor
+
+    def apply_trailing_stop(self, current_price, position_type):
+        if not self.activeTrade:
+            return False
+        dynamic_stop_pct = max(self.get_dynamic_trailing_stop(), self.minStopDistance)
+        if position_type == 'sell_absorption':
+            if self.bestPrice is None:
+                self.bestPrice = current_price
+            self.bestPrice = max(self.bestPrice, current_price)
+            stop_loss = self.bestPrice * (1 - dynamic_stop_pct)
+            return current_price <= stop_loss
+        else:
+            if self.bestPrice is None:
+                self.bestPrice = current_price
+            self.bestPrice = min(self.bestPrice, current_price)
+            stop_loss = self.bestPrice * (1 + dynamic_stop_pct)
+            return current_price >= stop_loss
+
+    def get_large_order_volume_threshold(self):
+        volumes = [v['volume'] for v in self.largeOrderVolumes]
+        return np.quantile(volumes, 0.5) if volumes else 0
+
+    def processTrade(self, trade):
+        binPrice = round(trade['price'] / 0.001) * 0.001
+        if binPrice not in self.priceBins:
+            self.priceBins[binPrice] = {'buyVol': 0, 'sellVol': 0, 'lastUpdate': trade['timestamp']}
+        bin = self.priceBins[binPrice]
+        if trade['timestamp'] - bin['lastUpdate'] > self.volumeWindow:
+            bin['buyVol'] = 0
+            bin['sellVol'] = 0
+        if trade['isBuyer']:
+            bin['buyVol'] += trade['quantity']
+        else:
+            bin['sellVol'] += trade['quantity']
+        bin['lastUpdate'] = trade['timestamp']
+
+        if self.activeTrade:
+            current_price = trade['price']
+            if self.apply_trailing_stop(current_price, self.activeTrade['type']):
+                self.closeActiveTrade(current_price, trade['timestamp'], trade.name, reason='trailing_stop')
+                return
+            trade_return = self.calculate_return(current_price)
+            if trade_return >= self.takeProfit:
+                self.closeActiveTrade(current_price, trade['timestamp'], trade.name, reason='take_profit')
+                return
+
+        large_order_volume = sum(v['volume'] for v in self.largeOrderVolumes)
+        large_order_count = len(self.largeOrderVolumes)
+        if large_order_volume < self.get_large_order_volume_threshold() or large_order_count < self.minLargeOrderCount:
+            return
+
+        if trade['quantity'] >= self.minLargeOrder:
+            opposingTrades = [t for t in self.recentTrades if t['isBuyer'] != trade['isBuyer'] and t['quantity'] <= 0.5]
+            if opposingTrades:
+                priceMin = trade['price'] * (1 - self.priceRange)
+                priceMax = trade['price'] * (1 + self.priceRange)
+                if all(priceMin <= t['price'] <= priceMax for t in opposingTrades):
+                    signal_type = 'sell_absorption' if trade['isBuyer'] else 'buy_absorption'
+                    is_buy_signal = signal_type == 'sell_absorption'
+                    if self.activeTrade:
+                        if (self.activeTrade['type'] == 'sell_absorption' and signal_type == 'buy_absorption') or \
+                           (self.activeTrade['type'] == 'buy_absorption' and signal_type == 'sell_absorption'):
+                            exit_price = trade['price']
+                            reason = 'take_profit' if self.calculate_return(exit_price) > 0 else 'stop_loss'
+                            self.closeActiveTrade(trade['price'], trade['timestamp'], trade.name, reason=reason)
+                        else:
+                            return
+                    signal = {
+                        'type': signal_type,
+                        'timestamp': trade['timestamp'],
+                        'price': trade['price'],
+                        'score': trade['quantity'],
+                        'trade_index': trade.name,
+                        'is_invalidated': False
+                    }
+                    if self.isNearHighVolume(trade['price']):
+                        if signal_type == 'sell_absorption':
+                            if trade['max_price_5min'] >= signal['price'] * (1 + self.confirmThreshold):
+                                signal['is_invalidated'] = self.checkInvalidation(signal['timestamp'], signal['price'], is_buy_signal=True)
+                                self.activeTrade = signal
+                                self.bestPrice = trade['price']
+                        elif signal_type == 'buy_absorption':
+                            if trade['min_price_5min'] <= signal['price'] * (1 - self.confirmThreshold):
+                                signal['is_invalidated'] = self.checkInvalidation(signal['timestamp'], signal['price'], is_buy_signal=False)
+                                self.activeTrade = signal
+                                self.bestPrice = trade['price']
+
+    def isNearHighVolume(self, price):
+        binPrice = round(price / 0.001) * 0.001
+        if binPrice in self.priceBins:
+            bin = self.priceBins[binPrice]
+            totalVol = bin['buyVol'] + bin['sellVol']
+            return totalVol >= self.getTopVolumeThreshold()
+        return False
+
+    def getTopVolumeThreshold(self):
+        volumes = [bin['buyVol'] + bin['sellVol'] for bin in self.priceBins.values()]
+        return np.quantile(volumes, 0.9) if volumes else 0
+
+# Load and prepare the data from SQLite database
+def load_data_from_sqlite(db_file, table_name='aggregated_trades', symbol='LTCUSDT'):
+    conn = sqlite3.connect(db_file)
+    try:
+        query = f"""
+            SELECT aggregatedTradeId AS id, firstTradeId AS trade_id1, lastTradeId AS trade_id2,
+                   tradeTime AS timestamp, symbol AS pair, price, quantity,
+                   isBuyerMaker AS is_buyer, orderType AS order_type, bestMatch AS unknown
+            FROM {table_name}
+            WHERE symbol = ?
+            ORDER BY tradeTime
+        """
+        df = pd.read_sql_query(query, conn, params=(symbol,))
+        if df.empty:
+            raise ValueError(f"No data found for symbol {symbol} in table {table_name}")
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms').dt.tz_localize('UTC').dt.tz_convert(lima_tz)
+        df['isBuyer'] = df['is_buyer'] == 1
+        return df
+    except Exception as e:
+        print(f"Error loading data: {e}")
+        return None
+    finally:
+        conn.close()
+
+# Categorize trades by timeframe
+def categorize_timeframe(timestamp):
+    hour = timestamp.hour
+    return 'Daytime' if 6 <= hour < 22 else 'Nighttime'
+
+# Optimized future max and min prices
+def compute_future_max_min(df, time_delta):
+    df = df.sort_values('timestamp').reset_index(drop=True)
+    max_prices = np.full(len(df), np.nan)
+    min_prices = np.full(len(df), np.nan)
+    j = 0
+    for i in range(len(df)):
+        current_time = df['timestamp'].iloc[i]
+        while j < len(df) and df['timestamp'].iloc[j] <= current_time + time_delta:
+            j += 1
+        future_trades = df.iloc[i+1:j]
+        if not future_trades.empty:
+            max_prices[i] = future_trades['price'].max()
+            min_prices[i] = future_trades['price'].min()
+    return max_prices, min_prices
+
+# Define updated parameter ranges
+trailingStopPcts = [0.004, 0.007, 0.01]
+absorptionWindows = [5]
+priceRanges = [0.005]
+minLargeOrders = [50]
+volumeWindows = [15*60*1000]
+confirmThresholds = [0.003, 0.004]
+takeProfits = [0.015, 0.02]
+
+# Load data from SQLite
+db_file = '../trades.db'  # Replace with your SQLite database file path
+df = load_data_from_sqlite(db_file, table_name='aggregated_trades', symbol='LTCUSDT')
+
+if df is None or df.empty:
+    print("Failed to load data. Exiting.")
+    exit(1)
+
+# Compute for confirmation (5 minutes) and profitability (2 hours)
+time_delta_5min = pd.Timedelta(minutes=5)
+time_delta_2h = pd.Timedelta(hours=2)
+df['max_price_5min'], df['min_price_5min'] = compute_future_max_min(df, time_delta_5min)
+df['max_price_2h'], df['min_price_2h'] = compute_future_max_min(df, time_delta_2h)
+df['timeframe'] = df['timestamp'].apply(categorize_timeframe)
+
+# Check if GPU (MPS) is available
+device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+print(f"Version {VERSION}, Using device: {device}")
+
+# Function to evaluate a parameter combination with progress logging
+counter = 0
+def evaluate_parameters(params, df=df):
+    global counter
+    counter += 1
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Version {VERSION}, Processed {counter}/{len(param_combinations)}")
+    absorptionWindow, priceRange, minLargeOrder, volumeWindow, confirmThreshold, trailingStopPct, takeProfit = params
+    analyzer = OrderFlowAnalyzer(absorptionWindow, priceRange, minLargeOrder, volumeWindow, confirmThreshold, trailingStopPct, takeProfit)
+    analyzer.processTrades(df)
+    
+    if analyzer.activeTrade:
+        last_trade = df.iloc[-1]
+        analyzer.closeActiveTrade(last_trade['price'], last_trade['timestamp'], last_trade.name, reason='end_of_data')
+    
+    signals = pd.DataFrame(analyzer.signals)
+    if signals.empty:
+        return {
+            'Daytime': (0, 0, 0, 0, 0),
+            'Nighttime': (0, 0, 0, 0, 0)
+        }
+    
+    signals['timeframe'] = signals['entry_timestamp'].apply(categorize_timeframe)
+    results = {}
+    
+    transaction_fee = 0.001  # 0.1% per trade (entry + exit)
+    
+    for timeframe in ['Daytime', 'Nighttime']:
+        tf_signals = signals[signals['timeframe'] == timeframe]
+        if tf_signals.empty:
+            results[timeframe] = (0, 0, 0, 0, 0)
+            continue
+        
+        signal_types = tf_signals['type'].values
+        entry_prices = torch.tensor(tf_signals['entry_price'].values, dtype=torch.float32, device=device)
+        exit_prices = torch.tensor(tf_signals['exit_price'].values, dtype=torch.float32, device=device)
+        trade_indices = tf_signals['trade_index'].values
+        is_invalidated = torch.tensor(tf_signals['is_invalidated'].values, dtype=torch.bool, device=device)
+        close_reasons = tf_signals['close_reason'].values
+        
+        trade_data = df.loc[trade_indices, ['max_price_2h', 'min_price_2h']].values
+        max_prices_2h = torch.tensor(trade_data[:, 0], dtype=torch.float32, device=device)
+        min_prices_2h = torch.tensor(trade_data[:, 1], dtype=torch.float32, device=device)
+        
+        outcomes = torch.zeros(len(tf_signals), dtype=torch.int32, device=device)
+        returns = torch.zeros(len(tf_signals), dtype=torch.float32, device=device)
+        
+        stop_loss = torch.where(is_invalidated, torch.tensor(0.001, device=device), torch.tensor(trailingStopPct, device=device))
+        
+        buy_mask = np.array([t == 'sell_absorption' for t in signal_types])
+        if buy_mask.any():
+            buy_indices = torch.tensor(np.where(buy_mask)[0], device=device)
+            entry_buy = entry_prices[buy_indices]
+            exit_buy = exit_prices[buy_indices]
+            max_buy = max_prices_2h[buy_indices]
+            min_buy = min_prices_2h[buy_indices]
+            stop_loss_buy = stop_loss[buy_indices]
+            close_reason_buy = close_reasons[buy_mask]
+            
+            manual_close = np.array([r in ['trailing_stop', 'take_profit', 'stop_loss', 'end_of_data'] for r in close_reason_buy])
+            if manual_close.any():
+                manual_indices = buy_indices[torch.tensor(manual_close, device=device)]
+                returns[manual_indices] = ((exit_buy[manual_close] / entry_buy[manual_close]) - 1) - 2 * transaction_fee
+                outcomes[manual_indices[returns[manual_indices] > 0]] = 1
+                outcomes[manual_indices[returns[manual_indices] <= 0]] = 2
+            
+            tp_sl_indices = buy_indices[~torch.tensor(manual_close, device=device)]
+            if len(tp_sl_indices) > 0:
+                entry_buy_tp_sl = entry_buy[~manual_close]
+                max_buy_tp_sl = max_buy[~manual_close]
+                min_buy_tp_sl = min_buy[~manual_close]
+                stop_loss_buy_tp_sl = stop_loss_buy[~manual_close]
+                
+                tp_price = entry_buy_tp_sl * (1 + takeProfit)
+                sl_price = entry_buy_tp_sl * (1 - stop_loss_buy_tp_sl)
+                
+                tp_hit = max_buy_tp_sl >= tp_price
+                outcomes[tp_sl_indices[tp_hit]] = 1
+                returns[tp_sl_indices[tp_hit]] = takeProfit - 2 * transaction_fee
+                returns_alt_fee = takeProfit - 2 * 0.00075  # Alternative fee (0.075%) for sensitivity analysis
+                
+                sl_hit = (~tp_hit) & (min_buy_tp_sl <= sl_price)
+                outcomes[tp_sl_indices[sl_hit]] = 2
+                returns[tp_sl_indices[sl_hit]] = -stop_loss_buy_tp_sl[sl_hit] - 2 * transaction_fee
+                returns_alt_fee_sl = -stop_loss_buy_tp_sl[sl_hit] - 2 * 0.00075
+                
+                orig_profit = (~tp_hit) & (~sl_hit) & (max_buy_tp_sl >= entry_buy_tp_sl * 1.01)
+                outcomes[tp_sl_indices[orig_profit]] = 1
+                returns[tp_sl_indices[orig_profit]] = ((max_buy_tp_sl[orig_profit] / entry_buy_tp_sl[orig_profit]) - 1) - 2 * transaction_fee
+                returns_alt_fee_orig = ((max_buy_tp_sl[orig_profit] / entry_buy_tp_sl[orig_profit]) - 1) - 2 * 0.00075
+        
+        sell_mask = np.array([t == 'buy_absorption' for t in signal_types])
+        if sell_mask.any():
+            sell_indices = torch.tensor(np.where(sell_mask)[0], device=device)
+            entry_sell = entry_prices[sell_indices]
+            exit_sell = exit_prices[sell_indices]
+            min_sell = min_prices_2h[sell_indices]
+            max_sell = max_prices_2h[sell_indices]
+            stop_loss_sell = stop_loss[sell_indices]
+            close_reason_sell = close_reasons[sell_mask]
+            
+            manual_close = np.array([r in ['trailing_stop', 'take_profit', 'stop_loss', 'end_of_data'] for r in close_reason_sell])
+            if manual_close.any():
+                manual_indices = sell_indices[torch.tensor(manual_close, device=device)]
+                returns[manual_indices] = ((entry_sell[manual_close] / exit_sell[manual_close]) - 1) - 2 * transaction_fee
+                outcomes[manual_indices[returns[manual_indices] > 0]] = 1
+                outcomes[manual_indices[returns[manual_indices] <= 0]] = 2
+            
+            tp_sl_indices = sell_indices[~torch.tensor(manual_close, device=device)]
+            if len(tp_sl_indices) > 0:
+                entry_sell_tp_sl = entry_sell[~manual_close]
+                min_sell_tp_sl = min_sell[~manual_close]
+                max_sell_tp_sl = max_sell[~manual_close]
+                stop_loss_sell_tp_sl = stop_loss_sell[~manual_close]
+                
+                tp_price = entry_sell_tp_sl * (1 - takeProfit)
+                sl_price = entry_sell_tp_sl * (1 + stop_loss_sell_tp_sl)
+                
+                tp_hit = min_sell_tp_sl <= tp_price
+                outcomes[tp_sl_indices[tp_hit]] = 1
+                returns[tp_sl_indices[tp_hit]] = takeProfit - 2 * transaction_fee
+                returns_alt_fee = takeProfit - 2 * 0.00075
+                
+                sl_hit = (~tp_hit) & (max_sell_tp_sl >= sl_price)
+                outcomes[tp_sl_indices[sl_hit]] = 2
+                returns[tp_sl_indices[sl_hit]] = -stop_loss_sell_tp_sl[sl_hit] - 2 * transaction_fee
+                returns_alt_fee_sl = -stop_loss_sell_tp_sl[sl_hit] - 2 * 0.00075
+                
+                orig_profit = (~tp_hit) & (~sl_hit) & (min_sell_tp_sl <= entry_sell_tp_sl * 0.99)
+                outcomes[tp_sl_indices[orig_profit]] = 1
+                returns[tp_sl_indices[orig_profit]] = ((entry_sell_tp_sl[orig_profit] / min_sell_tp_sl[orig_profit]) - 1) - 2 * transaction_fee
+                returns_alt_fee_orig = ((entry_sell_tp_sl[orig_profit] / min_sell_tp_sl[orig_profit]) - 1) - 2 * 0.00075
+        
+        profitable_pct = (outcomes == 1).float().mean().item()
+        num_signals = len(tf_signals)
+        avg_return = returns.mean().item() if len(returns) > 0 else 0
+        hit_rate = profitable_pct
+        loss_rate = (outcomes == 2).float().mean().item()
+        
+        # Fee sensitivity analysis (simulate 0.075% fee)
+        avg_return_alt_fee = returns_alt_fee.mean().item() if 'returns_alt_fee' in locals() else avg_return
+        avg_return_alt_fee_sl = returns_alt_fee_sl.mean().item() if 'returns_alt_fee_sl' in locals() else avg_return
+        avg_return_alt_fee_orig = returns_alt_fee_orig.mean().item() if 'returns_alt_fee_orig' in locals() else avg_return
+        
+        results[timeframe] = (profitable_pct, num_signals, avg_return, hit_rate, loss_rate, avg_return_alt_fee, avg_return_alt_fee_sl, avg_return_alt_fee_orig)
+    
+    return results
+
+# Create a list of all parameter combinations
+param_combinations = list(itertools.product(absorptionWindows, priceRanges, minLargeOrders, volumeWindows, confirmThresholds, trailingStopPcts, takeProfits))
+
+# Use multiprocessing to evaluate parameters in parallel
+if __name__ == '__main__':
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Starting grid search with version {VERSION}, {len(param_combinations)} combinations")
+    counter = 0
+    with mp.Pool(mp.cpu_count()) as pool:
+        results = pool.map(evaluate_parameters, param_combinations)
+    
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Grid search completed")
+    results_data = []
+    for i, params in enumerate(param_combinations):
+        absorptionWindow, priceRange, minLargeOrder, volumeWindow, confirmThreshold, trailingStopPct, takeProfit = params
+        daytime_results, nighttime_results = results[i]['Daytime'], results[i]['Nighttime']
+        for timeframe, (profitable_pct, num_signals, avg_return, hit_rate, loss_rate, avg_return_alt_fee, avg_return_alt_fee_sl, avg_return_alt_fee_orig) in [('Daytime', daytime_results), ('Nighttime', nighttime_results)]:
+            results_data.append({
+                'timeframe': timeframe,
+                'absorptionWindow': absorptionWindow,
+                'priceRange': priceRange,
+                'minLargeOrder': minLargeOrder,
+                'volumeWindow': volumeWindow / (60*1000),
+                'confirmThreshold': confirmThreshold,
+                'trailingStopPct': trailingStopPct,
+                'takeProfit': takeProfit,
+                'profitable_pct': profitable_pct,
+                'num_signals': num_signals,
+                'avg_return': avg_return,
+                'hit_rate': hit_rate,
+                'loss_rate': loss_rate,
+                'avg_return_alt_fee': avg_return_alt_fee,
+                'avg_return_alt_fee_sl': avg_return_alt_fee_sl,
+                'avg_return_alt_fee_orig': avg_return_alt_fee_orig
+            })
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Timeframe: {timeframe}")
+            print(f"Params: absorptionWindow={absorptionWindow}s, priceRange={priceRange*100}%, minLargeOrder={minLargeOrder}, "
+                  f"volumeWindow={volumeWindow/(60*1000)}min, confirmThreshold={confirmThreshold*100}%, "
+                  f"trailingStopPct={trailingStopPct*100}%, takeProfit={takeProfit*100}%")
+            print(f"Profitable Signals: {profitable_pct:.2%}, Total Signals: {num_signals}, "
+                  f"Avg Return: {avg_return:.4f}, Hit Rate: {hit_rate:.2%}, Loss Rate: {loss_rate:.2%}")
+            print(f"Fee Sensitivity (0.075% fee): Avg Return (TP): {avg_return_alt_fee:.4f}, "
+                  f"Avg Return (SL): {avg_return_alt_fee_sl:.4f}, Avg Return (Orig): {avg_return_alt_fee_orig:.4f}")
+    
+    results_df = pd.DataFrame(results_data)
+    for timeframe in ['Daytime', 'Nighttime']:
+        tf_df = results_df[results_df['timeframe'] == timeframe]
+        if not tf_df.empty:
+            best_result = tf_df.loc[tf_df['avg_return'].idxmax()]
+            print(f"\nBest Parameter Combination (Max Average Return) for {timeframe}:")
+            print(f"Absorption Window: {best_result['absorptionWindow']} seconds")
+            print(f"Price Range: {best_result['priceRange']*100}%")
+            print(f"Minimum Large Order: {best_result['minLargeOrder']} LTC")
+            print(f"Volume Window: {best_result['volumeWindow']} minutes")
+            print(f"Confirmation Threshold: {best_result['confirmThreshold']*100}%")
+            print(f"Trailing Stop Percentage: {best_result['trailingStopPct']*100}%")
+            print(f"Take Profit: {best_result['takeProfit']*100}%")
+            print(f"Percentage of Profitable Signals: {best_result['profitable_pct']:.2%}")
+            print(f"Total Number of Signals: {int(best_result['num_signals'])}")
+            print(f"Average Return: {best_result['avg_return']:.4f}")
+            print(f"Hit Rate: {best_result['hit_rate']:.2%}")
+            print(f"Loss Rate: {best_result['loss_rate']:.2%}")
+            print(f"Fee Sensitivity (0.075% fee): Avg Return (TP): {best_result['avg_return_alt_fee']:.4f}, "
+                  f"Avg Return (SL): {best_result['avg_return_alt_fee_sl']:.4f}, Avg Return (Orig): {best_result['avg_return_alt_fee_orig']:.4f}")
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    csv_file = f"results_{timestamp}.csv"
+    param_info = (f"Version: {VERSION}, Parameters: absorptionWindows={absorptionWindows}, "
+                  f"priceRanges={priceRanges}, minLargeOrders={minLargeOrders}, "
+                  f"volumeWindows={[v/(60*1000) for v in volumeWindows]}min, "
+                  f"confirmThresholds={confirmThresholds}, trailingStopPcts={trailingStopPcts}, "
+                  f"takeProfits={takeProfits}")
+    results_df.to_csv(csv_file, index=False)
+    with open(csv_file, 'r') as f:
+        content = f.read()
+    with open(csv_file, 'w') as f:
+        f.write(f"# {param_info}\n{content}")
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Results saved to {csv_file}")
+
+    # Baseline comparison: SMA crossover strategy
+    df['sma_short'] = df['price'].rolling(window=10).mean()
+    df['sma_long'] = df['price'].rolling(window=50).mean()
+    sma_signals = []
+    stop_loss = 0.003
+    take_profit = 0.015
+    transaction_fee = 0.001  # 0.1% per trade (entry + exit)
+    active_trade = None
+    for i in range(1, len(df)):
+        if df['sma_short'].iloc[i-1] < df['sma_long'].iloc[i-1] and df['sma_short'].iloc[i] >= df['sma_long'].iloc[i]:
+            if active_trade:
+                if active_trade['type'] == 'sell':
+                    sma_signals.append({
+                        'entry_timestamp': active_trade['timestamp'],
+                        'entry_price': active_trade['price'],
+                        'exit_timestamp': df['timestamp'].iloc[i],
+                        'exit_price': df['price'].iloc[i],
+                        'type': active_trade['type'],
+                        'index': i,
+                        'timeframe': df['timeframe'].iloc[i],
+                        'close_reason': 'opposite_signal'
+                    })
+                    active_trade = None
+                else:
+                    continue
+            active_trade = {'timestamp': df['timestamp'].iloc[i], 'type': 'buy', 'price': df['price'].iloc[i], 'index': i}
+        elif df['sma_short'].iloc[i-1] > df['sma_long'].iloc[i-1] and df['sma_short'].iloc[i] <= df['sma_long'].iloc[i]:
+            if active_trade:
+                if active_trade['type'] == 'buy':
+                    sma_signals.append({
+                        'entry_timestamp': active_trade['timestamp'],
+                        'entry_price': active_trade['price'],
+                        'exit_timestamp': df['timestamp'].iloc[i],
+                        'exit_price': df['price'].iloc[i],
+                        'type': active_trade['type'],
+                        'index': i,
+                        'timeframe': df['timeframe'].iloc[i],
+                        'close_reason': 'opposite_signal'
+                    })
+                    active_trade = None
+                else:
+                    continue
+            active_trade = {'timestamp': df['timestamp'].iloc[i], 'type': 'sell', 'price': df['price'].iloc[i], 'index': i}
+    
+    if active_trade:
+        sma_signals.append({
+            'entry_timestamp': active_trade['timestamp'],
+            'entry_price': active_trade['price'],
+            'exit_timestamp': df['timestamp'].iloc[-1],
+            'exit_price': df['price'].iloc[-1],
+            'type': active_trade['type'],
+            'index': len(df)-1,
+            'timeframe': df['timeframe'].iloc[-1],
+            'close_reason': 'end_of_data'
+        })
+    
+    sma_signals = pd.DataFrame(sma_signals)
+    if not sma_signals.empty:
+        for timeframe in ['Daytime', 'Nighttime']:
+            tf_sma_signals = sma_signals[sma_signals['timeframe'] == timeframe]
+            if tf_sma_signals.empty:
+                continue
+            sma_types = tf_sma_signals['type'].values
+            entry_prices = torch.tensor(tf_sma_signals['entry_price'].values, dtype=torch.float32, device=device)
+            exit_prices = torch.tensor(tf_sma_signals['exit_price'].values, dtype=torch.float32, device=device)
+            sma_indices = tf_sma_signals['index'].values
+            close_reasons = tf_sma_signals['close_reason'].values
+            
+            sma_trade_data = df.loc[sma_indices, ['max_price_2h', 'min_price_2h']].values
+            sma_max_prices = torch.tensor(sma_trade_data[:, 0], dtype=torch.float32, device=device)
+            sma_min_prices = torch.tensor(sma_trade_data[:, 1], dtype=torch.float32, device=device)
+            
+            sma_outcomes = torch.zeros(len(tf_sma_signals), dtype=torch.int32, device=device)
+            sma_returns = torch.zeros(len(tf_sma_signals), dtype=torch.float32, device=device)
+            
+            buy_mask = np.array([t == 'buy' for t in sma_types])
+            if buy_mask.any():
+                buy_indices = torch.tensor(np.where(buy_mask)[0], device=device)
+                entry_buy = entry_prices[buy_indices]
+                exit_buy = exit_prices[buy_indices]
+                max_buy = sma_max_prices[buy_indices]
+                min_buy = sma_min_prices[buy_indices]
+                close_reason_buy = close_reasons[buy_mask]
+                
+                manual_close = np.array([r in ['opposite_signal', 'end_of_data'] for r in close_reason_buy])
+                if manual_close.any():
+                    manual_indices = buy_indices[torch.tensor(manual_close, device=device)]
+                    sma_returns[manual_indices] = ((exit_buy[manual_close] / entry_buy[manual_close]) - 1) - 2 * transaction_fee
+                    sma_outcomes[manual_indices[sma_returns[manual_indices] > 0]] = 1
+                    sma_outcomes[manual_indices[sma_returns[manual_indices] <= 0]] = 2
+                
+                tp_sl_indices = buy_indices[~torch.tensor(manual_close, device=device)]
+                if len(tp_sl_indices) > 0:
+                    entry_buy_tp_sl = entry_buy[~manual_close]
+                    max_buy_tp_sl = max_buy[~manual_close]
+                    min_buy_tp_sl = min_buy[~manual_close]
+                    
+                    tp_price = entry_buy_tp_sl * (1 + take_profit)
+                    sl_price = entry_buy_tp_sl * (1 - stop_loss)
+                    
+                    tp_hit = max_buy_tp_sl >= tp_price
+                    sma_outcomes[tp_sl_indices[tp_hit]] = 1
+                    sma_returns[tp_sl_indices[tp_hit]] = take_profit - 2 * transaction_fee
+                    
+                    sl_hit = (~tp_hit) & (min_buy_tp_sl <= sl_price)
+                    sma_outcomes[tp_sl_indices[sl_hit]] = 2
+                    sma_returns[tp_sl_indices[sl_hit]] = -stop_loss - 2 * transaction_fee
+                    
+                    orig_profit = (~tp_hit) & (~sl_hit) & (max_buy_tp_sl >= entry_buy_tp_sl * 1.01)
+                    sma_outcomes[tp_sl_indices[orig_profit]] = 1
+                    sma_returns[tp_sl_indices[orig_profit]] = ((max_buy_tp_sl[orig_profit] / entry_buy_tp_sl[orig_profit]) - 1) - 2 * transaction_fee
+            
+            sell_mask = np.array([t == 'sell' for t in sma_types])
+            if sell_mask.any():
+                sell_indices = torch.tensor(np.where(sell_mask)[0], device=device)
+                entry_sell = entry_prices[sell_indices]
+                exit_sell = exit_prices[sell_indices]
+                min_sell = sma_min_prices[sell_indices]
+                max_sell = sma_max_prices[sell_indices]
+                close_reason_sell = close_reasons[sell_mask]
+                
+                manual_close = np.array([r in ['opposite_signal', 'end_of_data'] for r in close_reason_sell])
+                if manual_close.any():
+                    manual_indices = sell_indices[torch.tensor(manual_close, device=device)]
+                    sma_returns[manual_indices] = ((entry_sell[manual_close] / exit_sell[manual_close]) - 1) - 2 * transaction_fee
+                    sma_outcomes[manual_indices[sma_returns[manual_indices] > 0]] = 1
+                    sma_outcomes[manual_indices[sma_returns[manual_indices] <= 0]] = 2
+                
+                tp_sl_indices = sell_indices[~torch.tensor(manual_close, device=device)]
+                if len(tp_sl_indices) > 0:
+                    entry_sell_tp_sl = entry_sell[~manual_close]
+                    min_sell_tp_sl = min_sell[~manual_close]
+                    max_sell_tp_sl = max_sell[~manual_close]
+                    
+                    tp_price = entry_sell_tp_sl * (1 - take_profit)
+                    sl_price = entry_sell_tp_sl * (1 + stop_loss)
+                    
+                    tp_hit = min_sell_tp_sl <= tp_price
+                    sma_outcomes[tp_sl_indices[tp_hit]] = 1
+                    sma_returns[tp_sl_indices[tp_hit]] = take_profit - 2 * transaction_fee
+                    
+                    sl_hit = (~tp_hit) & (max_sell_tp_sl >= sl_price)
+                    sma_outcomes[tp_sl_indices[sl_hit]] = 2
+                    sma_returns[tp_sl_indices[sl_hit]] = -stop_loss - 2 * transaction_fee
+                    
+                    orig_profit = (~tp_hit) & (~sl_hit) & (min_sell_tp_sl <= entry_sell_tp_sl * 0.99)
+                    sma_outcomes[tp_sl_indices[orig_profit]] = 1
+                    sma_returns[tp_sl_indices[orig_profit]] = ((entry_sell_tp_sl[orig_profit] / min_sell_tp_sl[orig_profit]) - 1) - 2 * transaction_fee
+            
+            sma_profitable_pct = (sma_outcomes == 1).float().mean().item()
+            sma_avg_return = sma_returns.mean().item() if len(sma_returns) > 0 else 0
+            sma_hit_rate = sma_profitable_pct
+            sma_loss_rate = (sma_outcomes == 2).float().mean().item()
+            
+            print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Baseline (SMA Crossover with SL={stop_loss*100}% and TP={take_profit*100}%) for {timeframe}:")
+            print(f"Profitable Signals: {sma_profitable_pct:.2%}, Avg Return: {sma_avg_return:.4f}, "
+                  f"Hit Rate: {sma_hit_rate:.2%}, Loss Rate: {sma_loss_rate:.2%}")
+    else:
+        print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] No SMA crossover signals generated.")
