@@ -42,11 +42,13 @@ export class BinanceStream {
         //    ? Date.now() - this.storageTime
         //    : this.lastFeedState.lastAggregatedTradeTime; // Max 24 hours or what is last stored
         this.orderFlowAnalyzer = new OrderFlowAnalyzer(
-            5,
+            10,
             0.005,
-            50,
-            15 * 60 * 1000,
-            0.003,
+            70,
+            20 * 60 * 1000,
+            0.004,
+            0.005,
+            0.025,
             "LTCUSDT",
             (signal) => {
                 this.broadcastSignal(signal);

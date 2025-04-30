@@ -2,24 +2,34 @@ import { Signal, VolumeBin, PlotTrade } from "./interfaces";
 
 export class OrderFlowAnalyzer {
     private absorptionWindow: number; // seconds
-    private priceRange: number; // percentage (e.g., 0.003 = 0.3%)
+    private priceRange: number; // percentage
     private minLargeOrder: number; // LTC
     private volumeWindow: number; // milliseconds
-    private confirmThreshold: number; // percentage (e.g., 0.0025 = 0.25%)
+    private confirmThreshold: number; // percentage
+    private defaultStopLoss: number; // percentage (0.005)
+    private invalidStopLoss: number; // percentage (0.001 if invalidated)
+    private takeProfit: number; // percentage
     private confirmationWindow: number; // milliseconds (5 minutes)
+    private invalidationWindow: number; // milliseconds (5 seconds)
     private symbol: string; // e.g., "LTCUSDT"
-    private priceBins: Map<number, VolumeBin> = new Map(); // Volume heat map
-    private signals: Signal[] = []; // Confirmed signals
-    private pendingSignals: Signal[] = []; // Signals awaiting confirmation
-    private recentTrades: PlotTrade[] = []; // Trades within absorptionWindow
+    private priceBins: Map<number, VolumeBin> = new Map();
+    private signals: Signal[] = [];
+    private pendingSignals: Signal[] = [];
+    private recentTrades: PlotTrade[] = [];
+    private activeTrades: { [timeframe: string]: Signal | null } = {
+        Daytime: null,
+        Nighttime: null
+    }; // Track active trade per timeframe
     private callback?: (signal: Signal) => void;
 
     constructor(
-        absorptionWindow: number = 5,
+        absorptionWindow: number = 10, // Optimal from backtest
         priceRange: number = 0.005,
-        minLargeOrder: number = 50,
-        volumeWindow: number = 15 * 60 * 1000,
-        confirmThreshold: number = 0.003,
+        minLargeOrder: number = 70,
+        volumeWindow: number = 20 * 60 * 1000,
+        confirmThreshold: number = 0.004, // Optimal from backtest
+        defaultStopLoss: number = 0.005,
+        takeProfit: number = 0.025,
         symbol: string = "LTCUSDT",
         callback?: (signal: Signal) => void
     ) {
@@ -28,22 +38,26 @@ export class OrderFlowAnalyzer {
         this.minLargeOrder = minLargeOrder;
         this.volumeWindow = volumeWindow;
         this.confirmThreshold = confirmThreshold;
-        this.confirmationWindow = 5 * 60 * 1000; // 5 minutes in milliseconds
+        this.defaultStopLoss = defaultStopLoss;
+        this.invalidStopLoss = 0.001; // Tighter stop loss for invalidated signals
+        this.takeProfit = takeProfit;
+        this.confirmationWindow = 5 * 60 * 1000; // 5 minutes
+        this.invalidationWindow = 5 * 1000; // 5 seconds
         this.symbol = symbol;
         this.callback = callback;
     }
 
     public processTrade(trade: PlotTrade): void {
-        if (trade.symbol !== this.symbol) return; // Filter by symbol
+        if (trade.symbol !== this.symbol) return;
         this.updateRecentTrades(trade);
         this.updateVolumeHeatMap(trade);
-        this.detectAbsorption(trade);
+        const timeframe = this.getTimeframe(trade.time);
+        this.detectAbsorption(trade, timeframe);
         this.checkPendingSignals(trade.time);
     }
 
     private updateRecentTrades(trade: PlotTrade): void {
         const currentTime = trade.time;
-        // Remove trades older than absorptionWindow
         while (
             this.recentTrades.length &&
             currentTime - this.recentTrades[0].time >
@@ -61,12 +75,10 @@ export class OrderFlowAnalyzer {
             bin = { buyVol: 0, sellVol: 0, lastUpdate: trade.time };
             this.priceBins.set(binPrice, bin);
         }
-        // Reset volumes if outside volumeWindow
         if (trade.time - bin.lastUpdate > this.volumeWindow) {
             bin.buyVol = 0;
             bin.sellVol = 0;
         }
-        // Update volumes
         if (trade.orderType === "BUY") {
             bin.buyVol += trade.quantity;
         } else {
@@ -75,7 +87,7 @@ export class OrderFlowAnalyzer {
         bin.lastUpdate = trade.time;
     }
 
-    private detectAbsorption(trade: PlotTrade): void {
+    private detectAbsorption(trade: PlotTrade, timeframe: "Daytime" | "Nighttime"): void {
         if (trade.quantity >= this.minLargeOrder) {
             const opposingTrades = this.recentTrades.filter(
                 (t) => t.orderType !== trade.orderType && t.quantity <= 0.5
@@ -88,26 +100,73 @@ export class OrderFlowAnalyzer {
                         (t) => t.price >= priceMin && t.price <= priceMax
                     )
                 ) {
+                    const signalType =
+                        trade.orderType === "BUY"
+                            ? "sell_absorption" // Buy signal
+                            : "buy_absorption"; // Sell signal
+                    const isInvalidated = this.checkInvalidation(
+                        trade.time,
+                        trade.price,
+                        signalType === "sell_absorption"
+                    );
+                    const stopLossPercent = isInvalidated
+                        ? this.invalidStopLoss
+                        : this.defaultStopLoss;
+                    const stopLossPrice =
+                        signalType === "buy_absorption"
+                            ? trade.price * (1 + stopLossPercent) // Sell: stop loss above entry
+                            : trade.price * (1 - stopLossPercent); // Buy: stop loss below entry
+                    const takeProfitPrice =
+                        signalType === "buy_absorption"
+                            ? trade.price * (1 - this.takeProfit) // Sell: take profit below entry
+                            : trade.price * (1 + this.takeProfit); // Buy: take profit above entry
                     const signal: Signal = {
-                        type: trade.orderType === "BUY" ? "SELL" : "BUY",
+                        type: signalType,
                         time: trade.time,
                         price: trade.price,
-                        quantity: trade.quantity,
-                        status: "pending",
                         tradeIndex: trade.tradeId,
+                        isInvalidated,
+                        stopLoss: stopLossPrice,
+                        takeProfit: takeProfitPrice,
+                        timeframe,
                     };
                     if (this.isNearHighVolume(trade.price)) {
-                        const absorptionType =
-                            signal.type === "BUY"
-                                ? "Sell Absorption (BUY signal)"
-                                : "Buy Absorption (SELL signal)";
-                        console.log(
-                            `${absorptionType} at ${new Date(signal.time).toISOString()}, ` +
-                                `Price: ${signal.price.toFixed(2)}, Quantity: ${signal.quantity.toFixed(2)} LTC`
-                        );
-                        this.pendingSignals.push(signal);
-                        if (this.callback) {
-                            this.callback(signal);
+                        // Check for opposite signal to close active trade
+                        const activeTrade = this.activeTrades[timeframe];
+                        if (
+                            activeTrade &&
+                            ((activeTrade.type === "sell_absorption" &&
+                                signalType === "buy_absorption") ||
+                                (activeTrade.type === "buy_absorption" &&
+                                    signalType === "sell_absorption"))
+                        ) {
+                            const returnVal =
+                                signalType === "sell_absorption"
+                                    ? trade.price / activeTrade.price - 1
+                                    : activeTrade.price / trade.price - 1;
+                            activeTrade.closeReason =
+                                returnVal > 0 ? "take_profit" : "stop_loss";
+                            this.signals.push(activeTrade);
+                            if (this.callback) {
+                                this.callback(activeTrade);
+                            }
+                            this.activeTrades[timeframe] = null;
+                        }
+                        // Only generate new signal if no conflicting active trade
+                        if (!this.activeTrades[timeframe]) {
+                            console.log(
+                                `${signalType} at ${new Date(signal.time).toISOString()}, ` +
+                                    `Price: ${signal.price.toFixed(2)}, ` +
+                                    `Quantity: ${trade.quantity.toFixed(2)} LTC, ` +
+                                    `Timeframe: ${signal.timeframe}, ` +
+                                    `Stop Loss: ${signal.stopLoss.toFixed(2)}, ` +
+                                    `Take Profit: ${signal.takeProfit.toFixed(2)}, ` +
+                                    `Invalidated: ${signal.isInvalidated}`
+                            );
+                            this.pendingSignals.push(signal);
+                            if (this.callback) {
+                                this.callback(signal);
+                            }
                         }
                     }
                 }
@@ -115,15 +174,43 @@ export class OrderFlowAnalyzer {
         }
     }
 
+    private checkInvalidation(signalTime: number, signalPrice: number, isBuySignal: boolean): boolean {
+        let buyVolume = 0;
+        let sellVolume = 0;
+        let minPrice = signalPrice;
+        let maxPrice = signalPrice;
+        for (const trade of this.recentTrades) {
+            if (
+                signalTime < trade.time &&
+                trade.time <= signalTime + this.invalidationWindow
+            ) {
+                if (trade.orderType === "BUY") {
+                    buyVolume += trade.quantity;
+                } else {
+                    sellVolume += trade.quantity;
+                }
+                minPrice = Math.min(minPrice, trade.price);
+                maxPrice = Math.max(maxPrice, trade.price);
+            }
+        }
+        if (isBuySignal) {
+            const volumeCondition = sellVolume > 2 * buyVolume && sellVolume > 0;
+            const priceCondition = minPrice <= signalPrice * (1 - 0.002);
+            return volumeCondition || priceCondition;
+        } else {
+            const volumeCondition = buyVolume > 2 * sellVolume && buyVolume > 0;
+            const priceCondition = maxPrice >= signalPrice * (1 + 0.002);
+            return volumeCondition || priceCondition;
+        }
+    }
+
     private checkPendingSignals(currentTime: number): void {
-        const currentTimeMs = currentTime;
         while (
             this.pendingSignals.length &&
-            currentTimeMs >=
+            currentTime >=
                 this.pendingSignals[0].time + this.confirmationWindow
         ) {
             const signal = this.pendingSignals.shift()!;
-            // Get trades within the 5-minute confirmation window
             const confirmationTrades = this.recentTrades.filter(
                 (t) =>
                     t.time > signal.time &&
@@ -136,28 +223,26 @@ export class OrderFlowAnalyzer {
                 ? Math.min(...confirmationTrades.map((t) => t.price))
                 : signal.price;
             let isConfirmed = false;
-            if (signal.type === "BUY") {
-                // Buy signal (sell absorption): expect price to rise
+            if (signal.type === "sell_absorption") {
+                // Buy signal: expect price to rise
                 if (maxPrice >= signal.price * (1 + this.confirmThreshold)) {
                     isConfirmed = true;
                 }
             } else {
-                // Sell signal (buy absorption): expect price to fall
+                // Sell signal: expect price to fall
                 if (minPrice <= signal.price * (1 - this.confirmThreshold)) {
                     isConfirmed = true;
                 }
             }
-            signal.status = isConfirmed ? "confirmed" : "invalidated";
-            const absorptionType =
-                signal.type === "BUY"
-                    ? "Sell Absorption (BUY signal)"
-                    : "Buy Absorption (SELL signal)";
+            signal.closeReason = isConfirmed ? undefined : "invalidated";
             console.log(
-                `${signal.status.charAt(0).toUpperCase() + signal.status.slice(1)}: ` +
-                    `${absorptionType} at ${new Date(signal.time + this.confirmationWindow).toISOString()}, ` +
-                    `Price: ${signal.price.toFixed(2)}, Quantity: ${signal.quantity.toFixed(2)} LTC`
+                `${isConfirmed ? "Confirmed" : "Invalidated"}: ` +
+                    `${signal.type} at ${new Date(signal.time + this.confirmationWindow).toISOString()}, ` +
+                    `Price: ${signal.price.toFixed(2)}, ` +
+                    `Timeframe: ${signal.timeframe}`
             );
             if (isConfirmed) {
+                this.activeTrades[signal.timeframe] = signal;
                 this.signals.push(signal);
             }
             if (this.callback) {
@@ -182,13 +267,44 @@ export class OrderFlowAnalyzer {
             (bin) => bin.buyVol + bin.sellVol
         );
         if (!volumes.length) return 0;
-        // Calculate 90th percentile
         volumes.sort((a, b) => a - b);
         const index = Math.floor(0.9 * volumes.length);
         return volumes[index] || 0;
     }
 
+    private getTimeframe(timestamp: number): "Daytime" | "Nighttime" {
+        const date = new Date(timestamp);
+        // Convert to Lima time (UTC-5)
+        const limaOffset = -5 * 60; // UTC-5 in minutes
+        const utcMinutes = date.getUTCHours() * 60 + date.getUTCMinutes();
+        const limaMinutes = (utcMinutes + limaOffset + 24 * 60) % (24 * 60);
+        const limaHour = Math.floor(limaMinutes / 60);
+        return limaHour >= 6 && limaHour < 22 ? "Daytime" : "Nighttime";
+    }
+
     public getSignals(): Signal[] {
         return [...this.signals];
+    }
+
+    // Method to close active trade (e.g., for end of data or external call)
+    public closeActiveTrade(
+        exitPrice: number,
+        exitTime: number,
+        tradeIndex: number,
+        timeframe: "Daytime" | "Nighttime",
+        reason: "take_profit" | "stop_loss" | "end_of_data"
+    ): void {
+        const activeTrade = this.activeTrades[timeframe];
+        if (activeTrade) {
+            activeTrade.closeReason = reason;
+            activeTrade.price = exitPrice; // Update exit price
+            activeTrade.time = exitTime; // Update exit time
+            activeTrade.tradeIndex = tradeIndex;
+            this.signals.push(activeTrade);
+            if (this.callback) {
+                this.callback(activeTrade);
+            }
+            this.activeTrades[timeframe] = null;
+        }
     }
 }
