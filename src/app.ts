@@ -187,6 +187,20 @@ export class BinanceStream {
 
     private async broadcastSignal(signal: Signal) {
         console.log("Broadcasting signal:", signal);
+        // Send the signal to the webhook URL
+        const webhookUrl = process.env.WEBHOOK_URL;
+        if (webhookUrl) {
+            const message = {
+                type: signal.type === "buy_absorption" ? "Sell signal" : "Buy signal",
+                time: signal.time,
+                price: signal.price,
+                label: signal.closeReason,
+            };
+            await this.sendWebhookMessage(webhookUrl, message);
+        } else {
+            console.warn("No webhook URL provided");
+        }
+        // Send the signal to the connected clients
         this.wss.clients.forEach((client) => {
             if (client.readyState === WebSocket.OPEN) {
                 client.send(
@@ -197,6 +211,26 @@ export class BinanceStream {
                 );
             }
         });
+    }
+
+    private async sendWebhookMessage(webhookUrl: string, message: object): Promise<void> {
+        try {
+            const response = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(message),
+            });
+    
+            if (!response.ok) {
+                throw new Error(`Webhook request failed: ${response.status} ${response.statusText}`);
+            }
+    
+            console.log('Webhook message sent successfully');
+        } catch (error) {
+            console.error('Error sending webhook message:', error);
+        }
     }
 
     public async main() {
