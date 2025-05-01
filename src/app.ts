@@ -194,6 +194,8 @@ export class BinanceStream {
                 type: signal.type === "buy_absorption" ? "Sell signal" : "Buy signal",
                 time: signal.time,
                 price: signal.price,
+                takeProfit: signal.takeProfit,
+                stopLoss: signal.stopLoss,
                 label: signal.closeReason,
             };
             await this.sendWebhookMessage(webhookUrl, message);

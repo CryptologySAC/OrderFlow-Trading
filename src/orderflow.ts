@@ -147,9 +147,9 @@ export class OrderFlowAnalyzer {
                             activeTrade.closeReason =
                                 returnVal > 0 ? "take_profit" : "stop_loss";
                             this.signals.push(activeTrade);
-                            if (this.callback) {
-                                this.callback(activeTrade);
-                            }
+                            //if (this.callback) {
+                            //    this.callback(activeTrade);
+                           // }
                             this.activeTrades[timeframe] = null;
                         }
                         // Only generate new signal if no conflicting active trade
