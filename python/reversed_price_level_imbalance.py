@@ -99,13 +99,21 @@ def check_trade_outcome(args):
         tp_indices = torch.where(tp_hit)[0]
         sl_indices = torch.where(sl_hit)[0]
         
+        # Convert trade_time (ms) to datetime and extract date, day of week
+        trade_datetime = datetime.fromtimestamp(trade_time / 1000)
+        trade_date = trade_datetime.date().isoformat()
+        day_of_week = trade_datetime.strftime('%A')
+        
         if len(tp_indices) > 0 and (len(sl_indices) == 0 or tp_indices[0] < sl_indices[0]):
             return {
                 'trade_id': trade_id,
                 'trade_type': trade_type,
                 'outcome': 'TP First',
                 'net_flow_threshold': net_flow_threshold,
-                'price_proximity': price_proximity
+                'price_proximity': price_proximity,
+                'trade_time': trade_time,
+                'date': trade_date,
+                'day_of_week': day_of_week
             }
         elif len(sl_indices) > 0 and (len(tp_indices) == 0 or sl_indices[0] < tp_indices[0]):
             return {
@@ -113,7 +121,10 @@ def check_trade_outcome(args):
                 'trade_type': trade_type,
                 'outcome': 'SL First',
                 'net_flow_threshold': net_flow_threshold,
-                'price_proximity': price_proximity
+                'price_proximity': price_proximity,
+                'trade_time': trade_time,
+                'date': trade_date,
+                'day_of_week': day_of_week
             }
         print(f"Trade {trade_id} not closed")
         return None
@@ -191,7 +202,7 @@ def process_grid_search():
         print(f"Buy Signals: Preferred action: {buy_action}, Effective TP: {buy_effective_tp:.2f}%")
         print(f"Sell Signals: Preferred action: {sell_action}, Effective TP: {sell_effective_tp:.2f}%")
         
-        # Save individual CSV
+        # Save individual CSV with new fields
         outcome_df.to_csv(f'ltcusdt_price_level_imbalance_flow_{net_flow_threshold}_prox_{price_proximity}.csv', index=False)
     
     # Save summary CSV
