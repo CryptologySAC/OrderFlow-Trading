@@ -3,4 +3,6 @@ node_modules/
 trades.db
 trades.db-journal
 python/*.csv
+python/*.png
+python/*.log
 dist/
