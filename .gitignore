@@ -1,6 +1,6 @@
 node_modules/
 .env
 trades.db
+trades.db-journal
 python/*.csv
 dist/
-python/swing_high_pattern_detector_db.py
