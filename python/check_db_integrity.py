@@ -110,9 +110,9 @@ def analyze_distribution(conn):
         return
     
     df['tradeTime'] = df['tradeTime'].apply(convert_timestamp_to_datetime)
-    plt.figure(figsize=(12, 6))
-    plt.hist(df['tradeTime'], bins=50, color='blue', alpha=0.7)
-    plt.title("Distribution of Trades Over Time (Jan 27 - May 1, 2025)")
+    plt.figure(figsize=(24, 12), dpi=600)
+    plt.hist(df['tradeTime'], bins=1000, color='blue', alpha=0.7)
+    plt.title("Distribution of Trades Over Time")
     plt.xlabel("Time")
     plt.ylabel("Number of Trades")
     plt.grid(True)
@@ -136,7 +136,7 @@ def main():
 
         # Check for gaps in timestamps
         print("\n=== Checking for Gaps in Timestamps ===")
-        check_timestamp_gaps(conn, threshold_seconds=60)  # 60 sec threshold
+        check_timestamp_gaps(conn, threshold_seconds=30)  # 60 sec threshold
 
         # Check for duplicates
         #print("\n=== Checking for Duplicates ===")

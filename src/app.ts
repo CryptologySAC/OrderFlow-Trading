@@ -34,7 +34,7 @@ export class BinanceStream {
         this.symbol = process.env.SYMBOL ?? "ltcusdt"; // Default to ltcusdt if not provided
         this.storage = new Storage();
         this.storageTime = (process.env.MAX_STORAGE_TIME ??
-            1000 * 60 * 60 * 8) as number; // 8 hrs in ms
+            1000 * 60 * 60 * 24) as number; // 24 hrs in ms
 
         // this.lastFeedState = this.storage.getLastFeedState();
         this.thresholdTime = Date.now() - this.storageTime; // >
