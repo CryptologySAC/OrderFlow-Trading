@@ -1,3 +1,5 @@
+import e from "express";
+
 export interface PlotTrade {
     time: number; // eventTime in milliseconds
     price: number;
@@ -78,4 +80,15 @@ export interface FeedState {
     lastTradeTime: number;
     lastAggregatedTradeId: number;
     lastAggregatedTradeTime: number;
+}
+
+export interface SwingPoint {
+    tradeId: number;  
+    price: number;
+    timeStamp: number;
+}
+
+export enum HighLow {           
+    HIGH = 1,
+    LOW = -1
 }
