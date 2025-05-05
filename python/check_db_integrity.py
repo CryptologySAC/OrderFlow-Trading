@@ -75,7 +75,7 @@ def check_timestamp_gaps(conn, threshold_seconds=3600):
         for _, row in gaps.head(10).iterrows():  # Limit to first 10 for brevity
             start_time = convert_timestamp_to_datetime(row['prev_tradeTime'])
             end_time = convert_timestamp_to_datetime(row['tradeTime'])
-            print(f"Gap from {start_time} to {end_time}: {row['time_diff_seconds']:.2f} seconds | distance: {int( time.time() - (row['prev_tradeTime']/1000) )}000" )
+            print(f"Gap from {start_time} to {end_time}: {row['time_diff_seconds']:.0f} seconds | distance: {int( time.time() - (row['prev_tradeTime']/1000) )}000" )
         if len(gaps) > 10:
             print(f"... and {len(gaps) - 10} more gaps.")
     else:
@@ -131,12 +131,12 @@ def main():
         total_trades, min_time, max_time = check_data_coverage(conn)
 
         # Check for gaps in tradeId sequence
-        print("\n=== Checking for Gaps in Trade IDs ===")
-        check_trade_id_gaps(conn)
+        #print("\n=== Checking for Gaps in Trade IDs ===")
+        #check_trade_id_gaps(conn)
 
         # Check for gaps in timestamps
         print("\n=== Checking for Gaps in Timestamps ===")
-        check_timestamp_gaps(conn, threshold_seconds=3600)  # 1 hour threshold
+        check_timestamp_gaps(conn, threshold_seconds=60)  # 60 sec threshold
 
         # Check for duplicates
         #print("\n=== Checking for Duplicates ===")
