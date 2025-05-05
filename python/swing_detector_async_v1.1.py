@@ -7,8 +7,8 @@ from datetime import datetime
 DB_PATH = "../trades.db"
 START_DATE = "2025-01-27"
 END_DATE = "2025-05-01"
-THRESHOLD_DROP = 0.02  # 1% threshold for confirming swings and forming pairs
-THRESHOLD_UP = 0.005 # 0.5% threshold for SL
+THRESHOLD_DROP = 0.02  # 2% threshold for confirming HP
+THRESHOLD_UP = 0.005   # 0.5% threshold for SL and LP confirmation
 
 class SwingDetector:
     def __init__(self):
@@ -33,9 +33,19 @@ class SwingDetector:
         # Update contenders and confirm swings
         if self.last_type == 'low':
             # Looking for a Highest Point (HP)
+            # Check if price rises >=0.5% above current_hp before dropping >=2%
+            price_rise = (price - self.current_hp[2]) / self.current_hp[2]
+            if price_rise >= THRESHOLD_UP:
+                # Price rose >=0.5% above the HP candidate, update HP and continue
+                self.current_hp = (index, time, price)
+                return
+
+            # Update HP if price is higher
             if price > self.current_hp[2]:
                 self.current_hp = (index, time, price)
-            # Check if price drops >=1% below the current HP to confirm it
+                return
+
+            # Check if price drops >=2% below the current HP to confirm it
             price_drop = (self.current_hp[2] - price) / self.current_hp[2]
             if price_drop >= THRESHOLD_DROP:
                 # Confirm the HP as a swing high
@@ -44,18 +54,19 @@ class SwingDetector:
                 self.last_type = 'high'
                 # Start looking for an LP
                 self.current_lp = (index, time, price)
+
         else:  # last_type == 'high'
             # Looking for a Lowest Point (LP)
             if price < self.current_lp[2]:
                 self.current_lp = (index, time, price)
-            # Check if price rises >=1% above the current LP to confirm it
+            # Check if price rises >=0.5% above the current LP to confirm it
             price_rise = (price - self.current_lp[2]) / self.current_lp[2]
             if price_rise >= THRESHOLD_UP:
                 # Confirm the LP as a swing low
                 self.swings.append((self.current_lp[0], 'low', self.current_lp[1], self.current_lp[2]))
                 self.previous_lp = self.current_lp
                 self.last_type = 'low'
-                # Form a pair if drop from previous HP to this LP is >=1%
+                # Form a pair if drop from previous HP to this LP is >=2%
                 if self.previous_hp:
                     price_drop_from_high = (self.previous_hp[2] - self.current_lp[2]) / self.previous_hp[2]
                     if price_drop_from_high >= THRESHOLD_DROP:
@@ -123,8 +134,8 @@ def main():
         return
 
     # Save to CSV
-    pairs_df.to_csv("swing_high_low_pairs_async_v1.0.csv", index=False)
-    print("Results saved to 'swing_high_low_pairs_async_v1.0.csv'.")
+    pairs_df.to_csv("swing_high_low_pairs_async_v1.1.csv", index=False)
+    print("Results saved to 'swing_high_low_pairs_async_v1.1.csv'.")
 
     # Statistics
     print(f"Number of pairs: {len(pairs_df)}")
@@ -138,9 +149,9 @@ def main():
     plt.xlabel("Time")
     plt.ylabel("Frequency")
     plt.grid(True)
-    plt.savefig("swing_pairs_distribution_async_v1.0.png")
+    plt.savefig("swing_pairs_distribution_async_v1.1.png")
     plt.close()
-    print("Distribution plot saved to 'swing_pairs_distribution_async_v1.0.png'.")
+    print("Distribution plot saved to 'swing_pairs_distribution_async_v1.1.png'.")
 
 if __name__ == "__main__":
     main()
