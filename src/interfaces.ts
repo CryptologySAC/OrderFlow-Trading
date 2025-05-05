@@ -1,4 +1,3 @@
-import e from "express";
 
 export interface PlotTrade {
     time: number; // eventTime in milliseconds
