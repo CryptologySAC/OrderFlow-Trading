@@ -2,6 +2,7 @@ import sqlite3
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
+import time;
 
 # Database configuration
 DB_PATH = "../trades.db"
@@ -74,7 +75,7 @@ def check_timestamp_gaps(conn, threshold_seconds=3600):
         for _, row in gaps.head(10).iterrows():  # Limit to first 10 for brevity
             start_time = convert_timestamp_to_datetime(row['prev_tradeTime'])
             end_time = convert_timestamp_to_datetime(row['tradeTime'])
-            print(f"Gap from {start_time} to {end_time}: {row['time_diff_seconds']:.2f} seconds")
+            print(f"Gap from {start_time} to {end_time}: {row['time_diff_seconds']:.2f} seconds | distance: {int( time.time() - (row['prev_tradeTime']/1000) )}000" )
         if len(gaps) > 10:
             print(f"... and {len(gaps) - 10} more gaps.")
     else:
@@ -138,8 +139,8 @@ def main():
         check_timestamp_gaps(conn, threshold_seconds=3600)  # 1 hour threshold
 
         # Check for duplicates
-        print("\n=== Checking for Duplicates ===")
-        check_duplicates(conn)
+        #print("\n=== Checking for Duplicates ===")
+        #check_duplicates(conn)
 
         # Analyze distribution across time
         print("\n=== Analyzing Trade Distribution Across Time ===")
