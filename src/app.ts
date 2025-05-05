@@ -55,7 +55,7 @@ export class BinanceStream {
             }
         );
         this.app = express();
-        this.wss = new Server({ port: 3001 });
+        this.wss = new Server({ port: this.port +1 });
 
         this.wss.on("connection", (ws) => {
             console.log("Client connected");
