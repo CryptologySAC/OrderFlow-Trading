@@ -3,3 +3,4 @@ node_modules/
 trades.db
 python/*.csv
 dist/
+python/swing_high_pattern_detector_db.py
