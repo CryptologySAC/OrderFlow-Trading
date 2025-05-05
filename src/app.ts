@@ -25,7 +25,7 @@ export class BinanceStream {
     private thresholdTime: number;
     private readonly orderFlowAnalyzer: OrderFlowAnalyzer;
     private readonly app: express.Application;
-    private readonly port: number = 3000;
+    private readonly port: number = (process.env.PORT ?? 3000) as number;
     private readonly wss: Server;
 
     constructor() {
