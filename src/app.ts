@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 import {
     PlotTrade,
     // FeedState /*, MarketOrder, OrderType /*, AbsorptionLabel */,
-    Signal,
+    Signal, OrderBook
 } from "./interfaces";
 import express from "express";
 import path from "path";
@@ -26,7 +26,13 @@ export class BinanceStream {
     private readonly orderFlowAnalyzer: OrderFlowAnalyzer;
     private readonly app: express.Application;
     private readonly port: number = (process.env.PORT ?? 3000) as number;
+    private readonly wsPort: number = (process.env.WS_PORT ?? 3001) as number;
     private readonly wss: Server;
+    private orderBook: OrderBook = {
+        lastUpdateId: 0,
+        bids: [],
+        asks: []
+    };
 
     constructor() {
         // Initialize the Binance stream client
@@ -55,7 +61,7 @@ export class BinanceStream {
             }
         );
         this.app = express();
-        this.wss = new Server({ port: this.port +1 });
+        this.wss = new Server({ port: this.wsPort });
 
         this.wss.on("connection", (ws) => {
             console.log("Client connected");
@@ -65,6 +71,16 @@ export class BinanceStream {
                 JSON.stringify({
                     type: "backlog",
                     data: backlog /*, signals: backLogSignals */,
+                })
+            );
+            ws.send(
+                JSON.stringify({
+                    type: "orderbook",
+                    data: {
+                        a: this.orderBook.asks,
+                        b: this.orderBook.bids,
+                        e: "depthUpdate"
+                    },
                 })
             );
             ws.on("close", () => console.log("Client disconnected"));
@@ -118,6 +134,16 @@ export class BinanceStream {
         }
     }
 
+    private async fillOrderBook() {
+        try {
+            const orderBookInitial: SpotWebsocketAPI.DepthResponseResult = await this.binanceFeed.fetchOrderBookDepth(this.symbol);
+            this.orderBook = this.binanceFeed.processInitialOrderBook(orderBookInitial);     
+            
+        } catch (error) {
+            console.warn("OrderBook filled:", error);
+        } 
+    }
+
     private requestBacklog(): PlotTrade[] {
         const backLog: PlotTrade[] = [];
         this.aggTradeTemp = this.storage.getLatestAggregatedTrades(
@@ -145,7 +171,44 @@ export class BinanceStream {
             await this.binanceFeed.connectToStreams();
         try {
             const streamAggTrade = connection.aggTrade({ symbol: this.symbol });
-            // const streamTrade = connection.trade({ symbol})
+            const streamDepth = connection.diffBookDepth({ symbol: this.symbol, updateSpeed: "100ms"})
+
+            streamDepth.on(
+                "message",
+                (data: SpotWebsocketStreams.DiffBookDepthResponse) => {
+                    let orderBook = this.binanceFeed.processOrderBook(data);
+                    const currentPrice = parseFloat(orderBook.asks[0]?.price || '0'); // Approximate current price
+                    const topAsksQty = orderBook.asks
+                        .filter(level => parseFloat(level.price) <= currentPrice * 1.005)
+                        .reduce((sum, level) => sum + parseFloat(level.quantity), 0);
+                    const topBidsQty = orderBook.bids
+                        .filter(level => parseFloat(level.price) >= currentPrice * 0.995)
+                        .reduce((sum, level) => sum + parseFloat(level.quantity), 0);
+
+                    // Assume some external logic tracks the Sell Volume Surge signal
+                    const hasSellVolumeSurge = true; // Replace with actual signal detection
+                    if (hasSellVolumeSurge && topAsksQty >= 1.5 * topBidsQty) {
+                        console.log('Confirmed Sell Volume Surge with order book: high ask quantity detected!');
+                    }     
+                    
+                    try {
+                        // Broadcast trade to all connected clients
+                        this.wss.clients.forEach((client) => {
+                            if (client.readyState === WebSocket.OPEN) {
+                                client.send(
+                                    JSON.stringify({
+                                        type: "orderbook",
+                                        data,
+                                    })
+                                );
+                            }
+                        });
+                    } catch (error) {
+                        console.error("Error broadcasting trade:", error);
+                    }
+                    
+                }
+            );
 
             streamAggTrade.on(
                 "message",
@@ -243,6 +306,7 @@ export class BinanceStream {
         });
 
         try {
+            await this.fillOrderBook();
             await this.fillBacklog();
         } catch (error) {
             console.error("Error in main function:", error);

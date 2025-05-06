@@ -91,3 +91,15 @@ export enum HighLow {
     HIGH = 1,
     LOW = -1
 }
+
+export interface OrderBookLevel {
+    price: string;
+    quantity: string;
+}
+
+// Interface for the order book state
+export interface OrderBook {
+    lastUpdateId: number;
+    bids: OrderBookLevel[];
+    asks: OrderBookLevel[];
+}
