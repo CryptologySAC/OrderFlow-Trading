@@ -5,12 +5,13 @@ import dotenv from "dotenv";
 import {
     PlotTrade,
     // FeedState /*, MarketOrder, OrderType /*, AbsorptionLabel */,
-    Signal, OrderBook
+    Signal
 } from "./interfaces";
 import express from "express";
 import path from "path";
 import { Server } from "ws";
 import { OrderFlowAnalyzer } from "./orderflow";
+import { OrderBook } from "./orderBook";
 
 dotenv.config();
 
@@ -28,11 +29,8 @@ export class BinanceStream {
     private readonly port: number = (process.env.PORT ?? 3000) as number;
     private readonly wsPort: number = (process.env.WS_PORT ?? 3001) as number;
     private readonly wss: Server;
-    private orderBook: OrderBook = {
-        lastUpdateId: 0,
-        bids: [],
-        asks: []
-    };
+   
+    private orderBook: OrderBook = new OrderBook({lastUpdateId:0, bids:[], asks:[]}); // Initialize with empty order book
 
     constructor() {
         // Initialize the Binance stream client
@@ -76,11 +74,7 @@ export class BinanceStream {
             ws.send(
                 JSON.stringify({
                     type: "orderbook",
-                    data: {
-                        a: this.orderBook.asks,
-                        b: this.orderBook.bids,
-                        e: "depthUpdate"
-                    },
+                    data: this.orderBook.getOrderBook(),
                 })
             );
             ws.on("close", () => console.log("Client disconnected"));
@@ -137,7 +131,7 @@ export class BinanceStream {
     private async fillOrderBook() {
         try {
             const orderBookInitial: SpotWebsocketAPI.DepthResponseResult = await this.binanceFeed.fetchOrderBookDepth(this.symbol);
-            this.orderBook = this.binanceFeed.processInitialOrderBook(orderBookInitial);     
+            this.orderBook = new OrderBook(orderBookInitial);     
             
         } catch (error) {
             console.warn("OrderBook filled:", error);
@@ -176,20 +170,22 @@ export class BinanceStream {
             streamDepth.on(
                 "message",
                 (data: SpotWebsocketStreams.DiffBookDepthResponse) => {
-                    let orderBook = this.binanceFeed.processOrderBook(data);
-                    const currentPrice = parseFloat(orderBook.asks[0]?.price || '0'); // Approximate current price
-                    const topAsksQty = orderBook.asks
-                        .filter(level => parseFloat(level.price) <= currentPrice * 1.005)
-                        .reduce((sum, level) => sum + parseFloat(level.quantity), 0);
-                    const topBidsQty = orderBook.bids
-                        .filter(level => parseFloat(level.price) >= currentPrice * 0.995)
-                        .reduce((sum, level) => sum + parseFloat(level.quantity), 0);
+                    this.orderBook.updateOrderBook(data);
+                    //let orderBook = this.binanceFeed.processOrderBook(data);
+                    //const currentPrice = parseFloat(orderBook.asks[0]?.price || '0'); // Approximate current price
+                    //const topAsksQty = orderBook.asks
+                     //   .filter(level => parseFloat(level.price) <= currentPrice * 1.005)
+                     //   .reduce((sum, level) => sum + parseFloat(level.quantity), 0);
+                    //const topBidsQty = orderBook.bids
+                     //   .filter(level => parseFloat(level.price) >= currentPrice * 0.995)
+                     //   .reduce((sum, level) => sum + parseFloat(level.quantity), 0);
 
                     // Assume some external logic tracks the Sell Volume Surge signal
-                    const hasSellVolumeSurge = true; // Replace with actual signal detection
-                    if (hasSellVolumeSurge && topAsksQty >= 1.5 * topBidsQty) {
-                        console.log('Confirmed Sell Volume Surge with order book: high ask quantity detected!');
-                    }     
+                    //const hasSellVolumeSurge = true; // Replace with actual signal detection
+                    //if (hasSellVolumeSurge && topAsksQty >= 1.5 * topBidsQty) {
+                    //    console.log('Confirmed Sell Volume Surge with order book: high ask quantity detected!');
+                    //}     
+                    
                     
                     try {
                         // Broadcast trade to all connected clients
@@ -198,7 +194,7 @@ export class BinanceStream {
                                 client.send(
                                     JSON.stringify({
                                         type: "orderbook",
-                                        data,
+                                        data: this.orderBook.getOrderBook(),
                                     })
                                 );
                             }

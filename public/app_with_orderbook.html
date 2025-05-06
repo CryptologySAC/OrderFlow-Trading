@@ -260,8 +260,7 @@
               callback: (value) => Math.abs(value).toFixed(0) // Show absolute values
             },
             grid: { drawOnChartArea: true },
-            min: -500, // Adjust based on expected max quantity
-            max: 500
+            
           },
           'x-hidden': {
             type: 'linear',
@@ -276,9 +275,9 @@
               precision: 2,
               callback: (value) => value.toFixed(2)
             },
-            title: { display: true, text: 'Price (USDT)' },
+            title: { display: false, text: 'Price (USDT)' },
             grace: 0.05,
-            offset: true,
+            offset: true
           }
         },
         plugins: {
@@ -302,12 +301,12 @@
     const trades = [];
     const orderBookData = { bids: [], asks: [], lastPrice: null };
     const maxTrades = 20000;
-    const maxOrderBookLevels = 10; // Display up to 10 price levels per side
+    const maxOrderBookLevels = 50; // Display up to 50 price levels per side
     let annotationId = 0;
     let activeRange = null;
-    let tickGrouping = 1; // Default to 1 tick (0.01 USDT)
+    let tickGrouping = 5; // Default to 1 tick (0.01 USDT)
     const tickSize = 0.01; // 1 tick = 0.01 USDT
-    const paddingTime = 20000; // 20 seconds margin for latest marker
+   // const paddingTime = 20000; // 20 seconds margin for latest marker
 
     // Validate trade data
     function isValidTrade(trade) {
@@ -336,11 +335,7 @@
 
     // Validate order book data
     function isValidOrderBookUpdate(data) {
-      if (!data || !data.e || data.e !== 'depthUpdate') {
-        console.warn('Invalid order book update:', data);
-        return false;
-      }
-      if (!Array.isArray(data.b) || !Array.isArray(data.a)) {
+      if (!Array.isArray(data.bids) || !Array.isArray(data.asks)) {
         console.warn('Invalid bids or asks in order book update:', data);
         return false;
       }
@@ -492,14 +487,12 @@
         console.log('%s backlog trades processed.', trades.length);
         tradeChart.data.datasets[0].data = trades;
         if (trades.length > 0) {
-          const latestPrice = trades[trades.length - 1].y;
-          orderBookData.lastPrice = latestPrice; // Update last price from trade data
           tradeChart.options.plugins.annotation.annotations.lastPriceLine.yMin = latestPrice;
           tradeChart.options.plugins.annotation.annotations.lastPriceLine.yMax = latestPrice;
           if (activeRange !== null) {
             const latestTime = trades[trades.length - 1].x;
-            tradeChart.options.scales.x.min = latestTime - activeRange;
-            tradeChart.options.scales.x.max = latestTime + paddingTime;
+            //tradeChart.options.scales.x.min = latestTime - activeRange;
+            //tradeChart.options.scales.x.max = latestTime + paddingTime;
           }
         }
         tradeChart.update();
@@ -511,6 +504,7 @@
           tradeChart.data.datasets[0].data = trades;
           tradeChart.options.plugins.annotation.annotations.lastPriceLine.yMin = trade.price;
           tradeChart.options.plugins.annotation.annotations.lastPriceLine.yMax = trade.price;
+          orderBookData.lastPrice = trade.price; // Update last price from trade data
           orderBookData.lastPrice = trade.price; // Update last price from trade data
           if (activeRange !== null) {
             tradeChart.options.scales.x.max = trade.time + paddingTime;
@@ -538,7 +532,7 @@
       } else if (message.type === 'orderbook') {
         const data = message.data;
         if (isValidOrderBookUpdate(data)) {
-          updateOrderBook(data.b, data.a);
+          updateOrderBook(data.bids, data.asks);
         }
       }
     };
