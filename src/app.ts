@@ -165,7 +165,7 @@ export class BinanceStream {
             await this.binanceFeed.connectToStreams();
         try {
             const streamAggTrade = connection.aggTrade({ symbol: this.symbol });
-            const streamDepth = connection.diffBookDepth({ symbol: this.symbol, updateSpeed: "100ms"})
+            /*const streamDepth = connection.diffBookDepth({ symbol: this.symbol, updateSpeed: "100ms"})
 
             streamDepth.on(
                 "message",
@@ -205,7 +205,7 @@ export class BinanceStream {
                     
                 }
             );
-
+            */
             streamAggTrade.on(
                 "message",
                 (data: SpotWebsocketStreams.AggTradeResponse) => {

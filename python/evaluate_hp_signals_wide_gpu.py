@@ -140,6 +140,9 @@ def process_chunk(chunk_start, total_trades):
     return signal_results
 
 if __name__ == '__main__':
+    # Opt-in to future Pandas behavior to avoid FutureWarning
+    pd.set_option('future.no_silent_downcasting', True)
+
     # Load HP data from CSV
     hp_df = pd.read_csv('swing_high_low_pairs_filtered_v1.1.csv')
     hp_df['high_time'] = pd.to_datetime(hp_df['high_time'])
@@ -162,25 +165,19 @@ if __name__ == '__main__':
 
     # Add HP-related metrics
     signal_occurrences_df = pd.DataFrame(signal_occurrences)
-    for idx, result in signal_occurrences_df.iterrows():
-        future_hps = hp_df[hp_df['high_time'] > result['time']]
-        if future_hps.empty:
-            signal_occurrences_df.at[idx, 'time_to_next_hp'] = float('inf')
-            continue
-        nearest_hp = future_hps.iloc[0]
-        time_to_next_hp = (nearest_hp['high_time'] - result['time']).total_seconds()
-        hp_price = nearest_hp['high_price']
-        price_diff_percent = ((result['current_price'] - hp_price) / hp_price) * 100
-        signal_occurrences_df.at[idx, 'time_to_next_hp'] = time_to_next_hp
-        signal_occurrences_df.at[idx, 'price_diff_percent'] = price_diff_percent
-        signal_occurrences_df.at[idx, 'nearest_hp_time'] = nearest_hp['high_time']
+    signal_columns = ['sell_volume_increase', 'negative_delta', 'trade_rate_increase', 'price_rally']
+
+    # Ensure all signal columns exist, defaulting to False if missing
+    for col in signal_columns:
+        if col not in signal_occurrences_df.columns:
+            signal_occurrences_df[col] = False
+        else:
+            signal_occurrences_df[col] = signal_occurrences_df[col].astype(bool)
 
     # Calculate occurrence statistics across the entire database
-    signal_columns = ['sell_volume_increase', 'negative_delta', 'trade_rate_increase', 'price_rally']
     total_trades_processed = total_trades - TRADES_PER_CHECK + 1
     frequencies = {}
     for col in signal_columns:
-        signal_occurrences_df[col] = signal_occurrences_df[col].fillna(False)
         count = signal_occurrences_df[col].sum()
         frequency = count / total_trades_processed if total_trades_processed > 0 else 0
         frequencies[col] = {'count': count, 'frequency': frequency}
