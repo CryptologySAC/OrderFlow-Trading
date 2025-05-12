@@ -57,14 +57,14 @@ export interface AbsorptionLabel {
 
 // Signal interface matching Python's structure
 export interface Signal {
-    type: "buy_absorption" | "sell_absorption"; // Matches Python: buy_absorption (sell), sell_absorption (buy)
+    type: "buy_absorption" | "sell_absorption" | "flow"; // Matches Python: buy_absorption (sell), sell_absorption (buy)
     time: number; // Timestamp in milliseconds
-    price: number;
+    price?: number;
     tradeIndex?: number;
-    isInvalidated: boolean; // True if invalidated (tighter stop loss)
-    stopLoss: number; // Stop loss price
-    takeProfit: number; // Take profit price
-    timeframe: "Daytime" | "Nighttime";
+    isInvalidated?: boolean; // True if invalidated (tighter stop loss)
+    stopLoss?: number; // Stop loss price
+    takeProfit?: number; // Take profit price
+    timeframe?: "Daytime" | "Nighttime";
     closeReason?: "take_profit" | "stop_loss" | "opposite_signal" | "end_of_data" | "invalidated"; // Set when closed
 }
 

@@ -12,6 +12,7 @@ import path from "path";
 import { Server } from "ws";
 import { OrderFlowAnalyzer } from "./orderflow";
 import { OrderBook } from "./orderBook";
+import { ShpFlowDetector } from "./shp-flow-detector";
 
 dotenv.config();
 
@@ -29,7 +30,7 @@ export class BinanceStream {
     private readonly port: number = (process.env.PORT ?? 3000) as number;
     private readonly wsPort: number = (process.env.WS_PORT ?? 3001) as number;
     private readonly wss: Server;
-   
+    private readonly shpFlowDetector: ShpFlowDetector; 
     private orderBook: OrderBook = new OrderBook({lastUpdateId:0, bids:[], asks:[]}); // Initialize with empty order book
 
     constructor() {
@@ -54,6 +55,11 @@ export class BinanceStream {
             0.005,
             0.025,
             "LTCUSDT",
+            (signal) => {
+                this.broadcastSignal(signal);
+            }
+        );
+        this.shpFlowDetector = new ShpFlowDetector(
             (signal) => {
                 this.broadcastSignal(signal);
             }
@@ -106,6 +112,7 @@ export class BinanceStream {
                                 trade,
                                 this.symbol
                             );
+                            this.shpFlowDetector.addTrade(trade);
                         }
                     }
                 );
