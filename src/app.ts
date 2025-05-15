@@ -56,7 +56,7 @@ export class BinanceStream {
             0.025,
             "LTCUSDT",
             (signal) => {
-                this.broadcastSignal(signal);
+                console.log(signal); //this.broadcastSignal(signal);
             }
         );
         this.shpFlowDetector = new ShpFlowDetector(

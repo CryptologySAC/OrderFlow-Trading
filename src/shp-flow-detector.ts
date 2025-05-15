@@ -386,7 +386,11 @@ class ShpFlowDetector {
         // Emit the signal via callback
         const signal: Signal = {
             type: "flow",
-            time: windowEndMs, // Timestamp in milliseconds
+            price: 100,
+            time: windowEndMs,
+            timeframe: "Daytime",
+            stopLoss:100,
+            takeProfit:100, // Timestamp in milliseconds
         };
         this.signalCallback(signal);
     }

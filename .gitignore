@@ -6,3 +6,4 @@ python/*.csv
 python/*.png
 python/*.log
 dist/
+python/shp_plots/
