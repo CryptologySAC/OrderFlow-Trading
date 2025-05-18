@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LTCUSDT Trading Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .dashboard {
+            position: relative;
+            min-height: 600px;
+        }
+        .chart-container {
+            position: absolute;
+            background: white;
+            border: 1px solid #ccc;
+            padding: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        canvas {
+            max-width: 100%;
+        }
+        #addChart {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px;
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #addChart:hover {
+            background: #0056b3;
+        }
+        .indicator-text {
+            text-align: center;
+            margin-top: 5px;
+            font-weight: bold;
+        }
+        .direction-text {
+            color: red; /* Default, updated dynamically */
+        }
+        .ratio-text {
+            color: blue;
+        }
+        .support-text {
+            color: orange;
+        }
+        .stability-text {
+            color: green; /* Default, updated dynamically */
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+</head>
+<body>
+    <button id="addChart">Add Chart</button>
+    <div class="dashboard">
+        <div class="chart-container" id="orderBookContainer" style="width: 600px; height: 400px; left: 20px; top: 20px;">
+            <canvas id="orderBookChart"></canvas>
+            <div id="directionText" class="indicator-text direction-text"></div>
+            <div id="ratioText" class="indicator-text ratio-text"></div>
+            <div id="supportText" class="indicator-text support-text"></div>
+            <div id="stabilityText" class="indicator-text stability-text"></div>
+        </div>
+    </div>
+
+    <script>
+        // Initial order book data (updated by WebSocket)
+        let orderBookData = {
+            priceLevels: [],
+            ratio: 0,
+            supportPercent: 0,
+            askStable: true,
+            bidStable: false,
+            direction: { type: 'Stable', probability: 80 }
+        };
+
+        // Initialize Order Book Chart
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js not loaded');
+        }
+        if (typeof interact === 'undefined') {
+            console.error('interact.js not loaded');
+        }
+
+        // Proceed only if dependencies are loaded
+        if (typeof Chart !== 'undefined' && typeof interact !== 'undefined') {
+            const ctx = document.getElementById('orderBookChart').getContext('2d');
+            const orderBookChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: orderBookData.priceLevels.map(level => level.price.toFixed(2)),
+                    datasets: [
+                        {
+                            label: 'Asks',
+                            data: orderBookData.priceLevels.map(level => level.ask),
+                            backgroundColor: orderBookData.priceLevels.map(level =>
+                                level.ask ? `rgba(255, 0, 0, ${Math.min(level.ask / 2000, 1)})` : 'rgba(0, 0, 0, 0)'
+                            ),
+                            borderColor: 'rgba(255, 0, 0, 0.5)',
+                            borderWidth: 1,
+                            barThickness: 10
+                        },
+                        {
+                            label: 'Bids',
+                            data: orderBookData.priceLevels.map(level => level.bid),
+                            backgroundColor: orderBookData.priceLevels.map(level =>
+                                level.bid ? `rgba(0, 128, 0, ${Math.min(level.bid / 2000, 1)})` : 'rgba(0, 0, 0, 0)'
+                            ),
+                            borderColor: 'rgba(0, 128, 0, 0.5)',
+                            borderWidth: 1,
+                            barThickness: 10
+                        }
+                    ]
+                },
+                options: {
+                    indexAxis: 'y',
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Volume (LTC)' },
+                            ticks: { callback: value => Math.abs(value) }
+                        },
+                        y: {
+                            title: { display: true, text: 'Price (USDT)' },
+                            offset: true,
+                            reverse: true,
+                            
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                boxWidth: 10,
+                                boxHeight: 10,
+                                padding: 10,
+                                font: { size: 12 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const level = orderBookData.priceLevels[context.dataIndex];
+                                    return `Price: $${level.price.toFixed(2)}, Bid: ${level.bid} LTC, Ask: ${level.ask} LTC, Direction: ${orderBookData.direction.type} (${orderBookData.direction.probability}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Update HTML indicators
+            const updateIndicators = () => {
+                // Directional Balance Gauge
+                const directionText = document.getElementById('directionText');
+                directionText.textContent = `Direction: ${orderBookData.direction.type} (${orderBookData.direction.probability}%)`;
+                directionText.style.color = orderBookData.direction.type === 'Down' ? 'red' :
+                                           orderBookData.direction.type === 'Up' ? 'green' : 'gray';
+
+                // Ratio
+                const ratioText = document.getElementById('ratioText');
+                ratioText.textContent = `Ask/Bid Ratio: ${orderBookData.ratio.toFixed(2)} (Threshold: 2)`;
+
+                // Support Percentage
+                const supportText = document.getElementById('supportText');
+                supportText.textContent = `Bid Support: ${orderBookData.supportPercent.toFixed(2)}% (Threshold: 50%)`;
+
+                // Stability
+                const stabilityText = document.getElementById('stabilityText');
+                stabilityText.textContent = `Ask Volume Stability: ${orderBookData.askStable ? 'Stable' : 'Unstable'}`;
+                stabilityText.style.color = orderBookData.askStable ? 'green' : 'red';
+
+                // Apply stability border to container
+                document.getElementById('orderBookContainer').style.border = `3px solid ${orderBookData.askStable ? 'green' : 'red'}`;
+            };
+
+            // Connect to server WebSocket
+            const ws = new WebSocket('ws://localhost:8080');
+            ws.onopen = () => {
+                console.log('Connected to server WebSocket');
+            };
+            ws.onmessage = (event) => {
+                //console.log('Received data from server:', event.data);
+                orderBookData = JSON.parse(event.data);
+                // Update chart
+                orderBookChart.data.labels = orderBookData.priceLevels.map(level => level.price.toFixed(2));
+                orderBookChart.data.datasets[1].data = orderBookData.priceLevels.map(level => level.bid);
+                orderBookChart.data.datasets[0].data = orderBookData.priceLevels.map(level => level.ask);
+                orderBookChart.data.datasets[1].backgroundColor = orderBookData.priceLevels.map(level =>
+                    level.bid ? `rgba(0, 128, 0, ${Math.min(level.bid / 2000, 1)})` : 'rgba(0, 0, 0, 0)'
+                );
+                orderBookChart.data.datasets[0].backgroundColor = orderBookData.priceLevels.map(level =>
+                    level.ask ? `rgba(255, 0, 0, ${Math.min(level.ask / 2000, 1)})` : 'rgba(0, 0, 0, 0)'
+                );
+                orderBookChart.update();
+                // Update HTML indicators
+                updateIndicators();
+            };
+            ws.onerror = (error) => {
+                console.error('Server WebSocket error:', error);
+            };
+            ws.onclose = () => {
+                console.log('Server WebSocket closed, reconnecting...');
+                setTimeout(() => {
+                    const newWs = new WebSocket('ws://localhost:8080');
+                    ws.onopen = newWs.onopen;
+                    ws.onmessage = newWs.onmessage;
+                    ws.onerror = newWs.onerror;
+                    ws.onclose = newWs.onclose;
+                }, 5000);
+            };
+
+            // Make chart containers draggable and resizable
+            interact('.chart-container')
+                .draggable({
+                    inertia: true,
+                    modifiers: [
+                        interact.modifiers.restrictRect({
+                            restriction: '.dashboard',
+                            endOnly: true
+                        })
+                    ],
+                    listeners: {
+                        move: function(event) {
+                            const target = event.target;
+                            const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+                            const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+                            target.style.transform = `translate(${x}px, ${y}px)`;
+                            target.setAttribute('data-x', x);
+                            target.setAttribute('data-y', y);
+                        }
+                    }
+                })
+                .resizable({
+                    edges: { left: true, right: true, bottom: true, top: true },
+                    modifiers: [
+                        interact.modifiers.restrictSize({
+                            min: { width: 300, height: 200 },
+                            max: { width: 800, height: 600 }
+                        })
+                    ],
+                    listeners: {
+                        move: function(event) {
+                            const target = event.target;
+                            target.style.width = event.rect.width + 'px';
+                            target.style.height = event.rect.height + 'px';
+                            const canvas = target.querySelector('canvas');
+                            canvas.width = event.rect.width - 20;
+                            canvas.height = event.rect.height - 20;
+                            const chart = Chart.getChart(canvas.id);
+                            if (chart) chart.resize();
+                        }
+                    }
+                });
+
+            // Add new chart dynamically
+            document.getElementById('addChart').addEventListener('click', () => {
+                const chartId = `chart-${Date.now()}`;
+                const container = document.createElement('div');
+                container.className = 'chart-container';
+                container.id = chartId + '-container';
+                container.style.width = '400px';
+                container.style.height = '300px';
+                container.style.left = '20px';
+                container.style.top = '20px';
+                container.innerHTML = `<canvas id="${chartId}"></canvas>`;
+                document.querySelector('.dashboard').appendChild(container);
+
+                if (typeof Chart === 'undefined') {
+                    console.error('Chart.js not loaded');
+                    return;
+                }
+                const newCtx = document.getElementById(chartId).getContext('2d');
+                new Chart(newCtx, {
+                    type: 'line',
+                    data: {
+                        labels: ['1', '2', '3', '4', '5'],
+                        datasets: [{
+                            label: 'Placeholder',
+                            data: [10, 20, 15, 25, 30],
+                            borderColor: 'blue',
+                            fill: false
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            x: { title: { display: true, text: 'Time' } },
+                            y: { title: { display: true, text: 'Value' } }
+                        }
+                    }
+                });
+            });
+        }
+    </script>
+</body>
+</html>

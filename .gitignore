@@ -7,3 +7,4 @@ python/*.png
 python/*.log
 dist/
 python/shp_plots/
+xtrades.db
