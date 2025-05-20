@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 import {
     PlotTrade,
     // FeedState /*, MarketOrder, OrderType /*, AbsorptionLabel */,
-    Signal
+    Signal,
 } from "./interfaces";
 import express from "express";
 import path from "path";
@@ -27,11 +27,15 @@ export class BinanceStream {
     private thresholdTime: number;
     private readonly orderFlowAnalyzer: OrderFlowAnalyzer;
     private readonly app: express.Application;
-    private readonly port: number = (process.env.PORT ?? 3000) as number;
+    // private readonly port: number = (process.env.PORT ?? 3000) as number;
     private readonly wsPort: number = (process.env.WS_PORT ?? 3001) as number;
-    private readonly wss: Server;
-    private readonly shpFlowDetector: ShpFlowDetector; 
-    private orderBook: OrderBook = new OrderBook({lastUpdateId:0, bids:[], asks:[]}); // Initialize with empty order book
+    private readonly BroadCastWebSocket: Server;
+    private readonly shpFlowDetector: ShpFlowDetector;
+    private orderBook: OrderBook = new OrderBook({
+        lastUpdateId: 0,
+        bids: [],
+        asks: [],
+    }); // Initialize with empty order book
 
     constructor() {
         // Initialize the Binance stream client
@@ -56,18 +60,16 @@ export class BinanceStream {
             0.025,
             "LTCUSDT",
             (signal) => {
-                console.log(signal); //this.broadcastSignal(signal);
+                console.log(signal); // this.broadcastSignal(signal);
             }
         );
-        this.shpFlowDetector = new ShpFlowDetector(
-            (signal) => {
-                this.broadcastSignal(signal);
-            }
-        );
+        this.shpFlowDetector = new ShpFlowDetector((signal) => {
+            this.broadcastSignal(signal);
+        });
         this.app = express();
-        this.wss = new Server({ port: this.wsPort });
+        this.BroadCastWebSocket = new Server({ port: this.wsPort });
 
-        this.wss.on("connection", (ws) => {
+        this.BroadCastWebSocket.on("connection", (ws) => {
             console.log("Client connected");
             let backlog = this.requestBacklog();
             backlog = backlog.reverse(); // set the order to the oldest trade first
@@ -137,12 +139,12 @@ export class BinanceStream {
 
     private async fillOrderBook() {
         try {
-            const orderBookInitial: SpotWebsocketAPI.DepthResponseResult = await this.binanceFeed.fetchOrderBookDepth(this.symbol);
-            this.orderBook = new OrderBook(orderBookInitial);     
-            
+            const orderBookInitial: SpotWebsocketAPI.DepthResponseResult =
+                await this.binanceFeed.fetchOrderBookDepth(this.symbol);
+            this.orderBook = new OrderBook(orderBookInitial);
         } catch (error) {
             console.warn("OrderBook filled:", error);
-        } 
+        }
     }
 
     private requestBacklog(): PlotTrade[] {
@@ -231,7 +233,7 @@ export class BinanceStream {
 
                     try {
                         // Broadcast trade to all connected clients
-                        this.wss.clients.forEach((client) => {
+                        this.BroadCastWebSocket.clients.forEach((client) => {
                             if (client.readyState === WebSocket.OPEN) {
                                 client.send(
                                     JSON.stringify({
@@ -257,7 +259,10 @@ export class BinanceStream {
         const webhookUrl = process.env.WEBHOOK_URL;
         if (webhookUrl) {
             const message = {
-                type: signal.type === "buy_absorption" ? "Sell signal" : "Buy signal",
+                type:
+                    signal.type === "buy_absorption"
+                        ? "Sell signal"
+                        : "Buy signal",
                 time: signal.time,
                 price: signal.price,
                 takeProfit: signal.takeProfit,
@@ -269,7 +274,7 @@ export class BinanceStream {
             console.warn("No webhook URL provided");
         }
         // Send the signal to the connected clients
-        this.wss.clients.forEach((client) => {
+        this.BroadCastWebSocket.clients.forEach((client) => {
             if (client.readyState === WebSocket.OPEN) {
                 client.send(
                     JSON.stringify({
@@ -281,32 +286,37 @@ export class BinanceStream {
         });
     }
 
-    private async sendWebhookMessage(webhookUrl: string, message: object): Promise<void> {
+    private async sendWebhookMessage(
+        webhookUrl: string,
+        message: object
+    ): Promise<void> {
         try {
             const response = await fetch(webhookUrl, {
-                method: 'POST',
+                method: "POST",
                 headers: {
-                    'Content-Type': 'application/json',
+                    "Content-Type": "application/json",
                 },
                 body: JSON.stringify(message),
             });
-    
+
             if (!response.ok) {
-                throw new Error(`Webhook request failed: ${response.status} ${response.statusText}`);
+                throw new Error(
+                    `Webhook request failed: ${response.status} ${response.statusText}`
+                );
             }
-    
-            console.log('Webhook message sent successfully');
+
+            console.log("Webhook message sent successfully");
         } catch (error) {
-            console.error('Error sending webhook message:', error);
+            console.error("Error sending webhook message:", error);
         }
     }
 
     public async main() {
         this.app.use(express.static(path.join(__dirname, "../public")));
 
-        this.app.listen(this.port, () => {
-            console.log(`Server running at http://localhost:${this.port}`);
-        });
+        // this.app.listen(this.port, () => {
+        //    console.log(`Server running at http://localhost:${this.port}`);
+        // });
 
         try {
             await this.fillOrderBook();

@@ -1,10 +1,9 @@
 import { SpotWebsocketAPI, SpotWebsocketStreams } from "@binance/spot";
 
-
 export class OrderBook {
     private lastUpdateId: number;
-    private bids: Array<Array<string>>;
-    private asks: Array<Array<string>>;
+    private bids: string[][];
+    private asks: string[][];
 
     constructor(orderBook: SpotWebsocketAPI.DepthResponseResult) {
         this.lastUpdateId = orderBook.lastUpdateId ?? 0;
@@ -12,8 +11,10 @@ export class OrderBook {
         this.asks = orderBook.asks ?? [];
     }
 
-    public updateOrderBook(update: SpotWebsocketStreams.DiffBookDepthResponse): void {
-        const latestUpdateId = update.u ?? 0; 
+    public updateOrderBook(
+        update: SpotWebsocketStreams.DiffBookDepthResponse
+    ): void {
+        const latestUpdateId = update.u ?? 0;
         if (latestUpdateId <= this.lastUpdateId) {
             return; // Ignore updates that are not newer
         }
@@ -21,7 +22,9 @@ export class OrderBook {
         // Update bids and asks
         if (update.b && update.b.length > 0) {
             update.b.forEach((bid) => {
-                const existingBidIndex = this.bids.findIndex((b) => b[0] === bid[0]);
+                const existingBidIndex = this.bids.findIndex(
+                    (b) => b[0] === bid[0]
+                );
                 if (existingBidIndex !== -1) {
                     this.bids[existingBidIndex][1] = bid[1]; // Update quantity
                 } else {
@@ -31,12 +34,14 @@ export class OrderBook {
                         this.bids.push(bid); // Add new ask
                     }
                 }
-            });          
+            });
         }
 
         if (update.a && update.a.length > 0) {
             update.a.forEach((ask) => {
-                const existingAskIndex = this.asks.findIndex((a) => a[0] === ask[0]);
+                const existingAskIndex = this.asks.findIndex(
+                    (a) => a[0] === ask[0]
+                );
                 if (existingAskIndex !== -1) {
                     this.asks[existingAskIndex][1] = ask[1]; // Update quantity
                 } else {
@@ -46,7 +51,7 @@ export class OrderBook {
                         this.asks.push(ask); // Add new ask
                     }
                 }
-            });          
+            });
         }
         this.lastUpdateId = latestUpdateId;
     }
@@ -55,7 +60,7 @@ export class OrderBook {
         return {
             lastUpdateId: this.lastUpdateId,
             bids: this.bids,
-            asks: this.asks
+            asks: this.asks,
         };
     }
 }

@@ -13,7 +13,7 @@ export class Storage {
     private readonly getAggregatedTrades: BetterSqlite3.Statement;
 
     constructor() {
-        this.db = new BetterSqlite3("xtrades.db", { });
+        this.db = new BetterSqlite3("xtrades.db", {});
 
         // Create tables with the updated schema
         this.db.exec(`

@@ -1,4 +1,3 @@
-
 export interface PlotTrade {
     time: number; // eventTime in milliseconds
     price: number;
@@ -54,7 +53,6 @@ export interface AbsorptionLabel {
     label: string; // Signal description (e.g., "Sell Absorption")
 }
 
-
 // Signal interface matching Python's structure
 export interface Signal {
     type: "buy_absorption" | "sell_absorption" | "flow"; // Matches Python: buy_absorption (sell), sell_absorption (buy)
@@ -65,7 +63,17 @@ export interface Signal {
     stopLoss: number; // Stop loss price
     takeProfit: number; // Take profit price
     timeframe: "Daytime" | "Nighttime";
-    closeReason?: "take_profit" | "stop_loss" | "opposite_signal" | "end_of_data" | "invalidated"; // Set when closed
+    closeReason?:
+        | "take_profit"
+        | "stop_loss"
+        | "opposite_signal"
+        | "end_of_data"
+        | "invalidated"; // Set when closed
+}
+
+export interface BroadCast {
+    type: string;
+    data: any;
 }
 
 export interface VolumeBin {
@@ -82,14 +90,14 @@ export interface FeedState {
 }
 
 export interface SwingPoint {
-    tradeId: number;  
+    tradeId: number;
     price: number;
     timeStamp: number;
 }
 
-export enum HighLow {           
+export enum HighLow {
     HIGH = 1,
-    LOW = -1
+    LOW = -1,
 }
 
 export interface OrderBookLevel {

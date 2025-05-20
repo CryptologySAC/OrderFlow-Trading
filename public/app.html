@@ -24,9 +24,9 @@
 <body>
   <div class="rangeSelector">
     <button onclick="setRange(60000)">1m</button>
-    <button onclick="setRange(5 * 60000)">5m</button>
-    <button onclick="setRange(13 * 60000)">13m</button>
-    <button onclick="setRange(89 * 60000)">89m</button>
+    <button onclick="setRange(15 * 60000)">15m</button>
+    <button onclick="setRange(45 * 60000)">45m</button>
+    <button onclick="setRange(90 * 60000)">90m</button>
     <button onclick="setRange(null)">All</button>
   </div>
   <div class="chartWrapper">
@@ -118,10 +118,10 @@
           },
           y: {
             type: 'linear',
-            ticks: { stepSize: 0.01, precision: 2, },
+            ticks: { stepSize: 0.05, precision: 2, },
             title: { display: true, text: 'USDT' },
             position: 'right',
-            grace: 0.05,
+            grace: 0.1,
             offset: true,
           }
         },

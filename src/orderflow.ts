@@ -18,7 +18,7 @@ export class OrderFlowAnalyzer {
     private recentTrades: PlotTrade[] = [];
     private activeTrades: { [timeframe: string]: Signal | null } = {
         Daytime: null,
-        Nighttime: null
+        Nighttime: null,
     }; // Track active trade per timeframe
     private callback?: (signal: Signal) => void;
 
@@ -87,7 +87,10 @@ export class OrderFlowAnalyzer {
         bin.lastUpdate = trade.time;
     }
 
-    private detectAbsorption(trade: PlotTrade, timeframe: "Daytime" | "Nighttime"): void {
+    private detectAbsorption(
+        trade: PlotTrade,
+        timeframe: "Daytime" | "Nighttime"
+    ): void {
         if (trade.quantity >= this.minLargeOrder) {
             const opposingTrades = this.recentTrades.filter(
                 (t) => t.orderType !== trade.orderType && t.quantity <= 0.5
@@ -147,9 +150,9 @@ export class OrderFlowAnalyzer {
                             activeTrade.closeReason =
                                 returnVal > 0 ? "take_profit" : "stop_loss";
                             this.signals.push(activeTrade);
-                            //if (this.callback) {
+                            // if (this.callback) {
                             //    this.callback(activeTrade);
-                           // }
+                            // }
                             this.activeTrades[timeframe] = null;
                         }
                         // Only generate new signal if no conflicting active trade
@@ -174,7 +177,11 @@ export class OrderFlowAnalyzer {
         }
     }
 
-    private checkInvalidation(signalTime: number, signalPrice: number, isBuySignal: boolean): boolean {
+    private checkInvalidation(
+        signalTime: number,
+        signalPrice: number,
+        isBuySignal: boolean
+    ): boolean {
         let buyVolume = 0;
         let sellVolume = 0;
         let minPrice = signalPrice;
@@ -194,7 +201,8 @@ export class OrderFlowAnalyzer {
             }
         }
         if (isBuySignal) {
-            const volumeCondition = sellVolume > 2 * buyVolume && sellVolume > 0;
+            const volumeCondition =
+                sellVolume > 2 * buyVolume && sellVolume > 0;
             const priceCondition = minPrice <= signalPrice * (1 - 0.002);
             return volumeCondition || priceCondition;
         } else {
@@ -207,8 +215,7 @@ export class OrderFlowAnalyzer {
     private checkPendingSignals(currentTime: number): void {
         while (
             this.pendingSignals.length &&
-            currentTime >=
-                this.pendingSignals[0].time + this.confirmationWindow
+            currentTime >= this.pendingSignals[0].time + this.confirmationWindow
         ) {
             const signal = this.pendingSignals.shift()!;
             const confirmationTrades = this.recentTrades.filter(

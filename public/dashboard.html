@@ -13,7 +13,7 @@
         }
         .dashboard {
             position: relative;
-            min-height: 600px;
+            min-height: 800px;
         }
         .chart-container {
             position: absolute;
@@ -25,19 +25,7 @@
         canvas {
             max-width: 100%;
         }
-        #addChart {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 10px;
-            background: #007bff;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        #addChart:hover {
-            background: #0056b3;
-        }
+        
         .indicator-text {
             text-align: center;
             margin-top: 5px;
@@ -55,19 +43,54 @@
         .stability-text {
             color: green; /* Default, updated dynamically */
         }
+        div.rangeSelector {
+            margin: 10px;
+            text-align: center;
+        }
+        div.rangeSelector button {
+            margin: 0 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        div.chartAreaWrapper {
+            position: relative;
+            height: 1200px;
+            padding: 10px;
+        }
+        div.chartAreaWrapper50 {
+            position: relative;
+            height: 600px;
+            padding: 10px;
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation/dist/chartjs-plugin-annotation.min.js"></script>
 </head>
 <body>
-    <button id="addChart">Add Chart</button>
     <div class="dashboard">
-        <div class="chart-container" id="orderBookContainer" style="width: 600px; height: 400px; left: 20px; top: 20px;">
-            <canvas id="orderBookChart"></canvas>
+        <div class="chart-container" id="orderBookContainer" style="width: 600px; height: 1250px; left: 20px; top: 20px;">
+            <div class="chartAreaWrapper50">
+                <canvas id="orderBookChart"></canvas>
+            </div>
             <div id="directionText" class="indicator-text direction-text"></div>
             <div id="ratioText" class="indicator-text ratio-text"></div>
             <div id="supportText" class="indicator-text support-text"></div>
             <div id="stabilityText" class="indicator-text stability-text"></div>
+            <div id="volumeImbalance" class="indicator-text stability-text"></div>
+        </div>
+        <div class="chart-container" id="tradesContainer" style="width: 1600px; height: 1250px; left: 670px; top: 20px;">
+            <div class="rangeSelector">
+                <button onclick="setRange(60000)">1m</button>
+                <button onclick="setRange(15 * 60000)">15m</button>
+                <button onclick="setRange(45 * 60000)">45m</button>
+                <button onclick="setRange(90 * 60000)">90m</button>
+                <button onclick="setRange(null)">All</button>
+            </div>
+            <div class="chartAreaWrapper">
+                <canvas id="tradesChart"></canvas>
+            </div>
         </div>
     </div>
 
@@ -79,7 +102,8 @@
             supportPercent: 0,
             askStable: true,
             bidStable: false,
-            direction: { type: 'Stable', probability: 80 }
+            direction: { type: 'Stable', probability: 80 },
+            volumeImbalance: 0
         };
 
         // Initialize Order Book Chart
@@ -92,6 +116,289 @@
 
         // Proceed only if dependencies are loaded
         if (typeof Chart !== 'undefined' && typeof interact !== 'undefined') {
+
+            const tradectx = document.getElementById('tradesChart').getContext('2d');
+            const tradesChart = new Chart(tradectx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Trades',
+                        data: [],
+                        backgroundColor: (context) => {
+                            const trade = context.raw;
+                            let color = trade && trade.orderType === 'BUY' ? 'rgba(0, 255, 30, 0.2)' : 'rgba(255,0,90,0.2)';
+                            if (trade && trade.quantity > 500) {
+                                color = trade && trade.orderType === 'BUY' ? 'rgba(0,255,25, 0.6)' : 'rgba(255,50,200,0.6)';
+                            } else if (trade && trade.quantity > 200) {
+                                color = trade && trade.orderType === 'BUY' ? 'rgba(0,100,25, 0.5)' : 'rgba(255,0,20,0.5)';
+                            } else if (trade && trade.quantity > 100) {
+                                color = trade && trade.orderType === 'BUY' ? 'rgba(0,255,30, 0.4)' : 'rgba(255,0,90,0.4)';
+                            } else if (trade && trade.quantity > 15) {
+                                color = trade && trade.orderType === 'BUY' ? 'rgba(0,255,30, 0.3)' : 'rgba(255,0,90,0.3)';
+                            }
+                            return color;
+                        },
+                        pointRadius: (context) => {
+                            const trade = context.raw;
+                            let radius;
+                            if (trade && trade.quantity > 1000) {
+                                radius = 50;
+                            } else if (trade && trade.quantity > 500) {
+                                radius = 40;
+                            } else if (trade && trade.quantity > 200) {
+                                radius = 25;
+                            } else if (trade && trade.quantity > 100) {
+                                radius = 10;
+                            } else if (trade && trade.quantity > 50) {
+                                radius = 5;
+                            } else {
+                                radius = 2;
+                            }
+                            return radius;
+                        },
+                        hoverRadius: (context) => {
+                            const trade = context.raw;
+                            let radius;
+                            if (trade && trade.quantity > 1000) {
+                                radius = 50;
+                            } else if (trade && trade.quantity > 500) {
+                                radius = 40;
+                            } else if (trade && trade.quantity > 200) {
+                                radius = 25;
+                            } else if (trade && trade.quantity > 100) {
+                                radius = 10;
+                            } else if (trade && trade.quantity > 50) {
+                                radius = 5;
+                            } else {
+                                radius = 2;
+                            }
+                            return radius;
+                        }
+                    }],
+
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    layout: {
+                        padding: {
+                            right: 20, // Margin between plot area and right Y-axis
+                            left: 20 // Margin for left boundary
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: { 
+                                unit: 'minute', 
+                                stepSize: 1, 
+                                round: true, 
+                                displayFormats: { 
+                                    minute: 'HH:mm' 
+                                } 
+                            },
+                            grid: {
+                                display: true,
+                                color: "rgba(102, 102, 102, 0.1)",
+                                lineWidth: 1
+                            },
+                            title: { display: false, text: 'Time' },
+                            ticks: { source: 'auto' }
+                        },
+                        y: {
+                            type: 'linear',
+                            ticks: { stepSize: 0.05, precision: 2, },
+                            title: { display: true, text: 'USDT' },
+                            position: 'right',
+                            grace: 0.1,
+                            offset: true,
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const trade = context.raw;
+                                    return trade ? `Price: ${trade.y}, Qty: ${trade.quantity}, Type: ${trade.orderType}` : '';
+                                }
+                            }
+                        },
+                        annotation: {
+                            annotations: {
+                                lastPriceLine: {
+                                    type: 'line',
+                                    yMin: undefined,
+                                    yMax: undefined,
+                                    borderColor: 'blue',
+                                    borderWidth: 1,
+                                    drawTime: 'afterDatasetsDraw',
+                                    label: {
+                                        display: true,
+                                        content: (tradectx) => {
+                                            const yValue = tradectx.chart.options.plugins.annotation.annotations.lastPriceLine.yMin;
+                                            return yValue ? `${yValue.toFixed(2)}` : '';
+                                        },
+                                        position: 'end',
+                                        xAdjust: -50, // Adjusted for padding
+                                        yAdjust: 0,
+                                        backgroundColor: 'rgba(0, 0, 255, 1)',
+                                        borderColor: 'blue',
+                                        borderWidth: 2,
+                                        font: { size: 12 },
+                                        color: 'white',
+                                        padding: 6
+                                    }
+                                },
+                            }
+                        },
+                    }
+                },
+            });
+
+            // Data and state
+            const trades = [];
+            const maxTrades = 20000;
+            let annotationId = 0;
+            let activeRange = 90 * 60000;
+            const paddingTime = 300000; // 300 seconds margin for latest marker
+            const fifteenMinutes = 15 * 60 * 1000;
+
+            // Validate trade data
+            function isValidTrade(trade) {
+                if (!trade) {
+                    console.warn('Invalid trade: null or undefined');
+                    return false;
+                }
+                if (typeof trade.time !== 'number' || isNaN(trade.time) || !isFinite(trade.time)) {
+                    console.warn('Invalid trade time:', trade.time);
+                    return false;
+                }
+                if (typeof trade.price !== 'number' || isNaN(trade.price) || !isFinite(trade.price)) {
+                    console.warn('Invalid trade price:', trade.price);
+                    return false;
+                }
+                if (typeof trade.quantity !== 'number' || isNaN(trade.quantity) || !isFinite(trade.quantity)) {
+                    console.warn('Invalid trade quantity:', trade.quantity);
+                    return false;
+                }
+                if (!['BUY', 'SELL'].includes(trade.orderType)) {
+                    console.warn('Invalid trade orderType:', trade.orderType);
+                    return false;
+                }
+                return true;
+            }
+
+            // Set X-axis range and track duration
+            function setRange(duration) {
+                activeRange = duration;
+                const now = Date.now();
+                if (duration) {
+                    tradesChart.options.scales.x.min = now - duration;
+                    tradesChart.options.scales.x.max = now + paddingTime; // Add margin
+                } else {
+                    tradesChart.options.scales.x.min = undefined;
+                    tradesChart.options.scales.x.max = undefined;
+                }
+                tradesChart.update();
+            }
+
+            // WebSocket for real-time trade updates
+            const tradews = new WebSocket('ws://localhost:3001');
+            tradews.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                if (message.type === 'backlog') {
+                    console.log('%s backlog trades received.', message.data.length);
+                    trades.length = 0;
+                    message.data.forEach(t => {
+                        if (isValidTrade(t)) {
+                            trades.push({ x: t.time, y: t.price, quantity: t.quantity, orderType: t.orderType });
+                        }
+                    });
+                    while (trades.length > maxTrades) trades.shift();
+                    console.log('%s backlog trades processed.', trades.length);
+                    tradesChart.data.datasets[0].data = trades;
+                    if (trades.length > 0) {
+                        const latestPrice = trades[trades.length - 1].y;
+                        tradesChart.options.plugins.annotation.annotations.lastPriceLine.yMin = latestPrice;
+                        tradesChart.options.plugins.annotation.annotations.lastPriceLine.yMax = latestPrice;
+                        if (activeRange !== null) {
+                            const latestTime = trades[trades.length - 1].x;
+                            const min = latestTime - activeRange;
+                            const max = latestTime + paddingTime;
+                            tradesChart.options.scales.x.min = min;
+                            tradesChart.options.scales.x.max = max;
+
+                            let time = Math.ceil(min / fifteenMinutes) * fifteenMinutes;
+                            while (time <= max) {
+                                tradesChart.options.plugins.annotation.annotations[time] = {
+                                    type: 'line',
+                                    xMin: time,
+                                    xMax: time,
+                                    borderColor: 'rgba(102, 102, 102, 0.4)',
+                                    borderWidth: 2,
+                                    z: 1,
+                                };
+                                time += fifteenMinutes;
+                            }
+                        }
+                    }
+                    tradesChart.update();
+                } else if (message.type === 'trade') {
+                    const trade = message.data;
+                    if (isValidTrade(trade)) {
+                        trades.push({ x: trade.time, y: trade.price, quantity: trade.quantity, orderType: trade.orderType });
+                        while (trades.length > maxTrades) trades.shift();
+                        tradesChart.data.datasets[0].data = trades;
+                        tradesChart.options.plugins.annotation.annotations.lastPriceLine.yMin = trade.price;
+                        tradesChart.options.plugins.annotation.annotations.lastPriceLine.yMax = trade.price;
+                        if (activeRange !== null) {
+                            const min = trade.time - activeRange;
+                            const max = trade.time + paddingTime;
+                            tradesChart.options.scales.x.min = min;
+                            tradesChart.options.scales.x.max = max;
+
+                            let time = Math.ceil(min / fifteenMinutes) * fifteenMinutes;
+                            while (time <= max) {
+                                tradesChart.options.plugins.annotation.annotations[time] = {
+                                    type: 'line',
+                                    xMin: time,
+                                    xMax: time,
+                                    borderColor: 'rgba(102, 102, 102, 0.4)',
+                                    borderWidth: 2,
+                                    z: 1,
+                                };
+                                time += fifteenMinutes;
+                            }
+                        }
+                        tradesChart.update('none');
+                    }
+                } else if (message.type === 'signal') {
+                    const label = message.data;
+                    tradesChart.options.plugins.annotation.annotations[label.tradeIndex] = {
+                        type: 'label',
+                        xValue: label.time,
+                        yValue: label.price,
+                        content: label.type+" | "+label.status,
+                        backgroundColor: 'rgba(90, 50, 255, 1)',
+                        color: 'white',
+                        font: { size: 14 },
+                        padding: 8,
+                        id: label.tradeIndex
+                    };
+                    tradesChart.update('none');
+                    console.log('Signal label added:', label);
+                }
+            };
+
+
+
+            tradews.onopen = () => console.log('Connected to Trades WebSocket');
+            tradews.onerror = (error) => console.error('Trades WebSocket error:', error);
+            tradews.onclose = () => console.log('Trades WebSocket closed');
+
+
             const ctx = document.getElementById('orderBookChart').getContext('2d');
             const orderBookChart = new Chart(ctx, {
                 type: 'bar',
@@ -121,6 +428,9 @@
                     ]
                 },
                 options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
                     indexAxis: 'y',
                     scales: {
                         x: {
@@ -178,6 +488,11 @@
                 const stabilityText = document.getElementById('stabilityText');
                 stabilityText.textContent = `Ask Volume Stability: ${orderBookData.askStable ? 'Stable' : 'Unstable'}`;
                 stabilityText.style.color = orderBookData.askStable ? 'green' : 'red';
+
+                // volumeImbalance
+                const volumeImbalance = document.getElementById('volumeImbalance');
+                volumeImbalance.textContent = `Volume Imbalance: ${orderBookData.volumeImbalance.toFixed(2)} (Short < -0.65 | Long > 0.65)`;
+                volumeImbalance.style.color = orderBookData.volumeImbalance > 0.65 ? 'green' : orderBookData.volumeImbalance < -0.65 ? 'red' : 'gray';
 
                 // Apply stability border to container
                 document.getElementById('orderBookContainer').style.border = `3px solid ${orderBookData.askStable ? 'green' : 'red'}`;
@@ -244,8 +559,8 @@
                     edges: { left: true, right: true, bottom: true, top: true },
                     modifiers: [
                         interact.modifiers.restrictSize({
-                            min: { width: 300, height: 200 },
-                            max: { width: 800, height: 600 }
+                            min: { width: 600, height: 600 },
+                            max: { width: 1600, height: 1600 }
                         })
                     ],
                     listeners: {
@@ -262,43 +577,6 @@
                     }
                 });
 
-            // Add new chart dynamically
-            document.getElementById('addChart').addEventListener('click', () => {
-                const chartId = `chart-${Date.now()}`;
-                const container = document.createElement('div');
-                container.className = 'chart-container';
-                container.id = chartId + '-container';
-                container.style.width = '400px';
-                container.style.height = '300px';
-                container.style.left = '20px';
-                container.style.top = '20px';
-                container.innerHTML = `<canvas id="${chartId}"></canvas>`;
-                document.querySelector('.dashboard').appendChild(container);
-
-                if (typeof Chart === 'undefined') {
-                    console.error('Chart.js not loaded');
-                    return;
-                }
-                const newCtx = document.getElementById(chartId).getContext('2d');
-                new Chart(newCtx, {
-                    type: 'line',
-                    data: {
-                        labels: ['1', '2', '3', '4', '5'],
-                        datasets: [{
-                            label: 'Placeholder',
-                            data: [10, 20, 15, 25, 30],
-                            borderColor: 'blue',
-                            fill: false
-                        }]
-                    },
-                    options: {
-                        scales: {
-                            x: { title: { display: true, text: 'Time' } },
-                            y: { title: { display: true, text: 'Value' } }
-                        }
-                    }
-                });
-            });
         }
     </script>
 </body>
