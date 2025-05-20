@@ -254,16 +254,37 @@ export class OrderBookProcessor {
             .slice(0, this.numLevels)
             .reduce((sum, level) => sum + level.bid, 0);
 
-        // Calculate 10-tick volume imbalance
-        const imbalance = totalBid === 0 && totalAsk === 0
+        // Calculate 10-tick volume imbalance using raw order book data
+        const tickSize = 0.01; // LTCUSDT tick size
+        const tickRange = 10; // 10 ticks = 0.10 USDT
+        const bidLowerBound = bestBid - tickRange * tickSize; // e.g., $81.70 - 0.10 = $81.60
+        const askUpperBound = bestAsk + tickRange * tickSize; // e.g., $81.71 + 0.10 = $81.81
+
+        // Sum bid volumes within 10-tick range
+        let imbalanceBidVolume = 0;
+        for (const [price, qty] of this.orderBook.bids) {
+            if (price >= bidLowerBound && price <= bestBid) {
+                imbalanceBidVolume += qty;
+            }
+        }
+
+        // Sum ask volumes within 10-tick range
+        let imbalanceAskVolume = 0;
+        for (const [price, qty] of this.orderBook.asks) {
+            if (price >= bestAsk && price <= askUpperBound) {
+                imbalanceAskVolume += qty;
+            }
+        }
+
+        // Calculate imbalance
+        const imbalance = imbalanceBidVolume === 0 && imbalanceAskVolume === 0
             ? 0
-            : (totalBid - totalAsk) / (totalBid + totalAsk || 1);
+            : (imbalanceBidVolume - imbalanceAskVolume) / (imbalanceBidVolume + imbalanceAskVolume || 1);
         this.volumeImbalanceHistory.push(imbalance);
         if (this.volumeImbalanceHistory.length > 30) this.volumeImbalanceHistory.shift(); // Keep 30s of data
         const volumeImbalance = this.volumeImbalanceHistory.length > 0
             ? this.volumeImbalanceHistory.reduce((sum, val) => sum + val, 0) / this.volumeImbalanceHistory.length
             : 0;
-
         // Calculate metrics
         const ratio = totalAsk / (totalBid || 1);
         const supportPercent = (totalBid / (totalAsk || 1)) * 100;
