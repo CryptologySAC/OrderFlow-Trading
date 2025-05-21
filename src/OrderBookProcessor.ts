@@ -3,13 +3,13 @@ import axios from "axios";
 import dotenv from "dotenv";
 
 import {
-    Spot,
-    SPOT_WS_STREAMS_PROD_URL,
-    SpotWebsocketStreams,
+    //Spot,
+    //SPOT_WS_STREAMS_PROD_URL,
+    //SpotWebsocketStreams,
     SpotWebsocketAPI,
 } from "@binance/spot";
 
-import { ConfigurationWebsocketStreams } from "@binance/common";
+//import { ConfigurationWebsocketStreams } from "@binance/common";
 
 dotenv.config();
 
@@ -33,16 +33,16 @@ interface BinanceOrderBookSnapshot {
 
 export class OrderBookProcessor {
 
-    private readonly configurationWebsocketStreams: ConfigurationWebsocketStreams =
-        {
-            wsURL: SPOT_WS_STREAMS_PROD_URL,
-            compression: true,
-            mode: "pool",
-            poolSize: 2,
-        };
+    //private readonly configurationWebsocketStreams: ConfigurationWebsocketStreams =
+    //    {
+    //        wsURL: SPOT_WS_STREAMS_PROD_URL,
+    //        compression: true,
+    //        mode: "pool",
+    //        poolSize: 2,
+    //    };
 
-    private readonly streamClient: Spot;
-    private readonly symbol: string;
+    //private readonly streamClient: Spot;
+    //private readonly symbol: string;
 
     // private binanceWs: WebSocket | null = null;
     private serverWs: WebSocket.Server;
@@ -60,12 +60,12 @@ export class OrderBookProcessor {
     private readonly numLevels: number = (process.env.BIN_LEVELS ?? 10 ) as number; // Top 10 bid/ask levels
     private volumeImbalanceHistory: number[] = []; // Added for 30s moving average of 10-tick imbalance
 
-    constructor(symbol: string = "LTCUSDT") {
-        this.streamClient = new Spot({
-            configurationWebsocketStreams: this.configurationWebsocketStreams,
-        });
+    constructor() { //symbol: string = "LTCUSDT") {
+        //this.streamClient = new Spot({
+        //    configurationWebsocketStreams: this.configurationWebsocketStreams,
+        //});
 
-        this.symbol = symbol;
+        //this.symbol = symbol;
 
         // Initialize WebSocket server for browser clients (port 8080)
         this.serverWs = new WebSocket.Server({ port: 8080 });
@@ -88,35 +88,35 @@ export class OrderBookProcessor {
         });
     }
 
-    private async connectToStreams(): Promise<SpotWebsocketStreams.WebsocketStreamsConnection> {
-        const connection: SpotWebsocketStreams.WebsocketStreamsConnection =
-            await this.streamClient.websocketStreams.connect();
-        return connection;
-    }
+    //private async connectToStreams(): Promise<SpotWebsocketStreams.WebsocketStreamsConnection> {
+    //    const connection: SpotWebsocketStreams.WebsocketStreamsConnection =
+    //        await this.streamClient.websocketStreams.connect();
+    //    return connection;
+    //}
 
     // Start the order book processor
     public async start(): Promise<void> {
         try {
             // Fetch initial snapshot
             await this.fetchInitialOrderBook();
-            const connection: SpotWebsocketStreams.WebsocketStreamsConnection =
-                await this.connectToStreams();
-            const streamDepth = connection.diffBookDepth({
-                symbol: this.symbol,
-                updateSpeed: "1000ms",
-            });
-            streamDepth.on(
-                "message",
-                (response: SpotWebsocketStreams.DiffBookDepthResponse) => {
-                    const data: SpotWebsocketAPI.DepthResponseResult = {
-                        lastUpdateId: response.u,
-                        bids: response.b,
-                        asks: response.a,
-                    };
+            //const connection: SpotWebsocketStreams.WebsocketStreamsConnection =
+            //    await this.connectToStreams();
+            //const streamDepth = connection.diffBookDepth({
+            //    symbol: this.symbol,
+            //    updateSpeed: "1000ms",
+            //});
+            //streamDepth.on(
+            //    "message",
+            //    (response: SpotWebsocketStreams.DiffBookDepthResponse) => {
+            //        const data: SpotWebsocketAPI.DepthResponseResult = {
+            //            lastUpdateId: response.u,
+            //            bids: response.b,
+            //            asks: response.a,
+            //        };
                     // console.info(data);
-                    this.processWebSocketUpdate(data);
-                }
-            );
+            //        this.processWebSocketUpdate(data);
+            //    }
+            //);
         } catch (error) {
             console.error("Error starting OrderBookProcessor:", error);
             // Retry after 5 seconds
@@ -160,7 +160,7 @@ export class OrderBookProcessor {
     }
 
     // Process WebSocket update from Binance
-    private processWebSocketUpdate(
+    public processWebSocketUpdate(
         update: SpotWebsocketAPI.DepthResponseResult
     ): void {
         // Ignore updates that are older than the last snapshot

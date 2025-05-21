@@ -1,5 +1,6 @@
 import { BinanceDataFeed } from "./binance";
 import { Storage } from "./storage";
+import { OrderBookProcessor } from "./orderBookProcessor";
 import { SpotWebsocketStreams, SpotWebsocketAPI } from "@binance/spot";
 import dotenv from "dotenv";
 import {
@@ -11,7 +12,6 @@ import express from "express";
 import path from "path";
 import { Server } from "ws";
 import { OrderFlowAnalyzer } from "./orderflow";
-import { OrderBook } from "./orderBook";
 //import { ShpFlowDetector } from "./shp-flow-detector";
 
 dotenv.config();
@@ -21,6 +21,7 @@ export class BinanceStream {
     private readonly symbol: string;
     private readonly storageTime: number;
     private readonly storage: Storage;
+    private readonly orderBookProcessor: OrderBookProcessor;
     private aggTradeTemp: SpotWebsocketAPI.TradesAggregateResponseResultInner[] =
         [];
     // private readonly lastFeedState: FeedState;
@@ -31,15 +32,16 @@ export class BinanceStream {
     private readonly wsPort: number = (process.env.WS_PORT ?? 3001) as number;
     private readonly BroadCastWebSocket: Server;
     //private readonly shpFlowDetector: ShpFlowDetector;
-    private orderBook: OrderBook = new OrderBook({
-        lastUpdateId: 0,
-        bids: [],
-        asks: [],
-    }); // Initialize with empty order book
+    //private orderBook: OrderBook = new OrderBook({
+    //    lastUpdateId: 0,
+    //    bids: [],
+    //    asks: [],
+    //}); // Initialize with empty order book
 
     constructor() {
         // Initialize the Binance stream client
         this.binanceFeed = new BinanceDataFeed();
+        this.orderBookProcessor = new OrderBookProcessor();
         this.symbol = process.env.SYMBOL ?? "ltcusdt"; // Default to ltcusdt if not provided
         this.storage = new Storage();
         this.storageTime = (process.env.MAX_STORAGE_TIME ??
@@ -71,18 +73,10 @@ export class BinanceStream {
 
         this.BroadCastWebSocket.on("connection", (ws) => {
             console.log("Client connected");
-            //let backlog = this.requestBacklog();
-            //backlog = backlog.reverse(); // set the order to the oldest trade first
-            //ws.send(
-            //    JSON.stringify({
-            //        type: "backlog",
-            //        data: backlog /*, signals: backLogSignals */,
-            //    })
-            //);
             ws.send(
                 JSON.stringify({
                     type: "orderbook",
-                    data: this.orderBook.getOrderBook(),
+                    //data: this.orderBook.getOrderBook(),
                 })
             );
             ws.on("close", () => console.log("Client disconnected"));
@@ -153,20 +147,7 @@ export class BinanceStream {
             }
         } catch (error) {
             console.warn("Backlog filled:", error);
-        } finally {
-            // Start the webstream connection
-            await this.getTrades();
-        }
-    }
-
-    private async fillOrderBook() {
-        try {
-            const orderBookInitial: SpotWebsocketAPI.DepthResponseResult =
-                await this.binanceFeed.fetchOrderBookDepth(this.symbol);
-            this.orderBook = new OrderBook(orderBookInitial);
-        } catch (error) {
-            console.warn("OrderBook filled:", error);
-        }
+        } 
     }
 
     private requestBacklog(amount:number): PlotTrade[] {
@@ -191,56 +172,37 @@ export class BinanceStream {
         return backLog;
     }
 
+
     private async getTrades() {
-        const connection: SpotWebsocketStreams.WebsocketStreamsConnection =
-            await this.binanceFeed.connectToStreams();
+        const connection = await this.binanceFeed.connectToStreams();
+        
+        connection.on('close', async () => {
+            this.getTrades();
+        });
+
         try {
+            
+
             const streamAggTrade = connection.aggTrade({ symbol: this.symbol });
-            /*const streamDepth = connection.diffBookDepth({ symbol: this.symbol, updateSpeed: "100ms"})
+            const streamDepth = connection.diffBookDepth({ symbol: this.symbol, updateSpeed: "1000ms"})
 
             streamDepth.on(
                 "message",
                 (data: SpotWebsocketStreams.DiffBookDepthResponse) => {
-                    this.orderBook.updateOrderBook(data);
-                    //let orderBook = this.binanceFeed.processOrderBook(data);
-                    //const currentPrice = parseFloat(orderBook.asks[0]?.price || '0'); // Approximate current price
-                    //const topAsksQty = orderBook.asks
-                     //   .filter(level => parseFloat(level.price) <= currentPrice * 1.005)
-                     //   .reduce((sum, level) => sum + parseFloat(level.quantity), 0);
-                    //const topBidsQty = orderBook.bids
-                     //   .filter(level => parseFloat(level.price) >= currentPrice * 0.995)
-                     //   .reduce((sum, level) => sum + parseFloat(level.quantity), 0);
-
-                    // Assume some external logic tracks the Sell Volume Surge signal
-                    //const hasSellVolumeSurge = true; // Replace with actual signal detection
-                    //if (hasSellVolumeSurge && topAsksQty >= 1.5 * topBidsQty) {
-                    //    console.log('Confirmed Sell Volume Surge with order book: high ask quantity detected!');
-                    //}     
-                    
-                    
-                    try {
-                        // Broadcast trade to all connected clients
-                        this.wss.clients.forEach((client) => {
-                            if (client.readyState === WebSocket.OPEN) {
-                                client.send(
-                                    JSON.stringify({
-                                        type: "orderbook",
-                                        data: this.orderBook.getOrderBook(),
-                                    })
-                                );
-                            }
-                        });
-                    } catch (error) {
-                        console.error("Error broadcasting trade:", error);
-                    }
+                    const processedData: SpotWebsocketAPI.DepthResponseResult = {
+                        lastUpdateId: data.u,
+                        bids: data.b,
+                        asks: data.a,
+                    };
+                    this.orderBookProcessor.processWebSocketUpdate(processedData);
                     
                 }
             );
-            */
+            
             streamAggTrade.on(
                 "message",
                 (data: SpotWebsocketStreams.AggTradeResponse) => {
-                    console.info(data);
+                    //console.info(data);
                     const plotTrade: PlotTrade = {
                         time: data.T !== undefined ? data.T : 0, // Millisecond precision
                         price: data.p !== undefined ? parseFloat(data.p) : 0,
@@ -336,13 +298,10 @@ export class BinanceStream {
     public async main() {
         this.app.use(express.static(path.join(__dirname, "../public")));
 
-        // this.app.listen(this.port, () => {
-        //    console.log(`Server running at http://localhost:${this.port}`);
-        // });
-
         try {
-            await this.fillOrderBook();
             await this.fillBacklog();
+            await this.orderBookProcessor.start();
+            await this.getTrades();
         } catch (error) {
             console.error("Error in main function:", error);
         }

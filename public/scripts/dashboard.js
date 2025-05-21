@@ -652,7 +652,7 @@ function connectTradeWs() {
           if (delay >= 0 && delayGauge) {
             delayGauge.value = delay;
           } else if (delayGauge) {
-            console.warn('Invalid trade delay:', delay, trade);
+            console.warn('Invalid trade delay:', delay, trade.time, receiveTime);
             delayGauge.value = 0;
           }  
           trades.push({ x: trade.time, y: trade.price, quantity: trade.quantity, orderType: trade.orderType });
