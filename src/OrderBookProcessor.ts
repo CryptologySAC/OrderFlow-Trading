@@ -74,6 +74,17 @@ export class OrderBookProcessor {
             // Send initial order book data on connection
             this.emitOrderBook(ws);
             ws.on("close", () => console.log("Browser client disconnected"));
+            ws.on('message', (message) => {
+                try {
+                    const data = JSON.parse(message.toString());
+
+                    if (data.type === 'ping') {
+                        ws.send(JSON.stringify({ type: 'pong' }));
+                    } 
+                } catch (err) {
+                    console.error("Invalid message format", err);
+                }
+            });  
         });
     }
 

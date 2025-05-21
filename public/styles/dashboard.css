@@ -1,0 +1,89 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 20px;
+  background-color: #f4f4f4;
+}
+
+.dashboard {
+  position: relative;
+  min-height: 800px;
+}
+
+.chart-container, .gauge-container {
+  position: absolute;
+  background: white;
+  border: 1px solid #ccc;
+  padding: 10px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+#orderBookContainer {
+  width: 600px;
+  height: 1250px;
+  left: 20px;
+  top: 20px;
+}
+
+#tradesContainer {
+  width: 1600px;
+  height: 1250px;
+  left: 670px;
+  top: 20px;
+}
+
+#delayGaugeContainer { 
+    width: 200px;
+    height: 160px;
+    left: 2320px;
+    top: 20px;
+}
+
+canvas {
+  max-width: 100%;
+}
+
+.indicator-text {
+  text-align: center;
+  margin-top: 5px;
+  font-weight: bold;
+}
+
+.direction-text {
+  color: red;
+}
+
+.ratio-text {
+  color: blue;
+}
+
+.support-text {
+  color: orange;
+}
+
+.stability-text {
+  color: green;
+}
+
+.rangeSelector {
+  margin: 10px;
+  text-align: center;
+}
+
+.rangeSelector button {
+  margin: 0 5px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.chartAreaWrapper {
+  position: relative;
+  height: 1200px;
+  padding: 10px;
+}
+
+.chartAreaWrapper50 {
+  position: relative;
+  height: 600px;
+  padding: 10px;
+}

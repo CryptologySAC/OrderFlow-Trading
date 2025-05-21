@@ -12,7 +12,7 @@ import path from "path";
 import { Server } from "ws";
 import { OrderFlowAnalyzer } from "./orderflow";
 import { OrderBook } from "./orderBook";
-import { ShpFlowDetector } from "./shp-flow-detector";
+//import { ShpFlowDetector } from "./shp-flow-detector";
 
 dotenv.config();
 
@@ -30,7 +30,7 @@ export class BinanceStream {
     // private readonly port: number = (process.env.PORT ?? 3000) as number;
     private readonly wsPort: number = (process.env.WS_PORT ?? 3001) as number;
     private readonly BroadCastWebSocket: Server;
-    private readonly shpFlowDetector: ShpFlowDetector;
+    //private readonly shpFlowDetector: ShpFlowDetector;
     private orderBook: OrderBook = new OrderBook({
         lastUpdateId: 0,
         bids: [],
@@ -63,22 +63,22 @@ export class BinanceStream {
                 console.log(signal); // this.broadcastSignal(signal);
             }
         );
-        this.shpFlowDetector = new ShpFlowDetector((signal) => {
-            this.broadcastSignal(signal);
-        });
+        //this.shpFlowDetector = new ShpFlowDetector((signal) => {
+            //this.broadcastSignal(signal);
+        //});
         this.app = express();
         this.BroadCastWebSocket = new Server({ port: this.wsPort });
 
         this.BroadCastWebSocket.on("connection", (ws) => {
             console.log("Client connected");
-            let backlog = this.requestBacklog();
-            backlog = backlog.reverse(); // set the order to the oldest trade first
-            ws.send(
-                JSON.stringify({
-                    type: "backlog",
-                    data: backlog /*, signals: backLogSignals */,
-                })
-            );
+            //let backlog = this.requestBacklog();
+            //backlog = backlog.reverse(); // set the order to the oldest trade first
+            //ws.send(
+            //    JSON.stringify({
+            //        type: "backlog",
+            //        data: backlog /*, signals: backLogSignals */,
+            //    })
+            //);
             ws.send(
                 JSON.stringify({
                     type: "orderbook",
@@ -86,6 +86,28 @@ export class BinanceStream {
                 })
             );
             ws.on("close", () => console.log("Client disconnected"));
+            ws.on('message', (message) => {
+                try {
+                    const request = JSON.parse(message.toString());
+                    if (request.type === 'ping') {
+                        ws.send(JSON.stringify({ type: 'pong' }));
+                    } 
+                    if(request.type === 'backlog' ) {
+                        const amount: number = (request.data.amount ?? 1000) as number;
+                        console.log("Backlog request received: ", amount);
+                        let backlog = this.requestBacklog(amount);
+                        backlog = backlog.reverse(); // set the order to the oldest trade first
+                        ws.send(
+                            JSON.stringify({
+                                type: "backlog",
+                                data: backlog /*, signals: backLogSignals */,
+                            })
+                        );
+                    }
+                } catch (err) {
+                    console.error("Invalid message format", err);
+                }
+            });            
         });
     }
 
@@ -114,7 +136,7 @@ export class BinanceStream {
                                 trade,
                                 this.symbol
                             );
-                            this.shpFlowDetector.addTrade(trade);
+                            //this.shpFlowDetector.addTrade(trade);
                         }
                     }
                 );
@@ -147,10 +169,10 @@ export class BinanceStream {
         }
     }
 
-    private requestBacklog(): PlotTrade[] {
+    private requestBacklog(amount:number): PlotTrade[] {
         const backLog: PlotTrade[] = [];
         this.aggTradeTemp = this.storage.getLatestAggregatedTrades(
-            20000,
+            amount,
             this.symbol
         );
         this.aggTradeTemp.forEach(
@@ -253,7 +275,7 @@ export class BinanceStream {
         }
     }
 
-    private async broadcastSignal(signal: Signal) {
+    public async broadcastSignal(signal: Signal) {
         console.log("Broadcasting signal:", signal);
         // Send the signal to the webhook URL
         const webhookUrl = process.env.WEBHOOK_URL;
