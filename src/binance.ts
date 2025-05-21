@@ -201,7 +201,7 @@ export class BinanceDataFeed {
         orderBook.lastUpdateId = obData.u ?? 0;
 
         // Update bids
-        if (obData.b != undefined) {
+        if (obData.b !== undefined) {
             orderBook.bids = this.updateOrderBookLevels(
                 orderBook.bids,
                 obData.b
@@ -215,7 +215,7 @@ export class BinanceDataFeed {
         }
 
         // Update asks
-        if (obData.a != undefined) {
+        if (obData.a !== undefined) {
             orderBook.asks = this.updateOrderBookLevels(
                 orderBook.asks,
                 obData.a
@@ -245,7 +245,7 @@ export class BinanceDataFeed {
         orderBook.lastUpdateId = obData.lastUpdateId ?? 0;
 
         // Update bids
-        if (obData.bids != undefined) {
+        if (obData.bids !== undefined) {
             orderBook.bids = this.updateOrderBookLevels(
                 orderBook.bids,
                 obData.bids
@@ -259,7 +259,7 @@ export class BinanceDataFeed {
         }
 
         // Update asks
-        if (obData.asks != undefined) {
+        if (obData.asks !== undefined) {
             orderBook.asks = this.updateOrderBookLevels(
                 orderBook.asks,
                 obData.asks
@@ -300,10 +300,12 @@ export class BinanceDataFeed {
         // Convert back to array format
         const updatedLevels: OrderBookLevel[] = [];
         for (const price in levelMap) {
-            updatedLevels.push({
-                price,
-                quantity: levelMap[price],
-            });
+            if (levelMap.hasOwnProperty(price)) {
+                updatedLevels.push({
+                    price,
+                    quantity: levelMap[price],
+                });
+            }
         }
 
         return updatedLevels;

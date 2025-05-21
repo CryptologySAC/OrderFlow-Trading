@@ -305,7 +305,7 @@
             }
 
             // WebSocket for real-time trade updates
-            const tradews = new WebSocket('ws://localhost:3001');
+            const tradews = new WebSocket('wss://api.cryptology.pe/ltcusdt_trades');
             tradews.onmessage = (event) => {
                 const message = JSON.parse(event.data);
                 if (message.type === 'backlog') {
@@ -499,7 +499,7 @@
             };
 
             // Connect to server WebSocket
-            const ws = new WebSocket('ws://localhost:8080');
+            const ws = new WebSocket('wss://api.cryptology.pe/ltcusdt_orderbook');
             ws.onopen = () => {
                 console.log('Connected to server WebSocket');
             };
@@ -526,7 +526,7 @@
             ws.onclose = () => {
                 console.log('Server WebSocket closed, reconnecting...');
                 setTimeout(() => {
-                    const newWs = new WebSocket('ws://localhost:8080');
+                    const newWs = new WebSocket('wss://api.cryptology.pe/ltcusdt_orderbook');
                     ws.onopen = newWs.onopen;
                     ws.onmessage = newWs.onmessage;
                     ws.onerror = newWs.onerror;
