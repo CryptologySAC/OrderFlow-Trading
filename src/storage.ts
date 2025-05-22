@@ -187,8 +187,8 @@ export class Storage {
                 lastAggregatedTradeTime: aggTrade.T,
                 updatedAt: Date.now(),
             });
-        } catch (error) {
-            console.error("Error saving aggregated trade:", error);
+        } catch (err) {
+            return;
         }
     }
 

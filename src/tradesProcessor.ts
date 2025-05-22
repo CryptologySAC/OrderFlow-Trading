@@ -61,7 +61,11 @@ export class TradesProcessor {
                 }
             }
         } catch (error) {
-            console.warn("Backlog filled:", error);
+            const tempError: Error = error as Error;
+            console.warn(
+                "Backlog filled:",
+                (tempError.message ?? error) as string
+            );
         }
     }
 
