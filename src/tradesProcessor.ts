@@ -3,7 +3,6 @@ import { BinanceDataFeed } from "./binance";
 import { SpotWebsocketStreams, SpotWebsocketAPI } from "@binance/spot";
 import { PlotTrade, WebSocketMessage } from "./interfaces";
 import dotenv from "dotenv";
-// import { ShpFlowDetector } from "./shp-flow-detector";
 
 dotenv.config();
 
@@ -15,7 +14,6 @@ export class TradesProcessor {
     private aggTradeTemp: SpotWebsocketAPI.TradesAggregateResponseResultInner[] =
         [];
     private thresholdTime: number;
-    // private readonly shpFlowDetector: ShpFlowDetector;
 
     constructor() {
         this.binanceFeed = new BinanceDataFeed();
@@ -23,7 +21,7 @@ export class TradesProcessor {
         this.storage = new Storage();
         this.storageTime = (process.env.MAX_STORAGE_TIME ??
             1000 * 60 * 90) as number; // 90 mins in ms
-        this.thresholdTime = Date.now() - this.storageTime; // >
+        this.thresholdTime = Date.now() - this.storageTime;
     }
 
     /**
@@ -54,7 +52,6 @@ export class TradesProcessor {
                                 trade,
                                 this.symbol
                             );
-                            // this.shpFlowDetector.addTrade(trade);
                         }
                     }
                 );
@@ -62,12 +59,6 @@ export class TradesProcessor {
                 if (aggregatedTrades.length < 10) {
                     throw new Error("No more trades available");
                 }
-                console.log(
-                    "THRESHOLD TIME: %s (now: %s, diff: %s)",
-                    this.thresholdTime,
-                    Date.now(),
-                    Date.now() - this.thresholdTime
-                );
             }
         } catch (error) {
             console.warn("Backlog filled:", error);
@@ -80,25 +71,33 @@ export class TradesProcessor {
      * @returns An array of PlotTrade objects.
      */
     public requestBacklog(amount: number): PlotTrade[] {
-        const backLog: PlotTrade[] = [];
-        this.aggTradeTemp = this.storage.getLatestAggregatedTrades(
-            amount,
-            this.symbol
-        );
-        this.aggTradeTemp.forEach(
-            (trade: SpotWebsocketAPI.TradesAggregateResponseResultInner) => {
-                const plotTrade: PlotTrade = {
-                    time: trade.T !== undefined ? trade.T : 0, // Millisecond precision
-                    price: trade.p !== undefined ? parseFloat(trade.p) : 0,
-                    quantity: trade.q !== undefined ? parseFloat(trade.q) : 0,
-                    orderType: trade.m ? "SELL" : "BUY",
-                    symbol: this.symbol,
-                    tradeId: trade.a !== undefined ? trade.a : 0,
-                };
-                backLog.push(plotTrade);
-            }
-        );
-        return backLog;
+        try {
+            const backLog: PlotTrade[] = [];
+            this.aggTradeTemp = this.storage.getLatestAggregatedTrades(
+                amount,
+                this.symbol
+            );
+            this.aggTradeTemp.forEach(
+                (
+                    trade: SpotWebsocketAPI.TradesAggregateResponseResultInner
+                ) => {
+                    const plotTrade: PlotTrade = {
+                        time: trade.T !== undefined ? trade.T : 0, // Millisecond precision
+                        price: trade.p !== undefined ? parseFloat(trade.p) : 0,
+                        quantity:
+                            trade.q !== undefined ? parseFloat(trade.q) : 0,
+                        orderType: trade.m ? "SELL" : "BUY",
+                        symbol: this.symbol,
+                        tradeId: trade.a !== undefined ? trade.a : 0,
+                    };
+                    backLog.push(plotTrade);
+                }
+            );
+            return backLog;
+        } catch (error) {
+            console.log(error);
+            return [];
+        }
     }
 
     public addTrade(
@@ -124,7 +123,12 @@ export class TradesProcessor {
 
             return message;
         } catch (error) {
-            throw error;
+            console.log(error);
+            return {
+                type: "error",
+                data: error,
+                now: 0,
+            };
         }
     }
 }

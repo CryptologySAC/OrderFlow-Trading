@@ -1,5 +1,5 @@
 export interface WebSocketMessage {
-    type: "pong" | "backlog" | "trade" | "orderbook" | "signal";
+    type: "pong" | "backlog" | "trade" | "orderbook" | "signal" | "error";
     data: any;
     now: number;
 }
@@ -13,20 +13,6 @@ export interface PlotTrade {
     tradeId: number;
 }
 
-export interface MarketOrder {
-    orderType: OrderType;
-    eventTime: number;
-    symbol: string;
-    totalQuantity: number;
-    averagePrice: number;
-    orders: number;
-}
-
-export enum OrderType {
-    BUY = "BUY Order",
-    SELL = "SELL Order",
-}
-
 export interface Trade {
     e: string; // Event type (e.g., "trade")
     E: number; // Event time (milliseconds)
@@ -34,20 +20,6 @@ export interface Trade {
     t: number; // Trade ID
     p: string; // Price
     q: string; // Quantity
-    T: number; // Trade time (milliseconds)
-    m: boolean; // Is the buyer the maker? (true = seller-initiated, false = buyer-initiated)
-    M: boolean; // Is this the best match?
-}
-
-export interface AggregatedTrade {
-    e: string; // Event type (e.g., "aggTrade")
-    E: number; // Event time (milliseconds)
-    s: string; // Symbol (e.g., "LTCUSDT")
-    a: number; // Aggregated trade ID
-    p: string; // Price (weighted average)
-    q: string; // Quantity (total)
-    f: number; // First trade ID
-    l: number; // Last trade ID
     T: number; // Trade time (milliseconds)
     m: boolean; // Is the buyer the maker? (true = seller-initiated, false = buyer-initiated)
     M: boolean; // Is this the best match?
@@ -77,11 +49,6 @@ export interface Signal {
         | "invalidated"; // Set when closed
 }
 
-export interface BroadCast {
-    type: string;
-    data: any;
-}
-
 export interface VolumeBin {
     buyVol: number;
     sellVol: number;
@@ -104,16 +71,4 @@ export interface SwingPoint {
 export enum HighLow {
     HIGH = 1,
     LOW = -1,
-}
-
-export interface OrderBookLevel {
-    price: string;
-    quantity: string;
-}
-
-// Interface for the order book state
-export interface OrderBook {
-    lastUpdateId: number;
-    bids: OrderBookLevel[];
-    asks: OrderBookLevel[];
 }

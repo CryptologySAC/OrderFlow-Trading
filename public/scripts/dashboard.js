@@ -509,7 +509,7 @@ function startPing() {
  * Handle a Pong from the websocket server
  */
 function startPongTimeout() {
-    clearPongTimeout(socket);
+    clearPongTimeout();
     tradeWsPongTimeout = setTimeout(() => {
         console.warn("Pong not received, closing Trade socket...");
         tradeWs.close(); // This will trigger the reconnect
@@ -548,7 +548,8 @@ function connectTradeWs() {
                 JSON.stringify({
                     type: "backlog",
                     data: { amount: MAX_TRADES },
-            }));
+                })
+            );
         }
         startPing();
     };
@@ -580,7 +581,7 @@ function connectTradeWs() {
     tradeWs.onmessage = (event) => {
         try {
             const message = JSON.parse(event.data);
-            
+
             const receiveTime = Date.now();
             const messageTime = message.now ?? 0;
             const delay = receiveTime - messageTime;
@@ -589,17 +590,21 @@ function connectTradeWs() {
             }
 
             if (tradeTimeoutId) clearTimeout(tradeTimeoutId);
-            tradeTimeoutId = setTimeout(() => 
-                setGaugeTimeout(delayGauge), TRADE_TIMEOUT_MS 
+            tradeTimeoutId = setTimeout(
+                () => setGaugeTimeout(delayGauge),
+                TRADE_TIMEOUT_MS
             );
 
             switch (message.type) {
                 case "pong":
                     clearPongTimeout();
                     break;
-                
+
                 case "backlog":
-                    console.log(`%s backlog trades received.`, message.data.length);
+                    console.log(
+                        `%s backlog trades received.`,
+                        message.data.length
+                    );
                     if (delayGauge) {
                         delayGauge.value = 0;
                         delayGauge.title = "Loading Backlog";
@@ -621,8 +626,10 @@ function connectTradeWs() {
                     tradesChart.data.datasets[0].data = trades;
                     if (trades.length > 0) {
                         const latestPrice = trades[trades.length - 1].y;
-                        tradesChart.options.plugins.annotation.annotations.lastPriceLine.yMin = latestPrice;
-                        tradesChart.options.plugins.annotation.annotations.lastPriceLine.yMax = latestPrice;
+                        tradesChart.options.plugins.annotation.annotations.lastPriceLine.yMin =
+                            latestPrice;
+                        tradesChart.options.plugins.annotation.annotations.lastPriceLine.yMax =
+                            latestPrice;
                         if (activeRange !== null) {
                             const latestTime = trades[trades.length - 1].x;
                             const min = latestTime - activeRange;
@@ -630,7 +637,9 @@ function connectTradeWs() {
                             tradesChart.options.scales.x.min = min;
                             tradesChart.options.scales.x.max = max;
 
-                            let time = Math.ceil(min / FIFTEEN_MINUTES) * FIFTEEN_MINUTES;
+                            let time =
+                                Math.ceil(min / FIFTEEN_MINUTES) *
+                                FIFTEEN_MINUTES;
                             while (time <= max) {
                                 tradesChart.options.plugins.annotation.annotations[
                                     time
@@ -661,15 +670,19 @@ function connectTradeWs() {
                         });
                         while (trades.length > MAX_TRADES) trades.shift();
                         tradesChart.data.datasets[0].data = trades;
-                        tradesChart.options.plugins.annotation.annotations.lastPriceLine.yMin = trade.price;
-                        tradesChart.options.plugins.annotation.annotations.lastPriceLine.yMax = trade.price;
+                        tradesChart.options.plugins.annotation.annotations.lastPriceLine.yMin =
+                            trade.price;
+                        tradesChart.options.plugins.annotation.annotations.lastPriceLine.yMax =
+                            trade.price;
                         if (activeRange !== null) {
                             const min = trade.time - activeRange;
                             const max = trade.time + PADDING_TIME;
                             tradesChart.options.scales.x.min = min;
                             tradesChart.options.scales.x.max = max;
 
-                            let time = Math.ceil(min / FIFTEEN_MINUTES) * FIFTEEN_MINUTES;
+                            let time =
+                                Math.ceil(min / FIFTEEN_MINUTES) *
+                                FIFTEEN_MINUTES;
                             while (time <= max) {
                                 tradesChart.options.plugins.annotation.annotations[
                                     time
@@ -687,8 +700,8 @@ function connectTradeWs() {
                         tradesChart.update("none");
                     }
                     break;
-                
-                case "signal": 
+
+                case "signal":
                     const label = message.data;
                     tradesChart.options.plugins.annotation.annotations[
                         label.tradeIndex
@@ -708,17 +721,23 @@ function connectTradeWs() {
                     break;
 
                 case "orderbook":
-                    if (!message.data || !Array.isArray(message.data.priceLevels)) {
-                        console.error("Invalid order book data: priceLevels is missing or not an array", message.data);
+                    if (
+                        !message.data ||
+                        !Array.isArray(message.data.priceLevels)
+                    ) {
+                        console.error(
+                            "Invalid order book data: priceLevels is missing or not an array",
+                            message.data
+                        );
                         return;
                     }
-                
+
                     orderBookData = message.data;
                     if (window.orderBookChart) {
-                        orderBookChart.data.labels = orderBookData.priceLevels.map(
-                            (level) =>
+                        orderBookChart.data.labels =
+                            orderBookData.priceLevels.map((level) =>
                                 level.price ? level.price.toFixed(2) : "0.00"
-                        );
+                            );
                         orderBookChart.data.datasets[1].data =
                             orderBookData.priceLevels.map(
                                 (level) => level.bid || 0
@@ -748,13 +767,11 @@ function connectTradeWs() {
                     }
                     break;
             }
-
         } catch (error) {
             console.error("Error parsing trade WebSocket message:", error);
         }
     };
-}       
-     
+}
 
 /**
  * Sets up WebSocket connections for trades and order book data.

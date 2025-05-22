@@ -2,7 +2,6 @@ import express from "express";
 import path from "path";
 import { Server } from "ws";
 import { SpotWebsocketStreams } from "@binance/spot";
-
 import { TradesProcessor } from "./tradesProcessor";
 import { BinanceDataFeed } from "./binance";
 import { OrderBookProcessor } from "./orderBookProcessor";
@@ -22,7 +21,7 @@ export class OrderFlowDashboard {
     private readonly BroadCastWebSocket: Server;
 
     constructor() {
-        this.binanceFeed = new BinanceDataFeed("LTCUSDT");
+        this.binanceFeed = new BinanceDataFeed();
         this.orderBookProcessor = new OrderBookProcessor();
         this.tradesProcessor = new TradesProcessor();
 
@@ -36,7 +35,9 @@ export class OrderFlowDashboard {
                 try {
                     const request = JSON.parse(message.toString());
                     if (request.type === "ping") {
-                        ws.send(JSON.stringify({ type: "pong" }));
+                        ws.send(
+                            JSON.stringify({ type: "pong", now: Date.now() })
+                        );
                     }
                     if (request.type === "backlog") {
                         const amount: number = (request.data.amount ??
@@ -216,8 +217,3 @@ export class OrderFlowDashboard {
         }
     }
 }
-
-const processor = new OrderFlowDashboard();
-processor
-    .startDashboard()
-    .catch((err) => console.error("Failed to start processor:", err));
