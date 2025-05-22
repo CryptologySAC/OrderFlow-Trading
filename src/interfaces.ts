@@ -1,3 +1,9 @@
+export interface WebSocketMessage {
+    type: "pong" | "backlog" | "trade" | "orderbook" | "signal";
+    data: any;
+    now: number;
+}
+
 export interface PlotTrade {
     time: number; // eventTime in milliseconds
     price: number;

@@ -1,6 +1,3 @@
-
-
-
 export class WebSocketManager {
     private ws: WebSocket | null = null;
     private url: string;
@@ -29,7 +26,7 @@ export class WebSocketManager {
 
         this.ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
-            if (data.type === 'pong') {
+            if (data.type === "pong") {
                 this.clearPongTimeout();
             } else {
                 // handle other messages
@@ -51,7 +48,7 @@ export class WebSocketManager {
     private startPing() {
         this.pingInterval = setInterval(() => {
             if (this.ws?.readyState === WebSocket.OPEN) {
-                this.ws.send(JSON.stringify({ type: 'ping' }));
+                this.ws.send(JSON.stringify({ type: "ping" }));
                 this.startPongTimeout();
             }
         }, this.pingIntervalTime);
@@ -80,7 +77,8 @@ export class WebSocketManager {
     private tryReconnect() {
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
-            const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+            const delay =
+                this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
             this.reconnectTimer = setTimeout(() => this.connect(), delay);
         } else {
             console.error("Max reconnection attempts reached.");

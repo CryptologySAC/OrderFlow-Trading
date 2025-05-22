@@ -1,15 +1,8 @@
-import WebSocket from "ws";
 import axios from "axios";
 import dotenv from "dotenv";
 
-import {
-    //Spot,
-    //SPOT_WS_STREAMS_PROD_URL,
-    //SpotWebsocketStreams,
-    SpotWebsocketAPI,
-} from "@binance/spot";
-
-//import { ConfigurationWebsocketStreams } from "@binance/common";
+import { SpotWebsocketStreams, SpotWebsocketAPI } from "@binance/spot";
+import { WebSocketMessage } from "./interfaces";
 
 dotenv.config();
 
@@ -32,20 +25,8 @@ interface BinanceOrderBookSnapshot {
 }
 
 export class OrderBookProcessor {
+    private readonly symbol: string;
 
-    //private readonly configurationWebsocketStreams: ConfigurationWebsocketStreams =
-    //    {
-    //        wsURL: SPOT_WS_STREAMS_PROD_URL,
-    //        compression: true,
-    //        mode: "pool",
-    //        poolSize: 2,
-    //    };
-
-    //private readonly streamClient: Spot;
-    //private readonly symbol: string;
-
-    // private binanceWs: WebSocket | null = null;
-    private serverWs: WebSocket.Server;
     private orderBook: {
         bids: Map<number, number>;
         asks: Map<number, number>;
@@ -57,77 +38,17 @@ export class OrderBookProcessor {
     private askVolumeHistory: number[] = []; // For stability check (last 3 updates)
     private bidVolumeHistory: number[] = []; // For stability check (last 3 updates)
     private readonly binSize: number = (process.env.BIN_SIZE ?? 10) as number; // 0.10 USDT bins (10 ticks)
-    private readonly numLevels: number = (process.env.BIN_LEVELS ?? 10 ) as number; // Top 10 bid/ask levels
+    private readonly numLevels: number = (process.env.BIN_LEVELS ??
+        10) as number; // Top 10 bid/ask levels
     private volumeImbalanceHistory: number[] = []; // Added for 30s moving average of 10-tick imbalance
 
-    constructor() { //symbol: string = "LTCUSDT") {
-        //this.streamClient = new Spot({
-        //    configurationWebsocketStreams: this.configurationWebsocketStreams,
-        //});
-
-        //this.symbol = symbol;
-
-        // Initialize WebSocket server for browser clients (port 8080)
-        this.serverWs = new WebSocket.Server({ port: 8080 });
-        this.serverWs.on("connection", (ws) => {
-            console.log("Browser client connected");
-            // Send initial order book data on connection
-            this.emitOrderBook(ws);
-            ws.on("close", () => console.log("Browser client disconnected"));
-            ws.on('message', (message) => {
-                try {
-                    const data = JSON.parse(message.toString());
-
-                    if (data.type === 'ping') {
-                        ws.send(JSON.stringify({ type: 'pong' }));
-                    } 
-                } catch (err) {
-                    console.error("Invalid message format", err);
-                }
-            });  
-        });
-    }
-
-    //private async connectToStreams(): Promise<SpotWebsocketStreams.WebsocketStreamsConnection> {
-    //    const connection: SpotWebsocketStreams.WebsocketStreamsConnection =
-    //        await this.streamClient.websocketStreams.connect();
-    //    return connection;
-    //}
-
-    // Start the order book processor
-    public async start(): Promise<void> {
-        try {
-            // Fetch initial snapshot
-            await this.fetchInitialOrderBook();
-            //const connection: SpotWebsocketStreams.WebsocketStreamsConnection =
-            //    await this.connectToStreams();
-            //const streamDepth = connection.diffBookDepth({
-            //    symbol: this.symbol,
-            //    updateSpeed: "1000ms",
-            //});
-            //streamDepth.on(
-            //    "message",
-            //    (response: SpotWebsocketStreams.DiffBookDepthResponse) => {
-            //        const data: SpotWebsocketAPI.DepthResponseResult = {
-            //            lastUpdateId: response.u,
-            //            bids: response.b,
-            //            asks: response.a,
-            //        };
-                    // console.info(data);
-            //        this.processWebSocketUpdate(data);
-            //    }
-            //);
-        } catch (error) {
-            console.error("Error starting OrderBookProcessor:", error);
-            // Retry after 5 seconds
-            setTimeout(() => this.start(), 5000);
-        }
+    constructor(symbol: string = "LTCUSDT") {
+        this.symbol = symbol;
     }
 
     // Fetch initial order book snapshot via REST API
-    private async fetchInitialOrderBook(): Promise<void> {
-        const url =
-            "https://api.binance.com/api/v3/depth?symbol=LTCUSDT&limit=1000";
+    public async fetchInitialOrderBook(): Promise<WebSocketMessage> {
+        const url = `https://api.binance.com/api/v3/depth?symbol=${this.symbol}&limit=1000`;
         try {
             const response = await axios.get<BinanceOrderBookSnapshot>(url);
             const snapshot = response.data;
@@ -151,8 +72,16 @@ export class OrderBookProcessor {
                 "Initial order book snapshot loaded:",
                 this.lastUpdateId
             );
+
             // Emit initial order book to clients
-            this.emitOrderBookToAll();
+            const orderBook = this.processOrderBook();
+            const message: WebSocketMessage = {
+                type: "orderbook",
+                now: Date.now(),
+                data: orderBook,
+            };
+
+            return message;
         } catch (error) {
             console.error("Error fetching initial order book:", error);
             throw error;
@@ -161,16 +90,19 @@ export class OrderBookProcessor {
 
     // Process WebSocket update from Binance
     public processWebSocketUpdate(
-        update: SpotWebsocketAPI.DepthResponseResult
-    ): void {
+        data: SpotWebsocketStreams.DiffBookDepthResponse
+    ): WebSocketMessage {
+        const update: SpotWebsocketAPI.DepthResponseResult = {
+            lastUpdateId: data.u,
+            bids: data.b,
+            asks: data.a,
+        };
+
         // Ignore updates that are older than the last snapshot
         if (((update.lastUpdateId ?? -1) as number) <= this.lastUpdateId) {
-            console.error(
-                "Received outdated update: %s | %s",
-                update.lastUpdateId,
-                this.lastUpdateId
+            throw new Error(
+                `Received outdated update: ${update.lastUpdateId} | ${this.lastUpdateId}`
             );
-            return;
         }
 
         this.lastUpdateId = (update.lastUpdateId ?? -1) as number;
@@ -202,22 +134,14 @@ export class OrderBookProcessor {
         }
 
         // Emit updated order book to clients
-        this.emitOrderBookToAll();
-    }
+        const orderBook = this.processOrderBook();
+        const message: WebSocketMessage = {
+            type: "orderbook",
+            now: Date.now(),
+            data: orderBook,
+        };
 
-    // Emit order book to all connected browser clients
-    private emitOrderBookToAll(): void {
-        this.serverWs.clients.forEach((client) => {
-            if (client.readyState === WebSocket.OPEN) {
-                this.emitOrderBook(client);
-            }
-        });
-    }
-
-    // Emit processed order book to a single client
-    private emitOrderBook(client: WebSocket): void {
-        const processedData = this.processOrderBook();
-        client.send(JSON.stringify(processedData));
+        return message;
     }
 
     // Process order book into dashboard-compatible format
@@ -230,9 +154,10 @@ export class OrderBookProcessor {
         // Aggregate into 0.10 USDT bins, top 5 levels
         const priceLevels: { price: number; bid: number; ask: number }[] = [];
         for (let i = -this.numLevels; i < this.numLevels; i++) {
-            const price = Math.round(currentPrice * 100 + i * this.binSize) / 100; // 0.10 USDT bins
+            const price =
+                Math.round(currentPrice * 100 + i * this.binSize) / 100; // 0.10 USDT bins
             const binStart = Math.floor(price * this.binSize) / this.binSize;
-            const binEnd = binStart + (this.binSize * 0.01);
+            const binEnd = binStart + this.binSize * 0.01;
 
             // Sum bid volumes in bin
             let bidVolume = 0;
@@ -288,14 +213,21 @@ export class OrderBookProcessor {
         }
 
         // Calculate imbalance
-        const imbalance = imbalanceBidVolume === 0 && imbalanceAskVolume === 0
-            ? 0
-            : (imbalanceBidVolume - imbalanceAskVolume) / (imbalanceBidVolume + imbalanceAskVolume || 1);
+        const imbalance =
+            imbalanceBidVolume === 0 && imbalanceAskVolume === 0
+                ? 0
+                : (imbalanceBidVolume - imbalanceAskVolume) /
+                  (imbalanceBidVolume + imbalanceAskVolume || 1);
         this.volumeImbalanceHistory.push(imbalance);
-        if (this.volumeImbalanceHistory.length > 30) this.volumeImbalanceHistory.shift(); // Keep 30s of data
-        const volumeImbalance = this.volumeImbalanceHistory.length > 0
-            ? this.volumeImbalanceHistory.reduce((sum, val) => sum + val, 0) / this.volumeImbalanceHistory.length
-            : 0;
+        if (this.volumeImbalanceHistory.length > 30)
+            this.volumeImbalanceHistory.shift(); // Keep 30s of data
+        const volumeImbalance =
+            this.volumeImbalanceHistory.length > 0
+                ? this.volumeImbalanceHistory.reduce(
+                      (sum, val) => sum + val,
+                      0
+                  ) / this.volumeImbalanceHistory.length
+                : 0;
         // Calculate metrics
         const ratio = totalAsk / (totalBid || 1);
         const supportPercent = (totalBid / (totalAsk || 1)) * 100;
@@ -341,7 +273,3 @@ export class OrderBookProcessor {
         };
     }
 }
-
-// Start the processor
-// const processor = new OrderBookProcessor();
-// processor.start().catch(err => console.error('Failed to start processor:', err));

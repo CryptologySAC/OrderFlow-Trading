@@ -18,7 +18,7 @@
         "build": "yarn clean && yarn compile",
         "build:watch": "yarn clean && yarn compile -w",
         "clean": "rm -r dist",
-        "compile": "./node_modules/typescript/bin/tsc",
+        "compile": "yarn format && ./node_modules/typescript/bin/tsc",
         "format": "yarn lint && yarn prettier",
         "lint": "./node_modules/tslint/bin/tslint -c ./tslint.json 'src/**/*.ts' '__tests__/**/*.ts' --fix",
         "docs": "./node_modules/typedoc/bin/typedoc src --out docs",

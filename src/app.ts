@@ -1,18 +1,14 @@
+/*
+
 import { BinanceDataFeed } from "./binance";
 import { Storage } from "./storage";
 import { OrderBookProcessor } from "./orderBookProcessor";
 import { SpotWebsocketStreams, SpotWebsocketAPI } from "@binance/spot";
 import dotenv from "dotenv";
-import {
-    PlotTrade,
-    // FeedState /*, MarketOrder, OrderType /*, AbsorptionLabel */,
-    Signal,
-} from "./interfaces";
-import express from "express";
-import path from "path";
+import { PlotTrade, Signal } from "./interfaces";
 import { Server } from "ws";
 import { OrderFlowAnalyzer } from "./orderflow";
-//import { ShpFlowDetector } from "./shp-flow-detector";
+// import { ShpFlowDetector } from "./shp-flow-detector";
 
 dotenv.config();
 
@@ -27,16 +23,9 @@ export class BinanceStream {
     // private readonly lastFeedState: FeedState;
     private thresholdTime: number;
     private readonly orderFlowAnalyzer: OrderFlowAnalyzer;
-    private readonly app: express.Application;
-    // private readonly port: number = (process.env.PORT ?? 3000) as number;
     private readonly wsPort: number = (process.env.WS_PORT ?? 3001) as number;
     private readonly BroadCastWebSocket: Server;
-    //private readonly shpFlowDetector: ShpFlowDetector;
-    //private orderBook: OrderBook = new OrderBook({
-    //    lastUpdateId: 0,
-    //    bids: [],
-    //    asks: [],
-    //}); // Initialize with empty order book
+    // private readonly shpFlowDetector: ShpFlowDetector;
 
     constructor() {
         // Initialize the Binance stream client
@@ -65,43 +54,39 @@ export class BinanceStream {
                 console.log(signal); // this.broadcastSignal(signal);
             }
         );
-        //this.shpFlowDetector = new ShpFlowDetector((signal) => {
-            //this.broadcastSignal(signal);
-        //});
-        this.app = express();
+        // this.shpFlowDetector = new ShpFlowDetector((signal) => {
+        // this.broadcastSignal(signal);
+        // });
         this.BroadCastWebSocket = new Server({ port: this.wsPort });
 
         this.BroadCastWebSocket.on("connection", (ws) => {
             console.log("Client connected");
-            ws.send(
-                JSON.stringify({
-                    type: "orderbook",
-                    //data: this.orderBook.getOrderBook(),
-                })
-            );
+
             ws.on("close", () => console.log("Client disconnected"));
-            ws.on('message', (message) => {
+            ws.on("message", (message) => {
                 try {
                     const request = JSON.parse(message.toString());
-                    if (request.type === 'ping') {
-                        ws.send(JSON.stringify({ type: 'pong' }));
-                    } 
-                    if(request.type === 'backlog' ) {
-                        const amount: number = (request.data.amount ?? 1000) as number;
+                    if (request.type === "ping") {
+                        ws.send(JSON.stringify({ type: "pong" }));
+                    }
+                    if (request.type === "backlog") {
+                        const amount: number = (request.data.amount ??
+                            1000) as number;
                         console.log("Backlog request received: ", amount);
                         let backlog = this.requestBacklog(amount);
                         backlog = backlog.reverse(); // set the order to the oldest trade first
                         ws.send(
                             JSON.stringify({
                                 type: "backlog",
-                                data: backlog /*, signals: backLogSignals */,
+                                data: backlog /*, signals: backLogSignals * /,
+                                now: Date.now(),
                             })
                         );
                     }
                 } catch (err) {
                     console.error("Invalid message format", err);
                 }
-            });            
+            });
         });
     }
 
@@ -130,7 +115,7 @@ export class BinanceStream {
                                 trade,
                                 this.symbol
                             );
-                            //this.shpFlowDetector.addTrade(trade);
+                            // this.shpFlowDetector.addTrade(trade);
                         }
                     }
                 );
@@ -147,10 +132,10 @@ export class BinanceStream {
             }
         } catch (error) {
             console.warn("Backlog filled:", error);
-        } 
+        }
     }
 
-    private requestBacklog(amount:number): PlotTrade[] {
+    private requestBacklog(amount: number): PlotTrade[] {
         const backLog: PlotTrade[] = [];
         this.aggTradeTemp = this.storage.getLatestAggregatedTrades(
             amount,
@@ -172,37 +157,39 @@ export class BinanceStream {
         return backLog;
     }
 
-
     private async getTrades() {
         const connection = await this.binanceFeed.connectToStreams();
-        
-        connection.on('close', async () => {
+
+        connection.on("close", async () => {
             this.getTrades();
         });
 
         try {
-            
-
             const streamAggTrade = connection.aggTrade({ symbol: this.symbol });
-            const streamDepth = connection.diffBookDepth({ symbol: this.symbol, updateSpeed: "1000ms"})
+            const streamDepth = connection.diffBookDepth({
+                symbol: this.symbol,
+                updateSpeed: "1000ms",
+            });
 
             streamDepth.on(
                 "message",
                 (data: SpotWebsocketStreams.DiffBookDepthResponse) => {
-                    const processedData: SpotWebsocketAPI.DepthResponseResult = {
-                        lastUpdateId: data.u,
-                        bids: data.b,
-                        asks: data.a,
-                    };
-                    this.orderBookProcessor.processWebSocketUpdate(processedData);
-                    
+                    const processedData: SpotWebsocketAPI.DepthResponseResult =
+                        {
+                            lastUpdateId: data.u,
+                            bids: data.b,
+                            asks: data.a,
+                        };
+                    this.orderBookProcessor.processWebSocketUpdate(
+                        processedData
+                    );
                 }
             );
-            
+
             streamAggTrade.on(
                 "message",
                 (data: SpotWebsocketStreams.AggTradeResponse) => {
-                    //console.info(data);
+                    // console.info(data);
                     const plotTrade: PlotTrade = {
                         time: data.T !== undefined ? data.T : 0, // Millisecond precision
                         price: data.p !== undefined ? parseFloat(data.p) : 0,
@@ -223,6 +210,7 @@ export class BinanceStream {
                                     JSON.stringify({
                                         type: "trade",
                                         data: plotTrade,
+                                        now: Date.now(),
                                     })
                                 );
                             }
@@ -264,6 +252,7 @@ export class BinanceStream {
                     JSON.stringify({
                         type: "signal",
                         data: signal,
+                        now: Date.now(),
                     })
                 );
             }
@@ -296,14 +285,14 @@ export class BinanceStream {
     }
 
     public async main() {
-        this.app.use(express.static(path.join(__dirname, "../public")));
-
         try {
             await this.fillBacklog();
-            await this.orderBookProcessor.start();
+            await this.orderBookProcessor.fetchInitialOrderBook();
             await this.getTrades();
         } catch (error) {
             console.error("Error in main function:", error);
         }
     }
 }
+
+*/
