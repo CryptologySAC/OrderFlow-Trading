@@ -6,8 +6,11 @@ import { TradesProcessor } from "./tradesProcessor";
 import { BinanceDataFeed } from "./binance";
 import { OrderBookProcessor } from "./orderBookProcessor";
 import { Signal, WebSocketMessage } from "./interfaces";
+import { Storage } from "./storage";
+import { AbsorptionDetector } from "./absorptionDetector";
 
 export class OrderFlowDashboard {
+    private readonly intervalMs: number = 10 * 60 * 1000; // 10 minutes in milliseconds
     private readonly symbol: string = (
         process.env.SYMBOL ?? "LTCUSDT"
     ).toUpperCase();
@@ -20,10 +23,16 @@ export class OrderFlowDashboard {
     private readonly wsPort: number = (process.env.WS_PORT ?? 3001) as number;
     private readonly BroadCastWebSocket: Server;
 
+    private readonly absorptionDetector: AbsorptionDetector;
+
     constructor() {
         this.binanceFeed = new BinanceDataFeed();
         this.orderBookProcessor = new OrderBookProcessor();
         this.tradesProcessor = new TradesProcessor();
+
+        this.absorptionDetector = new AbsorptionDetector((detected) =>
+            console.log(`Absorption DETECTED: ${detected}`)
+        );
 
         this.BroadCastWebSocket = new Server({ port: this.wsPort });
 
@@ -114,6 +123,7 @@ export class OrderFlowDashboard {
             streamDepth.on(
                 "message",
                 async (data: SpotWebsocketStreams.DiffBookDepthResponse) => {
+                    this.absorptionDetector.addDepth(data);
                     const message: WebSocketMessage =
                         this.orderBookProcessor.processWebSocketUpdate(data);
                     await this.broadcastMessage(message);
@@ -124,6 +134,7 @@ export class OrderFlowDashboard {
                 "message",
                 async (data: SpotWebsocketStreams.AggTradeResponse) => {
                     try {
+                        this.absorptionDetector.addTrade(data);
                         const processedData: WebSocketMessage =
                             this.tradesProcessor.addTrade(data);
                         await this.broadcastMessage(processedData);
@@ -198,6 +209,28 @@ export class OrderFlowDashboard {
         });
     }
 
+    private async purgeDatabase() {
+        const storage: Storage = new Storage();
+        const intervalId = setInterval(async () => {
+            console.log(
+                `[${new Date().toISOString()}] Starting scheduled purge...`
+            );
+            try {
+                await storage.purgeOldEntries();
+            } catch (error) {
+                console.error(
+                    `[${new Date().toISOString()}] Scheduled purge failed: ${(error as Error).message}`
+                );
+            }
+        }, this.intervalMs);
+
+        process.on("SIGINT", () => {
+            console.log("Stopping timer...");
+            clearInterval(intervalId);
+            process.exit();
+        });
+    }
+
     public async startDashboard() {
         try {
             await this.startWebServer();
@@ -206,11 +239,13 @@ export class OrderFlowDashboard {
             const preloadTrades = this.preloadTrades();
             const fetchInitialOrderBook = this.fetchInitialOrderBook();
             const getFromBinanceAPI = this.getFromBinanceAPI();
+
             await Promise.all([
                 preloadTrades,
                 fetchInitialOrderBook,
                 getFromBinanceAPI,
             ]);
+            await this.purgeDatabase();
             console.log("Order Flow Dashboard started successfully.");
         } catch (error) {
             console.error("Error starting Order Flow Dashboard:", error);

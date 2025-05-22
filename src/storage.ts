@@ -11,6 +11,7 @@ export class Storage {
     private readonly getFeedState: BetterSqlite3.Statement;
     private readonly getTrades: BetterSqlite3.Statement;
     private readonly getAggregatedTrades: BetterSqlite3.Statement;
+    private readonly purgeAggregatedTrades: BetterSqlite3.Statement;
 
     constructor() {
         this.db = new BetterSqlite3("trades.db", {});
@@ -119,6 +120,10 @@ export class Storage {
             ORDER BY tradeTime DESC
             LIMIT @limit
         `);
+
+        this.purgeAggregatedTrades = this.db.prepare(
+            `DELETE FROM aggregated_trades WHERE tradeTime < @cutOffTime`
+        );
     }
 
     /**
@@ -292,6 +297,22 @@ export class Storage {
         } catch (error) {
             console.error("Error retrieving latest aggregated trades:", error);
             return [];
+        }
+    }
+
+    // Function to purge entries older than 24 hours
+    public async purgeOldEntries(): Promise<void> {
+        // Calculate the cutoff timestamp (24 hours ago in epoch milliseconds)
+        const currentTimeMs: number = Date.now(); // Current time in milliseconds
+        const hours24Ms: number = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+        const cutoffMs: number = currentTimeMs - hours24Ms;
+
+        try {
+            this.purgeAggregatedTrades.run({
+                cutOffTime: cutoffMs,
+            });
+        } catch (error) {
+            throw error;
         }
     }
 }
