@@ -63,10 +63,9 @@ export class AbsorptionDetector {
         >();
 
         for (const trade of this.trades) {
-            const price = ((trade.p ?? 0) as number).toFixed(
-                this.pricePrecision
-            );
-            const priceKey = +price;
+            const price: number =
+                trade.p !== undefined ? parseFloat(trade.p) : 0;
+            const priceKey = +price.toFixed(this.pricePrecision);
             if (!byPrice.has(priceKey)) byPrice.set(priceKey, []);
             byPrice.get(priceKey)!.push(trade);
         }
