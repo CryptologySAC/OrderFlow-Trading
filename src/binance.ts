@@ -10,7 +10,10 @@ import {
     ConfigurationWebsocketAPI,
     WebsocketApiRateLimit,
     WebsocketApiResponse,
+    Logger,
+    LogLevel,
 } from "@binance/common";
+
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -18,6 +21,8 @@ dotenv.config();
 export class BinanceDataFeed {
     private readonly streamClient: Spot;
     private readonly apiClient: Spot;
+    logger: Logger = Logger.getInstance();
+
     private readonly configurationWebsocketStreams: ConfigurationWebsocketStreams =
         {
             wsURL: SPOT_WS_STREAMS_PROD_URL,
@@ -33,9 +38,11 @@ export class BinanceDataFeed {
     };
 
     constructor() {
+        this.logger.setMinLogLevel(LogLevel.WARN);
         this.streamClient = new Spot({
             configurationWebsocketStreams: this.configurationWebsocketStreams,
         });
+
         this.apiClient = new Spot({
             configurationWebsocketAPI: this.configurationWebsocketAPI,
         });
@@ -120,18 +127,19 @@ export class BinanceDataFeed {
             const response: WebsocketApiResponse<SpotWebsocketAPI.TradesAggregateResponse> =
                 await connection.tradesAggregate(config);
             const rateLimits: WebsocketApiRateLimit[] = response.rateLimits!;
-            console.log("fetchAggTradesByTime() rate limits:", rateLimits);
+
+            rateLimits.forEach((rateLimit) => {
+                if (rateLimit.count > rateLimit.limit) {
+                    throw new Error("Rate limits Reached");
+                }
+            });
 
             const data: SpotWebsocketAPI.TradesAggregateResponseResultInner[] =
                 response.data as SpotWebsocketAPI.TradesAggregateResponseResultInner[];
-            console.log(
-                "fetchAggTradesByTime() response:",
-                data ? data.length : "no results"
-            );
 
             return data;
         } catch (error) {
-            throw new Error(`tradesAggregate() ${error}`);
+            throw new Error(`fetchAggTradesByTime() ${error}`);
         } finally {
             await connection!.disconnect();
         }
