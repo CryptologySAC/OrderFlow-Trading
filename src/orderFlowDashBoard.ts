@@ -8,6 +8,7 @@ import { OrderBookProcessor } from "./orderBookProcessor";
 import { Signal, WebSocketMessage } from "./interfaces";
 import { Storage } from "./storage";
 import { AbsorptionDetector } from "./absorptionDetector";
+import { ExhaustionDetector } from "./exhaustionDetector";
 
 export class OrderFlowDashboard {
     private readonly intervalMs: number = 10 * 60 * 1000; // 10 minutes
@@ -29,13 +30,18 @@ export class OrderFlowDashboard {
     private readonly tradesProcessor: TradesProcessor;
     private readonly orderBookProcessor: OrderBookProcessor;
     private readonly absorptionDetector: AbsorptionDetector;
+    private readonly exhaustionDetector: ExhaustionDetector;
 
     constructor() {
         this.binanceFeed = new BinanceDataFeed();
         this.orderBookProcessor = new OrderBookProcessor();
         this.tradesProcessor = new TradesProcessor();
-        this.absorptionDetector = new AbsorptionDetector((detected) =>
-            console.log(`Absorption DETECTED: ${detected}`)
+
+        this.exhaustionDetector = new ExhaustionDetector(
+            this.onExhaustionDetected.bind(this)
+        );
+        this.absorptionDetector = new AbsorptionDetector(
+            this.onAbsorptionDetected.bind(this)
         );
 
         this.BroadCastWebSocket = new WebSocketServer({ port: this.wsPort });
@@ -147,6 +153,7 @@ export class OrderFlowDashboard {
                 "message",
                 async (data: SpotWebsocketStreams.DiffBookDepthResponse) => {
                     this.absorptionDetector.addDepth(data);
+                    this.exhaustionDetector.addDepth(data);
                     const message: WebSocketMessage =
                         this.orderBookProcessor.processWebSocketUpdate(data);
                     await this.broadcastMessage(message);
@@ -158,6 +165,7 @@ export class OrderFlowDashboard {
                 async (data: SpotWebsocketStreams.AggTradeResponse) => {
                     try {
                         this.absorptionDetector.addTrade(data);
+                        this.exhaustionDetector.addTrade(data);
                         const processedData: WebSocketMessage =
                             this.tradesProcessor.addTrade(data);
                         await this.broadcastMessage(processedData);
@@ -241,6 +249,53 @@ export class OrderFlowDashboard {
             clearInterval(intervalId);
             process.exit();
         });
+    }
+
+    private async onExhaustionDetected(detected: {
+        side: "buy" | "sell";
+        price: number;
+        trades: any[];
+        totalAggressiveVolume: number;
+    }) {
+        const signal: Signal = {
+            time: Date.now(),
+            price: detected.price,
+            type:
+                detected.side === "buy" ? "sell_exhaustion" : "buy_exhaustion",
+            takeProfit:
+                detected.price + (detected.side === "buy" ? -0.005 : 0.005), // example TP/SL logic
+            stopLoss:
+                detected.price + (detected.side === "buy" ? 0.005 : -0.005),
+            closeReason: "exhaustion",
+        };
+
+        console.log(
+            `Exhaustion DETECTED: ${JSON.stringify(detected, null, 2)}`
+        );
+        await this.broadcastSignal(signal);
+    }
+
+    private async onAbsorptionDetected(detected: {
+        side: "buy" | "sell";
+        price: number;
+        trades: any[];
+        totalAggressiveVolume: number;
+    }) {
+        const signal: Signal = {
+            time: Date.now(),
+            price: detected.price,
+            type:
+                detected.side === "buy" ? "sell_absorption" : "buy_absorption",
+            takeProfit:
+                detected.price + (detected.side === "buy" ? -0.005 : 0.005), // example TP/SL logic
+            stopLoss:
+                detected.price + (detected.side === "buy" ? 0.005 : -0.005),
+            closeReason: "absorption",
+        };
+        console.log(
+            `Absorption DETECTED: ${JSON.stringify(detected, null, 2)}`
+        );
+        await this.broadcastSignal(signal);
     }
 
     public async startDashboard() {

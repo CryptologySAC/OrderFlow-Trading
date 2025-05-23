@@ -1,6 +1,6 @@
 import { Signal, VolumeBin, PlotTrade } from "./interfaces";
 
-export class OrderFlowAnalyzer {
+export class OrderFlowAnalyzerX {
     private absorptionWindow: number; // seconds
     private priceRange: number; // percentage
     private minLargeOrder: number; // LTC
@@ -249,7 +249,7 @@ export class OrderFlowAnalyzer {
                     `Timeframe: ${signal.timeframe}`
             );
             if (isConfirmed) {
-                this.activeTrades[signal.timeframe] = signal;
+                // this.activeTrades[signal.timeframe] = signal;
                 this.signals.push(signal);
             }
             if (this.callback) {
