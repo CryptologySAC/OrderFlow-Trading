@@ -53,7 +53,10 @@ export interface Signal {
         | "end_of_data"
         | "invalidated"
         | "exhaustion"
-        | "absorption"; // Set when closed
+        | "absorption"
+        | "delta_divergence"
+        | "cvd_slope_reversal"
+        | "both"; // Set when closed
 }
 
 export interface VolumeBin {

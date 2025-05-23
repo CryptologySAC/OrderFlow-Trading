@@ -9,6 +9,7 @@ import { Signal, WebSocketMessage } from "./interfaces";
 import { Storage } from "./storage";
 import { AbsorptionDetector } from "./absorptionDetector";
 import { ExhaustionDetector } from "./exhaustionDetector";
+import { DeltaCVDConfirmation } from "./deltaCVDCOnfirmation";
 
 export class OrderFlowDashboard {
     private readonly intervalMs: number = 10 * 60 * 1000; // 10 minutes
@@ -31,6 +32,7 @@ export class OrderFlowDashboard {
     private readonly orderBookProcessor: OrderBookProcessor;
     private readonly absorptionDetector: AbsorptionDetector;
     private readonly exhaustionDetector: ExhaustionDetector;
+    private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
 
     constructor() {
         this.binanceFeed = new BinanceDataFeed();
@@ -42,6 +44,16 @@ export class OrderFlowDashboard {
         );
         this.absorptionDetector = new AbsorptionDetector(
             this.onAbsorptionDetected.bind(this)
+        );
+        this.deltaCVDConfirmation = new DeltaCVDConfirmation((confirmed) =>
+            this.broadcastSignal({
+                type: `${confirmed.confirmedType}_confirmed` as Signal["type"],
+                time: confirmed.time,
+                price: confirmed.price,
+                takeProfit: confirmed.price * 1.01, // example
+                stopLoss: confirmed.price * 0.99, // example
+                closeReason: confirmed.reason,
+            })
         );
 
         this.BroadCastWebSocket = new WebSocketServer({ port: this.wsPort });
@@ -166,6 +178,7 @@ export class OrderFlowDashboard {
                     try {
                         this.absorptionDetector.addTrade(data);
                         this.exhaustionDetector.addTrade(data);
+                        this.deltaCVDConfirmation.addTrade(data);
                         const processedData: WebSocketMessage =
                             this.tradesProcessor.addTrade(data);
                         await this.broadcastMessage(processedData);
@@ -257,8 +270,9 @@ export class OrderFlowDashboard {
         trades: any[];
         totalAggressiveVolume: number;
     }) {
+        const time = Date.now();
         const signal: Signal = {
-            time: Date.now(),
+            time,
             price: detected.price,
             type:
                 detected.side === "buy" ? "sell_exhaustion" : "buy_exhaustion",
@@ -273,6 +287,11 @@ export class OrderFlowDashboard {
             `Exhaustion DETECTED: ${JSON.stringify(detected, null, 2)}`
         );
         await this.broadcastSignal(signal);
+        this.deltaCVDConfirmation.confirmSignal(
+            "exhaustion",
+            detected.price,
+            time
+        );
     }
 
     private async onAbsorptionDetected(detected: {
@@ -281,8 +300,9 @@ export class OrderFlowDashboard {
         trades: any[];
         totalAggressiveVolume: number;
     }) {
+        const time = Date.now();
         const signal: Signal = {
-            time: Date.now(),
+            time,
             price: detected.price,
             type:
                 detected.side === "buy" ? "sell_absorption" : "buy_absorption",
@@ -296,6 +316,11 @@ export class OrderFlowDashboard {
             `Absorption DETECTED: ${JSON.stringify(detected, null, 2)}`
         );
         await this.broadcastSignal(signal);
+        this.deltaCVDConfirmation.confirmSignal(
+            "absorption",
+            detected.price,
+            time
+        );
     }
 
     public async startDashboard() {
