@@ -35,25 +35,21 @@ export class AbsorptionDetector {
     }
 
     public addDepth(update: SpotWebsocketStreams.DiffBookDepthResponse) {
-        if (update.b) {
-            for (const [priceStr, qtyStr] of update.b) {
+        const updateLevel = (
+            side: "bid" | "ask",
+            updates: [string, string][]
+        ): void => {
+            for (const [priceStr, qtyStr] of updates) {
                 const price = parseFloat(priceStr);
                 const qty = parseFloat(qtyStr);
                 const level = this.depth.get(price) || { bid: 0, ask: 0 };
-                level.bid = qty;
+                level[side] = qty;
                 this.depth.set(price, level);
             }
-        }
+        };
 
-        if (update.a) {
-            for (const [priceStr, qtyStr] of update.a) {
-                const price = parseFloat(priceStr);
-                const qty = parseFloat(qtyStr);
-                const level = this.depth.get(price) || { bid: 0, ask: 0 };
-                level.ask = qty;
-                this.depth.set(price, level);
-            }
-        }
+        if (update.b) updateLevel("bid", update.b as [string, string][]);
+        if (update.a) updateLevel("ask", update.a as [string, string][]);
     }
 
     private checkAbsorption() {
@@ -63,18 +59,18 @@ export class AbsorptionDetector {
         >();
 
         for (const trade of this.trades) {
-            const price: number =
-                trade.p !== undefined ? parseFloat(trade.p) : 0;
-            const priceKey = +price.toFixed(this.pricePrecision);
-            if (!byPrice.has(priceKey)) byPrice.set(priceKey, []);
-            byPrice.get(priceKey)!.push(trade);
+            const priceStr = trade.p ?? "0";
+            const price = +parseFloat(priceStr).toFixed(this.pricePrecision);
+            if (!byPrice.has(price)) byPrice.set(price, []);
+            byPrice.get(price)!.push(trade);
         }
 
         for (const [price, tradesAtPrice] of byPrice.entries()) {
-            const aggressiveVolume = tradesAtPrice.reduce(
-                (sum, t) => sum + ((t.q ?? 0) as number),
-                0
-            );
+            const aggressiveVolume = tradesAtPrice.reduce((sum, t) => {
+                const qty =
+                    typeof t.q === "string" ? parseFloat(t.q) : (t.q ?? 0);
+                return sum + qty;
+            }, 0);
             if (aggressiveVolume < this.minAggVolume) continue;
 
             const bookLevel = this.depth.get(price);
@@ -89,14 +85,14 @@ export class AbsorptionDetector {
                 const previousQty =
                     side === "buy" ? lastLevel.ask : lastLevel.bid;
                 if (passiveQty >= previousQty * 0.9) {
-                    refilled = true; // passive volume refilled
+                    refilled = true;
                 }
             }
 
-            // Store current level for future comparisons
             this.lastSeenPassive.set(price, { ...bookLevel });
 
             if (passiveQty > aggressiveVolume * 0.8) {
+                console.log("Absorption Detected");
                 this.onAbsorption({
                     price,
                     side,

@@ -1,109 +1,97 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import { Storage } from "./storage";
 import { BinanceDataFeed } from "./binance";
 import { SpotWebsocketStreams, SpotWebsocketAPI } from "@binance/spot";
 import { PlotTrade, WebSocketMessage } from "./interfaces";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 export class TradesProcessor {
-    private readonly binanceFeed: BinanceDataFeed;
-    private readonly symbol: string;
-    private readonly storageTime: number;
-    private readonly storage: Storage;
+    private readonly binanceFeed = new BinanceDataFeed();
+    private readonly symbol: string = process.env.SYMBOL ?? "LTCUSDT";
+    private readonly storage = new Storage();
+    private readonly storageTime: number =
+        parseInt(process.env.MAX_STORAGE_TIME ?? "", 10) || 1000 * 60 * 90;
+    private thresholdTime: number = Date.now() - this.storageTime;
     private aggTradeTemp: SpotWebsocketAPI.TradesAggregateResponseResultInner[] =
         [];
-    private thresholdTime: number;
-
-    constructor() {
-        this.binanceFeed = new BinanceDataFeed();
-        this.symbol = process.env.SYMBOL ?? "ltcusdt"; // Default to ltcusdt if not provided
-        this.storage = new Storage();
-        this.storageTime = (process.env.MAX_STORAGE_TIME ??
-            1000 * 60 * 90) as number; // 90 mins in ms
-        this.thresholdTime = Date.now() - this.storageTime;
-    }
 
     /**
-     * Preload the Backlog of aggregated trades
+     * Preload the backlog of aggregated trades into storage
      */
-    public async fillBacklog() {
+    public async fillBacklog(): Promise<void> {
         console.log(
             "Requesting backlog for %s hours",
-            this.storageTime / 3600000
+            (this.storageTime / 3600000).toFixed(2)
         );
+
         try {
-            while (this.thresholdTime < Date.now()) {
-                const aggregatedTrades: SpotWebsocketAPI.TradesAggregateResponseResultInner[] =
+            const now = Date.now();
+            while (this.thresholdTime < now) {
+                const aggregatedTrades =
                     await this.binanceFeed.fetchAggTradesByTime(
                         this.symbol,
                         this.thresholdTime
                     );
-                aggregatedTrades.forEach(
-                    (
-                        trade: SpotWebsocketAPI.TradesAggregateResponseResultInner
-                    ) => {
-                        if (
-                            trade.T !== undefined &&
-                            trade.T > this.thresholdTime
-                        ) {
-                            this.thresholdTime = trade.T;
-                            this.storage.saveAggregatedTrade(
-                                trade,
-                                this.symbol
-                            );
-                        }
+
+                if (aggregatedTrades.length === 0) {
+                    console.warn(
+                        "No trades returned for threshold time:",
+                        this.thresholdTime
+                    );
+                    break;
+                }
+
+                for (const trade of aggregatedTrades) {
+                    if (trade.T && trade.T > this.thresholdTime) {
+                        this.thresholdTime = trade.T;
+                        this.storage.saveAggregatedTrade(trade, this.symbol);
                     }
-                );
+                }
 
                 if (aggregatedTrades.length < 10) {
-                    throw new Error("No more trades available");
+                    console.warn(
+                        "Possibly hit the end of available trade history"
+                    );
+                    break;
                 }
             }
-        } catch (error) {
-            const tempError: Error = error as Error;
-            console.warn(
-                "Backlog filled:",
-                (tempError.message ?? error) as string
-            );
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                console.warn("Backlog fill error:", error.message);
+            } else {
+                console.warn("Backlog fill error:", error);
+            }
         }
     }
 
     /**
-     * Request a backlog of trades from the storage.
-     * @param amount The number of trades to request.
-     * @returns An array of PlotTrade objects.
+     * Request a number of recent aggregated trades for plotting
      */
     public requestBacklog(amount: number): PlotTrade[] {
         try {
-            const backLog: PlotTrade[] = [];
             this.aggTradeTemp = this.storage.getLatestAggregatedTrades(
                 amount,
                 this.symbol
             );
-            this.aggTradeTemp.forEach(
-                (
-                    trade: SpotWebsocketAPI.TradesAggregateResponseResultInner
-                ) => {
-                    const plotTrade: PlotTrade = {
-                        time: trade.T !== undefined ? trade.T : 0, // Millisecond precision
-                        price: trade.p !== undefined ? parseFloat(trade.p) : 0,
-                        quantity:
-                            trade.q !== undefined ? parseFloat(trade.q) : 0,
-                        orderType: trade.m ? "SELL" : "BUY",
-                        symbol: this.symbol,
-                        tradeId: trade.a !== undefined ? trade.a : 0,
-                    };
-                    backLog.push(plotTrade);
-                }
-            );
-            return backLog;
+
+            return this.aggTradeTemp.map((trade) => ({
+                time: trade.T ?? 0,
+                price: parseFloat(trade.p || "0"),
+                quantity: parseFloat(trade.q || "0"),
+                orderType: trade.m ? "SELL" : "BUY",
+                symbol: this.symbol,
+                tradeId: trade.a ?? 0,
+            }));
         } catch (error) {
-            console.log(error);
+            console.error("requestBacklog() failed:", error);
             return [];
         }
     }
 
+    /**
+     * Process and store a live trade, returning a formatted message
+     */
     public addTrade(
         data: SpotWebsocketStreams.AggTradeResponse
     ): WebSocketMessage {
@@ -111,27 +99,25 @@ export class TradesProcessor {
             this.storage.saveAggregatedTrade(data, this.symbol);
 
             const processedTrade: PlotTrade = {
-                time: data.T !== undefined ? data.T : 0, // Millisecond precision
-                price: data.p !== undefined ? parseFloat(data.p) : 0,
-                quantity: data.q !== undefined ? parseFloat(data.q) : 0,
+                time: data.T ?? 0,
+                price: data.p && !isNaN(+data.p) ? parseFloat(data.p) : 0,
+                quantity: data.q && !isNaN(+data.q) ? parseFloat(data.q) : 0,
                 orderType: data.m ? "SELL" : "BUY",
                 symbol: this.symbol,
-                tradeId: data.a !== undefined ? data.a : 0,
+                tradeId: data.a ?? 0,
             };
 
-            const message: WebSocketMessage = {
+            return {
                 type: "trade",
                 now: Date.now(),
                 data: processedTrade,
             };
-
-            return message;
         } catch (error) {
-            console.log(error);
+            console.error("addTrade() failed:", error);
             return {
                 type: "error",
+                now: Date.now(),
                 data: error,
-                now: 0,
             };
         }
     }

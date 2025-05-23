@@ -1,33 +1,24 @@
 import BetterSqlite3 from "better-sqlite3";
-import { Trade, AbsorptionLabel, FeedState } from "./interfaces";
 import { SpotWebsocketAPI } from "@binance/spot";
 
 export class Storage {
     private readonly db: BetterSqlite3.Database;
-    private readonly insertTrade: BetterSqlite3.Statement;
     private readonly insertAggregatedTrade: BetterSqlite3.Statement;
-    private readonly insertSignal: BetterSqlite3.Statement;
-    private readonly updateFeedState: BetterSqlite3.Statement;
-    private readonly getFeedState: BetterSqlite3.Statement;
-    private readonly getTrades: BetterSqlite3.Statement;
     private readonly getAggregatedTrades: BetterSqlite3.Statement;
     private readonly purgeAggregatedTrades: BetterSqlite3.Statement;
 
     constructor() {
         this.db = new BetterSqlite3("trades.db", {});
 
+        ["SIGINT", "exit"].forEach((signal) =>
+            process.on(signal, () => {
+                this.close();
+                process.exit();
+            })
+        );
+
         // Create tables with the updated schema
         this.db.exec(`
-            CREATE TABLE IF NOT EXISTS trades (
-                tradeId INTEGER PRIMARY KEY,
-                tradeTime INTEGER,
-                symbol TEXT,
-                price REAL,
-                quantity REAL,
-                isBuyerMaker INTEGER,
-                orderType TEXT
-            );
-
             CREATE TABLE IF NOT EXISTS aggregated_trades (
                 aggregatedTradeId INTEGER PRIMARY KEY,
                 firstTradeId INTEGER,
@@ -40,77 +31,18 @@ export class Storage {
                 orderType TEXT,
                 bestMatch INTEGER
             );
-
-            CREATE TABLE IF NOT EXISTS signals (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                time INTEGER,
-                price REAL,
-                label TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS data_feed_state (
-                id INTEGER PRIMARY KEY,
-                lastTradeId INTEGER,
-                lastTradeTime INTEGER,
-                lastAggregatedTradeId INTEGER,
-                lastAggregatedTradeTime INTEGER,
-                updatedAt INTEGER
-            );
-        `);
-
-        // Initialize data_feed_state with a single row
-        this.db.exec(`
-            INSERT OR IGNORE INTO data_feed_state (id, lastTradeId, lastTradeTime, lastAggregatedTradeId, lastAggregatedTradeTime, updatedAt)
-            VALUES (1, 0, 0, 0, 0, 0)
         `);
 
         // Create indexes for performance
         this.db.exec(`
-            CREATE INDEX IF NOT EXISTS idx_trades_tradeTime ON trades (tradeTime);
-            CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades (symbol);
             CREATE INDEX IF NOT EXISTS idx_aggregated_trades_tradeTime ON aggregated_trades (tradeTime);
             CREATE INDEX IF NOT EXISTS idx_aggregated_trades_symbol ON aggregated_trades (symbol);
-            CREATE INDEX IF NOT EXISTS idx_signals_time ON signals (time);
         `);
 
         // Prepare insert statements
-        this.insertTrade = this.db.prepare(`
-            INSERT INTO trades (tradeId, tradeTime, symbol, price, quantity, isBuyerMaker, orderType)
-            VALUES (@tradeId, @tradeTime, @symbol, @price, @quantity, @isBuyerMaker, @orderType)
-        `);
-
         this.insertAggregatedTrade = this.db.prepare(`
-            INSERT INTO aggregated_trades (aggregatedTradeId, firstTradeId, lastTradeId, tradeTime, symbol, price, quantity, isBuyerMaker, orderType, bestMatch)
+            INSERT OR IGNORE INTO aggregated_trades (aggregatedTradeId, firstTradeId, lastTradeId, tradeTime, symbol, price, quantity, isBuyerMaker, orderType, bestMatch)
             VALUES (@aggregatedTradeId, @firstTradeId, @lastTradeId, @tradeTime, @symbol, @price, @quantity, @isBuyerMaker, @orderType, @bestMatch)
-        `);
-
-        this.insertSignal = this.db.prepare(`
-            INSERT INTO signals (time, price, label)
-            VALUES (@time, @price, @label)
-        `);
-
-        this.updateFeedState = this.db.prepare(`
-            UPDATE data_feed_state
-            SET lastTradeId = @lastTradeId,
-                lastTradeTime = @lastTradeTime,
-                lastAggregatedTradeId = @lastAggregatedTradeId,
-                lastAggregatedTradeTime = @lastAggregatedTradeTime,
-                updatedAt = @updatedAt
-            WHERE id = 1
-        `);
-
-        this.getFeedState = this.db.prepare(`
-            SELECT lastTradeId, lastTradeTime, lastAggregatedTradeId, lastAggregatedTradeTime
-            FROM data_feed_state
-            WHERE id = 1
-        `);
-
-        this.getTrades = this.db.prepare(`
-            SELECT tradeId, tradeTime, symbol, price, quantity, isBuyerMaker, orderType
-            FROM trades
-            WHERE symbol = @symbol
-            ORDER BY tradeTime DESC
-            LIMIT @limit
         `);
 
         this.getAggregatedTrades = this.db.prepare(`
@@ -124,38 +56,6 @@ export class Storage {
         this.purgeAggregatedTrades = this.db.prepare(
             `DELETE FROM aggregated_trades WHERE tradeTime < @cutOffTime`
         );
-    }
-
-    /**
-     * Saves an individual trade to the trades table.
-     * @param trade Trade object from Binance trade stream
-     */
-    public saveTrade(trade: Trade): void {
-        try {
-            const orderType = trade.m ? "SELL" : "BUY";
-            this.insertTrade.run({
-                tradeId: trade.t,
-                tradeTime: trade.T,
-                symbol: trade.s,
-                price: parseFloat(trade.p),
-                quantity: parseFloat(trade.q),
-                isBuyerMaker: trade.m ? 1 : 0,
-                orderType,
-            });
-
-            // Update feed state
-            this.updateFeedState.run({
-                lastTradeId: trade.t,
-                lastTradeTime: trade.T,
-                lastAggregatedTradeId:
-                    this.getLastFeedState().lastAggregatedTradeId,
-                lastAggregatedTradeTime:
-                    this.getLastFeedState().lastAggregatedTradeTime,
-                updatedAt: Date.now(),
-            });
-        } catch (error) {
-            console.error("Error saving trade:", error);
-        }
     }
 
     /**
@@ -183,49 +83,15 @@ export class Storage {
                 orderType,
                 bestMatch: aggTrade.M ? 1 : 0,
             });
+        } catch (err: any) {
+            // Ignore duplicate primary key errors (trade already stored)
+            if (err.code !== "SQLITE_CONSTRAINT_PRIMARYKEY") {
+                console.warn("Unexpected error saving aggregated trade:", err);
+            }
 
-            // Update feed state
-            this.updateFeedState.run({
-                lastTradeId: this.getLastFeedState().lastTradeId,
-                lastTradeTime: this.getLastFeedState().lastTradeTime,
-                lastAggregatedTradeId: aggTrade.a,
-                lastAggregatedTradeTime: aggTrade.T,
-                updatedAt: Date.now(),
-            });
-        } catch (err) {
+            // Otherwise silently skip
             return;
         }
-    }
-
-    /**
-     * Saves a signal to the signals table.
-     * @param signal AbsorptionLabel object
-     */
-    public saveSignal(signal: AbsorptionLabel): void {
-        try {
-            this.insertSignal.run({
-                time: signal.time,
-                price: signal.price,
-                label: signal.label,
-            });
-        } catch (error) {
-            console.error("Error saving signal:", error);
-        }
-    }
-
-    public getLastFeedState(): FeedState {
-        const result = this.getFeedState.get() as {
-            lastTradeId: number | null;
-            lastTradeTime: number | null;
-            lastAggregatedTradeId: number | null;
-            lastAggregatedTradeTime: number | null;
-        };
-        return {
-            lastTradeId: result.lastTradeId || 0,
-            lastTradeTime: result.lastTradeTime || 0,
-            lastAggregatedTradeId: result.lastAggregatedTradeId || 0,
-            lastAggregatedTradeTime: result.lastAggregatedTradeTime || 0,
-        };
     }
 
     /**
@@ -233,30 +99,7 @@ export class Storage {
      */
     public close(): void {
         this.db.close();
-    }
-
-    /**
-     * Retrieves the latest n trades from the database for a given symbol.
-     * @param n Number of trades to retrieve
-     * @param symbol Trading pair symbol (default: LTCUSDT)
-     * @returns Array of Trade objects
-     */
-    public getLatestTrades(n: number, symbol: string = "LTCUSDT"): any[] {
-        try {
-            const rows = this.getTrades.all({ symbol, limit: n }) as {
-                tradeId: number;
-                tradeTime: number;
-                symbol: string;
-                price: number;
-                quantity: number;
-                isBuyerMaker: number;
-                orderType: string;
-            }[];
-            return rows;
-        } catch (error) {
-            console.error("Error retrieving latest trades:", error);
-            return [];
-        }
+        console.info("Database connection closed.");
     }
 
     /**
@@ -267,7 +110,7 @@ export class Storage {
      */
     public getLatestAggregatedTrades(
         n: number,
-        symbol: string = "LTCUSDT"
+        symbol: string
     ): SpotWebsocketAPI.TradesAggregateResponseResultInner[] {
         try {
             const rows = this.getAggregatedTrades.all({ symbol, limit: n }) as {
@@ -293,15 +136,15 @@ export class Storage {
                 T: row.tradeTime,
                 m: row.isBuyerMaker === 1,
                 M: row.bestMatch === 1,
-            }));
+            })) as SpotWebsocketAPI.TradesAggregateResponseResultInner[];
         } catch (error) {
             console.error("Error retrieving latest aggregated trades:", error);
-            return [];
+            return [] as SpotWebsocketAPI.TradesAggregateResponseResultInner[];
         }
     }
 
     // Function to purge entries older than 24 hours
-    public async purgeOldEntries(): Promise<void> {
+    public purgeOldEntries(): void {
         // Calculate the cutoff timestamp (24 hours ago in epoch milliseconds)
         const currentTimeMs: number = Date.now(); // Current time in milliseconds
         const hours24Ms: number = 24 * 60 * 60 * 1000; // 24 hours in milliseconds

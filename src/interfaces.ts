@@ -55,13 +55,6 @@ export interface VolumeBin {
     lastUpdate: number;
 }
 
-export interface FeedState {
-    lastTradeId: number;
-    lastTradeTime: number;
-    lastAggregatedTradeId: number;
-    lastAggregatedTradeTime: number;
-}
-
 export interface SwingPoint {
     tradeId: number;
     price: number;

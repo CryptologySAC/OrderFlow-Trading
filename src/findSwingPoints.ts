@@ -8,7 +8,7 @@ const swingPoints = new SwingPoints(0.01);
 
 try {
     let allAggregatedTrades: SpotWebsocketAPI.TradesAggregateResponseResultInner[] =
-        storage.getLatestAggregatedTrades(15000000);
+        storage.getLatestAggregatedTrades(15000000, "LTCUSDT");
     allAggregatedTrades = allAggregatedTrades.reverse();
     console.log("Aggregated trades amount: ", allAggregatedTrades.length);
     for (const trade of allAggregatedTrades) {
