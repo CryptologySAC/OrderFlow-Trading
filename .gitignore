@@ -7,3 +7,5 @@ python/*.png
 python/*.log
 dist/
 python/shp_plots/
+yarn.lock
+.DS_Store
