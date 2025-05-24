@@ -96,13 +96,13 @@ export class OrderBookProcessor {
                 asks: data.a,
             };
 
-            if (((update.lastUpdateId ?? -1) as number) <= this.lastUpdateId) {
+            if ((update.lastUpdateId ?? -1) <= this.lastUpdateId) {
                 throw new Error(
                     `Received outdated update: ${update.lastUpdateId} | ${this.lastUpdateId}`
                 );
             }
 
-            this.lastUpdateId = (update.lastUpdateId ?? -1) as number;
+            this.lastUpdateId = update.lastUpdateId ?? -1;
 
             update.bids?.forEach(([price, qty]) => {
                 const priceNum = parseFloat(price);

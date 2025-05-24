@@ -40,4 +40,6 @@ async function requestBacklog(fromId: number, limit: number = 1000) {
     }
 }
 
-requestBacklog(fromId, limit);
+requestBacklog(fromId, limit).catch((err) => {
+    console.log(err);
+});

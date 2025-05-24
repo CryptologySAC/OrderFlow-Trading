@@ -1,6 +1,6 @@
 export interface WebSocketMessage {
     type: "pong" | "backlog" | "trade" | "orderbook" | "signal" | "error";
-    data: any;
+    data: unknown;
     now: number;
 }
 
@@ -34,10 +34,10 @@ export interface AbsorptionLabel {
 // Signal interface matching Python's structure
 export interface Signal {
     type:
-        | "buy_absorption"
-        | "sell_absorption"
-        | "sell_exhaustion"
-        | "buy_exhaustion"
+        | "exhaustion"
+        | "absorption"
+        | "exhaustion_confirmed"
+        | "absorption_confirmed"
         | "flow";
     time: number; // Timestamp in milliseconds
     price: number;
@@ -57,6 +57,10 @@ export interface Signal {
         | "delta_divergence"
         | "cvd_slope_reversal"
         | "both"; // Set when closed
+    totalAggressiveVolume?: number;
+    passiveVolume?: number;
+    refilled?: boolean;
+    zone?: string;
 }
 
 export interface VolumeBin {

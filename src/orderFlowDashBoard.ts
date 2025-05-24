@@ -40,20 +40,47 @@ export class OrderFlowDashboard {
         this.tradesProcessor = new TradesProcessor();
 
         this.exhaustionDetector = new ExhaustionDetector(
-            this.onExhaustionDetected.bind(this)
+            (data) => {
+                void this.onExhaustionDetected(data).catch((err) =>
+                    console.error("Exhaustion callback failed:", err)
+                );
+            },
+            {
+                windowMs: 30000, // Rolling window (e.g., 90 seconds)
+                minAggVolume: 300, // Minimum LTC volume
+                pricePrecision: 2, // LTCUSDT uses 2 decimals
+                zoneTicks: 5, // Cluster size for zone detection
+            }
         );
         this.absorptionDetector = new AbsorptionDetector(
-            this.onAbsorptionDetected.bind(this)
+            (data) => {
+                void this.onAbsorptionDetected(data).catch((err) =>
+                    console.error("Absorption callback failed:", err)
+                );
+            }, // callback
+            {
+                windowMs: 30000, // 90 seconds window
+                minAggVolume: 300, // Minimum aggressive volume for detection
+                pricePrecision: 2, // Use 2 decimals for LTCUSDT
+                zoneTicks: 5, // Zone covers 3 price ticks
+            }
         );
-        this.deltaCVDConfirmation = new DeltaCVDConfirmation((confirmed) =>
-            this.broadcastSignal({
-                type: `${confirmed.confirmedType}_confirmed` as Signal["type"],
-                time: confirmed.time,
-                price: confirmed.price,
-                takeProfit: confirmed.price * 1.01, // example
-                stopLoss: confirmed.price * 0.99, // example
-                closeReason: confirmed.reason,
-            })
+        this.deltaCVDConfirmation = new DeltaCVDConfirmation(
+            (confirmed) =>
+                void this.broadcastSignal({
+                    type: `${confirmed.confirmedType}_confirmed` as Signal["type"],
+                    time: confirmed.time,
+                    price: confirmed.price,
+                    takeProfit: confirmed.price * 1.01, // example
+                    stopLoss: confirmed.price * 0.99, // example
+                    closeReason: confirmed.reason,
+                }),
+            {
+                lookback: 90, // seconds, for rolling window
+                cvdLength: 20, // length for slope calculation
+                slopeThreshold: 0.08, // tune for your market
+                deltaThreshold: 30, // tune for your coin size!
+            }
         );
 
         this.BroadCastWebSocket = new WebSocketServer({ port: this.wsPort });
@@ -65,7 +92,24 @@ export class OrderFlowDashboard {
 
             ws.on("message", (message) => {
                 try {
-                    const request = JSON.parse(message.toString());
+                    let request: { type: string; data?: unknown };
+                    let raw: string;
+
+                    if (typeof message === "string") {
+                        raw = message;
+                    } else if (message instanceof Buffer) {
+                        raw = message.toString();
+                    } else {
+                        throw new Error("Unexpected message format");
+                    }
+
+                    const parsed: unknown = JSON.parse(raw);
+
+                    if (!this.isWebSocketRequest(parsed)) {
+                        throw new Error("Invalid request");
+                    }
+
+                    request = parsed;
                     if (
                         typeof request !== "object" ||
                         typeof request.type !== "string"
@@ -79,7 +123,10 @@ export class OrderFlowDashboard {
                         );
                     }
 
-                    if (request.type === "backlog") {
+                    if (
+                        request.type === "backlog" &&
+                        this.isBacklogRequest(request)
+                    ) {
                         const amount: number = parseInt(
                             request.data?.amount ?? "1000",
                             10
@@ -105,7 +152,44 @@ export class OrderFlowDashboard {
         this.broadcastMessage = this.broadcastMessage.bind(this);
     }
 
-    private async startWebServer() {
+    private isWebSocketRequest(
+        obj: unknown
+    ): obj is { type: string; data?: unknown } {
+        return (
+            typeof obj === "object" &&
+            obj !== null &&
+            "type" in obj &&
+            typeof (obj as { type: unknown }).type === "string"
+        );
+    }
+
+    private isBacklogRequest(
+        request: unknown
+    ): request is { type: "backlog"; data: { amount: string } } {
+        if (
+            typeof request !== "object" ||
+            request === null ||
+            !("type" in request) ||
+            !("data" in request)
+        ) {
+            return false;
+        }
+
+        const req = request as {
+            type: unknown;
+            data: unknown;
+        };
+
+        return (
+            req.type === "backlog" &&
+            typeof req.data === "object" &&
+            req.data !== null &&
+            "amount" in req.data &&
+            typeof (req.data as { amount: unknown }).amount === "string"
+        );
+    }
+
+    private startWebServer(): void {
         const publicPath = path.join(__dirname, "../public");
         console.log("Serving static files from:", publicPath);
         this.httpServer.use(express.static(publicPath));
@@ -124,7 +208,7 @@ export class OrderFlowDashboard {
 
     private async fetchInitialOrderBook() {
         try {
-            this.orderBookProcessor.fetchInitialOrderBook();
+            await this.orderBookProcessor.fetchInitialOrderBook();
         } catch (error) {
             console.error("Error preloading order book:", error);
         }
@@ -138,7 +222,7 @@ export class OrderFlowDashboard {
         });
     }
 
-    private async broadcastMessage(message: WebSocketMessage) {
+    private broadcastMessage(message: WebSocketMessage): void {
         try {
             this.sendToClients(message);
         } catch (error) {
@@ -149,39 +233,53 @@ export class OrderFlowDashboard {
     private async getFromBinanceAPI() {
         const connection = await this.binanceFeed.connectToStreams();
 
-        connection.on("close", async () => {
-            console.log("Stream closed. Attempting reconnect in 5s...");
-            setTimeout(() => this.getFromBinanceAPI(), 5000);
+        connection.on("close", (): void => {
+            try {
+                console.log("Stream closed. Attempting reconnect in 5s...");
+                setTimeout(() => {
+                    void this.getFromBinanceAPI().catch((err) => {
+                        console.error("Reconnection failed:", err);
+                    });
+                }, 5000);
+            } catch (err) {
+                console.error("Error reconnecting to Binance API:", err);
+            }
         });
 
         try {
             const streamAggTrade = connection.aggTrade({ symbol: this.symbol });
             const streamDepth = connection.diffBookDepth({
                 symbol: this.symbol,
-                updateSpeed: "1000ms",
+                updateSpeed: "100ms",
             });
 
             streamDepth.on(
                 "message",
-                async (data: SpotWebsocketStreams.DiffBookDepthResponse) => {
-                    this.absorptionDetector.addDepth(data);
-                    this.exhaustionDetector.addDepth(data);
-                    const message: WebSocketMessage =
-                        this.orderBookProcessor.processWebSocketUpdate(data);
-                    await this.broadcastMessage(message);
+                (data: SpotWebsocketStreams.DiffBookDepthResponse): void => {
+                    try {
+                        this.absorptionDetector.addDepth(data);
+                        this.exhaustionDetector.addDepth(data);
+                        const message: WebSocketMessage =
+                            this.orderBookProcessor.processWebSocketUpdate(
+                                data
+                            );
+                        this.broadcastMessage(message);
+                    } catch (error) {
+                        console.error("Error broadcasting depth:", error);
+                    }
                 }
             );
 
             streamAggTrade.on(
                 "message",
-                async (data: SpotWebsocketStreams.AggTradeResponse) => {
+                (data: SpotWebsocketStreams.AggTradeResponse): void => {
                     try {
                         this.absorptionDetector.addTrade(data);
                         this.exhaustionDetector.addTrade(data);
                         this.deltaCVDConfirmation.addTrade(data);
                         const processedData: WebSocketMessage =
                             this.tradesProcessor.addTrade(data);
-                        await this.broadcastMessage(processedData);
+                        this.broadcastMessage(processedData);
                     } catch (error) {
                         console.error("Error broadcasting trade:", error);
                     }
@@ -220,10 +318,7 @@ export class OrderFlowDashboard {
         const webhookUrl = process.env.WEBHOOK_URL;
         if (webhookUrl) {
             const message = {
-                type:
-                    signal.type === "buy_absorption"
-                        ? "Sell signal"
-                        : "Buy signal",
+                type: signal.type,
                 time: signal.time,
                 price: signal.price,
                 takeProfit: signal.takeProfit,
@@ -267,15 +362,14 @@ export class OrderFlowDashboard {
     private async onExhaustionDetected(detected: {
         side: "buy" | "sell";
         price: number;
-        trades: any[];
+        trades: SpotWebsocketStreams.AggTradeResponse[];
         totalAggressiveVolume: number;
     }) {
         const time = Date.now();
         const signal: Signal = {
             time,
             price: detected.price,
-            type:
-                detected.side === "buy" ? "sell_exhaustion" : "buy_exhaustion",
+            type: "exhaustion",
             takeProfit:
                 detected.price + (detected.side === "buy" ? -0.005 : 0.005), // example TP/SL logic
             stopLoss:
@@ -297,15 +391,14 @@ export class OrderFlowDashboard {
     private async onAbsorptionDetected(detected: {
         side: "buy" | "sell";
         price: number;
-        trades: any[];
+        trades: SpotWebsocketStreams.AggTradeResponse[];
         totalAggressiveVolume: number;
     }) {
         const time = Date.now();
         const signal: Signal = {
             time,
             price: detected.price,
-            type:
-                detected.side === "buy" ? "sell_absorption" : "buy_absorption",
+            type: "absorption",
             takeProfit:
                 detected.price + (detected.side === "buy" ? -0.005 : 0.005), // example TP/SL logic
             stopLoss:
@@ -325,7 +418,7 @@ export class OrderFlowDashboard {
 
     public async startDashboard() {
         try {
-            await this.startWebServer();
+            this.startWebServer();
 
             const preloadTrades = this.preloadTrades();
             const fetchInitialOrderBook = this.fetchInitialOrderBook();

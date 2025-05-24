@@ -1,2 +1,0 @@
-window.navigationData =
-    "eJyLrlYqSa0oUbJScsrMS8xLTg0uKUpNzFXSUSpILMlQslJKzkksLk4t1keR1ssoyc1R0lHKzsxLUbIyNLKojQUAqXwY9g==";

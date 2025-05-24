@@ -19,7 +19,7 @@ interface FlowMetrics {
     total_lt_volume: number;
 }
 
-class ShpFlowDetector {
+export class ShpFlowDetector {
     private trades: Trade[] = [];
     private signalCallback: (signal: Signal) => void;
     private readonly flowWindowSeconds: number;
@@ -67,15 +67,14 @@ class ShpFlowDetector {
         }
         if (
             this.trades.length > 0 &&
-            ((trade.T ?? 0) as number) <
-                this.trades[this.trades.length - 1].tradeTimeMs
+            (trade.T ?? 0) < this.trades[this.trades.length - 1].tradeTimeMs
         ) {
             throw new Error("Trades must be added in chronological order");
         }
 
         // Add the new trade to the internal array
         const processedTrade: Trade = {
-            tradeTimeMs: (trade.T ?? 0) as number,
+            tradeTimeMs: trade.T ?? 0,
             quantity: (trade.q ?? 0) as number,
             isBuyerMaker: trade.m ?? false,
             sizeLabel75: "75-100", // Placeholder; actual logic to determine this should be implemented
@@ -481,4 +480,4 @@ class ShpFlowDetector {
     }
 }
 
-export { ShpFlowDetector, Trade, Signal };
+//export { ShpFlowDetector, Trade, Signal };

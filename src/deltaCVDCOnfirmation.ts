@@ -5,6 +5,15 @@ interface ConfirmationSignal {
     price: number;
     confirmedType: "absorption" | "exhaustion";
     reason: "delta_divergence" | "cvd_slope_reversal" | "both";
+    delta: number;
+    slope: number;
+}
+
+export interface DeltaCVDConfig {
+    lookback?: number; // seconds for window (default 60)
+    cvdLength?: number; // bars to measure slope (default 10)
+    slopeThreshold?: number; // minimal slope for reversal (default 0.1)
+    deltaThreshold?: number; // minimal delta for divergence (default 0.1)
 }
 
 export class DeltaCVDConfirmation {
@@ -14,19 +23,22 @@ export class DeltaCVDConfirmation {
         isBuyerMaker: boolean;
         time: number;
     }[] = [];
-    private readonly lookback: number;
-    private readonly confirmationCallback: (signal: ConfirmationSignal) => void;
     private lastCVD: number[] = [];
-    private cvdLength: number;
+    private readonly lookback: number;
+    private readonly cvdLength: number;
+    private readonly slopeThreshold: number;
+    private readonly deltaThreshold: number;
+    private readonly confirmationCallback: (signal: ConfirmationSignal) => void;
 
     constructor(
         confirmationCallback: (signal: ConfirmationSignal) => void,
-        lookback = 60,
-        cvdLength = 10
+        config: DeltaCVDConfig = {}
     ) {
         this.confirmationCallback = confirmationCallback;
-        this.lookback = lookback;
-        this.cvdLength = cvdLength;
+        this.lookback = config.lookback ?? 60; // seconds
+        this.cvdLength = config.cvdLength ?? 10;
+        this.slopeThreshold = config.slopeThreshold ?? 0.1;
+        this.deltaThreshold = config.deltaThreshold ?? 0.1;
     }
 
     public addTrade(trade: SpotWebsocketStreams.AggTradeResponse) {
@@ -47,25 +59,37 @@ export class DeltaCVDConfirmation {
         currentPrice: number,
         currentTime: number
     ) {
-        const delta = this.calculateDelta();
+        // Calculate delta only for recent lookback window
+        const windowTrades = this.tradeHistory.filter(
+            (t) => currentTime - t.time <= this.lookback * 1000
+        );
+        const delta = this.calculateDelta(windowTrades);
         this.updateCVD(delta);
 
         const recentCVD = this.lastCVD.slice(-this.cvdLength);
         const slope = this.calculateSlope(recentCVD);
 
-        const divergence =
-            signalType === "absorption"
-                ? delta < 0 && slope > 0
-                : delta > 0 && slope < 0;
+        // If absorption: expect delta negative (selling dominates), but CVD rises (buying pressure)
+        // If exhaustion: expect delta positive (buying dominates), but CVD falls (selling pressure)
+        let divergence = false;
+        if (signalType === "absorption") {
+            divergence =
+                delta < -this.deltaThreshold && slope > this.slopeThreshold;
+        } else {
+            divergence =
+                delta > this.deltaThreshold && slope < -this.slopeThreshold;
+        }
 
-        const reason =
-            divergence && Math.abs(slope) > 0.1
-                ? "both"
-                : divergence
-                  ? "delta_divergence"
-                  : Math.abs(slope) > 0.1
-                    ? "cvd_slope_reversal"
-                    : null;
+        const hasSlope = Math.abs(slope) > this.slopeThreshold;
+
+        let reason: ConfirmationSignal["reason"] | null = null;
+        if (divergence && hasSlope) {
+            reason = "both";
+        } else if (divergence) {
+            reason = "delta_divergence";
+        } else if (hasSlope) {
+            reason = "cvd_slope_reversal";
+        }
 
         if (reason) {
             this.confirmationCallback({
@@ -73,22 +97,22 @@ export class DeltaCVDConfirmation {
                 price: currentPrice,
                 confirmedType: signalType,
                 reason,
+                delta,
+                slope,
             });
         }
     }
 
-    private calculateDelta(): number {
+    private calculateDelta(trades: typeof this.tradeHistory): number {
         let buyVol = 0;
         let sellVol = 0;
-
-        for (const trade of this.tradeHistory) {
+        for (const trade of trades) {
             if (trade.isBuyerMaker) {
                 sellVol += trade.quantity;
             } else {
                 buyVol += trade.quantity;
             }
         }
-
         return buyVol - sellVol;
     }
 

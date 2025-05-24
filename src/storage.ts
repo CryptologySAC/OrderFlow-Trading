@@ -83,9 +83,14 @@ export class Storage {
                 orderType,
                 bestMatch: aggTrade.M ? 1 : 0,
             });
-        } catch (err: any) {
+        } catch (err: unknown) {
             // Ignore duplicate primary key errors (trade already stored)
-            if (err.code !== "SQLITE_CONSTRAINT_PRIMARYKEY") {
+            if (
+                typeof err === "object" &&
+                err !== null &&
+                "code" in err &&
+                err.code !== "SQLITE_CONSTRAINT_PRIMARYKEY"
+            ) {
                 console.warn("Unexpected error saving aggregated trade:", err);
             }
 

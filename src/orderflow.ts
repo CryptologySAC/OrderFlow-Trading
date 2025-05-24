@@ -124,7 +124,7 @@ export class OrderFlowAnalyzerX {
                             ? trade.price * (1 - this.takeProfit) // Sell: take profit below entry
                             : trade.price * (1 + this.takeProfit); // Buy: take profit above entry
                     const signal: Signal = {
-                        type: signalType,
+                        type: "flow",
                         time: trade.time,
                         price: trade.price,
                         tradeIndex: trade.tradeId,
@@ -138,9 +138,9 @@ export class OrderFlowAnalyzerX {
                         const activeTrade = this.activeTrades[timeframe];
                         if (
                             activeTrade &&
-                            ((activeTrade.type === "sell_absorption" &&
+                            ((activeTrade.type === "flow" &&
                                 signalType === "buy_absorption") ||
-                                (activeTrade.type === "buy_absorption" &&
+                                (activeTrade.type === "flow" &&
                                     signalType === "sell_absorption"))
                         ) {
                             const returnVal =
@@ -230,7 +230,7 @@ export class OrderFlowAnalyzerX {
                 ? Math.min(...confirmationTrades.map((t) => t.price))
                 : signal.price;
             let isConfirmed = false;
-            if (signal.type === "sell_absorption") {
+            if (signal.type === "flow") {
                 // Buy signal: expect price to rise
                 if (maxPrice >= signal.price * (1 + this.confirmThreshold)) {
                     isConfirmed = true;

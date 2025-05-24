@@ -5,73 +5,344 @@
  * @module TradingDashboard
  */
 
-/**
- * WebSocket URL for trade data.
- * @constant {string}
- */
+import { TradeWebSocket } from "./websocket.js";
+
 const TRADE_WEBSOCKET_URL = "wss://api.cryptology.pe/ltcusdt_trades";
-let tradeWs = null;
-let tradeWsReconnectAttempts = 0;
-let tradeWsPingInterval = null;
-let tradeWsPongTimeout = null;
-
-/**
- * WebSocket URL for order book data.
- * @constant {string}
- */
-const ORDERBOOK_WEBSOCKET_URL = "wss://api.cryptology.pe/ltcusdt_orderbook";
-let orderBookWs = null;
-let orderBookWsReconnectAttempts = 0;
-let orderBookWsPingInterval = null;
-let orderBookWsPongTimeout = null;
-
-/**
- * Maxium retires to connect to a websocket
- * @constant {number}
- */
-const MAX_RECONNECT_ATTEMPTS = 10;
-
-/**
- * Reconnect Delay (ms)
- * @constant {number}
- */
-const RECONNECT_DELAY = 1000; // 1 second
-
-/**
- * Maximum number of trades to store.
- * @constant {number}
- */
 const MAX_TRADES = 50000;
-
-/**
- * Interval for pinging the WebSocket (ms).
- * @constant {number}
- */
+const MAX_RECONNECT_ATTEMPTS = 10;
+const RECONNECT_DELAY_MS = 1000;
 const PING_INTERVAL_MS = 10000;
-
-/**
- * Timeout for waiting for a pong response (ms).
- *  @constant {number}
- */
 const PONG_WAIT_MS = 5000;
-
-/**
- * Padding time for the trades chart (ms).
- * @constant {number}
- */
 const PADDING_TIME = 300000; // 5 minutes
-
-/**
- * Interval for 15-minute annotations (ms).
- * @constant {number}
- */
 const FIFTEEN_MINUTES = 15 * 60 * 1000; // 15 minutes
+const TRADE_TIMEOUT_MS = 10000; // 10 seconds
+
+// DOM references
+const tradesCanvas = document.getElementById("tradesChart");
+const orderBookCanvas = document.getElementById("orderBookChart");
+const delayGaugeCanvas = document.getElementById("delayGauge");
+const rangeSelector = document.querySelector(".rangeSelector");
+const directionText = document.getElementById("directionText");
+const ratioText = document.getElementById("ratioText");
+const supportText = document.getElementById("supportText");
+const stabilityText = document.getElementById("stabilityText");
+const volumeImbalance = document.getElementById("volumeImbalance");
+const orderBookContainer = document.getElementById("orderBookContainer");
+
+// Charts
+let tradesChart = null;
+let orderBookChart = null;
+let delayGauge = null;
+
+// Improve Trade Chart update performance
+let chartUpdateScheduled = false;
+function scheduleTradesChartUpdate() {
+    if (!chartUpdateScheduled) {
+        chartUpdateScheduled = true;
+        requestAnimationFrame(() => {
+            tradesChart.update("none");
+            chartUpdateScheduled = false;
+        });
+    }
+}
+
+// Improve Orderbook Chart performance
+let orderBookUpdateTimeout = null;
+function scheduleOrderBookUpdate() {
+    if (orderBookUpdateTimeout) clearTimeout(orderBookUpdateTimeout);
+    orderBookUpdateTimeout = setTimeout(() => {
+        orderBookChart.update();
+    }, 100); // Update 10 times/second max
+}
 
 /**
- * Timeout for trade delay gauge (ms).
- * @constant {number}
+ * Updates Y-axis bounds based on visible trades
  */
-const TRADE_TIMEOUT_MS = 10000; // 10 seconds
+function updateYAxisBounds() {
+    if (!tradesChart || trades.length === 0) return;
+
+    const xMin = tradesChart.options.scales.x.min;
+    const xMax = tradesChart.options.scales.x.max;
+
+    const visibleTrades = trades.filter((t) => t.x >= xMin && t.x <= xMax);
+
+    if (visibleTrades.length === 0) return;
+
+    const prices = visibleTrades.map((t) => t.y);
+    const yMin = Math.min(...prices);
+    const yMax = Math.max(...prices);
+
+    tradesChart.options.scales.y.suggestedMin = yMin - (yMax - yMin) * 0.05;
+    tradesChart.options.scales.y.suggestedMax = yMax + (yMax - yMin) * 0.05;
+    delete tradesChart.options.scales.y.min;
+    delete tradesChart.options.scales.y.max;
+}
+
+/**
+ * Updates 15-minute annotations efficiently
+ */
+function updateTimeAnnotations(latestTime, activeRange) {
+    const annotations = tradesChart.options.plugins.annotation.annotations;
+    const min = latestTime - activeRange;
+    const max = latestTime + PADDING_TIME;
+    Object.keys(annotations).forEach((key) => {
+        if (!isNaN(key) && (key < min || key > max)) delete annotations[key];
+    });
+
+    let time = Math.ceil(min / FIFTEEN_MINUTES) * FIFTEEN_MINUTES;
+    while (time <= max) {
+        if (!annotations[time]) {
+            annotations[time] = {
+                type: "line",
+                xMin: time,
+                xMax: time,
+                borderColor: "rgba(102, 102, 102, 0.4)",
+                borderWidth: 2,
+                z: 1,
+            };
+        }
+        time += FIFTEEN_MINUTES;
+    }
+}
+
+function createTrade(x, y, quantity, orderType) {
+    return { x, y, quantity, orderType };
+}
+
+function buildSignalLabel(signal) {
+    let color,
+        letter,
+        extraInfo = "";
+
+    if (signal.type.startsWith("exhaustion")) {
+        letter = "E";
+        color = signal.type.includes("confirmed")
+            ? "rgba(0, 90, 255, 0.5)" // Blue for confirmed
+            : signal.side === "sell"
+              ? "rgba(255, 0, 0, 0.5)"
+              : "rgba(0, 200, 0, 0.5)"; // Red/Green
+    } else if (signal.type.startsWith("absorption")) {
+        letter = "A";
+        color = signal.type.includes("confirmed")
+            ? "rgba(0, 90, 255, 0.5)"
+            : signal.side === "sell"
+              ? "rgba(255, 0, 0, 0.5)"
+              : "rgba(0, 200, 0, 0.5)";
+    } else {
+        letter = "?";
+        color = "rgba(128,128,128,0.5)";
+    }
+
+    // Compose info for testing
+    if (signal.totalAggressiveVolume !== undefined)
+        extraInfo += `\nAgg: ${signal.totalAggressiveVolume}`;
+    if (signal.passiveVolume !== undefined)
+        extraInfo += `\nPass: ${signal.passiveVolume}`;
+    if (signal.refilled !== undefined)
+        extraInfo += `\nRefilled: ${signal.refilled ? "Y" : "N"}`;
+    if (signal.zone) extraInfo += `\nZone: ${signal.zone}`;
+    if (signal.closeReason) extraInfo += `\n(${signal.closeReason})`;
+
+    return {
+        type: "label",
+        xValue: signal.time,
+        yValue: signal.price,
+        content: `${letter}\n${extraInfo.trim()}`,
+        backgroundColor: color,
+        color: "white",
+        font: { size: 14 },
+        padding: 8,
+        id: `label.${signal.time}.${signal.type}`,
+    };
+}
+
+// Configure Websocket
+const tradeWebsocket = new TradeWebSocket({
+    url: TRADE_WEBSOCKET_URL,
+    maxTrades: MAX_TRADES,
+    maxReconnectAttempts: MAX_RECONNECT_ATTEMPTS,
+    reconnectDelay: RECONNECT_DELAY_MS,
+    pingIntervalTime: PING_INTERVAL_MS,
+    pongWaitTime: PONG_WAIT_MS,
+    onBacklog: (backLog) => {
+        console.log(`${backLog.length} backlog trades received.`);
+        if (delayGauge) {
+            delayGauge.value = 0;
+            delayGauge.title = "Loading Backlog";
+        }
+
+        trades.length = 0;
+        for (const trade of backLog) {
+            if (isValidTrade(trade)) {
+                if (trades.length < MAX_TRADES) {
+                    trades.push(
+                        createTrade(
+                            trade.time,
+                            trade.price,
+                            trade.quantity,
+                            trade.orderType
+                        )
+                    );
+                } else {
+                    const recycled = trades.shift(); // Remove the oldest trade
+                    recycled.x = trade.time;
+                    recycled.y = trade.price;
+                    recycled.quantity = trade.quantity;
+                    recycled.orderType = trade.orderType;
+                    trades.push(recycled); // Push updated object
+                }
+            }
+        }
+        while (trades.length > MAX_TRADES) trades.shift();
+
+        tradesChart.data.datasets[0].data = [...trades];
+
+        if (trades.length > 0) {
+            const latestTrade = trades[trades.length - 1];
+            const latestTime = latestTrade.x;
+            const latestPrice = latestTrade.y;
+
+            // Update price line
+            const line =
+                tradesChart.options.plugins.annotation.annotations
+                    .lastPriceLine;
+            line.yMin = latestPrice;
+            line.yMax = latestPrice;
+
+            // Update axes and annotations
+            if (activeRange !== null) {
+                tradesChart.options.scales.x.min = latestTime - activeRange;
+                tradesChart.options.scales.x.max = latestTime + PADDING_TIME;
+                updateYAxisBounds(trades);
+                updateTimeAnnotations(latestTime, activeRange);
+            }
+        }
+
+        scheduleTradesChartUpdate();
+    },
+
+    onMessage: (message) => {
+        try {
+            const receiveTime = Date.now();
+            const messageTime = message.now ?? 0;
+            const delay = receiveTime - messageTime;
+            if (delay >= 0 && delayGauge) {
+                delayGauge.value = parseInt(delay, 10);
+            }
+
+            if (tradeTimeoutId) clearTimeout(tradeTimeoutId);
+            tradeTimeoutId = setTimeout(
+                () => setGaugeTimeout(delayGauge),
+                TRADE_TIMEOUT_MS
+            );
+
+            switch (message.type) {
+                case "trade":
+                    const trade = message.data;
+                    if (isValidTrade(trade)) {
+                        if (trades.length < MAX_TRADES) {
+                            trades.push(
+                                createTrade(
+                                    trade.time,
+                                    trade.price,
+                                    trade.quantity,
+                                    trade.orderType
+                                )
+                            );
+                        } else {
+                            const recycled = trades.shift(); // Remove the oldest trade
+                            recycled.x = trade.time;
+                            recycled.y = trade.price;
+                            recycled.quantity = trade.quantity;
+                            recycled.orderType = trade.orderType;
+                            trades.push(recycled); // Push updated object
+                        }
+                        while (trades.length > MAX_TRADES) trades.shift();
+
+                        tradesChart.data.datasets[0].data = [...trades];
+
+                        const line =
+                            tradesChart.options.plugins.annotation.annotations
+                                .lastPriceLine;
+                        line.yMin = trade.price;
+                        line.yMax = trade.price;
+
+                        if (activeRange !== null) {
+                            tradesChart.options.scales.x.min =
+                                trade.time - activeRange;
+                            tradesChart.options.scales.x.max =
+                                trade.time + PADDING_TIME;
+                            updateYAxisBounds(trades);
+                            updateTimeAnnotations(trade.time, activeRange);
+                        }
+
+                        scheduleTradesChartUpdate();
+                    }
+                    break;
+
+                case "signal":
+                    const label = message.data;
+                    tradesChart.options.plugins.annotation.annotations[
+                        label.id || `label.${label.time}.${label.type}`
+                    ] = buildSignalLabel(label);
+                    tradesChart.update("none");
+                    console.log("Signal label added:", label);
+                    break;
+
+                case "orderbook":
+                    if (
+                        !message.data ||
+                        !Array.isArray(message.data.priceLevels)
+                    ) {
+                        console.error(
+                            "Invalid order book data: priceLevels is missing or not an array",
+                            message.data
+                        );
+                        return;
+                    }
+
+                    orderBookData = message.data;
+                    if (window.orderBookChart) {
+                        orderBookChart.data.labels =
+                            orderBookData.priceLevels.map((level) =>
+                                level.price ? level.price.toFixed(2) : "0.00"
+                            );
+                        orderBookChart.data.datasets[1].data =
+                            orderBookData.priceLevels.map(
+                                (level) => level.bid || 0
+                            );
+                        orderBookChart.data.datasets[0].data =
+                            orderBookData.priceLevels.map(
+                                (level) => level.ask || 0
+                            );
+                        orderBookChart.data.datasets[1].backgroundColor =
+                            orderBookData.priceLevels.map((level) =>
+                                level.bid
+                                    ? `rgba(0, 128, 0, ${Math.min(level.bid / 2000, 1)})`
+                                    : "rgba(0, 0, 0, 0)"
+                            );
+                        orderBookChart.data.datasets[0].backgroundColor =
+                            orderBookData.priceLevels.map((level) =>
+                                level.ask
+                                    ? `rgba(255, 0, 0, ${Math.min(level.ask / 2000, 1)})`
+                                    : "rgba(0, 0, 0, 0)"
+                            );
+                        scheduleOrderBookUpdate();
+                        updateIndicators();
+                    } else {
+                        console.warn(
+                            "Order book chart not initialized; skipping update"
+                        );
+                    }
+                    break;
+            }
+        } catch (error) {
+            console.error("Error parsing trade WebSocket message:", error);
+        }
+    },
+});
+
+tradeWebsocket.connect();
 
 /**
  * Global timeout ID for trade delay gauge.
@@ -112,12 +383,6 @@ const trades = [];
  */
 let activeRange = 90 * 60000; // 90 minutes
 
-// DOM references
-const tradesCanvas = document.getElementById("tradesChart");
-const orderBookCanvas = document.getElementById("orderBookChart");
-const rangeSelector = document.querySelector(".rangeSelector");
-const delayGaugeCanvas = document.getElementById("delayGauge");
-
 /**
  * Validates a trade object.
  * @param {Object} trade - The trade to validate.
@@ -129,7 +394,7 @@ const delayGaugeCanvas = document.getElementById("delayGauge");
  */
 function isValidTrade(trade) {
     return (
-        trade != null &&
+        trade &&
         typeof trade.time === "number" &&
         typeof trade.price === "number" &&
         typeof trade.quantity === "number" &&
@@ -145,17 +410,14 @@ function isValidTrade(trade) {
 function getTradeBackgroundColor(context) {
     const trade = context.raw;
     if (!trade) return "rgba(0, 0, 0, 0)";
+
     const isBuy = trade.orderType === "BUY";
-    if (trade.quantity > 500) {
-        return isBuy ? "rgba(0, 255, 25, 0.6)" : "rgba(255, 50, 200, 0.6)";
-    } else if (trade.quantity > 200) {
-        return isBuy ? "rgba(0, 100, 25, 0.5)" : "rgba(255, 0, 20, 0.5)";
-    } else if (trade.quantity > 100) {
-        return isBuy ? "rgba(0, 255, 30, 0.4)" : "rgba(255, 0, 90, 0.4)";
-    } else if (trade.quantity > 15) {
-        return isBuy ? "rgba(0, 255, 30, 0.3)" : "rgba(255, 0, 90, 0.3)";
-    }
-    return isBuy ? "rgba(0, 255, 30, 0.2)" : "rgba(255, 0, 90, 0.2)";
+    const q = trade.quantity;
+    const opacity =
+        q > 500 ? 0.6 : q > 200 ? 0.5 : q > 100 ? 0.4 : q > 15 ? 0.3 : 0.2;
+    return isBuy
+        ? `rgba(0, 255, 30, ${opacity})`
+        : `rgba(255, 0, 90, ${opacity})`;
 }
 
 /**
@@ -164,14 +426,18 @@ function getTradeBackgroundColor(context) {
  * @returns {number} Radius in pixels.
  */
 function getTradePointRadius(context) {
-    const trade = context.raw;
-    if (!trade) return 2;
-    if (trade.quantity > 1000) return 50;
-    if (trade.quantity > 500) return 40;
-    if (trade.quantity > 200) return 25;
-    if (trade.quantity > 100) return 10;
-    if (trade.quantity > 50) return 5;
-    return 2;
+    const q = context.raw?.quantity || 0;
+    return q > 1000
+        ? 50
+        : q > 500
+          ? 40
+          : q > 200
+            ? 25
+            : q > 100
+              ? 10
+              : q > 50
+                ? 5
+                : 2;
 }
 
 /**
@@ -181,9 +447,7 @@ function getTradePointRadius(context) {
  * @throws {Error} If Chart.js is not loaded.
  */
 function initializeTradesChart(ctx) {
-    if (typeof Chart === "undefined") {
-        throw new Error("Chart.js is not loaded");
-    }
+    if (tradesChart) return tradesChart;
 
     return new Chart(ctx, {
         type: "scatter",
@@ -191,6 +455,7 @@ function initializeTradesChart(ctx) {
             datasets: [
                 {
                     label: "Trades",
+                    parsing: { xAxisKey: "x", yAxisKey: "y" },
                     data: trades,
                     backgroundColor: getTradeBackgroundColor,
                     pointRadius: getTradePointRadius,
@@ -202,9 +467,7 @@ function initializeTradesChart(ctx) {
             responsive: true,
             maintainAspectRatio: false,
             animation: false,
-            layout: {
-                padding: { right: 20, left: 20 },
-            },
+            layout: { padding: 0 },
             scales: {
                 x: {
                     type: "time",
@@ -212,18 +475,13 @@ function initializeTradesChart(ctx) {
                         unit: "minute",
                         displayFormats: { minute: "HH:mm" },
                     },
-                    grid: {
-                        display: true,
-                        color: "rgba(102, 102, 102, 0.1)",
-                        lineWidth: 1,
-                    },
-                    title: { display: false, text: "Time" },
+                    grid: { display: true, color: "rgba(102, 102, 102, 0.1)" },
                     ticks: { source: "auto" },
                 },
                 y: {
                     type: "linear",
-                    ticks: { stepSize: 0.05, precision: 2 },
                     title: { display: true, text: "USDT" },
+                    ticks: { stepSize: 0.05, precision: 2 },
                     position: "right",
                     grace: 0.1,
                     offset: true,
@@ -233,10 +491,10 @@ function initializeTradesChart(ctx) {
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        label: function (context) {
-                            const trade = context.raw;
-                            return trade
-                                ? `Price: ${trade.y.toFixed(2)}, Qty: ${trade.quantity}, Type: ${trade.orderType}`
+                        label: (context) => {
+                            const t = context.raw;
+                            return t
+                                ? `Price: ${t.y.toFixed(2)}, Qty: ${t.quantity}, Type: ${t.orderType}`
                                 : "";
                         },
                     },
@@ -252,20 +510,16 @@ function initializeTradesChart(ctx) {
                             drawTime: "afterDatasetsDraw",
                             label: {
                                 display: true,
-                                content: function (ctx) {
-                                    const yValue =
-                                        ctx.chart.options.plugins.annotation
-                                            .annotations.lastPriceLine.yMin;
-                                    return yValue ? `${yValue.toFixed(2)}` : "";
-                                },
+                                content: (ctx) =>
+                                    ctx.chart.options.plugins.annotation.annotations.lastPriceLine.yMin?.toFixed(
+                                        2
+                                    ) || "",
                                 position: "end",
-                                xAdjust: -50,
+                                xAdjust: -2,
                                 yAdjust: 0,
-                                backgroundColor: "rgba(0, 0, 255, 1)",
-                                borderColor: "blue",
-                                borderWidth: 2,
-                                font: { size: 12 },
+                                backgroundColor: "rgba(0, 0, 255, 0.5)",
                                 color: "white",
+                                font: { size: 12 },
                                 padding: 6,
                             },
                         },
@@ -282,14 +536,9 @@ function initializeTradesChart(ctx) {
  * @returns {Object|null} The Gauge instance or null if initialization fails.
  */
 function initializeDelayGauge(canvas) {
-    if (typeof RadialGauge === "undefined") {
-        console.error("Canvas Gauges is not loaded");
-        return null;
-    }
-    if (!canvas) {
-        console.error("Delay gauge canvas not found");
-        return null;
-    }
+    if (delayGauge) return delayGauge;
+
+    if (typeof RadialGauge === "undefined") return null;
 
     return new RadialGauge({
         renderTo: canvas,
@@ -299,13 +548,15 @@ function initializeDelayGauge(canvas) {
         title: "Trade Delay",
         minValue: 0,
         maxValue: 2000,
+        valueDec: 0,
+        valueInt: 4,
         majorTicks: ["0", "500", "1000", "1500", "2000"],
         minorTicks: 5,
         strokeTicks: true,
         highlights: [
-            { from: 0, to: 500, color: "rgba(0, 255, 0, 0.3)" }, // Green: Low delay
-            { from: 500, to: 1000, color: "rgba(255, 165, 0, 0.3)" }, // Orange: Slow
-            { from: 1000, to: 2000, color: "rgba(255, 0, 0, 0.3)" }, // Red: Very slow
+            { from: 0, to: 500, color: "rgba(0, 255, 0, 0.3)" },
+            { from: 500, to: 1000, color: "rgba(255, 165, 0, 0.3)" },
+            { from: 1000, to: 2000, color: "rgba(255, 0, 0, 0.3)" },
         ],
         colorPlate: "#fff",
         colorMajorTicks: "#444",
@@ -347,6 +598,7 @@ function setGaugeTimeout(gauge) {
  * @throws {Error} If Chart.js is not loaded.
  */
 function initializeOrderBookChart(ctx) {
+    if (orderBookChart) return orderBookChart;
     if (typeof Chart === "undefined") {
         throw new Error("Chart.js is not loaded");
     }
@@ -433,15 +685,17 @@ function initializeOrderBookChart(ctx) {
 function setRange(duration) {
     activeRange = duration;
     const now = Date.now();
-    if (window.tradesChart) {
+    if (tradesChart) {
         if (duration !== null) {
-            window.tradesChart.options.scales.x.min = now - duration;
-            window.tradesChart.options.scales.x.max = now + PADDING_TIME;
+            tradesChart.options.scales.x.min = now - duration;
+            tradesChart.options.scales.x.max = now + PADDING_TIME;
         } else {
-            window.tradesChart.options.scales.x.min = undefined;
-            window.tradesChart.options.scales.x.max = undefined;
+            tradesChart.options.scales.x.min = undefined;
+            tradesChart.options.scales.x.max = undefined;
         }
-        window.tradesChart.update();
+
+        updateYAxisBounds();
+        tradesChart.update();
     }
 }
 
@@ -449,7 +703,6 @@ function setRange(duration) {
  * Updates HTML indicators with order book data.
  */
 function updateIndicators() {
-    const directionText = document.getElementById("directionText");
     if (directionText) {
         directionText.textContent = `Direction: ${orderBookData.direction.type} (${orderBookData.direction.probability}%)`;
         directionText.style.color =
@@ -460,23 +713,19 @@ function updateIndicators() {
                   : "gray";
     }
 
-    const ratioText = document.getElementById("ratioText");
     if (ratioText) {
         ratioText.textContent = `Ask/Bid Ratio: ${orderBookData.ratio.toFixed(2)} (Threshold: 2)`;
     }
 
-    const supportText = document.getElementById("supportText");
     if (supportText) {
         supportText.textContent = `Bid Support: ${orderBookData.supportPercent.toFixed(2)}% (Threshold: 50%)`;
     }
 
-    const stabilityText = document.getElementById("stabilityText");
     if (stabilityText) {
         stabilityText.textContent = `Ask Volume Stability: ${orderBookData.askStable ? "Stable" : "Unstable"}`;
         stabilityText.style.color = orderBookData.askStable ? "green" : "red";
     }
 
-    const volumeImbalance = document.getElementById("volumeImbalance");
     if (volumeImbalance) {
         volumeImbalance.textContent = `Volume Imbalance: ${orderBookData.volumeImbalance.toFixed(2)} (Short < -0.65 | Long > 0.65)`;
         volumeImbalance.style.color =
@@ -487,299 +736,9 @@ function updateIndicators() {
                   : "gray";
     }
 
-    const orderBookContainer = document.getElementById("orderBookContainer");
     if (orderBookContainer) {
         orderBookContainer.style.border = `3px solid ${orderBookData.askStable ? "green" : "red"}`;
     }
-}
-
-/**
- * Sends a Ping to the websocket server
- */
-function startPing() {
-    tradeWsPingInterval = setInterval(() => {
-        if (tradeWs && tradeWs.readyState === WebSocket.OPEN) {
-            tradeWs.send(JSON.stringify({ type: "ping" }));
-            startPongTimeout();
-        }
-    }, PING_INTERVAL_MS);
-}
-
-/**
- * Handle a Pong from the websocket server
- */
-function startPongTimeout() {
-    clearPongTimeout();
-    tradeWsPongTimeout = setTimeout(() => {
-        console.warn("Pong not received, closing Trade socket...");
-        tradeWs.close(); // This will trigger the reconnect
-    }, PONG_WAIT_MS);
-}
-
-/**
- * Clears a Pong Timeout
- */
-function clearPongTimeout() {
-    if (tradeWsPongTimeout) clearTimeout(tradeWsPongTimeout);
-    tradeWsPongTimeout = null;
-}
-
-/**
- * Stops a Ping Interval
- */
-function stopPing() {
-    if (tradeWsPingInterval) clearInterval(tradeWsPingInterval);
-    clearPongTimeout();
-    tradeWsPingInterval = null;
-}
-
-/**
- * Connects to the trade WebSocket.
- */
-function connectTradeWs() {
-    tradeWs = new WebSocket(TRADE_WEBSOCKET_URL);
-
-    tradeWs.onopen = () => {
-        console.log("Connected to Trades LTCUSDT WebSocket");
-        tradeWsReconnectAttempts = 0;
-        if (tradeWs && tradeWs.readyState === WebSocket.OPEN) {
-            console.log("Sending backlog request");
-            tradeWs.send(
-                JSON.stringify({
-                    type: "backlog",
-                    data: { amount: MAX_TRADES },
-                })
-            );
-        }
-        startPing();
-    };
-
-    tradeWs.onerror = (error) =>
-        console.error("Trades WebSocket error:", error);
-
-    tradeWs.onclose = () => {
-        console.log(
-            "Trades WebSocket closed, reconnecting to %s",
-            TRADE_WEBSOCKET_URL
-        );
-        if (delayGauge) {
-            setGaugeTimeout(delayGauge);
-        }
-        stopPing();
-        tradeWsPingInterval = null;
-        if (tradeWsReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-            tradeWsReconnectAttempts++;
-            const delay =
-                RECONNECT_DELAY * Math.pow(2, tradeWsReconnectAttempts - 1);
-            console.log(`Reconnecting in ${delay / 1000}s...`);
-            setTimeout(connectTradeWs(), delay);
-        } else {
-            console.error("Max reconnect attempts reached.");
-        }
-    };
-
-    tradeWs.onmessage = (event) => {
-        try {
-            const message = JSON.parse(event.data);
-
-            const receiveTime = Date.now();
-            const messageTime = message.now ?? 0;
-            const delay = receiveTime - messageTime;
-            if (delay >= 0 && delayGauge) {
-                delayGauge.value = delay;
-            }
-
-            if (tradeTimeoutId) clearTimeout(tradeTimeoutId);
-            tradeTimeoutId = setTimeout(
-                () => setGaugeTimeout(delayGauge),
-                TRADE_TIMEOUT_MS
-            );
-
-            switch (message.type) {
-                case "pong":
-                    clearPongTimeout();
-                    break;
-
-                case "backlog":
-                    console.log(
-                        `%s backlog trades received.`,
-                        message.data.length
-                    );
-                    if (delayGauge) {
-                        delayGauge.value = 0;
-                        delayGauge.title = "Loading Backlog";
-                    }
-                    //setGaugeTimeout(delayGauge);
-                    trades.length = 0;
-                    message.data.forEach((t) => {
-                        if (isValidTrade(t)) {
-                            trades.push({
-                                x: t.time,
-                                y: t.price,
-                                quantity: t.quantity,
-                                orderType: t.orderType,
-                            });
-                        }
-                    });
-                    while (trades.length > MAX_TRADES) trades.shift();
-                    console.log(`%s backlog trades processed.`, trades.length);
-                    tradesChart.data.datasets[0].data = trades;
-                    if (trades.length > 0) {
-                        const latestPrice = trades[trades.length - 1].y;
-                        tradesChart.options.plugins.annotation.annotations.lastPriceLine.yMin =
-                            latestPrice;
-                        tradesChart.options.plugins.annotation.annotations.lastPriceLine.yMax =
-                            latestPrice;
-                        if (activeRange !== null) {
-                            const latestTime = trades[trades.length - 1].x;
-                            const min = latestTime - activeRange;
-                            const max = latestTime + PADDING_TIME;
-                            tradesChart.options.scales.x.min = min;
-                            tradesChart.options.scales.x.max = max;
-
-                            let time =
-                                Math.ceil(min / FIFTEEN_MINUTES) *
-                                FIFTEEN_MINUTES;
-                            while (time <= max) {
-                                tradesChart.options.plugins.annotation.annotations[
-                                    time
-                                ] = {
-                                    type: "line",
-                                    xMin: time,
-                                    xMax: time,
-                                    borderColor: "rgba(102, 102, 102, 0.4)",
-                                    borderWidth: 2,
-                                    z: 1,
-                                };
-                                time += FIFTEEN_MINUTES;
-                            }
-                        }
-                    }
-                    tradesChart.update();
-                    break;
-
-                case "trade":
-                    const trade = message.data;
-                    const messageTime = message.now ?? 0;
-                    if (isValidTrade(trade)) {
-                        trades.push({
-                            x: trade.time,
-                            y: trade.price,
-                            quantity: trade.quantity,
-                            orderType: trade.orderType,
-                        });
-                        while (trades.length > MAX_TRADES) trades.shift();
-                        tradesChart.data.datasets[0].data = trades;
-                        tradesChart.options.plugins.annotation.annotations.lastPriceLine.yMin =
-                            trade.price;
-                        tradesChart.options.plugins.annotation.annotations.lastPriceLine.yMax =
-                            trade.price;
-                        if (activeRange !== null) {
-                            const min = trade.time - activeRange;
-                            const max = trade.time + PADDING_TIME;
-                            tradesChart.options.scales.x.min = min;
-                            tradesChart.options.scales.x.max = max;
-
-                            let time =
-                                Math.ceil(min / FIFTEEN_MINUTES) *
-                                FIFTEEN_MINUTES;
-                            while (time <= max) {
-                                tradesChart.options.plugins.annotation.annotations[
-                                    time
-                                ] = {
-                                    type: "line",
-                                    xMin: time,
-                                    xMax: time,
-                                    borderColor: "rgba(102, 102, 102, 0.4)",
-                                    borderWidth: 2,
-                                    z: 1,
-                                };
-                                time += FIFTEEN_MINUTES;
-                            }
-                        }
-                        tradesChart.update("none");
-                    }
-                    break;
-
-                case "signal":
-                    const label = message.data;
-                    tradesChart.options.plugins.annotation.annotations[
-                        label.tradeIndex
-                    ] = {
-                        type: "label",
-                        xValue: label.time,
-                        yValue: label.price,
-                        content: `${label.type} | ${label.status}`,
-                        backgroundColor: "rgba(90, 50, 255, 1)",
-                        color: "white",
-                        font: { size: 14 },
-                        padding: 8,
-                        id: label.tradeIndex,
-                    };
-                    tradesChart.update("none");
-                    console.log("Signal label added:", label);
-                    break;
-
-                case "orderbook":
-                    if (
-                        !message.data ||
-                        !Array.isArray(message.data.priceLevels)
-                    ) {
-                        console.error(
-                            "Invalid order book data: priceLevels is missing or not an array",
-                            message.data
-                        );
-                        return;
-                    }
-
-                    orderBookData = message.data;
-                    if (window.orderBookChart) {
-                        orderBookChart.data.labels =
-                            orderBookData.priceLevels.map((level) =>
-                                level.price ? level.price.toFixed(2) : "0.00"
-                            );
-                        orderBookChart.data.datasets[1].data =
-                            orderBookData.priceLevels.map(
-                                (level) => level.bid || 0
-                            );
-                        orderBookChart.data.datasets[0].data =
-                            orderBookData.priceLevels.map(
-                                (level) => level.ask || 0
-                            );
-                        orderBookChart.data.datasets[1].backgroundColor =
-                            orderBookData.priceLevels.map((level) =>
-                                level.bid
-                                    ? `rgba(0, 128, 0, ${Math.min(level.bid / 2000, 1)})`
-                                    : "rgba(0, 0, 0, 0)"
-                            );
-                        orderBookChart.data.datasets[0].backgroundColor =
-                            orderBookData.priceLevels.map((level) =>
-                                level.ask
-                                    ? `rgba(255, 0, 0, ${Math.min(level.ask / 2000, 1)})`
-                                    : "rgba(0, 0, 0, 0)"
-                            );
-                        orderBookChart.update();
-                        updateIndicators();
-                    } else {
-                        console.warn(
-                            "Order book chart not initialized; skipping update"
-                        );
-                    }
-                    break;
-            }
-        } catch (error) {
-            console.error("Error parsing trade WebSocket message:", error);
-        }
-    };
-}
-
-/**
- * Sets up WebSocket connections for trades and order book data.
- * @param {Object} tradesChart - The trades Chart.js instance.
- * @param {Object} orderBookChart - The order book Chart.js instance.
- */
-function setupWebSockets(tradesChart, orderBookChart, delayGauge) {
-    connectTradeWs();
 }
 
 /**
@@ -787,7 +746,7 @@ function setupWebSockets(tradesChart, orderBookChart, delayGauge) {
  */
 function setupInteract() {
     if (typeof interact === "undefined") {
-        console.error("Interact.js is not loaded");
+        console.error("Interact.js not loaded");
         return;
     }
 
@@ -801,7 +760,7 @@ function setupInteract() {
                 }),
             ],
             listeners: {
-                move: function (event) {
+                move(event) {
                     const target = event.target;
                     const x =
                         (parseFloat(target.getAttribute("data-x")) || 0) +
@@ -820,19 +779,20 @@ function setupInteract() {
             modifiers: [
                 interact.modifiers.restrictSize({
                     min: { width: 600, height: 600 },
-                    max: { width: 1600, height: 1600 },
                 }),
             ],
             listeners: {
-                move: function (event) {
+                move(event) {
                     const target = event.target;
-                    target.style.width = event.rect.width + "px";
-                    target.style.height = event.rect.height + "px";
+                    target.style.width = `${event.rect.width}px`;
+                    target.style.height = `${event.rect.height}px`;
                     const canvas = target.querySelector("canvas");
-                    canvas.width = event.rect.width - 20;
-                    canvas.height = event.rect.height - 20;
-                    const chart = Chart.getChart(canvas.id);
-                    if (chart) chart.resize();
+                    if (canvas) {
+                        canvas.width = event.rect.width;
+                        canvas.height = event.rect.height;
+                        const chart = Chart.getChart(canvas.id);
+                        if (chart) chart.resize();
+                    }
                 },
             },
         });
@@ -892,16 +852,9 @@ function initialize() {
     }
 
     // Initialize charts
-    window.tradesChart = initializeTradesChart(tradesCtx);
-    window.orderBookChart = initializeOrderBookChart(orderBookCtx);
-    window.delayGauge = initializeDelayGauge(delayGaugeCanvas);
-
-    // Setup WebSockets
-    setupWebSockets(
-        window.tradesChart,
-        window.orderBookChart,
-        window.delayGauge
-    );
+    tradesChart = initializeTradesChart(tradesCtx);
+    orderBookChart = initializeOrderBookChart(orderBookCtx);
+    delayGauge = initializeDelayGauge(delayGaugeCanvas);
 
     // Setup interact.js
     setupInteract();

@@ -53,7 +53,9 @@ export class BinanceDataFeed {
         try {
             return await this.streamClient.websocketStreams.connect();
         } catch (error) {
-            this.logger.error(`connectToStreams() failed: ${error}`);
+            this.logger.error(
+                `connectToStreams() failed: ${JSON.stringify(error)}`
+            );
             throw error;
         }
     }
@@ -115,9 +117,9 @@ export class BinanceDataFeed {
             return data;
         } catch (error) {
             this.logger.error(
-                `[${contextLabel}] Error: ${error instanceof Error ? error.stack : error}`
+                `[${contextLabel}] Error: ${error instanceof Error ? JSON.stringify(error.stack) : JSON.stringify(error)}`
             );
-            throw new Error(`[${contextLabel}] ${error}`);
+            throw new Error(`[${contextLabel}] ${JSON.stringify(error)}`);
         } finally {
             await connection?.disconnect();
         }
