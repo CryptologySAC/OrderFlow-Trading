@@ -38,13 +38,15 @@ export interface Signal {
         | "absorption"
         | "exhaustion_confirmed"
         | "absorption_confirmed"
-        | "flow";
+        | "flow"
+        | "swingHigh"
+        | "swingLow";
     time: number; // Timestamp in milliseconds
     price: number;
     tradeIndex?: number;
     isInvalidated?: boolean; // True if invalidated (tighter stop loss)
-    stopLoss: number; // Stop loss price
-    takeProfit: number; // Take profit price
+    stopLoss?: number; // Stop loss price
+    takeProfit?: number; // Take profit price
     timeframe?: "Daytime" | "Nighttime";
     closeReason?:
         | "take_profit"

@@ -10,6 +10,7 @@ import { Storage } from "./storage";
 import { AbsorptionDetector } from "./absorptionDetector";
 import { ExhaustionDetector } from "./exhaustionDetector";
 import { DeltaCVDConfirmation } from "./deltaCVDCOnfirmation";
+import { SwingPredictor, SwingPrediction } from "./swingPredictor";
 
 export class OrderFlowDashboard {
     private readonly intervalMs: number = 10 * 60 * 1000; // 10 minutes
@@ -33,6 +34,14 @@ export class OrderFlowDashboard {
     private readonly absorptionDetector: AbsorptionDetector;
     private readonly exhaustionDetector: ExhaustionDetector;
     private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
+
+    private swingPredictor = new SwingPredictor({
+        lookaheadMs: 60000,
+        retraceTicks: 5,
+        pricePrecision: 2,
+        signalCooldownMs: 10000,
+        onSwingPredicted: this.handleSwingPrediction.bind(this),
+    });
 
     constructor() {
         this.binanceFeed = new BinanceDataFeed();
@@ -66,20 +75,24 @@ export class OrderFlowDashboard {
             }
         );
         this.deltaCVDConfirmation = new DeltaCVDConfirmation(
-            (confirmed) =>
-                void this.broadcastSignal({
+            (confirmed) => {
+                const confirmedSignal: Signal = {
                     type: `${confirmed.confirmedType}_confirmed` as Signal["type"],
                     time: confirmed.time,
                     price: confirmed.price,
-                    takeProfit: confirmed.price * 1.01, // example
-                    stopLoss: confirmed.price * 0.99, // example
+                    takeProfit: confirmed.price * 1.01,
+                    stopLoss: confirmed.price * 0.99,
                     closeReason: confirmed.reason,
-                }),
+                };
+
+                this.swingPredictor.onSignal(confirmedSignal);
+                void this.broadcastSignal(confirmedSignal);
+            },
             {
-                lookback: 90, // seconds, for rolling window
-                cvdLength: 20, // length for slope calculation
-                slopeThreshold: 0.08, // tune for your market
-                deltaThreshold: 30, // tune for your coin size!
+                lookback: 90,
+                cvdLength: 20,
+                slopeThreshold: 0.08,
+                deltaThreshold: 30,
             }
         );
 
@@ -277,6 +290,10 @@ export class OrderFlowDashboard {
                         this.absorptionDetector.addTrade(data);
                         this.exhaustionDetector.addTrade(data);
                         this.deltaCVDConfirmation.addTrade(data);
+                        this.swingPredictor.onPrice(
+                            parseFloat(data.p ?? "0"),
+                            data.T ?? Date.now()
+                        );
                         const processedData: WebSocketMessage =
                             this.tradesProcessor.addTrade(data);
                         this.broadcastMessage(processedData);
@@ -414,6 +431,10 @@ export class OrderFlowDashboard {
             detected.price,
             time
         );
+    }
+
+    private handleSwingPrediction(prediction: SwingPrediction): void {
+        void this.broadcastSignal(prediction);
     }
 
     public async startDashboard() {
