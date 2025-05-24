@@ -2,10 +2,6 @@ node_modules/
 .env
 trades.db
 trades.db-journal
-python/*.csv
-python/*.png
-python/*.log
 dist/
-python/shp_plots/
 yarn.lock
 .DS_Store
