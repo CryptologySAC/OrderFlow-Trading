@@ -46,6 +46,7 @@
         "@types/jest": "^29.5.14",
         "@types/node": "^22.15.3",
         "@types/prettier": "^3.0.0",
+        "@types/ws": "^8.18.1",
         "@typescript-eslint/eslint-plugin": "^8.32.1",
         "@typescript-eslint/parser": "^8.32.1",
         "cross-env": "^7.0.3",
@@ -87,13 +88,12 @@
         "@binance/common": "^1.0.2",
         "@binance/spot": "^4.0.0",
         "@types/express": "^5.0.1",
-        "@types/ws": "^8.18.1",
         "better-sqlite3": "^11.9.1",
         "dotenv": "^16.5.0",
         "express": "^5.1.0",
         "lightweight-charts": "^5.0.6",
         "pino": "^9.6.0",
         "pino-pretty": "^13.0.0",
-        "ws": "^8.18.1"
+        "ws": "^8.18.2"
     }
 }

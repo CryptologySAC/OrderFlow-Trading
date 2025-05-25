@@ -1,16 +1,22 @@
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 import express from "express";
 import path from "path";
-import { WebSocket, Server as WebSocketServer } from "ws";
+import * as ws from "ws";
 import { SpotWebsocketStreams } from "@binance/spot";
-import { TradesProcessor } from "./tradesProcessor";
-import { BinanceDataFeed } from "./binance";
-import { OrderBookProcessor } from "./orderBookProcessor";
-import { Signal, WebSocketMessage, Detected } from "./interfaces";
-import { Storage } from "./storage";
-import { AbsorptionDetector } from "./absorptionDetector";
-import { ExhaustionDetector } from "./exhaustionDetector";
-import { DeltaCVDConfirmation } from "./deltaCVDCOnfirmation";
-import { SwingPredictor, SwingPrediction } from "./swingPredictor";
+import { TradesProcessor } from "./tradesProcessor.js";
+import { BinanceDataFeed } from "./binance.js";
+import { OrderBookProcessor } from "./orderBookProcessor.js";
+import { Signal, WebSocketMessage, Detected } from "./interfaces.js";
+import { Storage } from "./storage.js";
+import { AbsorptionDetector } from "./absorptionDetector.js";
+import { ExhaustionDetector } from "./exhaustionDetector.js";
+import { DeltaCVDConfirmation } from "./deltaCVDCOnfirmation.js";
+import { SwingPredictor, SwingPrediction } from "./swingPredictor.js";
 
 export class OrderFlowDashboard {
     private readonly intervalMs: number = 10 * 60 * 1000; // 10 minutes
@@ -26,7 +32,7 @@ export class OrderFlowDashboard {
         process.env.WS_PORT ?? "3001",
         10
     );
-    private readonly BroadCastWebSocket: WebSocketServer;
+    private readonly BroadCastWebSocket: ws.WebSocketServer;
 
     private readonly binanceFeed: BinanceDataFeed;
     private readonly tradesProcessor: TradesProcessor;
@@ -98,7 +104,7 @@ export class OrderFlowDashboard {
             }
         );
 
-        this.BroadCastWebSocket = new WebSocketServer({ port: this.wsPort });
+        this.BroadCastWebSocket = new ws.WebSocketServer({ port: this.wsPort });
 
         this.BroadCastWebSocket.on("connection", (ws) => {
             console.log("Client connected");
@@ -148,7 +154,7 @@ export class OrderFlowDashboard {
                         if (
                             !Number.isInteger(amount) ||
                             amount <= 0 ||
-                            amount > 10000
+                            amount > 100000
                         ) {
                             console.warn("Invalid backlog amount:", rawAmount);
                             return;
@@ -209,6 +215,8 @@ export class OrderFlowDashboard {
             "amount" in req.data
             ? typeof (req.data as { amount: unknown }).amount === "string" ||
                   typeof (req.data as { amount: unknown }).amount ===
+                      "number" ||
+                  typeof (req.data as { amount: unknown }).amount ===
                       "undefined"
             : true;
     }
@@ -255,72 +263,64 @@ export class OrderFlowDashboard {
     }
 
     private async getFromBinanceAPI() {
-        try {
-            const connection = await this.binanceFeed.connectToStreams();
+        const connection = await this.binanceFeed.connectToStreams();
 
-            connection.on("close", (): void => {
-                try {
-                    console.log("Stream closed. Attempting reconnect in 5s...");
-                    this.delayFn(() => {
-                        void this.getFromBinanceAPI().catch((err) => {
-                            console.error("Reconnection failed:", err);
-                        });
-                    }, 5000);
-                } catch (err) {
-                    console.error("Error reconnecting to Binance API:", err);
-                }
+        connection.on("close", (): void => {
+            try {
+                console.log("Stream closed. Attempting reconnect in 5s...");
+                this.delayFn(() => {
+                    void this.getFromBinanceAPI().catch((err) => {
+                        console.error("Reconnection failed:", err);
+                    });
+                }, 5000);
+            } catch (err) {
+                console.error("Error reconnecting to Binance API:", err);
+            }
+        });
+
+        try {
+            const streamAggTrade = connection.aggTrade({ symbol: this.symbol });
+            const streamDepth = connection.diffBookDepth({
+                symbol: this.symbol,
+                updateSpeed: "100ms",
             });
 
-            try {
-                const streamAggTrade = connection.aggTrade({
-                    symbol: this.symbol,
-                });
-                const streamDepth = connection.diffBookDepth({
-                    symbol: this.symbol,
-                    updateSpeed: "100ms",
-                });
-
-                streamDepth.on(
-                    "message",
-                    (
-                        data: SpotWebsocketStreams.DiffBookDepthResponse
-                    ): void => {
-                        try {
-                            this.absorptionDetector.addDepth(data);
-                            this.exhaustionDetector.addDepth(data);
-                            const message: WebSocketMessage =
-                                this.orderBookProcessor.processWebSocketUpdate(
-                                    data
-                                );
-                            this.broadcastMessage(message);
-                        } catch (error) {
-                            console.error("Error broadcasting depth:", error);
-                        }
-                    }
-                );
-
-                streamAggTrade.on(
-                    "message",
-                    (data: SpotWebsocketStreams.AggTradeResponse): void => {
-                        try {
-                            this.absorptionDetector.addTrade(data);
-                            this.exhaustionDetector.addTrade(data);
-                            this.deltaCVDConfirmation.addTrade(data);
-                            this.swingPredictor.onPrice(
-                                parseFloat(data.p ?? "0"),
-                                data.T ?? Date.now()
+            streamDepth.on(
+                "message",
+                (data: SpotWebsocketStreams.DiffBookDepthResponse): void => {
+                    try {
+                        this.absorptionDetector.addDepth(data);
+                        this.exhaustionDetector.addDepth(data);
+                        const message: WebSocketMessage =
+                            this.orderBookProcessor.processWebSocketUpdate(
+                                data
                             );
-                            const processedData: WebSocketMessage =
-                                this.tradesProcessor.addTrade(data);
-                            this.broadcastMessage(processedData);
-                        } catch (error) {
-                            console.error("Error broadcasting trade:", error);
-                        }
+                        this.broadcastMessage(message);
+                    } catch (error) {
+                        console.error("Error broadcasting depth:", error);
                     }
-                );
-            } catch (error) {
-                console.error("Error connecting to Binance streams:", error);
-            }
+                }
+            );
+
+            streamAggTrade.on(
+                "message",
+                (data: SpotWebsocketStreams.AggTradeResponse): void => {
+                    try {
+                        this.absorptionDetector.addTrade(data);
+                        this.exhaustionDetector.addTrade(data);
+                        this.deltaCVDConfirmation.addTrade(data);
+                        this.swingPredictor.onPrice(
+                            parseFloat(data.p ?? "0"),
+                            data.T ?? Date.now()
+                        );
+                        const processedData: WebSocketMessage =
+                            this.tradesProcessor.addTrade(data);
+                        this.broadcastMessage(processedData);
+                    } catch (error) {
+                        console.error("Error broadcasting trade:", error);
+                    }
+                }
+            );
         } catch (error) {
             console.error("Error connecting to Binance streams:", error);
         }
