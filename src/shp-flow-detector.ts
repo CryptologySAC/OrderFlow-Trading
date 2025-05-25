@@ -1,4 +1,4 @@
-import { Signal } from "./interfaces";
+import { Signal } from "./interfaces.js";
 import { SpotWebsocketAPI } from "@binance/spot";
 
 interface Trade {

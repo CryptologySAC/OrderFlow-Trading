@@ -1,4 +1,4 @@
-import { HighLow, SwingPoint } from "./interfaces";
+import { HighLow, SwingPoint } from "./interfaces.js";
 
 export class SwingPoints {
     private highSwing: SwingPoint = { tradeId: 0, price: 0, timeStamp: 0 };

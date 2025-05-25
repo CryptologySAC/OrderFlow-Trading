@@ -1,5 +1,16 @@
 import { SpotWebsocketStreams } from "@binance/spot";
 
+export interface IWebSocket {
+    readyState: number;
+    send(data: string | Buffer): void;
+    on(event: "message", cb: (msg: string | Buffer) => void): this;
+    on(event: "close", cb: () => void): this;
+}
+export interface IWebSocketServer {
+    clients: Set<IWebSocket>;
+    on(event: "connection", cb: (ws: IWebSocket) => void): this;
+} 
+
 export interface WebSocketMessage {
     type:
         | "pong"

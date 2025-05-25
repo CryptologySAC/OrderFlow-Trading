@@ -1,6 +1,6 @@
-import { BinanceDataFeed } from "./binance";
+import { BinanceDataFeed } from "./binance.js";
 import { SpotWebsocketAPI } from "@binance/spot";
-import { Storage } from "./storage";
+import { Storage } from "./storage.js";
 
 const binanceFeed = new BinanceDataFeed();
 const storage = new Storage();

@@ -54,6 +54,7 @@ export class TradeWebSocket {
                 }
 
                 if (message.type === "backlog") {
+                    console.log("Backlog received.");
                     this.onBacklog(message.data);
                     return;
                 }
