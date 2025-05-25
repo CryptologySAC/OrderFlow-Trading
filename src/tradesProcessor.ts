@@ -1,10 +1,10 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-import { Storage } from "./storage.js";
-import { BinanceDataFeed } from "./binance.js";
+import { Storage } from "./storage";
+import { BinanceDataFeed } from "./binance";
 import { SpotWebsocketStreams, SpotWebsocketAPI } from "@binance/spot";
-import { PlotTrade, WebSocketMessage } from "./interfaces.js";
+import { PlotTrade, WebSocketMessage } from "./interfaces";
 
 export class TradesProcessor {
     private readonly binanceFeed = new BinanceDataFeed();

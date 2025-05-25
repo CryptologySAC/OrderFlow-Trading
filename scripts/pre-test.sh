@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
 yarn lint
-yarn build
+yarn compile

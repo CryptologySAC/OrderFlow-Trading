@@ -1,12 +1,9 @@
-import {
-    AbsorptionDetector,
-    AbsorptionSettings,
-} from "../src/absorptionDetector";
+import { AbsorptionDetector } from "../src/absorptionDetector";
 import { SpotWebsocketStreams } from "@binance/spot";
 
 describe("AbsorptionDetector", () => {
     it("should not trigger signal below min volume", () => {
-        const mockCallback = jest.fn();
+        const mockCallback = vi.fn();
         const detector = new AbsorptionDetector(mockCallback, {
             windowMs: 30000,
             minAggVolume: 500,

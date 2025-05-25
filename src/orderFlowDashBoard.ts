@@ -5,18 +5,21 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 import express from "express";
-import path from "path";
+import * as path from "node:path";
 import * as ws from "ws";
 import { SpotWebsocketStreams } from "@binance/spot";
-import { TradesProcessor } from "./tradesProcessor.js";
-import { BinanceDataFeed } from "./binance.js";
-import { OrderBookProcessor } from "./orderBookProcessor.js";
-import { Signal, WebSocketMessage, Detected } from "./interfaces.js";
-import { Storage } from "./storage.js";
-import { AbsorptionDetector } from "./absorptionDetector.js";
-import { ExhaustionDetector } from "./exhaustionDetector.js";
-import { DeltaCVDConfirmation } from "./deltaCVDCOnfirmation.js";
-import { SwingPredictor, SwingPrediction } from "./swingPredictor.js";
+import { TradesProcessor } from "./tradesProcessor";
+import { BinanceDataFeed } from "./binance";
+import { OrderBookProcessor } from "./orderBookProcessor";
+import { Signal, WebSocketMessage, Detected } from "./interfaces";
+import { Storage } from "./storage";
+import { AbsorptionDetector } from "./absorptionDetector";
+import { ExhaustionDetector } from "./exhaustionDetector";
+import { DeltaCVDConfirmation } from "./deltaCVDCOnfirmation";
+import { SwingPredictor, SwingPrediction } from "./swingPredictor";
+
+import { EventEmitter } from "events";
+EventEmitter.defaultMaxListeners = 20;
 
 export class OrderFlowDashboard {
     private readonly intervalMs: number = 10 * 60 * 1000; // 10 minutes

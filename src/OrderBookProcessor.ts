@@ -2,7 +2,7 @@ import axios from "axios";
 import dotenv from "dotenv";
 
 import { SpotWebsocketStreams, SpotWebsocketAPI } from "@binance/spot";
-import { WebSocketMessage } from "./interfaces.js";
+import { WebSocketMessage } from "./interfaces";
 
 dotenv.config();
 

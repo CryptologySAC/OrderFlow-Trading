@@ -1,4 +1,4 @@
-import { Signal } from "./interfaces.js";
+import { Signal } from "./interfaces";
 
 export interface SwingPrediction {
     time: number;

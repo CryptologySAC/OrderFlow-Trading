@@ -1,1 +1,1 @@
-export { OrderFlowDashboard } from "./orderFlowDashBoard.js";
+export { OrderFlowDashboard } from "./orderFlowDashBoard";

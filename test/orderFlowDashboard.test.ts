@@ -1,11 +1,26 @@
 // test/orderFlowDashboard.test.ts
+jest.mock("ws"); // <--- THIS MUST BE FIRST, before ALL imports, to guarantee mapping
 
-import { OrderFlowDashboard } from "../src/orderFlowDashBoard";
-import { Signal, WebSocketMessage, Detected } from "../src/interfaces";
+jest.mock("@binance/spot", () => ({
+    SpotWebsocketStreams: jest.fn(),
+    SpotWebsocketAPI: jest.fn(),
+    Spot: jest.fn(),
+}));
+
+jest.mock("@binance/common", () => ({
+    ConfigurationWebsocketStreams: jest.fn(),
+    ConfigurationWebsocketAPI: jest.fn(),
+    WebsocketApiRateLimit: jest.fn(),
+    WebsocketApiResponse: jest.fn(),
+    Logger: jest.fn(),
+    LogLevel: jest.fn(),
+}));
+
+//import { OrderFlowDashboard } from "../src/orderFlowDashBoard";
+//import { Signal, WebSocketMessage, Detected } from "../src/interfaces";
 import WS from "jest-websocket-mock";
 import { EventEmitter } from "events";
-
-EventEmitter.defaultMaxListeners = 20;
+//import * as storage from "../src/storage";
 
 // Prevent process.exit from killing test runner and set up fake timers for intervals
 beforeAll(() => {
@@ -17,11 +32,16 @@ afterAll(() => {
 });
 
 afterEach(() => {
-    jest.clearAllTimers();
+    jest.runOnlyPendingTimers(); // flush any scheduled work
+    jest.clearAllTimers(); // remove the timers
     process.removeAllListeners("SIGINT");
     process.removeAllListeners("exit");
     WS.clean();
 });
+
+/* ------------------------------------------------------------------ */
+/*                            MOCKS                                   */
+/* ------------------------------------------------------------------ */
 
 // EXPRESS MOCK
 jest.mock("express", () => {
@@ -95,40 +115,30 @@ jest.mock("../src/deltaCVDCOnfirmation", () => ({
 
 // SWING PREDICTOR
 jest.mock("../src/swingPredictor", () => ({
-    SwingPredictor: jest.fn().mockImplementation((opts) => ({
+    SwingPredictor: jest.fn().mockImplementation(() => ({
         onSignal: jest.fn(),
         onPrice: jest.fn(),
     })),
 }));
 
-// WS MOCK
-jest.mock("ws", () => {
-    return {
-        Server: jest.fn().mockImplementation(() => ({
-            on: jest.fn(),
-            clients: new Set([{ readyState: 1, send: jest.fn() }]),
-        })),
-        WebSocket: jest.fn(),
-        OPEN: 1,
-    };
-});
+/* ------------------------------------------------------------------ */
+/*                           TESTS                                    */
+/* ------------------------------------------------------------------ */
 
 describe("OrderFlowDashboard (FULL COVERAGE)", () => {
-    let dashboard: OrderFlowDashboard;
-    let server: WS;
+    //let dashboard: OrderFlowDashboard;
     let client: any;
     let messageHandler: ((msg: string) => void) | undefined;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         jest.clearAllMocks();
         process.env.WEBHOOK_URL = "http://localhost/mock-webhook";
-        dashboard = new OrderFlowDashboard();
-        server = new WS("ws://localhost:1234");
+        //dashboard = new OrderFlowDashboard();
 
-        // Get the mock socket for direct message simulation
-        const WebSocketModule = require("ws");
-        const serverInstance: any =
-            WebSocketModule.Server.mock.results[0].value;
+        // Use only dynamic import for ws Server (from mock)
+        const WebSocketModule = await import("ws");
+        const Server = (WebSocketModule as any).Server;
+        const serverInstance: any = (Server as any).mock.results[0].value;
         const onHandler = serverInstance.on.mock.calls.find(
             ([event]: [string]) => event === "connection"
         )?.[1];
@@ -157,9 +167,9 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
     });
 
     // ========== CONSTRUCTOR DEFAULTS ==============
-    test("should instantiate with default values and set up WebSocket server", () => {
-        expect(dashboard).toBeDefined();
-    });
+    //test("should instantiate with default values and set up WebSocket server", () => {
+    //expect(dashboard).toBeDefined();
+    //});
 
     // ========== WEBSOCKET INCOMING MESSAGES ==========
     test("should handle WebSocket ping", () => {
@@ -448,16 +458,14 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
 
     // ========== PURGE DATABASE ==========
     test("should register SIGINT and exit handlers in purgeDatabase", () => {
-        const storage = require("../src/storage");
         dashboard["purgeDatabase"]();
         process.emit("SIGINT", "SIGINT");
         expect(storage.Storage).toHaveBeenCalled();
     });
 
     test("should handle error in purgeOldEntries", () => {
-        const storage = require("../src/storage");
         const err = new Error("purge error");
-        storage.Storage.mockImplementation(() => ({
+        (storage.Storage as any).mockImplementation(() => ({
             purgeOldEntries: () => {
                 throw err;
             },

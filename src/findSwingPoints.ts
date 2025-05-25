@@ -1,6 +1,6 @@
-import { SwingPoints } from "./swingpoints.js";
-import { Storage } from "./storage.js";
-import { SwingPoint } from "./interfaces.js";
+import { SwingPoints } from "./swingpoints";
+import { Storage } from "./storage";
+import { SwingPoint } from "./interfaces";
 import { SpotWebsocketAPI } from "@binance/spot";
 
 const storage = new Storage();

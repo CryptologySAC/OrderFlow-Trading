@@ -1,4 +1,4 @@
-import { Signal, VolumeBin, PlotTrade } from "./interfaces.js";
+import { Signal, VolumeBin, PlotTrade } from "./interfaces";
 
 export class OrderFlowAnalyzerX {
     private absorptionWindow: number; // seconds
