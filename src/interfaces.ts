@@ -1,5 +1,14 @@
+import { SpotWebsocketStreams } from "@binance/spot";
+
 export interface WebSocketMessage {
-    type: "pong" | "backlog" | "trade" | "orderbook" | "signal" | "error";
+    type:
+        | "pong"
+        | "backlog"
+        | "trade"
+        | "orderbook"
+        | "signal"
+        | "error"
+        | "test";
     data: unknown;
     now: number;
 }
@@ -31,6 +40,13 @@ export interface AbsorptionLabel {
     label: string; // Signal description (e.g., "Sell Absorption")
 }
 
+export interface Detected {
+    side: "buy" | "sell";
+    price: number;
+    trades: SpotWebsocketStreams.AggTradeResponse[];
+    totalAggressiveVolume: number;
+}
+
 // Signal interface matching Python's structure
 export interface Signal {
     type:
@@ -38,13 +54,15 @@ export interface Signal {
         | "absorption"
         | "exhaustion_confirmed"
         | "absorption_confirmed"
-        | "flow";
+        | "flow"
+        | "swingHigh"
+        | "swingLow";
     time: number; // Timestamp in milliseconds
     price: number;
     tradeIndex?: number;
     isInvalidated?: boolean; // True if invalidated (tighter stop loss)
-    stopLoss: number; // Stop loss price
-    takeProfit: number; // Take profit price
+    stopLoss?: number; // Stop loss price
+    takeProfit?: number; // Take profit price
     timeframe?: "Daytime" | "Nighttime";
     closeReason?:
         | "take_profit"
