@@ -9,7 +9,7 @@ export interface IWebSocket {
 export interface IWebSocketServer {
     clients: Set<IWebSocket>;
     on(event: "connection", cb: (ws: IWebSocket) => void): this;
-} 
+}
 
 export interface WebSocketMessage {
     type:
