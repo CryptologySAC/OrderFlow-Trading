@@ -5,3 +5,4 @@ trades.db-journal
 dist/
 yarn.lock
 .DS_Store
+package-lock.json
