@@ -5,11 +5,12 @@ import { SpotWebsocketStreams } from "@binance/spot";
 import { TradesProcessor } from "./tradesProcessor";
 import { BinanceDataFeed } from "./binance";
 import { OrderBookProcessor } from "./orderBookProcessor";
-import { Signal, WebSocketMessage } from "./interfaces";
+import { Signal, WebSocketMessage, Detected } from "./interfaces";
 import { Storage } from "./storage";
 import { AbsorptionDetector } from "./absorptionDetector";
 import { ExhaustionDetector } from "./exhaustionDetector";
 import { DeltaCVDConfirmation } from "./deltaCVDCOnfirmation";
+import { SwingPredictor, SwingPrediction } from "./swingPredictor";
 
 export class OrderFlowDashboard {
     private readonly intervalMs: number = 10 * 60 * 1000; // 10 minutes
@@ -34,7 +35,17 @@ export class OrderFlowDashboard {
     private readonly exhaustionDetector: ExhaustionDetector;
     private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
 
-    constructor() {
+    private swingPredictor = new SwingPredictor({
+        lookaheadMs: 60000,
+        retraceTicks: 5,
+        pricePrecision: 2,
+        signalCooldownMs: 10000,
+        onSwingPredicted: this.handleSwingPrediction.bind(this),
+    });
+
+    constructor(
+        private delayFn: (cb: () => void, ms: number) => unknown = setTimeout
+    ) {
         this.binanceFeed = new BinanceDataFeed();
         this.orderBookProcessor = new OrderBookProcessor();
         this.tradesProcessor = new TradesProcessor();
@@ -66,20 +77,24 @@ export class OrderFlowDashboard {
             }
         );
         this.deltaCVDConfirmation = new DeltaCVDConfirmation(
-            (confirmed) =>
-                void this.broadcastSignal({
+            (confirmed) => {
+                const confirmedSignal: Signal = {
                     type: `${confirmed.confirmedType}_confirmed` as Signal["type"],
                     time: confirmed.time,
                     price: confirmed.price,
-                    takeProfit: confirmed.price * 1.01, // example
-                    stopLoss: confirmed.price * 0.99, // example
+                    takeProfit: confirmed.price * 1.01,
+                    stopLoss: confirmed.price * 0.99,
                     closeReason: confirmed.reason,
-                }),
+                };
+
+                this.swingPredictor.onSignal(confirmedSignal);
+                void this.broadcastSignal(confirmedSignal);
+            },
             {
-                lookback: 90, // seconds, for rolling window
-                cvdLength: 20, // length for slope calculation
-                slopeThreshold: 0.08, // tune for your market
-                deltaThreshold: 30, // tune for your coin size!
+                lookback: 90,
+                cvdLength: 20,
+                slopeThreshold: 0.08,
+                deltaThreshold: 30,
             }
         );
 
@@ -127,10 +142,18 @@ export class OrderFlowDashboard {
                         request.type === "backlog" &&
                         this.isBacklogRequest(request)
                     ) {
-                        const amount: number = parseInt(
-                            request.data?.amount ?? "1000",
-                            10
-                        );
+                        const rawAmount = request.data?.amount;
+                        const amount = parseInt(rawAmount ?? "1000", 10);
+
+                        if (
+                            !Number.isInteger(amount) ||
+                            amount <= 0 ||
+                            amount > 10000
+                        ) {
+                            console.warn("Invalid backlog amount:", rawAmount);
+                            return;
+                        }
+
                         console.log("Backlog request received:", amount);
                         let backlog =
                             this.tradesProcessor.requestBacklog(amount);
@@ -165,7 +188,7 @@ export class OrderFlowDashboard {
 
     private isBacklogRequest(
         request: unknown
-    ): request is { type: "backlog"; data: { amount: string } } {
+    ): request is { type: "backlog"; data: { amount?: string } } {
         if (
             typeof request !== "object" ||
             request === null ||
@@ -180,13 +203,14 @@ export class OrderFlowDashboard {
             data: unknown;
         };
 
-        return (
-            req.type === "backlog" &&
+        return req.type === "backlog" &&
             typeof req.data === "object" &&
             req.data !== null &&
-            "amount" in req.data &&
-            typeof (req.data as { amount: unknown }).amount === "string"
-        );
+            "amount" in req.data
+            ? typeof (req.data as { amount: unknown }).amount === "string" ||
+                  typeof (req.data as { amount: unknown }).amount ===
+                      "undefined"
+            : true;
     }
 
     private startWebServer(): void {
@@ -231,60 +255,72 @@ export class OrderFlowDashboard {
     }
 
     private async getFromBinanceAPI() {
-        const connection = await this.binanceFeed.connectToStreams();
-
-        connection.on("close", (): void => {
-            try {
-                console.log("Stream closed. Attempting reconnect in 5s...");
-                setTimeout(() => {
-                    void this.getFromBinanceAPI().catch((err) => {
-                        console.error("Reconnection failed:", err);
-                    });
-                }, 5000);
-            } catch (err) {
-                console.error("Error reconnecting to Binance API:", err);
-            }
-        });
-
         try {
-            const streamAggTrade = connection.aggTrade({ symbol: this.symbol });
-            const streamDepth = connection.diffBookDepth({
-                symbol: this.symbol,
-                updateSpeed: "100ms",
+            const connection = await this.binanceFeed.connectToStreams();
+
+            connection.on("close", (): void => {
+                try {
+                    console.log("Stream closed. Attempting reconnect in 5s...");
+                    this.delayFn(() => {
+                        void this.getFromBinanceAPI().catch((err) => {
+                            console.error("Reconnection failed:", err);
+                        });
+                    }, 5000);
+                } catch (err) {
+                    console.error("Error reconnecting to Binance API:", err);
+                }
             });
 
-            streamDepth.on(
-                "message",
-                (data: SpotWebsocketStreams.DiffBookDepthResponse): void => {
-                    try {
-                        this.absorptionDetector.addDepth(data);
-                        this.exhaustionDetector.addDepth(data);
-                        const message: WebSocketMessage =
-                            this.orderBookProcessor.processWebSocketUpdate(
-                                data
-                            );
-                        this.broadcastMessage(message);
-                    } catch (error) {
-                        console.error("Error broadcasting depth:", error);
-                    }
-                }
-            );
+            try {
+                const streamAggTrade = connection.aggTrade({
+                    symbol: this.symbol,
+                });
+                const streamDepth = connection.diffBookDepth({
+                    symbol: this.symbol,
+                    updateSpeed: "100ms",
+                });
 
-            streamAggTrade.on(
-                "message",
-                (data: SpotWebsocketStreams.AggTradeResponse): void => {
-                    try {
-                        this.absorptionDetector.addTrade(data);
-                        this.exhaustionDetector.addTrade(data);
-                        this.deltaCVDConfirmation.addTrade(data);
-                        const processedData: WebSocketMessage =
-                            this.tradesProcessor.addTrade(data);
-                        this.broadcastMessage(processedData);
-                    } catch (error) {
-                        console.error("Error broadcasting trade:", error);
+                streamDepth.on(
+                    "message",
+                    (
+                        data: SpotWebsocketStreams.DiffBookDepthResponse
+                    ): void => {
+                        try {
+                            this.absorptionDetector.addDepth(data);
+                            this.exhaustionDetector.addDepth(data);
+                            const message: WebSocketMessage =
+                                this.orderBookProcessor.processWebSocketUpdate(
+                                    data
+                                );
+                            this.broadcastMessage(message);
+                        } catch (error) {
+                            console.error("Error broadcasting depth:", error);
+                        }
                     }
-                }
-            );
+                );
+
+                streamAggTrade.on(
+                    "message",
+                    (data: SpotWebsocketStreams.AggTradeResponse): void => {
+                        try {
+                            this.absorptionDetector.addTrade(data);
+                            this.exhaustionDetector.addTrade(data);
+                            this.deltaCVDConfirmation.addTrade(data);
+                            this.swingPredictor.onPrice(
+                                parseFloat(data.p ?? "0"),
+                                data.T ?? Date.now()
+                            );
+                            const processedData: WebSocketMessage =
+                                this.tradesProcessor.addTrade(data);
+                            this.broadcastMessage(processedData);
+                        } catch (error) {
+                            console.error("Error broadcasting trade:", error);
+                        }
+                    }
+                );
+            } catch (error) {
+                console.error("Error connecting to Binance streams:", error);
+            }
         } catch (error) {
             console.error("Error connecting to Binance streams:", error);
         }
@@ -359,12 +395,7 @@ export class OrderFlowDashboard {
         });
     }
 
-    private async onExhaustionDetected(detected: {
-        side: "buy" | "sell";
-        price: number;
-        trades: SpotWebsocketStreams.AggTradeResponse[];
-        totalAggressiveVolume: number;
-    }) {
+    private async onExhaustionDetected(detected: Detected) {
         const time = Date.now();
         const signal: Signal = {
             time,
@@ -388,12 +419,7 @@ export class OrderFlowDashboard {
         );
     }
 
-    private async onAbsorptionDetected(detected: {
-        side: "buy" | "sell";
-        price: number;
-        trades: SpotWebsocketStreams.AggTradeResponse[];
-        totalAggressiveVolume: number;
-    }) {
+    private async onAbsorptionDetected(detected: Detected) {
         const time = Date.now();
         const signal: Signal = {
             time,
@@ -414,6 +440,10 @@ export class OrderFlowDashboard {
             detected.price,
             time
         );
+    }
+
+    private handleSwingPrediction(prediction: SwingPrediction): void {
+        void this.broadcastSignal(prediction);
     }
 
     public async startDashboard() {

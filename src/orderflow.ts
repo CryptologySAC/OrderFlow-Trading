@@ -162,8 +162,6 @@ export class OrderFlowAnalyzerX {
                                     `Price: ${signal.price.toFixed(2)}, ` +
                                     `Quantity: ${trade.quantity.toFixed(2)} LTC, ` +
                                     `Timeframe: ${signal.timeframe}, ` +
-                                    `Stop Loss: ${signal.stopLoss.toFixed(2)}, ` +
-                                    `Take Profit: ${signal.takeProfit.toFixed(2)}, ` +
                                     `Invalidated: ${signal.isInvalidated}`
                             );
                             this.pendingSignals.push(signal);
