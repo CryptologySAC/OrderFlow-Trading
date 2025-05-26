@@ -11,6 +11,22 @@ export type AbsorptionCallback = (data: {
     zone: number;
 }) => void;
 
+/**
+ * Configuration options for AbsorptionDetector.
+ *
+ * Controls windows, thresholds, and advanced feature flags.
+ * All fields are optional; reasonable defaults provided.
+ *
+ * @property windowMs           Rolling time window in milliseconds for trade aggregation.
+ * @property minAggVolume       Minimum total aggressive volume for absorption detection.
+ * @property pricePrecision     Price decimal places for tick/zone rounding.
+ * @property zoneTicks          Tick width for absorption price bands.
+ * @property eventCooldownMs    Debounce period between signals at the same zone/side.
+ * @property minInitialMoveTicks Number of ticks price must move in expected direction to confirm.
+ * @property confirmationTimeoutMs Max time (ms) allowed to confirm a signal.
+ * @property maxRevisitTicks    Max allowed retest distance (in ticks) for invalidation.
+ * @property features           Object with feature flags (see AbsorptionFeatures).
+ */
 export interface AbsorptionSettings {
     windowMs?: number;
     minAggVolume?: number;
@@ -23,6 +39,17 @@ export interface AbsorptionSettings {
     maxRevisitTicks?: number;
 }
 
+/**
+ * Feature flags to enable/disable advanced absorption detection logic.
+ *
+ * @property spoofingDetection   Enables spoofing detection logic.
+ * @property adaptiveZone        Enables adaptive ATR-based zone sizing.
+ * @property passiveHistory      Tracks passive volume changes over time.
+ * @property multiZone           Sums volume and passive liquidity across a price band.
+ * @property priceResponse       Enables price move confirmation before signaling.
+ * @property sideOverride        Enables advanced side-detection logic (for research).
+ * @property autoCalibrate       Enables automatic threshold adjustment.
+ */
 export interface AbsorptionFeatures {
     spoofingDetection?: boolean;
     adaptiveZone?: boolean;
@@ -33,6 +60,27 @@ export interface AbsorptionFeatures {
     autoCalibrate?: boolean;
 }
 
+/**
+ * AbsorptionDetector detects and confirms orderflow absorption events
+ * using Binance Spot WebSocket trades and orderbook depth.
+ *
+ * Features:
+ * - Spoofing detection (filters fake walls)
+ * - Adaptive zone sizing (ATR-based)
+ * - Multi-zone (banded) logic
+ * - Passive volume tracking and refill logic
+ * - Auto-calibration of thresholds
+ * - Price response confirmation/invalidation
+ * - Structured event logging via SignalLogger
+ *
+ * Designed for high-precision intraday signal detection and research.
+ *
+ * @param onAbsorption Callback executed when a confirmed absorption event is detected.
+ * @param settings Object containing configuration parameters (windows, thresholds, features, etc).
+ * @param logger Optional SignalLogger instance for CSV/JSON event logging.
+ *
+ * @see AbsorptionSettings for parameter options.
+ */
 export class AbsorptionDetector {
     private depth = new Map<number, { bid: number; ask: number }>();
     private trades: SpotWebsocketStreams.AggTradeResponse[] = [];
@@ -104,6 +152,25 @@ export class AbsorptionDetector {
         console.log("[AbsorptionDetector] Features enabled:", this.features);
     }
 
+    /**
+     * Adds a new trade (aggTrade) from Binance Spot to the absorption detector.
+     *
+     * Should be called for every incoming trade. Aggregates aggressive volume and
+     * manages absorption and spoofing detection. Triggers absorption checks and, if
+     * enabled, initiates price response confirmation.
+     *
+     * @param trade Binance Spot AggTradeResponse object.
+     *
+     * @example
+     * detector.addTrade({
+     *   e: "aggTrade",
+     *   p: "95.00",
+     *   q: "50.00",
+     *   m: true,
+     *   T: 1748281037000,
+     *   // ...
+     * });
+     */
     public addTrade(trade: SpotWebsocketStreams.AggTradeResponse) {
         if (!trade.T) return;
         this.trades.push(trade);
@@ -122,6 +189,29 @@ export class AbsorptionDetector {
         }
     }
 
+    /**
+     * Adds a new order book depth (diffBookDepth) update to the absorption detector.
+     *
+     * This method should be called for every incoming Binance Spot diffBookDepth stream message.
+     * Updates the passive (bid/ask) levels tracked internally, enabling real-time
+     * absorption, spoofing, and refill logic. Supports all feature flags, including
+     * spoofing detection and passive volume history.
+     *
+     * @param update Binance Spot DiffBookDepthResponse object.
+     *   Should include price/quantity pairs for bids (`b`) and/or asks (`a`).
+     *
+     * @remarks
+     * - Keeps internal orderbook in sync with the live Binance feed for accurate
+     *   absorption detection and event timing.
+     * - If enabled, also tracks time-series of passive volume for refill and spoofing features.
+     *
+     * @example
+     * detector.addDepth({
+     *   b: [["95.00", "100.00"]],
+     *   a: [["95.10", "50.00"]],
+     *   // ...other fields
+     * });
+     */
     public addDepth(update: SpotWebsocketStreams.DiffBookDepthResponse) {
         const updateLevel = (
             side: "bid" | "ask",
@@ -345,7 +435,19 @@ export class AbsorptionDetector {
         }
     }
 
-    // ---- MAIN ABSORPTION DETECTION, WITH FEATURE GATES ----
+    /**
+     * Runs the absorption detection algorithm on the current trade window.
+     *
+     * Called internally on each new trade to group and scan for high-probability
+     * absorption clusters by price zone. If a candidate is detected, logs as
+     * pending and (if enabled) starts price response confirmation logic.
+     *
+     * @param triggerTrade The trade that triggered this check. Used for price reference
+     *                     and advanced spoofing/side detection.
+     *
+     * @remarks
+     * Usually called automatically from addTrade; not for public use.
+     */
     private checkAbsorption(
         triggerTrade: SpotWebsocketStreams.AggTradeResponse
     ) {
@@ -487,6 +589,20 @@ export class AbsorptionDetector {
         }
     }
 
+    /**
+     * Confirms or invalidates all pending absorption signals based on
+     * price movement and configured thresholds.
+     *
+     * Called after every new trade (and optionally after depth changes).
+     * If price moves the required number of ticks (minInitialMoveTicks)
+     * in the expected direction within the allowed time, confirms the signal;
+     * otherwise invalidates on timeout or snap-back.
+     *
+     * @param currentPrice The most recent price (from trade or orderbook).
+     *
+     * @remarks
+     * Internal method; not for direct use outside the detector.
+     */
     private processPendingConfirmations(currentPrice: number) {
         const tick = 1 / Math.pow(10, this.pricePrecision);
         const now = Date.now();
