@@ -124,10 +124,10 @@ function buildSignalLabel(signal) {
     } else if (signal.type.startsWith("absorption")) {
         letter = "A";
         color = signal.type.includes("confirmed")
-            ? "rgba(0, 90, 255, 0.5)"
+            ? "rgba(0, 90, 255, 1)"
             : signal.side === "sell"
-              ? "rgba(255, 0, 0, 0.5)"
-              : "rgba(0, 200, 0, 0.5)";
+              ? "rgba(255, 0, 0, 1)"
+              : "rgba(0, 200, 0, 1)";
     } else {
         letter = "?";
         color = "rgba(128,128,128,0.5)";

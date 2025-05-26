@@ -169,10 +169,20 @@ export class OrderFlowDashboard {
                 );
             }, // callback
             {
-                windowMs: 30000, // 90 seconds window
-                minAggVolume: 300, // Minimum aggressive volume for detection
-                pricePrecision: 2, // Use 2 decimals for LTCUSDT
-                zoneTicks: 5, // Zone covers 3 price ticks
+                windowMs: 30000,
+                minAggVolume: 300,
+                pricePrecision: 2,
+                zoneTicks: 5,
+                eventCooldownMs: 15000,
+                features: {
+                    spoofingDetection: true,
+                    adaptiveZone: true,
+                    passiveHistory: true,
+                    multiZone: true,
+                    priceResponse: true,
+                    sideOverride: false,
+                    autoCalibrate: true,
+                },
             }
         );
         this.deltaCVDConfirmation = new DeltaCVDConfirmation(
