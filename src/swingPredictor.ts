@@ -36,6 +36,7 @@ export class SwingPredictor {
 
     public onSignal(signal: Signal) {
         const key = `${signal.type}_${signal.time}`;
+        console.log("[SwingPredictor] Signal received:", signal, "key:", key);
         this.swingCandidates.set(key, {
             signal,
             expires: signal.time + this.lookaheadMs,
@@ -48,6 +49,15 @@ export class SwingPredictor {
                 this.swingCandidates.delete(key);
                 continue;
             }
+
+            console.log(
+                "[SwingPredictor] Processing candidate:",
+                candidate.signal,
+                "current price:",
+                price,
+                "time:",
+                time
+            );
 
             const { signal } = candidate;
             const roundedPrice = +price.toFixed(this.pricePrecision);

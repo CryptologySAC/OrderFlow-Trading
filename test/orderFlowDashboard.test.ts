@@ -80,11 +80,11 @@ let capturedCallback: (confirmed: any) => void;
 vi.mock("../src/deltaCVDCOnfirmation.js", () => ({
     DeltaCVDConfirmation: vi.fn().mockImplementation((cb, options) => {
         capturedCallback = () => {
-        return {
-            confirmSignal: vi.fn(),
-            addTrade: vi.fn(),
+            return {
+                confirmSignal: vi.fn(),
+                addTrade: vi.fn(),
+            };
         };
-    }
     }),
 }));
 
@@ -126,13 +126,17 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
     let messageHandler: ((msg: string) => void) | undefined;
 
     beforeEach(async () => {
-        vi.resetModules();    
+        vi.resetModules();
         vi.resetAllMocks();
         vi.clearAllMocks();
 
-        capturedCallback = (confirmed: any) => { return confirmed; };  // reset capturedCallback
+        capturedCallback = (confirmed: any) => {
+            return confirmed;
+        }; // reset capturedCallback
 
-        const { OrderFlowDashboard } = await import("../src/orderFlowDashBoard.js");
+        const { OrderFlowDashboard } = await import(
+            "../src/orderFlowDashBoard.js"
+        );
 
         process.env.WEBHOOK_URL = "http://localhost/mock-webhook";
         dashboard = new OrderFlowDashboard();
@@ -193,7 +197,10 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
         const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
         if (messageHandler)
             messageHandler(
-                JSON.stringify({ type: "backlog", data: { amount: "10000000" } })
+                JSON.stringify({
+                    type: "backlog",
+                    data: { amount: "10000000" },
+                })
             );
         expect(warnSpy).toHaveBeenCalledWith(
             "Invalid backlog amount:",
@@ -359,29 +366,27 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
     });
 
     test("should register SIGINT and exit handlers in purgeDatabase", () => {
-    // arrange
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
-        throw new Error("process.exit was called");
+        // arrange
+        const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
+            throw new Error("process.exit was called");
+        });
+
+        dashboard["purgeDatabase"]();
+
+        // act + assert
+        let exitError: Error | undefined;
+        try {
+            process.emit("SIGINT", "SIGINT");
+        } catch (err) {
+            exitError = err as Error;
+        }
+
+        expect(exitError).toBeDefined();
+        expect(exitError?.message).toBe("process.exit was called");
+        expect(storage.Storage).toHaveBeenCalled();
+
+        exitSpy.mockRestore();
     });
-
-    dashboard["purgeDatabase"]();
-
-    // act + assert
-    let exitError: Error | undefined;
-    try {
-        process.emit("SIGINT", "SIGINT");
-    } catch (err) {
-        exitError = err as Error;
-    }
-
-    expect(exitError).toBeDefined();
-    expect(exitError?.message).toBe("process.exit was called");
-    expect(storage.Storage).toHaveBeenCalled();
-
-    exitSpy.mockRestore();
-});
-
-
 
     test("should handle error in purgeOldEntries", () => {
         const err = new Error("purge error");
@@ -408,9 +413,7 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
             .mockImplementation(() => {});
         await dashboard.startDashboard();
         expect(logSpy).toHaveBeenCalledWith(
-            expect.stringContaining(
-                "Server running at http"
-            )
+            expect.stringContaining("Server running at http")
         );
         logSpy.mockRestore();
         errorSpy.mockRestore();
@@ -634,14 +637,15 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
     });
 
     test("getFromBinanceAPI handles error in top-level catch", async () => {
-    const dash = new OrderFlowDashboard();
-    dash["binanceFeed"].connectToStreams = () => Promise.reject(new Error("fail"));
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    await expect(dash["getFromBinanceAPI"]()).rejects.toThrow("fail");
-    errorSpy.mockRestore();
-
-});
-
+        const dash = new OrderFlowDashboard();
+        dash["binanceFeed"].connectToStreams = () =>
+            Promise.reject(new Error("fail"));
+        const errorSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
+        await expect(dash["getFromBinanceAPI"]()).rejects.toThrow("fail");
+        errorSpy.mockRestore();
+    });
 
     test("handles error in sendToClients", () => {
         const dash = new OrderFlowDashboard();

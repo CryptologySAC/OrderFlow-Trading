@@ -1,5 +1,7 @@
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -17,9 +19,18 @@ import { AbsorptionDetector } from "./absorptionDetector.js";
 import { ExhaustionDetector } from "./exhaustionDetector.js";
 import { DeltaCVDConfirmation } from "./deltaCVDCOnfirmation.js";
 import { SwingPredictor, SwingPrediction } from "./swingPredictor.js";
+import { parseBool } from "./utils.js";
+import { SignalLogger } from "./signalLogger.js";
 
 import { EventEmitter } from "events";
 EventEmitter.defaultMaxListeners = 20;
+
+type WS = ws.WebSocket;
+interface WSRequest {
+    type: string;
+    data?: unknown;
+}
+type WSHandler = (ws: WS, data?: unknown) => void | Promise<void>;
 
 export class OrderFlowDashboard {
     private readonly intervalMs: number = 10 * 60 * 1000; // 10 minutes
@@ -36,25 +47,164 @@ export class OrderFlowDashboard {
         10
     );
     private readonly BroadCastWebSocket: ws.WebSocketServer;
-
+    private readonly storage: Storage;
     private readonly binanceFeed: BinanceDataFeed;
     private readonly tradesProcessor: TradesProcessor;
     private readonly orderBookProcessor: OrderBookProcessor;
     private readonly absorptionDetector: AbsorptionDetector;
     private readonly exhaustionDetector: ExhaustionDetector;
     private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
+    private readonly signalLogger: SignalLogger = new SignalLogger(
+        "signals.csv"
+    );
 
     private swingPredictor = new SwingPredictor({
-        lookaheadMs: 60000,
-        retraceTicks: 5,
+        lookaheadMs: 10000,
+        retraceTicks: 1,
         pricePrecision: 2,
-        signalCooldownMs: 10000,
+        signalCooldownMs: 1000,
         onSwingPredicted: this.handleSwingPrediction.bind(this),
     });
+
+    private readonly absorptionSettings = {
+        windowMs: parseInt(process.env.ABSORPTION_WINDOW_MS ?? "90000", 10),
+        minAggVolume: parseInt(
+            process.env.ABSORPTION_MIN_AGG_VOLUME ?? "600",
+            10
+        ),
+        pricePrecision: parseInt(
+            process.env.ABSORPTION_PRICE_PRECISION ?? "2",
+            10
+        ),
+        zoneTicks: parseInt(process.env.ABSORPTION_ZONE_TICKS ?? "3", 10),
+        eventCooldownMs: parseInt(
+            process.env.ABSORPTION_EVENT_COOLDOWN_MS ?? "15000",
+            10
+        ),
+        minInitialMoveTicks: parseInt(
+            process.env.ABSORPTION_MOVE_TICKS ?? "12",
+            10
+        ), // Minimum ticks for initial move to consider absorption
+        confirmationTimeoutMs: parseInt(
+            process.env.ABSORPTION_CONFIRMATION_TIMEOUT ?? "60000",
+            10
+        ), // How long to wait for confirmation
+        maxRevisitTicks: parseInt(
+            process.env.ABSORPTION_MAX_REVISIT_TICKS ?? "5",
+            10
+        ),
+        features: {
+            spoofingDetection: parseBool(
+                process.env.ABSORPTION_SPOOFING_DETECTION,
+                true
+            ),
+            adaptiveZone: parseBool(process.env.ABSORPTION_ADAPTIVE_ZONE, true),
+            passiveHistory: parseBool(
+                process.env.ABSORPTION_PASSIVE_HISTORY,
+                true
+            ),
+            multiZone: parseBool(process.env.ABSORPTION_MULTI_ZONE, true),
+            priceResponse: parseBool(
+                process.env.ABSORPTION_PRICE_RESPONSE,
+                true
+            ),
+            sideOverride: parseBool(
+                process.env.ABSORPTION_SIDE_OVERRIDE,
+                false
+            ),
+            autoCalibrate: parseBool(
+                process.env.ABSORPTION_AUTO_CALIBRATE,
+                true
+            ),
+        },
+    };
+
+    private wsHandlers: Record<string, WSHandler> = {
+        ping: (ws) => {
+            ws.send(JSON.stringify({ type: "pong", now: Date.now() }));
+        },
+        backlog: (ws, data) => {
+            let amount = 1000;
+            if (data && typeof data === "object" && "amount" in data) {
+                const rawAmount = (data as { amount?: string | number }).amount;
+                amount = parseInt(rawAmount as string, 10);
+                if (
+                    !Number.isInteger(amount) ||
+                    amount <= 0 ||
+                    amount > 100000
+                ) {
+                    ws.send(
+                        JSON.stringify({
+                            type: "error",
+                            message: "Invalid backlog amount",
+                        })
+                    );
+                    return;
+                }
+            }
+            let backlog = this.tradesProcessor.requestBacklog(amount);
+            backlog = backlog.reverse();
+            ws.send(
+                JSON.stringify({
+                    type: "backlog",
+                    data: backlog,
+                    now: Date.now(),
+                })
+            );
+        },
+        // Add more handlers as needed
+    };
+
+    private handleWSMessage(ws: WS, message: ws.RawData) {
+        let raw: string;
+        try {
+            if (typeof message === "string") raw = message;
+            else if (message instanceof Buffer) raw = message.toString();
+            else throw new Error("Unexpected message format");
+
+            const parsed: unknown = JSON.parse(raw);
+            if (!parsed || typeof parsed !== "object" || !("type" in parsed))
+                throw new Error("Invalid message shape");
+
+            const { type, data } = parsed as WSRequest;
+            const handler = this.wsHandlers[type];
+            if (!handler) {
+                ws.send(
+                    JSON.stringify({
+                        type: "error",
+                        message: "Unknown request type",
+                    })
+                );
+                return;
+            }
+
+            Promise.resolve(handler(ws, data)).catch((err) => {
+                // Local log with stack for ops/debugging
+                console.error(`[WS handler error] type=${type}`, err);
+                // Only message to client, never stack
+                ws.send(
+                    JSON.stringify({
+                        type: "error",
+                        message: (err as Error).message,
+                    })
+                );
+            });
+        } catch (err) {
+            // Local log
+            console.error("[WS message parse error]", err);
+            ws.send(
+                JSON.stringify({
+                    type: "error",
+                    message: (err as Error).message,
+                })
+            );
+        }
+    }
 
     constructor(
         private delayFn: (cb: () => void, ms: number) => unknown = setTimeout
     ) {
+        this.storage = new Storage();
         this.binanceFeed = new BinanceDataFeed();
         this.orderBookProcessor = new OrderBookProcessor();
         this.tradesProcessor = new TradesProcessor();
@@ -78,12 +228,8 @@ export class OrderFlowDashboard {
                     console.error("Absorption callback failed:", err)
                 );
             }, // callback
-            {
-                windowMs: 30000, // 90 seconds window
-                minAggVolume: 300, // Minimum aggressive volume for detection
-                pricePrecision: 2, // Use 2 decimals for LTCUSDT
-                zoneTicks: 5, // Zone covers 3 price ticks
-            }
+            this.absorptionSettings,
+            this.signalLogger
         );
         this.deltaCVDConfirmation = new DeltaCVDConfirmation(
             (confirmed) => {
@@ -97,7 +243,7 @@ export class OrderFlowDashboard {
                 };
 
                 this.swingPredictor.onSignal(confirmedSignal);
-                void this.broadcastSignal(confirmedSignal);
+                //void this.broadcastSignal(confirmedSignal);
             },
             {
                 lookback: 90,
@@ -108,79 +254,11 @@ export class OrderFlowDashboard {
         );
 
         this.BroadCastWebSocket = new ws.WebSocketServer({ port: this.wsPort });
-
         this.BroadCastWebSocket.on("connection", (ws) => {
             console.log("Client connected");
-
             ws.on("close", () => console.log("Client disconnected"));
-
-            ws.on("message", (message) => {
-                try {
-                    let request: { type: string; data?: unknown };
-                    let raw: string;
-
-                    if (typeof message === "string") {
-                        raw = message;
-                    } else if (message instanceof Buffer) {
-                        raw = message.toString();
-                    } else {
-                        throw new Error("Unexpected message format");
-                    }
-
-                    const parsed: unknown = JSON.parse(raw);
-
-                    if (!this.isWebSocketRequest(parsed)) {
-                        throw new Error("Invalid request");
-                    }
-
-                    request = parsed;
-                    if (
-                        typeof request !== "object" ||
-                        typeof request.type !== "string"
-                    ) {
-                        throw new Error("Invalid request structure");
-                    }
-
-                    if (request.type === "ping") {
-                        ws.send(
-                            JSON.stringify({ type: "pong", now: Date.now() })
-                        );
-                    }
-
-                    if (
-                        request.type === "backlog" &&
-                        this.isBacklogRequest(request)
-                    ) {
-                        const rawAmount = request.data?.amount;
-                        const amount = parseInt(rawAmount ?? "1000", 10);
-
-                        if (
-                            !Number.isInteger(amount) ||
-                            amount <= 0 ||
-                            amount > 100000
-                        ) {
-                            console.warn("Invalid backlog amount:", rawAmount);
-                            return;
-                        }
-
-                        console.log("Backlog request received:", amount);
-                        let backlog =
-                            this.tradesProcessor.requestBacklog(amount);
-                        backlog = backlog.reverse(); // Oldest trade first
-                        ws.send(
-                            JSON.stringify({
-                                type: "backlog",
-                                data: backlog,
-                                now: Date.now(),
-                            })
-                        );
-                    }
-                } catch (err) {
-                    console.warn("Invalid message format", err);
-                }
-            });
+            ws.on("message", (message) => this.handleWSMessage(ws, message));
         });
-
         this.broadcastMessage = this.broadcastMessage.bind(this);
     }
 
@@ -378,13 +456,12 @@ export class OrderFlowDashboard {
     }
 
     private purgeDatabase() {
-        const storage: Storage = new Storage();
         const intervalId = setInterval(() => {
             console.log(
                 `[${new Date().toISOString()}] Starting scheduled purge...`
             );
             try {
-                storage.purgeOldEntries();
+                this.storage.purgeOldEntries();
             } catch (error) {
                 console.error(
                     `[${new Date().toISOString()}] Scheduled purge failed: ${(error as Error).message}`
@@ -412,15 +489,18 @@ export class OrderFlowDashboard {
             closeReason: "exhaustion",
         };
 
-        console.log(
-            `Exhaustion DETECTED: ${JSON.stringify(detected, null, 2)}`
-        );
-        await this.broadcastSignal(signal);
-        this.deltaCVDConfirmation.confirmSignal(
-            "exhaustion",
-            detected.price,
-            time
-        );
+        //console.log(
+        //    `Exhaustion DETECTED: ${JSON.stringify(detected, null, 2)}`
+        //);
+        if (time < 0) {
+            // REMOVE THIS
+            await this.broadcastSignal(signal);
+            this.deltaCVDConfirmation.confirmSignal(
+                "exhaustion",
+                detected.price,
+                time
+            );
+        }
     }
 
     private async onAbsorptionDetected(detected: Detected) {
