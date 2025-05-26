@@ -1,6 +1,5 @@
 import { SwingPredictor, SwingPrediction } from "../src/swingPredictor";
 import { Signal } from "../src/interfaces.js";
-import { jest } from "@jest/globals";
 
 describe("SwingPredictor", () => {
     let predictions: SwingPrediction[] = [];

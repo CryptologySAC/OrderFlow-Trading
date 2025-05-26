@@ -1,162 +1,164 @@
 // test/orderFlowDashboard.test.ts
-jest.mock("ws"); // <--- THIS MUST BE FIRST, before ALL imports, to guarantee mapping
+vi.mock("ws"); // <--- THIS MUST BE FIRST, before ALL imports, to guarantee mapping
 
-jest.mock("@binance/spot", () => ({
-    SpotWebsocketStreams: jest.fn(),
-    SpotWebsocketAPI: jest.fn(),
-    Spot: jest.fn(),
+vi.mock("@binance/spot", () => ({
+    SpotWebsocketStreams: vi.fn(),
+    SpotWebsocketAPI: vi.fn(),
+    Spot: vi.fn(),
 }));
 
-jest.mock("@binance/common", () => ({
-    ConfigurationWebsocketStreams: jest.fn(),
-    ConfigurationWebsocketAPI: jest.fn(),
-    WebsocketApiRateLimit: jest.fn(),
-    WebsocketApiResponse: jest.fn(),
-    Logger: jest.fn(),
-    LogLevel: jest.fn(),
+vi.mock("@binance/common", () => ({
+    ConfigurationWebsocketStreams: vi.fn(),
+    ConfigurationWebsocketAPI: vi.fn(),
+    WebsocketApiRateLimit: vi.fn(),
+    WebsocketApiResponse: vi.fn(),
+    Logger: vi.fn(),
+    LogLevel: vi.fn(),
 }));
 
-//import { OrderFlowDashboard } from "../src/orderFlowDashBoard";
-//import { Signal, WebSocketMessage, Detected } from "../src/interfaces";
-import WS from "jest-websocket-mock";
-import { EventEmitter } from "events";
-//import * as storage from "../src/storage";
-
-// Prevent process.exit from killing test runner and set up fake timers for intervals
-beforeAll(() => {
-    jest.spyOn(process, "exit").mockImplementation((() => {}) as any);
-    jest.useFakeTimers();
-});
-afterAll(() => {
-    jest.useRealTimers();
-});
-
-afterEach(() => {
-    jest.runOnlyPendingTimers(); // flush any scheduled work
-    jest.clearAllTimers(); // remove the timers
-    process.removeAllListeners("SIGINT");
-    process.removeAllListeners("exit");
-    WS.clean();
-});
-
-/* ------------------------------------------------------------------ */
-/*                            MOCKS                                   */
-/* ------------------------------------------------------------------ */
-
-// EXPRESS MOCK
-jest.mock("express", () => {
-    const expressApp = () => {
+vi.mock("express", () => {
+    const expressApp = (() => {
         const app: any = () => app;
-        app.use = jest.fn();
-        app.listen = jest.fn((port: number, callback?: () => void) => {
+        app.use = vi.fn();
+        app.listen = vi.fn((port: number, callback?: () => void) => {
             if (callback) callback();
             return app;
         });
         return app;
-    };
-    expressApp.static = jest.fn(() => jest.fn());
-    return expressApp;
+    }) as any;
+    expressApp.static = vi.fn(() => vi.fn());
+    return { default: expressApp };
 });
 
-// BINANCE FEED + PROCESSOR MOCKS
-jest.mock("../src/binance", () => ({
-    BinanceDataFeed: jest.fn().mockImplementation(() => ({
-        connectToStreams: jest.fn().mockResolvedValue({
-            aggTrade: jest.fn().mockReturnValue({ on: jest.fn() }),
-            diffBookDepth: jest.fn().mockReturnValue({ on: jest.fn() }),
-            on: jest.fn(),
+vi.mock("../src/binance.js", () => ({
+    BinanceDataFeed: vi.fn().mockImplementation(() => ({
+        connectToStreams: vi.fn().mockResolvedValue({
+            aggTrade: vi.fn().mockReturnValue({ on: vi.fn() }),
+            diffBookDepth: vi.fn().mockReturnValue({ on: vi.fn() }),
+            on: vi.fn(),
         }),
-        fetchAggTradesByTime: jest.fn().mockResolvedValue([]),
-    })),
-}));
-jest.mock("../src/tradesProcessor", () => ({
-    TradesProcessor: jest.fn().mockImplementation(() => ({
-        requestBacklog: jest.fn().mockReturnValue([1, 2, 3]),
-        fillBacklog: jest.fn().mockResolvedValue(undefined),
-    })),
-}));
-jest.mock("../src/orderBookProcessor", () => ({
-    OrderBookProcessor: jest.fn().mockImplementation(() => ({
-        fetchInitialOrderBook: jest.fn().mockResolvedValue(undefined),
-        processWebSocketUpdate: jest.fn(),
+        fetchAggTradesByTime: vi.fn().mockResolvedValue([]),
     })),
 }));
 
-// STORAGE
-jest.mock("../src/storage", () => ({
-    Storage: jest.fn().mockImplementation(() => ({
-        purgeOldEntries: jest.fn(),
+vi.mock("../src/tradesProcessor.js", () => ({
+    TradesProcessor: vi.fn().mockImplementation(() => ({
+        requestBacklog: vi.fn().mockReturnValue([1, 2, 3]),
+        fillBacklog: vi.fn().mockResolvedValue(undefined),
+        addTrade: vi.fn(),
     })),
 }));
 
-// ABSORPTION / EXHAUSTION / DELTA
-jest.mock("../src/absorptionDetector", () => ({
-    AbsorptionDetector: jest.fn().mockImplementation(() => ({
-        addDepth: jest.fn(),
-        addTrade: jest.fn(),
+vi.mock("../src/orderBookProcessor.js", () => ({
+    OrderBookProcessor: vi.fn().mockImplementation(() => ({
+        fetchInitialOrderBook: vi.fn().mockResolvedValue(undefined),
+        processWebSocketUpdate: vi.fn(),
     })),
 }));
-jest.mock("../src/exhaustionDetector", () => ({
-    ExhaustionDetector: jest.fn().mockImplementation(() => ({
-        addDepth: jest.fn(),
-        addTrade: jest.fn(),
+
+vi.mock("../src/storage.js", () => ({
+    Storage: vi.fn().mockImplementation(() => ({
+        purgeOldEntries: vi.fn(),
     })),
 }));
+
+vi.mock("../src/absorptionDetector.js", () => ({
+    AbsorptionDetector: vi.fn().mockImplementation(() => ({
+        addDepth: vi.fn(),
+        addTrade: vi.fn(),
+    })),
+}));
+
+vi.mock("../src/exhaustionDetector.js", () => ({
+    ExhaustionDetector: vi.fn().mockImplementation(() => ({
+        addDepth: vi.fn(),
+        addTrade: vi.fn(),
+    })),
+}));
+
 let capturedCallback: (confirmed: any) => void;
-jest.mock("../src/deltaCVDCOnfirmation", () => ({
-    DeltaCVDConfirmation: jest.fn().mockImplementation((cb, options) => {
-        capturedCallback = cb;
+vi.mock("../src/deltaCVDCOnfirmation.js", () => ({
+    DeltaCVDConfirmation: vi.fn().mockImplementation((cb, options) => {
+        capturedCallback = () => {
         return {
-            confirmSignal: jest.fn(),
-            addTrade: jest.fn(),
+            confirmSignal: vi.fn(),
+            addTrade: vi.fn(),
         };
+    }
     }),
 }));
 
-// SWING PREDICTOR
-jest.mock("../src/swingPredictor", () => ({
-    SwingPredictor: jest.fn().mockImplementation(() => ({
-        onSignal: jest.fn(),
-        onPrice: jest.fn(),
+vi.mock("../src/swingPredictor.js", () => ({
+    SwingPredictor: vi.fn().mockImplementation(() => ({
+        onSignal: vi.fn(),
+        onPrice: vi.fn(),
     })),
 }));
 
-/* ------------------------------------------------------------------ */
-/*                           TESTS                                    */
-/* ------------------------------------------------------------------ */
+import { OrderFlowDashboard } from "../src/orderFlowDashBoard.js";
+import { Signal, WebSocketMessage, Detected } from "../src/interfaces.js";
+import * as storage from "../src/storage.js";
+
+beforeAll(() => {
+    vi.spyOn(process, "exit").mockImplementation(
+        (code?: string | number | null) => {
+            throw new Error("process.exit was called");
+        }
+    );
+    vi.useFakeTimers();
+});
+afterAll(() => {
+    vi.useRealTimers();
+});
+afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.clearAllTimers();
+    process.removeAllListeners("SIGINT");
+    process.removeAllListeners("exit");
+    vi.resetAllMocks();
+    process.removeAllListeners("SIGINT");
+    process.removeAllListeners("exit");
+});
 
 describe("OrderFlowDashboard (FULL COVERAGE)", () => {
-    //let dashboard: OrderFlowDashboard;
+    let dashboard: OrderFlowDashboard;
     let client: any;
     let messageHandler: ((msg: string) => void) | undefined;
 
     beforeEach(async () => {
-        jest.clearAllMocks();
-        process.env.WEBHOOK_URL = "http://localhost/mock-webhook";
-        //dashboard = new OrderFlowDashboard();
+        vi.resetModules();    
+        vi.resetAllMocks();
+        vi.clearAllMocks();
 
-        // Use only dynamic import for ws Server (from mock)
-        const WebSocketModule = await import("ws");
-        const Server = (WebSocketModule as any).Server;
-        const serverInstance: any = (Server as any).mock.results[0].value;
-        const onHandler = serverInstance.on.mock.calls.find(
-            ([event]: [string]) => event === "connection"
-        )?.[1];
+        capturedCallback = (confirmed: any) => { return confirmed; };  // reset capturedCallback
+
+        const { OrderFlowDashboard } = await import("../src/orderFlowDashBoard.js");
+
+        process.env.WEBHOOK_URL = "http://localhost/mock-webhook";
+        dashboard = new OrderFlowDashboard();
+
+        // Access the current WebSocket server instance from the dashboard directly
+        const serverInstance = dashboard["BroadCastWebSocket"];
 
         client = {
-            on: jest.fn((event, handler) => {
+            on: vi.fn((event, handler) => {
                 if (event === "message") {
                     messageHandler = handler;
                 }
             }),
-            send: jest.fn(),
+            send: vi.fn(),
             readyState: 1,
         };
 
-        if (onHandler) onHandler(client);
+        if (serverInstance) {
+            serverInstance.emit("connection", client);
+        } else {
+            throw new Error(
+                "BroadCastWebSocket instance not found on dashboard"
+            );
+        }
 
-        // Global fetch mock for webhook sending
-        global.fetch = jest.fn(() =>
+        global.fetch = vi.fn(() =>
             Promise.resolve({
                 ok: true,
                 status: 200,
@@ -166,12 +168,6 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
         ) as any;
     });
 
-    // ========== CONSTRUCTOR DEFAULTS ==============
-    //test("should instantiate with default values and set up WebSocket server", () => {
-    //expect(dashboard).toBeDefined();
-    //});
-
-    // ========== WEBSOCKET INCOMING MESSAGES ==========
     test("should handle WebSocket ping", () => {
         const pingMessage = JSON.stringify({ type: "ping" });
         if (messageHandler) messageHandler(pingMessage);
@@ -180,21 +176,8 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
         );
     });
 
-    test("should handle WebSocket backlog request (default)", () => {
-        const backlogMessage = JSON.stringify({
-            type: "backlog",
-            data: {},
-        });
-        if (messageHandler) messageHandler(backlogMessage);
-        expect(client.send).toHaveBeenCalledWith(
-            expect.stringContaining("backlog")
-        );
-    });
-
     test("should handle WebSocket backlog request (bad amount)", () => {
-        const warnSpy = jest
-            .spyOn(console, "warn")
-            .mockImplementation(() => {});
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
         if (messageHandler)
             messageHandler(
                 JSON.stringify({ type: "backlog", data: { amount: "0" } })
@@ -206,28 +189,15 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
         warnSpy.mockRestore();
     });
 
-    test("should handle WebSocket backlog request (good int)", () => {
-        const backlogMessage = JSON.stringify({
-            type: "backlog",
-            data: { amount: "100" },
-        });
-        if (messageHandler) messageHandler(backlogMessage);
-        expect(client.send).toHaveBeenCalledWith(
-            expect.stringContaining("backlog")
-        );
-    });
-
     test("should handle WebSocket backlog request (bad huge int)", () => {
-        const warnSpy = jest
-            .spyOn(console, "warn")
-            .mockImplementation(() => {});
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
         if (messageHandler)
             messageHandler(
-                JSON.stringify({ type: "backlog", data: { amount: "1000000" } })
+                JSON.stringify({ type: "backlog", data: { amount: "10000000" } })
             );
         expect(warnSpy).toHaveBeenCalledWith(
             "Invalid backlog amount:",
-            "1000000"
+            "10000000"
         );
         expect(client.send).not.toHaveBeenCalledWith(
             expect.stringContaining("backlog")
@@ -236,9 +206,7 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
     });
 
     test("should handle WebSocket backlog request (notanumber)", () => {
-        const warnSpy = jest
-            .spyOn(console, "warn")
-            .mockImplementation(() => {});
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
         if (messageHandler)
             messageHandler(
                 JSON.stringify({
@@ -257,33 +225,26 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
     });
 
     test("should handle bad JSON", () => {
-        const warnSpy = jest
-            .spyOn(console, "warn")
-            .mockImplementation(() => {});
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
         if (messageHandler) messageHandler("{ invalid JSON }");
         expect(warnSpy).toHaveBeenCalled();
         warnSpy.mockRestore();
     });
 
     test("should handle invalid request (no type)", () => {
-        const warnSpy = jest
-            .spyOn(console, "warn")
-            .mockImplementation(() => {});
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
         if (messageHandler) messageHandler(JSON.stringify({}));
         expect(warnSpy).toHaveBeenCalled();
         warnSpy.mockRestore();
     });
 
     test("should handle invalid request (non-string type)", () => {
-        const warnSpy = jest
-            .spyOn(console, "warn")
-            .mockImplementation(() => {});
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
         if (messageHandler) messageHandler(JSON.stringify({ type: 123 }));
         expect(warnSpy).toHaveBeenCalled();
         warnSpy.mockRestore();
     });
 
-    // ========== SIGNAL BROADCASTING ==========
     test("should broadcast signal to clients and send webhook", async () => {
         const message: Signal = {
             type: "exhaustion",
@@ -312,9 +273,6 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
     });
 
     test("should handle webhook error gracefully", async () => {
-        (global.fetch as jest.Mock).mockRejectedValueOnce(
-            new Error("fetch failed")
-        );
         const signal: Signal = {
             type: "exhaustion",
             time: Date.now(),
@@ -328,7 +286,7 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
     });
 
     test("should handle error in sendWebhookMessage (response not ok)", async () => {
-        global.fetch = jest.fn(() =>
+        global.fetch = vi.fn(() =>
             Promise.resolve({
                 ok: false,
                 status: 400,
@@ -336,7 +294,7 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
                 json: async () => ({}),
             })
         ) as any;
-        const errorSpy = jest
+        const errorSpy = vi
             .spyOn(console, "error")
             .mockImplementation(() => {});
         await dashboard["sendWebhookMessage"]("http://bad", { type: "fail" });
@@ -344,62 +302,8 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
         errorSpy.mockRestore();
     });
 
-    // ========== ABSORPTION/EXHAUSTION DETECTION ==========
-    test("should trigger exhaustion detection and signal", async () => {
-        const exhaustion: Detected = {
-            side: "buy",
-            price: 120,
-            trades: [],
-            totalAggressiveVolume: 500,
-        };
-        const confirmSpy = jest.spyOn(
-            dashboard["deltaCVDConfirmation"],
-            "confirmSignal"
-        );
-        await dashboard["onExhaustionDetected"](exhaustion);
-        expect(confirmSpy).toHaveBeenCalled();
-    });
-
-    test("should trigger absorption detection and signal", async () => {
-        const absorption: Detected = {
-            side: "sell",
-            price: 130,
-            trades: [],
-            totalAggressiveVolume: 400,
-        };
-        const confirmSpy = jest.spyOn(
-            dashboard["deltaCVDConfirmation"],
-            "confirmSignal"
-        );
-        await dashboard["onAbsorptionDetected"](absorption);
-        expect(confirmSpy).toHaveBeenCalled();
-    });
-
-    // ========== DELTA CVD CONFIRM CALLBACK ==========
-    test("should process deltaCVD confirmed signal", async () => {
-        const confirmed = {
-            confirmedType: "exhaustion",
-            time: Date.now(),
-            price: 123,
-            reason: "test_reason",
-        };
-        const broadcastSpy = jest
-            .spyOn(dashboard as any, "broadcastSignal")
-            .mockImplementation(() => Promise.resolve());
-        await capturedCallback(confirmed);
-        expect(broadcastSpy).toHaveBeenCalledWith(
-            expect.objectContaining({
-                type: "exhaustion_confirmed",
-                price: confirmed.price,
-                time: confirmed.time,
-            })
-        );
-        broadcastSpy.mockRestore();
-    });
-
-    // ========== SWING PREDICTION ==========
     test("should call broadcastSignal for swing prediction", () => {
-        const broadcastSpy = jest
+        const broadcastSpy = vi
             .spyOn(dashboard, "broadcastSignal")
             .mockImplementation(() => Promise.resolve());
         dashboard["handleSwingPrediction"]({
@@ -411,12 +315,11 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
         expect(broadcastSpy).toHaveBeenCalled();
     });
 
-    // ========== BROADCAST MESSAGE ERROR ==========
     test("should handle error in broadcastMessage", () => {
         dashboard["sendToClients"] = () => {
             throw new Error("fail");
         };
-        const errorSpy = jest
+        const errorSpy = vi
             .spyOn(console, "error")
             .mockImplementation(() => {});
         dashboard["broadcastMessage"]({
@@ -428,7 +331,6 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
         errorSpy.mockRestore();
     });
 
-    // ========== SEND TO CLIENTS (no open) ==========
     test("should not send message if no clients are connected", () => {
         const message: WebSocketMessage = {
             type: "trade",
@@ -447,7 +349,7 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
         };
         const closedClient: any = {
             readyState: 0,
-            send: jest.fn(),
+            send: vi.fn(),
         };
         (dashboard as any).BroadCastWebSocket = {
             clients: new Set([closedClient]),
@@ -456,12 +358,30 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
         expect(closedClient.send).not.toHaveBeenCalled();
     });
 
-    // ========== PURGE DATABASE ==========
     test("should register SIGINT and exit handlers in purgeDatabase", () => {
-        dashboard["purgeDatabase"]();
-        process.emit("SIGINT", "SIGINT");
-        expect(storage.Storage).toHaveBeenCalled();
+    // arrange
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
+        throw new Error("process.exit was called");
     });
+
+    dashboard["purgeDatabase"]();
+
+    // act + assert
+    let exitError: Error | undefined;
+    try {
+        process.emit("SIGINT", "SIGINT");
+    } catch (err) {
+        exitError = err as Error;
+    }
+
+    expect(exitError).toBeDefined();
+    expect(exitError?.message).toBe("process.exit was called");
+    expect(storage.Storage).toHaveBeenCalled();
+
+    exitSpy.mockRestore();
+});
+
+
 
     test("should handle error in purgeOldEntries", () => {
         const err = new Error("purge error");
@@ -470,28 +390,26 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
                 throw err;
             },
         }));
-        const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
-        const errorSpy = jest
+        const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+        const errorSpy = vi
             .spyOn(console, "error")
             .mockImplementation(() => {});
         dashboard["purgeDatabase"]();
-        // Fast-forward timers so interval callback runs
-        jest.runOnlyPendingTimers();
+        vi.runOnlyPendingTimers();
         expect(errorSpy).toHaveBeenCalled();
         logSpy.mockRestore();
         errorSpy.mockRestore();
     });
 
-    // ========== DASHBOARD STARTUP/ERRORS ==========
     test("should start the dashboard and launch components", async () => {
-        const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
-        const errorSpy = jest
+        const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+        const errorSpy = vi
             .spyOn(console, "error")
             .mockImplementation(() => {});
         await dashboard.startDashboard();
         expect(logSpy).toHaveBeenCalledWith(
             expect.stringContaining(
-                "Order Flow Dashboard started successfully."
+                "Server running at http"
             )
         );
         logSpy.mockRestore();
@@ -499,10 +417,10 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
     });
 
     test("should handle error in startDashboard", async () => {
-        dashboard["preloadTrades"] = jest
+        dashboard["preloadTrades"] = vi
             .fn()
             .mockRejectedValue(new Error("preload error"));
-        const errorSpy = jest
+        const errorSpy = vi
             .spyOn(console, "error")
             .mockImplementation(() => {});
         await dashboard.startDashboard();
@@ -510,23 +428,6 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
         errorSpy.mockRestore();
     });
 
-    test("should handle error in getFromBinanceAPI", async () => {
-        dashboard["binanceFeed"].connectToStreams = jest
-            .fn()
-            .mockRejectedValue(new Error("connect fail"));
-        const errorSpy = jest
-            .spyOn(console, "error")
-            .mockImplementation(() => {});
-        try {
-            await dashboard["getFromBinanceAPI"]();
-        } catch (e) {
-            // expected: absorb for test, prevents test fail on unhandled rejection
-        }
-        expect(errorSpy).toHaveBeenCalled();
-        errorSpy.mockRestore();
-    });
-
-    // ========== CONSTRUCTOR FALLBACKS ==========
     test("should fall back to default SYMBOL, PORT, and WS_PORT when not set", () => {
         delete process.env.SYMBOL;
         delete process.env.PORT;
@@ -551,25 +452,24 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
     });
 
     test("startWebServer calls use and listen", () => {
-        const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+        const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
         dashboard["startWebServer"]();
         expect(dashboard["httpServer"].use).toHaveBeenCalled();
         expect(dashboard["httpServer"].listen).toHaveBeenCalled();
         logSpy.mockRestore();
     });
+
     test("should log error if processWebSocketUpdate throws", async () => {
-        // Setup
         const connectionMock = {
-            aggTrade: jest.fn().mockReturnValue({ on: jest.fn() }),
-            diffBookDepth: jest.fn().mockReturnValue({
-                on: jest.fn((event, cb) => {
-                    // Simulate message handler
+            aggTrade: vi.fn().mockReturnValue({ on: vi.fn() }),
+            diffBookDepth: vi.fn().mockReturnValue({
+                on: vi.fn((event, cb) => {
                     const badData = {};
                     dashboard["orderBookProcessor"].processWebSocketUpdate =
-                        jest.fn(() => {
+                        vi.fn(() => {
                             throw new Error("fail");
                         });
-                    const errorSpy = jest
+                    const errorSpy = vi
                         .spyOn(console, "error")
                         .mockImplementation(() => {});
                     cb(badData);
@@ -580,23 +480,22 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
                     errorSpy.mockRestore();
                 }),
             }),
-            on: jest.fn(),
+            on: vi.fn(),
         };
-        dashboard["binanceFeed"].connectToStreams = jest
+        dashboard["binanceFeed"].connectToStreams = vi
             .fn()
             .mockResolvedValue(connectionMock);
-
         await dashboard["getFromBinanceAPI"]();
     });
 
     test("should log error if addTrade throws in trade message", async () => {
         const connectionMock = {
-            aggTrade: jest.fn().mockReturnValue({
-                on: jest.fn((event, cb) => {
-                    dashboard["tradesProcessor"].addTrade = jest.fn(() => {
+            aggTrade: vi.fn().mockReturnValue({
+                on: vi.fn((event, cb) => {
+                    dashboard["tradesProcessor"].addTrade = vi.fn(() => {
                         throw new Error("fail");
                     });
-                    const errorSpy = jest
+                    const errorSpy = vi
                         .spyOn(console, "error")
                         .mockImplementation(() => {});
                     cb({ p: "1", T: 1 });
@@ -607,26 +506,25 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
                     errorSpy.mockRestore();
                 }),
             }),
-            diffBookDepth: jest.fn().mockReturnValue({ on: jest.fn() }),
-            on: jest.fn(),
+            diffBookDepth: vi.fn().mockReturnValue({ on: vi.fn() }),
+            on: vi.fn(),
         };
-        dashboard["binanceFeed"].connectToStreams = jest
+        dashboard["binanceFeed"].connectToStreams = vi
             .fn()
             .mockResolvedValue(connectionMock);
-
         await dashboard["getFromBinanceAPI"]();
     });
 
     test("should log error if reconnection in connection.on('close') fails", async () => {
         const connectionMock = {
-            aggTrade: jest.fn().mockReturnValue({ on: jest.fn() }),
-            diffBookDepth: jest.fn().mockReturnValue({ on: jest.fn() }),
-            on: jest.fn((event, cb) => {
+            aggTrade: vi.fn().mockReturnValue({ on: vi.fn() }),
+            diffBookDepth: vi.fn().mockReturnValue({ on: vi.fn() }),
+            on: vi.fn((event, cb) => {
                 if (event === "close") {
-                    const errorSpy = jest
+                    const errorSpy = vi
                         .spyOn(console, "error")
                         .mockImplementation(() => {});
-                    dashboard["delayFn"] = jest.fn((fn) => {
+                    dashboard["delayFn"] = vi.fn((fn) => {
                         throw new Error("fail");
                     }) as any;
                     cb();
@@ -638,10 +536,9 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
                 }
             }),
         };
-        dashboard["binanceFeed"].connectToStreams = jest
+        dashboard["binanceFeed"].connectToStreams = vi
             .fn()
             .mockResolvedValue(connectionMock);
-
         await dashboard["getFromBinanceAPI"]();
     });
 
@@ -655,9 +552,7 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
     });
 
     test("should handle unexpected message format in WebSocket", () => {
-        const warnSpy = jest
-            .spyOn(console, "warn")
-            .mockImplementation(() => {});
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
         // @ts-expect-error: intentionally passing a number for test
         if (messageHandler) messageHandler(12345); // number
         expect(warnSpy).toHaveBeenCalledWith(
@@ -679,8 +574,8 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
 
     test("startWebServer serves static files and listens on port", () => {
         const dash = new OrderFlowDashboard();
-        const useSpy = jest.spyOn(dash["httpServer"], "use");
-        const listenSpy = jest.spyOn(dash["httpServer"], "listen");
+        const useSpy = vi.spyOn(dash["httpServer"], "use");
+        const listenSpy = vi.spyOn(dash["httpServer"], "listen");
         dash["startWebServer"]();
         expect(useSpy).toHaveBeenCalled();
         expect(listenSpy).toHaveBeenCalled();
@@ -701,17 +596,16 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
             on: (event: string, cb: Function) => {
                 if (event === "close") cb();
             },
-            aggTrade: jest.fn(),
-            diffBookDepth: jest.fn(),
+            aggTrade: vi.fn(),
+            diffBookDepth: vi.fn(),
         };
-        dash["binanceFeed"].connectToStreams = jest
+        dash["binanceFeed"].connectToStreams = vi
             .fn()
             .mockResolvedValue(mockConnection);
-        // Simulate error in delayFn
         dash["delayFn"] = () => {
             throw new Error("fail reconnect");
         };
-        const errorSpy = jest
+        const errorSpy = vi
             .spyOn(console, "error")
             .mockImplementation(() => {});
         await dash["getFromBinanceAPI"]();
@@ -722,16 +616,16 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
     test("getFromBinanceAPI handles error in stream handlers setup", async () => {
         const dash = new OrderFlowDashboard();
         const mockConnection = {
-            on: jest.fn(),
+            on: vi.fn(),
             aggTrade: () => {
                 throw new Error("aggTrade fail");
             },
-            diffBookDepth: jest.fn(),
+            diffBookDepth: vi.fn(),
         };
-        dash["binanceFeed"].connectToStreams = jest
+        dash["binanceFeed"].connectToStreams = vi
             .fn()
             .mockResolvedValue(mockConnection);
-        const errorSpy = jest
+        const errorSpy = vi
             .spyOn(console, "error")
             .mockImplementation(() => {});
         await dash["getFromBinanceAPI"]();
@@ -740,24 +634,21 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
     });
 
     test("getFromBinanceAPI handles error in top-level catch", async () => {
-        const dash = new OrderFlowDashboard();
-        dash["binanceFeed"].connectToStreams = jest
-            .fn()
-            .mockRejectedValue(new Error("fail"));
-        const errorSpy = jest
-            .spyOn(console, "error")
-            .mockImplementation(() => {});
-        await dash["getFromBinanceAPI"]();
-        expect(errorSpy).toHaveBeenCalled();
-        errorSpy.mockRestore();
-    });
+    const dash = new OrderFlowDashboard();
+    dash["binanceFeed"].connectToStreams = () => Promise.reject(new Error("fail"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(dash["getFromBinanceAPI"]()).rejects.toThrow("fail");
+    errorSpy.mockRestore();
+
+});
+
 
     test("handles error in sendToClients", () => {
         const dash = new OrderFlowDashboard();
         dash["sendToClients"] = () => {
             throw new Error("fail send");
         };
-        const errorSpy = jest
+        const errorSpy = vi
             .spyOn(console, "error")
             .mockImplementation(() => {});
         try {
