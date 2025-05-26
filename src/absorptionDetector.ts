@@ -1,4 +1,5 @@
 import { SpotWebsocketStreams } from "@binance/spot";
+import { SignalLogger } from "./signalLogger.js";
 
 export type AbsorptionCallback = (data: {
     price: number;
@@ -17,6 +18,9 @@ export interface AbsorptionSettings {
     zoneTicks?: number;
     eventCooldownMs?: number;
     features?: AbsorptionFeatures;
+    minInitialMoveTicks?: number; // Minimum ticks for initial move to consider absorption
+    confirmationTimeoutMs?: number; // How long to wait for confirmation
+    maxRevisitTicks?: number; // How many ticks to allow revisiting the same zone
 }
 
 export interface AbsorptionFeatures {
@@ -69,6 +73,11 @@ export class AbsorptionDetector {
     // For auto-calibration
     private lastCalibrated: number = Date.now();
 
+    private readonly minInitialMoveTicks: number;
+    private readonly confirmationTimeoutMs: number;
+    private readonly maxRevisitTicks: number;
+    private readonly logger?: SignalLogger; // pass in constructor
+
     constructor(
         callback: AbsorptionCallback,
         {
@@ -77,15 +86,25 @@ export class AbsorptionDetector {
             pricePrecision = 2,
             zoneTicks = 3,
             eventCooldownMs = 15000,
+            minInitialMoveTicks = 10,
+            confirmationTimeoutMs = 60000,
+            maxRevisitTicks = 5,
             features = {},
-        }: AbsorptionSettings = {}
+        }: AbsorptionSettings = {},
+        logger?: SignalLogger
     ) {
         this.onAbsorption = callback;
+        this.logger = logger;
         this.windowMs = windowMs;
         this.minAggVolume = minAggVolume;
         this.pricePrecision = pricePrecision;
         this.zoneTicks = zoneTicks;
         this.eventCooldownMs = eventCooldownMs;
+        this.minInitialMoveTicks = minInitialMoveTicks;
+        this.confirmationTimeoutMs = confirmationTimeoutMs;
+        this.maxRevisitTicks = maxRevisitTicks;
+        this.logger = logger;
+
         this.features = features;
         console.log("[AbsorptionDetector] Features enabled:", this.features);
     }
@@ -101,7 +120,6 @@ export class AbsorptionDetector {
             // --- Enhancement: Track price for adaptive zone ---
             if (this.features.adaptiveZone) {
                 this.updateRollingATR(parseFloat(trade.p ?? "0"));
-                console.log("[AbsorptionDetector] updateRollingATR called.");
             }
 
             this.checkAbsorption(trade);
@@ -109,7 +127,6 @@ export class AbsorptionDetector {
             // --- Enhancement: Price response logic ---
             if (this.features.priceResponse) {
                 this.onPrice(parseFloat(trade.p ?? "0"));
-                console.log("[AbsorptionDetector] onPrice called.");
             }
         }
     }
@@ -133,9 +150,6 @@ export class AbsorptionDetector {
                         level.bid,
                         level.ask
                     );
-                    console.log(
-                        "[AbsorptionDetector] trackPassiveOrderbookHistory called."
-                    );
                 }
                 // --- Enhancement: Passive volume time series ---
                 if (this.features.passiveHistory) {
@@ -143,9 +157,6 @@ export class AbsorptionDetector {
                         price,
                         level.bid,
                         level.ask
-                    );
-                    console.log(
-                        "[AbsorptionDetector] updatePassiveVolumeHistory called."
                     );
                 }
             }
@@ -352,7 +363,7 @@ export class AbsorptionDetector {
 
     // ---- MAIN ABSORPTION DETECTION, WITH FEATURE GATES ----
     private checkAbsorption(
-        triggerTrade?: SpotWebsocketStreams.AggTradeResponse
+        triggerTrade: SpotWebsocketStreams.AggTradeResponse
     ) {
         // --- (zoneTicks may be adaptive) ---
         const zoneTicks = this.features.adaptiveZone
@@ -394,7 +405,6 @@ export class AbsorptionDetector {
                     totalPassive: passiveVolume,
                     allTrades,
                 } = this.sumVolumesInBand(zone, Math.floor(zoneTicks / 2)));
-                console.log("[AbsorptionDetector] sumVolumesInBand called.");
             } else {
                 aggressiveVolume = tradesAtZone.reduce((sum, t) => {
                     const qty =
@@ -427,10 +437,6 @@ export class AbsorptionDetector {
             let refilled = false;
             if (this.features.passiveHistory) {
                 refilled = this.hasPassiveRefilled(price, side);
-                console.log(
-                    "[AbsorptionDetector] hasPassiveRefilled called. Refills:",
-                    refilled
-                );
             } else {
                 const lastLevel = this.lastSeenPassive.get(price);
                 if (lastLevel) {
@@ -498,9 +504,130 @@ export class AbsorptionDetector {
             }
         }
 
+        // Check for confirmations
+        this.processPendingConfirmations(parseFloat(triggerTrade.p ?? "0"));
+
         // --- Enhancement: Auto-calibration ---
         if (this.features.autoCalibrate) {
             this.autoCalibrate();
         }
+    }
+
+    private processPendingConfirmations(currentPrice: number) {
+        const tick = 1 / Math.pow(10, this.pricePrecision);
+        const now = Date.now();
+
+        this.pendingAbsorptions.forEach((abs) => {
+            if (abs.confirmed) return; // Skip already processed
+
+            // Calculate move in ticks
+            const moveTicks = Math.abs(currentPrice - abs.price) / tick;
+
+            // Check for confirmation (move in expected direction)
+            if (
+                (abs.side === "buy" &&
+                    currentPrice >=
+                        abs.price + this.minInitialMoveTicks * tick) ||
+                (abs.side === "sell" &&
+                    currentPrice <= abs.price - this.minInitialMoveTicks * tick)
+            ) {
+                abs.confirmed = true;
+                if (this.logger) {
+                    this.logger.logEvent({
+                        timestamp: new Date(now).toISOString(),
+                        type: "absorption",
+                        symbol: "LTCUSDT", // Replace with your symbol if needed
+                        signalPrice: abs.price,
+                        side: abs.side,
+                        aggressiveVolume: abs.aggressive,
+                        passiveVolume: abs.passive,
+                        zone: abs.zone,
+                        refilled: abs.refilled,
+                        confirmed: true,
+                        confirmationTime: new Date(now).toISOString(),
+                        moveSizeTicks: moveTicks,
+                        moveTimeMs: now - abs.time,
+                        entryRecommended: true,
+                    });
+                }
+                // Fire actual callback if desired
+                this.onAbsorption({
+                    price: abs.price,
+                    side: abs.side,
+                    trades: abs.trades,
+                    totalAggressiveVolume: abs.aggressive,
+                    passiveVolume: abs.passive,
+                    refilled: abs.refilled,
+                    zone: abs.zone,
+                });
+                console.log(
+                    "[AbsorptionDetector] Absorption confirmed by price response."
+                );
+                return;
+            }
+
+            // Invalidate if price revisits absorption level before confirmation
+            if (
+                (abs.side === "buy" &&
+                    currentPrice <= abs.price - this.maxRevisitTicks * tick) ||
+                (abs.side === "sell" &&
+                    currentPrice >= abs.price + this.maxRevisitTicks * tick)
+            ) {
+                abs.confirmed = false;
+                if (this.logger) {
+                    this.logger.logEvent({
+                        timestamp: new Date(now).toISOString(),
+                        type: "absorption",
+                        symbol: "LTCUSDT", // Replace as needed
+                        signalPrice: abs.price,
+                        side: abs.side,
+                        aggressiveVolume: abs.aggressive,
+                        passiveVolume: abs.passive,
+                        zone: abs.zone,
+                        refilled: abs.refilled,
+                        confirmed: false,
+                        invalidationTime: new Date(now).toISOString(),
+                        invalidationReason: "Price revisited absorption level",
+                        outcome: "fail",
+                    });
+                }
+                console.log(
+                    "[AbsorptionDetector] Absorption invalidated by price revisit."
+                );
+                return;
+            }
+
+            // Invalidate if confirmation timeout exceeded
+            if (now - abs.time > this.confirmationTimeoutMs) {
+                abs.confirmed = false;
+                if (this.logger) {
+                    this.logger.logEvent({
+                        timestamp: new Date(now).toISOString(),
+                        type: "absorption",
+                        symbol: "LTCUSDT", // Replace as needed
+                        signalPrice: abs.price,
+                        side: abs.side,
+                        aggressiveVolume: abs.aggressive,
+                        passiveVolume: abs.passive,
+                        zone: abs.zone,
+                        refilled: abs.refilled,
+                        confirmed: false,
+                        invalidationTime: new Date(now).toISOString(),
+                        invalidationReason: "Timeout (no move)",
+                        outcome: "fail",
+                    });
+                }
+                console.log(
+                    "[AbsorptionDetector] Absorption invalidated by timeout."
+                );
+                return;
+            }
+        });
+
+        // Remove processed absorptions
+        this.pendingAbsorptions = this.pendingAbsorptions.filter(
+            (abs) =>
+                !abs.confirmed && now - abs.time < this.confirmationTimeoutMs
+        );
     }
 }

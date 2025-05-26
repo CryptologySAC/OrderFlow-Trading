@@ -1,5 +1,7 @@
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -17,6 +19,7 @@ import { AbsorptionDetector } from "./absorptionDetector.js";
 import { ExhaustionDetector } from "./exhaustionDetector.js";
 import { DeltaCVDConfirmation } from "./deltaCVDCOnfirmation.js";
 import { SwingPredictor, SwingPrediction } from "./swingPredictor.js";
+import { parseBool } from "./utils.js";
 
 import { EventEmitter } from "events";
 EventEmitter.defaultMaxListeners = 20;
@@ -58,6 +61,59 @@ export class OrderFlowDashboard {
         signalCooldownMs: 1000,
         onSwingPredicted: this.handleSwingPrediction.bind(this),
     });
+
+    private readonly absorptionSettings = {
+        windowMs: parseInt(process.env.ABSORPTION_WINDOW_MS ?? "90000", 10),
+        minAggVolume: parseInt(
+            process.env.ABSORPTION_MIN_AGG_VOLUME ?? "600",
+            10
+        ),
+        pricePrecision: parseInt(
+            process.env.ABSORPTION_PRICE_PRECISION ?? "2",
+            10
+        ),
+        zoneTicks: parseInt(process.env.ABSORPTION_ZONE_TICKS ?? "3", 10),
+        eventCooldownMs: parseInt(
+            process.env.ABSORPTION_EVENT_COOLDOWN_MS ?? "15000",
+            10
+        ),
+        minInitialMoveTicks: parseInt(
+            process.env.ABSORPTION_MOVE_TICKS ?? "12",
+            10
+        ), // Minimum ticks for initial move to consider absorption
+        confirmationTimeoutMs: parseInt(
+            process.env.ABSORPTION_CONFIRMATION_TIMEOUT ?? "60000",
+            10
+        ), // How long to wait for confirmation
+        maxRevisitTicks: parseInt(
+            process.env.ABSORPTION_MAX_REVISIT_TICKS ?? "5",
+            10
+        ),
+        features: {
+            spoofingDetection: parseBool(
+                process.env.ABSORPTION_SPOOFING_DETECTION,
+                true
+            ),
+            adaptiveZone: parseBool(process.env.ABSORPTION_ADAPTIVE_ZONE, true),
+            passiveHistory: parseBool(
+                process.env.ABSORPTION_PASSIVE_HISTORY,
+                true
+            ),
+            multiZone: parseBool(process.env.ABSORPTION_MULTI_ZONE, true),
+            priceResponse: parseBool(
+                process.env.ABSORPTION_PRICE_RESPONSE,
+                true
+            ),
+            sideOverride: parseBool(
+                process.env.ABSORPTION_SIDE_OVERRIDE,
+                false
+            ),
+            autoCalibrate: parseBool(
+                process.env.ABSORPTION_AUTO_CALIBRATE,
+                true
+            ),
+        },
+    };
 
     private wsHandlers: Record<string, WSHandler> = {
         ping: (ws) => {
@@ -168,22 +224,7 @@ export class OrderFlowDashboard {
                     console.error("Absorption callback failed:", err)
                 );
             }, // callback
-            {
-                windowMs: 30000,
-                minAggVolume: 300,
-                pricePrecision: 2,
-                zoneTicks: 5,
-                eventCooldownMs: 15000,
-                features: {
-                    spoofingDetection: true,
-                    adaptiveZone: true,
-                    passiveHistory: true,
-                    multiZone: true,
-                    priceResponse: true,
-                    sideOverride: false,
-                    autoCalibrate: true,
-                },
-            }
+            this.absorptionSettings
         );
         this.deltaCVDConfirmation = new DeltaCVDConfirmation(
             (confirmed) => {
@@ -197,7 +238,7 @@ export class OrderFlowDashboard {
                 };
 
                 this.swingPredictor.onSignal(confirmedSignal);
-                void this.broadcastSignal(confirmedSignal);
+                //void this.broadcastSignal(confirmedSignal);
             },
             {
                 lookback: 90,
@@ -443,15 +484,18 @@ export class OrderFlowDashboard {
             closeReason: "exhaustion",
         };
 
-        console.log(
-            `Exhaustion DETECTED: ${JSON.stringify(detected, null, 2)}`
-        );
-        await this.broadcastSignal(signal);
-        this.deltaCVDConfirmation.confirmSignal(
-            "exhaustion",
-            detected.price,
-            time
-        );
+        //console.log(
+        //    `Exhaustion DETECTED: ${JSON.stringify(detected, null, 2)}`
+        //);
+        if (time < 0) {
+            // REMOVE THIS
+            await this.broadcastSignal(signal);
+            this.deltaCVDConfirmation.confirmSignal(
+                "exhaustion",
+                detected.price,
+                time
+            );
+        }
     }
 
     private async onAbsorptionDetected(detected: Detected) {
