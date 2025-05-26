@@ -1,4 +1,4 @@
-Certainly. Here’s a **comprehensive, professional-level Markdown documentation** for your `AbsorptionDetector` class—covering *usage*, *parameters*, *orderflow context*, *behavior*, and *tuning recommendations*.
+Certainly. Here’s a **comprehensive, professional-level Markdown documentation** for your `AbsorptionDetector` class—covering _usage_, _parameters_, _orderflow context_, _behavior_, and _tuning recommendations_.
 This is ready to paste into a `docs/AbsorptionDetector.md` or similar for your GitHub repo.
 
 ---
@@ -12,12 +12,12 @@ It is designed for intraday traders seeking an edge by identifying significant a
 
 The detector features:
 
-* **Pure orderflow-based signal generation** (no traditional indicators)
-* **Advanced spoofing detection** to filter fake walls
-* **Price response and confirmation logic** for actionable signals
-* **Adaptive zone sizing, multi-zone logic, passive volume tracking**
-* **Extensive event logging for backtesting and statistical review**
-* **Pluggable, feature-flag-driven architecture** for advanced research and fast iteration
+- **Pure orderflow-based signal generation** (no traditional indicators)
+- **Advanced spoofing detection** to filter fake walls
+- **Price response and confirmation logic** for actionable signals
+- **Adaptive zone sizing, multi-zone logic, passive volume tracking**
+- **Extensive event logging for backtesting and statistical review**
+- **Pluggable, feature-flag-driven architecture** for advanced research and fast iteration
 
 ---
 
@@ -26,8 +26,8 @@ The detector features:
 **Absorption** is an orderflow phenomenon where a large passive order (or cluster) in the order book is repeatedly “hit” by aggressive market orders, but is not pulled or canceled—instead, the liquidity absorbs the flow.
 This often occurs at round numbers, swing highs/lows, or key support/resistance, and is typically followed by a stall, reversal, or “ignition” move in the opposite direction.
 
-* **Bullish absorption:** Aggressive sells repeatedly hit a large bid wall, but price fails to break down, and eventually bounces.
-* **Bearish absorption:** Aggressive buys attack a large ask wall, but price fails to break out, and eventually reverses.
+- **Bullish absorption:** Aggressive sells repeatedly hit a large bid wall, but price fails to break down, and eventually bounces.
+- **Bearish absorption:** Aggressive buys attack a large ask wall, but price fails to break out, and eventually reverses.
 
 **True absorption** = evidence of a real market participant absorbing orderflow (not spoofing) and often marks key market turning points.
 
@@ -35,17 +35,19 @@ This often occurs at round numbers, swing highs/lows, or key support/resistance,
 
 ## What Does the Detector Do?
 
-* **Watches all trades and orderbook updates** for the selected instrument.
-* **Aggregates aggressive market volume** and passive orderbook volume at each price (or zone).
-* **Detects absorption events:**
+- **Watches all trades and orderbook updates** for the selected instrument.
+- **Aggregates aggressive market volume** and passive orderbook volume at each price (or zone).
+- **Detects absorption events:**
 
-  * High aggressive volume is absorbed by a stable or refilled passive wall at a price/zone.
-  * Spoofing (pulling the wall) is detected and filtered out.
-* **Signals a “pending” absorption event** and tracks price response:
+    - High aggressive volume is absorbed by a stable or refilled passive wall at a price/zone.
+    - Spoofing (pulling the wall) is detected and filtered out.
 
-  * Confirms the event if price moves favorably by a configurable number of ticks within a certain time window (no snap-back).
-  * Invalidates if price retests or fails to move quickly enough.
-* **Logs every detection, confirmation, and invalidation** for robust statistical analysis.
+- **Signals a “pending” absorption event** and tracks price response:
+
+    - Confirms the event if price moves favorably by a configurable number of ticks within a certain time window (no snap-back).
+    - Invalidates if price retests or fails to move quickly enough.
+
+- **Logs every detection, confirmation, and invalidation** for robust statistical analysis.
 
 ---
 
@@ -62,23 +64,27 @@ const onAbsorption = (data) => {
 
 const logger = new SignalLogger("signal_log.csv");
 
-const detector = new AbsorptionDetector(onAbsorption, {
-    windowMs: 90000,
-    minAggVolume: 600,
-    pricePrecision: 2,
-    zoneTicks: 3,
-    minInitialMoveTicks: 12,
-    confirmationTimeoutMs: 60000,
-    maxRevisitTicks: 5,
-    features: {
-        spoofingDetection: true,
-        adaptiveZone: true,
-        passiveHistory: true,
-        multiZone: true,
-        priceResponse: true,
-        autoCalibrate: true,
-    }
-}, logger);
+const detector = new AbsorptionDetector(
+    onAbsorption,
+    {
+        windowMs: 90000,
+        minAggVolume: 600,
+        pricePrecision: 2,
+        zoneTicks: 3,
+        minInitialMoveTicks: 12,
+        confirmationTimeoutMs: 60000,
+        maxRevisitTicks: 5,
+        features: {
+            spoofingDetection: true,
+            adaptiveZone: true,
+            passiveHistory: true,
+            multiZone: true,
+            priceResponse: true,
+            autoCalibrate: true,
+        },
+    },
+    logger
+);
 
 // Feed it trades and depth updates from Binance stream
 detector.addTrade(tradeMsg);
@@ -144,47 +150,47 @@ detector.addDepth(orderBookMsg);
 
 ## Logging & Analytics
 
-* **Every signal event (detected, confirmed, invalidated) is logged** as a CSV/JSON row for later review.
-* Use the logs to analyze:
+- **Every signal event (detected, confirmed, invalidated) is logged** as a CSV/JSON row for later review.
+- Use the logs to analyze:
 
-  * Signal hit rates and fail rates
-  * Typical response time/size
-  * Which settings produce the highest edge
-  * Manual or automated trade review
+    - Signal hit rates and fail rates
+    - Typical response time/size
+    - Which settings produce the highest edge
+    - Manual or automated trade review
 
 ---
 
 ## Practical Trading Advice
 
-* **Never enter after the move is complete**—confirm on early price reaction, not after full target.
-* **Tune parameters to maximize after-fee, after-slippage edge**, not just signal frequency.
-* **Review logs regularly:** adjust min volume, move, and time thresholds to filter out false or late signals.
-* **Visualize signals on your chart:** use the logs to spot the most predictive patterns.
+- **Never enter after the move is complete**—confirm on early price reaction, not after full target.
+- **Tune parameters to maximize after-fee, after-slippage edge**, not just signal frequency.
+- **Review logs regularly:** adjust min volume, move, and time thresholds to filter out false or late signals.
+- **Visualize signals on your chart:** use the logs to spot the most predictive patterns.
 
 ---
 
 ## Advanced Notes
 
-* **Dynamic calibration (`autoCalibrate`)**: Adjusts thresholds to prevent signal flooding or drought.
-* **Passive refill tracking**: Detects hidden liquidity and iceberg orders.
-* **Multi-zone logic**: Captures distributed absorption across a price band.
-* **Perfect for research:** Feature flags enable fast A/B testing of detection algorithms.
+- **Dynamic calibration (`autoCalibrate`)**: Adjusts thresholds to prevent signal flooding or drought.
+- **Passive refill tracking**: Detects hidden liquidity and iceberg orders.
+- **Multi-zone logic**: Captures distributed absorption across a price band.
+- **Perfect for research:** Feature flags enable fast A/B testing of detection algorithms.
 
 ---
 
 ## Integration & Extension
 
-* Can be combined with exhaustion detectors, CVD/Delta confirmation, swing predictors, etc.
-* Supports any market and timescale with configurable settings.
-* Plug in any logging/output system (CSV, JSON, database).
+- Can be combined with exhaustion detectors, CVD/Delta confirmation, swing predictors, etc.
+- Supports any market and timescale with configurable settings.
+- Plug in any logging/output system (CSV, JSON, database).
 
 ---
 
 ## References & Further Reading
 
-* *Trading Order Flow: How Absorption and Exhaustion Shape Market Turning Points* (see provided PDF)
-* *Volume Profile & Footprint Trading for Crypto* (OrderFlow\.net)
-* Binance API Docs: [https://binance-docs.github.io/apidocs/spot/en/](https://binance-docs.github.io/apidocs/spot/en/)
+- _Trading Order Flow: How Absorption and Exhaustion Shape Market Turning Points_ (see provided PDF)
+- _Volume Profile & Footprint Trading for Crypto_ (OrderFlow\.net)
+- Binance API Docs: [https://binance-docs.github.io/apidocs/spot/en/](https://binance-docs.github.io/apidocs/spot/en/)
 
 ---
 
