@@ -197,8 +197,3 @@ For questions, improvements, or advanced usage, open an issue or pull request on
 
 **This detector provides the “engine” for real edge in modern orderflow trading.
 Refine, iterate, and study your logs—your next edge is in the data.**
-
----
-
-**Ready for inclusion in your repo!**
-Let me know if you want it split up, want example log rows, or want to add an FAQ section.
