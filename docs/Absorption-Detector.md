@@ -1,8 +1,3 @@
-Certainly. Here’s a **comprehensive, professional-level Markdown documentation** for your `AbsorptionDetector` class—covering _usage_, _parameters_, _orderflow context_, _behavior_, and _tuning recommendations_.
-This is ready to paste into a `docs/AbsorptionDetector.md` or similar for your GitHub repo.
-
----
-
 # AbsorptionDetector
 
 ## Overview
