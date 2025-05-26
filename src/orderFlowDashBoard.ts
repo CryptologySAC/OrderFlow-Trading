@@ -21,6 +21,13 @@ import { SwingPredictor, SwingPrediction } from "./swingPredictor.js";
 import { EventEmitter } from "events";
 EventEmitter.defaultMaxListeners = 20;
 
+type WS = ws.WebSocket;
+interface WSRequest {
+    type: string;
+    data?: unknown;
+}
+type WSHandler = (ws: WS, data?: unknown) => void | Promise<void>;
+
 export class OrderFlowDashboard {
     private readonly intervalMs: number = 10 * 60 * 1000; // 10 minutes
     private readonly symbol: string = (
@@ -36,7 +43,7 @@ export class OrderFlowDashboard {
         10
     );
     private readonly BroadCastWebSocket: ws.WebSocketServer;
-
+    private readonly storage: Storage;
     private readonly binanceFeed: BinanceDataFeed;
     private readonly tradesProcessor: TradesProcessor;
     private readonly orderBookProcessor: OrderBookProcessor;
@@ -45,16 +52,99 @@ export class OrderFlowDashboard {
     private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
 
     private swingPredictor = new SwingPredictor({
-        lookaheadMs: 60000,
-        retraceTicks: 5,
+        lookaheadMs: 10000,
+        retraceTicks: 1,
         pricePrecision: 2,
-        signalCooldownMs: 10000,
+        signalCooldownMs: 1000,
         onSwingPredicted: this.handleSwingPrediction.bind(this),
     });
+
+    private wsHandlers: Record<string, WSHandler> = {
+        ping: (ws) => {
+            ws.send(JSON.stringify({ type: "pong", now: Date.now() }));
+        },
+        backlog: (ws, data) => {
+            let amount = 1000;
+            if (data && typeof data === "object" && "amount" in data) {
+                const rawAmount = (data as { amount?: string | number }).amount;
+                amount = parseInt(rawAmount as string, 10);
+                if (
+                    !Number.isInteger(amount) ||
+                    amount <= 0 ||
+                    amount > 100000
+                ) {
+                    ws.send(
+                        JSON.stringify({
+                            type: "error",
+                            message: "Invalid backlog amount",
+                        })
+                    );
+                    return;
+                }
+            }
+            let backlog = this.tradesProcessor.requestBacklog(amount);
+            backlog = backlog.reverse();
+            ws.send(
+                JSON.stringify({
+                    type: "backlog",
+                    data: backlog,
+                    now: Date.now(),
+                })
+            );
+        },
+        // Add more handlers as needed
+    };
+
+    private handleWSMessage(ws: WS, message: ws.RawData) {
+        let raw: string;
+        try {
+            if (typeof message === "string") raw = message;
+            else if (message instanceof Buffer) raw = message.toString();
+            else throw new Error("Unexpected message format");
+
+            const parsed: unknown = JSON.parse(raw);
+            if (!parsed || typeof parsed !== "object" || !("type" in parsed))
+                throw new Error("Invalid message shape");
+
+            const { type, data } = parsed as WSRequest;
+            const handler = this.wsHandlers[type];
+            if (!handler) {
+                ws.send(
+                    JSON.stringify({
+                        type: "error",
+                        message: "Unknown request type",
+                    })
+                );
+                return;
+            }
+
+            Promise.resolve(handler(ws, data)).catch((err) => {
+                // Local log with stack for ops/debugging
+                console.error(`[WS handler error] type=${type}`, err);
+                // Only message to client, never stack
+                ws.send(
+                    JSON.stringify({
+                        type: "error",
+                        message: (err as Error).message,
+                    })
+                );
+            });
+        } catch (err) {
+            // Local log
+            console.error("[WS message parse error]", err);
+            ws.send(
+                JSON.stringify({
+                    type: "error",
+                    message: (err as Error).message,
+                })
+            );
+        }
+    }
 
     constructor(
         private delayFn: (cb: () => void, ms: number) => unknown = setTimeout
     ) {
+        this.storage = new Storage();
         this.binanceFeed = new BinanceDataFeed();
         this.orderBookProcessor = new OrderBookProcessor();
         this.tradesProcessor = new TradesProcessor();
@@ -108,79 +198,11 @@ export class OrderFlowDashboard {
         );
 
         this.BroadCastWebSocket = new ws.WebSocketServer({ port: this.wsPort });
-
         this.BroadCastWebSocket.on("connection", (ws) => {
             console.log("Client connected");
-
             ws.on("close", () => console.log("Client disconnected"));
-
-            ws.on("message", (message) => {
-                try {
-                    let request: { type: string; data?: unknown };
-                    let raw: string;
-
-                    if (typeof message === "string") {
-                        raw = message;
-                    } else if (message instanceof Buffer) {
-                        raw = message.toString();
-                    } else {
-                        throw new Error("Unexpected message format");
-                    }
-
-                    const parsed: unknown = JSON.parse(raw);
-
-                    if (!this.isWebSocketRequest(parsed)) {
-                        throw new Error("Invalid request");
-                    }
-
-                    request = parsed;
-                    if (
-                        typeof request !== "object" ||
-                        typeof request.type !== "string"
-                    ) {
-                        throw new Error("Invalid request structure");
-                    }
-
-                    if (request.type === "ping") {
-                        ws.send(
-                            JSON.stringify({ type: "pong", now: Date.now() })
-                        );
-                    }
-
-                    if (
-                        request.type === "backlog" &&
-                        this.isBacklogRequest(request)
-                    ) {
-                        const rawAmount = request.data?.amount;
-                        const amount = parseInt(rawAmount ?? "1000", 10);
-
-                        if (
-                            !Number.isInteger(amount) ||
-                            amount <= 0 ||
-                            amount > 100000
-                        ) {
-                            console.warn("Invalid backlog amount:", rawAmount);
-                            return;
-                        }
-
-                        console.log("Backlog request received:", amount);
-                        let backlog =
-                            this.tradesProcessor.requestBacklog(amount);
-                        backlog = backlog.reverse(); // Oldest trade first
-                        ws.send(
-                            JSON.stringify({
-                                type: "backlog",
-                                data: backlog,
-                                now: Date.now(),
-                            })
-                        );
-                    }
-                } catch (err) {
-                    console.warn("Invalid message format", err);
-                }
-            });
+            ws.on("message", (message) => this.handleWSMessage(ws, message));
         });
-
         this.broadcastMessage = this.broadcastMessage.bind(this);
     }
 
@@ -378,13 +400,12 @@ export class OrderFlowDashboard {
     }
 
     private purgeDatabase() {
-        const storage: Storage = new Storage();
         const intervalId = setInterval(() => {
             console.log(
                 `[${new Date().toISOString()}] Starting scheduled purge...`
             );
             try {
-                storage.purgeOldEntries();
+                this.storage.purgeOldEntries();
             } catch (error) {
                 console.error(
                     `[${new Date().toISOString()}] Scheduled purge failed: ${(error as Error).message}`
