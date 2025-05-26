@@ -71,6 +71,11 @@ export class AbsorptionDetector {
                 const level = this.depth.get(price) || { bid: 0, ask: 0 };
                 level[side] = qty;
                 this.depth.set(price, level);
+                this.trackPassiveOrderbookHistory(
+                    price,
+                    level["bid"],
+                    level["ask"]
+                );
             }
         };
 
@@ -143,7 +148,8 @@ export class AbsorptionDetector {
             const last = this.lastSignal.get(eventKey) ?? 0;
             if (
                 passiveQty > aggressiveVolume * 0.8 &&
-                now - last > this.eventCooldownMs
+                now - last > this.eventCooldownMs &&
+                !this.wasSpoofed(price, side, latestTrade.T ?? 0)
             ) {
                 this.lastSignal.set(eventKey, now);
                 this.onAbsorption({
@@ -157,5 +163,49 @@ export class AbsorptionDetector {
                 });
             }
         }
+    }
+
+    // Store recent depth changes (for spoofing/pulling analysis)
+    private passiveChangeHistory: Map<
+        number,
+        { time: number; bid: number; ask: number }[]
+    > = new Map();
+
+    /** Call this in addDepth() **after** updating this.depth */
+    private trackPassiveOrderbookHistory(
+        price: number,
+        newBid: number,
+        newAsk: number
+    ) {
+        const now = Date.now();
+        if (!this.passiveChangeHistory.has(price))
+            this.passiveChangeHistory.set(price, []);
+        const history = this.passiveChangeHistory.get(price)!;
+        history.push({ time: now, bid: newBid, ask: newAsk });
+        // Keep only last N updates (e.g., 10 per price)
+        if (history.length > 10) history.shift();
+    }
+
+    /** Helper to check if a spoofing event occurred (passive liquidity pulled just before trade hit) */
+    private wasSpoofed(
+        price: number,
+        side: "buy" | "sell",
+        tradeTime: number
+    ): boolean {
+        const hist = this.passiveChangeHistory.get(price);
+        if (!hist || hist.length < 2) return false;
+        // Check if, just before the trade time, passive liquidity dropped sharply (e.g., > 60% in < 1s)
+        for (let i = hist.length - 2; i >= 0; i--) {
+            const curr = hist[i + 1],
+                prev = hist[i];
+            if (curr.time > tradeTime) continue;
+            const delta =
+                side === "buy" ? prev.ask - curr.ask : prev.bid - curr.bid;
+            const base = side === "buy" ? prev.ask : prev.bid;
+            if (base > 0 && delta / base > 0.6 && curr.time - prev.time < 1200)
+                return true;
+            if (curr.time < tradeTime - 2000) break;
+        }
+        return false;
     }
 }
