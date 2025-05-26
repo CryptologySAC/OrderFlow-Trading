@@ -20,6 +20,7 @@ import { ExhaustionDetector } from "./exhaustionDetector.js";
 import { DeltaCVDConfirmation } from "./deltaCVDCOnfirmation.js";
 import { SwingPredictor, SwingPrediction } from "./swingPredictor.js";
 import { parseBool } from "./utils.js";
+import { SignalLogger } from "./signalLogger.js";
 
 import { EventEmitter } from "events";
 EventEmitter.defaultMaxListeners = 20;
@@ -53,6 +54,9 @@ export class OrderFlowDashboard {
     private readonly absorptionDetector: AbsorptionDetector;
     private readonly exhaustionDetector: ExhaustionDetector;
     private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
+    private readonly signalLogger: SignalLogger = new SignalLogger(
+        "signals.csv"
+    );
 
     private swingPredictor = new SwingPredictor({
         lookaheadMs: 10000,
@@ -224,7 +228,8 @@ export class OrderFlowDashboard {
                     console.error("Absorption callback failed:", err)
                 );
             }, // callback
-            this.absorptionSettings
+            this.absorptionSettings,
+            this.signalLogger
         );
         this.deltaCVDConfirmation = new DeltaCVDConfirmation(
             (confirmed) => {
