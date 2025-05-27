@@ -1,9 +1,9 @@
-import axios from "axios";
+//import axios from "axios";
 import dotenv from "dotenv";
 
 import { SpotWebsocketStreams, SpotWebsocketAPI } from "@binance/spot";
 import { WebSocketMessage } from "./interfaces.js";
-
+import { BinanceDataFeed } from "./binance.js";
 dotenv.config();
 
 export interface IOrderBookProcessor {
@@ -25,14 +25,15 @@ interface OrderBookData {
 }
 
 // Interface for Binance REST API order book snapshot
-interface BinanceOrderBookSnapshot {
-    lastUpdateId: number;
-    bids: [string, string][];
-    asks: [string, string][];
-}
+//interface BinanceOrderBookSnapshot {
+//    lastUpdateId: number;
+//    bids: [string, string][];
+//    asks: [string, string][];
+//}
 
 export class OrderBookProcessor implements IOrderBookProcessor {
     private readonly symbol: string;
+    private readonly binanceFeed = new BinanceDataFeed();
 
     private orderBook: {
         bids: Map<number, number>;
@@ -54,10 +55,23 @@ export class OrderBookProcessor implements IOrderBookProcessor {
     }
 
     public async fetchInitialOrderBook(): Promise<WebSocketMessage> {
-        const url = `https://api.binance.com/api/v3/depth?symbol=${this.symbol}&limit=1000`;
+        //const url = `https://api.binance.com/api/v3/depth?symbol=${this.symbol}&limit=1000`;
         try {
-            const response = await axios.get<BinanceOrderBookSnapshot>(url);
-            const snapshot = response.data;
+            //const response = await axios.get<BinanceOrderBookSnapshot>(url);
+            //const snapshot = response.data;
+            const snapshot = await this.binanceFeed.getDepthSnapshot(
+                this.symbol,
+                1000
+            );
+
+            if (
+                !snapshot ||
+                !snapshot.lastUpdateId ||
+                !snapshot.bids ||
+                !snapshot.asks
+            ) {
+                throw new Error("Failed to fetch order book snapshot");
+            }
 
             this.lastUpdateId = snapshot.lastUpdateId;
 

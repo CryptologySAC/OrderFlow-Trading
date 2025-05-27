@@ -971,10 +971,10 @@ export class OrderFlowDashboard {
         const correlationId = randomUUID();
 
         try {
-            const connection = (await this.dependencies.circuitBreaker.execute(
+            const connection = await this.dependencies.circuitBreaker.execute(
                 () => this.dependencies.binanceFeed.connectToStreams(),
                 correlationId
-            )) as SpotWebsocketStreams.WebsocketStreamsConnection;
+            );
 
             connection.on("close", (): void => {
                 if (this.isShuttingDown) return;
