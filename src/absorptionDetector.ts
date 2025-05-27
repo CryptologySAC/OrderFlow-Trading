@@ -1,5 +1,17 @@
 import { SpotWebsocketStreams } from "@binance/spot";
 import { SignalLogger } from "./signalLogger.js";
+import {
+    CircularBuffer,
+    TimeAwareCache,
+    SpoofingDetector,
+    AdaptiveZoneCalculator,
+    PassiveVolumeTracker,
+    AutoCalibrator,
+    PriceConfirmationManager,
+    TradeData,
+    DepthLevel,
+    PendingDetection,
+} from "./utils.js";
 
 export type AbsorptionCallback = (data: {
     price: number;
@@ -37,6 +49,7 @@ export interface AbsorptionSettings {
     minInitialMoveTicks?: number;
     confirmationTimeoutMs?: number;
     maxRevisitTicks?: number;
+    symbol?: string;
 }
 
 /**
@@ -82,42 +95,31 @@ export interface AbsorptionFeatures {
  * @see AbsorptionSettings for parameter options.
  */
 export class AbsorptionDetector {
-    private depth = new Map<number, { bid: number; ask: number }>();
-    private trades: SpotWebsocketStreams.AggTradeResponse[] = [];
+    // Core data storage - now using efficient data structures
+    private depth = new TimeAwareCache<number, DepthLevel>(300000); // 5 minutes TTL
+    private trades = new CircularBuffer<TradeData>(10000); // Circular buffer for trades
+
+    // Core configuration
     private readonly onAbsorption: AbsorptionCallback;
     private readonly windowMs: number;
     private minAggVolume: number;
     private readonly pricePrecision: number;
     private zoneTicks: number;
     private readonly eventCooldownMs: number;
-    private lastSignal = new Map<string, number>();
-    private lastSeenPassive = new Map<number, { bid: number; ask: number }>();
+    private readonly symbol: string;
 
+    // Cooldown tracking
+    private lastSignal = new TimeAwareCache<string, number>(900000); // 15 minutes TTL
+
+    // Feature modules
     private readonly features: AbsorptionFeatures;
-    private passiveChangeHistory = new Map<
-        number,
-        { time: number; bid: number; ask: number }[]
-    >();
-    private priceWindow: number[] = [];
-    private rollingATR = 0;
-    private readonly atrLookback = 30;
-    private passiveVolumeHistory = new Map<
-        number,
-        { time: number; bid: number; ask: number }[]
-    >();
-    private pendingAbsorptions: {
-        time: number;
-        price: number;
-        side: "buy" | "sell";
-        zone: number;
-        trades: SpotWebsocketStreams.AggTradeResponse[];
-        aggressive: number;
-        passive: number;
-        refilled: boolean;
-        confirmed: boolean;
-    }[] = [];
-    private lastCalibrated: number = Date.now();
+    private readonly spoofingDetector: SpoofingDetector;
+    private readonly adaptiveZoneCalculator: AdaptiveZoneCalculator;
+    private readonly passiveVolumeTracker: PassiveVolumeTracker;
+    private readonly autoCalibrator: AutoCalibrator;
+    private readonly priceConfirmationManager: PriceConfirmationManager;
 
+    // Price response confirmation settings
     private readonly minInitialMoveTicks: number;
     private readonly confirmationTimeoutMs: number;
     private readonly maxRevisitTicks: number;
@@ -135,9 +137,24 @@ export class AbsorptionDetector {
             confirmationTimeoutMs = 60000,
             maxRevisitTicks = 5,
             features = {},
+            symbol = "LTCUSDT",
         }: AbsorptionSettings = {},
         logger?: SignalLogger
     ) {
+        // Validate settings
+        this.validateSettings({
+            windowMs,
+            minAggVolume,
+            pricePrecision,
+            zoneTicks,
+            eventCooldownMs,
+            minInitialMoveTicks,
+            confirmationTimeoutMs,
+            maxRevisitTicks,
+            features,
+            symbol,
+        });
+
         this.onAbsorption = callback;
         this.windowMs = windowMs;
         this.minAggVolume = minAggVolume;
@@ -148,8 +165,42 @@ export class AbsorptionDetector {
         this.confirmationTimeoutMs = confirmationTimeoutMs;
         this.maxRevisitTicks = maxRevisitTicks;
         this.features = features;
+        this.symbol = symbol;
         this.logger = logger;
-        console.log("[AbsorptionDetector] Features enabled:", this.features);
+
+        // Initialize feature modules
+        this.spoofingDetector = new SpoofingDetector();
+        this.adaptiveZoneCalculator = new AdaptiveZoneCalculator();
+        this.passiveVolumeTracker = new PassiveVolumeTracker();
+        this.autoCalibrator = new AutoCalibrator();
+        this.priceConfirmationManager = new PriceConfirmationManager();
+
+        console.log(
+            "[AbsorptionDetector] Initialized with features:",
+            this.features
+        );
+        console.log("[AbsorptionDetector] Symbol:", this.symbol);
+    }
+
+    private validateSettings(settings: AbsorptionSettings): void {
+        if (settings.windowMs && settings.windowMs < 1000) {
+            throw new Error("windowMs must be at least 1000ms");
+        }
+        if (settings.minAggVolume && settings.minAggVolume <= 0) {
+            throw new Error("minAggVolume must be positive");
+        }
+        if (
+            settings.pricePrecision &&
+            (settings.pricePrecision < 0 || settings.pricePrecision > 8)
+        ) {
+            throw new Error("pricePrecision must be between 0 and 8");
+        }
+        if (settings.zoneTicks && settings.zoneTicks <= 0) {
+            throw new Error("zoneTicks must be positive");
+        }
+        if (settings.eventCooldownMs && settings.eventCooldownMs < 0) {
+            throw new Error("eventCooldownMs must be non-negative");
+        }
     }
 
     /**
@@ -171,21 +222,41 @@ export class AbsorptionDetector {
      *   // ...
      * });
      */
-    public addTrade(trade: SpotWebsocketStreams.AggTradeResponse) {
-        if (!trade.T) return;
-        this.trades.push(trade);
-        const now = Date.now();
-        this.trades = this.trades.filter(
-            (t) => now - (t.T ?? 0) <= this.windowMs
-        );
-
-        if (this.features.adaptiveZone) {
-            this.updateRollingATR(parseFloat(trade.p ?? "0"));
+    public addTrade(trade: SpotWebsocketStreams.AggTradeResponse): void {
+        if (!trade.T || !trade.p || !trade.q) {
+            console.warn("[AbsorptionDetector] Invalid trade data received");
+            return;
         }
-        this.checkAbsorption(trade);
 
-        if (this.features.priceResponse) {
-            this.onPrice(parseFloat(trade.p ?? "0"));
+        try {
+            const tradeData: TradeData = {
+                price: parseFloat(trade.p),
+                quantity: parseFloat(trade.q),
+                timestamp: trade.T,
+                isMakerSell: trade.m || false,
+                originalTrade: trade,
+            };
+
+            this.trades.add(tradeData);
+
+            if (this.features.adaptiveZone) {
+                this.adaptiveZoneCalculator.updatePrice(tradeData.price);
+            }
+
+            this.checkAbsorption(tradeData);
+
+            if (this.features.priceResponse) {
+                this.processConfirmations(tradeData.price);
+            }
+
+            if (this.features.autoCalibrate) {
+                this.performAutoCalibration();
+            }
+        } catch (error) {
+            console.error(
+                "[AbsorptionDetector] Error processing trade:",
+                error
+            );
         }
     }
 
@@ -212,227 +283,165 @@ export class AbsorptionDetector {
      *   // ...other fields
      * });
      */
-    public addDepth(update: SpotWebsocketStreams.DiffBookDepthResponse) {
-        const updateLevel = (
-            side: "bid" | "ask",
-            updates: [string, string][]
-        ) => {
-            for (const [priceStr, qtyStr] of updates) {
-                const price = parseFloat(priceStr);
-                const qty = parseFloat(qtyStr);
-                const level = this.depth.get(price) || { bid: 0, ask: 0 };
-                level[side] = qty;
+    public addDepth(update: SpotWebsocketStreams.DiffBookDepthResponse): void {
+        try {
+            this.updateDepthLevel(
+                "bid",
+                (update.b as [string, string][]) || []
+            );
+            this.updateDepthLevel(
+                "ask",
+                (update.a as [string, string][]) || []
+            );
+        } catch (error) {
+            console.error(
+                "[AbsorptionDetector] Error processing depth update:",
+                error
+            );
+        }
+    }
+
+    private updateDepthLevel(
+        side: "bid" | "ask",
+        updates: [string, string][]
+    ): void {
+        for (const [priceStr, qtyStr] of updates) {
+            const price = parseFloat(priceStr);
+            const qty = parseFloat(qtyStr);
+
+            if (isNaN(price) || isNaN(qty)) {
+                console.warn(
+                    "[AbsorptionDetector] Invalid depth data:",
+                    priceStr,
+                    qtyStr
+                );
+                continue;
+            }
+
+            const level = this.depth.get(price) || { bid: 0, ask: 0 };
+            level[side] = qty;
+
+            // Remove level if both sides are zero
+            if (level.bid === 0 && level.ask === 0) {
+                this.depth.delete(price);
+            } else {
                 this.depth.set(price, level);
-
-                if (this.features.spoofingDetection) {
-                    this.trackPassiveOrderbookHistory(
-                        price,
-                        level.bid,
-                        level.ask
-                    );
-                }
-                if (this.features.passiveHistory) {
-                    this.updatePassiveVolumeHistory(
-                        price,
-                        level.bid,
-                        level.ask
-                    );
-                }
             }
-        };
-        if (update.b) updateLevel("bid", update.b as [string, string][]);
-        if (update.a) updateLevel("ask", update.a as [string, string][]);
-    }
 
-    // Spoofing detection
-    private trackPassiveOrderbookHistory(
-        price: number,
-        newBid: number,
-        newAsk: number
-    ) {
-        const now = Date.now();
-        if (!this.passiveChangeHistory.has(price))
-            this.passiveChangeHistory.set(price, []);
-        const history = this.passiveChangeHistory.get(price)!;
-        history.push({ time: now, bid: newBid, ask: newAsk });
-        if (history.length > 10) history.shift();
-    }
-
-    private wasSpoofed(
-        price: number,
-        side: "buy" | "sell",
-        tradeTime: number
-    ): boolean {
-        const hist = this.passiveChangeHistory.get(price);
-        if (!hist || hist.length < 2) return false;
-        for (let i = hist.length - 2; i >= 0; i--) {
-            const curr = hist[i + 1],
-                prev = hist[i];
-            if (curr.time > tradeTime) continue;
-            const delta =
-                side === "buy" ? prev.ask - curr.ask : prev.bid - curr.bid;
-            const base = side === "buy" ? prev.ask : prev.bid;
-            if (
-                base > 0 &&
-                delta / base > 0.6 &&
-                curr.time - prev.time < 1200
-            ) {
-                console.log(
-                    "[AbsorptionDetector] Spoofing detected at price:",
-                    price
+            if (this.features.spoofingDetection) {
+                this.spoofingDetector.trackPassiveChange(
+                    price,
+                    level.bid,
+                    level.ask
                 );
-                return true;
             }
-            if (curr.time < tradeTime - 2000) break;
-        }
-        return false;
-    }
 
-    // Adaptive zone/tick size
-    private updateRollingATR(price: number) {
-        this.priceWindow.push(price);
-        if (this.priceWindow.length > this.atrLookback)
-            this.priceWindow.shift();
-        if (this.priceWindow.length > 2) {
-            let sum = 0;
-            for (let i = 1; i < this.priceWindow.length; i++) {
-                sum += Math.abs(this.priceWindow[i] - this.priceWindow[i - 1]);
-            }
-            this.rollingATR = sum / (this.priceWindow.length - 1);
-        }
-    }
-
-    private getAdaptiveZoneTicks(): number {
-        const tick = 1 / Math.pow(10, this.pricePrecision);
-        return Math.max(
-            1,
-            Math.min(10, Math.round((this.rollingATR / tick) * 2))
-        );
-    }
-
-    // Passive volume time series & advanced refill
-    private updatePassiveVolumeHistory(
-        price: number,
-        bid: number,
-        ask: number
-    ) {
-        if (!this.passiveVolumeHistory.has(price))
-            this.passiveVolumeHistory.set(price, []);
-        const arr = this.passiveVolumeHistory.get(price)!;
-        arr.push({ time: Date.now(), bid, ask });
-        if (arr.length > 30) arr.shift();
-    }
-
-    private hasPassiveRefilled(
-        price: number,
-        side: "buy" | "sell",
-        windowMs = 15000
-    ): boolean {
-        const arr = this.passiveVolumeHistory.get(price);
-        if (!arr || arr.length < 3) return false;
-        let refills = 0;
-        let prev = side === "buy" ? arr[0].ask : arr[0].bid;
-        for (const snap of arr) {
-            const qty = side === "buy" ? snap.ask : snap.bid;
-            if (qty > prev * 1.15) refills++;
-            prev = qty;
-        }
-        const now = Date.now();
-        return refills >= 3 && now - arr[0].time < windowMs;
-    }
-
-    // Multi-zone (banded) absorption detection
-    private sumVolumesInBand(center: number, bandTicks: number) {
-        const tick = 1 / Math.pow(10, this.pricePrecision);
-        let totalAggressive = 0,
-            totalPassive = 0;
-        let allTrades: SpotWebsocketStreams.AggTradeResponse[] = [];
-        for (let offset = -bandTicks; offset <= bandTicks; offset++) {
-            const price = +(center + offset * tick).toFixed(
-                this.pricePrecision
-            );
-            const tradesAtPrice = this.trades.filter(
-                (t) =>
-                    +parseFloat(t.p ?? "0").toFixed(this.pricePrecision) ===
-                    price
-            );
-            totalAggressive += tradesAtPrice.reduce(
-                (sum, t) => sum + parseFloat(t.q as string),
-                0
-            );
-            allTrades.push(...tradesAtPrice);
-            const bookLevel = this.depth.get(price);
-            if (bookLevel) totalPassive += bookLevel.bid + bookLevel.ask;
-        }
-        return { totalAggressive, totalPassive, allTrades };
-    }
-
-    // Price response integration
-    private onPrice(price: number) {
-        const tick = 1 / Math.pow(10, this.pricePrecision);
-        this.pendingAbsorptions.forEach((abs) => {
-            if (abs.confirmed) return;
-            if (
-                (abs.side === "buy" && price <= abs.price - tick * 2) ||
-                (abs.side === "sell" && price >= abs.price + tick * 2)
-            ) {
-                abs.confirmed = true;
-                console.log(
-                    "[AbsorptionDetector] Price response: confirmed absorption at",
-                    abs.price
+            if (this.features.passiveHistory) {
+                this.passiveVolumeTracker.updatePassiveVolume(
+                    price,
+                    level.bid,
+                    level.ask
                 );
-                this.onAbsorption({
-                    price: abs.price,
-                    side: abs.side,
-                    trades: abs.trades,
-                    totalAggressiveVolume: abs.aggressive,
-                    passiveVolume: abs.passive,
-                    refilled: abs.refilled,
-                    zone: abs.zone,
-                });
             }
-        });
-        const now = Date.now();
-        this.pendingAbsorptions = this.pendingAbsorptions.filter(
-            (abs) => now - abs.time < this.windowMs
-        );
+        }
     }
 
-    private getTradeSide(
-        trade: SpotWebsocketStreams.AggTradeResponse
-    ): "buy" | "sell" {
+    private getTradeSide(trade: TradeData): "buy" | "sell" {
         if (this.features.sideOverride) {
-            // Custom logic can be added here.
+            // Custom logic can be added here for research purposes
             console.log(
                 "[AbsorptionDetector] Side override is enabled. Using default logic."
             );
         }
-        return trade.m ? "sell" : "buy"; // Binance: m=true => maker is sell, so aggressive buy
+        return trade.isMakerSell ? "buy" : "sell"; // Binance: m=true => maker is sell, so aggressive buy
     }
 
-    private autoCalibrate() {
-        const now = Date.now();
-        if (now - this.lastCalibrated < 15 * 60 * 1000) return;
-        this.lastCalibrated = now;
-        const signals = Array.from(this.lastSignal.values()).filter(
-            (t) => now - t < 30 * 60 * 1000
-        );
-        if (signals.length > 10) {
-            this.minAggVolume = Math.round(this.minAggVolume * 1.2);
-            console.log(
-                "[AbsorptionDetector] AutoCalibrate: Too many absorptions, raising minAggVolume to",
+    private performAutoCalibration(): void {
+        if (this.features.autoCalibrate) {
+            const newMinVolume = this.autoCalibrator.calibrate(
                 this.minAggVolume
             );
-        } else if (signals.length < 2) {
-            this.minAggVolume = Math.max(
-                1,
-                Math.round(this.minAggVolume * 0.85)
+            if (newMinVolume !== this.minAggVolume) {
+                this.minAggVolume = newMinVolume;
+            }
+        }
+    }
+
+    private processConfirmations(currentPrice: number): void {
+        const confirmedAbsorptions =
+            this.priceConfirmationManager.processPendingConfirmations(
+                currentPrice,
+                this.pricePrecision,
+                this.minInitialMoveTicks,
+                this.maxRevisitTicks,
+                this.confirmationTimeoutMs,
+                this.logger,
+                this.symbol,
+                "absorption"
             );
-            console.log(
-                "[AbsorptionDetector] AutoCalibrate: Too few absorptions, lowering minAggVolume to",
-                this.minAggVolume
+
+        // Fire callbacks for confirmed absorptions
+        for (const absorption of confirmedAbsorptions) {
+            this.onAbsorption({
+                price: absorption.price,
+                side: absorption.side,
+                trades: absorption.trades,
+                totalAggressiveVolume: absorption.aggressive,
+                passiveVolume: absorption.passive as number,
+                refilled: absorption.refilled,
+                zone: absorption.zone,
+            });
+        }
+    }
+
+    private getEffectiveZoneTicks(): number {
+        if (this.features.adaptiveZone) {
+            return this.adaptiveZoneCalculator.getAdaptiveZoneTicks(
+                this.pricePrecision
             );
         }
+        return this.zoneTicks;
+    }
+
+    private sumVolumesInBand(
+        center: number,
+        bandTicks: number
+    ): {
+        totalAggressive: number;
+        totalPassive: number;
+        allTrades: SpotWebsocketStreams.AggTradeResponse[];
+    } {
+        const tick = 1 / Math.pow(10, this.pricePrecision);
+        let totalAggressive = 0;
+        let totalPassive = 0;
+        const allTrades: SpotWebsocketStreams.AggTradeResponse[] = [];
+
+        for (let offset = -bandTicks; offset <= bandTicks; offset++) {
+            const price = +(center + offset * tick).toFixed(
+                this.pricePrecision
+            );
+
+            // Get trades at this price within the time window
+            const now = Date.now();
+            const tradesAtPrice = this.trades.filter(
+                (t) =>
+                    +t.price.toFixed(this.pricePrecision) === price &&
+                    now - t.timestamp <= this.windowMs
+            );
+
+            totalAggressive += tradesAtPrice.reduce(
+                (sum, t) => sum + t.quantity,
+                0
+            );
+            allTrades.push(...tradesAtPrice.map((t) => t.originalTrade));
+
+            const bookLevel = this.depth.get(price);
+            if (bookLevel) {
+                totalPassive += bookLevel.bid + bookLevel.ask;
+            }
+        }
+
+        return { totalAggressive, totalPassive, allTrades };
     }
 
     /**
@@ -448,271 +457,216 @@ export class AbsorptionDetector {
      * @remarks
      * Usually called automatically from addTrade; not for public use.
      */
-    private checkAbsorption(
-        triggerTrade: SpotWebsocketStreams.AggTradeResponse
-    ) {
-        const zoneTicks = this.features.adaptiveZone
-            ? this.getAdaptiveZoneTicks()
-            : this.zoneTicks;
+    private checkAbsorption(triggerTrade: TradeData): void {
+        const zoneTicks = this.getEffectiveZoneTicks();
+        const now = Date.now();
 
-        const byPrice = new Map<
-            number,
-            SpotWebsocketStreams.AggTradeResponse[]
-        >();
-        for (const trade of this.trades) {
-            const price = +parseFloat(trade.p ?? "0").toFixed(
-                this.pricePrecision
-            );
-            if (!byPrice.has(price)) byPrice.set(price, []);
+        // Get trades within the time window
+        const recentTrades = this.trades.filter(
+            (t) => now - t.timestamp <= this.windowMs
+        );
+
+        if (recentTrades.length === 0) return;
+
+        // Group trades by price
+        const byPrice = new Map<number, TradeData[]>();
+        for (const trade of recentTrades) {
+            const price = +trade.price.toFixed(this.pricePrecision);
+            if (!byPrice.has(price)) {
+                byPrice.set(price, []);
+            }
             byPrice.get(price)!.push(trade);
         }
 
-        const zoneMap = new Map<
-            number,
-            SpotWebsocketStreams.AggTradeResponse[]
-        >();
+        // Group by zones
+        const zoneMap = new Map<number, TradeData[]>();
         for (const [price, tradesAtPrice] of byPrice) {
             const zone = +(Math.round(price / zoneTicks) * zoneTicks).toFixed(
                 this.pricePrecision
             );
-            if (!zoneMap.has(zone)) zoneMap.set(zone, []);
+            if (!zoneMap.has(zone)) {
+                zoneMap.set(zone, []);
+            }
             zoneMap.get(zone)!.push(...tradesAtPrice);
         }
 
+        // Analyze each zone for absorption
         for (const [zone, tradesAtZone] of zoneMap.entries()) {
-            let aggressiveVolume, passiveVolume, allTrades;
-            if (this.features.multiZone) {
-                ({
-                    totalAggressive: aggressiveVolume,
-                    totalPassive: passiveVolume,
-                    allTrades,
-                } = this.sumVolumesInBand(zone, Math.floor(zoneTicks / 2)));
-            } else {
-                aggressiveVolume = tradesAtZone.reduce((sum, t) => {
-                    const qty =
-                        typeof t.q === "string" ? parseFloat(t.q) : (t.q ?? 0);
-                    return sum + qty;
-                }, 0);
-                allTrades = tradesAtZone;
-                const latestTrade = tradesAtZone[tradesAtZone.length - 1];
-                const price = +parseFloat(latestTrade.p ?? "0").toFixed(
-                    this.pricePrecision
-                );
-                const bookLevel = this.depth.get(price);
-                passiveVolume = bookLevel ? bookLevel.bid + bookLevel.ask : 0;
-            }
-            if (aggressiveVolume < this.minAggVolume) continue;
-
-            const latestTrade = allTrades[allTrades.length - 1];
-            const price = +parseFloat(latestTrade.p ?? "0").toFixed(
-                this.pricePrecision
+            this.analyzeZoneForAbsorption(
+                zone,
+                tradesAtZone,
+                triggerTrade,
+                zoneTicks
             );
-            const side = this.getTradeSide(latestTrade);
+        }
+    }
 
+    private analyzeZoneForAbsorption(
+        zone: number,
+        tradesAtZone: TradeData[],
+        triggerTrade: TradeData,
+        zoneTicks: number
+    ): void {
+        let aggressiveVolume: number;
+        let passiveVolume: number;
+        let allTrades: SpotWebsocketStreams.AggTradeResponse[];
+
+        if (this.features.multiZone) {
+            const bandResult = this.sumVolumesInBand(
+                zone,
+                Math.floor(zoneTicks / 2)
+            );
+            aggressiveVolume = bandResult.totalAggressive;
+            passiveVolume = bandResult.totalPassive;
+            allTrades = bandResult.allTrades;
+        } else {
+            aggressiveVolume = tradesAtZone.reduce(
+                (sum, t) => sum + t.quantity,
+                0
+            );
+            allTrades = tradesAtZone.map((t) => t.originalTrade);
+
+            const latestTrade = tradesAtZone[tradesAtZone.length - 1];
+            const price = +latestTrade.price.toFixed(this.pricePrecision);
             const bookLevel = this.depth.get(price);
-            if (!bookLevel) continue;
+            passiveVolume = bookLevel ? bookLevel.bid + bookLevel.ask : 0;
+        }
 
-            const passiveQty = side === "buy" ? bookLevel.ask : bookLevel.bid;
+        if (aggressiveVolume < this.minAggVolume) return;
 
-            // Passive volume refill logic
-            let refilled = false;
-            if (this.features.passiveHistory) {
-                refilled = this.hasPassiveRefilled(price, side);
-            } else {
-                const lastLevel = this.lastSeenPassive.get(price);
-                if (lastLevel) {
-                    const previousQty =
-                        side === "buy" ? lastLevel.ask : lastLevel.bid;
-                    if (passiveQty >= previousQty * 0.9) refilled = true;
-                }
-                this.lastSeenPassive.set(price, { ...bookLevel });
-            }
+        const latestTrade = tradesAtZone[tradesAtZone.length - 1];
+        const price = +latestTrade.price.toFixed(this.pricePrecision);
+        const side = this.getTradeSide(latestTrade);
 
-            // Spoofing detection
-            if (this.features.spoofingDetection && triggerTrade) {
-                if (
-                    this.wasSpoofed(price, side, triggerTrade.T ?? Date.now())
-                ) {
-                    console.log(
-                        "[AbsorptionDetector] Spoofing detected, absorption ignored at price:",
-                        price
-                    );
-                    continue;
-                }
-            }
+        const bookLevel = this.depth.get(price);
+        if (!bookLevel) return;
 
-            const eventKey = `${zone}_${side}`;
-            const now = Date.now();
-            const last = this.lastSignal.get(eventKey) ?? 0;
+        const passiveQty = side === "buy" ? bookLevel.ask : bookLevel.bid;
 
+        // Check for spoofing
+        if (this.features.spoofingDetection) {
             if (
-                passiveQty > aggressiveVolume * 0.8 &&
-                now - last > this.eventCooldownMs
+                this.spoofingDetector.wasSpoofed(
+                    price,
+                    side,
+                    triggerTrade.timestamp
+                )
             ) {
-                this.lastSignal.set(eventKey, now);
-
-                if (this.features.priceResponse) {
-                    this.pendingAbsorptions.push({
-                        time: now,
-                        price,
-                        side,
-                        zone,
-                        trades: allTrades,
-                        aggressive: aggressiveVolume,
-                        passive: passiveVolume,
-                        refilled,
-                        confirmed: false,
-                    });
-                    console.log(
-                        "[AbsorptionDetector] Pending absorption added for price response."
-                    );
-                } else {
-                    this.onAbsorption({
-                        price,
-                        side,
-                        trades: allTrades,
-                        totalAggressiveVolume: aggressiveVolume,
-                        passiveVolume: passiveVolume,
-                        refilled,
-                        zone,
-                    });
-                    console.log("[AbsorptionDetector] Absorption event fired.");
-                }
+                console.log(
+                    "[AbsorptionDetector] Spoofing detected, absorption ignored at price:",
+                    price
+                );
+                return;
             }
         }
 
-        // Confirm or invalidate pending absorptions
-        this.processPendingConfirmations(parseFloat(triggerTrade.p ?? "0"));
+        // Check passive volume refill
+        let refilled = false;
+        if (this.features.passiveHistory) {
+            refilled = this.passiveVolumeTracker.hasPassiveRefilled(
+                price,
+                side
+            );
+        } else {
+            refilled = this.passiveVolumeTracker.checkRefillStatus(
+                price,
+                side,
+                passiveQty
+            );
+        }
 
-        if (this.features.autoCalibrate) {
-            this.autoCalibrate();
+        // Check cooldown
+        const eventKey = `${zone}_${side}`;
+        const now = Date.now();
+        const lastSignalTime = this.lastSignal.get(eventKey) || 0;
+
+        if (
+            passiveQty > aggressiveVolume * 0.8 &&
+            now - lastSignalTime > this.eventCooldownMs
+        ) {
+            this.lastSignal.set(eventKey, now);
+
+            const absorption: PendingDetection = {
+                time: now,
+                price,
+                side,
+                zone,
+                trades: allTrades,
+                aggressive: aggressiveVolume,
+                passive: passiveVolume,
+                refilled,
+                confirmed: false,
+            };
+
+            if (this.features.priceResponse) {
+                this.priceConfirmationManager.addPendingAbsorption(absorption);
+                console.log(
+                    "[AbsorptionDetector] Pending absorption added for price response at",
+                    price
+                );
+            } else {
+                // Fire immediately if price response is disabled
+                this.onAbsorption({
+                    price: absorption.price,
+                    side: absorption.side,
+                    trades: absorption.trades,
+                    totalAggressiveVolume: absorption.aggressive,
+                    passiveVolume: absorption.passive as number,
+                    refilled: absorption.refilled,
+                    zone: absorption.zone,
+                });
+                console.log(
+                    "[AbsorptionDetector] Absorption event fired immediately at",
+                    price
+                );
+            }
+
+            if (this.features.autoCalibrate) {
+                this.autoCalibrator.recordSignal();
+            }
         }
     }
 
     /**
-     * Confirms or invalidates all pending absorption signals based on
-     * price movement and configured thresholds.
-     *
-     * Called after every new trade (and optionally after depth changes).
-     * If price moves the required number of ticks (minInitialMoveTicks)
-     * in the expected direction within the allowed time, confirms the signal;
-     * otherwise invalidates on timeout or snap-back.
-     *
-     * @param currentPrice The most recent price (from trade or orderbook).
-     *
-     * @remarks
-     * Internal method; not for direct use outside the detector.
+     * Get current detector statistics for monitoring and debugging.
      */
-    private processPendingConfirmations(currentPrice: number) {
-        const tick = 1 / Math.pow(10, this.pricePrecision);
-        const now = Date.now();
+    public getStats(): {
+        tradesInBuffer: number;
+        depthLevels: number;
+        pendingConfirmations: number;
+        currentMinVolume: number;
+        adaptiveZoneTicks?: number;
+        rollingATR?: number;
+    } {
+        const stats = {
+            tradesInBuffer: this.trades.length,
+            depthLevels: this.depth.size(),
+            pendingConfirmations:
+                this.priceConfirmationManager.getPendingCount(),
+            currentMinVolume: this.minAggVolume,
+        };
 
-        this.pendingAbsorptions.forEach((abs) => {
-            if (abs.confirmed) return;
+        if (this.features.adaptiveZone) {
+            return {
+                ...stats,
+                adaptiveZoneTicks:
+                    this.adaptiveZoneCalculator.getAdaptiveZoneTicks(
+                        this.pricePrecision
+                    ),
+                rollingATR: this.adaptiveZoneCalculator.getATR(),
+            };
+        }
 
-            const moveTicks = Math.abs(currentPrice - abs.price) / tick;
+        return stats;
+    }
 
-            if (
-                (abs.side === "buy" &&
-                    currentPrice >=
-                        abs.price + this.minInitialMoveTicks * tick) ||
-                (abs.side === "sell" &&
-                    currentPrice <= abs.price - this.minInitialMoveTicks * tick)
-            ) {
-                abs.confirmed = true;
-                if (this.logger) {
-                    this.logger.logEvent({
-                        timestamp: new Date(now).toISOString(),
-                        type: "absorption",
-                        symbol: "LTCUSDT",
-                        signalPrice: abs.price,
-                        side: abs.side,
-                        aggressiveVolume: abs.aggressive,
-                        passiveVolume: abs.passive,
-                        zone: abs.zone,
-                        refilled: abs.refilled,
-                        confirmed: true,
-                        confirmationTime: new Date(now).toISOString(),
-                        moveSizeTicks: moveTicks,
-                        moveTimeMs: now - abs.time,
-                        entryRecommended: true,
-                    });
-                }
-                this.onAbsorption({
-                    price: abs.price,
-                    side: abs.side,
-                    trades: abs.trades,
-                    totalAggressiveVolume: abs.aggressive,
-                    passiveVolume: abs.passive,
-                    refilled: abs.refilled,
-                    zone: abs.zone,
-                });
-                console.log(
-                    "[AbsorptionDetector] Absorption confirmed by price response."
-                );
-                return;
-            }
-
-            if (
-                (abs.side === "buy" &&
-                    currentPrice <= abs.price - this.maxRevisitTicks * tick) ||
-                (abs.side === "sell" &&
-                    currentPrice >= abs.price + this.maxRevisitTicks * tick)
-            ) {
-                abs.confirmed = false;
-                if (this.logger) {
-                    this.logger.logEvent({
-                        timestamp: new Date(now).toISOString(),
-                        type: "absorption",
-                        symbol: "LTCUSDT",
-                        signalPrice: abs.price,
-                        side: abs.side,
-                        aggressiveVolume: abs.aggressive,
-                        passiveVolume: abs.passive,
-                        zone: abs.zone,
-                        refilled: abs.refilled,
-                        confirmed: false,
-                        invalidationTime: new Date(now).toISOString(),
-                        invalidationReason: "Price revisited absorption level",
-                        outcome: "fail",
-                    });
-                }
-                console.log(
-                    "[AbsorptionDetector] Absorption invalidated by price revisit."
-                );
-                return;
-            }
-
-            if (now - abs.time > this.confirmationTimeoutMs) {
-                abs.confirmed = false;
-                if (this.logger) {
-                    this.logger.logEvent({
-                        timestamp: new Date(now).toISOString(),
-                        type: "absorption",
-                        symbol: "LTCUSDT",
-                        signalPrice: abs.price,
-                        side: abs.side,
-                        aggressiveVolume: abs.aggressive,
-                        passiveVolume: abs.passive,
-                        zone: abs.zone,
-                        refilled: abs.refilled,
-                        confirmed: false,
-                        invalidationTime: new Date(now).toISOString(),
-                        invalidationReason: "Timeout (no move)",
-                        outcome: "fail",
-                    });
-                }
-                console.log(
-                    "[AbsorptionDetector] Absorption invalidated by timeout."
-                );
-                return;
-            }
-        });
-
-        // Remove processed absorptions
-        this.pendingAbsorptions = this.pendingAbsorptions.filter(
-            (abs) =>
-                !abs.confirmed && now - abs.time < this.confirmationTimeoutMs
-        );
+    /**
+     * Manually trigger cleanup of old data (normally happens automatically).
+     * Useful for testing or explicit memory management.
+     */
+    public cleanup(): void {
+        // The TimeAwareCache instances handle their own cleanup automatically
+        // This method is provided for explicit cleanup if needed
+        console.log("[AbsorptionDetector] Manual cleanup triggered");
     }
 }

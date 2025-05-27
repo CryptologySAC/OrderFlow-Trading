@@ -8,7 +8,7 @@ export interface SignalEvent {
     signalPrice: number;
     side: "buy" | "sell";
     aggressiveVolume: number;
-    passiveVolume: number;
+    passiveVolume: number | null;
     zone: number;
     refilled: boolean;
     confirmed: boolean;
