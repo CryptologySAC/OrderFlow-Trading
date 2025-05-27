@@ -444,7 +444,7 @@ export class ExhaustionDetector {
             };
 
             if (this.features.priceResponse) {
-                this.priceConfirmationManager.addPendingAbsorption(exhaustion);
+                this.priceConfirmationManager.addPendingDetection(exhaustion);
                 console.log(
                     "[ExhaustionDetector] Pending exhaustion added for price response at",
                     price

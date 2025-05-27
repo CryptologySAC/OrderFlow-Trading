@@ -321,10 +321,10 @@ export class AutoCalibrator {
 }
 
 export class PriceConfirmationManager {
-    private pendingAbsorptions: PendingDetection[] = [];
+    private pendingDetections: PendingDetection[] = [];
 
-    addPendingAbsorption(absorption: PendingDetection): void {
-        this.pendingAbsorptions.push(absorption);
+    addPendingDetection(detection: PendingDetection): void {
+        this.pendingDetections.push(detection);
     }
 
     processPendingConfirmations(
@@ -339,9 +339,9 @@ export class PriceConfirmationManager {
     ): PendingDetection[] {
         const tick = 1 / Math.pow(10, pricePrecision);
         const now = Date.now();
-        const confirmedAbsorptions: PendingDetection[] = [];
+        const confirmedDetections: PendingDetection[] = [];
 
-        this.pendingAbsorptions.forEach((abs) => {
+        this.pendingDetections.forEach((abs) => {
             if (abs.confirmed) return;
 
             const moveTicks = Math.abs(currentPrice - abs.price) / tick;
@@ -354,7 +354,7 @@ export class PriceConfirmationManager {
                     currentPrice <= abs.price - minInitialMoveTicks * tick)
             ) {
                 abs.confirmed = true;
-                confirmedAbsorptions.push(abs);
+                confirmedDetections.push(abs);
 
                 if (logger && symbol) {
                     logger.logEvent({
@@ -443,14 +443,14 @@ export class PriceConfirmationManager {
         });
 
         // Remove processed absorptions
-        this.pendingAbsorptions = this.pendingAbsorptions.filter(
+        this.pendingDetections = this.pendingDetections.filter(
             (abs) => !abs.confirmed && now - abs.time < confirmationTimeoutMs
         );
 
-        return confirmedAbsorptions;
+        return confirmedDetections;
     }
 
     getPendingCount(): number {
-        return this.pendingAbsorptions.length;
+        return this.pendingDetections.length;
     }
 }

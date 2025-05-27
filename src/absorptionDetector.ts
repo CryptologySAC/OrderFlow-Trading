@@ -599,7 +599,7 @@ export class AbsorptionDetector {
             };
 
             if (this.features.priceResponse) {
-                this.priceConfirmationManager.addPendingAbsorption(absorption);
+                this.priceConfirmationManager.addPendingDetection(absorption);
                 console.log(
                     "[AbsorptionDetector] Pending absorption added for price response at",
                     price
