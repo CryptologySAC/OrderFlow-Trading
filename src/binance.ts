@@ -17,7 +17,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// Custom Error Types
+// --- Error Types ---
 export class BinanceApiError extends Error {
     constructor(
         public context: string,
@@ -44,18 +44,42 @@ export class BinanceConfigurationError extends Error {
     }
 }
 
-// Cache interfaces
+// --- Generic Cache Utility ---
 interface CacheEntry<T> {
     data: T;
     timestamp: number;
     ttl: number;
 }
 
-// Using Binance SDK types for depth response
-interface DepthSnapshot {
-    lastUpdateId: number;
-    bids: [string, string][];
-    asks: [string, string][];
+class TimedCache<T> {
+    private cache = new Map<string, CacheEntry<T>>();
+
+    get(key: string): T | null {
+        const entry = this.cache.get(key);
+        if (!entry) return null;
+        if (Date.now() > entry.timestamp + entry.ttl) {
+            this.cache.delete(key);
+            return null;
+        }
+        return entry.data;
+    }
+
+    set(key: string, data: T, ttlMs: number) {
+        this.cache.set(key, { data, timestamp: Date.now(), ttl: ttlMs });
+    }
+
+    clear() {
+        this.cache.clear();
+    }
+
+    cleanup() {
+        const now = Date.now();
+        for (const [key, entry] of this.cache.entries()) {
+            if (now > entry.timestamp + entry.ttl) {
+                this.cache.delete(key);
+            }
+        }
+    }
 }
 
 export interface IBinanceDataFeed {
@@ -82,14 +106,8 @@ export class BinanceDataFeed implements IBinanceDataFeed {
     private readonly logger: Logger;
     private apiConnection?: SpotWebsocketAPI.WebsocketAPIConnection;
     private streamConnection?: SpotWebsocketStreams.WebsocketStreamsConnection;
-
-    // Cache management
-    private cache = new Map<string, CacheEntry<unknown>>();
-    private readonly defaultCacheTtlMs = 5000; // 5 seconds default TTL
-
-    // Rate limit management
-    private rateLimitBackoffMs = 1000;
-    private readonly maxRetries = 3;
+    private cache = new TimedCache<unknown>();
+    private readonly defaultCacheTtlMs = 5000; // 5s default cache for all endpoints
 
     private readonly configurationWebsocketStreams: ConfigurationWebsocketStreams =
         {
@@ -109,40 +127,33 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         this.validateConfiguration();
 
         this.logger = Logger.getInstance();
-        this.logger.setMinLogLevel(LogLevel.WARN);
+        this.logger.setMinLogLevel(LogLevel.INFO);
 
         this.streamClient = new Spot({
             configurationWebsocketStreams: this.configurationWebsocketStreams,
         });
-
         this.apiClient = new Spot({
             configurationWebsocketAPI: this.configurationWebsocketAPI,
         });
     }
 
-    private validateConfiguration(): void {
-        if (!process.env.API_KEY || !process.env.API_SECRET) {
+    private validateConfiguration() {
+        const { API_KEY, API_SECRET } = process.env;
+        if (!API_KEY || !API_SECRET) {
             throw new BinanceConfigurationError(
                 "Missing required API credentials: API_KEY and API_SECRET must be set"
             );
         }
-
-        if (
-            process.env.API_KEY.length < 10 ||
-            process.env.API_SECRET.length < 10
-        ) {
+        if (API_KEY.length < 10 || API_SECRET.length < 10) {
             throw new BinanceConfigurationError(
-                "Invalid API credentials: API_KEY and API_SECRET appear to be too short"
+                "API_KEY and API_SECRET must look valid"
             );
         }
     }
 
     public async connectToStreams(): Promise<SpotWebsocketStreams.WebsocketStreamsConnection> {
         try {
-            if (this.streamConnection) {
-                return this.streamConnection;
-            }
-
+            if (this.streamConnection) return this.streamConnection;
             this.streamConnection =
                 await this.streamClient.websocketStreams.connect();
             return this.streamConnection;
@@ -161,37 +172,29 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         return this.apiConnection;
     }
 
+    // --- Public Data Methods ---
     public async tradesAggregate(
         symbol: string,
         limit: number,
         fromId?: number
     ): Promise<SpotWebsocketAPI.TradesAggregateResponseResultInner[]> {
-        const cacheKey = this.getCacheKey("tradesAggregate", {
-            symbol,
-            limit,
-            fromId,
-        });
-        const cached =
-            this.getFromCache<
-                SpotWebsocketAPI.TradesAggregateResponseResultInner[]
-            >(cacheKey);
-
+        const cacheKey = `tradesAggregate-${symbol}-${limit}-${fromId ?? ""}`;
+        const cached = this.cache.get(cacheKey) as
+            | SpotWebsocketAPI.TradesAggregateResponseResultInner[]
+            | null;
         if (cached) {
             this.logger.info(`[tradesAggregate] Cache hit for ${symbol}`);
             return cached;
         }
-
         const config: SpotWebsocketAPI.TradesAggregateRequest = {
             symbol,
             limit,
             ...(fromId ? { fromId } : {}),
         };
-
         const result = await this.executeWithRetry(() =>
             this.executeWithApiConnection(config, "tradesAggregate")
         );
-
-        this.setCache(cacheKey, result, this.defaultCacheTtlMs);
+        this.cache.set(cacheKey, result, this.defaultCacheTtlMs);
         return result;
     }
 
@@ -199,170 +202,72 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         symbol: string,
         startTime: number
     ): Promise<SpotWebsocketAPI.TradesAggregateResponseResultInner[]> {
-        const cacheKey = this.getCacheKey("fetchAggTradesByTime", {
-            symbol,
-            startTime,
-        });
-        const cached =
-            this.getFromCache<
-                SpotWebsocketAPI.TradesAggregateResponseResultInner[]
-            >(cacheKey);
-
+        const cacheKey = `fetchAggTradesByTime-${symbol}-${startTime}`;
+        const cached = this.cache.get(cacheKey) as
+            | SpotWebsocketAPI.TradesAggregateResponseResultInner[]
+            | null;
         if (cached) {
             this.logger.info(`[fetchAggTradesByTime] Cache hit for ${symbol}`);
             return cached;
         }
-
         const config: SpotWebsocketAPI.TradesAggregateRequest = {
             symbol,
             startTime,
             limit: 1000,
         };
-
         const result = await this.executeWithRetry(() =>
             this.executeWithApiConnection(config, "fetchAggTradesByTime")
         );
-
-        this.setCache(cacheKey, result, this.defaultCacheTtlMs);
+        this.cache.set(cacheKey, result, this.defaultCacheTtlMs);
         return result;
     }
 
     public async getDepthSnapshot(
         symbol: string,
-        limit: number = 1000
+        limit = 1000
     ): Promise<SpotWebsocketAPI.DepthResponseResult> {
-        const cacheKey = this.getCacheKey("depthSnapshot", { symbol, limit });
-        const cached = this.getFromCache<DepthSnapshot>(cacheKey);
-
+        const cacheKey = `depthSnapshot-${symbol}-${limit}`;
+        const cached = this.cache.get(
+            cacheKey
+        ) as SpotWebsocketAPI.DepthResponseResult | null;
         if (cached) {
             this.logger.info(`[getDepthSnapshot] Cache hit for ${symbol}`);
             return cached;
         }
-
-        const config: SpotWebsocketAPI.DepthRequest = {
-            symbol,
-            limit,
-        };
-
+        const config: SpotWebsocketAPI.DepthRequest = { symbol, limit };
         const result = await this.executeWithRetry(() =>
             this.executeWithDepthConnection(config, "getDepthSnapshot")
         );
-
-        this.setCache(cacheKey, result, 2000); // 2 second TTL for depth data
+        this.cache.set(cacheKey, result, 2000); // shorter cache for depth
         return result;
     }
 
-    private validateDepthSnapshot(
-        data: SpotWebsocketAPI.DepthResponseResult
-    ): DepthSnapshot {
-        if (!data || typeof data !== "object") {
-            throw new Error("Invalid depth snapshot format: not an object");
-        }
-
-        if (typeof data.lastUpdateId !== "number") {
-            throw new Error(
-                "Invalid depth snapshot: missing or invalid lastUpdateId"
-            );
-        }
-
-        if (!Array.isArray(data.bids) || !Array.isArray(data.asks)) {
-            throw new Error(
-                "Invalid depth snapshot: bids and asks must be arrays"
-            );
-        }
-
-        // Type-safe validation for bid/ask format
-        const validateOrders = (
-            orders: unknown,
-            type: string
-        ): [string, string][] => {
-            if (!Array.isArray(orders)) {
-                throw new Error(`Invalid ${type} orders: must be an array`);
-            }
-
-            const validatedOrders: [string, string][] = [];
-
-            orders.forEach((order: unknown, index: number) => {
-                if (!Array.isArray(order) || order.length !== 2) {
-                    throw new Error(
-                        `Invalid ${type} order at index ${index}: must be [price, quantity] array`
-                    );
-                }
-                if (
-                    typeof order[0] !== "string" ||
-                    typeof order[1] !== "string"
-                ) {
-                    throw new Error(
-                        `Invalid ${type} order at index ${index}: price and quantity must be strings`
-                    );
-                }
-                validatedOrders.push([order[0], order[1]]);
-            });
-
-            return validatedOrders;
-        };
-
-        const validatedBids = validateOrders(data.bids, "bid");
-        const validatedAsks = validateOrders(data.asks, "ask");
-
-        return {
-            lastUpdateId: data.lastUpdateId,
-            bids: validatedBids,
-            asks: validatedAsks,
-        };
-    }
-
-    private validateTradeData(
-        data: unknown
-    ): SpotWebsocketAPI.TradesAggregateResponseResultInner[] {
-        if (!Array.isArray(data)) {
-            throw new Error("Invalid trade data format: expected array");
-        }
-
-        // Type-safe validation with proper typing
-        data.forEach((item: unknown, index: number) => {
-            if (!item || typeof item !== "object") {
-                throw new Error(
-                    `Invalid trade data at index ${index}: expected object`
-                );
-            }
-        });
-
-        // Safe type assertion after validation
-        return data as SpotWebsocketAPI.TradesAggregateResponseResultInner[];
-    }
-
+    // --- Internal Helpers ---
     private async executeWithRetry<T>(operation: () => Promise<T>): Promise<T> {
-        let lastError: Error;
-
-        for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+        let lastError: Error | null = null;
+        const maxRetries = 3;
+        let backoff = 1000;
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 return await operation();
             } catch (error) {
                 lastError = error as Error;
-
                 if (
                     error instanceof BinanceRateLimitError &&
-                    attempt < this.maxRetries
+                    attempt < maxRetries
                 ) {
-                    const backoffTime =
-                        this.rateLimitBackoffMs * Math.pow(2, attempt - 1);
                     this.logger.warn(
-                        `Rate limit hit, backing off for ${backoffTime}ms (attempt ${attempt}/${this.maxRetries})`
+                        `Rate limit hit, backoff ${backoff}ms, attempt ${attempt}/${maxRetries}`
                     );
-                    await this.sleep(backoffTime);
-                    continue;
-                }
-
-                if (attempt === this.maxRetries) {
+                    await this.sleep(backoff);
+                    backoff *= 2;
+                } else if (attempt === maxRetries) {
                     throw lastError;
+                } else {
+                    await this.sleep(backoff);
                 }
-
-                // For other errors, wait a shorter time before retry
-                await this.sleep(1000 * attempt);
             }
         }
-
         throw lastError!;
     }
 
@@ -374,21 +279,11 @@ export class BinanceDataFeed implements IBinanceDataFeed {
             const connection = await this.getApiConnection();
             const response: WebsocketApiResponse<SpotWebsocketAPI.TradesAggregateResponse> =
                 await connection.tradesAggregate(config);
-
-            const rateLimits: WebsocketApiRateLimit[] =
-                response.rateLimits ?? [];
-            this.logRateLimits(rateLimits, contextLabel);
-            await this.handleRateLimit(rateLimits, contextLabel);
-
-            const data = this.validateTradeData(response.data);
-            this.logger.info(
-                `[${contextLabel}] Received ${data?.length ?? 0} records`
-            );
-
-            return data;
+            this.handleApiRateLimit(response.rateLimits ?? [], contextLabel);
+            return this.validateTradeData(response.data);
         } catch (error) {
             this.logger.error(
-                `[${contextLabel}] Error: ${error instanceof Error ? error.stack : JSON.stringify(error)}`
+                `[${contextLabel}] API error: ${JSON.stringify(error)}`
             );
             throw new BinanceApiError(contextLabel, error);
         }
@@ -397,142 +292,81 @@ export class BinanceDataFeed implements IBinanceDataFeed {
     private async executeWithDepthConnection(
         config: SpotWebsocketAPI.DepthRequest,
         contextLabel: string
-    ): Promise<DepthSnapshot> {
+    ): Promise<SpotWebsocketAPI.DepthResponseResult> {
         try {
             const connection = await this.getApiConnection();
             const response: WebsocketApiResponse<SpotWebsocketAPI.DepthResponse> =
                 await connection.depth(config);
-
-            const rateLimits: WebsocketApiRateLimit[] =
-                response.rateLimits ?? [];
-            this.logRateLimits(rateLimits, contextLabel);
-            await this.handleRateLimit(rateLimits, contextLabel);
-            if (!response.data) {
-                throw new Error(
-                    `Invalid response format for depth snapshot: ${JSON.stringify(response.data)}`
-                );
-            }
-            const data = this.validateDepthSnapshot(
+            this.handleApiRateLimit(response.rateLimits ?? [], contextLabel);
+            return this.validateDepthSnapshot(
                 response.data as SpotWebsocketAPI.DepthResponseResult
             );
-            this.logger.info(
-                `[${contextLabel}] Received depth snapshot for ${config.symbol}: ${data.bids.length} bids, ${data.asks.length} asks`
-            );
-
-            return data;
         } catch (error) {
             this.logger.error(
-                `[${contextLabel}] Error: ${error instanceof Error ? error.stack : JSON.stringify(error)}`
+                `[${contextLabel}] API error: ${JSON.stringify(error)}`
             );
             throw new BinanceApiError(contextLabel, error);
         }
     }
 
-    private async handleRateLimit(
+    private handleApiRateLimit(
         rateLimits: WebsocketApiRateLimit[],
         context: string
-    ): Promise<void> {
+    ) {
         for (const limit of rateLimits) {
-            const usageRatio = limit.count / limit.limit;
-
-            if (usageRatio >= 1.0) {
+            const usage = limit.count / limit.limit;
+            if (usage >= 1.0) {
                 throw new BinanceRateLimitError(context, limit.rateLimitType);
             }
-
-            if (usageRatio >= 0.9) {
-                // Proactive backoff when approaching limit
-                const backoffTime = this.rateLimitBackoffMs;
+            if (usage >= 0.9) {
                 this.logger.warn(
-                    `[${context}] Approaching rate limit (${(usageRatio * 100).toFixed(1)}%), backing off for ${backoffTime}ms`
+                    `[${context}] Approaching rate limit: ${(usage * 100).toFixed(1)}%`
                 );
-                await this.sleep(backoffTime);
             }
         }
     }
 
-    private logRateLimits(
-        rateLimits: WebsocketApiRateLimit[],
-        context: string,
-        warningThreshold = 0.8
-    ): void {
-        if (!rateLimits.length) {
-            this.logger.info(`[${context}] No rate limits reported`);
-            return;
+    private validateTradeData(
+        data: unknown
+    ): SpotWebsocketAPI.TradesAggregateResponseResultInner[] {
+        if (!Array.isArray(data)) {
+            throw new Error("Invalid trade data format: expected array");
         }
-
-        for (const limit of rateLimits) {
-            const usageRatio = limit.count / limit.limit;
-            const msg = `[${context}] Rate Limit: type=${limit.rateLimitType}, interval=${limit.interval}, count=${limit.count}, limit=${limit.limit}`;
-
-            if (usageRatio >= warningThreshold) {
-                this.logger.warn(
-                    `${msg} ⚠️ HIGH USAGE (${(usageRatio * 100).toFixed(1)}%)`
-                );
-            } else {
-                this.logger.info(msg);
-            }
-        }
+        // Optionally add deeper per-item validation here
+        return data as SpotWebsocketAPI.TradesAggregateResponseResultInner[];
     }
 
-    // Cache management methods
-    private getCacheKey(
-        method: string,
-        params: Record<string, unknown>
-    ): string {
-        return `${method}-${JSON.stringify(params)}`;
-    }
-
-    private getFromCache<T>(key: string): T | null {
-        const entry = this.cache.get(key);
-        if (!entry) return null;
-
-        const now = Date.now();
-        if (now > entry.timestamp + entry.ttl) {
-            this.cache.delete(key);
-            return null;
+    private validateDepthSnapshot(
+        data: unknown
+    ): SpotWebsocketAPI.DepthResponseResult {
+        if (!data || typeof data !== "object")
+            throw new Error("Invalid depth snapshot format");
+        const snap = data as SpotWebsocketAPI.DepthResponseResult;
+        if (
+            typeof snap.lastUpdateId !== "number" ||
+            !Array.isArray(snap.bids) ||
+            !Array.isArray(snap.asks)
+        ) {
+            throw new Error("Malformed depth snapshot");
         }
-
-        return entry.data as T;
-    }
-
-    private setCache<T>(key: string, data: T, ttlMs: number): void {
-        this.cache.set(key, {
-            data,
-            timestamp: Date.now(),
-            ttl: ttlMs,
-        });
-
-        // Cleanup old entries periodically
-        if (this.cache.size > 1000) {
-            this.cleanupCache();
-        }
-    }
-
-    private cleanupCache(): void {
-        const now = Date.now();
-        for (const [key, entry] of this.cache.entries()) {
-            if (now > entry.timestamp + entry.ttl) {
-                this.cache.delete(key);
-            }
-        }
+        return snap;
     }
 
     private sleep(ms: number): Promise<void> {
         return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
+    // --- Disconnects all resources ---
     public async disconnect(): Promise<void> {
         try {
             if (this.apiConnection) {
                 await this.apiConnection.disconnect();
                 this.apiConnection = undefined;
             }
-
             if (this.streamConnection) {
                 await this.streamConnection.disconnect();
                 this.streamConnection = undefined;
             }
-
             this.cache.clear();
             this.logger.info("BinanceDataFeed disconnected and cleaned up");
         } catch (error) {
