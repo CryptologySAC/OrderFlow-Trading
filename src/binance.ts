@@ -127,7 +127,7 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         this.validateConfiguration();
 
         this.logger = Logger.getInstance();
-        this.logger.setMinLogLevel(LogLevel.INFO);
+        this.logger.setMinLogLevel(LogLevel.WARN);
 
         this.streamClient = new Spot({
             configurationWebsocketStreams: this.configurationWebsocketStreams,
