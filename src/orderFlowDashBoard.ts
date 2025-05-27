@@ -11,7 +11,7 @@ import * as path from "node:path";
 import * as ws from "ws";
 import { SpotWebsocketStreams } from "@binance/spot";
 import { TradesProcessor } from "./tradesProcessor.js";
-import { BinanceDataFeed } from "./binance.js";
+import { BinanceDataFeed, IBinanceDataFeed } from "./binance.js";
 import {
     OrderBookProcessor,
     IOrderBookProcessor,
@@ -236,10 +236,6 @@ class CircuitBreaker {
 // Enhanced Interfaces
 interface IStorage {
     purgeOldEntries(): void;
-}
-
-interface IBinanceDataFeed {
-    connectToStreams(): Promise<unknown>;
 }
 
 interface ITradesProcessor {
@@ -1238,6 +1234,7 @@ export class OrderFlowDashboard {
                 stopLoss:
                     detected.price + (detected.side === "buy" ? 0.005 : -0.005),
                 closeReason: "exhaustion",
+                signalData: detected,
             };
 
             this.dependencies.logger.info(
@@ -1278,6 +1275,7 @@ export class OrderFlowDashboard {
                 stopLoss:
                     detected.price + (detected.side === "buy" ? 0.005 : -0.005),
                 closeReason: "absorption",
+                signalData: detected,
             };
 
             this.dependencies.logger.info(

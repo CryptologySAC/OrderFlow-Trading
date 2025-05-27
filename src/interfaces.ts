@@ -90,6 +90,7 @@ export interface Signal {
     passiveVolume?: number;
     refilled?: boolean;
     zone?: string;
+    signalData?: unknown;
 }
 
 export interface VolumeBin {

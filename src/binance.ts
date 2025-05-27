@@ -17,7 +17,11 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-export class BinanceDataFeed {
+export interface IBinanceDataFeed {
+    connectToStreams(): Promise<SpotWebsocketStreams.WebsocketStreamsConnection>;
+}
+
+export class BinanceDataFeed implements IBinanceDataFeed {
     private readonly streamClient: Spot;
     private readonly apiClient: Spot;
     private readonly logger: Logger;
