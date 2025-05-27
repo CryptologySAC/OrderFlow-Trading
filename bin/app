@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
-import { OrderFlowDashboard } from "../dist/index.js";
+import { OrderFlowDashboard, createDependencies } from "../dist/index.js";
  
-const processor = new OrderFlowDashboard();
+const dependencies = createDependencies();
+const processor = new OrderFlowDashboard(dependencies);
 processor
     .startDashboard()
     .catch((err) => console.error("Failed to start dashboard:", err));

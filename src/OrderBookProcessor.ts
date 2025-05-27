@@ -6,6 +6,13 @@ import { WebSocketMessage } from "./interfaces.js";
 
 dotenv.config();
 
+export interface IOrderBookProcessor {
+    processWebSocketUpdate(
+        data: SpotWebsocketStreams.DiffBookDepthResponse
+    ): WebSocketMessage;
+    fetchInitialOrderBook(): Promise<WebSocketMessage>;
+}
+
 // Interface for order book data (matching dashboard format)
 interface OrderBookData {
     priceLevels: { price: number; bid: number; ask: number }[];
@@ -24,7 +31,7 @@ interface BinanceOrderBookSnapshot {
     asks: [string, string][];
 }
 
-export class OrderBookProcessor {
+export class OrderBookProcessor implements IOrderBookProcessor {
     private readonly symbol: string;
 
     private orderBook: {
@@ -77,12 +84,7 @@ export class OrderBookProcessor {
                 data: orderBook,
             };
         } catch (error) {
-            console.error("Error fetching initial order book:", error);
-            return {
-                type: "error",
-                data: error,
-                now: 0,
-            };
+            throw error;
         }
     }
 

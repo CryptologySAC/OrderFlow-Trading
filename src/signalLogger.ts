@@ -22,7 +22,11 @@ export interface SignalEvent {
     outcome?: string;
 }
 
-export class SignalLogger {
+export interface ISignalLogger {
+    logEvent(event: SignalEvent): void;
+}
+
+export class SignalLogger implements ISignalLogger {
     private file: string;
     private headerWritten = false;
 
@@ -35,12 +39,14 @@ export class SignalLogger {
         }
     }
 
+    // Implement the interface method (same as logEvent)
     logEvent(event: SignalEvent) {
         const header = Object.keys(event).join(",") + "\n";
         const row =
             Object.values(event)
                 .map((v) => (v === undefined ? "" : `"${v}"`))
                 .join(",") + "\n";
+
         if (!this.headerWritten) {
             fs.appendFileSync(this.file, header);
             this.headerWritten = true;

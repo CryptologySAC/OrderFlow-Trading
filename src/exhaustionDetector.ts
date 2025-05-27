@@ -1,5 +1,5 @@
 import { SpotWebsocketStreams } from "@binance/spot";
-import { SignalLogger } from "./signalLogger.js";
+import { ISignalLogger } from "./signalLogger.js";
 import {
     CircularBuffer,
     TimeAwareCache,
@@ -102,7 +102,7 @@ export class ExhaustionDetector {
     private readonly minInitialMoveTicks: number;
     private readonly confirmationTimeoutMs: number;
     private readonly maxRevisitTicks: number;
-    private readonly logger?: SignalLogger;
+    private readonly logger?: ISignalLogger;
 
     constructor(
         callback: ExhaustionCallback,
@@ -126,7 +126,7 @@ export class ExhaustionDetector {
             },
             symbol = "LTCUSDT",
         }: ExhaustionSettings = {},
-        logger?: SignalLogger
+        logger?: ISignalLogger
     ) {
         this.onExhaustion = callback;
         this.windowMs = windowMs;

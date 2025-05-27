@@ -1,5 +1,5 @@
 import { SpotWebsocketStreams } from "@binance/spot";
-import { SignalLogger } from "./signalLogger.js";
+import { ISignalLogger } from "./signalLogger.js";
 import {
     CircularBuffer,
     TimeAwareCache,
@@ -123,7 +123,7 @@ export class AbsorptionDetector {
     private readonly minInitialMoveTicks: number;
     private readonly confirmationTimeoutMs: number;
     private readonly maxRevisitTicks: number;
-    private readonly logger?: SignalLogger;
+    private readonly logger?: ISignalLogger;
 
     constructor(
         callback: AbsorptionCallback,
@@ -139,7 +139,7 @@ export class AbsorptionDetector {
             features = {},
             symbol = "LTCUSDT",
         }: AbsorptionSettings = {},
-        logger?: SignalLogger
+        logger?: ISignalLogger
     ) {
         // Validate settings
         this.validateSettings({

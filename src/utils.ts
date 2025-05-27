@@ -1,5 +1,5 @@
 import { SpotWebsocketStreams } from "@binance/spot";
-import { SignalLogger } from "./signalLogger.js";
+import { ISignalLogger } from "./signalLogger.js";
 
 export function parseBool(
     val: string | undefined,
@@ -333,7 +333,7 @@ export class PriceConfirmationManager {
         minInitialMoveTicks: number,
         maxRevisitTicks: number,
         confirmationTimeoutMs: number,
-        logger?: SignalLogger,
+        logger?: ISignalLogger,
         symbol?: string,
         eventType: "absorption" | "exhaustion" = "absorption"
     ): PendingDetection[] {
@@ -453,4 +453,15 @@ export class PriceConfirmationManager {
     getPendingCount(): number {
         return this.pendingDetections.length;
     }
+}
+
+export function isValidBacklogRequest(
+    obj: unknown
+): obj is { type: "backlog"; data?: { amount?: string | number } } {
+    return (
+        typeof obj === "object" &&
+        obj !== null &&
+        "type" in obj &&
+        (obj as { type: unknown }).type === "backlog"
+    );
 }
