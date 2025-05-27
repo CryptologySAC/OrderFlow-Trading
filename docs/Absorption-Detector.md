@@ -2,57 +2,57 @@
 
 ## Overview
 
-The `AbsorptionDetector` is a TypeScript class for **real-time detection of absorption events** in cryptocurrency orderflow, using Binance Spot WebSocket trade and order book data.
-It is designed for intraday traders seeking an edge by identifying significant areas where aggressive order flow is absorbed by strong passive liquidity, indicating potential reversals or swing points.
+The `AbsorptionDetector` is a **modular, memory-efficient, production-ready TypeScript class** for **real-time detection of absorption events** in cryptocurrency orderflow, using Binance Spot WebSocket trade and order book data.
+It is designed for **intraday traders and quantitative researchers** who want to systematically identify key areas where aggressive market orders are absorbed by strong passive liquidity, revealing potential swing points and edge opportunities.
 
-The detector features:
+**Key features:**
 
-- **Pure orderflow-based signal generation** (no traditional indicators)
-- **Advanced spoofing detection** to filter fake walls
-- **Price response and confirmation logic** for actionable signals
-- **Adaptive zone sizing, multi-zone logic, passive volume tracking**
-- **Extensive event logging for backtesting and statistical review**
-- **Pluggable, feature-flag-driven architecture** for advanced research and fast iteration
+- **Pure orderflow-based detection** (no price or candle indicators)
+- **Advanced spoofing detection** (filters fake or pulled walls)
+- **Price response/confirmation logic** for actionable, trade-ready signals
+- **Adaptive zone sizing, multi-zone bands, refill and passive history**
+- **Auto-calibration, robust event logging, and full research telemetry**
+- **Pluggable, feature-flag-driven architecture** (via shared `utils.ts` modules)
+- **Supports both “absorption” and “exhaustion” detection (when used with correct event type)**
 
 ---
 
 ## What Is Absorption?
 
-**Absorption** is an orderflow phenomenon where a large passive order (or cluster) in the order book is repeatedly “hit” by aggressive market orders, but is not pulled or canceled—instead, the liquidity absorbs the flow.
-This often occurs at round numbers, swing highs/lows, or key support/resistance, and is typically followed by a stall, reversal, or “ignition” move in the opposite direction.
+**Absorption** describes an orderflow event where large aggressive market orders are continuously matched by a stable or refilled passive orderbook wall (not cancelled, not pulled).
+This typically occurs at round numbers, swing levels, or clear support/resistance—indicating the presence of a real, strong market participant (not a “spoof”) willing to absorb flow.
 
-- **Bullish absorption:** Aggressive sells repeatedly hit a large bid wall, but price fails to break down, and eventually bounces.
-- **Bearish absorption:** Aggressive buys attack a large ask wall, but price fails to break out, and eventually reverses.
+- **Bullish absorption:** Big sell orders repeatedly hit a large bid wall; price holds and then bounces.
+- **Bearish absorption:** Big buy orders attack a large ask wall; price holds and then drops.
 
-**True absorption** = evidence of a real market participant absorbing orderflow (not spoofing) and often marks key market turning points.
+**Key property:** Absorption marks _real_ liquidity—often a precursor to reversal, major ignition, or a “fake breakdown/breakout.”
 
 ---
 
 ## What Does the Detector Do?
 
-- **Watches all trades and orderbook updates** for the selected instrument.
-- **Aggregates aggressive market volume** and passive orderbook volume at each price (or zone).
+- **Ingests live trades and orderbook updates** for your instrument.
+- **Aggregates aggressive market volume** and passive liquidity at each price or cluster zone.
 - **Detects absorption events:**
 
-    - High aggressive volume is absorbed by a stable or refilled passive wall at a price/zone.
-    - Spoofing (pulling the wall) is detected and filtered out.
+    - Large aggressive flow meets a stable or _refilled_ passive wall.
+    - Spoofing (walls pulled/cancelled) is detected and filtered out.
 
 - **Signals a “pending” absorption event** and tracks price response:
 
-    - Confirms the event if price moves favorably by a configurable number of ticks within a certain time window (no snap-back).
-    - Invalidates if price retests or fails to move quickly enough.
+    - **Confirms** if price reacts favorably (minimum tick move) within a set time window (no deep snap-back).
+    - **Invalidates** if price retests/undoes the move or fails to react in time.
 
-- **Logs every detection, confirmation, and invalidation** for robust statistical analysis.
+- **Logs every step**—detection, confirmation, invalidation—**with all contextual fields** for research/backtesting.
 
 ---
 
-## Usage Example
+## Example Usage
 
 ```ts
 import { AbsorptionDetector } from "./absorptionDetector.js";
 import { SignalLogger } from "./signalLogger.js";
 
-// Example callback for confirmed absorption
 const onAbsorption = (data) => {
     console.log("Absorption signal:", data);
 };
@@ -77,107 +77,118 @@ const detector = new AbsorptionDetector(
             priceResponse: true,
             autoCalibrate: true,
         },
+        symbol: "LTCUSDT",
     },
     logger
 );
 
-// Feed it trades and depth updates from Binance stream
+// Stream in trades and depth from Binance:
 detector.addTrade(tradeMsg);
 detector.addDepth(orderBookMsg);
 ```
 
 ---
 
-## Settings & Parameters
+## Parameters & Settings
 
-| Name                    | Type     | Description                                                                                          | Typical Value    |
-| ----------------------- | -------- | ---------------------------------------------------------------------------------------------------- | ---------------- |
-| `windowMs`              | `number` | Time window in ms for aggregating trades for absorption detection.                                   | `90000` (90 sec) |
-| `minAggVolume`          | `number` | Minimum aggressive trade volume (sum of market orders) for an absorption to be considered.           | `600`            |
-| `pricePrecision`        | `number` | Decimal precision for prices (e.g. `2` for 0.01).                                                    | `2`              |
-| `zoneTicks`             | `number` | Price band (in ticks) for grouping absorption.                                                       | `3`              |
-| `eventCooldownMs`       | `number` | Minimum time between signals at the same zone/side (debounce).                                       | `15000` (15 sec) |
-| `minInitialMoveTicks`   | `number` | Number of ticks price must move (from absorption) in the expected direction to confirm signal.       | `12`             |
-| `confirmationTimeoutMs` | `number` | Time window to confirm signal after detection.                                                       | `60000` (1 min)  |
-| `maxRevisitTicks`       | `number` | How far price can move back toward/through the absorption price before invalidation (retake filter). | `5`              |
-| `features`              | `object` | Enables advanced detection and research features. (See below)                                        | See below        |
+| Name                    | Type     | Description                                                                 | Typical Value |
+| ----------------------- | -------- | --------------------------------------------------------------------------- | ------------- |
+| `windowMs`              | `number` | Trade lookback window (ms) for detection                                    | `90000` (90s) |
+| `minAggVolume`          | `number` | Minimum sum of aggressive (market) volume to qualify                        | `600`         |
+| `pricePrecision`        | `number` | Price rounding decimals (matches instrument tick)                           | `2`           |
+| `zoneTicks`             | `number` | Width (in ticks) for clustering/grouping prices into detection bands        | `3`           |
+| `eventCooldownMs`       | `number` | Debounce time between signals at same price/side                            | `15000` (15s) |
+| `minInitialMoveTicks`   | `number` | How many ticks price must move favorably (after detection) for confirmation | `12`          |
+| `confirmationTimeoutMs` | `number` | Max time to confirm a signal (ms)                                           | `60000` (1m)  |
+| `maxRevisitTicks`       | `number` | Max allowed retest distance (in ticks) for invalidation                     | `5`           |
+| `features`              | `object` | Enables/disables advanced detection modules (see below)                     | See below     |
+| `symbol`                | `string` | Instrument symbol (for logging and analytics)                               | `"LTCUSDT"`   |
 
 ---
 
-### **Feature Flags**
+### Feature Flags
 
-| Feature             | Description                                                                                        |
-| ------------------- | -------------------------------------------------------------------------------------------------- |
-| `spoofingDetection` | Detects and ignores events where passive wall is pulled before being hit (filters out fake walls). |
-| `adaptiveZone`      | Automatically adjusts zone width based on market volatility (ATR).                                 |
-| `passiveHistory`    | Tracks historical changes in passive volume for refill/sustained liquidity detection.              |
-| `multiZone`         | Aggregates absorption across multiple neighboring price bands (clusters).                          |
-| `priceResponse`     | Requires a fast, directional price response to confirm absorption (filters out non-actionable).    |
-| `sideOverride`      | Allows for custom trade side logic (advanced/research).                                            |
-| `autoCalibrate`     | Dynamically adjusts `minAggVolume` based on recent signal rates to optimize detection.             |
+| Flag                | Description                                                                      |
+| ------------------- | -------------------------------------------------------------------------------- |
+| `spoofingDetection` | Detects and ignores signals when wall is pulled or cancelled (“fake” liquidity)  |
+| `adaptiveZone`      | Dynamically adjusts zone width (tick band) using real-time volatility (ATR)      |
+| `passiveHistory`    | Tracks passive volume over time to spot “refills” (iceberg, hidden liquidity)    |
+| `multiZone`         | Aggregates volumes over a band of zones, not just single price                   |
+| `priceResponse`     | Requires a price reaction for confirmation (prevents trading stale/fake signals) |
+| `sideOverride`      | Allows custom research logic for aggressive/passive side (advanced/research)     |
+| `autoCalibrate`     | Dynamically tunes `minAggVolume` to adapt to market regime changes               |
 
 ---
 
 ## How Absorption Detection Works
 
-1. **Aggregates recent trades by price/zone** using `windowMs` and `zoneTicks`.
-2. **Checks for high aggressive volume at a stable/refilled passive wall.**
-3. **Filters out spoofing events** (wall pulls before being hit).
-4. **Marks a “pending” absorption** when conditions are met.
-5. **Confirms absorption** only if price moves favorably by at least `minInitialMoveTicks` (no snap-back within `maxRevisitTicks`) within `confirmationTimeoutMs`.
-6. **Logs every detection and outcome** to file via `SignalLogger`.
+1. **Aggregates all recent trades by price/zone** using your time window and price precision.
+2. **Detects clusters where large aggressive market orders meet stable/refilled passive walls.**
+3. **Applies all active feature modules:**
+
+    - Spoofing detection (history, pulls)
+    - Passive refill and adaptive band width
+    - Multi-zone (captures distributed liquidity)
+
+4. **Logs and signals “pending” absorptions.**
+5. **Tracks price response:**
+
+    - If price moves favorably (by `minInitialMoveTicks`) and doesn’t snap back within `maxRevisitTicks`, within `confirmationTimeoutMs`,
+      the event is **confirmed**.
+    - If price fails to move or revisits, it is **invalidated**.
+
+6. **All events are logged to file or analytics backend.**
 
 ---
 
-## Good Default Settings
+## Defaults (Recommended for LTCUSDT Spot)
 
-| Parameter               | Value | Rationale                                                       |
-| ----------------------- | ----- | --------------------------------------------------------------- |
-| `windowMs`              | 90000 | 1–2 minute clusters common for true absorption                  |
-| `minAggVolume`          | 600   | Enough to filter noise, not so high as to miss real events      |
-| `pricePrecision`        | 2     | Matches typical tick size for LTCUSDT (0.01)                    |
-| `zoneTicks`             | 3     | Absorption typically occurs in tight 2–5 tick bands             |
-| `minInitialMoveTicks`   | 12    | Requires \~0.12 move before confirming a signal (trader’s edge) |
-| `confirmationTimeoutMs` | 60000 | 1 minute: actionable, avoids dead signals                       |
-| `maxRevisitTicks`       | 5     | Allows for shallow retests, filters out failed moves            |
+| Parameter               | Value | Why                                     |
+| ----------------------- | ----- | --------------------------------------- |
+| `windowMs`              | 90000 | 1–2 minute clusters best for absorption |
+| `minAggVolume`          | 600   | Filters out noise, not too restrictive  |
+| `pricePrecision`        | 2     | Matches 0.01 tick size                  |
+| `zoneTicks`             | 3     | 2–5 tick bands catch most real clusters |
+| `minInitialMoveTicks`   | 12    | Ensures edge after fees/slippage        |
+| `confirmationTimeoutMs` | 60000 | 1 min: balances speed and reliability   |
+| `maxRevisitTicks`       | 5     | Allows for some chop, filters failed    |
 
 ---
 
 ## Logging & Analytics
 
-- **Every signal event (detected, confirmed, invalidated) is logged** as a CSV/JSON row for later review.
-- Use the logs to analyze:
+- **Every detection, confirmation, and invalidation** is logged (CSV, JSON, or DB).
+- Use your logs to analyze:
 
-    - Signal hit rates and fail rates
-    - Typical response time/size
-    - Which settings produce the highest edge
-    - Manual or automated trade review
+    - Hit rate, fail rate, post-signal move stats
+    - Parameter sensitivity and edge analysis
+    - Visualization of signal timing vs. price chart
 
 ---
 
 ## Practical Trading Advice
 
-- **Never enter after the move is complete**—confirm on early price reaction, not after full target.
-- **Tune parameters to maximize after-fee, after-slippage edge**, not just signal frequency.
-- **Review logs regularly:** adjust min volume, move, and time thresholds to filter out false or late signals.
-- **Visualize signals on your chart:** use the logs to spot the most predictive patterns.
+- **Enter only on early confirmation, not after full target is hit.**
+- **Optimize after-fee/slippage edge**, not just “raw” signal frequency.
+- **Tune thresholds for your market regime** (volatile, choppy, etc.).
+- **Regularly review log stats and trade journal** to improve signal quality.
 
 ---
 
 ## Advanced Notes
 
-- **Dynamic calibration (`autoCalibrate`)**: Adjusts thresholds to prevent signal flooding or drought.
-- **Passive refill tracking**: Detects hidden liquidity and iceberg orders.
-- **Multi-zone logic**: Captures distributed absorption across a price band.
-- **Perfect for research:** Feature flags enable fast A/B testing of detection algorithms.
+- **Memory management is fully automatic:** all buffers and histories are time-limited and space-bounded.
+- **Auto-calibration adapts to live market regime.**
+- **Compatible with all modern event-driven research pipelines (CSV, DB, plot, ML, etc).**
+- **Easily extend for multi-instrument, multi-exchange, or cross-signal research.**
 
 ---
 
-## Integration & Extension
+## Modular and Extensible
 
-- Can be combined with exhaustion detectors, CVD/Delta confirmation, swing predictors, etc.
-- Supports any market and timescale with configurable settings.
-- Plug in any logging/output system (CSV, JSON, database).
+- Detector is compatible with the same `utils.ts` modules as `ExhaustionDetector`, `SignalLogger`, etc.
+- Drop-in support for other advanced signals: exhaustion, swing prediction, CVD, delta, etc.
+- Open for extension with your own research modules.
 
 ---
 
@@ -195,5 +206,5 @@ For questions, improvements, or advanced usage, open an issue or pull request on
 
 ---
 
-**This detector provides the “engine” for real edge in modern orderflow trading.
-Refine, iterate, and study your logs—your next edge is in the data.**
+**Absorption detection is your edge engine in modern orderflow trading.
+Refine, iterate, and analyze your logs—the data holds the edge.**

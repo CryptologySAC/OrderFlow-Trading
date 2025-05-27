@@ -2,62 +2,62 @@
 
 ## Overview
 
-The `ExhaustionDetector` is a TypeScript class for **real-time detection of exhaustion events** in cryptocurrency orderflow, using Binance Spot WebSocket trade and order book data.
-It is designed for intraday traders and researchers seeking to detect market moments where aggressive orderflow runs out, passive liquidity is absent, and a “vacuum” or liquidity cliff forms—often just before a reversal or rapid price move.
+The `ExhaustionDetector` is a **modular, memory-safe, high-precision TypeScript class** for **real-time detection of exhaustion events** in cryptocurrency orderflow using Binance Spot WebSocket trade and order book data.
+It is designed for **intraday and quantitative traders** who want to systematically identify market points where aggressive market orders fully deplete passive liquidity, often signaling imminent reversals, traps, or high-probability moves.
 
-The detector features:
+**Key features:**
 
-- **Pure orderflow-based exhaustion signal generation**
-- **Advanced spoofing and refill detection**
-- **Zone-based and multi-zone logic**
-- **Adaptive zone sizing (ATR-based)**
-- **Price response and confirmation logic for actionable signals**
-- **Full structured event logging for backtesting and review**
-- **A modular, feature-flag-driven architecture for research and rapid iteration**
+- **Pure orderflow-based signal generation** (no candles or moving averages)
+- **Advanced spoofing detection** to filter out fake liquidity events
+- **Adaptive zone sizing, multi-zone logic, passive volume and refill tracking**
+- **Price response/confirmation logic** for actionable, not hypothetical, signals
+- **Auto-calibration, robust event logging, and research-ready architecture**
+- **Plug-in, feature-flag-driven modules via shared `utils.ts`**
+- **Supports research into both “exhaustion” and “absorption” with flexible event type**
 
 ---
 
 ## What Is Exhaustion?
 
-**Exhaustion** in orderflow occurs when aggressive market orders (buy or sell) “clear out” all passive liquidity on the opposite side of the orderbook—creating a “vacuum” that is often filled by a price jump, reversal, or “impulse” move as the market seeks liquidity.
+**Exhaustion** is an orderflow event where aggressive market orders on one side (e.g., buy) “clean out” all available passive liquidity on the opposite side (e.g., sell offers disappear, no more ask wall).
+The orderbook “runs out” of liquidity, and price often pauses, reverses, or whipsaws as liquidity dries up and market orders can no longer find a match.
 
-- **Ask-side exhaustion:** Aggressive buys clear the ask book; no more sellers. Price often jumps up or spikes before new offers arrive.
-- **Bid-side exhaustion:** Aggressive sells clear the bid book; no more buyers. Price often drops quickly before new bids are posted.
+- **Bullish exhaustion:** All ask liquidity is taken; buyers “clean out the book” at a local high, often preceding a reversal down.
+- **Bearish exhaustion:** All bid liquidity is taken; sellers “clean out the book” at a local low, often preceding a reversal up.
 
-**True exhaustion** is not simply low volume—it is a _sudden_ and _total_ lack of passive liquidity at a key price or zone, immediately following significant aggressive activity.
+**True exhaustion** signals that a move is likely done—momentum dries up, and a “trap” or inflection point is likely.
 
 ---
 
 ## What Does the Detector Do?
 
-- **Scans all trades and depth updates** for the target instrument in real time.
-- **Aggregates aggressive volume by price zone** over a rolling window.
-- **Detects exhaustion:**
+- **Processes every trade and orderbook update** for your chosen symbol.
+- **Clusters trades by price/zone and aggregates aggressive market volume.**
+- **Detects exhaustion events:**
 
-    - Large aggressive volume is seen at a price/zone, and the _opposite side_ of the orderbook is fully cleared (or nearly so).
-    - Optional features filter out spoofing, fake refills, or noise.
+    - Large aggressive flow _completely_ removes all passive liquidity at a price/zone (opposite side hits zero).
+    - Spoofing (pulled liquidity) is detected and filtered out.
 
-- **Signals a “pending” exhaustion event** and tracks price response:
+- **Signals “pending” exhaustion** and tracks price response:
 
-    - Confirms the event if price moves in the expected direction by a configurable number of ticks, without snap-back, within a set time.
-    - Invalidates if price revisits the exhaustion level or fails to move quickly enough.
+    - **Confirms** the event if price reacts favorably by a set number of ticks within a window (and does not retest too deeply).
+    - **Invalidates** if price retests/undoes the move or fails to react in time.
 
-- **Logs every detection, confirmation, and invalidation** for review and research.
+- **Logs all signals, confirmations, and invalidations** for later statistical analysis.
 
 ---
 
-## Usage Example
+## Example Usage
 
 ```ts
 import { ExhaustionDetector } from "./exhaustionDetector.js";
 import { SignalLogger } from "./signalLogger.js";
 
-// Callback for confirmed exhaustion
 const onExhaustion = (data) => {
     console.log("Exhaustion signal:", data);
 };
 
-const logger = new SignalLogger("signal_log.csv");
+const logger = new SignalLogger("exhaustion_log.csv");
 
 const detector = new ExhaustionDetector(
     onExhaustion,
@@ -75,14 +75,14 @@ const detector = new ExhaustionDetector(
             passiveHistory: true,
             multiZone: true,
             priceResponse: true,
-            sideOverride: true,
             autoCalibrate: true,
         },
+        symbol: "LTCUSDT",
     },
     logger
 );
 
-// Feed detector trades and orderbook depth messages from Binance
+// Feed with trades and depth from Binance Spot
 detector.addTrade(tradeMsg);
 detector.addDepth(orderBookMsg);
 ```
@@ -91,111 +91,119 @@ detector.addDepth(orderBookMsg);
 
 ## Settings & Parameters
 
-| Name                    | Type     | Description                                                          | Typical Value    |
-| ----------------------- | -------- | -------------------------------------------------------------------- | ---------------- |
-| `windowMs`              | `number` | Rolling time window (ms) for trade aggregation.                      | `90000` (90 sec) |
-| `minAggVolume`          | `number` | Minimum aggressive trade volume (sum) for exhaustion detection.      | `600`            |
-| `pricePrecision`        | `number` | Decimal precision for prices (e.g., `2` for 0.01 ticks).             | `2`              |
-| `zoneTicks`             | `number` | Price band (in ticks) for grouping exhaustion detection.             | `3`              |
-| `eventCooldownMs`       | `number` | Minimum time between signals at the same zone/side.                  | `15000` (15 sec) |
-| `minInitialMoveTicks`   | `number` | Number of ticks price must move (from exhaustion) to confirm signal. | `12`             |
-| `confirmationTimeoutMs` | `number` | Time window to confirm signal after detection.                       | `60000` (1 min)  |
-| `maxRevisitTicks`       | `number` | Allowed retest distance (in ticks) before invalidation.              | `5`              |
-| `features`              | `object` | Enables advanced detection and research features (see below).        | See below        |
+| Name                    | Type     | Description                                                         | Typical Value |
+| ----------------------- | -------- | ------------------------------------------------------------------- | ------------- |
+| `windowMs`              | `number` | Trade lookback window (ms) for detection                            | `90000` (90s) |
+| `minAggVolume`          | `number` | Minimum aggressive (market) volume to qualify for exhaustion        | `600`         |
+| `pricePrecision`        | `number` | Price rounding decimals                                             | `2`           |
+| `zoneTicks`             | `number` | Width (in ticks) for grouping prices into exhaustion bands          | `3`           |
+| `eventCooldownMs`       | `number` | Debounce time between signals at the same price/side                | `15000` (15s) |
+| `minInitialMoveTicks`   | `number` | Number of ticks price must move (after exhaustion) for confirmation | `12`          |
+| `confirmationTimeoutMs` | `number` | Max time to confirm a signal (ms)                                   | `60000` (1m)  |
+| `maxRevisitTicks`       | `number` | Max retest distance (in ticks) for invalidation                     | `5`           |
+| `features`              | `object` | Enables/disables advanced detection modules (see below)             | See below     |
+| `symbol`                | `string` | Instrument symbol (for logging and analytics)                       | `"LTCUSDT"`   |
 
 ---
 
-### **Feature Flags**
+### Feature Flags
 
-| Feature             | Description                                                                                      |
-| ------------------- | ------------------------------------------------------------------------------------------------ |
-| `spoofingDetection` | Detects and ignores events where passive wall is pulled before exhaustion (filters out fakes).   |
-| `adaptiveZone`      | Automatically adjusts zone width based on recent market volatility (ATR).                        |
-| `passiveHistory`    | Tracks time-series of passive volume for refill/sustained liquidity detection.                   |
-| `multiZone`         | Aggregates exhaustion across neighboring price bands.                                            |
-| `priceResponse`     | Requires a directional price response to confirm exhaustion (filters out non-actionable events). |
-| `sideOverride`      | Enables advanced/experimental side-detection logic.                                              |
-| `autoCalibrate`     | Dynamically adjusts `minAggVolume` based on recent signal frequency to optimize detection.       |
+| Flag                | Description                                                                            |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| `spoofingDetection` | Detects and ignores signals when passive liquidity is pulled before being exhausted    |
+| `adaptiveZone`      | Dynamically adjusts exhaustion band width using volatility (ATR)                       |
+| `passiveHistory`    | Tracks historical passive volume for detecting refilled walls                          |
+| `multiZone`         | Aggregates exhaustion over a band of neighboring zones                                 |
+| `priceResponse`     | Requires a price reaction to confirm exhaustion (prevents acting on fake/late signals) |
+| `sideOverride`      | Allows custom logic for aggressive/passive side (advanced/research)                    |
+| `autoCalibrate`     | Dynamically tunes `minAggVolume` for best detection frequency                          |
 
 ---
 
 ## How Exhaustion Detection Works
 
 1. **Aggregates recent trades by price/zone** using `windowMs` and `zoneTicks`.
-2. **Checks for high aggressive volume at a zone** and whether the opposite orderbook side is _empty_ (or very thin).
-3. **Optional spoofing/refill checks** filter out false positives.
-4. **Marks a “pending” exhaustion** when conditions are met.
-5. **Confirms exhaustion** only if price moves by at least `minInitialMoveTicks` (without snap-back, within `maxRevisitTicks` and `confirmationTimeoutMs`).
-6. **Logs all detections and outcomes** for analytics.
+2. **Detects zones where aggressive flow “cleans out” passive liquidity** (opposite side = 0).
+3. **Applies all advanced feature modules:**
+
+    - Spoofing detection (pulled liquidity)
+    - Passive volume refill, adaptive band width, multi-zone
+
+4. **Signals “pending” exhaustion when conditions are met.**
+5. **Tracks price response:**
+
+    - Confirms if price moves favorably (`minInitialMoveTicks`), no deep retest (`maxRevisitTicks`), within `confirmationTimeoutMs`.
+    - Invalidates otherwise.
+
+6. **All steps/events are logged for robust backtesting.**
 
 ---
 
 ## Good Default Settings
 
-| Parameter               | Value | Rationale                                              |
-| ----------------------- | ----- | ------------------------------------------------------ |
-| `windowMs`              | 90000 | Captures meaningful short-term market sweeps           |
-| `minAggVolume`          | 600   | Filters out low-volume noise; tune for asset/liquidity |
-| `pricePrecision`        | 2     | 0.01 for LTCUSDT, etc                                  |
-| `zoneTicks`             | 3     | Detects exhaustion across a micro-range                |
-| `minInitialMoveTicks`   | 12    | Requires real price follow-through for confirmation    |
-| `confirmationTimeoutMs` | 60000 | Only act on immediate exhaustion-driven moves          |
-| `maxRevisitTicks`       | 5     | Allows minor retest, filters chop                      |
+| Parameter               | Value | Why                                     |
+| ----------------------- | ----- | --------------------------------------- |
+| `windowMs`              | 90000 | 1–2 min clusters catch most real events |
+| `minAggVolume`          | 600   | Filters noise, not too restrictive      |
+| `pricePrecision`        | 2     | Matches tick size for LTCUSDT           |
+| `zoneTicks`             | 3     | 2–5 tick bands common for exhaustion    |
+| `minInitialMoveTicks`   | 12    | Requires price to move before confirm   |
+| `confirmationTimeoutMs` | 60000 | 1 min: actionable, avoids stale         |
+| `maxRevisitTicks`       | 5     | Allows minor retest, filters failures   |
 
 ---
 
 ## Logging & Analytics
 
-- **All exhaustion events and their outcomes are logged** using the provided `SignalLogger`.
-- Logs contain timestamps, signal details, confirmation/invalidation outcomes, and more.
+- **Every exhaustion event (detected, confirmed, invalidated) is logged** for later analysis and research.
 - Use logs to analyze:
 
-    - Signal accuracy and frequency
-    - Average response size/time
-    - Settings that maximize your edge
-    - Edge cases and potential improvements
+    - Hit/fail rates and signal outcomes
+    - Optimal thresholds for real edge
+    - Price response time and post-event move distribution
+    - Manual or automated trade reviews
 
 ---
 
 ## Practical Trading Advice
 
-- **Enter only after confirmation:** Require immediate price reaction for edge.
-- **Review logs frequently:** Adjust thresholds to optimize win rate and minimize chop.
-- **Don’t chase late moves:** Exits or timeouts keep you out of “dead” signals.
-- **Visualize exhaustion events on your trading chart:** Study post-signal price action.
+- **Use only confirmed signals for manual/automated trading**—avoid acting on raw “detection” without price confirmation.
+- **Tune parameters for your market and timescale**—lower for scalping, higher for swing trading.
+- **Review logs regularly** and adjust thresholds to maximize edge after fees/slippage.
+- **Combine with absorption, CVD/delta, or swing logic** for highest quality setups.
 
 ---
 
 ## Advanced Notes
 
-- **Dynamic calibration (`autoCalibrate`)**: Keeps signal frequency stable and optimal.
-- **Passive refill tracking**: Prevents false signals from replenished liquidity.
-- **Multi-zone aggregation**: Finds exhaustion in “distributed” orderbook holes.
-- **Research toggles:** Feature flags enable fast A/B testing of improvements.
+- **All memory/state is bounded and auto-managed** via time-aware caches and buffers.
+- **Auto-calibration** adapts to live market flow (avoids signal flooding or starvation).
+- **Designed for multi-instrument, multi-exchange, and ML/statistical research.**
+- **Can be used as a “building block” for composite signal generation.**
 
 ---
 
 ## Integration & Extension
 
-- Combine with absorption detectors, CVD/Delta logic, swing predictors, and more.
-- Adaptable to any market and time scale with parameter tuning.
-- Pluggable logging/output for database or analytics stack.
+- Works with the same `utils.ts` as absorption and other detectors.
+- Ready for plug-in to dashboards, research notebooks, or trading bots.
+- Can be combined with any orderflow, delta, or predictive module for advanced edges.
 
 ---
 
 ## References & Further Reading
 
-- _Trading Order Flow: How Exhaustion Signals Precede Reversals_ (see provided PDF)
-- _Volume Profile, Footprint, and Orderbook Trading for Crypto_ (OrderFlow\.net)
+- _Trading Order Flow: How Absorption and Exhaustion Shape Market Turning Points_ (see included PDF)
+- _Volume Profile & Footprint Trading for Crypto_ (OrderFlow\.net)
 - Binance API Docs: [https://binance-docs.github.io/apidocs/spot/en/](https://binance-docs.github.io/apidocs/spot/en/)
 
 ---
 
 ## Contact
 
-For questions, improvements, or research use-cases, open an issue or pull request on GitHub.
+For questions, suggestions, or advanced usage, open an issue or pull request on GitHub.
 
 ---
 
-**The ExhaustionDetector is your edge for finding “liquidity vacuums”—where big moves begin.
-Analyze, iterate, and let the data guide your edge.**
+**Exhaustion signals the end of a move—your edge is in detecting real liquidity dry-ups, not just price prints.
+Analyze, iterate, and learn from your logs to level up your orderflow trading.**
