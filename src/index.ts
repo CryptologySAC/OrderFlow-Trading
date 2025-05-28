@@ -3,7 +3,7 @@
 import {
     OrderFlowDashboard,
     createDependencies,
-} from "./orderFlowDashBoard.js";
+} from "./orderFlowDashboard.js";
 
 /**
  * Main entry point for the Order Flow Trading application

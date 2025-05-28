@@ -2273,3 +2273,4 @@ timestamp,type,symbol,signalPrice,side,aggressiveVolume,passiveVolume,zone,refil
 "2025-05-28T13:55:35.524Z","accumulation","LTCUSDT","96","buy","172.74800000000005","231.66","96","false","false","detected"
 "2025-05-28T13:55:35.525Z","accumulation","LTCUSDT","96","buy","180.14500000000004","231.66","96","false","false","detected"
 "2025-05-28T13:55:35.527Z","accumulation","LTCUSDT","96","buy","180.20300000000003","231.66","96","false","false","detected"
+"2025-05-28T13:57:47.258Z","accumulation","LTCUSDT","95.96","buy","74.925","100.201","95.96000000000001","false","false","detected"
