@@ -315,6 +315,67 @@ export class PassiveVolumeTracker {
         const previousQty = side === "buy" ? lastLevel.ask : lastLevel.bid;
         return currentPassive >= previousQty * 0.9;
     }
+
+    /**
+     * Get average passive volume at a price level over a time window
+     */
+    public getAveragePassive(price: number, windowMs: number): number {
+        const history = this.passiveVolumeHistory.get(price);
+        if (!history || history.length === 0) {
+            // No history, return current value
+            const current = this.lastSeenPassive.get(price);
+            return current ? current.bid + current.ask : 0;
+        }
+
+        const now = Date.now();
+        const cutoff = now - windowMs;
+        const recentHistory = history.filter((h) => h.time >= cutoff);
+
+        if (recentHistory.length === 0) {
+            return 0;
+        }
+
+        const totalBid = recentHistory.reduce((sum, h) => sum + h.bid, 0);
+        const totalAsk = recentHistory.reduce((sum, h) => sum + h.ask, 0);
+
+        return (totalBid + totalAsk) / recentHistory.length;
+    }
+
+    /**
+     * Get average passive volume for a specific side
+     */
+    public getAveragePassiveBySide(
+        price: number,
+        side: "buy" | "sell",
+        windowMs: number
+    ): number {
+        const history = this.passiveVolumeHistory.get(price);
+        if (!history || history.length === 0) {
+            const current = this.lastSeenPassive.get(price);
+            if (!current) return 0;
+            return side === "buy" ? current.ask : current.bid;
+        }
+
+        const now = Date.now();
+        const cutoff = now - windowMs;
+        const recentHistory = history.filter((h) => h.time >= cutoff);
+
+        if (recentHistory.length === 0) {
+            return 0;
+        }
+
+        if (side === "buy") {
+            return (
+                recentHistory.reduce((sum, h) => sum + h.ask, 0) /
+                recentHistory.length
+            );
+        } else {
+            return (
+                recentHistory.reduce((sum, h) => sum + h.bid, 0) /
+                recentHistory.length
+            );
+        }
+    }
 }
 
 /**

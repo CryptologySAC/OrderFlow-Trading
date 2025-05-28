@@ -456,4 +456,114 @@ export abstract class BaseDetector implements IDetector {
      * Abstract method - must be implemented by subclasses
      */
     protected abstract checkForSignal(triggerTrade: TradeData): void;
+
+    // src/indicators/base/baseDetector.ts
+    // Add these methods to the BaseDetector class:
+
+    /**
+     * Get aggressive volume at a specific price within a time window
+     */
+    protected getAggressiveVolumeAtPrice(
+        price: number,
+        windowMs: number
+    ): number {
+        const now = Date.now();
+        const priceStr = price.toFixed(this.pricePrecision);
+
+        return this.trades
+            .filter(
+                (t) =>
+                    now - t.timestamp <= windowMs &&
+                    t.price.toFixed(this.pricePrecision) === priceStr
+            )
+            .reduce((sum, t) => sum + t.quantity, 0);
+    }
+
+    /**
+     * Get current spread from recent trades and known depth levels
+     */
+    protected getCurrentSpread(): {
+        spread: number;
+        bestBid: number;
+        bestAsk: number;
+    } | null {
+        // Get the most recent trade price as a reference
+        const recentTrades = this.trades.getAll();
+        if (recentTrades.length === 0) {
+            return null;
+        }
+
+        const lastPrice = recentTrades[recentTrades.length - 1].price;
+
+        // Simple approach: look for nearby price levels
+        let bestBid = 0;
+        let bestAsk = Number.MAX_VALUE;
+
+        // Check prices near the last trade
+        const checkRange = 100; // Check 100 ticks each direction
+        const tickSize = Math.pow(10, -this.pricePrecision);
+
+        for (let i = 0; i <= checkRange; i++) {
+            // Check bid side
+            const bidPrice = +(lastPrice - i * tickSize).toFixed(
+                this.pricePrecision
+            );
+            const bidLevel = this.depth.get(bidPrice);
+            if (bidLevel && bidLevel.bid > 0 && bidPrice > bestBid) {
+                bestBid = bidPrice;
+            }
+
+            // Check ask side
+            const askPrice = +(lastPrice + i * tickSize).toFixed(
+                this.pricePrecision
+            );
+            const askLevel = this.depth.get(askPrice);
+            if (askLevel && askLevel.ask > 0 && askPrice < bestAsk) {
+                bestAsk = askPrice;
+            }
+
+            // Stop if we found both sides close to last trade
+            if (
+                bestBid > 0 &&
+                bestAsk < Number.MAX_VALUE &&
+                bestAsk - bestBid < lastPrice * 0.01
+            ) {
+                break;
+            }
+        }
+
+        if (bestBid === 0 || bestAsk === Number.MAX_VALUE) {
+            return null;
+        }
+
+        const spread = (bestAsk - bestBid) / bestBid;
+
+        return { spread, bestBid, bestAsk };
+    }
+
+    /**
+     * Debug current state
+     */
+    protected debugCurrentState(): void {
+        const now = Date.now();
+        const recentTrades = this.trades.filter(
+            (t) => now - t.timestamp <= 5000
+        );
+        const totalVolume = recentTrades.reduce(
+            (sum, t) => sum + t.quantity,
+            0
+        );
+        const spreadInfo = this.getCurrentSpread();
+
+        this.logger.info(`[${this.constructor.name}] Debug State`, {
+            recentTradeCount: recentTrades.length,
+            recentVolume: totalVolume.toFixed(2),
+            bestBid: spreadInfo?.bestBid.toFixed(this.pricePrecision),
+            bestAsk: spreadInfo?.bestAsk.toFixed(this.pricePrecision),
+            depthLevels: this.depth.size(),
+            spreadPercent: spreadInfo
+                ? (spreadInfo.spread * 100).toFixed(3) + "%"
+                : "N/A",
+        });
+    }
 }

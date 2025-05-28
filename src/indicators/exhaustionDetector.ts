@@ -104,59 +104,158 @@ export class ExhaustionDetector
     /**
      * Analyze zone for exhaustion
      */
+    // src/indicators/exhaustionDetector.ts
+    // Replace the analyzeZoneForExhaustion method with this:
+
     private analyzeZoneForExhaustion(
         zone: number,
         tradesAtZone: TradeData[],
         triggerTrade: TradeData,
         zoneTicks: number
     ): void {
-        const volumes = this.calculateZoneVolumes(
-            zone,
-            tradesAtZone,
-            zoneTicks
-        );
-
-        if (volumes.aggressive < this.minAggVolume) return;
-
+        // Get the most recent trade price in the zone
         const latestTrade = tradesAtZone[tradesAtZone.length - 1];
         const price = +latestTrade.price.toFixed(this.pricePrecision);
         const side = this.getTradeSide(latestTrade);
 
+        // Skip if no orderbook data
         const bookLevel = this.depth.get(price);
         if (!bookLevel) return;
 
-        // Exhaustion: opposite liquidity is depleted
-        const oppositeQty = side === "buy" ? bookLevel.ask : bookLevel.bid;
-
-        // Check for spoofing
-        if (
-            this.features.spoofingDetection &&
-            this.isSpoofed(price, side, triggerTrade.timestamp)
-        ) {
-            return;
-        }
-
-        // Check passive refill
-        const refilled = this.checkRefill(price, side, oppositeQty);
-
-        // Check cooldown
+        // Check cooldown first
         if (!this.checkCooldown(zone, side)) return;
 
-        // Exhaustion criteria: opposite side has minimal liquidity
-        if (
-            (oppositeQty === 0 || oppositeQty < volumes.aggressive * 0.05) &&
-            !refilled
-        ) {
-            this.handleExhaustion({
+        // New exhaustion detection logic
+        const exhaustionDetected = this.checkExhaustionConditions(price, side);
+
+        if (exhaustionDetected) {
+            // Calculate volumes for the signal
+            const volumes = this.calculateZoneVolumes(
                 zone,
-                price,
-                side,
-                trades: volumes.trades,
-                aggressive: volumes.aggressive,
-                passive: volumes.passive,
-                refilled,
-            });
+                tradesAtZone,
+                zoneTicks
+            );
+
+            // Check for spoofing
+            if (
+                this.features.spoofingDetection &&
+                this.isSpoofed(price, side, triggerTrade.timestamp)
+            ) {
+                return;
+            }
+
+            // Check passive refill (exhaustion is invalid if liquidity returns)
+            const oppositeQty = side === "buy" ? bookLevel.ask : bookLevel.bid;
+            const refilled = this.checkRefill(price, side, oppositeQty);
+
+            if (!refilled) {
+                // Only signal if NOT refilled
+                this.handleExhaustion({
+                    zone,
+                    price,
+                    side,
+                    trades: volumes.trades,
+                    aggressive: volumes.aggressive,
+                    passive: volumes.passive,
+                    refilled,
+                });
+            }
         }
+
+        // Debug output every 10 trades
+        if (Math.random() < 0.1) {
+            this.debugCurrentState();
+        }
+    }
+
+    /**
+     * Check exhaustion conditions with improved logic
+     */
+    private checkExhaustionConditions(
+        price: number,
+        side: "buy" | "sell"
+    ): boolean {
+        // Get opposite side liquidity
+        const oppositeSide = side === "buy" ? "ask" : "bid";
+        const oppositeQty = this.depth.get(price)?.[oppositeSide] || 0;
+
+        // Get average liquidity at this level
+        const avgLiquidity = this.passiveVolumeTracker.getAveragePassiveBySide(
+            price,
+            side === "buy" ? "sell" : "buy", // Opposite side for average
+            300000 // 5 minutes
+        );
+
+        // Get spread information
+        const spreadInfo = this.getCurrentSpread();
+        if (!spreadInfo) {
+            return false; // Can't detect exhaustion without spread
+        }
+
+        // Get recent aggressive volume
+        const recentAggressive = this.getAggressiveVolumeAtPrice(price, 5000);
+
+        // Method 1: Absolute exhaustion - opposite side is nearly empty
+        const absoluteExhaustion =
+            recentAggressive > this.minAggVolume &&
+            oppositeQty < this.minAggVolume * 0.05;
+
+        // Method 2: Relative exhaustion - liquidity depleted vs average
+        const relativeExhaustion =
+            avgLiquidity > 0 &&
+            oppositeQty < avgLiquidity * 0.1 &&
+            recentAggressive > this.minAggVolume;
+
+        // Method 3: Spread exhaustion - wide spread indicates lack of liquidity
+        const spreadExhaustion =
+            spreadInfo.spread > 0.002 && // 0.2% spread
+            oppositeQty < this.minAggVolume &&
+            recentAggressive > this.minAggVolume * 0.5;
+
+        // Method 4: Price at extreme - exhaustion at best bid/ask
+        const priceAtExtreme =
+            (side === "buy" && Math.abs(price - spreadInfo.bestBid) < 0.01) ||
+            (side === "sell" && Math.abs(price - spreadInfo.bestAsk) < 0.01);
+
+        const extremeExhaustion =
+            priceAtExtreme &&
+            oppositeQty < this.minAggVolume * 0.1 &&
+            spreadInfo.spread > 0.001;
+
+        // Log near-misses for debugging
+        if (
+            !absoluteExhaustion &&
+            !relativeExhaustion &&
+            !spreadExhaustion &&
+            !extremeExhaustion
+        ) {
+            if (
+                oppositeQty < this.minAggVolume * 0.2 &&
+                recentAggressive > this.minAggVolume * 0.3
+            ) {
+                this.logger.debug(`[Exhaustion] Near miss at ${price}`, {
+                    price,
+                    side,
+                    oppositeQty: oppositeQty.toFixed(2),
+                    avgLiquidity: avgLiquidity.toFixed(2),
+                    recentAggressive: recentAggressive.toFixed(2),
+                    spread: (spreadInfo.spread * 100).toFixed(3) + "%",
+                    depletion:
+                        avgLiquidity > 0
+                            ? ((1 - oppositeQty / avgLiquidity) * 100).toFixed(
+                                  1
+                              ) + "%"
+                            : "N/A",
+                });
+            }
+        }
+
+        return (
+            absoluteExhaustion ||
+            relativeExhaustion ||
+            spreadExhaustion ||
+            extremeExhaustion
+        );
     }
 
     /**

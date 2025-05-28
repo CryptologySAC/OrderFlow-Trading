@@ -105,45 +105,50 @@ export class AbsorptionDetector
     /**
      * Analyze zone for absorption
      */
+    // src/indicators/absorptionDetector.ts
+    // Replace the analyzeZoneForAbsorption method with this:
+
     private analyzeZoneForAbsorption(
         zone: number,
         tradesAtZone: TradeData[],
         triggerTrade: TradeData,
         zoneTicks: number
     ): void {
-        const volumes = this.calculateZoneVolumes(
-            zone,
-            tradesAtZone,
-            zoneTicks
-        );
-
-        if (volumes.aggressive < this.minAggVolume) return;
-
+        // Get the most recent trade price in the zone
         const latestTrade = tradesAtZone[tradesAtZone.length - 1];
         const price = +latestTrade.price.toFixed(this.pricePrecision);
         const side = this.getTradeSide(latestTrade);
 
+        // Skip if no orderbook data
         const bookLevel = this.depth.get(price);
         if (!bookLevel) return;
 
-        const passiveQty = side === "buy" ? bookLevel.ask : bookLevel.bid;
-
-        // Check for spoofing
-        if (
-            this.features.spoofingDetection &&
-            this.isSpoofed(price, side, triggerTrade.timestamp)
-        ) {
-            return;
-        }
-
-        // Check passive refill
-        const refilled = this.checkRefill(price, side, passiveQty);
-
-        // Check cooldown
+        // Check cooldown first
         if (!this.checkCooldown(zone, side)) return;
 
-        // Absorption criteria: passive volume absorbs aggressive volume
-        if (passiveQty > volumes.aggressive * 0.8) {
+        // New absorption detection logic
+        const absorptionDetected = this.checkAbsorptionConditions(price, side);
+
+        if (absorptionDetected) {
+            // Calculate volumes for the signal
+            const volumes = this.calculateZoneVolumes(
+                zone,
+                tradesAtZone,
+                zoneTicks
+            );
+
+            // Check for spoofing
+            if (
+                this.features.spoofingDetection &&
+                this.isSpoofed(price, side, triggerTrade.timestamp)
+            ) {
+                return;
+            }
+
+            // Check passive refill
+            const passiveQty = side === "buy" ? bookLevel.ask : bookLevel.bid;
+            const refilled = this.checkRefill(price, side, passiveQty);
+
             this.handleAbsorption({
                 zone,
                 price,
@@ -154,6 +159,81 @@ export class AbsorptionDetector
                 refilled,
             });
         }
+
+        // Debug output every 10 trades
+        if (Math.random() < 0.1) {
+            this.debugCurrentState();
+        }
+    }
+
+    /**
+     * Check absorption conditions with improved logic
+     */
+    private checkAbsorptionConditions(
+        price: number,
+        side: "buy" | "sell"
+    ): boolean {
+        // Time windows
+        const shortWindow = 5000; // 5 seconds for recent activity
+        const longWindow = 60000; // 60 seconds for average
+
+        // Get recent aggressive volume at this specific price
+        const recentAggressive = this.getAggressiveVolumeAtPrice(
+            price,
+            shortWindow
+        );
+
+        // Skip if no recent activity
+        if (recentAggressive < this.minAggVolume * 0.1) {
+            return false;
+        }
+
+        // Get average passive liquidity at this level
+        const avgPassive = this.passiveVolumeTracker.getAveragePassiveBySide(
+            price,
+            side,
+            longWindow
+        );
+
+        // Current passive liquidity
+        const currentPassive =
+            this.depth.get(price)?.[side === "buy" ? "ask" : "bid"] || 0;
+
+        // Method 1: Classic absorption - passive remains strong
+        const classicAbsorption =
+            recentAggressive > this.minAggVolume &&
+            currentPassive > recentAggressive * 0.8;
+
+        // Method 2: Relative absorption - passive didn't decrease much despite aggression
+        const relativeAbsorption =
+            avgPassive > 0 &&
+            recentAggressive > avgPassive * 2 &&
+            currentPassive > avgPassive * 0.7;
+
+        // Method 3: Iceberg detection - refilling after being hit
+        const icebergDetection =
+            this.features.passiveHistory &&
+            this.passiveVolumeTracker.hasPassiveRefilled(price, side);
+
+        // Log near-misses for debugging
+        if (
+            !classicAbsorption &&
+            !relativeAbsorption &&
+            recentAggressive > this.minAggVolume * 0.5
+        ) {
+            this.logger.debug(`[Absorption] Near miss at ${price}`, {
+                price,
+                side,
+                recentAggressive: recentAggressive.toFixed(2),
+                currentPassive: currentPassive.toFixed(2),
+                avgPassive: avgPassive.toFixed(2),
+                ratio: (currentPassive / recentAggressive).toFixed(2),
+            });
+        }
+
+        return (
+            classicAbsorption || relativeAbsorption || icebergDetection || false
+        );
     }
 
     /**
