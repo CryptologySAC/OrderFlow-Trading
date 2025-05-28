@@ -26,6 +26,7 @@ export interface PendingDetection {
     refilled: boolean;
     confirmed: boolean;
     status?: "pending" | "confirmed" | "invalidated";
+    id: string; // Optional ID for tracking
 }
 
 /**

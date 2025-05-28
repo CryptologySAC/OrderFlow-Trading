@@ -24,9 +24,13 @@ export class TradesProcessor implements ITradesProcessor {
     private thresholdTime: number = Date.now() - this.storageTime;
     private aggTradeTemp: SpotWebsocketAPI.TradesAggregateResponseResultInner[] =
         [];
-    private readonly logger: Logger = new Logger();
+    private readonly logger;
     private readonly metricsCollector: MetricsCollector =
         new MetricsCollector();
+
+    constructor(logger: Logger) {
+        this.logger = logger;
+    }
 
     /**
      * Preload the backlog of aggregated trades into storage

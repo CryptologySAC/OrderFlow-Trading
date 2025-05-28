@@ -172,6 +172,8 @@ export class OrderFlowDashboard {
                     });
             },
             this.createAbsorptionSettings(),
+            this.logger,
+            this.metricsCollector,
             dependencies.signalLogger
         );
 
@@ -184,6 +186,8 @@ export class OrderFlowDashboard {
                     });
             },
             this.createExhaustionSettings(),
+            this.logger,
+            this.metricsCollector,
             dependencies.signalLogger
         );
 
@@ -995,7 +999,7 @@ export class OrderFlowDashboard {
  * Factory function to create dependencies
  */
 export function createDependencies(): Dependencies {
-    const logger = new Logger();
+    const logger = new Logger(process.env.NODE_ENV === "development");
     const metricsCollector = new MetricsCollector();
     const rateLimiter = new RateLimiter(60000, 100);
     const circuitBreaker = new CircuitBreaker(5, 60000, 10000);
@@ -1025,7 +1029,7 @@ export function createDependencies(): Dependencies {
     return {
         storage: new Storage(),
         binanceFeed: new BinanceDataFeed(),
-        tradesProcessor: new TradesProcessor(),
+        tradesProcessor: new TradesProcessor(logger),
         orderBookProcessor: new OrderBookProcessor(),
         signalLogger: new SignalLogger("signals.csv"),
         logger,

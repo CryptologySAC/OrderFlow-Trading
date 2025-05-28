@@ -1,11 +1,16 @@
 // src/infrastructure/logger.ts
+import util from "node:util";
 
 /**
  * Structured logger for the trading system
  */
 export class Logger {
     private correlationContext = new Map<string, string>();
+    private pretty: boolean;
 
+    constructor(pretty = false) {
+        this.pretty = pretty;
+    }
     /**
      * Log info level message
      */
@@ -68,7 +73,22 @@ export class Logger {
             ...context,
         };
 
-        console.log(JSON.stringify(logEntry));
+        if (this.pretty) {
+            // Print the context with util.inspect for dev
+            console.log(
+                `[${level}] ${message}`,
+                context
+                    ? util.inspect(context, {
+                          colors: true,
+                          depth: null,
+                          compact: false,
+                      })
+                    : ""
+            );
+        } else {
+            // Standard JSON log
+            console.log(JSON.stringify(logEntry));
+        }
     }
 
     /**
