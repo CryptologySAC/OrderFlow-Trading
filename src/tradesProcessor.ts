@@ -1,11 +1,13 @@
 import dotenv from "dotenv";
 dotenv.config();
-
+import { randomUUID } from "crypto";
 import { Storage } from "./infrastructure/storage.js";
 import { BinanceDataFeed } from "./utils/binance.js";
 import { SpotWebsocketStreams, SpotWebsocketAPI } from "@binance/spot";
 import { WebSocketMessage } from "./utils/interfaces.js";
 import { PlotTrade } from "./utils/types.js";
+import { Logger } from "./infrastructure/logger.js";
+import { MetricsCollector } from "./infrastructure/metricsCollector.js";
 
 export interface ITradesProcessor {
     fillBacklog(): Promise<void>;
@@ -22,14 +24,18 @@ export class TradesProcessor implements ITradesProcessor {
     private thresholdTime: number = Date.now() - this.storageTime;
     private aggTradeTemp: SpotWebsocketAPI.TradesAggregateResponseResultInner[] =
         [];
+    private readonly logger: Logger = new Logger();
+    private readonly metricsCollector: MetricsCollector =
+        new MetricsCollector();
 
     /**
      * Preload the backlog of aggregated trades into storage
      */
     public async fillBacklog(): Promise<void> {
-        console.log(
-            "Requesting backlog for %s hours",
-            (this.storageTime / 3600000).toFixed(2)
+        this.logger.info(
+            `Requesting backlog for %s hours ${(
+                this.storageTime / 3600000
+            ).toFixed(2)}`
         );
 
         try {
@@ -42,9 +48,8 @@ export class TradesProcessor implements ITradesProcessor {
                     );
 
                 if (aggregatedTrades.length === 0) {
-                    console.warn(
-                        "No trades returned for threshold time:",
-                        this.thresholdTime
+                    this.logger.warn(
+                        `No trades returned for threshold time: ${this.thresholdTime}`
                     );
                     break;
                 }
@@ -64,19 +69,38 @@ export class TradesProcessor implements ITradesProcessor {
                 }
 
                 if (aggregatedTrades.length < 10) {
-                    console.warn(
+                    this.logger.warn(
                         "Possibly hit the end of available trade history"
                     );
                     break;
                 }
             }
-        } catch (error: unknown) {
-            if (error instanceof Error) {
-                console.warn("Backlog fill error:", error.message);
-            } else {
-                console.warn("Backlog fill error:", error);
-            }
+        } catch (error) {
+            this.handleError(error as Error, "fillBacklog");
         }
+    }
+
+    private handleError(
+        error: Error,
+        context: string,
+        correlationId?: string
+    ): void {
+        this.metricsCollector.incrementMetric("errorsCount");
+
+        const errorContext = {
+            context,
+            errorName: error.name,
+            errorMessage: error.message,
+            stack: error.stack,
+            timestamp: new Date().toISOString(),
+            correlationId: correlationId || randomUUID(),
+        };
+
+        this.logger.error(
+            `[${context}] ${error.message}`,
+            errorContext,
+            correlationId
+        );
     }
 
     /**
@@ -98,7 +122,7 @@ export class TradesProcessor implements ITradesProcessor {
                 tradeId: trade.a ?? 0,
             }));
         } catch (error) {
-            console.error("requestBacklog() failed:", error);
+            this.handleError(error as Error, "requestBacklog");
             return [];
         }
     }
@@ -127,7 +151,7 @@ export class TradesProcessor implements ITradesProcessor {
                 data: processedTrade,
             };
         } catch (error) {
-            console.error("addTrade() failed:", error);
+            this.handleError(error as Error, "addTrade");
             return {
                 type: "error",
                 now: Date.now(),
