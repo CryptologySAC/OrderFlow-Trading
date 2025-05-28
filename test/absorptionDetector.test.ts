@@ -1,4 +1,4 @@
-import { AbsorptionDetector } from "../src/absorptionDetector";
+import { AbsorptionDetector } from "../src/indicators/absorptionDetector";
 import { SpotWebsocketStreams } from "@binance/spot";
 
 describe("AbsorptionDetector", () => {

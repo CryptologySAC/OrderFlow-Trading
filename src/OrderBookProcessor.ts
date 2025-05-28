@@ -2,8 +2,9 @@
 import dotenv from "dotenv";
 
 import { SpotWebsocketStreams, SpotWebsocketAPI } from "@binance/spot";
-import { WebSocketMessage } from "./interfaces.js";
-import { BinanceDataFeed } from "./binance.js";
+import { WebSocketMessage } from "./utils/interfaces.js";
+import { BinanceDataFeed } from "./utils/binance.js";
+import { DepthLevel } from "./utils/utils.js";
 dotenv.config();
 
 export interface IOrderBookProcessor {
@@ -11,6 +12,7 @@ export interface IOrderBookProcessor {
         data: SpotWebsocketStreams.DiffBookDepthResponse
     ): WebSocketMessage;
     fetchInitialOrderBook(): Promise<WebSocketMessage>;
+    getDepthAtPrice(price: number): DepthLevel | null;
 }
 
 // Interface for order book data (matching dashboard format)
@@ -154,6 +156,19 @@ export class OrderBookProcessor implements IOrderBookProcessor {
                 now: 0,
             };
         }
+    }
+
+    public getDepthAtPrice(price: number): DepthLevel | null {
+        const roundedPrice = Math.round(price * 100) / 100; // Round to cents
+
+        const bidQty = this.orderBook.bids.get(roundedPrice) || 0;
+        const askQty = this.orderBook.asks.get(roundedPrice) || 0;
+
+        if (bidQty === 0 && askQty === 0) {
+            return null;
+        }
+
+        return { bid: bidQty, ask: askQty };
     }
 
     private processOrderBook(): OrderBookData {

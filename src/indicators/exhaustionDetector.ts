@@ -1,5 +1,5 @@
 import { SpotWebsocketStreams } from "@binance/spot";
-import { ISignalLogger } from "./signalLogger.js";
+import { ISignalLogger } from "../services/signalLogger.js";
 import {
     CircularBuffer,
     TimeAwareCache,
@@ -11,7 +11,7 @@ import {
     TradeData,
     DepthLevel,
     PendingDetection,
-} from "./utils.js";
+} from "../utils/utils.js";
 
 /**
  * Callback executed on confirmed exhaustion event.
@@ -359,6 +359,7 @@ export class ExhaustionDetector {
         zoneTicks: number
     ): void {
         let aggressiveVolume: number;
+        let passiveVolume: number;
         let allTrades: SpotWebsocketStreams.AggTradeResponse[];
 
         if (this.features.multiZone) {
@@ -367,6 +368,7 @@ export class ExhaustionDetector {
                 Math.floor(zoneTicks / 2)
             );
             aggressiveVolume = bandResult.totalAggressive;
+            passiveVolume = bandResult.totalPassive;
             allTrades = bandResult.allTrades;
         } else {
             aggressiveVolume = tradesAtZone.reduce(
@@ -374,6 +376,11 @@ export class ExhaustionDetector {
                 0
             );
             allTrades = tradesAtZone.map((t) => t.originalTrade);
+
+            const latestTrade = tradesAtZone[tradesAtZone.length - 1];
+            const price = +latestTrade.price.toFixed(this.pricePrecision);
+            const bookLevel = this.depth.get(price);
+            passiveVolume = bookLevel ? bookLevel.bid + bookLevel.ask : 0;
         }
         if (aggressiveVolume < this.minAggVolume) return;
 
@@ -438,7 +445,7 @@ export class ExhaustionDetector {
                 zone,
                 trades: allTrades,
                 aggressive: aggressiveVolume,
-                passive: null,
+                passive: passiveVolume,
                 refilled,
                 confirmed: false,
             };
@@ -470,29 +477,45 @@ export class ExhaustionDetector {
         }
     }
 
-    private sumVolumesInBand(center: number, bandTicks: number) {
+    private sumVolumesInBand(
+        center: number,
+        bandTicks: number
+    ): {
+        totalAggressive: number;
+        totalPassive: number;
+        allTrades: SpotWebsocketStreams.AggTradeResponse[];
+    } {
         const tick = 1 / Math.pow(10, this.pricePrecision);
         let totalAggressive = 0;
+        let totalPassive = 0;
         const allTrades: SpotWebsocketStreams.AggTradeResponse[] = [];
-        const now = Date.now();
 
         for (let offset = -bandTicks; offset <= bandTicks; offset++) {
             const price = +(center + offset * tick).toFixed(
                 this.pricePrecision
             );
-            // Trades at this price within window
+
+            // Get trades at this price within the time window
+            const now = Date.now();
             const tradesAtPrice = this.trades.filter(
                 (t) =>
                     +t.price.toFixed(this.pricePrecision) === price &&
                     now - t.timestamp <= this.windowMs
             );
+
             totalAggressive += tradesAtPrice.reduce(
                 (sum, t) => sum + t.quantity,
                 0
             );
             allTrades.push(...tradesAtPrice.map((t) => t.originalTrade));
+
+            const bookLevel = this.depth.get(price);
+            if (bookLevel) {
+                totalPassive += bookLevel.bid + bookLevel.ask;
+            }
         }
-        return { totalAggressive, allTrades };
+
+        return { totalAggressive, totalPassive, allTrades };
     }
 
     /**

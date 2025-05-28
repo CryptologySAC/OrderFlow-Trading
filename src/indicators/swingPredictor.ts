@@ -1,4 +1,4 @@
-import { Signal } from "./interfaces.js";
+import { Signal } from "../utils/interfaces.js";
 
 export interface SwingPrediction {
     time: number;
@@ -27,10 +27,10 @@ export class SwingPredictor {
         new Map();
 
     constructor(config: SwingPredictorConfig) {
-        this.lookaheadMs = config.lookaheadMs ?? 60000;
-        this.retraceTicks = config.retraceTicks ?? 5;
+        this.lookaheadMs = config.lookaheadMs ?? 900000;
+        this.retraceTicks = config.retraceTicks ?? 50;
         this.pricePrecision = config.pricePrecision ?? 2;
-        this.signalCooldownMs = config.signalCooldownMs ?? 10000;
+        this.signalCooldownMs = config.signalCooldownMs ?? 300000;
         this.onSwingPredicted = config.onSwingPredicted;
     }
 

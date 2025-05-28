@@ -11,25 +11,43 @@ import * as path from "node:path";
 import * as ws from "ws";
 import { SpotWebsocketStreams } from "@binance/spot";
 import { TradesProcessor } from "./tradesProcessor.js";
-import { BinanceDataFeed, IBinanceDataFeed } from "./binance.js";
+import { BinanceDataFeed, IBinanceDataFeed } from "./utils/binance.js";
 import {
     OrderBookProcessor,
     IOrderBookProcessor,
 } from "./orderBookProcessor.js";
-import { Signal, WebSocketMessage, Detected } from "./interfaces.js";
-import { Storage } from "./storage.js";
+import { Signal, WebSocketMessage } from "./utils/interfaces.js";
+import { Detected } from "./utils/types.js";
+import { Storage } from "./infrastructure/storage.js";
 import {
     AbsorptionDetector,
     AbsorptionSettings,
-} from "./absorptionDetector.js";
+} from "./indicators/absorptionDetector.js";
 import {
     ExhaustionDetector,
     ExhaustionSettings,
-} from "./exhaustionDetector.js";
-import { DeltaCVDConfirmation } from "./deltaCVDCOnfirmation.js";
-import { SwingPredictor, SwingPrediction } from "./swingPredictor.js";
-import { parseBool } from "./utils.js";
-import { SignalLogger, ISignalLogger } from "./signalLogger.js";
+} from "./indicators/exhaustionDetector.js";
+import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
+import {
+    SwingPredictor,
+    SwingPrediction,
+} from "./indicators/swingPredictor.js";
+import { parseBool, TradeData } from "./utils/utils.js";
+import { SignalLogger, ISignalLogger } from "./services/signalLogger.js";
+import { SwingMetrics } from "./indicators/swingMetrics.js";
+import { AccumulationDetector } from "./indicators/accumulationDetector.js";
+import { MomentumDivergence } from "./indicators/momentumDivergence.js";
+import {
+    calculateProfitTarget,
+    calculateStopLoss,
+} from "./utils/calculations.js";
+import { AlertManager } from "./alerts/alertManager.js";
+import type { VolumeNodes } from "./indicators/swingMetrics.js";
+import type { AccumulationResult } from "./indicators/accumulationDetector.js";
+import type { DivergenceResult } from "./indicators/momentumDivergence.js";
+import { SignalCoordinator } from "./services/signalCoordinator.js";
+import type { TimeContext, ConfirmedSignal } from "./utils/types.js";
+import { AnomalyDetector } from "./services/anomalyDetector.js";
 
 import { EventEmitter } from "events";
 import { randomUUID } from "crypto";
@@ -422,6 +440,7 @@ interface Dependencies {
     metricsCollector: MetricsCollector;
     rateLimiter: RateLimiter;
     circuitBreaker: CircuitBreaker;
+    alertManager: AlertManager;
 }
 
 type WS = ws.WebSocket;
@@ -443,8 +462,19 @@ export class OrderFlowDashboard {
     private readonly absorptionDetector: AbsorptionDetector;
     private readonly exhaustionDetector: ExhaustionDetector;
     private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
+    private readonly swingMetrics: SwingMetrics;
+    private readonly accumulationDetector: AccumulationDetector;
+    private readonly momentumDivergence: MomentumDivergence;
     private isShuttingDown = false;
     private activeConnections = new Set<ExtendedWebSocket>();
+    private readonly signalCoordinator: SignalCoordinator;
+    private readonly anomalyDetector: AnomalyDetector;
+    private timeContext: TimeContext = {
+        wallTime: Date.now(),
+        marketTime: Date.now(),
+        mode: "realtime",
+        speed: 1,
+    };
 
     private swingPredictor = new SwingPredictor({
         lookaheadMs: 10000,
@@ -599,22 +629,60 @@ export class OrderFlowDashboard {
         // Validate configuration
         Config.validate();
 
+        this.anomalyDetector = new AnomalyDetector();
+        this.signalCoordinator = new SignalCoordinator(
+            {
+                requiredConfirmations: 2,
+                confirmationWindowMs: 30000, // 30 seconds
+                deduplicationWindowMs: 5000, // 5 seconds
+                signalExpiryMs: 60000, // 1 minute
+            },
+            dependencies.signalLogger,
+            this.timeContext
+        );
+
+        // Listen for confirmed signals
+        this.signalCoordinator.on(
+            "signal_confirmed",
+            (signal: ConfirmedSignal) => {
+                void this.handleConfirmedSignal(signal);
+            }
+        );
+
         this.exhaustionDetector = new ExhaustionDetector(
-            (data) =>
-                void this.handleDetection(
-                    () => this.onExhaustionDetected(data),
-                    "exhaustion"
-                ),
+            (data) => {
+                const signalId = this.signalCoordinator.submitSignal(
+                    "exhaustion",
+                    data.price,
+                    "exhaustion_detector",
+                    { volume: data.totalAggressiveVolume, side: data.side }
+                );
+
+                if (signalId) {
+                    console.log(
+                        `[Dashboard] Exhaustion signal submitted: ${signalId}`
+                    );
+                }
+            },
             this.exhaustionSettings,
             dependencies.signalLogger
         );
 
         this.absorptionDetector = new AbsorptionDetector(
-            (data) =>
-                void this.handleDetection(
-                    () => this.onAbsorptionDetected(data),
-                    "absorption"
-                ),
+            (data) => {
+                const signalId = this.signalCoordinator.submitSignal(
+                    "absorption",
+                    data.price,
+                    "absorption_detector",
+                    { volume: data.totalAggressiveVolume, side: data.side }
+                );
+
+                if (signalId) {
+                    console.log(
+                        `[Dashboard] Absorption signal submitted: ${signalId}`
+                    );
+                }
+            },
             this.absorptionSettings,
             dependencies.signalLogger
         );
@@ -649,6 +717,13 @@ export class OrderFlowDashboard {
             }
         );
 
+        this.swingMetrics = new SwingMetrics();
+        this.accumulationDetector = new AccumulationDetector(
+            dependencies.signalLogger,
+            Config.SYMBOL
+        );
+        this.momentumDivergence = new MomentumDivergence();
+
         this.BroadCastWebSocket = new ws.WebSocketServer({
             port: Config.WS_PORT,
         });
@@ -656,6 +731,118 @@ export class OrderFlowDashboard {
         this.setupHealthCheck();
         this.setupGracefulShutdown();
         this.broadcastMessage = this.broadcastMessage.bind(this);
+    }
+
+    private async handleConfirmedSignal(
+        signal: ConfirmedSignal
+    ): Promise<void> {
+        const correlationId = randomUUID();
+
+        try {
+            this.dependencies.logger.info(
+                "Processing confirmed signal",
+                {
+                    signalId: signal.id,
+                    price: signal.finalPrice,
+                    confidence: signal.confidence,
+                    confirmations:
+                        signal.originalSignals[0]?.confirmations.size || 0,
+                },
+                correlationId
+            );
+
+            // Determine signal type and side
+            const originalSignal = signal.originalSignals[0];
+            const signalType = originalSignal.type;
+            const side: "buy" | "sell" =
+                signalType === "exhaustion" ? "sell" : "buy";
+
+            // Check for market anomalies before proceeding
+            const currentPrice = signal.finalPrice;
+            const bookLevel =
+                this.dependencies.orderBookProcessor.getDepthAtPrice(
+                    currentPrice
+                );
+            const spread = bookLevel
+                ? Math.abs(bookLevel.ask - bookLevel.bid) / currentPrice
+                : 0;
+
+            const anomaly = this.anomalyDetector.detectAnomaly(
+                currentPrice,
+                0, // We'd need to track volume properly
+                spread
+            );
+
+            if (anomaly && anomaly.severity === "critical") {
+                this.dependencies.logger.warn(
+                    "Signal rejected due to market anomaly",
+                    {
+                        anomaly,
+                        signalId: signal.id,
+                    },
+                    correlationId
+                );
+                return;
+            }
+
+            // Calculate targets
+            const profitTarget = calculateProfitTarget(currentPrice, side);
+            const stopLoss = calculateStopLoss(currentPrice, side);
+
+            // Create the final signal
+            const tradingSignal: Signal = {
+                type:
+                    signalType === "absorption"
+                        ? "absorption_confirmed"
+                        : signalType === "exhaustion"
+                          ? "exhaustion_confirmed"
+                          : "flow",
+                time: signal.confirmedAt,
+                price: signal.finalPrice,
+                takeProfit: profitTarget.price,
+                stopLoss,
+                closeReason: "swing_detection",
+                signalData: {
+                    confidence: signal.confidence,
+                    confirmations: Array.from(originalSignal.confirmations),
+                    metadata: originalSignal.metadata,
+                    anomalyCheck: anomaly
+                        ? {
+                              detected: true,
+                              type: anomaly.type,
+                              severity: anomaly.severity,
+                          }
+                        : { detected: false },
+                },
+            };
+
+            // Send alerts and broadcast
+            await this.dependencies.alertManager.sendAlert(tradingSignal);
+            await this.broadcastSignal(tradingSignal);
+
+            // Mark signal as executed
+            signal.executed = true;
+
+            this.dependencies.logger.info(
+                "Confirmed signal processed successfully",
+                {
+                    signalId: signal.id,
+                    executedPrice: signal.finalPrice,
+                    side,
+                },
+                correlationId
+            );
+        } catch {
+            this.handleError(
+                new SignalProcessingError(
+                    "Failed to process confirmed signal",
+                    { signalId: signal.id },
+                    correlationId
+                ),
+                "confirmed_signal_handler",
+                correlationId
+            );
+        }
     }
 
     private setupWebSocketServer(): void {
@@ -1053,6 +1240,20 @@ export class OrderFlowDashboard {
                             parseFloat(data.p ?? "0"),
                             data.T ?? Date.now()
                         );
+
+                        const tradeData: TradeData = {
+                            price: parseFloat(data.p || "0"),
+                            quantity: parseFloat(data.q || "0"),
+                            timestamp: data.T || Date.now(),
+                            isMakerSell: data.m || false,
+                            originalTrade: data,
+                        };
+
+                        this.analyzeSwingOpportunity(
+                            tradeData.price,
+                            tradeData
+                        );
+
                         const processedData: WebSocketMessage =
                             this.dependencies.tradesProcessor.addTrade(data);
                         this.broadcastMessage(processedData);
@@ -1335,6 +1536,119 @@ export class OrderFlowDashboard {
         );
     }
 
+    private analyzeSwingOpportunity(
+        currentPrice: number,
+        trade: TradeData
+    ): void {
+        // Update all indicators
+        this.swingMetrics.addTrade(trade);
+        this.momentumDivergence.addDataPoint(
+            trade.price,
+            trade.quantity,
+            trade.timestamp
+        );
+
+        // Get current orderbook state for accumulation
+        const bookLevel =
+            this.dependencies.orderBookProcessor.getDepthAtPrice(currentPrice);
+        const passiveVolume = bookLevel ? bookLevel.bid + bookLevel.ask : 0;
+
+        this.accumulationDetector.addTrade(trade, passiveVolume);
+
+        // Check for swing signals
+        const volumeNodes: VolumeNodes =
+            this.swingMetrics.getVolumeNodes(currentPrice);
+        const accumulation: AccumulationResult =
+            this.accumulationDetector.detectAccumulation(currentPrice);
+        const divergence: DivergenceResult =
+            this.momentumDivergence.detectDivergence();
+
+        // Signal generation logic
+        if (
+            this.shouldGenerateSwingSignal(
+                currentPrice,
+                accumulation,
+                divergence,
+                volumeNodes
+            )
+        ) {
+            // Fire and forget - we don't wait for completion
+            void this.generateSwingSignal(
+                currentPrice,
+                accumulation,
+                divergence
+            ).catch((error) => {
+                this.handleError(
+                    error as Error,
+                    "swing_signal_generation",
+                    randomUUID()
+                );
+            });
+        }
+    }
+
+    private shouldGenerateSwingSignal(
+        currentPrice: number, // Add this parameter
+        accumulation: AccumulationResult,
+        divergence: DivergenceResult,
+        volumeNodes: VolumeNodes
+    ): boolean {
+        // Require at least 2 confirmations
+        let confirmations = 0;
+
+        if (accumulation.isAccumulating && accumulation.strength > 0.5) {
+            confirmations++;
+        }
+
+        if (divergence.type === "bullish" && divergence.strength > 0.3) {
+            confirmations++;
+        }
+
+        // Check if price is near a low volume node (easier to move through)
+        const nearLVN = volumeNodes.lvn.some(
+            (lvn) => Math.abs(lvn - currentPrice) < currentPrice * 0.001
+        );
+        if (nearLVN) {
+            confirmations++;
+        }
+
+        return confirmations >= 2;
+    }
+
+    private async generateSwingSignal(
+        currentPrice: number,
+        accumulation: AccumulationResult,
+        divergence: DivergenceResult
+    ): Promise<void> {
+        const side: "buy" | "sell" =
+            divergence.type === "bullish" || accumulation.isAccumulating
+                ? "buy"
+                : "sell";
+
+        const profitTarget = calculateProfitTarget(currentPrice, side);
+        const stopLoss = calculateStopLoss(currentPrice, side);
+
+        const signal: Signal = {
+            type: "flow",
+            time: Date.now(),
+            price: currentPrice,
+            takeProfit: profitTarget.price,
+            stopLoss,
+            closeReason: "swing_detection",
+            signalData: {
+                accumulation,
+                divergence,
+                expectedGainPercent: profitTarget.netGain,
+            },
+        };
+
+        // Send alert via AlertManager
+        await this.dependencies.alertManager.sendAlert(signal);
+
+        // Also broadcast to WebSocket clients
+        await this.broadcastSignal(signal);
+    }
+
     public async startDashboard(): Promise<void> {
         const correlationId = randomUUID();
 
@@ -1385,6 +1699,10 @@ export function createDependencies(): Dependencies {
     const metricsCollector = new MetricsCollector();
     const rateLimiter = new RateLimiter();
     const circuitBreaker = new CircuitBreaker();
+    const alertManager = new AlertManager(
+        process.env.ALERT_WEBHOOK_URL,
+        parseInt(process.env.ALERT_COOLDOWN_MS || "300000", 10)
+    );
 
     return {
         storage: new Storage() as IStorage,
@@ -1396,6 +1714,7 @@ export function createDependencies(): Dependencies {
         metricsCollector,
         rateLimiter,
         circuitBreaker,
+        alertManager,
     };
 }
 

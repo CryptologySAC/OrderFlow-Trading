@@ -1,5 +1,8 @@
-import { SwingPredictor, SwingPrediction } from "../src/swingPredictor";
-import { Signal } from "../src/interfaces.js";
+import {
+    SwingPredictor,
+    SwingPrediction,
+} from "../src/indicators/swingPredictor";
+import { Signal } from "../src/utils/interfaces.js";
 
 describe("SwingPredictor", () => {
     let predictions: SwingPrediction[] = [];

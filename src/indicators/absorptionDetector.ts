@@ -1,5 +1,5 @@
 import { SpotWebsocketStreams } from "@binance/spot";
-import { ISignalLogger } from "./signalLogger.js";
+import { ISignalLogger } from "../services/signalLogger.js";
 import {
     CircularBuffer,
     TimeAwareCache,
@@ -11,7 +11,7 @@ import {
     TradeData,
     DepthLevel,
     PendingDetection,
-} from "./utils.js";
+} from "../utils/utils.js";
 
 export type AbsorptionCallback = (data: {
     price: number;
@@ -387,7 +387,7 @@ export class AbsorptionDetector {
                 side: absorption.side,
                 trades: absorption.trades,
                 totalAggressiveVolume: absorption.aggressive,
-                passiveVolume: absorption.passive as number,
+                passiveVolume: absorption.passive,
                 refilled: absorption.refilled,
                 zone: absorption.zone,
             });
@@ -611,7 +611,7 @@ export class AbsorptionDetector {
                     side: absorption.side,
                     trades: absorption.trades,
                     totalAggressiveVolume: absorption.aggressive,
-                    passiveVolume: absorption.passive as number,
+                    passiveVolume: absorption.passive,
                     refilled: absorption.refilled,
                     zone: absorption.zone,
                 });

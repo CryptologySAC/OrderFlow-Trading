@@ -96,8 +96,8 @@ vi.mock("../src/swingPredictor.js", () => ({
 }));
 
 import { OrderFlowDashboard } from "../src/orderFlowDashBoard.js";
-import { Signal, WebSocketMessage, Detected } from "../src/interfaces.js";
-import * as storage from "../src/storage.js";
+import { Signal, WebSocketMessage, Detected } from "../src/utils/interfaces.js";
+import * as storage from "../src/infrastructure/storage.js";
 
 beforeAll(() => {
     vi.spyOn(process, "exit").mockImplementation(
