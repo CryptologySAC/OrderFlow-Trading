@@ -12,16 +12,9 @@ import {
     DepthLevel,
     PendingDetection,
 } from "../utils/utils.js";
+import { Detected } from "../utils/types.js";
 
-export type AbsorptionCallback = (data: {
-    price: number;
-    side: "buy" | "sell";
-    trades: SpotWebsocketStreams.AggTradeResponse[];
-    totalAggressiveVolume: number;
-    passiveVolume: number;
-    refilled: boolean;
-    zone: number;
-}) => void;
+export type AbsorptionCallback = (data: Detected) => void;
 
 /**
  * Configuration options for AbsorptionDetector.
@@ -390,6 +383,9 @@ export class AbsorptionDetector {
                 passiveVolume: absorption.passive,
                 refilled: absorption.refilled,
                 zone: absorption.zone,
+                id: Date.now().toString(),
+                detectedAt: Date.now(),
+                detectorSource: "absorption",
             });
         }
     }
@@ -614,6 +610,9 @@ export class AbsorptionDetector {
                     passiveVolume: absorption.passive,
                     refilled: absorption.refilled,
                     zone: absorption.zone,
+                    id: Date.now().toString(),
+                    detectedAt: Date.now(),
+                    detectorSource: "absorption",
                 });
                 console.log(
                     "[AbsorptionDetector] Absorption event fired immediately at",

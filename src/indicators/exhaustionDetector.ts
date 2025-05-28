@@ -12,18 +12,12 @@ import {
     DepthLevel,
     PendingDetection,
 } from "../utils/utils.js";
+import { Detected } from "../utils/types.js";
 
 /**
  * Callback executed on confirmed exhaustion event.
  */
-export type ExhaustionCallback = (data: {
-    price: number;
-    side: "buy" | "sell";
-    trades: SpotWebsocketStreams.AggTradeResponse[];
-    totalAggressiveVolume: number;
-    zone: number;
-    refilled: boolean;
-}) => void;
+export type ExhaustionCallback = (data: Detected) => void;
 
 /**
  * Configuration options for ExhaustionDetector.
@@ -298,6 +292,9 @@ export class ExhaustionDetector {
                 totalAggressiveVolume: exhaustion.aggressive,
                 zone: exhaustion.zone,
                 refilled: exhaustion.refilled,
+                id: Date.now().toString(),
+                detectedAt: Date.now(),
+                detectorSource: "exhaustion",
             });
         }
     }
@@ -465,6 +462,9 @@ export class ExhaustionDetector {
                     totalAggressiveVolume: exhaustion.aggressive,
                     zone: exhaustion.zone,
                     refilled: exhaustion.refilled,
+                    id: Date.now().toString(),
+                    detectedAt: Date.now(),
+                    detectorSource: "exhaustion",
                 });
                 console.log(
                     "[ExhaustionDetector] Exhaustion event fired immediately at",

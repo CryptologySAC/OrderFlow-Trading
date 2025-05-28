@@ -3,7 +3,11 @@
 import { EventEmitter } from "events";
 import { randomUUID } from "crypto";
 import type { Signal } from "../utils/interfaces.js";
-import type { Detected } from "../utils/types.js";
+import type {
+    Detected,
+    ConfirmedSignal,
+    MarketAnomaly,
+} from "../utils/types.js";
 import { SignalCoordinator } from "../services/signalCoordinator.js";
 import { AnomalyDetector } from "../services/anomalyDetector.js";
 import { AlertManager } from "../alerts/alertManager.js";
@@ -31,16 +35,22 @@ export class SignalManager extends EventEmitter {
      * Setup signal confirmation handlers
      */
     private setupSignalHandlers(): void {
-        this.signalCoordinator.on("signal_confirmed", (signal) => {
-            void this.handleConfirmedSignal(signal).catch((error) => {
-                this.logger.error("Error handling confirmed signal", { error });
-            });
-        });
+        this.signalCoordinator.on(
+            "signal_confirmed",
+            (signal: ConfirmedSignal) => {
+                void this.handleConfirmedSignal(signal).catch((error) => {
+                    this.logger.error("Error handling confirmed signal", {
+                        error,
+                    });
+                });
+            }
+        );
     }
 
     /**
      * Process absorption detection
      */
+    // eslint-disable-next-line @typescript-eslint/require-await
     public async processAbsorption(detected: Detected): Promise<void> {
         const correlationId = randomUUID();
 
@@ -69,6 +79,7 @@ export class SignalManager extends EventEmitter {
     /**
      * Process exhaustion detection
      */
+    // eslint-disable-next-line @typescript-eslint/require-await
     public async processExhaustion(detected: Detected): Promise<void> {
         const correlationId = randomUUID();
 
@@ -97,12 +108,18 @@ export class SignalManager extends EventEmitter {
     /**
      * Handle confirmed signals from coordinator
      */
-    private async handleConfirmedSignal(signal: any): Promise<void> {
+    private async handleConfirmedSignal(
+        signal: ConfirmedSignal
+    ): Promise<void> {
         const correlationId = randomUUID();
 
         try {
             // Check for market anomalies
             const anomaly = this.checkMarketAnomaly(signal.finalPrice);
+            if (!anomaly) {
+                return;
+            }
+
             if (anomaly?.severity === "critical") {
                 this.logger.warn(
                     "Signal rejected due to market anomaly",
@@ -136,7 +153,7 @@ export class SignalManager extends EventEmitter {
     /**
      * Check for market anomalies
      */
-    private checkMarketAnomaly(price: number): any {
+    private checkMarketAnomaly(price: number): MarketAnomaly | null {
         // This would need orderbook data in real implementation
         return this.anomalyDetector.detectAnomaly(price, 0, 0);
     }
@@ -144,7 +161,10 @@ export class SignalManager extends EventEmitter {
     /**
      * Create trading signal from confirmed signal
      */
-    private createTradingSignal(confirmedSignal: any, anomaly: any): Signal {
+    private createTradingSignal(
+        confirmedSignal: ConfirmedSignal,
+        anomaly: MarketAnomaly
+    ): Signal {
         const originalSignal = confirmedSignal.originalSignals[0];
         const signalType = originalSignal.type;
         const side: "buy" | "sell" =

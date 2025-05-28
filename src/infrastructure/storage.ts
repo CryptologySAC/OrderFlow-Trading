@@ -17,7 +17,28 @@ interface AggregatedTradeRow {
     bestMatch: number; // 1 or 0
 }
 
-export class Storage {
+export interface IStorage {
+    saveAggregatedTrade(
+        aggTrade: SpotWebsocketAPI.TradesAggregateResponseResultInner,
+        symbol: string
+    ): void;
+
+    getLatestAggregatedTrades(
+        n: number,
+        symbol: string
+    ): SpotWebsocketAPI.TradesAggregateResponseResultInner[];
+
+    saveAggregatedTradesBulk(
+        trades: SpotWebsocketAPI.TradesAggregateResponseResultInner[],
+        symbol: string
+    ): number;
+
+    purgeOldEntries(hours?: number): number;
+
+    close(): void;
+}
+
+export class Storage implements IStorage {
     private readonly db: Database;
     private readonly insertAggregatedTrade: Statement;
     private readonly getAggregatedTrades: Statement;

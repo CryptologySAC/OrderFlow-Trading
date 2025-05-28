@@ -145,47 +145,47 @@ export class SwingMomentumDivergence {
     private priceMA: number[] = [];
     private volumeMA: number[] = [];
     private readonly periods = 30; // 30 x 30s = 15 minutes
-    
+
     addDataPoint(price: number, volume: number): void {
         this.priceMA.push(price);
         this.volumeMA.push(volume);
-        
+
         if (this.priceMA.length > this.periods) {
             this.priceMA.shift();
             this.volumeMA.shift();
         }
     }
-    
+
     detectDivergence(): {
-        type: "bullish" | "bearish" | "none",
-        strength: number
+        type: "bullish" | "bearish" | "none";
+        strength: number;
     } {
         if (this.priceMA.length < this.periods) {
             return { type: "none", strength: 0 };
         }
-        
+
         // Calculate slopes
         const priceSlope = this.calculateSlope(this.priceMA);
         const volumeSlope = this.calculateSlope(this.volumeMA);
-        
+
         // Divergence: price and volume moving opposite
         if (priceSlope < -0.001 && volumeSlope > 0.001) {
             // Price down, volume up = bullish divergence
-            return { 
-                type: "bullish", 
-                strength: Math.abs(volumeSlope - priceSlope) 
+            return {
+                type: "bullish",
+                strength: Math.abs(volumeSlope - priceSlope),
             };
         } else if (priceSlope > 0.001 && volumeSlope < -0.001) {
             // Price up, volume down = bearish divergence
-            return { 
-                type: "bearish", 
-                strength: Math.abs(priceSlope - volumeSlope) 
+            return {
+                type: "bearish",
+                strength: Math.abs(priceSlope - volumeSlope),
             };
         }
-        
+
         return { type: "none", strength: 0 };
     }
-    
+
     private calculateSlope(values: number[]): number {
         // Linear regression slope
         const n = values.length;
@@ -193,7 +193,7 @@ export class SwingMomentumDivergence {
         const sumY = values.reduce((a, b) => a + b, 0);
         const sumXY = values.reduce((sum, y, i) => sum + i * y, 0);
         const sumX2 = (n * (n - 1) * (2 * n - 1)) / 6;
-        
+
         return (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
     }
 }

@@ -1,6 +1,7 @@
 // src/websocket/websocketManager.ts
 
-import { WebSocketServer, WebSocket as WS } from "ws";
+import { WebSocketServer, WebSocket } from "ws";
+import type { RawData } from "ws";
 import { randomUUID } from "crypto";
 import { Logger } from "../infrastructure/logger.js";
 import { RateLimiter } from "../infrastructure/rateLimiter.js";
@@ -8,7 +9,7 @@ import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { WebSocketError } from "../core/errors.js";
 import type { WebSocketMessage } from "../utils/interfaces.js";
 
-export interface ExtendedWebSocket extends WS {
+export interface ExtendedWebSocket extends WebSocket {
     clientId?: string;
     correlationId?: string;
 }
@@ -83,7 +84,7 @@ export class WebSocketManager {
     /**
      * Handle incoming WebSocket messages
      */
-    private handleWSMessage(ws: ExtendedWebSocket, message: WS.RawData): void {
+    private handleWSMessage(ws: ExtendedWebSocket, message: RawData): void {
         const correlationId = randomUUID();
 
         if (!this.rateLimiter.isAllowed(ws.clientId || "unknown")) {
@@ -103,7 +104,7 @@ export class WebSocketManager {
                 ws.clientId || "unknown",
                 correlationId
             );
-            const parsed = JSON.parse(raw);
+            const parsed: unknown = JSON.parse(raw);
 
             if (!this.isValidWSRequest(parsed)) {
                 throw new WebSocketError(
@@ -163,7 +164,7 @@ export class WebSocketManager {
      * Parse raw WebSocket message
      */
     private parseMessage(
-        message: WS.RawData,
+        message: RawData,
         clientId: string,
         correlationId: string
     ): string {
@@ -197,7 +198,7 @@ export class WebSocketManager {
         if (this.isShuttingDown) return;
 
         this.wsServer.clients.forEach((client) => {
-            if (client.readyState === WS.OPEN) {
+            if (client.readyState === WebSocket.OPEN) {
                 try {
                     client.send(JSON.stringify(message));
                 } catch (error) {

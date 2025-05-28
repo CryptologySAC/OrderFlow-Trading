@@ -7,7 +7,13 @@ import { SpotWebsocketStreams, SpotWebsocketAPI } from "@binance/spot";
 import { WebSocketMessage } from "./utils/interfaces.js";
 import { PlotTrade } from "./utils/types.js";
 
-export class TradesProcessor {
+export interface ITradesProcessor {
+    fillBacklog(): Promise<void>;
+    requestBacklog(amount: number): PlotTrade[];
+    addTrade(data: SpotWebsocketStreams.AggTradeResponse): WebSocketMessage;
+}
+
+export class TradesProcessor implements ITradesProcessor {
     private readonly binanceFeed = new BinanceDataFeed();
     private readonly symbol: string = process.env.SYMBOL ?? "LTCUSDT";
     private readonly storage = new Storage();

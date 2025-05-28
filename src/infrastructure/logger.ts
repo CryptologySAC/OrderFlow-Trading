@@ -1,23 +1,87 @@
+// src/infrastructure/logger.ts
 
-export interface Logger {
-    warn(
+/**
+ * Structured logger for the trading system
+ */
+export class Logger {
+    private correlationContext = new Map<string, string>();
+
+    /**
+     * Log info level message
+     */
+    public info(
         message: string,
-        meta?: Record<string, unknown>,
+        context?: Record<string, unknown>,
         correlationId?: string
-    ): void;
-    info(
+    ): void {
+        this.log("INFO", message, context, correlationId);
+    }
+
+    /**
+     * Log error level message
+     */
+    public error(
         message: string,
-        meta?: Record<string, unknown>,
+        context?: Record<string, unknown>,
         correlationId?: string
-    ): void;
-    error(
+    ): void {
+        this.log("ERROR", message, context, correlationId);
+    }
+
+    /**
+     * Log warning level message
+     */
+    public warn(
         message: string,
-        meta?: Record<string, unknown>,
+        context?: Record<string, unknown>,
         correlationId?: string
-    ): void;
-    debug(
+    ): void {
+        this.log("WARN", message, context, correlationId);
+    }
+
+    /**
+     * Log debug level message
+     */
+    public debug(
         message: string,
-        meta?: Record<string, unknown>,
+        context?: Record<string, unknown>,
         correlationId?: string
-    ): void;
+    ): void {
+        this.log("DEBUG", message, context, correlationId);
+    }
+
+    /**
+     * Core logging method
+     */
+    private log(
+        level: string,
+        message: string,
+        context?: Record<string, unknown>,
+        correlationId?: string
+    ): void {
+        const timestamp = new Date().toISOString();
+        const logEntry = {
+            timestamp,
+            level,
+            message,
+            correlationId,
+            ...context,
+        };
+
+        console.log(JSON.stringify(logEntry));
+    }
+
+    /**
+     * Set correlation context
+     */
+    public setCorrelationId(id: string, context: string): void {
+        this.correlationContext.set(id, context);
+    }
+
+    /**
+     * Remove correlation context
+     */
+    public removeCorrelationId(id: string): void {
+        this.correlationContext.delete(id);
+    }
 }
