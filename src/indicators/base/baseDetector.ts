@@ -24,6 +24,47 @@ import type {
     DetectorCallback,
 } from "../interfaces/detectorInterfaces.js";
 
+// --- Strict rolling window utility ---
+export class RollingWindow {
+    private buffer: number[];
+    private pointer: number = 0;
+    private filled: boolean = false;
+
+    constructor(private size: number) {
+        this.buffer = new Array(size).fill(0) as number[];
+    }
+
+    public push(value: number): void {
+        this.buffer[this.pointer] = value;
+        this.pointer = (this.pointer + 1) % this.size;
+        if (this.pointer === 0) this.filled = true;
+    }
+
+    public mean(): number {
+        const count = this.filled ? this.size : this.pointer;
+        if (count === 0) return 0;
+        return this.buffer.slice(0, count).reduce((a, b) => a + b, 0) / count;
+    }
+
+    public sum(): number {
+        const count = this.filled ? this.size : this.pointer;
+        if (count === 0) return 0;
+        return this.buffer.slice(0, count).reduce((a, b) => a + b, 0);
+    }
+
+    public min(): number {
+        const count = this.filled ? this.size : this.pointer;
+        if (count === 0) return 0;
+        return Math.min(...this.buffer.slice(0, count));
+    }
+
+    public clear(): void {
+        this.pointer = 0;
+        this.filled = false;
+        this.buffer.fill(0);
+    }
+}
+
 /**
  * Abstract base class for orderflow detectors
  */
@@ -64,6 +105,9 @@ export abstract class BaseDetector implements IDetector {
 
     // Abstract method for detector type
     protected abstract readonly detectorType: "absorption" | "exhaustion";
+
+    // NEW: rolling window for passive volume tracking (strict apples-to-apples orderflow logic)
+    protected readonly rollingPassiveVolume: RollingWindow;
 
     constructor(
         callback: DetectorCallback,
@@ -110,6 +154,10 @@ export abstract class BaseDetector implements IDetector {
         this.passiveVolumeTracker = new PassiveVolumeTracker();
         this.autoCalibrator = new AutoCalibrator();
         this.priceConfirmationManager = new PriceConfirmationManager();
+
+        // NEW: initialize rolling window for passive volume, window size based on windowMs (1 sample per second)
+        const rollingWindowSize = Math.max(Math.ceil(this.windowMs / 1000), 10);
+        this.rollingPassiveVolume = new RollingWindow(rollingWindowSize);
 
         this.logger.info(`[${this.constructor.name}] Initialized`, {
             features: this.features,
@@ -187,6 +235,7 @@ export abstract class BaseDetector implements IDetector {
 
     /**
      * Add depth update
+     * (Now also push rolling passive total into the rolling window, for apples-to-apples comparison)
      */
     public addDepth(update: SpotWebsocketStreams.DiffBookDepthResponse): void {
         try {
@@ -198,6 +247,17 @@ export abstract class BaseDetector implements IDetector {
                 "ask",
                 (update.a as [string, string][]) || []
             );
+
+            // NEW: track passive volume as rolling window
+            let passive = 0;
+            const allPrices = Array.from(this.depth.keys());
+            for (const price of allPrices) {
+                const level = this.depth.get(price);
+                if (level) {
+                    passive += level.bid + level.ask;
+                }
+            }
+            this.rollingPassiveVolume.push(passive);
         } catch (error) {
             this.handleError(
                 error as Error,
@@ -360,14 +420,14 @@ export abstract class BaseDetector implements IDetector {
         center: number,
         bandTicks: number
     ): {
-        aggressive: number; // Changed from totalAggressive
-        passive: number; // Changed from totalPassive
-        trades: SpotWebsocketStreams.AggTradeResponse[]; // Changed from allTrades
+        aggressive: number;
+        passive: number;
+        trades: SpotWebsocketStreams.AggTradeResponse[];
     } {
         const tick = 1 / Math.pow(10, this.pricePrecision);
-        let aggressive = 0; // Changed from totalAggressive
-        let passive = 0; // Changed from totalPassive
-        const trades: SpotWebsocketStreams.AggTradeResponse[] = []; // Changed from allTrades
+        let aggressive = 0;
+        let passive = 0;
+        const trades: SpotWebsocketStreams.AggTradeResponse[] = [];
 
         for (let offset = -bandTicks; offset <= bandTicks; offset++) {
             const price = +(center + offset * tick).toFixed(
@@ -456,9 +516,6 @@ export abstract class BaseDetector implements IDetector {
      * Abstract method - must be implemented by subclasses
      */
     protected abstract checkForSignal(triggerTrade: TradeData): void;
-
-    // src/indicators/base/baseDetector.ts
-    // Add these methods to the BaseDetector class:
 
     /**
      * Get aggressive volume at a specific price within a time window

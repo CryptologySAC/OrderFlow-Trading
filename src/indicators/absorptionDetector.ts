@@ -2,7 +2,7 @@
 
 import { randomUUID } from "crypto";
 import { SpotWebsocketStreams } from "@binance/spot";
-import { BaseDetector } from "./base/baseDetector.js";
+import { BaseDetector, RollingWindow } from "./base/baseDetector.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
@@ -33,6 +33,9 @@ export class AbsorptionDetector
 {
     protected readonly detectorType = "absorption" as const;
 
+    // --- ADD: rolling passive window for apples-to-apples comparison
+    private readonly rollingZonePassive: RollingWindow;
+
     constructor(
         callback: DetectorCallback,
         settings: AbsorptionSettings = {},
@@ -41,6 +44,10 @@ export class AbsorptionDetector
         signalLogger?: ISignalLogger
     ) {
         super(callback, settings, logger, metricsCollector, signalLogger);
+
+        // --- ADD: rolling window for zone passive, matches windowMs
+        const windowSize = Math.max(Math.ceil(this.windowMs / 1000), 10);
+        this.rollingZonePassive = new RollingWindow(windowSize);
     }
 
     /**
@@ -105,9 +112,6 @@ export class AbsorptionDetector
     /**
      * Analyze zone for absorption
      */
-    // src/indicators/absorptionDetector.ts
-    // Replace the analyzeZoneForAbsorption method with this:
-
     private analyzeZoneForAbsorption(
         zone: number,
         tradesAtZone: TradeData[],
@@ -195,20 +199,19 @@ export class AbsorptionDetector
             longWindow
         );
 
-        // Current passive liquidity
-        const currentPassive =
-            this.depth.get(price)?.[side === "buy" ? "ask" : "bid"] || 0;
+        // --- CHANGE: Use rolling mean/min of passive for apples-to-apples comparison
+        const rollingZonePassive = this.rollingZonePassive.mean();
 
         // Method 1: Classic absorption - passive remains strong
         const classicAbsorption =
             recentAggressive > this.minAggVolume &&
-            currentPassive > recentAggressive * 0.8;
+            rollingZonePassive > recentAggressive * 0.8;
 
         // Method 2: Relative absorption - passive didn't decrease much despite aggression
         const relativeAbsorption =
             avgPassive > 0 &&
             recentAggressive > avgPassive * 2 &&
-            currentPassive > avgPassive * 0.7;
+            rollingZonePassive > avgPassive * 0.7;
 
         // Method 3: Iceberg detection - refilling after being hit
         const icebergDetection =
@@ -225,9 +228,9 @@ export class AbsorptionDetector
                 price,
                 side,
                 recentAggressive: recentAggressive.toFixed(2),
-                currentPassive: currentPassive.toFixed(2),
+                rollingZonePassive: rollingZonePassive.toFixed(2),
                 avgPassive: avgPassive.toFixed(2),
-                ratio: (currentPassive / recentAggressive).toFixed(2),
+                ratio: (rollingZonePassive / recentAggressive).toFixed(2),
             });
         }
 
@@ -255,12 +258,28 @@ export class AbsorptionDetector
         const aggressive = tradesAtZone.reduce((sum, t) => sum + t.quantity, 0);
         const trades = tradesAtZone.map((t) => t.originalTrade);
 
-        const latestTrade = tradesAtZone[tradesAtZone.length - 1];
-        const price = +latestTrade.price.toFixed(this.pricePrecision);
-        const bookLevel = this.depth.get(price);
-        const passive = bookLevel ? bookLevel.bid + bookLevel.ask : 0;
+        // --- CHANGE: Use rolling window mean/min for passive instead of current snapshot
+        const passive = this.rollingZonePassive.mean();
 
         return { aggressive, passive, trades };
+    }
+
+    /**
+     * When new depth data arrives, update rolling window for apples-to-apples comparison
+     */
+    public addDepth(update: SpotWebsocketStreams.DiffBookDepthResponse): void {
+        super.addDepth(update);
+
+        // For every depth update, push current sum of bid+ask at all known prices into rollingZonePassive
+        let totalPassive = 0;
+        const allPrices = this.depth.keys();
+        for (const price of allPrices) {
+            const level = this.depth.get(price);
+            if (level) {
+                totalPassive += level.bid + level.ask;
+            }
+        }
+        this.rollingZonePassive.push(totalPassive);
     }
 
     /**

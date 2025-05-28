@@ -159,6 +159,10 @@ export class TimeAwareCache<K, V> {
     size(): number {
         return this.cache.size;
     }
+
+    keys(): K[] {
+        return Array.from(this.cache.keys());
+    }
 }
 
 /**
