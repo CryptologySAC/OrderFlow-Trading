@@ -47,9 +47,13 @@ import {
 import { SwingMetrics } from "./indicators/swingMetrics.js";
 import { AccumulationDetector } from "./indicators/accumulationDetector.js";
 import { MomentumDivergence } from "./indicators/momentumDivergence.js";
-import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
+import {
+    DeltaCVDConfirmation,
+    DeltaCVDConfirmationSettings,
+} from "./indicators/deltaCVDConfirmation.js";
 import {
     SwingPredictor,
+    SwingPredictorConfig,
     type SwingPrediction,
 } from "./indicators/swingPredictor.js";
 
@@ -67,8 +71,8 @@ import type {
     Signal,
     AccumulationResult,
     DivergenceResult,
-    SignalType,
     SwingSignalData,
+    DeltaCVDConfirmationEvent,
 } from "./types/signalTypes.js";
 import type { TimeContext } from "./utils/types.js";
 
@@ -197,43 +201,16 @@ export class OrderFlowDashboard {
 
         // Initialize other components
         this.deltaCVDConfirmation = new DeltaCVDConfirmation(
-            (confirmed) => {
-                const correlationId = randomUUID();
-                try {
-                    const confirmedSignal: Signal = {
-                        type: `${confirmed.type}_confirmed` as SignalType,
-                        time: confirmed.time,
-                        price: confirmed.price,
-                        closeReason: confirmed.closeReason,
-                        id: confirmed.id,
-                        side: confirmed.side,
-                        signalData: confirmed.signalData,
-                    };
-
-                    this.swingPredictor.onSignal(confirmedSignal);
-                } catch (error) {
-                    this.handleError(
-                        error as Error,
-                        "delta_cvd_confirmation",
-                        correlationId
-                    );
-                }
-            },
-            {
-                lookback: 90,
-                cvdLength: 20,
-                slopeThreshold: 0.08,
-                deltaThreshold: 30,
-            }
+            this.DeltaCVDConfirmationCallback,
+            this.createDeltaCVDSettings(),
+            this.logger,
+            this.metricsCollector,
+            dependencies.signalLogger
         );
 
-        this.swingPredictor = new SwingPredictor({
-            lookaheadMs: 10000,
-            retraceTicks: 1,
-            pricePrecision: 2,
-            signalCooldownMs: 1000,
-            onSwingPredicted: this.handleSwingPrediction.bind(this),
-        });
+        this.swingPredictor = new SwingPredictor(
+            this.createSwingPredictorSettings()
+        );
 
         this.accumulationDetector = new AccumulationDetector(
             dependencies.signalLogger,
@@ -245,6 +222,42 @@ export class OrderFlowDashboard {
         this.setupHttpServer();
         this.setupGracefulShutdown();
     }
+
+    private DeltaCVDConfirmationCallback = (event: unknown): void => {
+        if (!this.isDeltaCVDConfirmationEvent(event)) {
+            this.handleError(
+                new SignalProcessingError(
+                    "Invalid Delta CVD confirmation event",
+                    { event }
+                ),
+                "delta_cvd_confirmation",
+                randomUUID()
+            );
+            return;
+        }
+
+        // TypeScript now knows event is DeltaCVDConfirmationEvent
+        const correlationId = randomUUID();
+        try {
+            const signal: Signal = {
+                id: correlationId,
+                type: "cvd_confirmation",
+                time: event.time, // No error - TypeScript knows the type
+                price: event.price, // No error
+                side: event.side, // No error
+                closeReason: "delta_divergence",
+                signalData: event,
+            };
+
+            this.swingPredictor.onSignal(signal);
+        } catch (error) {
+            this.handleError(
+                error instanceof Error ? error : new Error("Unknown error"),
+                "delta_cvd_confirmation",
+                correlationId
+            );
+        }
+    };
 
     /**
      * Create WebSocket handlers
@@ -267,6 +280,23 @@ export class OrderFlowDashboard {
                 this.handleBacklogRequest(ws, data, correlationId);
             },
         };
+    }
+
+    private isDeltaCVDConfirmationEvent(
+        value: unknown
+    ): value is DeltaCVDConfirmationEvent {
+        if (typeof value !== "object" || value === null) {
+            return false;
+        }
+
+        const obj = value as Record<string, unknown>;
+
+        return (
+            typeof obj.time === "number" &&
+            typeof obj.price === "number" &&
+            typeof obj.side === "string" &&
+            (obj.side === "buy" || obj.side === "sell")
+        );
     }
 
     /**
@@ -325,6 +355,28 @@ export class OrderFlowDashboard {
                 })
             );
         }
+    }
+
+    private createDeltaCVDSettings(): DeltaCVDConfirmationSettings {
+        return {
+            windowSec: Config.DELTA_CVD_CONFIRMATION.WINDOW_SEC,
+            minWindowTrades: Config.DELTA_CVD_CONFIRMATION.MIN_WINDOW_TRADES,
+            minWindowVolume: Config.DELTA_CVD_CONFIRMATION.MIN_WINDOW_VOLUME,
+            minRateOfChange: Config.DELTA_CVD_CONFIRMATION.MIN_RATE_OF_CHANGE, // Use adaptive if 0
+            pricePrecision: Config.DELTA_CVD_CONFIRMATION.PRICE_PRECISION,
+            dynamicThresholds: Config.DELTA_CVD_CONFIRMATION.DYNAMIC_THRESHOLDS,
+            logDebug: Config.DELTA_CVD_CONFIRMATION.LOG_DEBUG,
+        };
+    }
+
+    private createSwingPredictorSettings(): SwingPredictorConfig {
+        return {
+            lookaheadMs: Config.SWING_PREDICTOR.LOOKAHEAD_MS,
+            retraceTicks: Config.SWING_PREDICTOR.RETRACE_TICKS,
+            pricePrecision: Config.SWING_PREDICTOR.PRICE_PRECISION,
+            signalCooldownMs: Config.SWING_PREDICTOR.SIGNAL_COOLDOWN_MS,
+            onSwingPredicted: this.handleSwingPrediction.bind(this),
+        };
     }
 
     /**

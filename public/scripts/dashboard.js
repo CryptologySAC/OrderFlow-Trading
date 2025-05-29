@@ -119,15 +119,19 @@ function buildSignalLabel(signal) {
 
     // 1. Main signal summary (type/side/price/time)
     let label = `[${signal.type?.toUpperCase() ?? "?"}] ${signal.side?.toUpperCase() ?? "?"} @ ${signal.price?.toFixed(2) ?? "?"}`;
-    label += signal.time ? `\n${(new Date(signal.time)).toLocaleTimeString()}` : "";
+    label += signal.time
+        ? `\n${new Date(signal.time).toLocaleTimeString()}`
+        : "";
 
     // 2. TP/SL
     if (signal.takeProfit) label += `\nTP: ${signal.takeProfit.toFixed(2)}`;
-    if (signal.stopLoss)   label += ` | SL: ${signal.stopLoss.toFixed(2)}`;
+    if (signal.stopLoss) label += ` | SL: ${signal.stopLoss.toFixed(2)}`;
 
     // 3. Confidence/Confirmations
-    if (signal.confidence !== undefined) label += `\nConf: ${(signal.confidence * 100).toFixed(0)}%`;
-    if (signal.confirmations?.length) label += ` | Confirms: ${signal.confirmations.join(", ")}`;
+    if (signal.confidence !== undefined)
+        label += `\nConf: ${(signal.confidence * 100).toFixed(0)}%`;
+    if (signal.confirmations?.length)
+        label += ` | Confirms: ${signal.confirmations.join(", ")}`;
 
     // 4. Zone/Volumes/Refilled
     if (signal.zone !== undefined) label += `\nZone: ${signal.zone}`;
@@ -139,8 +143,7 @@ function buildSignalLabel(signal) {
         label += ` | Ref: ${signal.refilled ? "Yes" : "No"}`;
 
     // 5. Reason/closeReason
-    if (signal.closeReason)
-        label += `\nReason: ${signal.closeReason}`;
+    if (signal.closeReason) label += `\nReason: ${signal.closeReason}`;
 
     // 6. Anomaly
     if (signal.anomaly && signal.anomaly.detected)
@@ -187,7 +190,6 @@ function buildSignalLabel(signal) {
 
     return label;
 }
-
 
 // Configure Websocket
 const tradeWebsocket = new TradeWebSocket({
@@ -322,7 +324,7 @@ const tradeWebsocket = new TradeWebSocket({
                         xValue: message.data.time,
                         yValue: message.data.price,
                         content: label,
-                        backgroundColor: "rgba(90, 50, 255, 0.5)",  
+                        backgroundColor: "rgba(90, 50, 255, 0.5)",
                         color: "white",
                         font: {
                             size: 12,
@@ -332,7 +334,7 @@ const tradeWebsocket = new TradeWebSocket({
                         padding: 8,
                         position: {
                             x: "center",
-                            y: "center"
+                            y: "center",
                         },
                     };
                     tradesChart.update("none");

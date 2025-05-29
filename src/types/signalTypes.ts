@@ -7,7 +7,8 @@ export type SignalType =
     | "exhaustion_confirmed"
     | "flow"
     | "swingHigh"
-    | "swingLow";
+    | "swingLow"
+    | "cvd_confirmation";
 
 export type SignalSide = "buy" | "sell";
 
@@ -47,15 +48,10 @@ export interface Signal {
     signalData?:
         | AbsorptionSignalData
         | ExhaustionSignalData
-        | DeltaCVDData
+        | DeltaCVDConfirmationEvent
         | SwingSignalData
         | FlowSignalData
         | TradingSignalData;
-}
-
-export interface DeltaCVDData {
-    delta: number; // delta value for the signal
-    slope: number; // slope of the CVD line
 }
 
 export interface AbsorptionSignalData {
@@ -119,4 +115,22 @@ export interface TradingSignalData {
         detected: boolean;
         anomaly?: MarketAnomaly;
     };
+}
+
+export interface BaseSignalEvent {
+    type: SignalType;
+    time: number;
+    price: number;
+    side: "buy" | "sell";
+}
+
+export interface DeltaCVDConfirmationEvent extends BaseSignalEvent {
+    rateOfChange: number;
+    windowVolume: number;
+    direction: "up" | "down";
+    triggerType: "absorption" | "exhaustion";
+    windowTrades: number;
+    meta?: unknown;
+    delta?: number;
+    slope?: number;
 }

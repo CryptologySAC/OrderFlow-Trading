@@ -1,3 +1,5 @@
+// src/indicators/swingPredictor.ts
+
 import { Signal } from "../types/signalTypes.js";
 
 export interface SwingPrediction {
@@ -7,11 +9,11 @@ export interface SwingPrediction {
     sourceSignal: Signal;
 }
 
-interface SwingPredictorConfig {
-    lookaheadMs?: number; // how long to wait for confirmation
-    retraceTicks?: number; // how many ticks opposite needed to confirm swing
+export interface SwingPredictorConfig {
+    lookaheadMs?: number; // How long to wait for confirmation
+    retraceTicks?: number; // Ticks in opposite direction needed for confirmation
     pricePrecision?: number;
-    signalCooldownMs?: number; // prevent duplicate predictions
+    signalCooldownMs?: number; // Prevent duplicate signals at same price/side
     onSwingPredicted: (prediction: SwingPrediction) => void;
 }
 
@@ -22,62 +24,88 @@ export class SwingPredictor {
     private readonly signalCooldownMs: number;
     private readonly onSwingPredicted: (p: SwingPrediction) => void;
 
+    // Stores signal candidates with expiry and tracking direction
+    private swingCandidates: Map<
+        string,
+        {
+            signal: Signal;
+            expires: number;
+            initialPrice: number;
+            triggered: boolean;
+        }
+    > = new Map();
+
     private lastSignalTime: Map<string, number> = new Map();
-    private swingCandidates: Map<string, { signal: Signal; expires: number }> =
-        new Map();
 
     constructor(config: SwingPredictorConfig) {
-        this.lookaheadMs = config.lookaheadMs ?? 900000;
-        this.retraceTicks = config.retraceTicks ?? 50;
+        this.lookaheadMs = config.lookaheadMs ?? 60000;
+        this.retraceTicks = config.retraceTicks ?? 10;
         this.pricePrecision = config.pricePrecision ?? 2;
         this.signalCooldownMs = config.signalCooldownMs ?? 300000;
         this.onSwingPredicted = config.onSwingPredicted;
     }
 
-    public onSignal(signal: Signal) {
-        const key = `${signal.type}_${signal.time}`;
-        console.log("[SwingPredictor] Signal received:", signal, "key:", key);
-        this.swingCandidates.set(key, {
+    public onSignal(signal: Signal): void {
+        if (!signal.price || !signal.time || !signal.side) return;
+
+        // Deduplication key: type+side+price (rounded)
+        const priceKey = signal.price.toFixed(this.pricePrecision);
+        const dedupeKey = `${signal.type}_${signal.side}_${priceKey}`;
+
+        // Avoid duplicates
+        if (this.swingCandidates.has(dedupeKey)) {
+            return;
+        }
+
+        this.swingCandidates.set(dedupeKey, {
             signal,
             expires: signal.time + this.lookaheadMs,
+            initialPrice: signal.price,
+            triggered: false,
         });
     }
 
-    public onPrice(price: number, time: number) {
+    public onPrice(price: number, time: number): void {
         for (const [key, candidate] of this.swingCandidates.entries()) {
             if (time > candidate.expires) {
                 this.swingCandidates.delete(key);
                 continue;
             }
 
-            console.log(
-                "[SwingPredictor] Processing candidate:",
-                candidate.signal,
-                "current price:",
-                price,
-                "time:",
-                time
-            );
-
-            const { signal } = candidate;
-            const roundedPrice = +price.toFixed(this.pricePrecision);
-            const signalPrice = +signal.price.toFixed(this.pricePrecision);
+            const { signal, initialPrice, triggered } = candidate;
+            if (!signal.side) continue;
             const tickSize = 1 / Math.pow(10, this.pricePrecision);
+            const retraceAmount = this.retraceTicks * tickSize;
 
-            const isLong =
-                signal.type === "absorption_confirmed" ||
-                (signal.type === "exhaustion_confirmed" &&
-                    signal.price < price);
-            const threshold = this.retraceTicks * tickSize;
-            const triggered = isLong
-                ? roundedPrice <= signalPrice - threshold
-                : roundedPrice >= signalPrice + threshold;
+            // Only consider a swing in the "expected" direction
+            let swingTriggered = false;
+            let swingType: "swingLow" | "swingHigh" | undefined;
 
-            if (triggered) {
-                const swingType = isLong ? "swingLow" : "swingHigh";
-                const cooldownKey = `${swingType}_${signal.price}`;
+            if (signal.side === "buy") {
+                // Price needs to go DOWN by retraceAmount after the signal, then back UP past initialPrice
+                if (!triggered && price <= initialPrice - retraceAmount) {
+                    // Mark as "down-move completed"
+                    candidate.triggered = true;
+                }
+                if (triggered && price >= initialPrice) {
+                    swingType = "swingLow";
+                    swingTriggered = true;
+                }
+            } else if (signal.side === "sell") {
+                // Price needs to go UP by retraceAmount after the signal, then back DOWN past initialPrice
+                if (!triggered && price >= initialPrice + retraceAmount) {
+                    candidate.triggered = true;
+                }
+                if (triggered && price <= initialPrice) {
+                    swingType = "swingHigh";
+                    swingTriggered = true;
+                }
+            }
+
+            if (swingTriggered && swingType) {
+                // Check cooldown (per swing type and price)
+                const cooldownKey = `${swingType}_${initialPrice.toFixed(this.pricePrecision)}`;
                 const last = this.lastSignalTime.get(cooldownKey) ?? 0;
-
                 if (time - last > this.signalCooldownMs) {
                     this.lastSignalTime.set(cooldownKey, time);
                     this.onSwingPredicted({
@@ -86,8 +114,8 @@ export class SwingPredictor {
                         type: swingType,
                         sourceSignal: signal,
                     });
-                    this.swingCandidates.delete(key);
                 }
+                this.swingCandidates.delete(key);
             }
         }
     }

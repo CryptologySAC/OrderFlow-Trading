@@ -79,6 +79,37 @@ export class Config {
         ),
     };
 
+    static readonly DELTA_CVD_CONFIRMATION = {
+        WINDOW_SEC: parseInt(process.env.DELTACVD_WINDOW_SEC ?? "60", 10),
+        MIN_WINDOW_TRADES: parseInt(
+            process.env.DELTACVD_MIN_WINDOW_TRADES ?? "30",
+            10
+        ),
+        MIN_WINDOW_VOLUME: parseInt(
+            process.env.DELTACVD_MIN_WINDOW_VOLUME ?? "20",
+            10
+        ),
+        MIN_RATE_OF_CHANGE: parseFloat(
+            process.env.DELTACVD_MIN_RATE_OF_CHANGE ?? "0"
+        ), // Use adaptive if 0
+        PRICE_PRECISION: parseInt(
+            process.env.DELTACVD_PRICE_PRECISION ?? "2",
+            10
+        ),
+        DYNAMIC_THRESHOLDS: process.env.DELTACVD_DYNAMIC_THRESHOLDS === "true",
+        LOG_DEBUG: process.env.DELTACVD_LOG_DEBUG === "true",
+    };
+
+    static readonly SWING_PREDICTOR = {
+        LOOKAHEAD_MS: parseInt(process.env.SWING_LOOKAHEAD_MS ?? "60000", 10),
+        RETRACE_TICKS: parseInt(process.env.SWING_RETRACE_TICKS ?? "10", 10),
+        PRICE_PRECISION: parseInt(process.env.SWING_PRICE_PRECISION ?? "2", 10),
+        SIGNAL_COOLDOWN_MS: parseInt(
+            process.env.SWING_SIGNAL_COOLDOWN_MS ?? "300000",
+            10
+        ),
+    };
+
     /**
      * Validate configuration on startup
      */
