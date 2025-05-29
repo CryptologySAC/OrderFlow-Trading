@@ -134,13 +134,3 @@ export interface DeltaCVDConfirmationEvent extends BaseSignalEvent {
     delta?: number;
     slope?: number;
 }
-
-export interface DeltaCVDConfirmationSettings {
-    windowSec: number; // Rolling window length in seconds (default: 60)
-    minWindowTrades: number; // Minimum trades in window to trigger check (default: 30)
-    minWindowVolume: number; // Minimum volume in window (default: 20)
-    minRateOfChange: number; // Minimum delta CVD rate (adaptive default)
-    dynamicThresholds: boolean; // Adapt thresholds to volatility
-    logDebug: boolean; // Log debugging info
-    pricePrecision: number; // For reporting
-}
