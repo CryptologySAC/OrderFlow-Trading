@@ -32,7 +32,7 @@ import {
 import { SignalManager } from "./trading/signalManager.js";
 import { DataStreamManager } from "./trading/dataStreamManager.js";
 import { SignalCoordinator } from "./services/signalCoordinator.js";
-import { AnomalyDetector } from "./services/anomalyDetector.js";
+import { AnomalyDetector } from "./indicators/anomalyDetector.js";
 import { AlertManager } from "./alerts/alertManager.js";
 
 // Indicator imports

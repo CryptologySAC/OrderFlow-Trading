@@ -1,101 +1,159 @@
+// src/indicators/accumulationDetector.ts
+
 import { TradeData } from "../utils/utils.js";
 import { ISignalLogger } from "../services/signalLogger.js";
 import { AccumulationResult } from "../types/signalTypes.js";
 
+export interface AccumulationDetectorConfig {
+    windowMs?: number; // Rolling window for aggregation (default: 15 min)
+    minDurationMs?: number; // Min duration for an accumulation zone (default: 5 min)
+    zoneSize?: number; // USDT per zone (default: 0.02)
+    minRatio?: number; // Min passive/aggressive ratio to trigger (default: 1.2)
+    minRecentActivityMs?: number; // Max ms since last trade (default: 1 min)
+    minAggVolume?: number; // Minimum aggressive volume (default: 5)
+    trackSide?: boolean; // Track buy/sell accumulation separately
+}
+
 export interface ZoneData {
-    aggressive: number;
-    passive: number;
+    aggressive: number[];
+    passive: number[];
+    times: number[];
     startTime: number;
     lastUpdate: number;
     tradeCount: number;
+    side: "buy" | "sell";
 }
 
 export class AccumulationDetector {
     private readonly zones = new Map<number, ZoneData>();
-    private readonly windowMs = 900000; // 15 minutes
-    private readonly minDurationMs = 300000; // 5 minutes
-    private readonly zoneSize = 0.02; // USDT
+    private readonly cfg: Required<AccumulationDetectorConfig>;
     private readonly cleanupIntervalMs = 60000;
     private lastCleanup = Date.now();
 
     constructor(
         private readonly logger?: ISignalLogger,
-        private readonly symbol = "LTCUSDT"
-    ) {}
+        private readonly symbol = "LTCUSDT",
+        config: AccumulationDetectorConfig = {}
+    ) {
+        this.cfg = {
+            windowMs: config.windowMs ?? 900_000,
+            minDurationMs: config.minDurationMs ?? 300_000,
+            zoneSize: config.zoneSize ?? 0.02,
+            minRatio: config.minRatio ?? 1.2,
+            minRecentActivityMs: config.minRecentActivityMs ?? 60_000,
+            minAggVolume: config.minAggVolume ?? 5,
+            trackSide: config.trackSide ?? true,
+        };
+    }
 
     public addTrade(trade: TradeData, passiveVolume: number): void {
-        const zone = Math.round(trade.price / this.zoneSize) * this.zoneSize;
-        const existing = this.zones.get(zone);
+        const zone =
+            Math.round(trade.price / this.cfg.zoneSize) * this.cfg.zoneSize;
+        const side: "buy" | "sell" = trade.isMakerSell ? "buy" : "sell"; // Adjust as needed!
 
-        if (existing) {
-            existing.aggressive += trade.quantity;
-            existing.passive = passiveVolume;
-            existing.lastUpdate = trade.timestamp;
-            existing.tradeCount++;
-        } else {
-            this.zones.set(zone, {
-                aggressive: trade.quantity,
-                passive: passiveVolume,
+        let zoneKey = zone;
+        if (this.cfg.trackSide) {
+            // If tracking sides, combine zone and side
+            zoneKey = parseFloat(`${zone}.${side === "buy" ? 1 : 2}`);
+        }
+
+        let data = this.zones.get(zoneKey);
+        const now = Date.now();
+
+        if (!data) {
+            data = {
+                aggressive: [],
+                passive: [],
+                times: [],
                 startTime: trade.timestamp,
                 lastUpdate: trade.timestamp,
-                tradeCount: 1,
-            });
+                tradeCount: 0,
+                side,
+            };
+            this.zones.set(zoneKey, data);
+        }
+
+        data.aggressive.push(trade.quantity);
+        data.passive.push(passiveVolume);
+        data.times.push(trade.timestamp);
+        data.lastUpdate = trade.timestamp;
+        data.tradeCount++;
+
+        // Remove old data from rolling window
+        while (data.times.length && now - data.times[0] > this.cfg.windowMs) {
+            data.aggressive.shift();
+            data.passive.shift();
+            data.times.shift();
         }
 
         this.maybeCleanup();
     }
 
     public detectAccumulation(currentPrice: number): AccumulationResult {
-        const zone = Math.round(currentPrice / this.zoneSize) * this.zoneSize;
-        const data = this.zones.get(zone);
+        // Detect for both buy and sell
+        const sideKeys = this.cfg.trackSide ? ["buy", "sell"] : [undefined];
 
-        if (!data) {
-            return {
-                isAccumulating: false,
-                strength: 0,
-                duration: 0,
-                zone,
-                ratio: 0,
-            };
-        }
-
-        const now = Date.now();
-        const duration = now - data.startTime;
-        const ratio = data.passive / (data.aggressive || 1);
-
-        // Accumulation criteria:
-        // 1. More passive than aggressive (absorption happening)
-        // 2. Sufficient duration
-        // 3. Recent activity
-        const isAccumulating =
-            ratio > 1.2 &&
-            duration > this.minDurationMs &&
-            now - data.lastUpdate < 60000; // Last trade within 1 minute
-
-        const strength = Math.min(ratio / 3, 1);
-
-        const result: AccumulationResult = {
-            isAccumulating,
-            strength,
-            duration,
-            zone,
-            ratio,
+        let result: AccumulationResult = {
+            isAccumulating: false,
+            strength: 0,
+            duration: 0,
+            zone: 0,
+            ratio: 0,
         };
 
-        if (isAccumulating && this.logger) {
-            this.logger.logEvent({
-                timestamp: new Date().toISOString(),
-                type: "accumulation",
-                symbol: this.symbol,
-                signalPrice: currentPrice,
-                side: "buy",
-                aggressiveVolume: data.aggressive,
-                passiveVolume: data.passive,
-                zone,
-                refilled: false,
-                confirmed: false,
-                outcome: "detected",
-            });
+        for (const side of sideKeys) {
+            const zone =
+                Math.round(currentPrice / this.cfg.zoneSize) *
+                this.cfg.zoneSize;
+            const zoneKey = this.cfg.trackSide
+                ? parseFloat(`${zone}.${side === "buy" ? 1 : 2}`)
+                : zone;
+            const data = this.zones.get(zoneKey);
+
+            if (!data || data.aggressive.length === 0) continue;
+
+            const now = Date.now();
+            const duration = now - data.startTime;
+            const recentAgg = data.aggressive.reduce((a, b) => a + b, 0);
+            const recentPassive = data.passive.reduce((a, b) => a + b, 0);
+
+            const ratio = recentPassive / (recentAgg || 1);
+
+            const isAccumulating =
+                ratio > this.cfg.minRatio &&
+                duration > this.cfg.minDurationMs &&
+                now - data.lastUpdate < this.cfg.minRecentActivityMs &&
+                recentAgg > this.cfg.minAggVolume;
+
+            const strength = Math.min(ratio / (this.cfg.minRatio * 2), 1);
+
+            if (
+                isAccumulating &&
+                (!result.isAccumulating || strength > result.strength)
+            ) {
+                result = {
+                    isAccumulating,
+                    strength,
+                    duration,
+                    zone,
+                    ratio,
+                };
+                if (this.logger) {
+                    this.logger.logEvent({
+                        timestamp: new Date().toISOString(),
+                        type: "accumulation",
+                        symbol: this.symbol,
+                        signalPrice: currentPrice,
+                        side: side as "buy" | "sell",
+                        aggressiveVolume: recentAgg,
+                        passiveVolume: recentPassive,
+                        zone,
+                        refilled: false,
+                        confirmed: false,
+                        outcome: "detected",
+                    });
+                }
+            }
         }
 
         return result;
@@ -103,26 +161,34 @@ export class AccumulationDetector {
 
     public getStats(): {
         activeZones: number;
-        totalVolume: number;
         strongestZone: number | null;
+        totalAggVolume: number;
+        totalPassiveVolume: number;
     } {
-        let totalVolume = 0;
+        let totalAggVolume = 0;
+        let totalPassiveVolume = 0;
         let strongestZone: number | null = null;
-        let maxRatio = 0;
+        let maxStrength = 0;
 
         for (const [zone, data] of this.zones) {
-            totalVolume += data.aggressive + data.passive;
-            const ratio = data.passive / (data.aggressive || 1);
-            if (ratio > maxRatio) {
-                maxRatio = ratio;
+            const agg = data.aggressive.reduce((a, b) => a + b, 0);
+            const passive = data.passive.reduce((a, b) => a + b, 0);
+            const ratio = passive / (agg || 1);
+            const strength = Math.min(ratio / (this.cfg.minRatio * 2), 1);
+            totalAggVolume += agg;
+            totalPassiveVolume += passive;
+
+            if (strength > maxStrength) {
+                maxStrength = strength;
                 strongestZone = zone;
             }
         }
 
         return {
             activeZones: this.zones.size,
-            totalVolume,
             strongestZone,
+            totalAggVolume,
+            totalPassiveVolume,
         };
     }
 
@@ -130,7 +196,7 @@ export class AccumulationDetector {
         const now = Date.now();
         if (now - this.lastCleanup < this.cleanupIntervalMs) return;
 
-        const cutoff = now - this.windowMs;
+        const cutoff = now - this.cfg.windowMs;
         const toDelete: number[] = [];
 
         for (const [zone, data] of this.zones) {
@@ -138,11 +204,9 @@ export class AccumulationDetector {
                 toDelete.push(zone);
             }
         }
-
         for (const zone of toDelete) {
             this.zones.delete(zone);
         }
-
         this.lastCleanup = now;
     }
 }

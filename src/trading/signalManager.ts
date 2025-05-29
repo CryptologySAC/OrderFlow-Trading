@@ -9,7 +9,7 @@ import type {
     MarketAnomaly,
 } from "../utils/types.js";
 import { SignalCoordinator } from "../services/signalCoordinator.js";
-import { AnomalyDetector } from "../services/anomalyDetector.js";
+import { AnomalyDetector } from "../indicators/anomalyDetector.js";
 import { AlertManager } from "../alerts/alertManager.js";
 import { Logger } from "../infrastructure/logger.js";
 import {

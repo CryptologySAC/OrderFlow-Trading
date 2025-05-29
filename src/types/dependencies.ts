@@ -11,7 +11,7 @@ import { RateLimiter } from "../infrastructure/rateLimiter.js";
 import { CircuitBreaker } from "../infrastructure/circuitBreaker.js";
 import { AlertManager } from "../alerts/alertManager.js";
 import { SignalCoordinator } from "../services/signalCoordinator.js";
-import { AnomalyDetector } from "../services/anomalyDetector.js";
+import { AnomalyDetector } from "../indicators/anomalyDetector.js";
 
 /**
  * Application dependencies interface

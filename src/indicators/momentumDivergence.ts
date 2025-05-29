@@ -3,20 +3,36 @@ import { DivergenceResult } from "../types/signalTypes.js";
 
 export interface DataPoint {
     price: number;
-    volume: number;
+    volume: number; // Consider: use buy-sell delta
     timestamp: number;
+}
+
+export interface MomentumDivergenceConfig {
+    lookbackPeriods?: number;
+    sampleIntervalMs?: number;
+    minDataPoints?: number;
+    slopeThreshold?: number;
+    logDetections?: boolean;
+    useDeltaVolume?: boolean; // If true, expect volume as net (buy-sell)
 }
 
 export class MomentumDivergence {
     private readonly dataPoints: CircularBuffer<DataPoint>;
-    private readonly sampleIntervalMs = 30000; // 30 seconds
-    private readonly minDataPoints = 30; // 15 minutes worth
+    private readonly lookbackPeriods: number;
+    private readonly sampleIntervalMs: number;
+    private readonly minDataPoints: number;
+    private readonly slopeThreshold: number;
+    private readonly logDetections: boolean;
+    private readonly useDeltaVolume: boolean;
     private lastSampleTime = 0;
 
-    constructor(
-        private readonly lookbackPeriods = 30,
-        private readonly slopeThreshold = 0.001
-    ) {
+    constructor(config: MomentumDivergenceConfig = {}) {
+        this.lookbackPeriods = config.lookbackPeriods ?? 30;
+        this.sampleIntervalMs = config.sampleIntervalMs ?? 30_000;
+        this.minDataPoints = config.minDataPoints ?? 30;
+        this.slopeThreshold = config.slopeThreshold ?? 0.001;
+        this.logDetections = config.logDetections ?? false;
+        this.useDeltaVolume = config.useDeltaVolume ?? false;
         this.dataPoints = new CircularBuffer<DataPoint>(
             this.lookbackPeriods * 2
         );
@@ -27,18 +43,15 @@ export class MomentumDivergence {
         volume: number,
         timestamp: number
     ): void {
-        // Sample at intervals to avoid noise
-        if (timestamp - this.lastSampleTime < this.sampleIntervalMs) {
-            return;
-        }
+        if (timestamp - this.lastSampleTime < this.sampleIntervalMs) return;
 
+        // Could optionally filter by volume direction here if useDeltaVolume = true
         this.dataPoints.add({ price, volume, timestamp });
         this.lastSampleTime = timestamp;
     }
 
     public detectDivergence(): DivergenceResult {
         const points = this.dataPoints.getAll();
-
         if (points.length < this.minDataPoints) {
             return {
                 type: "none",
@@ -48,17 +61,30 @@ export class MomentumDivergence {
             };
         }
 
-        // Use only recent points for calculation
-        const recentPoints = points.slice(-this.lookbackPeriods);
-        const prices = recentPoints.map((p) => p.price);
-        const volumes = recentPoints.map((p) => p.volume);
+        // Remove outliers/gaps
+        const filtered = points.filter(
+            (p, i, arr) =>
+                i === 0 ||
+                p.timestamp - arr[i - 1].timestamp < this.sampleIntervalMs * 2
+        );
+        const recent = filtered.slice(-this.lookbackPeriods);
+        const prices = recent.map((p) => p.price);
+        const volumes = recent.map((p) => p.volume);
 
         const priceSlope = this.calculateSlope(prices);
         const volumeSlope = this.calculateSlope(volumes);
 
-        // Normalize slopes to percentage change
+        // Normalize price slope by price volatility (e.g., std dev)
         const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
-        const normalizedPriceSlope = priceSlope / avgPrice;
+        const priceStd =
+            Math.sqrt(
+                prices.reduce(
+                    (acc, val) => acc + Math.pow(val - avgPrice, 2),
+                    0
+                ) / prices.length
+            ) || 1;
+
+        const normalizedPriceSlope = priceSlope / priceStd;
 
         let divergenceType: "bullish" | "bearish" | "none" = "none";
         let strength = 0;
@@ -67,21 +93,32 @@ export class MomentumDivergence {
             normalizedPriceSlope < -this.slopeThreshold &&
             volumeSlope > this.slopeThreshold
         ) {
-            // Price falling, volume rising = bullish divergence
             divergenceType = "bullish";
-            strength = Math.abs(normalizedPriceSlope) + Math.abs(volumeSlope);
+            strength =
+                (Math.abs(normalizedPriceSlope) + Math.abs(volumeSlope)) / 2;
         } else if (
             normalizedPriceSlope > this.slopeThreshold &&
             volumeSlope < -this.slopeThreshold
         ) {
-            // Price rising, volume falling = bearish divergence
             divergenceType = "bearish";
-            strength = Math.abs(normalizedPriceSlope) + Math.abs(volumeSlope);
+            strength =
+                (Math.abs(normalizedPriceSlope) + Math.abs(volumeSlope)) / 2;
+        }
+
+        if (this.logDetections && divergenceType !== "none") {
+            console.log("[MomentumDivergence] Detected:", {
+                divergenceType,
+                strength,
+                normalizedPriceSlope,
+                volumeSlope,
+                avgPrice,
+                priceStd,
+            });
         }
 
         return {
             type: divergenceType,
-            strength: Math.min(strength * 100, 1), // Normalize to 0-1
+            strength: Math.max(0, Math.min(strength, 1)), // Clamp 0-1
             priceSlope: normalizedPriceSlope,
             volumeSlope,
         };
@@ -104,7 +141,6 @@ export class MomentumDivergence {
         const n = values.length;
         if (n < 2) return 0;
 
-        // Use indices as X values (0, 1, 2, ...)
         let sumX = 0;
         let sumY = 0;
         let sumXY = 0;
