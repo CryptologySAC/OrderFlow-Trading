@@ -1,11 +1,5 @@
 import { CircularBuffer } from "../utils/utils.js";
-
-export interface DivergenceResult {
-    type: "bullish" | "bearish" | "none";
-    strength: number;
-    priceSlope: number;
-    volumeSlope: number;
-}
+import { DivergenceResult } from "../types/signalTypes.js";
 
 export interface DataPoint {
     price: number;

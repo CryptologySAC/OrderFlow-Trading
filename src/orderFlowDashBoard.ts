@@ -62,10 +62,14 @@ import {
 
 // Types
 import type { Dependencies } from "./types/dependencies.js";
-import type { Signal } from "./utils/interfaces.js";
 import type { VolumeNodes } from "./indicators/swingMetrics.js";
-import type { AccumulationResult } from "./indicators/accumulationDetector.js";
-import type { DivergenceResult } from "./indicators/momentumDivergence.js";
+import type {
+    Signal,
+    AccumulationResult,
+    DivergenceResult,
+    SignalType,
+    SwingSignalData,
+} from "./types/signalTypes.js";
 import type { TimeContext } from "./utils/types.js";
 
 // Storage and processors
@@ -197,12 +201,13 @@ export class OrderFlowDashboard {
                 const correlationId = randomUUID();
                 try {
                     const confirmedSignal: Signal = {
-                        type: `${confirmed.confirmedType}_confirmed` as Signal["type"],
+                        type: `${confirmed.type}_confirmed` as SignalType,
                         time: confirmed.time,
                         price: confirmed.price,
-                        takeProfit: confirmed.price * 1.01,
-                        stopLoss: confirmed.price * 0.99,
-                        closeReason: confirmed.reason,
+                        closeReason: confirmed.closeReason,
+                        id: confirmed.id,
+                        side: confirmed.side,
+                        signalData: confirmed.signalData,
                     };
 
                     this.swingPredictor.onSignal(confirmedSignal);
@@ -706,18 +711,23 @@ export class OrderFlowDashboard {
         const profitTarget = calculateProfitTarget(currentPrice, side);
         const stopLoss = calculateStopLoss(currentPrice, side);
 
+        const signalData: SwingSignalData = {
+            accumulation,
+            divergence,
+            expectedGainPercent: profitTarget.netGain,
+            swingType: side === "buy" ? "low" : "high",
+            strength: Math.max(accumulation.strength, divergence.strength),
+        };
         const signal: Signal = {
+            id: randomUUID(),
+            side,
             type: "flow",
             time: Date.now(),
             price: currentPrice,
             takeProfit: profitTarget.price,
             stopLoss,
             closeReason: "swing_detection",
-            signalData: {
-                accumulation,
-                divergence,
-                expectedGainPercent: profitTarget.netGain,
-            },
+            signalData,
         };
 
         // Send alert via AlertManager
@@ -761,7 +771,6 @@ export class OrderFlowDashboard {
      */
     private async broadcastSignal(signal: Signal): Promise<void> {
         const correlationId = randomUUID();
-
         try {
             this.logger.info("Broadcasting signal", { signal }, correlationId);
             this.metricsCollector.incrementMetric("signalsGenerated");
@@ -1030,7 +1039,7 @@ export function createDependencies(): Dependencies {
     const anomalyDetector = new AnomalyDetector();
     const signalCoordinator = new SignalCoordinator(
         {
-            requiredConfirmations: 2,
+            requiredConfirmations: 1,
             confirmationWindowMs: 30000,
             deduplicationWindowMs: 5000,
             signalExpiryMs: 60000,

@@ -165,7 +165,6 @@ export class TimeAwareCache<K, V> {
     }
 }
 
-
 /**
  * Adaptive zone size calculation (ATR-based).
  */

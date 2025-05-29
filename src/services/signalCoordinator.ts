@@ -43,7 +43,7 @@ export class SignalCoordinator extends EventEmitter {
      * Submit a signal for coordination and deduplication
      */
     public submitSignal(
-        type: "absorption" | "exhaustion" | "swing",
+        type: "absorption" | "exhaustion" | "swingHigh" | "swingLow",
         price: number,
         detectorName: string,
         metadata: Record<string, unknown> = {}
@@ -84,7 +84,7 @@ export class SignalCoordinator extends EventEmitter {
      * Find existing pending signal within price tolerance
      */
     private findOrCreatePendingSignal(
-        type: "absorption" | "exhaustion" | "swing",
+        type: "absorption" | "exhaustion" | "swingHigh" | "swingLow",
         price: number,
         timestamp: number
     ): string {

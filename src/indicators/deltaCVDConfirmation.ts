@@ -1,13 +1,11 @@
+import { randomUUID } from "crypto";
 import { SpotWebsocketStreams } from "@binance/spot";
-
-interface ConfirmationSignal {
-    time: number;
-    price: number;
-    confirmedType: "absorption" | "exhaustion";
-    reason: "delta_divergence" | "cvd_slope_reversal" | "both";
-    delta: number;
-    slope: number;
-}
+import {
+    Signal,
+    CloseReason,
+    SignalType,
+    DeltaCVDData,
+} from "../types/signalTypes";
 
 export interface DeltaCVDConfig {
     lookback?: number; // seconds for window (default 60)
@@ -28,10 +26,10 @@ export class DeltaCVDConfirmation {
     private readonly cvdLength: number;
     private readonly slopeThreshold: number;
     private readonly deltaThreshold: number;
-    private readonly confirmationCallback: (signal: ConfirmationSignal) => void;
+    private readonly confirmationCallback: (signal: Signal) => void;
 
     constructor(
-        confirmationCallback: (signal: ConfirmationSignal) => void,
+        confirmationCallback: (signal: Signal) => void,
         config: DeltaCVDConfig = {}
     ) {
         this.confirmationCallback = confirmationCallback;
@@ -55,7 +53,7 @@ export class DeltaCVDConfirmation {
     }
 
     public confirmSignal(
-        signalType: "absorption" | "exhaustion",
+        signalType: SignalType,
         currentPrice: number,
         currentTime: number
     ) {
@@ -82,25 +80,34 @@ export class DeltaCVDConfirmation {
 
         const hasSlope = Math.abs(slope) > this.slopeThreshold;
 
-        let reason: ConfirmationSignal["reason"] | null = null;
+        let closeReason: CloseReason;
         if (divergence && hasSlope) {
-            reason = "both";
+            closeReason = "both";
         } else if (divergence) {
-            reason = "delta_divergence";
+            closeReason = "delta_divergence";
         } else if (hasSlope) {
-            reason = "cvd_slope_reversal";
+            closeReason = "cvd_slope_reversal";
+        } else {
+            return; // No confirmation
         }
 
-        if (reason) {
-            this.confirmationCallback({
-                time: currentTime,
-                price: currentPrice,
-                confirmedType: signalType,
-                reason,
-                delta,
-                slope,
-            });
-        }
+        // Create the confirmation signal
+        let signalData: DeltaCVDData = {
+            delta,
+            slope,
+        };
+
+        let confirmationSignal: Signal = {
+            id: randomUUID(),
+            time: currentTime,
+            price: currentPrice,
+            type: signalType,
+            side: signalType === "absorption" ? "sell" : "buy",
+            signalData,
+            closeReason,
+        };
+
+        this.confirmationCallback(confirmationSignal);
     }
 
     private calculateDelta(trades: typeof this.tradeHistory): number {

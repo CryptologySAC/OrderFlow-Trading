@@ -109,52 +109,85 @@ function createTrade(x, y, quantity, orderType) {
     return { x, y, quantity, orderType };
 }
 
+/**
+ * Build a label string for orderflow signals for chart annotations.
+ * @param {Signal} signal - Signal object as per the new interface
+ * @returns {string} - Formatted label text for Chart.js or other UI
+ */
 function buildSignalLabel(signal) {
-    let color,
-        letter,
-        extraInfo = "";
+    if (!signal) return "Invalid Signal";
 
-    if (signal.type.startsWith("exhaustion")) {
-        letter = "E";
-        color = signal.type.includes("confirmed")
-            ? "rgba(0, 90, 255, 0.5)" // Blue for confirmed
-            : signal.signalData.side === "sell"
-              ? "rgba(255, 0, 0, 0.5)"
-              : "rgba(0, 200, 0, 0.5)"; // Red/Green
-    } else if (signal.type.startsWith("absorption")) {
-        letter = "A";
-        color = signal.type.includes("confirmed")
-            ? "rgba(0, 90, 255, 1)"
-            : signal.signalData.side === "sell"
-              ? "rgba(255, 0, 0, 1)"
-              : "rgba(0, 200, 0, 1)";
-    } else {
-        letter = "?";
-        color = "rgba(128,128,128,0.5)";
+    // 1. Main signal summary (type/side/price/time)
+    let label = `[${signal.type?.toUpperCase() ?? "?"}] ${signal.side?.toUpperCase() ?? "?"} @ ${signal.price?.toFixed(2) ?? "?"}`;
+    label += signal.time ? `\n${(new Date(signal.time)).toLocaleTimeString()}` : "";
+
+    // 2. TP/SL
+    if (signal.takeProfit) label += `\nTP: ${signal.takeProfit.toFixed(2)}`;
+    if (signal.stopLoss)   label += ` | SL: ${signal.stopLoss.toFixed(2)}`;
+
+    // 3. Confidence/Confirmations
+    if (signal.confidence !== undefined) label += `\nConf: ${(signal.confidence * 100).toFixed(0)}%`;
+    if (signal.confirmations?.length) label += ` | Confirms: ${signal.confirmations.join(", ")}`;
+
+    // 4. Zone/Volumes/Refilled
+    if (signal.zone !== undefined) label += `\nZone: ${signal.zone}`;
+    if (signal.totalAggressiveVolume !== undefined)
+        label += ` | Agg: ${Number(signal.totalAggressiveVolume).toFixed(2)}`;
+    if (signal.passiveVolume !== undefined)
+        label += ` | Passive: ${Number(signal.passiveVolume).toFixed(2)}`;
+    if (signal.refilled !== undefined)
+        label += ` | Ref: ${signal.refilled ? "Yes" : "No"}`;
+
+    // 5. Reason/closeReason
+    if (signal.closeReason)
+        label += `\nReason: ${signal.closeReason}`;
+
+    // 6. Anomaly
+    if (signal.anomaly && signal.anomaly.detected)
+        label += `\nAnomaly: ${signal.anomaly.type || "?"} (${signal.anomaly.severity || "?"})`;
+
+    // 7. Signal-specific details
+    if (signal.signalData) {
+        if ("absorptionType" in signal.signalData) {
+            label += `\nAbsorption: ${signal.signalData.absorptionType}`;
+            if (signal.signalData.spoofed) label += " | Spoofed!";
+            if (signal.signalData.recentAggressive !== undefined)
+                label += `\nAgg: ${Number(signal.signalData.recentAggressive).toFixed(2)}`;
+            if (signal.signalData.rollingZonePassive !== undefined)
+                label += ` | RollingPassive: ${Number(signal.signalData.rollingZonePassive).toFixed(2)}`;
+            if (signal.signalData.avgPassive !== undefined)
+                label += ` | AvgPassive: ${Number(signal.signalData.avgPassive).toFixed(2)}`;
+        }
+        if ("exhaustionType" in signal.signalData) {
+            label += `\nExhaustion: ${signal.signalData.exhaustionType}`;
+            if (signal.signalData.spoofed) label += " | Spoofed!";
+            if (signal.signalData.recentAggressive !== undefined)
+                label += `\nAgg: ${Number(signal.signalData.recentAggressive).toFixed(2)}`;
+            if (signal.signalData.oppositeQty !== undefined)
+                label += ` | OppQty: ${Number(signal.signalData.oppositeQty).toFixed(2)}`;
+            if (signal.signalData.avgLiquidity !== undefined)
+                label += ` | AvgBook: ${Number(signal.signalData.avgLiquidity).toFixed(2)}`;
+            if (signal.signalData.spread !== undefined)
+                label += ` | Spread: ${(signal.signalData.spread * 100).toFixed(3)}%`;
+        }
+        if ("swingType" in signal.signalData) {
+            label += `\nSwing: ${signal.signalData.swingType} | Str: ${signal.signalData.strength}`;
+        }
+        if ("divergence" in signal.signalData) {
+            label += `\nDiv: ${signal.signalData.divergence}`;
+        }
+        // Add more per-type details as needed.
     }
 
-    // Compose info for testing
-    if (signal.totalAggressiveVolume !== undefined)
-        extraInfo += `\nAgg: ${signal.totalAggressiveVolume}`;
-    if (signal.passiveVolume !== undefined)
-        extraInfo += `\nPass: ${signal.passiveVolume}`;
-    if (signal.refilled !== undefined)
-        extraInfo += `\nRefilled: ${signal.refilled ? "Y" : "N"}`;
-    if (signal.zone) extraInfo += `\nZone: ${signal.zone}`;
-    if (signal.closeReason) extraInfo += `\n(${signal.closeReason})`;
+    // 8. Invalidation (for signal lifecycle tracking)
+    if (signal.isInvalidated) label += "\n❌ Invalidated";
 
-    return {
-        type: "label",
-        xValue: signal.time,
-        yValue: signal.price,
-        content: `${letter}\n${extraInfo.trim()}`,
-        backgroundColor: color,
-        color: "white",
-        font: { size: 14 },
-        padding: 8,
-        id: `label.${signal.time}.${signal.type}`,
-    };
+    // Optional: truncate if label is too long for chart
+    if (label.length > 250) label = label.slice(0, 245) + "...";
+
+    return label;
 }
+
 
 // Configure Websocket
 const tradeWebsocket = new TradeWebSocket({
@@ -281,10 +314,27 @@ const tradeWebsocket = new TradeWebSocket({
                     break;
 
                 case "signal":
-                    const label = message.data;
-                    tradesChart.options.plugins.annotation.annotations[
-                        label.id || `label.${label.time}.${label.type}`
-                    ] = buildSignalLabel(label);
+                    const label = buildSignalLabel(message.data);
+                    const id = message.data.id;
+
+                    tradesChart.options.plugins.annotation.annotations[id] = {
+                        type: "label",
+                        xValue: message.data.time,
+                        yValue: message.data.price,
+                        content: label,
+                        backgroundColor: "rgba(90, 50, 255, 0.5)",  
+                        color: "white",
+                        font: {
+                            size: 12,
+                            family: "monospace",
+                        },
+                        borderRadius: 4,
+                        padding: 8,
+                        position: {
+                            x: "center",
+                            y: "center"
+                        },
+                    };
                     tradesChart.update("none");
                     console.log("Signal label added:", label);
                     break;

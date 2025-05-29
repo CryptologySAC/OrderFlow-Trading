@@ -22,8 +22,7 @@ export interface WebSocketMessage {
     now: number;
 }
 
-// Signal interface matching Python's structure
-export interface Signal {
+export interface Signal_old {
     type:
         | "exhaustion"
         | "absorption"

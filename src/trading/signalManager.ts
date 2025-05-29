@@ -2,7 +2,7 @@
 
 import { EventEmitter } from "events";
 import { randomUUID } from "crypto";
-import type { Signal } from "../utils/interfaces.js";
+import type { Signal, TradingSignalData } from "../types/signalTypes.js";
 import type {
     Detected,
     ConfirmedSignal,
@@ -120,11 +120,8 @@ export class SignalManager extends EventEmitter {
         try {
             // Check for market anomalies
             const anomaly = this.checkMarketAnomaly(signal.finalPrice);
-            if (!anomaly) {
-                return;
-            }
 
-            if (anomaly?.severity === "critical") {
+            if (anomaly && anomaly?.severity === "critical") {
                 this.logger.warn(
                     "Signal rejected due to market anomaly",
                     { anomaly, signalId: signal.id },
@@ -167,7 +164,7 @@ export class SignalManager extends EventEmitter {
      */
     private createTradingSignal(
         confirmedSignal: ConfirmedSignal,
-        anomaly: MarketAnomaly
+        anomaly: MarketAnomaly | null
     ): Signal {
         const originalSignal = confirmedSignal.originalSignals[0];
         const signalType = originalSignal.type;
@@ -180,30 +177,35 @@ export class SignalManager extends EventEmitter {
         );
         const stopLoss = calculateStopLoss(confirmedSignal.finalPrice, side);
 
-        return {
+        const signalData: TradingSignalData = {
+            confidence: confirmedSignal.confidence,
+            confirmations: Array.from(originalSignal.confirmations),
+            meta: originalSignal.metadata,
+            anomalyCheck: anomaly
+                ? {
+                      detected: true,
+                      anomaly,
+                  }
+                : { detected: false },
+        };
+
+        const signal: Signal = {
+            id: confirmedSignal.id,
+            side,
+            time: confirmedSignal.confirmedAt,
+            price: confirmedSignal.finalPrice,
             type:
                 signalType === "absorption"
                     ? "absorption_confirmed"
                     : signalType === "exhaustion"
                       ? "exhaustion_confirmed"
                       : "flow",
-            time: confirmedSignal.confirmedAt,
-            price: confirmedSignal.finalPrice,
             takeProfit: profitTarget.price,
             stopLoss,
             closeReason: "swing_detection",
-            signalData: {
-                confidence: confirmedSignal.confidence,
-                confirmations: Array.from(originalSignal.confirmations),
-                metadata: originalSignal.metadata,
-                anomalyCheck: anomaly
-                    ? {
-                          detected: true,
-                          type: anomaly.type,
-                          severity: anomaly.severity,
-                      }
-                    : { detected: false },
-            },
+            signalData,
         };
+
+        return signal;
     }
 }

@@ -1,7 +1,9 @@
 // src/utils/types.ts
-import type { AccumulationResult } from "../indicators/accumulationDetector.js";
-import type { DivergenceResult } from "../indicators/momentumDivergence.js";
-
+import {
+    AccumulationResult,
+    DivergenceResult,
+    SwingSignalData,
+} from "../types/signalTypes.js";
 /* ===========================
    BINANCE SPECIFIC TYPES
    =========================== */
@@ -77,7 +79,7 @@ export interface SignalCoordination {
 
 export interface PendingSignal {
     id: string;
-    type: "absorption" | "exhaustion" | "swing";
+    type: "absorption" | "exhaustion" | "swingHigh" | "swingLow";
     price: number;
     timestamp: number;
     confirmations: Set<string>; // Set of detector names that confirmed
@@ -222,15 +224,6 @@ export interface SwingPoint {
 export enum HighLow {
     HIGH = 1,
     LOW = -1,
-}
-
-/**
- * Data structure for swing trading signals containing all indicator results
- */
-export interface SwingSignalData {
-    accumulation: AccumulationResult;
-    divergence: DivergenceResult;
-    expectedGainPercent: number;
 }
 
 /**

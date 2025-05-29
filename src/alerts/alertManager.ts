@@ -1,11 +1,10 @@
 // src/alerts/alertManager.ts
-import { Signal } from "../utils/interfaces.js";
+import { Signal, SwingSignalData } from "../types/signalTypes.js";
 import { AlertMessage } from "../utils/types.js";
 import {
     calculateBreakeven,
     calculateProfitTarget,
 } from "../utils/calculations.js";
-import type { SwingSignalData } from "../utils/types.js";
 
 export class AlertManager {
     private lastAlertTime = 0;

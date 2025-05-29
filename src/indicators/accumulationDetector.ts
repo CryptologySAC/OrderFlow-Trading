@@ -1,5 +1,6 @@
 import { TradeData } from "../utils/utils.js";
 import { ISignalLogger } from "../services/signalLogger.js";
+import { AccumulationResult } from "../types/signalTypes.js";
 
 export interface ZoneData {
     aggressive: number;
@@ -7,14 +8,6 @@ export interface ZoneData {
     startTime: number;
     lastUpdate: number;
     tradeCount: number;
-}
-
-export interface AccumulationResult {
-    isAccumulating: boolean;
-    strength: number;
-    duration: number;
-    zone: number;
-    ratio: number;
 }
 
 export class AccumulationDetector {
