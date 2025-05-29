@@ -10,6 +10,7 @@ export interface Metrics {
     errorsCount: number;
     circuitBreakerState: string;
     uptime: number;
+    cvdConfirmations?: number;
     tradeMessages?: number;
     depthMessages?: number;
 }

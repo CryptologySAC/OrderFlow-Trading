@@ -1,228 +1,205 @@
 // src/indicators/deltaCVDConfirmation.ts
-import { randomUUID } from "crypto";
 import { SpotWebsocketStreams } from "@binance/spot";
+import { Detector } from "./base";
 import type { TradeData } from "../utils/utils.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
+import type { DeltaCVDConfirmationEvent } from "../types/signalTypes.js";
+import type { BaseDetectorSettings } from "./interfaces/detectorInterfaces.js";
 
-export interface DeltaCVDConfirmationSettings {
-    windowSec?: number; // Rolling window length in seconds (default: 60)
-    minWindowTrades?: number; // Minimum trades in window to trigger check (default: 30)
-    minWindowVolume?: number; // Minimum volume in window (default: 20)
-    minRateOfChange?: number; // Minimum delta CVD rate (adaptive default)
-    dynamicThresholds?: boolean; // Adapt thresholds to volatility
-    logDebug?: boolean; // Log debugging info
-    pricePrecision?: number; // For reporting
+export type DeltaCVDConfirmationCallback = (event: unknown) => void;
+
+export interface DeltaCVDConfirmationSettings extends BaseDetectorSettings {
+    windowSec: number; // Rolling window length in seconds (default: 60)
+    minWindowTrades: number; // Minimum trades in window to trigger check (default: 30)
+    minWindowVolume: number; // Minimum volume in window (default: 20)
+    minRateOfChange: number; // Minimum delta CVD rate (adaptive default)
+    dynamicThresholds: boolean; // Adapt thresholds to volatility
+    logDebug: boolean; // Log debugging info
 }
 
-export type ConfirmCallback = (event: unknown) => void;
-
-export class DeltaCVDConfirmation {
+export class DeltaCVDConfirmation extends Detector {
     private readonly trades: TradeData[] = [];
-    private readonly cvd: number[] = [];
-    private readonly prices: number[] = [];
-    private readonly times: number[] = [];
-    private readonly settings: Required<DeltaCVDConfirmationSettings>;
-    protected readonly logger: Logger;
-    protected readonly metricsCollector: MetricsCollector;
-    protected readonly signalLogger?: ISignalLogger;
-    private readonly callback: ConfirmCallback;
+    private readonly settings: DeltaCVDConfirmationSettings;
+
+    private lastSignalTime: number = 0;
 
     constructor(
-        callback: ConfirmCallback,
-        settings: DeltaCVDConfirmationSettings = {},
+        private readonly callback: (event: DeltaCVDConfirmationEvent) => void,
+        settings: DeltaCVDConfirmationSettings,
         logger: Logger,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger
     ) {
-        this.callback = callback;
+        super(logger, metricsCollector, signalLogger);
         this.settings = {
             windowSec: settings.windowSec ?? 60,
             minWindowTrades: settings.minWindowTrades ?? 30,
             minWindowVolume: settings.minWindowVolume ?? 20,
-            minRateOfChange: settings.minRateOfChange ?? 0, // Use adaptive if 0
+            minRateOfChange: settings.minRateOfChange ?? 0.05,
             dynamicThresholds: settings.dynamicThresholds ?? true,
             logDebug: settings.logDebug ?? false,
-            pricePrecision: settings.pricePrecision ?? 2,
-        };
-
-        this.logger = logger;
-        this.metricsCollector = metricsCollector;
-        this.signalLogger = signalLogger;
-        this.logger.info(
-            "[DeltaCVDConfirmation] Initialized with settings:",
-            this.settings
-        );
+        } as Required<DeltaCVDConfirmationSettings>;
     }
 
-    /**
-     * Add a new trade and evaluate for confirmation.
-     */
+    // --- Required by Detector interface
     public addTrade(trade: SpotWebsocketStreams.AggTradeResponse): void {
-        const t: TradeData = {
+        const normalized: TradeData = {
             price: parseFloat(trade.p ?? "0"),
             quantity: parseFloat(trade.q ?? "0"),
             timestamp: trade.T ?? Date.now(),
-            isMakerSell: !!trade.m,
+            isMakerSell: trade.m || false,
             originalTrade: trade,
         };
-        this.trades.push(t);
 
-        // Maintain a rolling window for CVD and prices.
-        this.pruneOldTrades();
+        this.trades.push(normalized);
 
-        const direction = t.isMakerSell ? -1 : 1;
-        const newCVD =
-            (this.cvd.length ? this.cvd[this.cvd.length - 1] : 0) +
-            direction * t.quantity;
-        this.cvd.push(newCVD);
-        this.prices.push(t.price);
-        this.times.push(t.timestamp);
-
-        // Rolling window update
-        this.pruneOldArrays();
-
-        // Try confirmation if enough data
-        if (this.trades.length < this.settings.minWindowTrades) return;
-
-        this.evaluateWindow();
-    }
-
-    private pruneOldTrades(): void {
+        // Keep trades within window
         const cutoff = Date.now() - this.settings.windowSec * 1000;
         while (this.trades.length && this.trades[0].timestamp < cutoff) {
             this.trades.shift();
         }
-    }
 
-    private pruneOldArrays(): void {
-        const maxLen = this.trades.length;
-        while (this.cvd.length > maxLen) this.cvd.shift();
-        while (this.prices.length > maxLen) this.prices.shift();
-        while (this.times.length > maxLen) this.times.shift();
+        this.detectCVDConfirmation();
     }
 
     /**
-     * Main detection logic for CVD confirmation in window.
+     * Add depth data (not used in this detector, but required by interface).
+     * This method must be implemented to satisfy the Detector interface.
      */
-    private evaluateWindow(): void {
-        try {
-            const n = this.trades.length;
-            const windowVolume = this.trades.reduce(
-                (sum, t) => sum + t.quantity,
-                0
-            );
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    public addDepth(_: SpotWebsocketStreams.DiffBookDepthResponse): void {}
 
-            if (windowVolume < this.settings.minWindowVolume) return;
+    // --- CVD Confirmation Logic ---
+    private detectCVDConfirmation(): void {
+        const {
+            windowSec,
+            minWindowTrades,
+            minWindowVolume,
+            minRateOfChange,
+            dynamicThresholds,
+            logDebug,
+        } = this.settings;
 
-            // Use regression to estimate CVD rate-of-change
-            const t0 = this.times[0];
-            const tn = this.times[n - 1];
-            const cvd0 = this.cvd[0];
-            const cvdn = this.cvd[n - 1];
+        const now = Date.now();
+        const windowStart = now - windowSec * 1000;
+        const windowTrades = this.trades.filter(
+            (t) => t.timestamp >= windowStart
+        );
 
-            // Time delta in seconds
-            const dt = (tn - t0) / 1000 || 1;
-            const dCVD = cvdn - cvd0;
-            const rateOfChange = dCVD / dt;
-
-            // Dynamic threshold: X% of window volume per second
-            let threshold = this.settings.minRateOfChange;
-            if (this.settings.dynamicThresholds) {
-                threshold = Math.max(
-                    (windowVolume * 0.015) / dt, // 1.5% of vol/sec, can tune
-                    this.settings.minRateOfChange
-                );
-            }
-
-            // Signal direction: up means buy dominance, down means sell
-            const direction = rateOfChange > 0 ? "up" : "down";
-
-            // Get latest price and trade
-            const price = this.prices[n - 1];
-            const time = this.times[n - 1];
-            const side = direction === "up" ? "buy" : "sell";
-
-            // Optional: attach meta, e.g. price stddev, mean vol, etc
-            const meta = {
-                priceStd: this.std(this.prices),
-                meanVol: windowVolume / n,
-            };
-
-            // --- Confirmations: only fire if rate exceeds threshold
-            if (Math.abs(rateOfChange) >= threshold) {
-                // By convention, absorption should confirm on CVD *upturn* after sell pressure;
-                // exhaustion should confirm on CVD *downturn* after buy pressure.
-                // The dashboard/parent should provide which type we're confirming (here, just pass as meta).
-                this.callback({
-                    type: "cvd_confirmation",
-                    time,
-                    price,
-                    side,
-                    rateOfChange,
-                    windowVolume,
-                    direction,
-                    triggerType: "absorption", // Up to integration: pass real type
-                    windowTrades: n,
-                    meta,
-                });
-            }
-
-            // Debug output
-            if (this.settings.logDebug) {
-                this.logger.info("[DeltaCVDConfirmation] Debug:", {
-                    price,
-                    side,
-                    rateOfChange,
-                    windowVolume,
-                    direction,
-                    dt,
-                    threshold,
-                    n,
-                });
-            }
-        } catch (error) {
-            this.handleError(
-                error as Error,
-                "DeltaCVDConfirmation.evaluateWindow",
-                randomUUID()
-            );
+        if (windowTrades.length < minWindowTrades) {
+            if (logDebug)
+                this.logger.debug("[DeltaCVD] Not enough trades for analysis");
+            return;
         }
-    }
 
-    /**
-     * Handle errors
-     */
-    protected handleError(
-        error: Error,
-        context: string,
-        correlationId?: string
-    ): void {
-        this.metricsCollector.incrementMetric("errorsCount");
+        const windowVolume = windowTrades.reduce(
+            (sum, t) => sum + t.quantity,
+            0
+        );
+        if (windowVolume < minWindowVolume) {
+            if (logDebug)
+                this.logger.debug("[DeltaCVD] Not enough volume for analysis");
+            return;
+        }
 
-        const errorContext = {
-            context,
-            errorName: error.name,
-            errorMessage: error.message,
-            stack: error.stack,
-            timestamp: new Date().toISOString(),
-            correlationId: correlationId || randomUUID(),
+        // Compute CVD values in window
+        let cvd = 0;
+        const cvdSeries: number[] = [];
+        for (const t of windowTrades) {
+            cvd += t.isMakerSell ? -t.quantity : t.quantity;
+            cvdSeries.push(cvd);
+        }
+
+        // Compute rate of change (slope)
+        const n = cvdSeries.length;
+        if (n < 2) return;
+
+        const x = Array.from({ length: n }, (_, i) => i);
+        const sumX = x.reduce((a, b) => a + b, 0);
+        const sumY = cvdSeries.reduce((a, b) => a + b, 0);
+        const sumXY = x.reduce((acc, val, i) => acc + val * cvdSeries[i], 0);
+        const sumX2 = x.reduce((acc, val) => acc + val * val, 0);
+
+        const denominator = n * sumX2 - sumX * sumX;
+        if (denominator === 0) return;
+
+        const slope = (n * sumXY - sumX * sumY) / denominator;
+        const rateOfChange = slope / windowSec; // per second
+
+        // Dynamic threshold: scale to window volatility
+        let minROC = minRateOfChange;
+        if (dynamicThresholds) {
+            const prices = windowTrades.map((t) => t.price);
+            const priceStd = Math.sqrt(
+                prices.reduce((sum, v) => sum + (v - prices[0]) ** 2, 0) /
+                    prices.length
+            );
+            minROC = Math.max(minROC, priceStd * 0.02); // adjust as needed
+        }
+
+        if (logDebug) {
+            this.logger.debug("[DeltaCVD] Stats", {
+                windowVolume,
+                windowTrades: windowTrades.length,
+                rateOfChange: rateOfChange.toFixed(4),
+                minROC: minROC.toFixed(4),
+            });
+        }
+
+        if (Math.abs(rateOfChange) < minROC) {
+            return;
+        }
+
+        // Classify direction and type
+        const direction = rateOfChange > 0 ? "up" : "down";
+        const lastTrade = windowTrades[windowTrades.length - 1];
+        const price = lastTrade.price;
+
+        const event: DeltaCVDConfirmationEvent = {
+            type: "cvd_confirmation",
+            time: lastTrade.timestamp,
+            price: price,
+            side: rateOfChange > 0 ? "buy" : "sell",
+            rateOfChange,
+            windowVolume,
+            direction,
+            triggerType: "absorption", // TODO: You may want to detect triggerType contextually
+            windowTrades: windowTrades.length,
+            meta: {
+                priceStd: undefined, // Can pass priceStd if computed
+                meanVol: windowVolume / windowTrades.length,
+            },
         };
 
-        this.logger.error(
-            `[${context}] ${error.message}`,
-            errorContext,
-            correlationId
-        );
-    }
+        // Throttle signals (prevent flooding)
+        if (now - this.lastSignalTime < (this.settings.windowSec * 1000) / 2)
+            return;
+        this.lastSignalTime = now;
 
-    /**
-     * Utility: sample standard deviation
-     */
-    private std(arr: number[]): number {
-        const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
-        const sq = arr.reduce((s, x) => s + (x - mean) ** 2, 0) / arr.length;
-        return Math.sqrt(sq);
+        if (logDebug)
+            this.logger.info("[DeltaCVD] Confirmation event", { event });
+
+        // Metrics
+        this.metricsCollector.incrementMetric("cvdConfirmations");
+
+        // Optionally log
+        if (this.signalLogger) {
+            this.signalLogger.logEvent({
+                timestamp: new Date().toISOString(),
+                type: "cvd_confirmation",
+                signalPrice: price,
+                side: event.side,
+                rateOfChange,
+                windowVolume,
+                direction,
+                windowTrades: windowTrades.length,
+                triggerType: event.triggerType,
+            });
+        }
+
+        // Fire callback
+        this.callback(event);
     }
 }

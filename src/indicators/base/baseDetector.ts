@@ -1,5 +1,5 @@
 // src/indicators/base/baseDetector.ts
-
+import { Detector } from "./detector.js";
 import { SpotWebsocketStreams } from "@binance/spot";
 import { randomUUID } from "crypto";
 import { Logger } from "../../infrastructure/logger.js";
@@ -71,7 +71,7 @@ export class RollingWindow {
 /**
  * Abstract base class for orderflow detectors
  */
-export abstract class BaseDetector implements IDetector {
+export abstract class BaseDetector extends Detector implements IDetector {
     // Data storage
     protected readonly depth = new TimeAwareCache<number, DepthLevel>(300000);
     protected readonly trades = new CircularBuffer<TradeData>(10000);
@@ -102,9 +102,6 @@ export abstract class BaseDetector implements IDetector {
     protected readonly priceConfirmationManager: PriceConfirmationManager;
 
     // Dependencies
-    protected readonly logger: Logger;
-    protected readonly metricsCollector: MetricsCollector;
-    protected readonly signalLogger?: ISignalLogger;
     protected readonly callback: DetectorCallback;
 
     // Abstract method for detector type
@@ -120,6 +117,8 @@ export abstract class BaseDetector implements IDetector {
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger
     ) {
+        super(logger, metricsCollector, signalLogger);
+
         // Validate settings
         this.validateSettings(settings);
 
@@ -153,11 +152,6 @@ export abstract class BaseDetector implements IDetector {
             autoCalibrate: true,
             ...settings.features,
         };
-
-        // Initialize dependencies
-        this.logger = logger;
-        this.metricsCollector = metricsCollector;
-        this.signalLogger = signalLogger;
 
         // Initialize feature modules
         this.spoofingDetector = new SpoofingDetector(this.spoofingSettings);
@@ -462,32 +456,6 @@ export abstract class BaseDetector implements IDetector {
         }
 
         return { aggressive, passive, trades };
-    }
-
-    /**
-     * Handle errors
-     */
-    protected handleError(
-        error: Error,
-        context: string,
-        correlationId?: string
-    ): void {
-        this.metricsCollector.incrementMetric("errorsCount");
-
-        const errorContext = {
-            context,
-            errorName: error.name,
-            errorMessage: error.message,
-            stack: error.stack,
-            timestamp: new Date().toISOString(),
-            correlationId: correlationId || randomUUID(),
-        };
-
-        this.logger.error(
-            `[${context}] ${error.message}`,
-            errorContext,
-            correlationId
-        );
     }
 
     /**

@@ -4,14 +4,14 @@ import * as path from "path";
 export interface SignalEvent {
     timestamp: string;
     type: string; // "absorption" | "exhaustion" | ...
-    symbol: string;
+    symbol?: string;
     signalPrice: number;
     side: "buy" | "sell";
-    aggressiveVolume: number;
-    passiveVolume: number | null;
-    zone: number;
-    refilled: boolean;
-    confirmed: boolean;
+    aggressiveVolume?: number;
+    passiveVolume?: number | null;
+    zone?: number;
+    refilled?: boolean;
+    confirmed?: boolean;
     confirmationTime?: string;
     moveSizeTicks?: number;
     moveTimeMs?: number;
@@ -20,6 +20,11 @@ export interface SignalEvent {
     invalidationTime?: string;
     invalidationReason?: string;
     outcome?: string;
+    rateOfChange?: number;
+    windowVolume?: number;
+    direction?: "up" | "down";
+    windowTrades?: number;
+    triggerType?: "absorption" | "exhaustion";
 }
 
 export interface ISignalLogger {
