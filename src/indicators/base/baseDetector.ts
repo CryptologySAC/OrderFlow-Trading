@@ -8,7 +8,6 @@ import { ISignalLogger } from "../../services/signalLogger.js";
 import {
     CircularBuffer,
     TimeAwareCache,
-    SpoofingDetector,
     AdaptiveZoneCalculator,
     PassiveVolumeTracker,
     AutoCalibrator,
@@ -16,6 +15,10 @@ import {
     TradeData,
     DepthLevel,
 } from "../../utils/utils.js";
+import {
+    SpoofingDetector,
+    SpoofingDetectorConfig,
+} from "../../services/spoofingDetector.js";
 import type {
     IDetector,
     DetectorStats,
@@ -80,6 +83,7 @@ export abstract class BaseDetector implements IDetector {
     protected zoneTicks: number;
     protected readonly eventCooldownMs: number;
     protected readonly symbol: string;
+    private readonly spoofingSettings: SpoofingDetectorConfig;
 
     // Confirmation parameters
     protected readonly minInitialMoveTicks: number;
@@ -130,6 +134,13 @@ export abstract class BaseDetector implements IDetector {
         this.confirmationTimeoutMs = settings.confirmationTimeoutMs ?? 60000;
         this.maxRevisitTicks = settings.maxRevisitTicks ?? 5;
         this.symbol = settings.symbol ?? "LTCUSDT";
+        this.spoofingSettings = {
+            tickSize: 0.01,
+            wallTicks: 10,
+            minWallSize: 20,
+            dynamicWallWidth: false,
+            ...settings.spoofing,
+        };
 
         // Initialize features with defaults
         this.features = {
@@ -149,7 +160,7 @@ export abstract class BaseDetector implements IDetector {
         this.signalLogger = signalLogger;
 
         // Initialize feature modules
-        this.spoofingDetector = new SpoofingDetector();
+        this.spoofingDetector = new SpoofingDetector(this.spoofingSettings);
         this.adaptiveZoneCalculator = new AdaptiveZoneCalculator();
         this.passiveVolumeTracker = new PassiveVolumeTracker();
         this.autoCalibrator = new AutoCalibrator();
@@ -525,15 +536,47 @@ export abstract class BaseDetector implements IDetector {
         windowMs: number
     ): number {
         const now = Date.now();
-        const priceStr = price.toFixed(this.pricePrecision);
+        const precision = Math.pow(10, -this.pricePrecision) / 2;
+        const filtered = this.trades.filter(
+            (t) =>
+                now - t.timestamp <= windowMs &&
+                Math.abs(t.price - price) < precision
+        );
+        //this.logger.info("DEBUG getAggressiveVolumeAtPrice", {
+        //    price,
+        //    windowMs,
+        //    filteredCount: filtered.length,
+        //    sampleTradePrices: this.trades
+        //        .getAll()
+        //        .slice(-10)
+        //        .map((t) => t.price),
+        //    checkPrice: price,
+        //    precision,
+        //});
+        return filtered.reduce((sum, t) => sum + t.quantity, 0);
+    }
 
-        return this.trades
-            .filter(
-                (t) =>
-                    now - t.timestamp <= windowMs &&
-                    t.price.toFixed(this.pricePrecision) === priceStr
-            )
-            .reduce((sum, t) => sum + t.quantity, 0);
+    protected getAggressiveAtPrice(
+        price: number,
+        from: number,
+        to: number
+    ): number {
+        const precision = Math.pow(10, -this.pricePrecision) / 2;
+        const filtered = this.trades.filter(
+            (t) =>
+                t.timestamp >= from &&
+                t.timestamp < to &&
+                Math.abs(t.price - price) < precision
+        );
+        //this.logger.info("DEBUG getAggressiveAtPrice", {
+        //    price,
+        //    from,
+        //    to,
+        //    filteredCount: filtered.length,
+        //    sampleTradePrices: filtered.map((t) => t.price),
+        //    precision,
+        //});
+        return filtered.reduce((sum, t) => sum + t.quantity, 0);
     }
 
     /**

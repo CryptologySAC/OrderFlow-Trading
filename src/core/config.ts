@@ -1,4 +1,6 @@
 // src/core/config.ts
+import dotenv from "dotenv";
+dotenv.config();
 
 /**
  * Centralized configuration management
@@ -64,6 +66,16 @@ export class Config {
         MAX_REVISIT_TICKS: parseInt(
             process.env.ABSORPTION_MAX_REVISIT_TICKS ?? "5",
             10
+        ),
+    };
+
+    static readonly SPOOFING = {
+        TICK_SIZE: parseFloat(process.env.SPOOFING_TICK_SIZE ?? "0.01"),
+        WALL_TICKS: parseInt(process.env.SPOOFING_WALL_TICKS ?? "5", 10),
+        MIN_WALL_SIZE: parseFloat(process.env.SPOOFING_MIN_WALL_SIZE ?? "100"),
+        DYNAMIC_WALL_WIDTH: process.env.SPOOFING_DYNAMIC_WALL_WIDTH === "true",
+        TEST_LOG_MIN_SPOOF: parseFloat(
+            process.env.SPOOFING_TEST_LOG_MIN_SPOOF ?? "1000"
         ),
     };
 

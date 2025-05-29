@@ -121,6 +121,11 @@ export class SignalCoordinator extends EventEmitter {
      * Confirm a signal and emit event
      */
     private confirmSignal(signal: PendingSignal): void {
+        console.info("[SignalCoordinator] Signal confirmed", {
+            id: signal.id,
+            price: signal.price,
+        });
+
         const confirmed: ConfirmedSignal = {
             id: signal.id,
             originalSignals: [signal],

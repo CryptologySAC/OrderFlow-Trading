@@ -2,6 +2,7 @@
 
 import { SpotWebsocketStreams } from "@binance/spot";
 import type { Detected } from "../../utils/types.js";
+import type { SpoofingDetectorConfig } from "../../services/spoofingDetector.js";
 
 /**
  * Base detector interface
@@ -38,6 +39,7 @@ export interface BaseDetectorSettings {
     confirmationTimeoutMs?: number;
     maxRevisitTicks?: number;
     symbol?: string;
+    spoofing?: SpoofingDetectorConfig;
 }
 
 /**

@@ -165,9 +165,9 @@ export class AbsorptionDetector
         }
 
         // Debug output every 10 trades
-        if (Math.random() < 0.1) {
-            this.debugCurrentState();
-        }
+        //if (Math.random() < 0.1) {
+        //    this.debugCurrentState();
+        //}
     }
 
     /**
@@ -186,6 +186,11 @@ export class AbsorptionDetector
             price,
             shortWindow
         );
+
+        //this.logger.info("DEBUG aggressive", {
+        //    recentAggressive,
+        //    minAggVolume: this.minAggVolume,
+        //});
 
         // Skip if no recent activity
         if (recentAggressive < this.minAggVolume * 0.1) {
@@ -218,21 +223,28 @@ export class AbsorptionDetector
             this.features.passiveHistory &&
             this.passiveVolumeTracker.hasPassiveRefilled(price, side);
 
+        //this.logger.info("DEBUG passive", { rollingZonePassive, avgPassive });
+
         // Log near-misses for debugging
         if (
             !classicAbsorption &&
             !relativeAbsorption &&
             recentAggressive > this.minAggVolume * 0.5
         ) {
-            this.logger.debug(`[Absorption] Near miss at ${price}`, {
-                price,
-                side,
-                recentAggressive: recentAggressive.toFixed(2),
-                rollingZonePassive: rollingZonePassive.toFixed(2),
-                avgPassive: avgPassive.toFixed(2),
-                ratio: (rollingZonePassive / recentAggressive).toFixed(2),
-            });
+            //this.logger.debug(`[Absorption] Near miss at ${price}`, {
+            //    price,
+            //    side,
+            //    recentAggressive: recentAggressive.toFixed(2),
+            //    rollingZonePassive: rollingZonePassive.toFixed(2),
+            //    avgPassive: avgPassive.toFixed(2),
+            //    ratio: (rollingZonePassive / recentAggressive).toFixed(2),
+            //});
         }
+        //this.logger.info("DEBUG conditions", {
+        //    classicAbsorption,
+        //    relativeAbsorption,
+        //    icebergDetection,
+        //});
 
         return (
             classicAbsorption || relativeAbsorption || icebergDetection || false
@@ -290,10 +302,14 @@ export class AbsorptionDetector
         side: "buy" | "sell",
         timestamp: number
     ): boolean {
-        if (this.spoofingDetector.wasSpoofed(price, side, timestamp)) {
-            this.logger.info(
-                `[AbsorptionDetector] Spoofing detected at price ${price}`
-            );
+        if (
+            this.spoofingDetector.wasSpoofed(
+                price,
+                side,
+                timestamp,
+                (p, from, to) => this.getAggressiveAtPrice(p, from, to)
+            )
+        ) {
             return true;
         }
         return false;

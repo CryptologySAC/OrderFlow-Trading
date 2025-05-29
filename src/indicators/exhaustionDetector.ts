@@ -167,9 +167,9 @@ export class ExhaustionDetector
         }
 
         // Debug output every 10 trades
-        if (Math.random() < 0.1) {
-            this.debugCurrentState();
-        }
+        //if (Math.random() < 0.1) {
+        //    this.debugCurrentState();
+        //}
     }
 
     /**
@@ -225,7 +225,7 @@ export class ExhaustionDetector
             rollingZonePassive < this.minAggVolume * 0.1 &&
             spreadInfo.spread > 0.001;
 
-        // Log near-misses for debugging
+        /*/ Log near-misses for debugging
         if (
             !absoluteExhaustion &&
             !relativeExhaustion &&
@@ -236,23 +236,24 @@ export class ExhaustionDetector
                 rollingZonePassive < this.minAggVolume * 0.2 &&
                 recentAggressive > this.minAggVolume * 0.3
             ) {
-                this.logger.debug(`[Exhaustion] Near miss at ${price}`, {
-                    price,
-                    side,
-                    rollingZonePassive: rollingZonePassive.toFixed(2),
-                    avgLiquidity: avgLiquidity.toFixed(2),
-                    recentAggressive: recentAggressive.toFixed(2),
-                    spread: (spreadInfo.spread * 100).toFixed(3) + "%",
-                    depletion:
-                        avgLiquidity > 0
-                            ? (
-                                  (1 - rollingZonePassive / avgLiquidity) *
-                                  100
-                              ).toFixed(1) + "%"
-                            : "N/A",
-                });
+                //this.logger.debug(`[Exhaustion] Near miss at ${price}`, {
+                //    price,
+                //    side,
+                //    rollingZonePassive: rollingZonePassive.toFixed(2),
+                //    avgLiquidity: avgLiquidity.toFixed(2),
+                //    recentAggressive: recentAggressive.toFixed(2),
+                //    spread: (spreadInfo.spread * 100).toFixed(3) + "%",
+                //    depletion:
+                //        avgLiquidity > 0
+                //            ? (
+                //                  (1 - rollingZonePassive / avgLiquidity) *
+                //                  100
+                //              ).toFixed(1) + "%"
+                //            : "N/A",
+                //});
             }
         }
+            */
 
         return (
             absoluteExhaustion ||
@@ -313,10 +314,17 @@ export class ExhaustionDetector
         side: "buy" | "sell",
         timestamp: number
     ): boolean {
-        if (this.spoofingDetector.wasSpoofed(price, side, timestamp)) {
-            this.logger.info(
-                `[ExhaustionDetector] Spoofing detected at price ${price}`
-            );
+        if (
+            this.spoofingDetector.wasSpoofed(
+                price,
+                side,
+                timestamp,
+                (p, from, to) => this.getAggressiveAtPrice(p, from, to)
+            )
+        ) {
+            //this.logger.info(
+            //    `[ExhaustionDetector] Spoofing detected at price ${price}`
+            //);
             return true;
         }
         return false;

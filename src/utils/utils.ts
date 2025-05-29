@@ -165,59 +165,6 @@ export class TimeAwareCache<K, V> {
     }
 }
 
-/**
- * Spoofing detection module for orderbook wall changes.
- */
-export class SpoofingDetector {
-    private passiveChangeHistory = new TimeAwareCache<
-        number,
-        { time: number; bid: number; ask: number }[]
-    >(300000); // 5 minutes TTL
-
-    /**
-     * Track changes in passive (limit) orderbook at price level.
-     */
-    trackPassiveChange(price: number, bid: number, ask: number): void {
-        const now = Date.now();
-        let history = this.passiveChangeHistory.get(price) || [];
-        history.push({ time: now, bid, ask });
-        if (history.length > 10) history = history.slice(-10);
-        this.passiveChangeHistory.set(price, history);
-    }
-
-    /**
-     * Detect spoofing (fake wall pull) at given price/side.
-     */
-    wasSpoofed(
-        price: number,
-        side: "buy" | "sell",
-        tradeTime: number
-    ): boolean {
-        const hist = this.passiveChangeHistory.get(price);
-        if (!hist || hist.length < 2) return false;
-        for (let i = hist.length - 2; i >= 0; i--) {
-            const curr = hist[i + 1];
-            const prev = hist[i];
-            if (curr.time > tradeTime) continue;
-            const delta =
-                side === "buy" ? prev.ask - curr.ask : prev.bid - curr.bid;
-            const base = side === "buy" ? prev.ask : prev.bid;
-            if (
-                base > 0 &&
-                delta / base > 0.6 &&
-                curr.time - prev.time < 1200
-            ) {
-                console.log(
-                    "[SpoofingDetector] Spoofing detected at price:",
-                    price
-                );
-                return true;
-            }
-            if (curr.time < tradeTime - 2000) break;
-        }
-        return false;
-    }
-}
 
 /**
  * Adaptive zone size calculation (ATR-based).

@@ -57,6 +57,7 @@ export class AnomalyDetector {
 
         // Check for liquidity void (extreme spread)
         if (spread > this.normalSpread * 10) {
+            console.debug("[AnomalyDetector] Detected liquidity void anomaly");
             return this.createLiquidityVoidAnomaly(currentPrice, spread);
         }
 
@@ -68,6 +69,7 @@ export class AnomalyDetector {
 
         if (timeGap > 5000) {
             // More than 5 seconds gap
+            console.debug("[AnomalyDetector] Detected more than 5 seconds gap");
             return this.createApiGapAnomaly(currentPrice, timeGap);
         }
 
@@ -77,6 +79,9 @@ export class AnomalyDetector {
         const normalVolatility = stdDev / mean; // Coefficient of variation
 
         if (recentVolatility > normalVolatility * 3) {
+            console.debug(
+                "[AnomalyDetector] Detected more volatility than normal"
+            );
             return this.createVolatilityAnomaly(currentPrice, recentVolatility);
         }
 

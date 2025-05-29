@@ -111,6 +111,10 @@ export class SignalManager extends EventEmitter {
     private async handleConfirmedSignal(
         signal: ConfirmedSignal
     ): Promise<void> {
+        this.logger.info("[SignalManager] handleConfirmedSignal", {
+            signalId: signal.id,
+            price: signal.finalPrice,
+        });
         const correlationId = randomUUID();
 
         try {

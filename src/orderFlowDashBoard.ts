@@ -326,6 +326,11 @@ export class OrderFlowDashboard {
      * Create absorption detector settings
      */
     private createAbsorptionSettings(): AbsorptionSettings {
+        console.log("Spoofing Settings:", Config.SPOOFING);
+        console.log(
+            "Creating absorption settings with config:",
+            Config.ABSORPTION
+        );
         return {
             windowMs: Config.ABSORPTION.WINDOW_MS,
             minAggVolume: Config.ABSORPTION.MIN_AGG_VOLUME,
@@ -336,6 +341,13 @@ export class OrderFlowDashboard {
             confirmationTimeoutMs: Config.ABSORPTION.CONFIRMATION_TIMEOUT,
             maxRevisitTicks: Config.ABSORPTION.MAX_REVISIT_TICKS,
             symbol: Config.SYMBOL,
+            spoofing: {
+                tickSize: Config.SPOOFING.TICK_SIZE,
+                wallTicks: Config.SPOOFING.WALL_TICKS,
+                minWallSize: Config.SPOOFING.MIN_WALL_SIZE,
+                dynamicWallWidth: Config.SPOOFING.DYNAMIC_WALL_WIDTH,
+                testLogMinSpoof: Config.SPOOFING.TEST_LOG_MIN_SPOOF,
+            },
             features: {
                 spoofingDetection: parseBool(
                     process.env.ABSORPTION_SPOOFING_DETECTION,
@@ -370,6 +382,10 @@ export class OrderFlowDashboard {
      * Create exhaustion detector settings
      */
     private createExhaustionSettings(): ExhaustionSettings {
+        console.log(
+            "Creating exhaustion settings with config:",
+            Config.EXHAUSTION
+        );
         return {
             windowMs: Config.EXHAUSTION.WINDOW_MS,
             minAggVolume: Config.EXHAUSTION.MIN_AGG_VOLUME,
@@ -380,6 +396,13 @@ export class OrderFlowDashboard {
             confirmationTimeoutMs: Config.EXHAUSTION.CONFIRMATION_TIMEOUT,
             maxRevisitTicks: Config.EXHAUSTION.MAX_REVISIT_TICKS,
             symbol: Config.SYMBOL,
+            spoofing: {
+                tickSize: Config.SPOOFING.TICK_SIZE,
+                wallTicks: Config.SPOOFING.WALL_TICKS,
+                minWallSize: Config.SPOOFING.MIN_WALL_SIZE,
+                dynamicWallWidth: Config.SPOOFING.DYNAMIC_WALL_WIDTH,
+                testLogMinSpoof: Config.SPOOFING.TEST_LOG_MIN_SPOOF,
+            },
             features: {
                 spoofingDetection: parseBool(
                     process.env.EXHAUSTION_SPOOFING_DETECTION,
