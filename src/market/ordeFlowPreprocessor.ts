@@ -35,13 +35,13 @@ export class OrderflowPreprocessor extends EventEmitter {
         const price = +parseFloat(trade.p ?? "0").toFixed(this.pricePrecision);
         const quantity = parseFloat(trade.q ?? "0");
         const timestamp = trade.T ?? Date.now();
-        const isMakerSell = !!trade.m;
+        const buyerIsMaker = !!trade.m || false;
 
         const aggressive: AggressiveTrade = {
             price,
             quantity,
             timestamp,
-            isMakerSell,
+            buyerIsMaker,
             originalTrade: trade,
         };
 

@@ -1,176 +1,166 @@
-// src/indicators/accumulationDetector.ts
+/**********************************************************************
+ *  AccumulationDetector
+ *  Emits `"accumulation"` EventEmitter events when passive > taker flow
+ *  in a price zone for longer than minDurationMs.
+ *********************************************************************/
 
-import { SpotWebsocketStreams } from "@binance/spot";
-import { TradeData } from "../utils/utils.js";
+import { EventEmitter } from "events";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
+import type { EnrichedTradeEvent } from "../types/marketEvents.js";
+import { RollingWindow } from "../utils/rollingWindow.js";
 import { AccumulationResult } from "../types/signalTypes.js";
-import { Detector } from "./base/detector.js";
 
-/**
- * Configuration options for the AccumulationDetector.
- */
-export interface AccumulationDetectorConfig {
-    windowMs?: number; // Rolling window for aggregation (default: 15 min)
-    minDurationMs?: number; // Min duration for an accumulation zone (default: 5 min)
-    zoneSize?: number; // USDT per zone (default: 0.02)
-    minRatio?: number; // Min passive/aggressive ratio to trigger (default: 1.2)
-    minRecentActivityMs?: number; // Max ms since last trade (default: 1 min)
-    minAggVolume?: number; // Minimum aggressive volume (default: 5)
-    trackSide?: boolean; // Track buy/sell accumulation separately (default: true)
-    pricePrecision?: number; // For reporting (default: 2)
+/* ------------------------------------------------------------------ *
+ *  Settings
+ * ------------------------------------------------------------------ */
+
+export interface AccumulationSettings {
+    windowMs?: number; // length of rolling window   (default 15 min)
+    minDurationMs?: number; // min life of zone           (default 5 min)
+    zoneSize?: number; // USDT per zone              (default 0.02)
+    minRatio?: number; // passive / aggressive >     (default 1.2)
+    minRecentActivityMs?: number; // trade staleness threshold  (default 60 s)
+    minAggVolume?: number; // min taker qty in zone      (default 5)
+    trackSide?: boolean; // separate bid/ask zones     (default true)
+    pricePrecision?: number; // toFixed digits             (default 2)
 }
 
-export interface ZoneData {
-    aggressive: number[];
-    times: number[];
+/* ------------------------------------------------------------------ *
+ *  Internal structures
+ * ------------------------------------------------------------------ */
+
+interface ZoneData {
+    aggressiveQty: RollingWindow<number>;
+    timestamps: RollingWindow<number>;
     startTime: number;
     lastUpdate: number;
     tradeCount: number;
     side: "buy" | "sell";
 }
 
-export interface PassiveVolumeEntry {
+interface PassiveVolumeSnap {
     volume: number;
     lastUpdate: number;
 }
 
-/**
- * AccumulationDetector
- * Tracks aggressive trading and passive liquidity per zone, for accumulation signals.
- */
-export class AccumulationDetector extends Detector {
+/* ------------------------------------------------------------------ *
+ *  Detector
+ * ------------------------------------------------------------------ */
+
+export class AccumulationDetector extends EventEmitter {
     private readonly zones = new Map<string, ZoneData>();
-    private readonly passiveVolumeByZone = new Map<
-        string,
-        PassiveVolumeEntry
-    >();
-    private readonly config: Required<AccumulationDetectorConfig>;
-    private readonly cleanupIntervalMs = 60_000;
+    private readonly passiveByZone = new Map<string, PassiveVolumeSnap>();
+
+    private readonly settings: Required<AccumulationSettings>;
     private lastCleanup = Date.now();
+    private readonly cleanupIntervalMs = 60_000;
 
     constructor(
-        private readonly symbol = "LTCUSDT",
-        config: AccumulationDetectorConfig = {},
-        logger: Logger,
-        metricsCollector: MetricsCollector,
-        signalLogger?: ISignalLogger
+        /** Unused – kept for signature parity with AbsorptionDetector */
+        _callback: unknown,
+        settings: AccumulationSettings = {},
+        private readonly logger: Logger,
+        private readonly metrics: MetricsCollector,
+        private readonly signalLogger?: ISignalLogger
     ) {
-        super(logger, metricsCollector, signalLogger);
-        this.config = {
-            windowMs: config.windowMs ?? 900_000,
-            minDurationMs: config.minDurationMs ?? 300_000,
-            zoneSize: config.zoneSize ?? 0.02,
-            minRatio: config.minRatio ?? 1.2,
-            minRecentActivityMs: config.minRecentActivityMs ?? 60_000,
-            minAggVolume: config.minAggVolume ?? 5,
-            trackSide: config.trackSide ?? true,
-            pricePrecision: config.pricePrecision ?? 2,
+        super();
+        this.settings = {
+            windowMs: settings.windowMs ?? 900_000,
+            minDurationMs: settings.minDurationMs ?? 300_000,
+            zoneSize: settings.zoneSize ?? 0.02,
+            minRatio: settings.minRatio ?? 1.2,
+            minRecentActivityMs: settings.minRecentActivityMs ?? 60_000,
+            minAggVolume: settings.minAggVolume ?? 5,
+            trackSide: settings.trackSide ?? true,
+            pricePrecision: settings.pricePrecision ?? 2,
         };
     }
 
-    /**
-     * Process new trades; updates rolling aggressive volume and timestamp.
-     */
-    public addTrade(trade: SpotWebsocketStreams.AggTradeResponse): void {
-        const normalized: TradeData = {
-            price: parseFloat(trade.p ?? "0"),
-            quantity: parseFloat(trade.q ?? "0"),
-            timestamp: trade.T ?? Date.now(),
-            isMakerSell: trade.m || false,
-            originalTrade: trade,
-        };
+    /* -------------------------------------------------------------- *
+     *  Public entry – called for every EnrichedTradeEvent
+     * -------------------------------------------------------------- */
+    public onEnrichedTrade(evt: EnrichedTradeEvent): void {
+        try {
+            this.consumeTrade(evt);
+            const signal: AccumulationResult = this.detectAccumulation(
+                evt.price
+            );
+            if (signal.isAccumulating) {
+                /** Emit event for listeners (dashboard, strategy, etc.) */
+                this.emit("accumulation", signal);
+                this.metrics.incrementMetric("accumulationDetected");
+            }
+        } catch (err) {
+            this.logger.error?.("[AccumulationDetector] processing error", {
+                err,
+            });
+            this.metrics.incrementMetric("accumulationErrors");
+        }
+    }
 
-        const zone = this.getZoneKey(normalized.price, normalized.isMakerSell);
-        let data = this.zones.get(zone);
+    /* -------------------------------------------------------------- *
+     *  In-memory aggregation
+     * -------------------------------------------------------------- */
+    private consumeTrade(e: EnrichedTradeEvent): void {
+        const {
+            price,
+            quantity,
+            timestamp,
+            buyerIsMaker,
+            zonePassiveBidVolume = 0,
+            zonePassiveAskVolume = 0,
+        } = e;
+
+        const isBidSide = buyerIsMaker; // m=true ⇒ bid side liquidity hit
+        const key = this.zoneKey(price, isBidSide);
         const now = Date.now();
 
-        if (!data) {
-            data = {
-                aggressive: [],
-                times: [],
-                startTime: normalized.timestamp,
-                lastUpdate: normalized.timestamp,
+        /* ---- ensure zone exists ---- */
+        let zone = this.zones.get(key);
+        if (!zone) {
+            const cap = Math.ceil(this.settings.windowMs / 3_000); // ~1 trade / 3 s
+            zone = {
+                aggressiveQty: new RollingWindow<number>(cap, true),
+                timestamps: new RollingWindow<number>(cap, true),
+                startTime: timestamp,
+                lastUpdate: timestamp,
                 tradeCount: 0,
-                side: normalized.isMakerSell ? "buy" : "sell",
+                side: isBidSide ? "sell" : "buy",
             };
-            this.zones.set(zone, data);
+            this.zones.set(key, zone);
         }
 
-        data.aggressive.push(normalized.quantity);
-        data.times.push(normalized.timestamp);
-        data.lastUpdate = normalized.timestamp;
-        data.tradeCount++;
+        /* ---- store trade ---- */
+        zone.aggressiveQty.push(quantity);
+        zone.timestamps.push(timestamp);
+        zone.lastUpdate = timestamp;
+        zone.tradeCount++;
 
-        // Prune rolling window
-        while (
-            data.times.length &&
-            now - data.times[0] > this.config.windowMs
-        ) {
-            data.aggressive.shift();
-            data.times.shift();
-        }
+        /* ---- overwrite passive snapshot ---- */
+        const passiveVol = isBidSide
+            ? zonePassiveBidVolume
+            : zonePassiveAskVolume;
+        this.passiveByZone.set(key, {
+            volume: passiveVol,
+            lastUpdate: timestamp,
+        });
 
-        this.maybeCleanup();
+        /* ---- prune window by time ---- */
+        this.pruneZone(zone, now);
+        this.maybeCleanup(now);
     }
 
-    /**
-     * Update passive volumes for all price zones from the latest order book.
-     */
-    public addDepth(update: SpotWebsocketStreams.DiffBookDepthResponse): void {
-        // For every depth update, walk bids/asks, aggregate passive at each price, and update per-zone.
-        const now = Date.now();
-        this.updateDepthSide(
-            Array.isArray(update.b)
-                ? update.b.filter(
-                      (x): x is [string, string] =>
-                          Array.isArray(x) && x.length === 2
-                  )
-                : undefined,
-            "bid",
-            now
-        );
-        this.updateDepthSide(
-            Array.isArray(update.a)
-                ? update.a.filter(
-                      (x): x is [string, string] =>
-                          Array.isArray(x) && x.length === 2
-                  )
-                : undefined,
-            "ask",
-            now
-        );
+    /* -------------------------------------------------------------- *
+     *  Detection logic for a given price
+     * -------------------------------------------------------------- */
+    private detectAccumulation(price: number): AccumulationResult {
+        const sideKeys = this.settings.trackSide
+            ? ["buy", "sell"]
+            : [undefined];
 
-        // Optionally: prune old entries if they haven't been updated recently (handled in maybeCleanup)
-    }
-
-    private updateDepthSide(
-        updates: [string, string][] | undefined,
-        side: "bid" | "ask",
-        now: number
-    ) {
-        if (!updates) return;
-        for (const [priceStr, qtyStr] of updates) {
-            const price = parseFloat(priceStr);
-            const qty = parseFloat(qtyStr);
-            if (isNaN(price) || isNaN(qty)) continue;
-            // We aggregate both bids and asks into the same zone map,
-            // but for more advanced detectors, you could split by side.
-            const zone = this.getZoneKey(price, side === "bid");
-            const entry = this.passiveVolumeByZone.get(zone);
-            const volume = (entry?.volume ?? 0) + qty;
-            this.passiveVolumeByZone.set(zone, { volume, lastUpdate: now });
-        }
-    }
-
-    /**
-     * Compute accumulation result for the current price.
-     */
-    public detectAccumulation(currentPrice: number): AccumulationResult {
-        const sideKeys = this.config.trackSide ? ["buy", "sell"] : [undefined];
-
-        let result: AccumulationResult = {
+        let best: AccumulationResult = {
             isAccumulating: false,
             strength: 0,
             duration: 0,
@@ -179,131 +169,77 @@ export class AccumulationDetector extends Detector {
         };
 
         for (const side of sideKeys) {
-            const zoneKey = this.getZoneKey(currentPrice, side === "buy");
-            const data = this.zones.get(zoneKey);
-
-            if (!data || data.aggressive.length === 0) continue;
+            const key = this.zoneKey(price, side === "buy");
+            const zone = this.zones.get(key);
+            if (!zone || zone.aggressiveQty.sum() === 0) continue;
 
             const now = Date.now();
-            const duration = now - data.startTime;
-            const recentAgg = data.aggressive.reduce((a, b) => a + b, 0);
+            const duration = now - zone.startTime;
+            const aggVol = zone.aggressiveQty.sum();
+            const passiveVol = this.passiveByZone.get(key)?.volume ?? 0;
+            const ratio = passiveVol / (aggVol || 1);
 
-            // Pull the most recent passive volume for this zone
-            const passiveEntry = this.passiveVolumeByZone.get(zoneKey);
-            const recentPassive = passiveEntry ? passiveEntry.volume : 0;
+            const accumulating =
+                ratio > this.settings.minRatio &&
+                duration > this.settings.minDurationMs &&
+                now - zone.lastUpdate < this.settings.minRecentActivityMs &&
+                aggVol > this.settings.minAggVolume;
 
-            const ratio = recentPassive / (recentAgg || 1);
+            if (!accumulating) continue;
 
-            const isAccumulating =
-                ratio > this.config.minRatio &&
-                duration > this.config.minDurationMs &&
-                now - data.lastUpdate < this.config.minRecentActivityMs &&
-                recentAgg > this.config.minAggVolume;
-
-            const strength = Math.min(ratio / (this.config.minRatio * 2), 1);
-
-            if (
-                isAccumulating &&
-                (!result.isAccumulating || strength > result.strength)
-            ) {
-                result = {
-                    isAccumulating,
+            const strength = Math.min(ratio / (this.settings.minRatio * 2), 1);
+            if (!best.isAccumulating || strength > best.strength) {
+                best = {
+                    isAccumulating: true,
                     strength,
                     duration,
-                    zone: parseFloat(zoneKey),
+                    zone: parseFloat(key),
                     ratio,
                 };
-                // Log only if logging enabled
-                if (this.signalLogger) {
-                    this.signalLogger.logEvent({
-                        timestamp: new Date().toISOString(),
-                        type: "accumulation",
-                        symbol: this.symbol,
-                        signalPrice: currentPrice,
-                        side: side as "buy" | "sell",
-                        aggressiveVolume: recentAgg,
-                        passiveVolume: recentPassive,
-                        zone: parseFloat(zoneKey),
-                        refilled: false,
-                        confirmed: false,
-                        outcome: "detected",
-                    });
-                }
             }
         }
-
-        return result;
+        return best;
     }
 
-    public getStats(): {
-        activeZones: number;
-        strongestZone: number | null;
-        totalAggVolume: number;
-        totalPassiveVolume: number;
-    } {
-        let totalAggVolume = 0;
-        let totalPassiveVolume = 0;
-        let strongestZone: number | null = null;
-        let maxStrength = 0;
+    /* -------------------------------------------------------------- *
+     *  Helpers
+     * -------------------------------------------------------------- */
+    private zoneKey(price: number, isBid: boolean | undefined): string {
+        const base = (
+            Math.round(price / this.settings.zoneSize) * this.settings.zoneSize
+        ).toFixed(this.settings.pricePrecision);
+        if (!this.settings.trackSide) return base;
+        return `${base}_${isBid === undefined ? "both" : isBid ? "buy" : "sell"}`;
+    }
 
-        for (const [zoneKey, data] of this.zones) {
-            const agg = data.aggressive.reduce((a, b) => a + b, 0);
-            const passive = this.passiveVolumeByZone.get(zoneKey)?.volume ?? 0;
-            const ratio = passive / (agg || 1);
-            const strength = Math.min(ratio / (this.config.minRatio * 2), 1);
-            totalAggVolume += agg;
-            totalPassiveVolume += passive;
+    private pruneZone(z: ZoneData, now: number): void {
+        while (
+            z.timestamps.count() &&
+            now - z.timestamps.toArray()[0] > this.settings.windowMs
+        ) {
+            /* drop oldest sample by rebuilding windows minus first element */
+            const ts = z.timestamps.toArray().slice(1);
+            const qty = z.aggressiveQty.toArray().slice(1);
+            const cap = z.timestamps.count() || 1;
 
-            if (strength > maxStrength) {
-                maxStrength = strength;
-                strongestZone = parseFloat(zoneKey);
-            }
+            z.timestamps = new RollingWindow<number>(cap, true);
+            z.aggressiveQty = new RollingWindow<number>(cap, true);
+            ts.forEach((t) => z.timestamps.push(t));
+            qty.forEach((q) => z.aggressiveQty.push(q));
+            z.startTime = ts.length ? ts[0] : now;
         }
-
-        return {
-            activeZones: this.zones.size,
-            strongestZone,
-            totalAggVolume,
-            totalPassiveVolume,
-        };
     }
 
-    private getZoneKey(price: number, isBuy: boolean | undefined): string {
-        // Compose a key with price zone and, if enabled, side
-        const baseZone = (
-            Math.round(price / this.config.zoneSize) * this.config.zoneSize
-        ).toFixed(this.config.pricePrecision);
-        if (this.config.trackSide) {
-            const sideStr =
-                isBuy === undefined ? "both" : isBuy ? "buy" : "sell";
-            return `${baseZone}_${sideStr}`;
-        }
-        return baseZone;
-    }
-
-    private maybeCleanup(): void {
-        const now = Date.now();
+    private maybeCleanup(now: number): void {
         if (now - this.lastCleanup < this.cleanupIntervalMs) return;
 
-        const cutoff = now - this.config.windowMs;
-        const toDelete: string[] = [];
+        const cutoff = now - this.settings.windowMs;
+        const passiveCut = now - this.settings.minRecentActivityMs * 2;
 
-        for (const [zoneKey, data] of this.zones) {
-            if (data.lastUpdate < cutoff) {
-                toDelete.push(zoneKey);
-            }
-        }
-        for (const zoneKey of toDelete) {
-            this.zones.delete(zoneKey);
-        }
-
-        // Prune passive volume entries as well
-        const passiveCutoff = now - this.config.minRecentActivityMs * 2;
-        for (const [zoneKey, entry] of this.passiveVolumeByZone) {
-            if (entry.lastUpdate < passiveCutoff) {
-                this.passiveVolumeByZone.delete(zoneKey);
-            }
-        }
+        for (const [k, z] of this.zones)
+            if (z.lastUpdate < cutoff) this.zones.delete(k);
+        for (const [k, p] of this.passiveByZone)
+            if (p.lastUpdate < passiveCut) this.passiveByZone.delete(k);
 
         this.lastCleanup = now;
     }

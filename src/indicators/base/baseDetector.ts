@@ -256,7 +256,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
             price: parseFloat(trade.p!),
             quantity: parseFloat(trade.q!),
             timestamp: trade.T!,
-            isMakerSell: trade.m || false,
+            buyerIsMaker: trade.m || false,
             originalTrade: trade,
         };
     }
@@ -314,11 +314,11 @@ export abstract class BaseDetector extends Detector implements IDetector {
         if (this.features.sideOverride) {
             this.logger.debug(
                 `[${this.constructor.name}] Side override enabled`,
-                { originalSide: trade.isMakerSell ? "sell" : "buy" }
+                { originalSide: trade.buyerIsMaker ? "sell" : "buy" }
             );
         }
-        // Binance: m=true => maker is sell, so aggressive buy
-        return trade.isMakerSell ? "buy" : "sell";
+        // Binance: m=true => buyer is maker, so aggressive sell
+        return trade.buyerIsMaker ? "sell" : "buy";
     }
 
     /**

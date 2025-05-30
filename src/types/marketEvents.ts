@@ -6,7 +6,7 @@ export interface AggressiveTrade {
     price: number;
     quantity: number;
     timestamp: number;
-    isMakerSell: boolean;
+    buyerIsMaker: boolean;
     originalTrade: SpotWebsocketStreams.AggTradeResponse;
 }
 

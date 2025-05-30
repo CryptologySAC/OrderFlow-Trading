@@ -49,7 +49,7 @@ import {
 import { SwingMetrics } from "./indicators/swingMetrics.js";
 import {
     AccumulationDetector,
-    AccumulationDetectorConfig,
+    AccumulationSettings,
 } from "./indicators/accumulationDetector.js";
 import { MomentumDivergence } from "./indicators/momentumDivergence.js";
 import {
@@ -232,6 +232,14 @@ export class OrderFlowDashboard {
             dependencies.signalLogger
         );
 
+        this.accumulationDetector.on(
+            "accumulation",
+            (event: AccumulationResult) => {
+                //TODO make this robust
+                this.logger.warn("Market accumulation detected:", { event });
+            }
+        );
+
         // Initialize Market
         this.preprocessor = new OrderflowPreprocessor({
             //TODO Config
@@ -247,6 +255,7 @@ export class OrderFlowDashboard {
                 // TODO
                 this.absorptionDetector.onEnrichedTrade(enrichedTrade);
                 this.anomalyDetector.onEnrichedTrade(enrichedTrade);
+                this.accumulationDetector.onEnrichedTrade(enrichedTrade);
             }
         );
 
@@ -390,7 +399,7 @@ export class OrderFlowDashboard {
         }
     }
 
-    private createAccumulationDetectorSettings(): AccumulationDetectorConfig {
+    private createAccumulationDetectorSettings(): AccumulationSettings {
         return {
             windowMs: Config.ACCUMULATION_DETECTOR.WINDOW_MS,
             minDurationMs: Config.ACCUMULATION_DETECTOR.MIN_DURATION_MS,
@@ -624,7 +633,6 @@ export class OrderFlowDashboard {
             this.preprocessor.handleAggTrade(data);
             this.exhaustionDetector.addTrade(data);
             this.deltaCVDConfirmation.addTrade(data);
-            this.accumulationDetector.addTrade(data);
 
             // Update swing predictor
             this.swingPredictor.onPrice(
@@ -671,7 +679,6 @@ export class OrderFlowDashboard {
             // Update detectors
             this.preprocessor.handleDepth(data);
             this.exhaustionDetector.addDepth(data);
-            this.accumulationDetector.addDepth(data);
 
             // Process and broadcast
             const message =
@@ -708,7 +715,7 @@ export class OrderFlowDashboard {
             price: parseFloat(data.p || "0"),
             quantity: parseFloat(data.q || "0"),
             timestamp: data.T || Date.now(),
-            isMakerSell: data.m || false,
+            buyerIsMaker: data.m || false,
             originalTrade: data,
         };
     }
@@ -731,8 +738,14 @@ export class OrderFlowDashboard {
         // Check for swing signals
         const volumeNodes: VolumeNodes =
             this.swingMetrics.getVolumeNodes(currentPrice);
-        const accumulation: AccumulationResult =
-            this.accumulationDetector.detectAccumulation(currentPrice);
+        const accumulation: AccumulationResult = {
+            isAccumulating: false,
+            strength: 0,
+            zone: 0,
+            duration: 0,
+            ratio: 0,
+        };
+        // TODO this.accumulationDetector.detectAccumulation(currentPrice);
         const divergence: DivergenceResult =
             this.momentumDivergence.detectDivergence();
 

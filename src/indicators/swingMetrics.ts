@@ -21,10 +21,11 @@ export class SwingMetrics {
     public addTrade(trade: TradeData): void {
         const priceLevel =
             Math.round(trade.price / this.binSize) * this.binSize;
+        const aggressorIsBuy = !trade.buyerIsMaker;
         const existing = this.volumeProfile.get(priceLevel);
 
         if (existing) {
-            if (trade.isMakerSell) {
+            if (aggressorIsBuy) {
                 existing.buy += trade.quantity;
             } else {
                 existing.sell += trade.quantity;
@@ -32,8 +33,8 @@ export class SwingMetrics {
             existing.timestamp = trade.timestamp;
         } else {
             this.volumeProfile.set(priceLevel, {
-                buy: trade.isMakerSell ? trade.quantity : 0,
-                sell: trade.isMakerSell ? 0 : trade.quantity,
+                buy: aggressorIsBuy ? trade.quantity : 0,
+                sell: aggressorIsBuy ? 0 : trade.quantity,
                 timestamp: trade.timestamp,
             });
         }

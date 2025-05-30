@@ -49,7 +49,7 @@ export class DeltaCVDConfirmation extends Detector {
             price: parseFloat(trade.p ?? "0"),
             quantity: parseFloat(trade.q ?? "0"),
             timestamp: trade.T ?? Date.now(),
-            isMakerSell: trade.m || false,
+            buyerIsMaker: trade.m || false,
             originalTrade: trade,
         };
 
@@ -108,7 +108,7 @@ export class DeltaCVDConfirmation extends Detector {
         let cvd = 0;
         const cvdSeries: number[] = [];
         for (const t of windowTrades) {
-            cvd += t.isMakerSell ? -t.quantity : t.quantity;
+            cvd += t.buyerIsMaker ? -t.quantity : t.quantity;
             cvdSeries.push(cvd);
         }
 

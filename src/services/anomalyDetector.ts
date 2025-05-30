@@ -195,11 +195,12 @@ export class AnomalyDetector extends EventEmitter {
      */
     public onEnrichedTrade(trade: EnrichedTradeEvent): void {
         const now = trade.timestamp;
-        const aggressiveSide: "buy" | "sell" = trade.isMakerSell
+        /*  Binance aggTrade:  m === true  ⇒  buyer is maker  ⇒  SELL aggression  */
+        const aggressiveSide: "buy" | "sell" = trade.buyerIsMaker
             ? "sell"
             : "buy";
 
-        // Track order sizes
+        // Track order sizes (once!)
         this.trackOrderSize(trade.quantity, trade.price, now);
 
         // Update price-volume history for iceberg detection
@@ -237,6 +238,7 @@ export class AnomalyDetector extends EventEmitter {
             side: aggressiveSide,
             time: now,
         });
+        /* orderSizeHistory already updated inside trackOrderSize() */
 
         // Run anomaly checks
         if (this.marketHistory.toArray().length >= this.minHistory) {
@@ -281,7 +283,7 @@ export class AnomalyDetector extends EventEmitter {
 
         // Calculate distribution buckets
         const distribution = new Map<number, number>();
-        const bucketSize = stdDev / 2;
+        const bucketSize = stdDev === 0 ? Math.max(1, mean / 10) : stdDev / 2;
         for (const size of sizes) {
             const bucket = Math.floor(size / bucketSize) * bucketSize;
             distribution.set(bucket, (distribution.get(bucket) || 0) + 1);
@@ -681,16 +683,18 @@ export class AnomalyDetector extends EventEmitter {
         const now = Date.now();
         const totalPassive =
             snapshot.zonePassiveBidVolume + snapshot.zonePassiveAskVolume;
+
+        const recent = this.marketHistory
+            .toArray()
+            .filter((s) => now - s.timestamp < 120_000)
+            .slice(-20);
         const avgPassive =
-            this.marketHistory
-                .toArray()
-                .filter((s) => now - s.timestamp < 120_000)
-                .slice(-20)
-                .reduce(
-                    (sum, h) =>
-                        sum + h.zonePassiveBidVolume + h.zonePassiveAskVolume,
-                    0
-                ) / 20;
+            recent.reduce(
+                (sum, h) =>
+                    sum + h.zonePassiveBidVolume + h.zonePassiveAskVolume,
+                0
+            ) / (recent.length || 1);
+
         const liquidityRatio = totalPassive / (avgPassive || 1);
         // Confidence: scales with how much spread exceeds normal threshold
         const confidence = Math.min(1, spreadBps / (this.normalSpreadBps * 15));
@@ -1323,7 +1327,10 @@ export class AnomalyDetector extends EventEmitter {
                 severity: anomaly.severity,
                 time: now,
             };
-            this.recentAnomalies.push(anomaly);
+            /* store *detached* copy so later mutations to rationales don’t leak */
+            this.recentAnomalies.push(
+                JSON.parse(JSON.stringify(anomaly)) as AnomalyEvent
+            );
             if (this.recentAnomalies.length > 500) this.recentAnomalies.shift();
 
             this.emit("anomaly", anomaly);

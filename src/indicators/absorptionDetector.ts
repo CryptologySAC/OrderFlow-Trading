@@ -91,10 +91,10 @@ export class AbsorptionDetector
 
             // --- Absorption logic: is there still passive after big aggression?
             // Optionally, can use zonePassive*Volume or local passive*Volume
-            const passive = event.isMakerSell
+            const passive = event.buyerIsMaker
                 ? event.passiveBidVolume
                 : event.passiveAskVolume;
-            const zonePassive = event.isMakerSell
+            const zonePassive = event.buyerIsMaker
                 ? event.zonePassiveBidVolume
                 : event.zonePassiveAskVolume;
 
@@ -113,7 +113,7 @@ export class AbsorptionDetector
                     id: randomUUID(),
                     time: now,
                     price: event.price,
-                    side: event.isMakerSell ? "buy" : "sell",
+                    side: event.buyerIsMaker ? "sell" : "buy",
                     zone,
                     aggressiveVolume: event.quantity,
                     passiveVolume: passive,

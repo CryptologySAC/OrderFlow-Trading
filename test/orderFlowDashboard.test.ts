@@ -569,7 +569,7 @@ export class OrderFlowDashboard {
             price: parseFloat(data.p || "0"),
             quantity: parseFloat(data.q || "0"),
             timestamp: data.T || Date.now(),
-            isMakerSell: data.m || false,
+            buyerIsMaker: data.m || false,
             originalTrade: data,
         };
     }

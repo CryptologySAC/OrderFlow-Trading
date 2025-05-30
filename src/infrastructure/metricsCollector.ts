@@ -14,6 +14,8 @@ export interface Metrics {
     tradeMessages?: number;
     depthMessages?: number;
     absorptionSignals?: number;
+    accumulationDetected?: number;
+    accumulationErrors?: number;
 }
 
 /**

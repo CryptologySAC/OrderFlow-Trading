@@ -36,7 +36,7 @@ export interface TradeData {
     price: number;
     quantity: number;
     timestamp: number;
-    isMakerSell: boolean;
+    buyerIsMaker: boolean;
     originalTrade: SpotWebsocketStreams.AggTradeResponse;
 }
 
@@ -553,3 +553,6 @@ export function calculateBreakeven(
         return entryPrice * (1 - totalCommission);
     }
 }
+
+export const getAggressiveSide = (buyerIsMaker: boolean) =>
+    buyerIsMaker ? "sell" : "buy";
