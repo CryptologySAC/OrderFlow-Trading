@@ -7,6 +7,7 @@ import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
 import type { TradeData, PendingDetection } from "../utils/utils.js";
+import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import type {
     IExhaustionDetector,
     DetectorCallback,
@@ -49,6 +50,9 @@ export class ExhaustionDetector
         this.rollingZonePassive = new RollingWindow(windowSize);
     }
 
+    public onEnrichedTrade(event: EnrichedTradeEvent): void {
+        void event;
+    }
     /**
      * Check for exhaustion signal
      */

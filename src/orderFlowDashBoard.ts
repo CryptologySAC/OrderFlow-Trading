@@ -25,6 +25,8 @@ import { RateLimiter } from "./infrastructure/rateLimiter.js";
 import { CircuitBreaker } from "./infrastructure/circuitBreaker.js";
 
 // Service imports
+import type { EnrichedTradeEvent } from "./types/marketEvents.js";
+import { OrderflowPreprocessor } from "./market/ordeFlowPreprocessor.js";
 import {
     WebSocketManager,
     type ExtendedWebSocket,
@@ -102,6 +104,9 @@ export class OrderFlowDashboard {
     private readonly wsManager: WebSocketManager;
     private readonly signalManager: SignalManager;
     private readonly dataStreamManager: DataStreamManager;
+
+    // Market
+    private readonly preprocessor: OrderflowPreprocessor;
 
     // Coordinators
     private readonly signalCoordinator: SignalCoordinator;
@@ -225,6 +230,23 @@ export class OrderFlowDashboard {
             dependencies.logger,
             dependencies.metricsCollector,
             dependencies.signalLogger
+        );
+
+        // Initialize Market
+        this.preprocessor = new OrderflowPreprocessor({
+            //TODO Config
+            pricePrecision: 2,
+            bandTicks: 10,
+            tickSize: 0.01,
+        });
+
+        // All detectors subscribe to enriched trades:
+        this.preprocessor.on(
+            "enriched_trade",
+            (enrichedTrade: EnrichedTradeEvent) => {
+                // TODO
+                this.absorptionDetector.onEnrichedTrade(enrichedTrade);
+            }
         );
 
         // Setup event handlers
@@ -598,6 +620,7 @@ export class OrderFlowDashboard {
 
         try {
             // Update detectors
+            this.preprocessor.handleAggTrade(data);
             this.anomalyDetector.onTrade(data);
             this.absorptionDetector.addTrade(data);
             this.exhaustionDetector.addTrade(data);
@@ -647,6 +670,7 @@ export class OrderFlowDashboard {
 
         try {
             // Update detectors
+            this.preprocessor.handleDepth(data);
             this.anomalyDetector.onDepth(data);
             this.absorptionDetector.addDepth(data);
             this.exhaustionDetector.addDepth(data);

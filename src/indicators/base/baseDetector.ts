@@ -1,10 +1,12 @@
 // src/indicators/base/baseDetector.ts
-import { Detector } from "./detector.js";
+import { Detector } from "./detectorEnrichedTrade.js";
 import { SpotWebsocketStreams } from "@binance/spot";
 import { randomUUID } from "crypto";
 import { Logger } from "../../infrastructure/logger.js";
 import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../../services/signalLogger.js";
+//import type { EnrichedTradeEvent } from "../../types/marketEvents.js";
+
 import {
     CircularBuffer,
     TimeAwareCache,
@@ -237,6 +239,10 @@ export abstract class BaseDetector extends Detector implements IDetector {
             );
         }
     }
+
+    //protected onEnrichedTrade(event: EnrichedTradeEvent): void {
+    //   void event
+    //}
 
     /**
      * Add depth update

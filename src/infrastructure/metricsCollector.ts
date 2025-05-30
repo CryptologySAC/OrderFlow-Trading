@@ -13,6 +13,7 @@ export interface Metrics {
     cvdConfirmations?: number;
     tradeMessages?: number;
     depthMessages?: number;
+    absorptionSignals?: number;
 }
 
 /**

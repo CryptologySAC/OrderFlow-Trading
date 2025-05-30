@@ -46,7 +46,7 @@ export class AnomalyDetector extends EventEmitter {
     private readonly normalSpread: number;
     private readonly minHistory: number;
     private readonly anomalyCooldownMs: number;
-    //private readonly spoofingDetector?: SpoofingDetector;
+    private readonly spoofingDetector?: SpoofingDetector;
     private readonly logger?: Logger;
 
     // Track the latest best bid/ask from depth updates
@@ -62,7 +62,7 @@ export class AnomalyDetector extends EventEmitter {
         this.windowSize = options.windowSize ?? 1000;
         this.normalSpread = options.normalSpread ?? 0.002; // 0.2% for crypto
         this.minHistory = options.minHistory ?? 100;
-        //this.spoofingDetector = options.spoofingDetector;
+        this.spoofingDetector = options.spoofingDetector;
         this.logger = options.logger;
         this.anomalyCooldownMs = options.anomalyCooldownMs ?? 10000; // 10s
     }
@@ -76,9 +76,10 @@ export class AnomalyDetector extends EventEmitter {
         const timestamp = trade.T ?? Date.now();
 
         // Use latest known best bid/ask
-        const bestBid = this.bestBid;
-        const bestAsk = this.bestAsk;
-        const spread = bestBid && bestAsk ? (bestAsk - bestBid) / bestBid : 0;
+        const bestBid = this.bestBid ?? 0;
+        const bestAsk = this.bestAsk ?? 0;
+        const spread =
+            bestBid > 0 && bestAsk > 0 ? (bestAsk - bestBid) / bestBid : 0;
 
         // Store point
         this.priceHistory.push({
@@ -93,6 +94,58 @@ export class AnomalyDetector extends EventEmitter {
             this.priceHistory.shift();
         }
 
+        // Spoofing check (if spoofingDetector is set)
+        if (this.spoofingDetector) {
+            const price = parseFloat(trade.p ?? "0");
+            const side: "buy" | "sell" = trade.m ? "buy" : "sell";
+            const tradeTime = trade.T ?? Date.now();
+
+            // You need to pass a function that returns executed volume.
+            const getAggressiveVolume = (
+                bandPrice: number,
+                from: number,
+                to: number
+            ): number => {
+                // Find all trades in the time window at this price
+                return this.priceHistory
+                    .filter(
+                        (pt) =>
+                            pt.price === bandPrice &&
+                            pt.time >= from &&
+                            pt.time <= to
+                    )
+                    .reduce((sum, pt) => sum + pt.volume, 0);
+            };
+
+            // If spoofed, emit anomaly
+            const spoofed = this.spoofingDetector.wasSpoofed(
+                price,
+                side,
+                tradeTime,
+                getAggressiveVolume
+            );
+
+            if (spoofed) {
+                const event: AnomalyEvent = {
+                    type: "spoofing",
+                    detectedAt: tradeTime,
+                    severity: "high",
+                    affectedPriceRange: { min: price, max: price },
+                    recommendedAction: "pause",
+                    details: {
+                        // Optionally include more details from spoofingDetector
+                        price,
+                        side,
+                        // ...possibly the band, size, etc.
+                    },
+                };
+                this.emitAnomaly(event);
+                this.logger?.warn?.("[AnomalyDetector] Spoofing detected", {
+                    event,
+                });
+            }
+        }
+
         // --- Anomaly Checks ---
         if (this.priceHistory.length >= this.minHistory) {
             this.checkFlashCrash(price, timestamp);
@@ -101,24 +154,6 @@ export class AnomalyDetector extends EventEmitter {
             this.checkExtremeVolatility(price, timestamp);
             this.checkOrderbookImbalance(timestamp, bestBid, bestAsk);
         }
-
-        // TODO Spoofing check (if integrated)
-        //if (this.spoofingDetector) {
-        //    const spoof = this.spoofingDetector.wasSpoofed();
-        //    if (spoof) {
-        //        this.emitAnomaly({
-        //            type: "spoofing",
-        //            detectedAt: timestamp,
-        //            severity: "high",
-        //            affectedPriceRange: {
-        //                min: spoof.priceStart,
-        //                max: spoof.priceEnd,
-        //            },
-        //            recommendedAction: "pause",
-        //            details: { spoof },
-        //        });
-        //    }
-        // }
     }
 
     /**
@@ -127,15 +162,21 @@ export class AnomalyDetector extends EventEmitter {
     public onDepth(update: SpotWebsocketStreams.DiffBookDepthResponse): void {
         const bids = (update.b as [string, string][]) || [];
         const asks = (update.a as [string, string][]) || [];
+
+        // Defensive: reset if empty!
         if (bids.length) {
             this.bestBid = Math.max(
                 ...bids.map(([price]) => parseFloat(price))
             );
+        } else {
+            this.bestBid = undefined;
         }
         if (asks.length) {
             this.bestAsk = Math.min(
                 ...asks.map(([price]) => parseFloat(price))
             );
+        } else {
+            this.bestAsk = undefined;
         }
         this.lastDepthUpdate = Date.now();
     }
@@ -233,10 +274,24 @@ export class AnomalyDetector extends EventEmitter {
 
     private checkOrderbookImbalance(
         now: number,
-        bestBid?: number,
-        bestAsk?: number
+        bestBid: number,
+        bestAsk: number
     ) {
-        if (typeof bestBid !== "number" || typeof bestAsk !== "number") return;
+        if (
+            typeof bestBid !== "number" ||
+            typeof bestAsk !== "number" ||
+            bestBid <= 0 ||
+            bestAsk <= 0 ||
+            bestBid >= bestAsk
+        ) {
+            this.logger?.warn?.("[Orderbook] Invalid book state", {
+                bestBid,
+                bestAsk,
+                // Add more diagnostics if needed
+            });
+            // Optionally trigger a book snapshot reload here
+            return; // Do not emit anomaly if the book state is invalid
+        }
         // If spread is extremely wide compared to normal
         const spread = (bestAsk - bestBid) / (bestBid || 1);
         if (spread > 0.01) {

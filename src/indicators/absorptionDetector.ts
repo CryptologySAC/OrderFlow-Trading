@@ -6,6 +6,8 @@ import { BaseDetector, RollingWindow } from "./base/baseDetector.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
+import type { EnrichedTradeEvent } from "../types/marketEvents.js";
+
 import type { TradeData, PendingDetection } from "../utils/utils.js";
 import type {
     IAbsorptionDetector,
@@ -24,6 +26,22 @@ export interface AbsorptionFeatures extends DetectorFeatures {
     // Add any absorption-specific features here
 }
 
+// TODO
+export interface AbsorptionSignal {
+    id: string;
+    time: number;
+    price: number;
+    side: "buy" | "sell";
+    zone: number;
+    aggressiveVolume: number;
+    passiveVolume: number;
+    zonePassiveBidVolume?: number;
+    zonePassiveAskVolume?: number;
+    trades: number;
+    refilled: boolean;
+    confirmed: boolean;
+}
+
 /**
  * Absorption detector - identifies when aggressive volume is absorbed by passive liquidity
  */
@@ -35,6 +53,8 @@ export class AbsorptionDetector
 
     // --- ADD: rolling passive window for apples-to-apples comparison
     private readonly rollingZonePassive: RollingWindow;
+    private readonly settings: Required<AbsorptionSettings>;
+    private lastSignalAt: number = 0;
 
     constructor(
         callback: DetectorCallback,
@@ -44,10 +64,96 @@ export class AbsorptionDetector
         signalLogger?: ISignalLogger
     ) {
         super(callback, settings, logger, metricsCollector, signalLogger);
+        this.settings = settings as Required<AbsorptionSettings>;
 
         // --- ADD: rolling window for zone passive, matches windowMs
         const windowSize = Math.max(Math.ceil(this.windowMs / 1000), 10);
         this.rollingZonePassive = new RollingWindow(windowSize);
+    }
+
+    /**
+     * Call this on every enriched event from the preprocessor
+     */
+    public onEnrichedTrade(event: EnrichedTradeEvent): void {
+        try {
+            // Only act on sufficiently large aggressive trades
+            if (event.quantity < this.minAggVolume) return;
+
+            const now = Date.now();
+            // Cooldown to avoid flooding
+            if (now - this.lastSignalAt < this.settings.eventCooldownMs) return;
+
+            // --- Zone logic: round to nearest tick band
+            const zone = +(
+                Math.round(event.price / this.zoneTicks) * this.zoneTicks
+            ).toFixed(this.pricePrecision);
+
+            // --- Absorption logic: is there still passive after big aggression?
+            // Optionally, can use zonePassive*Volume or local passive*Volume
+            const passive = event.isMakerSell
+                ? event.passiveBidVolume
+                : event.passiveAskVolume;
+            const zonePassive = event.isMakerSell
+                ? event.zonePassiveBidVolume
+                : event.zonePassiveAskVolume;
+
+            // Criteria: after a big market order, there's still substantial passive at the same/zone level
+            const absorption =
+                passive > event.quantity * 0.8 ||
+                (zonePassive !== undefined &&
+                    zonePassive > event.quantity * 0.5);
+
+            if (absorption) {
+                // Optionally check for spoofing (if passed from event/meta)
+                // If spoofingDetector result is available in event.meta, filter here
+
+                // --- Construct signal
+                const signal: AbsorptionSignal = {
+                    id: randomUUID(),
+                    time: now,
+                    price: event.price,
+                    side: event.isMakerSell ? "buy" : "sell",
+                    zone,
+                    aggressiveVolume: event.quantity,
+                    passiveVolume: passive,
+                    zonePassiveBidVolume: event.zonePassiveBidVolume,
+                    zonePassiveAskVolume: event.zonePassiveAskVolume,
+                    trades: 1, // Here, 1 trade - you could aggregate within window if needed
+                    refilled: false, // Future: passive refill logic
+                    confirmed: false,
+                };
+
+                // Metrics/logging
+                this.metricsCollector.incrementMetric("absorptionSignals");
+                this.logger.info("[AbsorptionDetector] Absorption detected", {
+                    signal,
+                });
+                this.signalLogger?.logEvent({
+                    timestamp: new Date().toISOString(),
+                    type: "absorption",
+                    symbol: this.settings.symbol,
+                    signalPrice: event.price,
+                    side: signal.side,
+                    aggressiveVolume: event.quantity,
+                    passiveVolume: passive,
+                    zone,
+                    refilled: false,
+                    confirmed: false,
+                    outcome: "detected",
+                });
+
+                // Fire the callback/event downstream
+                // (Assuming callback is now set by wiring, e.g., this.onSignal)
+                // If you want: this.onSignal(signal);
+            }
+
+            this.lastSignalAt = now;
+        } catch (error) {
+            this.handleError(
+                error as Error,
+                "AbsorptionDetector.onEnrichedTrade"
+            );
+        }
     }
 
     /**

@@ -1,15 +1,17 @@
 // src/indicators/interfaces/detectorInterfaces.ts
 
-import { SpotWebsocketStreams } from "@binance/spot";
+//import { SpotWebsocketStreams } from "@binance/spot";
 import type { Detected } from "../../utils/types.js";
+//import type { EnrichedTradeEvent } from "../../types/marketEvents.js";
 import type { SpoofingDetectorConfig } from "../../services/spoofingDetector.js";
 
 /**
  * Base detector interface
  */
 export interface IDetector {
-    addTrade(trade: SpotWebsocketStreams.AggTradeResponse): void;
-    addDepth(update: SpotWebsocketStreams.DiffBookDepthResponse): void;
+    //onEnrichedTrade(event: EnrichedTradeEvent): void;
+    //addTrade(trade: SpotWebsocketStreams.AggTradeResponse): void;
+    //addDepth(update: SpotWebsocketStreams.DiffBookDepthResponse): void;
     getStats(): DetectorStats;
     cleanup(): void;
 }
