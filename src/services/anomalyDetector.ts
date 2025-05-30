@@ -5,6 +5,7 @@ import type { MarketAnomaly } from "../utils/types.js";
 import type { SpoofingDetector } from "../services/spoofingDetector.js";
 import { Logger } from "../infrastructure/logger.js";
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
+import { RollingWindow } from "../utils/rollingWindow.js";
 
 export interface AnomalyDetectorOptions {
     windowSize?: number;
@@ -17,6 +18,7 @@ export interface AnomalyDetectorOptions {
     absorptionRatioThreshold?: number;
     icebergDetectionWindow?: number;
     orderSizeAnomalyThreshold?: number;
+    tickSize?: number;
 }
 
 export type AnomalyType =
@@ -83,7 +85,7 @@ interface IcebergCandidate {
 }
 
 export class AnomalyDetector extends EventEmitter {
-    private marketHistory: MarketSnapshot[] = [];
+    private marketHistory: RollingWindow<MarketSnapshot>;
     private readonly windowSize: number;
     private readonly normalSpreadBps: number;
     private readonly minHistory: number;
@@ -92,6 +94,7 @@ export class AnomalyDetector extends EventEmitter {
     private readonly absorptionRatioThreshold: number;
     private readonly icebergDetectionWindow: number;
     private readonly orderSizeAnomalyThreshold: number;
+    private readonly tickSize: number;
 
     private cachedStats?: { stats: OrderSizeStats; timestamp: number };
     private statsCacheDuration = 5000; // 5 seconds
@@ -102,7 +105,9 @@ export class AnomalyDetector extends EventEmitter {
     // Properly track orderbook state
     private currentBestBid = 0;
     private currentBestAsk = 0;
-    private lastDepthUpdateTime = 0;
+    private lastDepthUpdateTime: number = 0;
+    private absorptionRationale: Record<string, boolean | number> = {};
+    private exhaustionRationale: Record<string, boolean | number> = {};
 
     private getOrderSizeStats(): OrderSizeStats {
         const now = Date.now();
@@ -119,16 +124,19 @@ export class AnomalyDetector extends EventEmitter {
     }
 
     // Flow tracking
-    private recentFlowWindow: {
+    private recentFlowWindow: RollingWindow<{
         volume: number;
         side: "buy" | "sell";
         time: number;
-    }[] = [];
+    }>;
     private flowWindowMs = 30000;
 
     // Order size tracking
-    private orderSizeHistory: { size: number; time: number; price: number }[] =
-        [];
+    private orderSizeHistory: RollingWindow<{
+        size: number;
+        time: number;
+        price: number;
+    }>;
     private orderSizeWindowMs = 300000; // 5 minutes
 
     // Iceberg tracking
@@ -155,6 +163,22 @@ export class AnomalyDetector extends EventEmitter {
         this.absorptionRatioThreshold = options.absorptionRatioThreshold ?? 3.0;
         this.icebergDetectionWindow = options.icebergDetectionWindow ?? 60000; // 1 minute
         this.orderSizeAnomalyThreshold = options.orderSizeAnomalyThreshold ?? 3; // 3 std devs
+        this.tickSize = options.tickSize ?? 0.01;
+
+        this.marketHistory = new RollingWindow<MarketSnapshot>(
+            this.windowSize,
+            false
+        );
+        this.orderSizeHistory = new RollingWindow<{
+            size: number;
+            time: number;
+            price: number;
+        }>(Math.max(2000, Math.ceil(this.orderSizeWindowMs / 100)), false);
+        this.recentFlowWindow = new RollingWindow<{
+            volume: number;
+            side: "buy" | "sell";
+            time: number;
+        }>(Math.max(500, Math.ceil(this.flowWindowMs / 100)), false);
     }
 
     /**
@@ -172,8 +196,8 @@ export class AnomalyDetector extends EventEmitter {
     public onEnrichedTrade(trade: EnrichedTradeEvent): void {
         const now = trade.timestamp;
         const aggressiveSide: "buy" | "sell" = trade.isMakerSell
-            ? "buy"
-            : "sell";
+            ? "sell"
+            : "buy";
 
         // Track order sizes
         this.trackOrderSize(trade.quantity, trade.price, now);
@@ -206,9 +230,6 @@ export class AnomalyDetector extends EventEmitter {
 
         // Update history
         this.marketHistory.push(snapshot);
-        if (this.marketHistory.length > this.windowSize) {
-            this.marketHistory.shift();
-        }
 
         // Update flow tracking
         this.recentFlowWindow.push({
@@ -216,21 +237,10 @@ export class AnomalyDetector extends EventEmitter {
             side: aggressiveSide,
             time: now,
         });
-        const flowCutoff = now - this.flowWindowMs;
-        this.recentFlowWindow = this.recentFlowWindow.filter(
-            (f) => f.time > flowCutoff
-        );
 
         // Run anomaly checks
-        if (this.marketHistory.length >= this.minHistory) {
+        if (this.marketHistory.toArray().length >= this.minHistory) {
             this.runAnomalyChecks(snapshot, spreadBps);
-            this.checkOrderSizeAnomaly(trade);
-            this.checkIcebergOrders(trade);
-        }
-
-        // Check spoofing
-        if (this.spoofingDetector) {
-            this.checkSpoofing(trade);
         }
     }
 
@@ -239,16 +249,16 @@ export class AnomalyDetector extends EventEmitter {
      */
     private trackOrderSize(size: number, price: number, time: number): void {
         this.orderSizeHistory.push({ size, price, time });
-
-        // Clean old entries
-        const cutoff = time - this.orderSizeWindowMs;
-        this.orderSizeHistory = this.orderSizeHistory.filter(
-            (o) => o.time > cutoff
-        );
     }
 
     private calculateOrderSizeStats(): OrderSizeStats {
-        if (this.orderSizeHistory.length === 0) {
+        const now = Date.now();
+        const sizes = this.orderSizeHistory
+            .toArray()
+            .filter((o) => now - o.time < this.orderSizeWindowMs)
+            .map((o) => o.size);
+
+        if (sizes.length === 0) {
             return {
                 mean: 0,
                 median: 0,
@@ -261,9 +271,7 @@ export class AnomalyDetector extends EventEmitter {
             };
         }
 
-        const sizes = this.orderSizeHistory
-            .map((o) => o.size)
-            .sort((a, b) => a - b);
+        sizes.sort((a, b) => a - b);
         const mean = this.calculateMean(sizes);
         const stdDev = this.calculateStdDev(sizes, mean);
         const median = sizes[Math.floor(sizes.length / 2)];
@@ -294,18 +302,22 @@ export class AnomalyDetector extends EventEmitter {
     /**
      * Check for anomalous order sizes
      */
-    private checkOrderSizeAnomaly(trade: EnrichedTradeEvent): void {
+    private checkOrderSizeAnomaly(snapshot: MarketSnapshot): void {
         const stats = this.calculateOrderSizeStats();
         if (stats.mean === 0) return;
 
-        const zScore = (trade.quantity - stats.mean) / (stats.stdDev || 1);
+        const tradeSize = snapshot.aggressiveVolume;
+        const zScore = (tradeSize - stats.mean) / (stats.stdDev || 1);
 
         // Check for unusually large orders
         if (zScore > this.orderSizeAnomalyThreshold) {
-            // Check if it's part of a pattern
-            const recentLargeOrders = this.orderSizeHistory.filter(
-                (o) => Date.now() - o.time < 60000 && o.size > stats.p95
-            ).length;
+            // Recent large orders cluster (last 60s, above p95)
+            const now = snapshot.timestamp;
+            const recentLargeOrders = this.orderSizeHistory
+                .toArray()
+                .filter(
+                    (o) => now - o.time < 60000 && o.size > stats.p95
+                ).length;
 
             const severity =
                 zScore > 5 ? "high" : recentLargeOrders > 5 ? "high" : "medium";
@@ -315,17 +327,18 @@ export class AnomalyDetector extends EventEmitter {
                     recentLargeOrders > 3
                         ? "whale_activity"
                         : "order_size_anomaly",
-                detectedAt: trade.timestamp,
+                detectedAt: snapshot.timestamp,
                 severity,
                 affectedPriceRange: {
-                    min: trade.price * 0.999,
-                    max: trade.price * 1.001,
+                    min: snapshot.price * 0.999,
+                    max: snapshot.price * 1.001,
                 },
-                recommendedAction: trade.isMakerSell
-                    ? "watch_support"
-                    : "watch_resistance",
+                recommendedAction:
+                    snapshot.aggressiveSide === "sell"
+                        ? "watch_support"
+                        : "watch_resistance",
                 details: {
-                    orderSize: trade.quantity,
+                    tradeSize,
                     zScore,
                     stats: {
                         mean: stats.mean,
@@ -334,28 +347,29 @@ export class AnomalyDetector extends EventEmitter {
                         p99: stats.p99,
                     },
                     recentLargeOrders,
-                    percentileRank: this.calculatePercentileRank(
-                        trade.quantity
-                    ),
-                    isWhale: trade.quantity > stats.p99,
+                    percentileRank: this.calculatePercentileRank(tradeSize),
+                    isWhale: tradeSize > stats.p99,
                 },
             });
         }
 
         // Check for unusually small orders (potential algo splitting)
-        if (trade.quantity < stats.mean * 0.1 && stats.mean > 0) {
-            const recentSmallOrders = this.orderSizeHistory.filter(
-                (o) => Date.now() - o.time < 30000 && o.size < stats.mean * 0.1
-            ).length;
+        if (tradeSize < stats.mean * 0.1 && stats.mean > 0) {
+            const now = snapshot.timestamp;
+            const recentSmallOrders = this.orderSizeHistory
+                .toArray()
+                .filter(
+                    (o) => now - o.time < 30000 && o.size < stats.mean * 0.1
+                ).length;
 
             if (recentSmallOrders > 20) {
                 this.emitAnomaly({
                     type: "order_size_anomaly",
-                    detectedAt: trade.timestamp,
+                    detectedAt: snapshot.timestamp,
                     severity: "info",
                     affectedPriceRange: {
-                        min: trade.price * 0.999,
-                        max: trade.price * 1.001,
+                        min: snapshot.price * 0.999,
+                        max: snapshot.price * 1.001,
                     },
                     recommendedAction: "monitor",
                     details: {
@@ -363,6 +377,7 @@ export class AnomalyDetector extends EventEmitter {
                         smallOrderCount: recentSmallOrders,
                         averageSmallSize: this.calculateMean(
                             this.orderSizeHistory
+                                .toArray()
                                 .filter((o) => o.size < stats.mean * 0.1)
                                 .map((o) => o.size)
                         ),
@@ -380,7 +395,7 @@ export class AnomalyDetector extends EventEmitter {
         volume: number,
         time: number
     ): void {
-        const rounded = Math.round(price * 100) / 100;
+        const rounded = this.roundToTick(price);
         const existing = this.priceVolumeHistory.get(rounded) || {
             volume: 0,
             count: 0,
@@ -398,103 +413,6 @@ export class AnomalyDetector extends EventEmitter {
             if (time - data.lastUpdate > this.icebergDetectionWindow * 2) {
                 this.priceVolumeHistory.delete(p);
             }
-        }
-    }
-
-    private checkIcebergOrders(trade: EnrichedTradeEvent): void {
-        const price = Math.round(trade.price * 100) / 100;
-        const side: "buy" | "sell" = trade.isMakerSell ? "buy" : "sell";
-        const key = `${price}_${side}`;
-        const now = trade.timestamp;
-
-        // Get or create candidate
-        let candidate = this.icebergCandidates.get(key);
-
-        // Check if passive liquidity keeps getting refilled at this level
-        const passiveVolume =
-            side === "buy" ? trade.passiveAskVolume : trade.passiveBidVolume;
-        const zonePassive =
-            side === "buy"
-                ? trade.zonePassiveAskVolume
-                : trade.zonePassiveBidVolume;
-
-        if (!candidate) {
-            // Start tracking if we see significant passive volume
-            if (passiveVolume > 0 || (zonePassive && zonePassive > 0)) {
-                candidate = {
-                    price,
-                    side,
-                    firstSeen: now,
-                    totalVolume: trade.quantity,
-                    fillCount: 1,
-                    lastRefill: now,
-                    refillPattern: [],
-                };
-                this.icebergCandidates.set(key, candidate);
-            }
-            return;
-        }
-
-        // Update candidate
-        const timeSinceLastFill = now - candidate.lastRefill;
-        candidate.totalVolume += trade.quantity;
-        candidate.fillCount++;
-
-        // Check for refill pattern
-        if (passiveVolume > 0 && timeSinceLastFill < 5000) {
-            candidate.refillPattern.push(timeSinceLastFill);
-            candidate.lastRefill = now;
-
-            // Iceberg detection criteria:
-            // 1. Multiple fills at same price
-            // 2. Consistent refill timing
-            // 3. Large total volume absorbed
-            if (candidate.fillCount > 5 && candidate.refillPattern.length > 3) {
-                const avgRefillTime = this.calculateMean(
-                    candidate.refillPattern
-                );
-                const refillStdDev = this.calculateStdDev(
-                    candidate.refillPattern,
-                    avgRefillTime
-                );
-
-                // Consistent refill pattern suggests iceberg
-                if (refillStdDev < avgRefillTime * 0.3) {
-                    const stats = this.calculateOrderSizeStats();
-
-                    this.emitAnomaly({
-                        type: "iceberg_order",
-                        detectedAt: now,
-                        severity:
-                            candidate.totalVolume > stats.mean * 20
-                                ? "high"
-                                : "medium",
-                        affectedPriceRange: {
-                            min: price - 0.01,
-                            max: price + 0.01,
-                        },
-                        recommendedAction:
-                            side === "buy" ? "avoid_selling" : "avoid_buying",
-                        details: {
-                            price,
-                            side,
-                            totalVolumeAbsorbed: candidate.totalVolume,
-                            fillCount: candidate.fillCount,
-                            avgRefillTime: avgRefillTime / 1000, // seconds
-                            refillConsistency: 1 - refillStdDev / avgRefillTime,
-                            durationMinutes:
-                                (now - candidate.firstSeen) / 60000,
-                            estimatedRemainingSize:
-                                this.estimateIcebergSize(candidate),
-                        },
-                    });
-                }
-            }
-        }
-
-        // Clean old candidates
-        if (now - candidate.lastRefill > this.icebergDetectionWindow) {
-            this.icebergCandidates.delete(key);
         }
     }
 
@@ -569,47 +487,30 @@ export class AnomalyDetector extends EventEmitter {
         return index === -1 ? 100 : (index / sortedSizes.length) * 100;
     }
 
-    /*private calculateAbsorptionConfidence(data: any): number {
-        // Calculate confidence based on multiple factors
-        let confidence = 0.5; // base confidence
-
-        // Volume significance
-        const avgVolume = this.getAverageVolume();
-        if (data.totalAggressiveVolume > avgVolume * 3) confidence += 0.2;
-
-        // Price stability during absorption
-        const priceStability = this.checkPriceStability(data.price, 30000);
-        if (priceStability > 0.95) confidence += 0.2;
-
-        // Flow imbalance supports absorption
-        const flow = this.calculateFlowMetrics();
-        if (Math.abs(flow.flowImbalance) > 0.7) confidence += 0.1;
-
-        return Math.min(1, confidence);
-    }
-
-    /*private calculateExhaustionConfidence(data: any): number {
-        let confidence = 0.5;
-
-        // Check volume decline pattern
-        const volumeDecline = this.checkVolumeDecline();
-        if (volumeDecline > 0.7) confidence += 0.2;
-
-        // Check if at important price level
-        const atResistance = this.checkIfAtResistance(data.price);
-        if (atResistance) confidence += 0.2;
-
-        // Order size distribution supports exhaustion
-        const stats = this.calculateOrderSizeStats();
-        const recentAvgSize = this.calculateMean(
-            this.orderSizeHistory.slice(-10).map((o) => o.size)
-        );
-        if (recentAvgSize < stats.mean * 0.5) confidence += 0.1;
-
-        return Math.min(1, confidence);
-    }
-        */
-
+    /**
+     * Runs all anomaly checks in a specific order on the latest market snapshot.
+     *
+     * Detection order:
+     *  1. Flash crash         — Extreme deviation from rolling mean
+     *  2. Liquidity void      — Abnormally wide spread or missing passive liquidity
+     *  3. API gap             — Data/feed interruption
+     *  4. Extreme volatility  — Sudden spike in rolling returns stddev
+     *  5. Orderbook imbalance — Strong passive volume asymmetry (bid/ask)
+     *  6. Flow imbalance      — Aggressive trade volume asymmetry
+     *  7. Absorption          — Aggressive trades absorbed by passive liquidity (with little price move)
+     *  8. Exhaustion          — Diminishing aggressive activity after strong move
+     *  9. Momentum ignition   — Recent burst of one-sided flow
+     * 10. Whale activity      — Single or clustered outlier trade(s)
+     * 11. Iceberg detection   — Repeated fills at same price, consistent timing, high passive absorption
+     * 12. Spoofing detection  — Passive walls that cancel without execution, detected by spoofingDetector
+     * 13. Order size anomaly  — Unusually large/small trades relative to rolling window
+     *
+     * The order ensures that "eventful" anomalies (crash, liquidity void) are detected before
+     * microstructure anomalies (absorption, iceberg, spoofing), and that all detections can
+     * leverage updated rolling window stats.
+     *
+     * Each check emits an anomaly event if detected.
+     */
     private runAnomalyChecks(
         snapshot: MarketSnapshot,
         spreadBps?: number
@@ -623,10 +524,124 @@ export class AnomalyDetector extends EventEmitter {
         this.checkAbsorption(snapshot);
         this.checkExhaustion(snapshot);
         this.checkMomentumIgnition(snapshot);
+        this.checkWhaleActivity(snapshot);
+        this.checkIceberg(snapshot);
+        this.checkSpoofing(snapshot);
+        this.checkOrderSizeAnomaly(snapshot);
+    }
+
+    private roundToTick(price: number): number {
+        return Math.round(price / this.tickSize) * this.tickSize;
+    }
+
+    private checkIceberg(snapshot: MarketSnapshot): void {
+        // Use rolling order size percentiles and refill patterns at this price/side
+        const price = this.roundToTick(snapshot.price);
+        const side = snapshot.aggressiveSide;
+
+        const key = `${price}_${side}`;
+        const now = snapshot.timestamp;
+
+        let candidate = this.icebergCandidates.get(key);
+
+        const passiveVolume =
+            side === "buy"
+                ? snapshot.zonePassiveAskVolume
+                : snapshot.zonePassiveBidVolume;
+
+        // 1. Start tracking a new candidate if high passive volume is detected
+        if (!candidate) {
+            if (passiveVolume > 0) {
+                candidate = {
+                    price,
+                    side,
+                    firstSeen: now,
+                    totalVolume: snapshot.aggressiveVolume,
+                    fillCount: 1,
+                    lastRefill: now,
+                    refillPattern: [],
+                };
+                this.icebergCandidates.set(key, candidate);
+            }
+            return;
+        }
+
+        // 2. Update candidate stats
+        const timeSinceLastFill = now - candidate.lastRefill;
+        candidate.totalVolume += snapshot.aggressiveVolume;
+        candidate.fillCount++;
+
+        // 3. Record refill pattern (regular refills = more iceberg confidence)
+        if (passiveVolume > 0 && timeSinceLastFill < 5000) {
+            candidate.refillPattern.push(timeSinceLastFill);
+            candidate.lastRefill = now;
+
+            // Gather rolling order size stats for comparison
+            const arr = this.orderSizeHistory
+                .toArray()
+                .filter((o) => now - o.time < 300_000);
+            if (arr.length < 100) return; // Require adequate history
+            const sizes = arr.map((o) => o.size).sort((a, b) => a - b);
+            const meanOrder = this.calculateMean(sizes);
+            const p99 = sizes[Math.floor(sizes.length * 0.99)];
+
+            // Confidence factors
+            const regularRefill =
+                candidate.refillPattern.length > 3 &&
+                this.calculateStdDev(
+                    candidate.refillPattern,
+                    this.calculateMean(candidate.refillPattern)
+                ) <
+                    this.calculateMean(candidate.refillPattern) * 0.3;
+
+            const bigTotalAbsorbed = candidate.totalVolume > meanOrder * 12;
+            const highOrderPercentile = candidate.totalVolume > p99 * 3;
+            const highFillCount = candidate.fillCount > 5;
+
+            let confidence = 0;
+            if (regularRefill) confidence += 0.35;
+            if (bigTotalAbsorbed) confidence += 0.3;
+            if (highOrderPercentile) confidence += 0.25;
+            if (highFillCount) confidence += 0.1;
+
+            if (confidence >= 0.5) {
+                this.emitAnomaly({
+                    type: "iceberg_order",
+                    detectedAt: now,
+                    severity: confidence > 0.8 ? "high" : "medium",
+                    affectedPriceRange: {
+                        min: price - 0.01,
+                        max: price + 0.01,
+                    },
+                    recommendedAction:
+                        side === "buy" ? "avoid_selling" : "avoid_buying",
+                    details: {
+                        confidence,
+                        totalVolumeAbsorbed: candidate.totalVolume,
+                        fillCount: candidate.fillCount,
+                        avgRefillTime: this.calculateMean(
+                            candidate.refillPattern
+                        ),
+                        refillPattern: candidate.refillPattern,
+                        regularRefill,
+                        bigTotalAbsorbed,
+                        highOrderPercentile,
+                        highFillCount,
+                        estimatedRemainingSize:
+                            this.estimateIcebergSize(candidate),
+                    },
+                });
+            }
+        }
+
+        // 4. Clean up old candidates
+        if (now - candidate.lastRefill > this.icebergDetectionWindow) {
+            this.icebergCandidates.delete(key);
+        }
     }
 
     private checkFlashCrash(snapshot: MarketSnapshot): void {
-        const prices = this.marketHistory.map((h) => h.price);
+        const prices = this.marketHistory.toArray().map((h) => h.price);
         const mean = this.calculateMean(prices);
         const stdDev = this.calculateStdDev(prices, mean);
         const zScore = Math.abs(snapshot.price - mean) / (stdDev || 1);
@@ -643,11 +658,15 @@ export class AnomalyDetector extends EventEmitter {
                 recommendedAction:
                     zScore > 5 ? "close_positions" : "reduce_size",
                 details: {
+                    confidence: Math.min(zScore / 5, 1),
                     mean,
                     stdDev,
                     zScore,
-                    price: snapshot.price,
                     percentMove: ((snapshot.price - mean) / mean) * 100,
+                    rationale: {
+                        zScoreAbove3: zScore > 3,
+                        zScoreAbove5: zScore > 5,
+                    },
                 },
             });
         }
@@ -659,22 +678,24 @@ export class AnomalyDetector extends EventEmitter {
     ): void {
         if (!spreadBps) return;
 
-        // Check for abnormally wide spreads
-        if (spreadBps > this.normalSpreadBps * 5) {
-            // Also check if passive liquidity is thin
-            const totalPassive =
-                snapshot.zonePassiveBidVolume + snapshot.zonePassiveAskVolume;
-            const avgPassive =
-                this.marketHistory
-                    .slice(-20)
-                    .reduce(
-                        (sum, h) =>
-                            sum +
-                            h.zonePassiveBidVolume +
-                            h.zonePassiveAskVolume,
-                        0
-                    ) / 20;
+        const now = Date.now();
+        const totalPassive =
+            snapshot.zonePassiveBidVolume + snapshot.zonePassiveAskVolume;
+        const avgPassive =
+            this.marketHistory
+                .toArray()
+                .filter((s) => now - s.timestamp < 120_000)
+                .slice(-20)
+                .reduce(
+                    (sum, h) =>
+                        sum + h.zonePassiveBidVolume + h.zonePassiveAskVolume,
+                    0
+                ) / 20;
+        const liquidityRatio = totalPassive / (avgPassive || 1);
+        // Confidence: scales with how much spread exceeds normal threshold
+        const confidence = Math.min(1, spreadBps / (this.normalSpreadBps * 15));
 
+        if (spreadBps > this.normalSpreadBps * 5) {
             this.emitAnomaly({
                 type: "liquidity_void",
                 detectedAt: snapshot.timestamp,
@@ -686,11 +707,17 @@ export class AnomalyDetector extends EventEmitter {
                 },
                 recommendedAction: "pause",
                 details: {
+                    confidence,
                     spreadBps,
                     normalSpreadBps: this.normalSpreadBps,
                     currentPassiveLiquidity: totalPassive,
                     averagePassiveLiquidity: avgPassive,
-                    liquidityRatio: totalPassive / (avgPassive || 1),
+                    liquidityRatio,
+                    rationale: {
+                        spreadThreshold: this.normalSpreadBps * 5,
+                        actualSpread: spreadBps,
+                        passiveLiquidityDrop: liquidityRatio < 0.3,
+                    },
                 },
             });
         }
@@ -703,6 +730,8 @@ export class AnomalyDetector extends EventEmitter {
 
         if (totalVolume > 0) {
             const imbalance = (bidVolume - askVolume) / totalVolume;
+            // Confidence: scales with normalized absolute imbalance
+            const confidence = Math.min(1, Math.abs(imbalance) / 1.2);
 
             if (Math.abs(imbalance) > this.volumeImbalanceThreshold) {
                 this.emitAnomaly({
@@ -716,11 +745,18 @@ export class AnomalyDetector extends EventEmitter {
                     recommendedAction:
                         imbalance > 0 ? "consider_long" : "consider_short",
                     details: {
+                        confidence,
                         imbalance,
                         bidVolume,
                         askVolume,
                         direction: imbalance > 0 ? "bid_heavy" : "ask_heavy",
                         imbalancePercent: imbalance * 100,
+                        rationale: {
+                            threshold: this.volumeImbalanceThreshold,
+                            actual: Math.abs(imbalance),
+                            direction:
+                                imbalance > 0 ? "bid_heavy" : "ask_heavy",
+                        },
                     },
                 });
             }
@@ -729,6 +765,7 @@ export class AnomalyDetector extends EventEmitter {
 
     private checkFlowImbalance(snapshot: MarketSnapshot): void {
         const flowMetrics = this.calculateFlowMetrics();
+        const confidence = Math.min(1, Math.abs(flowMetrics.flowImbalance));
 
         if (
             Math.abs(flowMetrics.flowImbalance) > this.volumeImbalanceThreshold
@@ -749,108 +786,328 @@ export class AnomalyDetector extends EventEmitter {
                         ? "momentum_long"
                         : "momentum_short",
                 details: {
+                    confidence,
                     ...flowMetrics,
                     windowMs: this.flowWindowMs,
                     direction:
                         flowMetrics.netFlow > 0
                             ? "buy_pressure"
                             : "sell_pressure",
+                    rationale: {
+                        threshold: this.volumeImbalanceThreshold,
+                        actual: Math.abs(flowMetrics.flowImbalance),
+                        direction:
+                            flowMetrics.netFlow > 0
+                                ? "buy_pressure"
+                                : "sell_pressure",
+                    },
                 },
             });
         }
     }
 
     private checkAbsorption(snapshot: MarketSnapshot): void {
-        // Absorption: high aggressive volume but price doesn't move
-        const recentSnapshots = this.marketHistory.slice(-10);
+        const now = Date.now();
+        const recentSnapshots = this.marketHistory
+            .toArray()
+            .filter((s) => now - s.timestamp < 120_000)
+            .slice(-10);
         if (recentSnapshots.length < 10) return;
+
+        const confidence = this.calculateAbsorptionConfidence(
+            snapshot,
+            recentSnapshots
+        );
+        if (confidence < 0.5) return;
 
         const totalAggressive = recentSnapshots.reduce(
             (sum, s) => sum + s.aggressiveVolume,
             0
         );
+        const passiveVolume =
+            snapshot.aggressiveSide === "buy"
+                ? snapshot.zonePassiveAskVolume
+                : snapshot.zonePassiveBidVolume;
+        const absorptionRatio = passiveVolume / (totalAggressive || 1);
+
         const priceRange =
             Math.max(...recentSnapshots.map((s) => s.price)) -
             Math.min(...recentSnapshots.map((s) => s.price));
         const avgPrice = this.calculateMean(
             recentSnapshots.map((s) => s.price)
         );
-        const priceRangePercent = (priceRange / avgPrice) * 100;
+        const priceRangePercent = (priceRange / (avgPrice || 1)) * 100;
 
-        // High volume but tiny price movement
-        if (priceRangePercent < 0.05 && totalAggressive > 0) {
-            const passiveVolume =
-                snapshot.aggressiveSide === "buy"
-                    ? snapshot.zonePassiveAskVolume
-                    : snapshot.zonePassiveBidVolume;
+        this.emitAnomaly({
+            type: "absorption",
+            detectedAt: snapshot.timestamp,
+            severity:
+                confidence > 0.8
+                    ? "high"
+                    : confidence > 0.65
+                      ? "medium"
+                      : "info",
+            affectedPriceRange: {
+                min: Math.min(...recentSnapshots.map((s) => s.price)),
+                max: Math.max(...recentSnapshots.map((s) => s.price)),
+            },
+            recommendedAction:
+                snapshot.aggressiveSide === "buy" ? "fade_rally" : "fade_dip",
+            details: {
+                confidence,
+                aggressiveVolume: totalAggressive,
+                passiveVolume,
+                absorptionRatio,
+                priceRangePercent,
+                rationale: this.absorptionRationale, // set by scoring function
+            },
+        });
+    }
 
-            const absorptionRatio = passiveVolume / totalAggressive;
+    // Multi-factor confidence model for absorption
+    private calculateAbsorptionConfidence(
+        snapshot: MarketSnapshot,
+        recentSnapshots: MarketSnapshot[]
+    ): number {
+        let confidence = 0;
+        const rationale: Record<string, boolean | number> = {};
 
-            if (absorptionRatio > this.absorptionRatioThreshold) {
-                this.emitAnomaly({
-                    type: "absorption",
-                    detectedAt: snapshot.timestamp,
-                    severity: absorptionRatio > 5 ? "high" : "medium",
-                    affectedPriceRange: {
-                        min: Math.min(...recentSnapshots.map((s) => s.price)),
-                        max: Math.max(...recentSnapshots.map((s) => s.price)),
-                    },
-                    recommendedAction:
-                        snapshot.aggressiveSide === "buy"
-                            ? "fade_rally"
-                            : "fade_dip",
-                    details: {
-                        aggressiveVolume: totalAggressive,
-                        passiveVolume,
-                        absorptionRatio,
-                        priceRangePercent,
-                        absorbingSide:
-                            snapshot.aggressiveSide === "buy"
-                                ? "sellers"
-                                : "buyers",
-                    },
-                });
-            }
-        }
+        // 1. Aggressive volume relative to average
+        const avgAggressive = this.calculateMean(
+            recentSnapshots.map((s) => s.aggressiveVolume)
+        );
+        const highAggressive = snapshot.aggressiveVolume > avgAggressive * 2.5;
+        if (highAggressive) confidence += 0.2;
+        rationale.highAggressive = highAggressive;
+
+        // 2. Minimal price movement (tight range in last N)
+        const priceRange =
+            Math.max(...recentSnapshots.map((s) => s.price)) -
+            Math.min(...recentSnapshots.map((s) => s.price));
+        const avgPrice = this.calculateMean(
+            recentSnapshots.map((s) => s.price)
+        );
+        const tightRange = avgPrice > 0 && priceRange / avgPrice < 0.07 / 100;
+        if (tightRange) confidence += 0.2;
+        rationale.tightRange = tightRange;
+        rationale.priceRangePercent = (priceRange / (avgPrice || 1)) * 100;
+
+        // 3. High passive/zone volume vs. aggressive
+        const totalAggressive = recentSnapshots.reduce(
+            (sum, s) => sum + s.aggressiveVolume,
+            0
+        );
+        const passiveVolume =
+            snapshot.aggressiveSide === "buy"
+                ? snapshot.zonePassiveAskVolume
+                : snapshot.zonePassiveBidVolume;
+        const absorptionRatio = passiveVolume / (totalAggressive || 1);
+        const highAbsorptionRatio =
+            absorptionRatio > this.absorptionRatioThreshold;
+        if (highAbsorptionRatio) confidence += 0.25;
+        rationale.absorptionRatio = absorptionRatio;
+        rationale.highAbsorptionRatio = highAbsorptionRatio;
+
+        // 4. Flow imbalance supports absorption
+        const flow = this.calculateFlowMetrics();
+        const flowSupportsAbsorption =
+            Math.abs(flow.flowImbalance) > 0.7 &&
+            ((snapshot.aggressiveSide === "buy" && flow.flowImbalance < 0) ||
+                (snapshot.aggressiveSide === "sell" && flow.flowImbalance > 0));
+        if (flowSupportsAbsorption) confidence += 0.2;
+        rationale.flowImbalance = flow.flowImbalance;
+        rationale.flowSupportsAbsorption = flowSupportsAbsorption;
+
+        // 5. Recent refills/iceberg (not implemented—placeholder)
+        // Optionally, analyze iceberg/zone refill confidence
+
+        this.absorptionRationale = rationale;
+        return Math.min(1, confidence);
     }
 
     private checkExhaustion(snapshot: MarketSnapshot): void {
-        // Exhaustion: aggressive volume drying up after a move
-        const recentFlow = this.recentFlowWindow.slice(-20);
-        if (recentFlow.length < 20) return;
+        const now = Date.now();
+        const flows = this.recentFlowWindow
+            .toArray()
+            .filter((f) => now - f.time < 120_000); // 2 min window
 
-        const firstHalf = recentFlow.slice(0, 10);
-        const secondHalf = recentFlow.slice(10);
+        if (flows.length < 20) return;
 
-        const firstVolume = firstHalf.reduce((sum, f) => sum + f.volume, 0);
-        const secondVolume = secondHalf.reduce((sum, f) => sum + f.volume, 0);
+        const confidence = this.calculateExhaustionConfidence(snapshot, flows);
+        if (confidence < 0.5) return;
 
-        if (firstVolume > 0 && secondVolume / firstVolume < 0.3) {
-            // Volume dried up by 70%+
-            this.emitAnomaly({
-                type: "exhaustion",
-                detectedAt: snapshot.timestamp,
-                severity: secondVolume / firstVolume < 0.1 ? "high" : "medium",
-                affectedPriceRange: {
-                    min: snapshot.price * 0.998,
-                    max: snapshot.price * 1.002,
-                },
-                recommendedAction: "prepare_reversal",
-                details: {
-                    firstHalfVolume: firstVolume,
-                    secondHalfVolume: secondVolume,
-                    volumeDeclinePercent:
-                        ((firstVolume - secondVolume) / firstVolume) * 100,
-                    dominantSide: this.getDominantFlowSide(),
-                },
-            });
+        const firstHalf = flows.slice(0, 10).reduce((a, b) => a + b.volume, 0);
+        const secondHalf = flows.slice(10).reduce((a, b) => a + b.volume, 0);
+
+        this.emitAnomaly({
+            type: "exhaustion",
+            detectedAt: snapshot.timestamp,
+            severity:
+                confidence > 0.8
+                    ? "high"
+                    : confidence > 0.65
+                      ? "medium"
+                      : "info",
+            affectedPriceRange: {
+                min: snapshot.price * 0.998,
+                max: snapshot.price * 1.002,
+            },
+            recommendedAction: "prepare_reversal",
+            details: {
+                confidence,
+                firstHalfVolume: firstHalf,
+                secondHalfVolume: secondHalf,
+                volumeDeclinePercent:
+                    firstHalf > 0
+                        ? ((firstHalf - secondHalf) / firstHalf) * 100
+                        : 0,
+                dominantSide: this.getDominantFlowSide(),
+                rationale: this.exhaustionRationale,
+            },
+        });
+    }
+
+    // Multi-factor confidence model for exhaustion
+    private calculateExhaustionConfidence(
+        snapshot: MarketSnapshot,
+        flows: { volume: number; side: "buy" | "sell"; time: number }[]
+    ): number {
+        let confidence = 0;
+        const rationale: Record<string, boolean | number> = {};
+
+        // 1. Sharp drop in recent aggressive volume
+        if (flows.length < 20) return 0;
+        const firstHalf = flows.slice(0, 10).reduce((a, b) => a + b.volume, 0);
+        const secondHalf = flows.slice(10).reduce((a, b) => a + b.volume, 0);
+        const volumeDrop = firstHalf > 0 && secondHalf / firstHalf < 0.35;
+        if (volumeDrop) confidence += 0.35;
+        rationale.volumeDrop = volumeDrop;
+        rationale.firstHalfVolume = firstHalf;
+        rationale.secondHalfVolume = secondHalf;
+
+        // 2. Shrinking order sizes (mean of last 10 < 60% of rolling mean)
+        const now = Date.now();
+        const arr = this.orderSizeHistory
+            .toArray()
+            .filter((o) => now - o.time < 120_000);
+        const avgSize = this.calculateMean(arr.map((o) => o.size));
+        const last10 = arr.slice(-10).map((o) => o.size);
+        const recentAvgSize = this.calculateMean(last10);
+        const shrinkingOrders = recentAvgSize < avgSize * 0.6;
+        if (shrinkingOrders) confidence += 0.2;
+        rationale.shrinkingOrders = shrinkingOrders;
+        rationale.avgSize = avgSize;
+        rationale.recentAvgSize = recentAvgSize;
+
+        // 3. Price at/after trend stall or reversal (simple: price flat after move)
+        // Placeholder: optionally implement advanced price action filter
+
+        // 4. Surge in passive resistance (optional)
+        const passiveVolume =
+            snapshot.aggressiveSide === "buy"
+                ? snapshot.zonePassiveAskVolume
+                : snapshot.zonePassiveBidVolume;
+        const strongResistance = passiveVolume > avgSize * 2;
+        if (strongResistance) confidence += 0.2;
+        rationale.strongResistance = strongResistance;
+        rationale.passiveVolume = passiveVolume;
+
+        // 5. Flow reverses (netFlow flips sign)
+        const flow = this.calculateFlowMetrics();
+        const netFlowFlip =
+            Math.sign(flow.netFlow) !== Math.sign(firstHalf - secondHalf) &&
+            flow.netFlow !== 0;
+        if (netFlowFlip) confidence += 0.15;
+        rationale.netFlow = flow.netFlow;
+        rationale.netFlowFlip = netFlowFlip;
+
+        this.exhaustionRationale = rationale;
+        return Math.min(1, confidence);
+    }
+
+    private checkWhaleActivity(snapshot: MarketSnapshot): void {
+        // Use the rolling window of order sizes to establish quantiles
+        const now = Date.now();
+        const arr = this.orderSizeHistory
+            .toArray()
+            .filter((o) => now - o.time < 300_000);
+        if (arr.length < 100) return; // Require sufficient sample size
+
+        // Get all sizes, sorted for percentile calculation
+        const sizes = arr.map((o) => o.size).sort((a, b) => a - b);
+
+        // 99th, 99.5th, and 99.9th percentile thresholds
+        const p99 = sizes[Math.floor(sizes.length * 0.99)];
+        const p995 = sizes[Math.floor(sizes.length * 0.995)];
+        const p999 = sizes[Math.floor(sizes.length * 0.999)];
+
+        // The candidate order size for whale detection
+        const candidateSize = snapshot.aggressiveVolume;
+
+        // Determine percentile thresholds met
+        let confidence = 0;
+        let whaleLevel = 0;
+        if (candidateSize >= p999) {
+            confidence = 1.0;
+            whaleLevel = 999;
+        } else if (candidateSize >= p995) {
+            confidence = 0.85;
+            whaleLevel = 995;
+        } else if (candidateSize >= p99) {
+            confidence = 0.7;
+            whaleLevel = 99;
         }
+
+        // Cluster detection: are there other whale trades in the last 30?
+        const recentLarge = arr.slice(-30).filter((o) => o.size >= p99).length;
+        if (recentLarge > 3 && confidence > 0.7) confidence += 0.1; // boost if whale cluster
+
+        if (confidence < 0.7) return; // Only emit for real whales
+
+        this.emitAnomaly({
+            type: "whale_activity",
+            detectedAt: snapshot.timestamp,
+            severity:
+                confidence > 0.95
+                    ? "critical"
+                    : confidence > 0.85
+                      ? "high"
+                      : "medium",
+            affectedPriceRange: {
+                min: snapshot.price * 0.997,
+                max: snapshot.price * 1.003,
+            },
+            recommendedAction:
+                snapshot.aggressiveSide === "sell"
+                    ? "watch_support"
+                    : "watch_resistance",
+            details: {
+                confidence,
+                whaleLevel, // 99, 995, or 999 for diagnostic clarity
+                candidateSize,
+                p99,
+                p995,
+                p999,
+                percentile: this.calculatePercentileRank(candidateSize),
+                recentLargeWhales: recentLarge,
+                rationale: {
+                    isP999: candidateSize >= p999,
+                    isP995: candidateSize >= p995,
+                    isP99: candidateSize >= p99,
+                    cluster: recentLarge > 3,
+                },
+            },
+        });
     }
 
     private checkMomentumIgnition(snapshot: MarketSnapshot): void {
         // Sudden surge in directional flow
-        const last5 = this.recentFlowWindow.slice(-5);
-        const previous15 = this.recentFlowWindow.slice(-20, -5);
+        const now = Date.now();
+        const flows = this.recentFlowWindow
+            .toArray()
+            .filter((f) => now - f.time < 120_000);
+        const last5 = flows.slice(-5);
+        const previous15 = flows.slice(-20, -5);
 
         if (last5.length < 5 || previous15.length < 15) return;
 
@@ -883,11 +1140,12 @@ export class AnomalyDetector extends EventEmitter {
     }
 
     private checkApiGap(snapshot: MarketSnapshot): void {
-        const len = this.marketHistory.length;
+        const arr = this.marketHistory.toArray();
+        const len = arr.length;
         if (len < 2) return;
-
-        const timeGap =
-            snapshot.timestamp - this.marketHistory[len - 2].timestamp;
+        const timeGap = snapshot.timestamp - arr[len - 2].timestamp;
+        // Confidence: larger gaps = higher confidence (normalize 30s = 1)
+        const confidence = Math.min(1, timeGap / 30000);
 
         if (timeGap > 5000) {
             this.emitAnomaly({
@@ -900,21 +1158,32 @@ export class AnomalyDetector extends EventEmitter {
                 },
                 recommendedAction: timeGap > 30000 ? "pause" : "continue",
                 details: {
+                    confidence,
                     timeGapMs: timeGap,
                     timeGapSeconds: timeGap / 1000,
+                    rationale: {
+                        thresholdMs: 5000,
+                        actualMs: timeGap,
+                        severe: timeGap > 30000,
+                    },
                 },
             });
         }
     }
 
     private checkExtremeVolatility(snapshot: MarketSnapshot): void {
-        const prices = this.marketHistory.map((h) => h.price);
+        const now = Date.now();
+        const recentPrices = this.marketHistory
+            .toArray()
+            .filter((s) => now - s.timestamp < 120_000)
+            .map((h) => h.price);
+
         const returns: number[] = [];
-
-        for (let i = 1; i < prices.length; i++) {
-            returns.push((prices[i] - prices[i - 1]) / prices[i - 1]);
+        for (let i = 1; i < recentPrices.length; i++) {
+            returns.push(
+                (recentPrices[i] - recentPrices[i - 1]) / recentPrices[i - 1]
+            );
         }
-
         const recentReturns = returns.slice(-20);
         const allReturnsStdDev = this.calculateStdDev(
             returns,
@@ -947,56 +1216,73 @@ export class AnomalyDetector extends EventEmitter {
         }
     }
 
-    private checkSpoofing(trade: EnrichedTradeEvent): void {
+    private checkSpoofing(snapshot: MarketSnapshot): void {
         if (!this.spoofingDetector) return;
 
-        const side: "buy" | "sell" = trade.isMakerSell ? "buy" : "sell";
+        const side: "buy" | "sell" = snapshot.aggressiveSide;
+        const price = snapshot.price;
+        const tradeTime = snapshot.timestamp;
 
+        // Provide function to get aggressive volume for a price/time window, as required by detector
         const getAggressiveVolume = (
             bandPrice: number,
             from: number,
             to: number
         ): number => {
+            // Use marketHistory as your trade tape
             return this.marketHistory
+                .toArray()
                 .filter(
                     (s) =>
-                        s.price === bandPrice &&
+                        this.roundToTick(s.price) ===
+                            this.roundToTick(bandPrice) &&
                         s.timestamp >= from &&
                         s.timestamp <= to
                 )
                 .reduce((sum, s) => sum + s.aggressiveVolume, 0);
         };
 
+        // Check for spoof
         const spoofed = this.spoofingDetector.wasSpoofed(
-            trade.price,
+            price,
             side,
-            trade.timestamp,
+            tradeTime,
             getAggressiveVolume
         );
 
-        if (spoofed) {
-            this.emitAnomaly({
-                type: "spoofing",
-                detectedAt: trade.timestamp,
-                severity: "high",
-                affectedPriceRange: { min: trade.price, max: trade.price },
-                recommendedAction: "pause",
-                details: {
-                    price: trade.price,
-                    side,
-                    passiveVolumeBefore:
-                        trade.passiveBidVolume + trade.passiveAskVolume,
-                },
-            });
-        }
+        if (!spoofed) return;
+
+        // Optionally, you can add more meta/confidence data
+        // If you want details of the spoofed event, you could extend your detector to return the event, but for now, stick to binary + local stats
+
+        this.emitAnomaly({
+            type: "spoofing",
+            detectedAt: tradeTime,
+            severity: "high", // If you want to be more dynamic, add confidence in your detector!
+            affectedPriceRange: { min: price, max: price },
+            recommendedAction: "pause",
+            details: {
+                price,
+                side,
+                // If you want more, patch SpoofingDetector to return maxSpoofEvent or meta
+                passiveVolumeBefore:
+                    snapshot.passiveBidVolume + snapshot.passiveAskVolume,
+                rationale: "Detected by SpoofingDetector wall cancel logic",
+            },
+        });
     }
 
     // Helper methods
     private calculateFlowMetrics(): FlowMetrics {
+        const now = Date.now();
         let buyVolume = 0;
         let sellVolume = 0;
 
-        for (const flow of this.recentFlowWindow) {
+        const recentFlows = this.recentFlowWindow
+            .toArray()
+            .filter((f) => now - f.time < this.flowWindowMs);
+
+        for (const flow of recentFlows) {
             if (flow.side === "buy") {
                 buyVolume += flow.volume;
             } else {
@@ -1073,9 +1359,9 @@ export class AnomalyDetector extends EventEmitter {
         };
     } {
         const recentTime = Date.now() - 300000; // 5 minutes
-        const recentSnapshots = this.marketHistory.filter(
-            (s) => s.timestamp > recentTime
-        );
+        const recentSnapshots = this.marketHistory
+            .toArray()
+            .filter((s) => s.timestamp > recentTime);
 
         if (recentSnapshots.length < 10) {
             return {
@@ -1152,83 +1438,5 @@ export class AnomalyDetector extends EventEmitter {
                 volatility,
             },
         };
-    }
-
-    private checkPriceStability(price: number, windowMs: number): number {
-        const cutoff = Date.now() - windowMs;
-        const recent = this.marketHistory.filter((s) => s.timestamp > cutoff);
-        if (recent.length === 0) return 0;
-
-        const prices = recent.map((s) => s.price);
-        const mean = this.calculateMean(prices);
-        const stdDev = this.calculateStdDev(prices, mean);
-
-        return 1 - stdDev / mean;
-    }
-
-    private checkVolumeDecline(): number {
-        const recent = this.recentFlowWindow.slice(-20);
-        if (recent.length < 20) return 0;
-
-        const firstHalf = recent
-            .slice(0, 10)
-            .reduce((sum, f) => sum + f.volume, 0);
-        const secondHalf = recent
-            .slice(10)
-            .reduce((sum, f) => sum + f.volume, 0);
-
-        return firstHalf > 0 ? 1 - secondHalf / firstHalf : 0;
-    }
-
-    private checkIfAtResistance(price: number): boolean {
-        // Check if price is at a high volume node from history
-        const priceHistory = this.priceVolumeHistory.get(
-            Math.round(price * 100) / 100
-        );
-        if (!priceHistory) return false;
-
-        const avgVolume = this.getAverageVolumeAtPrice();
-        return priceHistory.volume > avgVolume * 2;
-    }
-
-    private getAverageVolume(): number {
-        if (this.marketHistory.length === 0) return 0;
-        return this.calculateMean(
-            this.marketHistory.map((s) => s.aggressiveVolume)
-        );
-    }
-
-    private getAverageVolumeAtPrice(): number {
-        let total = 0;
-        let count = 0;
-        for (const data of this.priceVolumeHistory.values()) {
-            total += data.volume;
-            count++;
-        }
-        return count > 0 ? total / count : 0;
-    }
-
-    private getAverageTradeSize(): number {
-        return this.calculateMean(this.orderSizeHistory.map((o) => o.size));
-    }
-
-    private getCurrentSpreadBps(): number | undefined {
-        if (this.currentBestBid > 0 && this.currentBestAsk > 0) {
-            const mid = (this.currentBestBid + this.currentBestAsk) / 2;
-            return ((this.currentBestAsk - this.currentBestBid) / mid) * 10000;
-        }
-        return undefined;
-    }
-
-    private calculateRecentVolatility(): number {
-        const prices = this.marketHistory.slice(-30).map((s) => s.price);
-        if (prices.length < 2) return 0;
-
-        const returns: number[] = [];
-        for (let i = 1; i < prices.length; i++) {
-            returns.push((prices[i] - prices[i - 1]) / prices[i - 1]);
-        }
-
-        return this.calculateStdDev(returns, this.calculateMean(returns));
     }
 }

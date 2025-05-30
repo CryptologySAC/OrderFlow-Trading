@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import { Logger } from "../../infrastructure/logger.js";
 import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../../services/signalLogger.js";
+import { RollingWindow } from "../../utils/rollingWindow.js";
 //import type { EnrichedTradeEvent } from "../../types/marketEvents.js";
 
 import {
@@ -28,47 +29,6 @@ import type {
     DetectorFeatures,
     DetectorCallback,
 } from "../interfaces/detectorInterfaces.js";
-
-// --- Strict rolling window utility ---
-export class RollingWindow {
-    private buffer: number[];
-    private pointer: number = 0;
-    private filled: boolean = false;
-
-    constructor(private size: number) {
-        this.buffer = new Array(size).fill(0) as number[];
-    }
-
-    public push(value: number): void {
-        this.buffer[this.pointer] = value;
-        this.pointer = (this.pointer + 1) % this.size;
-        if (this.pointer === 0) this.filled = true;
-    }
-
-    public mean(): number {
-        const count = this.filled ? this.size : this.pointer;
-        if (count === 0) return 0;
-        return this.buffer.slice(0, count).reduce((a, b) => a + b, 0) / count;
-    }
-
-    public sum(): number {
-        const count = this.filled ? this.size : this.pointer;
-        if (count === 0) return 0;
-        return this.buffer.slice(0, count).reduce((a, b) => a + b, 0);
-    }
-
-    public min(): number {
-        const count = this.filled ? this.size : this.pointer;
-        if (count === 0) return 0;
-        return Math.min(...this.buffer.slice(0, count));
-    }
-
-    public clear(): void {
-        this.pointer = 0;
-        this.filled = false;
-        this.buffer.fill(0);
-    }
-}
 
 /**
  * Abstract base class for orderflow detectors

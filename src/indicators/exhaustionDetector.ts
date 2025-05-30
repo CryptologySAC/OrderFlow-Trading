@@ -2,7 +2,7 @@
 
 import { randomUUID } from "crypto";
 import { SpotWebsocketStreams } from "@binance/spot";
-import { BaseDetector, RollingWindow } from "./base/baseDetector.js";
+import { BaseDetector } from "./base/baseDetector.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
@@ -14,6 +14,7 @@ import type {
     BaseDetectorSettings,
     DetectorFeatures,
 } from "./interfaces/detectorInterfaces.js";
+import { RollingWindow } from "../utils/rollingWindow.js";
 
 export interface ExhaustionSettings extends BaseDetectorSettings {
     features?: ExhaustionFeatures;

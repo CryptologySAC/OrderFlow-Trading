@@ -2,11 +2,12 @@
 
 import { randomUUID } from "crypto";
 import { SpotWebsocketStreams } from "@binance/spot";
-import { BaseDetector, RollingWindow } from "./base/baseDetector.js";
+import { BaseDetector } from "./base/baseDetector.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
+import { RollingWindow } from "../utils/rollingWindow.js";
 
 import type { TradeData, PendingDetection } from "../utils/utils.js";
 import type {
