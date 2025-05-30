@@ -82,18 +82,167 @@ detector.onEnrichedTrade(enrichedTradeEvent);
 
 ---
 
-## Parameters & Settings
+## Detector Settings — Exact Explanation
 
-| Name                  | Type      | Description                                             | Typical Value     |
-| --------------------- | --------- | ------------------------------------------------------- | ----------------- |
-| `windowMs`            | `number`  | Trade lookback window (ms) for rolling sum              | `900000` (15 min) |
-| `minDurationMs`       | `number`  | Minimum zone life to qualify (ms)                       | `300000` (5 min)  |
-| `zoneSize`            | `number`  | Price zone width (in quote currency, e.g., \$0.02)      | `0.02`            |
-| `minRatio`            | `number`  | Passive/aggressive volume ratio threshold               | `1.2`             |
-| `minRecentActivityMs` | `number`  | Max staleness for recent trade in zone (ms)             | `60000` (1 min)   |
-| `minAggVolume`        | `number`  | Minimum taker (aggressive) volume to qualify (per zone) | `5`               |
-| `trackSide`           | `boolean` | Track bid/ask sides separately                          | `true`            |
-| `pricePrecision`      | `number`  | Decimal places for zone rounding                        | `2`               |
+Each setting in `AccumulationDetector` controls a **specific aspect of how the detector interprets orderflow** to identify real accumulation. Below is a detailed breakdown of each parameter, its exact effect, and practical examples:
+
+| Setting               | Type    | Description                                                | Example Value |
+| --------------------- | ------- | ---------------------------------------------------------- | ------------- |
+| `windowMs`            | number  | Rolling lookback window for trade volume & timestamps (ms) | `900_000`     |
+| `minDurationMs`       | number  | Minimum time (ms) a zone must persist to qualify           | `300_000`     |
+| `zoneSize`            | number  | Price width for grouping trades into zones                 | `0.02`        |
+| `minRatio`            | number  | Passive/aggressive volume ratio threshold for accumulation | `1.2`         |
+| `minRecentActivityMs` | number  | Max staleness allowed for last trade in zone (ms)          | `60_000`      |
+| `minAggVolume`        | number  | Minimum total aggressive volume to qualify (per zone)      | `5`           |
+| `trackSide`           | boolean | Track bid/ask zones separately                             | `true`        |
+| `pricePrecision`      | number  | Number of decimals for zone key rounding                   | `2`           |
+
+### Detailed Setting Behavior
+
+#### 1. `windowMs`
+
+* **Type:** `number` (milliseconds)
+* **Purpose:**
+
+  * Sets the **rolling lookback window** for trade volume and timestamps considered when evaluating a zone.
+* **Effect:**
+
+  * Only trades within the last `windowMs` (e.g., 900,000 ms = 15 minutes) are used to sum aggressive (taker) volume for a given price zone.
+* **Example:**
+
+  * If `windowMs = 900_000`, a large sell that occurred 20 minutes ago is ignored in the ratio; only the last 15 minutes count.
+
+#### 2. `minDurationMs`
+
+* **Type:** `number` (milliseconds)
+* **Purpose:**
+
+  * **Minimum time** a price zone must be tracked (from first trade to now) before it can qualify as an accumulation zone.
+* **Effect:**
+
+  * Prevents "flash" events from triggering a signal; **accumulation must persist for at least this duration**.
+* **Example:**
+
+  * If `minDurationMs = 300_000`, zone must be accumulating for at least 5 minutes.
+
+#### 3. `zoneSize`
+
+* **Type:** `number` (e.g., `0.02`)
+* **Purpose:**
+
+  * **Width of each price zone**, in quote currency (e.g., \$0.02 for LTCUSDT).
+* **Effect:**
+
+  * Trades are grouped into discrete zones by rounding price. Controls the **granularity of detection**.
+* **Example:**
+
+  * If `zoneSize = 0.02`, prices 81.23 and 81.24 will be grouped in the same zone (e.g., 81.24).
+
+#### 4. `minRatio`
+
+* **Type:** `number` (e.g., `1.2`)
+* **Purpose:**
+
+  * **Threshold ratio** of passive (resting limit order) volume over aggressive (taker) volume required to call it accumulation.
+* **Effect:**
+
+  * Passive volume in the zone must be at least `minRatio` × aggressive volume for a signal.
+* **Example:**
+
+  * If `minRatio = 1.2` and aggressive volume = 10, passive must be ≥ 12.
+
+#### 5. `minRecentActivityMs`
+
+* **Type:** `number` (milliseconds)
+* **Purpose:**
+
+  * **Maximum staleness** allowed for the last trade in the zone.
+* **Effect:**
+
+  * Ensures zone is still “live”; if no trades in the last `minRecentActivityMs`, signal is suppressed.
+* **Example:**
+
+  * If `minRecentActivityMs = 60_000`, at least one trade in the last 60 seconds is required for detection.
+
+#### 6. `minAggVolume`
+
+* **Type:** `number` (e.g., `5`)
+* **Purpose:**
+
+  * **Minimum total aggressive volume** in the zone (over the window) to qualify.
+* **Effect:**
+
+  * Avoids signaling on noise, e.g., very low-volume “accumulation” that isn’t significant.
+* **Example:**
+
+  * If `minAggVolume = 5`, need ≥ 5 units (LTC) of aggressive volume in the zone to consider it.
+
+#### 7. `trackSide`
+
+* **Type:** `boolean`
+* **Purpose:**
+
+  * Whether to **track accumulation for bid and ask sides separately** (`true`) or aggregate both (`false`).
+* **Effect:**
+
+  * If `true`, you can distinguish **buy-side (bid) accumulation** from **sell-side (ask/distribution)**; otherwise, only the combined effect is tracked.
+* **Example:**
+
+  * `trackSide = true` → You get separate events for accumulation at bids and asks.
+
+#### 8. `pricePrecision`
+
+* **Type:** `number` (e.g., `2`)
+* **Purpose:**
+
+  * **Number of decimals** to round price when creating zone keys.
+* **Effect:**
+
+  * Ensures consistency in grouping trades into zones and avoids floating-point errors.
+* **Example:**
+
+  * With `pricePrecision = 2`, a price of 81.2367 becomes 81.24.
+
+---
+
+### Setting Summary Table
+
+| Setting               | Controls...                                  | Too Low Means...                | Too High Means...                   |
+| --------------------- | -------------------------------------------- | ------------------------------- | ----------------------------------- |
+| `windowMs`            | How far back to look for trades in zone      | Too reactive, signals on noise  | Misses recent regime changes        |
+| `minDurationMs`       | How long zone must persist to signal         | False/weak signals              | Misses fast/real accumulations      |
+| `zoneSize`            | Price step per zone                          | Too granular (noise)            | Too coarse (misses details)         |
+| `minRatio`            | Strength of passive over aggressive required | Signals on weak absorption      | Only the strongest, rarest events   |
+| `minRecentActivityMs` | Max allowed time since last trade in zone    | Old zones can trigger           | Misses slow/steady accumulations    |
+| `minAggVolume`        | Minimum aggressive volume required           | Signals on micro/noise events   | Misses thin market signals          |
+| `trackSide`           | Split buy/sell or combine                    | —                               | —                                   |
+| `pricePrecision`      | Rounding for zone key                        | Risk of floating point mismatch | Too coarse, possible grouping error |
+
+---
+
+## Defaults (Recommended for LTCUSDT Spot)
+
+| Parameter             | Value  | Rationale                                           |
+| --------------------- | ------ | --------------------------------------------------- |
+| `windowMs`            | 900000 | Captures multi-minute accumulation phases           |
+| `minDurationMs`       | 300000 | 5+ minute holding for credible accumulation         |
+| `zoneSize`            | 0.02   | Matches fine-grained order book steps for LTCUSDT   |
+| `minRatio`            | 1.2    | Avoids weak/noise absorption, favors clear stacking |
+| `minRecentActivityMs` | 60000  | Ensures zone is currently active                    |
+| `minAggVolume`        | 5      | Filters out low-volume chop                         |
+| `trackSide`           | true   | Enables detection of buy vs. sell accumulation      |
+| `pricePrecision`      | 2      | Matches tick size                                   |
+
+---
+
+### Practical Tuning Tips
+
+* **For volatile, active markets:**
+  Lower `minDurationMs`, `windowMs`, and `zoneSize` for more sensitivity.
+* **For thin, choppy markets:**
+  Raise `minAggVolume` and `minRatio` to reduce noise.
+* **To catch early, strong accumulation:**
+  Lower `minDurationMs` but keep `minRatio` firm.
 
 ---
 
@@ -115,21 +264,6 @@ detector.onEnrichedTrade(enrichedTradeEvent);
    * `zone` (price)
    * `ratio` (passive/aggressive)
 5. **Cleans up old/inactive zones to maintain memory efficiency.**
-
----
-
-## Defaults (Recommended for LTCUSDT Spot)
-
-| Parameter             | Value  | Rationale                                           |
-| --------------------- | ------ | --------------------------------------------------- |
-| `windowMs`            | 900000 | Captures multi-minute accumulation phases           |
-| `minDurationMs`       | 300000 | 5+ minute holding for credible accumulation         |
-| `zoneSize`            | 0.02   | Matches fine-grained order book steps for LTCUSDT   |
-| `minRatio`            | 1.2    | Avoids weak/noise absorption, favors clear stacking |
-| `minRecentActivityMs` | 60000  | Ensures zone is currently active                    |
-| `minAggVolume`        | 5      | Filters out low-volume chop                         |
-| `trackSide`           | true   | Enables detection of buy vs. sell accumulation      |
-| `pricePrecision`      | 2      | Matches tick size                                   |
 
 ---
 
@@ -202,6 +336,7 @@ To export this documentation to PDF:
 
 * [x] Overview, features, and usage
 * [x] Parameter table and rationale
+* [x] Detailed setting explanations
 * [x] Detection and signal logic
 * [x] Practical trading advice
 * [x] Logging and extensibility
