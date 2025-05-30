@@ -32,7 +32,7 @@ import {
 import { SignalManager } from "./trading/signalManager.js";
 import { DataStreamManager } from "./trading/dataStreamManager.js";
 import { SignalCoordinator } from "./services/signalCoordinator.js";
-import { AnomalyDetector } from "./indicators/anomalyDetector.js";
+import { AnomalyDetector, AnomalyEvent } from "./services/anomalyDetector.js";
 import { AlertManager } from "./alerts/alertManager.js";
 
 // Indicator imports
@@ -45,7 +45,10 @@ import {
     type ExhaustionSettings,
 } from "./indicators/exhaustionDetector.js";
 import { SwingMetrics } from "./indicators/swingMetrics.js";
-import { AccumulationDetector } from "./indicators/accumulationDetector.js";
+import {
+    AccumulationDetector,
+    AccumulationDetectorConfig,
+} from "./indicators/accumulationDetector.js";
 import { MomentumDivergence } from "./indicators/momentumDivergence.js";
 import {
     DeltaCVDConfirmation,
@@ -145,6 +148,10 @@ export class OrderFlowDashboard {
         // Initialize coordinators
         this.signalCoordinator = dependencies.signalCoordinator;
         this.anomalyDetector = dependencies.anomalyDetector;
+        this.anomalyDetector.on("anomaly", (event: AnomalyEvent) => {
+            this.logger.warn("Market anomaly detected:", { event });
+            // TODO Take action (pause trading, alert, etc.)
+        });
 
         // Initialize managers
         this.wsManager = new WebSocketManager(
@@ -213,8 +220,11 @@ export class OrderFlowDashboard {
         );
 
         this.accumulationDetector = new AccumulationDetector(
-            dependencies.signalLogger,
-            Config.SYMBOL
+            Config.SYMBOL,
+            this.createAccumulationDetectorSettings(),
+            dependencies.logger,
+            dependencies.metricsCollector,
+            dependencies.signalLogger
         );
 
         // Setup event handlers
@@ -355,6 +365,20 @@ export class OrderFlowDashboard {
                 })
             );
         }
+    }
+
+    private createAccumulationDetectorSettings(): AccumulationDetectorConfig {
+        return {
+            windowMs: Config.ACCUMULATION_DETECTOR.WINDOW_MS,
+            minDurationMs: Config.ACCUMULATION_DETECTOR.MIN_DURATION_MS,
+            zoneSize: Config.ACCUMULATION_DETECTOR.ZONE_SIZE,
+            minRatio: Config.ACCUMULATION_DETECTOR.MIN_RATIO,
+            minRecentActivityMs:
+                Config.ACCUMULATION_DETECTOR.MIN_RECENT_ACTIVITY_MS,
+            minAggVolume: Config.ACCUMULATION_DETECTOR.MIN_AGG_VOLUME,
+            trackSide: Config.ACCUMULATION_DETECTOR.TRACK_SIDE,
+            pricePrecision: Config.ACCUMULATION_DETECTOR.PRICE_PRECISION,
+        };
     }
 
     private createDeltaCVDSettings(): DeltaCVDConfirmationSettings {
@@ -574,9 +598,11 @@ export class OrderFlowDashboard {
 
         try {
             // Update detectors
+            this.anomalyDetector.onTrade(data);
             this.absorptionDetector.addTrade(data);
             this.exhaustionDetector.addTrade(data);
             this.deltaCVDConfirmation.addTrade(data);
+            this.accumulationDetector.addTrade(data);
 
             // Update swing predictor
             this.swingPredictor.onPrice(
@@ -621,8 +647,10 @@ export class OrderFlowDashboard {
 
         try {
             // Update detectors
+            this.anomalyDetector.onDepth(data);
             this.absorptionDetector.addDepth(data);
             this.exhaustionDetector.addDepth(data);
+            this.accumulationDetector.addDepth(data);
 
             // Process and broadcast
             const message =
@@ -678,13 +706,6 @@ export class OrderFlowDashboard {
             trade.quantity,
             trade.timestamp
         );
-
-        // Get current orderbook state for accumulation
-        const bookLevel =
-            this.dependencies.orderBookProcessor.getDepthAtPrice(currentPrice);
-        const passiveVolume = bookLevel ? bookLevel.bid + bookLevel.ask : 0;
-
-        this.accumulationDetector.addTrade(trade, passiveVolume);
 
         // Check for swing signals
         const volumeNodes: VolumeNodes =

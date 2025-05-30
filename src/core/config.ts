@@ -17,16 +17,13 @@ export class Config {
 
     // Exhaustion detector settings
     static readonly EXHAUSTION = {
-        WINDOW_MS: parseInt(process.env.EXHAUSTION_WINDOW_MS ?? "90000", 10),
+        WINDOW_MS: parseInt(process.env.WINDOW_MS ?? "90000", 10),
         MIN_AGG_VOLUME: parseInt(
             process.env.EXHAUSTION_MIN_AGG_VOLUME ?? "600",
             10
         ),
-        PRICE_PRECISION: parseInt(
-            process.env.EXHAUSTION_PRICE_PRECISION ?? "2",
-            10
-        ),
-        ZONE_TICKS: parseInt(process.env.EXHAUSTION_ZONE_TICKS ?? "3", 10),
+        PRICE_PRECISION: parseInt(process.env.PRICE_PRECISION ?? "2", 10),
+        ZONE_TICKS: parseInt(process.env.ZONE_TICKS ?? "3", 10),
         EVENT_COOLDOWN_MS: parseInt(
             process.env.EXHAUSTION_EVENT_COOLDOWN_MS ?? "15000",
             10
@@ -44,16 +41,13 @@ export class Config {
 
     // Absorption detector settings
     static readonly ABSORPTION = {
-        WINDOW_MS: parseInt(process.env.ABSORPTION_WINDOW_MS ?? "90000", 10),
+        WINDOW_MS: parseInt(process.env.WINDOW_MS ?? "90000", 10),
         MIN_AGG_VOLUME: parseInt(
             process.env.ABSORPTION_MIN_AGG_VOLUME ?? "600",
             10
         ),
-        PRICE_PRECISION: parseInt(
-            process.env.ABSORPTION_PRICE_PRECISION ?? "2",
-            10
-        ),
-        ZONE_TICKS: parseInt(process.env.ABSORPTION_ZONE_TICKS ?? "3", 10),
+        PRICE_PRECISION: parseInt(process.env.PRICE_PRECISION ?? "2", 10),
+        ZONE_TICKS: parseInt(process.env.ZONE_TICKS ?? "3", 10),
         EVENT_COOLDOWN_MS: parseInt(
             process.env.ABSORPTION_EVENT_COOLDOWN_MS ?? "15000",
             10
@@ -92,10 +86,7 @@ export class Config {
         MIN_RATE_OF_CHANGE: parseFloat(
             process.env.DELTACVD_MIN_RATE_OF_CHANGE ?? "0"
         ), // Use adaptive if 0
-        PRICE_PRECISION: parseInt(
-            process.env.DELTACVD_PRICE_PRECISION ?? "2",
-            10
-        ),
+        PRICE_PRECISION: parseInt(process.env.PRICE_PRECISION ?? "2", 10),
         DYNAMIC_THRESHOLDS: process.env.DELTACVD_DYNAMIC_THRESHOLDS === "true",
         LOG_DEBUG: process.env.DELTACVD_LOG_DEBUG === "true",
     };
@@ -103,11 +94,34 @@ export class Config {
     static readonly SWING_PREDICTOR = {
         LOOKAHEAD_MS: parseInt(process.env.SWING_LOOKAHEAD_MS ?? "60000", 10),
         RETRACE_TICKS: parseInt(process.env.SWING_RETRACE_TICKS ?? "10", 10),
-        PRICE_PRECISION: parseInt(process.env.SWING_PRICE_PRECISION ?? "2", 10),
+        PRICE_PRECISION: parseInt(process.env.PRICE_PRECISION ?? "2", 10),
         SIGNAL_COOLDOWN_MS: parseInt(
             process.env.SWING_SIGNAL_COOLDOWN_MS ?? "300000",
             10
         ),
+    };
+
+    static readonly ACCUMULATION_DETECTOR = {
+        WINDOW_MS: parseInt(
+            process.env.ACCUMULATION_WINDOW_MS ?? "900_000",
+            10
+        ),
+        MIN_DURATION_MS: parseInt(
+            process.env.ACCUMULATION_MIN_DURATION_MS ?? "300_000",
+            10
+        ),
+        ZONE_SIZE: parseFloat(process.env.ACCUMULATION_ZONE_SIZE ?? "0.02"),
+        MIN_RATIO: parseFloat(process.env.ACCUMULATION_MIN_RATIO ?? "1.2"),
+        MIN_RECENT_ACTIVITY_MS: parseInt(
+            process.env.ACCUMULATION_MIN_RECENT_ACTIVITY ?? "60_000",
+            10
+        ),
+        MIN_AGG_VOLUME: parseInt(
+            process.env.ACCUMULATION_MIN_AGG_VOLUME ?? "5",
+            10
+        ),
+        TRACK_SIDE: process.env.ACCUMULATION_TRACK_SIDE === "true",
+        PRICE_PRECISION: parseInt(process.env.PRICE_PRECISION ?? "2", 10),
     };
 
     /**

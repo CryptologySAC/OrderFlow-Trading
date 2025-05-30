@@ -1,6 +1,6 @@
 // src/indicators/deltaCVDConfirmation.ts
 import { SpotWebsocketStreams } from "@binance/spot";
-import { Detector } from "./base";
+import { Detector } from "./base/detector.js";
 import type { TradeData } from "../utils/utils.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";

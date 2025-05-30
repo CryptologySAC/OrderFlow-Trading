@@ -9,7 +9,7 @@ import type {
     MarketAnomaly,
 } from "../utils/types.js";
 import { SignalCoordinator } from "../services/signalCoordinator.js";
-import { AnomalyDetector } from "../indicators/anomalyDetector.js";
+import { AnomalyDetector } from "../services/anomalyDetector.js";
 import { AlertManager } from "../alerts/alertManager.js";
 import { Logger } from "../infrastructure/logger.js";
 import {
@@ -155,8 +155,25 @@ export class SignalManager extends EventEmitter {
      * Check for market anomalies
      */
     private checkMarketAnomaly(price: number): MarketAnomaly | null {
-        // This would need orderbook data in real implementation
-        return this.anomalyDetector.detectAnomaly(price, 0, 0);
+        // TODO This would need orderbook data in real implementation
+        void price;
+        return null;
+        /*
+        const marketHealth = this.anomalyDetector.getMarketHealth();
+        if (marketHealth.isHealthy || !marketHealth.highestSeverity) {
+            return null;
+        }
+
+        const marketAnomaly: MarketAnomaly = {
+            affectedPriceRange: { min: price, max: price },
+            detectedAt: Date.now(),
+            severity: marketHealth.highestSeverity,
+            recommendedAction: marketHealth.recommendation,
+            type: "health_check",
+        };
+
+        return marketAnomaly;
+        */
     }
 
     /**

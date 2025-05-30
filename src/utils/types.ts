@@ -161,11 +161,24 @@ export interface BufferConfig {
  * Market anomaly detection
  */
 export interface MarketAnomaly {
-    type: "flash_crash" | "api_gap" | "liquidity_void" | "extreme_volatility";
+    type:
+        | "flash_crash"
+        | "api_gap"
+        | "liquidity_void"
+        | "extreme_volatility"
+        | "spoofing"
+        | "orderbook_imbalance"
+        | "health_check";
     detectedAt: number;
-    severity: "low" | "medium" | "high" | "critical";
+    severity: "low" | "medium" | "high" | "critical" | "info";
     affectedPriceRange: { min: number; max: number };
-    recommendedAction: "pause" | "reduce_size" | "close_positions" | "continue";
+    recommendedAction:
+        | "pause"
+        | "reduce_size"
+        | "close_positions"
+        | "continue"
+        | "insufficient_data"
+        | "caution";
 }
 
 /* ===========================
