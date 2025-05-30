@@ -246,6 +246,7 @@ export class OrderFlowDashboard {
             (enrichedTrade: EnrichedTradeEvent) => {
                 // TODO
                 this.absorptionDetector.onEnrichedTrade(enrichedTrade);
+                this.anomalyDetector.onEnrichedTrade(enrichedTrade);
             }
         );
 
@@ -621,8 +622,6 @@ export class OrderFlowDashboard {
         try {
             // Update detectors
             this.preprocessor.handleAggTrade(data);
-            this.anomalyDetector.onTrade(data);
-            this.absorptionDetector.addTrade(data);
             this.exhaustionDetector.addTrade(data);
             this.deltaCVDConfirmation.addTrade(data);
             this.accumulationDetector.addTrade(data);
@@ -671,8 +670,6 @@ export class OrderFlowDashboard {
         try {
             // Update detectors
             this.preprocessor.handleDepth(data);
-            this.anomalyDetector.onDepth(data);
-            this.absorptionDetector.addDepth(data);
             this.exhaustionDetector.addDepth(data);
             this.accumulationDetector.addDepth(data);
 

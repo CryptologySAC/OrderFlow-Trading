@@ -168,7 +168,14 @@ export interface MarketAnomaly {
         | "extreme_volatility"
         | "spoofing"
         | "orderbook_imbalance"
-        | "health_check";
+        | "health_check"
+        | "flow_imbalance"
+        | "absorption"
+        | "exhaustion"
+        | "momentum_ignition"
+        | "iceberg_order"
+        | "order_size_anomaly"
+        | "whale_activity";
     detectedAt: number;
     severity: "low" | "medium" | "high" | "critical" | "info";
     affectedPriceRange: { min: number; max: number };
@@ -178,7 +185,21 @@ export interface MarketAnomaly {
         | "close_positions"
         | "continue"
         | "insufficient_data"
-        | "caution";
+        | "caution"
+        | "consider_long"
+        | "consider_short"
+        | "momentum_long"
+        | "momentum_short"
+        | "fade_rally"
+        | "fade_dip"
+        | "prepare_reversal"
+        | "join_buy_momentum"
+        | "join_sell_momentum"
+        | "avoid_selling"
+        | "avoid_buying"
+        | "monitor"
+        | "watch_support"
+        | "watch_resistance";
 }
 
 /* ===========================
