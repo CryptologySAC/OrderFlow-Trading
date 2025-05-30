@@ -1,5 +1,4 @@
 // src/services/anomalyDetector.ts
-
 import { EventEmitter } from "events";
 import type { MarketAnomaly } from "../utils/types.js";
 import type { SpoofingDetector } from "../services/spoofingDetector.js";
@@ -101,6 +100,7 @@ export class AnomalyDetector extends EventEmitter {
 
     private readonly spoofingDetector?: SpoofingDetector;
     private readonly logger?: Logger;
+    private lastTradeSymbol = "";
 
     // Properly track orderbook state
     private currentBestBid = 0;
@@ -194,55 +194,58 @@ export class AnomalyDetector extends EventEmitter {
      * Main entry point - process enriched trades
      */
     public onEnrichedTrade(trade: EnrichedTradeEvent): void {
-        const now = trade.timestamp;
-        /*  Binance aggTrade:  m === true  ⇒  buyer is maker  ⇒  SELL aggression  */
-        const aggressiveSide: "buy" | "sell" = trade.buyerIsMaker
-            ? "sell"
-            : "buy";
+        try {
+            // capture symbol for scoped emits
+            this.lastTradeSymbol = trade.originalTrade.s ?? "";
 
-        // Track order sizes (once!)
-        this.trackOrderSize(trade.quantity, trade.price, now);
+            const now = trade.timestamp;
+            // Binance aggTrade: m=true ⇒ buyerIsMaker ⇒ SELL aggression
+            const aggressiveSide: "buy" | "sell" = trade.buyerIsMaker
+                ? "sell"
+                : "buy";
 
-        // Update price-volume history for iceberg detection
-        this.updatePriceVolumeHistory(trade.price, trade.quantity, now);
+            // track size + iceberg history
+            this.trackOrderSize(trade.quantity, trade.price, now);
+            this.updatePriceVolumeHistory(trade.price, trade.quantity, now);
 
-        // Calculate spread if we have valid quotes
-        let spread: number | undefined;
-        let spreadBps: number | undefined;
-        if (this.currentBestBid > 0 && this.currentBestAsk > 0) {
-            spread = this.currentBestAsk - this.currentBestBid;
-            spreadBps = (spread / trade.price) * 10000; // basis points
-        }
+            // compute spread bps if we have valid quotes
+            let spreadBps: number | undefined;
+            if (this.currentBestBid && this.currentBestAsk) {
+                const spread = this.currentBestAsk - this.currentBestBid;
+                spreadBps = (spread / trade.price) * 10000;
+            }
 
-        // Create market snapshot
-        const snapshot: MarketSnapshot = {
-            price: trade.price,
-            aggressiveVolume: trade.quantity,
-            aggressiveSide,
-            timestamp: now,
-            spread,
-            passiveBidVolume: trade.passiveBidVolume,
-            passiveAskVolume: trade.passiveAskVolume,
-            zonePassiveBidVolume: trade.zonePassiveBidVolume ?? 0,
-            zonePassiveAskVolume: trade.zonePassiveAskVolume ?? 0,
-            bestBid: this.currentBestBid,
-            bestAsk: this.currentBestAsk,
-        };
+            // assemble snapshot
+            const snapshot = {
+                price: trade.price,
+                aggressiveVolume: trade.quantity,
+                aggressiveSide,
+                timestamp: now,
+                spread: spreadBps,
+                passiveBidVolume: trade.passiveBidVolume,
+                passiveAskVolume: trade.passiveAskVolume,
+                zonePassiveBidVolume: trade.zonePassiveBidVolume ?? 0,
+                zonePassiveAskVolume: trade.zonePassiveAskVolume ?? 0,
+                bestBid: this.currentBestBid,
+                bestAsk: this.currentBestAsk,
+            };
 
-        // Update history
-        this.marketHistory.push(snapshot);
+            // push into buffers
+            this.marketHistory.push(snapshot);
+            this.recentFlowWindow.push({
+                volume: trade.quantity,
+                side: aggressiveSide,
+                time: now,
+            });
 
-        // Update flow tracking
-        this.recentFlowWindow.push({
-            volume: trade.quantity,
-            side: aggressiveSide,
-            time: now,
-        });
-        /* orderSizeHistory already updated inside trackOrderSize() */
-
-        // Run anomaly checks
-        if (this.marketHistory.toArray().length >= this.minHistory) {
-            this.runAnomalyChecks(snapshot, spreadBps);
+            // fire detectors once we have enough history
+            if (this.marketHistory.count() >= this.minHistory) {
+                this.runAnomalyChecks(snapshot, spreadBps);
+            }
+        } catch (err) {
+            this.logger?.error?.("AnomalyDetector.onEnrichedTrade error", {
+                err,
+            });
         }
     }
 
@@ -398,21 +401,21 @@ export class AnomalyDetector extends EventEmitter {
         time: number
     ): void {
         const rounded = this.roundToTick(price);
-        const existing = this.priceVolumeHistory.get(rounded) || {
+        const prev = this.priceVolumeHistory.get(rounded) ?? {
             volume: 0,
             count: 0,
             lastUpdate: 0,
         };
 
         this.priceVolumeHistory.set(rounded, {
-            volume: existing.volume + volume,
-            count: existing.count + 1,
+            volume: prev.volume + volume,
+            count: prev.count + 1,
             lastUpdate: time,
         });
 
-        // Clean old entries
-        for (const [p, data] of this.priceVolumeHistory.entries()) {
-            if (time - data.lastUpdate > this.icebergDetectionWindow * 2) {
+        // prune any level not updated in 2×iceberg window
+        for (const [p, info] of this.priceVolumeHistory) {
+            if (time - info.lastUpdate > this.icebergDetectionWindow * 2) {
                 this.priceVolumeHistory.delete(p);
             }
         }
@@ -1315,27 +1318,37 @@ export class AnomalyDetector extends EventEmitter {
     private emitAnomaly(anomaly: AnomalyEvent): void {
         const now = Date.now();
         const last = this.lastEmitted[anomaly.type];
-        const cooldown = this.anomalyCooldownMs;
-
-        const shouldEmit =
+        const ok =
             !last ||
             (anomaly.severity === "critical" && last.severity !== "critical") ||
-            now - last.time > cooldown;
+            now - last.time > this.anomalyCooldownMs;
+        if (!ok) return;
 
-        if (shouldEmit) {
-            this.lastEmitted[anomaly.type] = {
-                severity: anomaly.severity,
-                time: now,
-            };
-            /* store *detached* copy so later mutations to rationales don’t leak */
-            this.recentAnomalies.push(
-                JSON.parse(JSON.stringify(anomaly)) as AnomalyEvent
-            );
-            if (this.recentAnomalies.length > 500) this.recentAnomalies.shift();
+        this.lastEmitted[anomaly.type] = {
+            severity: anomaly.severity,
+            time: now,
+        };
 
-            this.emit("anomaly", anomaly);
-            this.logger?.warn?.("Market anomaly detected:", { anomaly });
+        // clone to avoid later mutation
+        const payload: AnomalyEvent =
+            typeof structuredClone === "function"
+                ? structuredClone(anomaly)
+                : (JSON.parse(JSON.stringify(anomaly)) as AnomalyEvent);
+
+        // keep history
+        this.recentAnomalies.push(payload);
+        if (this.recentAnomalies.length > 500) this.recentAnomalies.shift();
+
+        // emit both a global and a symbol-scoped event
+        this.emit("anomaly", payload);
+        if (this.lastTradeSymbol) {
+            this.emit(`anomaly:${this.lastTradeSymbol}`, payload);
         }
+
+        this.logger?.warn?.("Market anomaly detected", {
+            type: payload.type,
+            severity: payload.severity,
+        });
     }
 
     private calculateMean(values: number[]): number {
