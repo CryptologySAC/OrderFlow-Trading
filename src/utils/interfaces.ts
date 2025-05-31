@@ -16,6 +16,7 @@ export interface WebSocketMessage {
         | "trade"
         | "orderbook"
         | "signal"
+        | "anomaly"
         | "error"
         | "test";
     data: unknown;

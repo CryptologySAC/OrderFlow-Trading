@@ -34,6 +34,85 @@ let tradesChart = null;
 let orderBookChart = null;
 let delayGauge = null;
 
+let anomalyList = [];
+const anomalySeverityOrder = ["critical", "high", "medium", "info"];
+let anomalyFilters = new Set(["critical", "high"]);
+
+// Used to control badge display
+let badgeTimeout = null;
+let latestBadgeElem = null;
+
+function getAnomalyIcon(type) {
+    switch (type) {
+        case "flash_crash":
+            return "⚡";
+        case "liquidity_void":
+            return "💧";
+        case "absorption":
+            return "A";
+        case "exhaustion":
+            return "E";
+        case "whale_activity":
+            return "🐋";
+        case "momentum_ignition":
+            return "🔥";
+        case "spoofing":
+            return "👻";
+        case "iceberg_order":
+            return "🧊";
+        case "orderbook_imbalance":
+            return "≠";
+        case "flow_imbalance":
+            return "⇄";
+        default:
+            return "•";
+    }
+}
+function capitalize(str) {
+    return str[0].toUpperCase() + str.slice(1);
+}
+function formatAgo(ts) {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    return `${m}m ago`;
+}
+
+function renderAnomalyList() {
+    const listElem = document.getElementById("anomalyList");
+    if (!listElem) return;
+    // Filter
+    const filtered = anomalyList.filter((a) => anomalyFilters.has(a.severity));
+    listElem.innerHTML = filtered
+        .map(
+            (a) => `
+            <div class="anomaly-row ${a.severity}">
+                <span class="anomaly-type">${getAnomalyIcon(a.type)}</span>
+                <span>${capitalize(a.type)}</span>
+                <span style="margin-left:8px">${a.affectedPriceRange.min.toFixed(2)} - ${a.affectedPriceRange.max.toFixed(2)}</span>
+                <span style="margin-left:8px">${a.severity}</span>
+                <span style="margin-left:8px">${a.recommendedAction}</span>
+                <span style="margin-left:auto">${formatAgo(a.detectedAt || a.time || Date.now())}</span>
+            </div>
+        `
+        )
+        .join("");
+}
+function showAnomalyBadge(anomaly) {
+    // Remove previous badge
+    if (latestBadgeElem) latestBadgeElem.remove();
+    const badge = document.createElement("div");
+    badge.className = `anomaly-badge ${anomaly.severity}`;
+    badge.innerHTML = `${getAnomalyIcon(anomaly.type)} ${capitalize(anomaly.type)} @ ${anomaly.price.toFixed(2)}`;
+    document.body.appendChild(badge);
+    latestBadgeElem = badge;
+    if (badgeTimeout) clearTimeout(badgeTimeout);
+    badgeTimeout = setTimeout(() => {
+        badge.remove();
+        latestBadgeElem = null;
+    }, 4000);
+}
+
 // Improve Trade Chart update performance
 let chartUpdateScheduled = false;
 function scheduleTradesChartUpdate() {
@@ -272,6 +351,23 @@ const tradeWebsocket = new TradeWebSocket({
             );
 
             switch (message.type) {
+                case "anomaly":
+                    console.log("Anomaly received:", message.data);
+                    anomalyList.unshift(message.data);
+                    // Limit list length
+                    if (anomalyList.length > 100)
+                        anomalyList = anomalyList.slice(0, 100);
+                    renderAnomalyList();
+                    // Badge only for high/critical
+                    if (
+                        message.data.severity === "high" ||
+                        message.data.severity === "critical"
+                    ) {
+                        //showAnomalyBadge(message.data);
+                    }
+                    // Annotate chart if desired (optional, see below)
+                    //addAnomalyChartLabel(message.data);
+                    break;
                 case "trade":
                     const trade = message.data;
                     if (isValidTrade(trade)) {
@@ -380,7 +476,6 @@ const tradeWebsocket = new TradeWebSocket({
                                     : "rgba(0, 0, 0, 0)"
                             );
                         scheduleOrderBookUpdate();
-                        updateIndicators();
                     } else {
                         console.warn(
                             "Order book chart not initialized; skipping update"
@@ -406,21 +501,9 @@ let tradeTimeoutId = null;
  * Global order book data.
  * @type {Object}
  * @property {Array<Object>} priceLevels - Array of price levels with price, bid, and ask.
- * @property {number} ratio - Ask/bid ratio.
- * @property {number} supportPercent - Bid support percentage.
- * @property {boolean} askStable - Ask volume stability.
- * @property {boolean} bidStable - Bid volume stability.
- * @property {Object} direction - Market direction with type and probability.
- * @property {number} volumeImbalance - Volume imbalance metric.
  */
 let orderBookData = {
     priceLevels: [],
-    ratio: 0,
-    supportPercent: 0,
-    askStable: true,
-    bidStable: false,
-    direction: { type: "Stable", probability: 80 },
-    volumeImbalance: 0,
 };
 
 /**
@@ -672,7 +755,7 @@ function initializeOrderBookChart(ctx) {
                     ),
                     borderColor: "rgba(255, 0, 0, 0.5)",
                     borderWidth: 1,
-                    barThickness: 10,
+                    barThickness: 2,
                 },
                 {
                     label: "Bids",
@@ -684,7 +767,7 @@ function initializeOrderBookChart(ctx) {
                     ),
                     borderColor: "rgba(0, 128, 0, 0.5)",
                     borderWidth: 1,
-                    barThickness: 10,
+                    barThickness: 2,
                 },
             ],
         },
@@ -752,48 +835,6 @@ function setRange(duration) {
 }
 
 /**
- * Updates HTML indicators with order book data.
- */
-function updateIndicators() {
-    if (directionText) {
-        directionText.textContent = `Direction: ${orderBookData.direction.type} (${orderBookData.direction.probability}%)`;
-        directionText.style.color =
-            orderBookData.direction.type === "Down"
-                ? "red"
-                : orderBookData.direction.type === "Up"
-                  ? "green"
-                  : "gray";
-    }
-
-    if (ratioText) {
-        ratioText.textContent = `Ask/Bid Ratio: ${orderBookData.ratio.toFixed(2)} (Threshold: 2)`;
-    }
-
-    if (supportText) {
-        supportText.textContent = `Bid Support: ${orderBookData.supportPercent.toFixed(2)}% (Threshold: 50%)`;
-    }
-
-    if (stabilityText) {
-        stabilityText.textContent = `Ask Volume Stability: ${orderBookData.askStable ? "Stable" : "Unstable"}`;
-        stabilityText.style.color = orderBookData.askStable ? "green" : "red";
-    }
-
-    if (volumeImbalance) {
-        volumeImbalance.textContent = `Volume Imbalance: ${orderBookData.volumeImbalance.toFixed(2)} (Short < -0.65 | Long > 0.65)`;
-        volumeImbalance.style.color =
-            orderBookData.volumeImbalance > 0.65
-                ? "green"
-                : orderBookData.volumeImbalance < -0.65
-                  ? "red"
-                  : "gray";
-    }
-
-    if (orderBookContainer) {
-        orderBookContainer.style.border = `3px solid ${orderBookData.askStable ? "green" : "red"}`;
-    }
-}
-
-/**
  * Sets up Interact.js for draggable and resizable chart containers.
  */
 function setupInteract() {
@@ -803,6 +844,53 @@ function setupInteract() {
     }
 
     interact(".chart-container")
+        .draggable({
+            inertia: true,
+            modifiers: [
+                interact.modifiers.restrictRect({
+                    restriction: ".dashboard",
+                    endOnly: true,
+                }),
+            ],
+            listeners: {
+                move(event) {
+                    const target = event.target;
+                    const x =
+                        (parseFloat(target.getAttribute("data-x")) || 0) +
+                        event.dx;
+                    const y =
+                        (parseFloat(target.getAttribute("data-y")) || 0) +
+                        event.dy;
+                    target.style.transform = `translate(${x}px, ${y}px)`;
+                    target.setAttribute("data-x", x);
+                    target.setAttribute("data-y", y);
+                },
+            },
+        })
+        .resizable({
+            edges: { left: true, right: true, bottom: true, top: true },
+            modifiers: [
+                interact.modifiers.restrictSize({
+                    min: { width: 600, height: 600 },
+                }),
+            ],
+            listeners: {
+                move(event) {
+                    const target = event.target;
+                    target.style.width = `${event.rect.width}px`;
+                    target.style.height = `${event.rect.height}px`;
+                    const canvas = target.querySelector("canvas");
+                    if (canvas) {
+                        canvas.width = event.rect.width;
+                        canvas.height = event.rect.height;
+                        const chart = Chart.getChart(canvas.id);
+                        if (chart) chart.resize();
+                    }
+                },
+            },
+        });
+
+    interact(".anomaly-list-container")
         .draggable({
             inertia: true,
             modifiers: [
@@ -924,5 +1012,47 @@ function initialize() {
     }
 }
 
+function addAnomalyChartLabel(anomaly) {
+    if (!window.tradesChart) return;
+    const now = anomaly.time || anomaly.detectedAt || Date.now();
+    window.tradesChart.options.plugins.annotation.annotations =
+        window.tradesChart.options.plugins.annotation.annotations || {};
+    window.tradesChart.options.plugins.annotation.annotations[
+        `anomaly.${now}`
+    ] = {
+        type: "label",
+        xValue: anomaly.time || anomaly.detectedAt,
+        yValue: anomaly.price,
+        content: `${getAnomalyIcon(anomaly.type)}`,
+        backgroundColor:
+            anomaly.severity === "critical"
+                ? "rgba(229,57,53,0.8)"
+                : anomaly.severity === "high"
+                  ? "rgba(255,179,0,0.85)"
+                  : anomaly.severity === "medium"
+                    ? "rgba(255,241,118,0.5)"
+                    : "rgba(33,150,243,0.5)",
+        color: "#fff",
+        font: { size: 18, weight: "bold" },
+        padding: 6,
+        borderRadius: 6,
+        id: `anomaly.${now}`,
+    };
+    window.tradesChart.update("none");
+}
+
 // Start application
 document.addEventListener("DOMContentLoaded", initialize);
+
+document.addEventListener("DOMContentLoaded", () => {
+    const filterBox = document.querySelector(".anomaly-filter");
+    if (filterBox) {
+        filterBox.querySelectorAll("input[type=checkbox]").forEach((box) => {
+            box.addEventListener("change", () => {
+                if (box.checked) anomalyFilters.add(box.value);
+                else anomalyFilters.delete(box.value);
+                renderAnomalyList();
+            });
+        });
+    }
+});

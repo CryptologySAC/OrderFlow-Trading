@@ -16,6 +16,15 @@ export interface Metrics {
     absorptionSignals?: number;
     accumulationDetected?: number;
     accumulationErrors?: number;
+    invalidTrades?: number;
+    preprocessorErrors?: number;
+    orderBookStateErrors?: number;
+    orderbookCircuitRejected?: number;
+    orderbookPruneDuration?: number;
+    orderbookPruneRemoved?: number;
+    orderbookProcessingErrors?: number;
+    orderbookUpdatesProcessed?: number;
+    orderbookProcessingTime?: number;
 }
 
 /**

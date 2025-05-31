@@ -1,285 +1,414 @@
-//import axios from "axios";
-import dotenv from "dotenv";
-
-import { SpotWebsocketStreams, SpotWebsocketAPI } from "@binance/spot";
-import { WebSocketMessage } from "./utils/interfaces.js";
-import { BinanceDataFeed } from "./utils/binance.js";
-import { DepthLevel } from "./utils/utils.js";
-dotenv.config();
+import type { OrderBookSnapshot, PassiveLevel } from "./types/marketEvents.js";
+import type { WebSocketMessage } from "./utils/interfaces.js";
+import { Logger } from "./infrastructure/logger.js";
+import { MetricsCollector } from "./infrastructure/metricsCollector.js";
+import { CircularBuffer } from "./utils/utils.js";
 
 export interface IOrderBookProcessor {
-    processWebSocketUpdate(
-        data: SpotWebsocketStreams.DiffBookDepthResponse
-    ): WebSocketMessage;
-    fetchInitialOrderBook(): Promise<WebSocketMessage>;
-    getDepthAtPrice(price: number): DepthLevel | null;
+    onOrderBookUpdate(event: OrderBookSnapshot): WebSocketMessage;
+    getHealth(): ProcessorHealth;
+    getStats(): ProcessorStats;
 }
 
-// Interface for order book data (matching dashboard format)
 interface OrderBookData {
-    priceLevels: { price: number; bid: number; ask: number }[];
-    ratio: number;
-    supportPercent: number;
-    askStable: boolean;
-    bidStable: boolean;
-    direction: { type: "Down" | "Up" | "Stable"; probability: number };
-    volumeImbalance: number;
+    priceLevels: PriceLevel[];
+    bestBid: number;
+    bestAsk: number;
+    spread: number;
+    midPrice: number;
+    totalBidVolume: number;
+    totalAskVolume: number;
+    imbalance: number;
+    timestamp: number;
 }
 
-// Interface for Binance REST API order book snapshot
-//interface BinanceOrderBookSnapshot {
-//    lastUpdateId: number;
-//    bids: [string, string][];
-//    asks: [string, string][];
-//}
+interface PriceLevel {
+    price: number;
+    bid: number;
+    ask: number;
+    bidCount?: number; // Number of orders in this bin
+    askCount?: number; // Number of orders in this bin
+}
+
+interface BinConfig {
+    minPrice: number;
+    maxPrice: number;
+    binSize: number;
+    numLevels: number;
+}
+
+interface ProcessorHealth {
+    status: "healthy" | "degraded" | "unhealthy";
+    lastUpdateMs: number;
+    bufferedUpdates: number;
+    errorRate: number;
+    processingLatencyMs: number;
+}
+
+interface ProcessorStats {
+    processedUpdates: number;
+    avgProcessingTimeMs: number;
+    p99ProcessingTimeMs: number;
+    errorCount: number;
+    lastError?: string;
+}
 
 export class OrderBookProcessor implements IOrderBookProcessor {
-    private readonly symbol: string;
-    private readonly binanceFeed = new BinanceDataFeed();
+    private readonly logger: Logger;
+    private readonly metricsCollector: MetricsCollector;
 
-    private orderBook: {
-        bids: Map<number, number>;
-        asks: Map<number, number>;
-    } = {
-        bids: new Map(),
-        asks: new Map(),
-    };
-    private lastUpdateId: number = 0;
-    private askVolumeHistory: number[] = []; // For stability check
-    private bidVolumeHistory: number[] = []; // For stability check
-    private readonly binSize: number = (process.env.BIN_SIZE ?? 10) as number;
-    private readonly numLevels: number = (process.env.BIN_LEVELS ??
-        10) as number;
-    private volumeImbalanceHistory: number[] = [];
+    // Configuration
+    private readonly binSize: number;
+    private readonly numLevels: number;
+    private readonly tickSize: number;
+    private readonly precision: number;
+    private readonly maxBufferSize: number;
 
-    constructor(symbol: string = "LTCUSDT") {
-        this.symbol = symbol;
+    // State management
+    private readonly recentSnapshots: CircularBuffer<OrderBookSnapshot>;
+    private lastProcessedTime = Date.now();
+    private processedCount = 0;
+    private errorCount = 0;
+    private lastError?: string;
+
+    // Performance tracking
+    private readonly processingTimes: CircularBuffer<number>;
+    private readonly errorWindow: number[] = [];
+    private readonly maxErrorRate = 10; // per minute
+
+    // Caching
+    private lastBinConfig?: BinConfig;
+    private cachedBins?: Map<number, PriceLevel>;
+
+    constructor(
+        config: {
+            binSize?: number;
+            numLevels?: number;
+            maxBufferSize?: number;
+            tickSize?: number;
+            precision?: number;
+        },
+        logger: Logger,
+        metricsCollector: MetricsCollector
+    ) {
+        this.binSize = config.binSize ?? 10;
+        this.numLevels = config.numLevels ?? 10;
+        this.maxBufferSize = config.maxBufferSize ?? 1000;
+        this.tickSize = config.tickSize ?? 0.01;
+        this.precision = config.precision ?? 2;
+
+        this.logger = logger;
+        this.metricsCollector = metricsCollector;
+
+        this.recentSnapshots = new CircularBuffer<OrderBookSnapshot>(
+            this.maxBufferSize
+        );
+        this.processingTimes = new CircularBuffer<number>(1000);
+
+        this.logger.info("[OrderBookProcessor] Initialized", {
+            binSize: this.binSize,
+            numLevels: this.numLevels,
+            tickSize: this.tickSize,
+        });
     }
 
-    public async fetchInitialOrderBook(): Promise<WebSocketMessage> {
-        //const url = `https://api.binance.com/api/v3/depth?symbol=${this.symbol}&limit=1000`;
-        try {
-            //const response = await axios.get<BinanceOrderBookSnapshot>(url);
-            //const snapshot = response.data;
-            const snapshot = await this.binanceFeed.getDepthSnapshot(
-                this.symbol,
-                1000
-            );
+    /**
+     * Main processing method - receives enriched orderbook snapshots
+     */
+    public onOrderBookUpdate(event: OrderBookSnapshot): WebSocketMessage {
+        const startTime = Date.now();
 
-            if (
-                !snapshot ||
-                !snapshot.lastUpdateId ||
-                !snapshot.bids ||
-                !snapshot.asks
-            ) {
-                throw new Error("Failed to fetch order book snapshot");
+        try {
+            // Validate input
+            if (!this.validateSnapshot(event)) {
+                throw new Error("Invalid orderbook snapshot");
             }
 
-            this.lastUpdateId = snapshot.lastUpdateId;
+            // Store snapshot
+            this.recentSnapshots.add(event);
 
-            snapshot.bids.forEach(([price, qty]) => {
-                const priceNum = parseFloat(price);
-                const qtyNum = parseFloat(qty);
-                if (qtyNum > 0) this.orderBook.bids.set(priceNum, qtyNum);
-            });
-            snapshot.asks.forEach(([price, qty]) => {
-                const priceNum = parseFloat(price);
-                const qtyNum = parseFloat(qty);
-                if (qtyNum > 0) this.orderBook.asks.set(priceNum, qtyNum);
-            });
+            // Process and bin the orderbook
+            const orderBookData = this.processOrderBook(event);
 
-            console.log(
-                "Initial order book snapshot loaded:",
-                this.lastUpdateId
+            // Track metrics
+            const processingTime = Date.now() - startTime;
+            this.processingTimes.add(processingTime);
+            this.lastProcessedTime = Date.now();
+            this.processedCount++;
+
+            this.metricsCollector.updateMetric(
+                "orderbookProcessingTime",
+                processingTime
             );
+            this.metricsCollector.incrementMetric("orderbookUpdatesProcessed");
 
-            const orderBook = this.processOrderBook();
             return {
                 type: "orderbook",
                 now: Date.now(),
-                data: orderBook,
+                data: orderBookData,
             };
         } catch (error) {
-            throw error;
-        }
-    }
+            this.handleError(error as Error, event);
 
-    public processWebSocketUpdate(
-        data: SpotWebsocketStreams.DiffBookDepthResponse
-    ): WebSocketMessage {
-        try {
-            const update: SpotWebsocketAPI.DepthResponseResult = {
-                lastUpdateId: data.u,
-                bids: data.b,
-                asks: data.a,
-            };
-
-            if ((update.lastUpdateId ?? -1) <= this.lastUpdateId) {
-                throw new Error(
-                    `Received outdated update: ${update.lastUpdateId} | ${this.lastUpdateId}`
-                );
-            }
-
-            this.lastUpdateId = update.lastUpdateId ?? -1;
-
-            update.bids?.forEach(([price, qty]) => {
-                const priceNum = parseFloat(price);
-                const qtyNum = parseFloat(qty);
-                if (qtyNum === 0) {
-                    this.orderBook.bids.delete(priceNum);
-                } else {
-                    this.orderBook.bids.set(priceNum, qtyNum);
-                }
-            });
-
-            update.asks?.forEach(([price, qty]) => {
-                const priceNum = parseFloat(price);
-                const qtyNum = parseFloat(qty);
-                if (qtyNum === 0) {
-                    this.orderBook.asks.delete(priceNum);
-                } else {
-                    this.orderBook.asks.set(priceNum, qtyNum);
-                }
-            });
-
-            const orderBook = this.processOrderBook();
-            return {
-                type: "orderbook",
-                now: Date.now(),
-                data: orderBook,
-            };
-        } catch (error) {
-            console.log(error);
             return {
                 type: "error",
-                data: error,
-                now: 0,
+                data: {
+                    message: (error as Error).message,
+                    code: "ORDERBOOK_PROCESSING_ERROR",
+                },
+                now: Date.now(),
             };
         }
     }
 
-    public getDepthAtPrice(price: number): DepthLevel | null {
-        const roundedPrice = Math.round(price * 100) / 100; // Round to cents
+    /**
+     * Process orderbook snapshot and group into bins
+     */
+    private processOrderBook(snapshot: OrderBookSnapshot): OrderBookData {
+        // Calculate price range for binning
+        const binConfig = this.calculateBinConfig(snapshot.midPrice);
 
-        const bidQty = this.orderBook.bids.get(roundedPrice) || 0;
-        const askQty = this.orderBook.asks.get(roundedPrice) || 0;
+        // Group levels into bins
+        const binnedLevels = this.binOrderBook(
+            snapshot.depthSnapshot,
+            binConfig
+        );
 
-        if (bidQty === 0 && askQty === 0) {
-            return null;
-        }
-
-        return { bid: bidQty, ask: askQty };
+        return {
+            priceLevels: Array.from(binnedLevels.values()).sort(
+                (a, b) => a.price - b.price
+            ),
+            bestBid: snapshot.bestBid,
+            bestAsk: snapshot.bestAsk,
+            spread: snapshot.spread,
+            midPrice: snapshot.midPrice,
+            totalBidVolume: snapshot.passiveBidVolume,
+            totalAskVolume: snapshot.passiveAskVolume,
+            imbalance: snapshot.imbalance,
+            timestamp: snapshot.timestamp,
+        };
     }
 
-    private processOrderBook(): OrderBookData {
-        const bestBid = Math.max(...Array.from(this.orderBook.bids.keys()));
-        const bestAsk = Math.min(...Array.from(this.orderBook.asks.keys()));
-        const currentPrice = (bestBid + bestAsk) / 2;
+    /**
+     * Calculate bin configuration based on current price
+     */
+    private calculateBinConfig(midPrice: number): BinConfig {
+        const binIncrement = this.tickSize * this.binSize;
 
-        const priceLevels: { price: number; bid: number; ask: number }[] = [];
-        for (let i = -this.numLevels; i < this.numLevels; i++) {
-            const price =
-                Math.round(currentPrice * 100 + i * this.binSize) / 100;
-            const binStart = Math.floor(price * this.binSize) / this.binSize;
-            const binEnd = binStart + this.binSize * 0.01;
+        // Calculate raw price boundaries
+        const halfRange = this.numLevels * binIncrement;
+        const rawMinPrice = midPrice - halfRange;
+        const rawMaxPrice = midPrice + halfRange;
 
-            let bidVolume = 0;
-            for (const [p, qty] of this.orderBook.bids) {
-                if (p >= binStart && p < binEnd) bidVolume += qty;
-            }
+        // Align to bin boundaries
+        const minPrice = Math.floor(rawMinPrice / binIncrement) * binIncrement;
+        const maxPrice = Math.ceil(rawMaxPrice / binIncrement) * binIncrement;
 
-            let askVolume = 0;
-            for (const [p, qty] of this.orderBook.asks) {
-                if (p >= binStart && p < binEnd) askVolume += qty;
-            }
+        return {
+            minPrice: this.roundToTick(minPrice),
+            maxPrice: this.roundToTick(maxPrice),
+            binSize: binIncrement,
+            numLevels: this.numLevels,
+        };
+    }
 
-            priceLevels.push({
-                price: binStart,
-                bid: bidVolume,
-                ask: askVolume,
+    /**
+     * Group orderbook levels into price bins
+     */
+    private binOrderBook(
+        depthSnapshot: Map<number, PassiveLevel>,
+        config: BinConfig
+    ): Map<number, PriceLevel> {
+        const bins = new Map<number, PriceLevel>();
+        const binIncrement = config.binSize;
+
+        // Initialize bins
+        for (
+            let price = config.minPrice;
+            price <= config.maxPrice;
+            price += binIncrement
+        ) {
+            const binPrice = this.roundToTick(price);
+            bins.set(binPrice, {
+                price: binPrice,
+                bid: 0,
+                ask: 0,
+                bidCount: 0,
+                askCount: 0,
             });
         }
 
-        const totalAsk = priceLevels
-            .slice(this.numLevels)
-            .reduce((sum, level) => sum + level.ask, 0);
-        const totalBid = priceLevels
-            .slice(0, this.numLevels)
-            .reduce((sum, level) => sum + level.bid, 0);
+        // Aggregate levels into bins
+        for (const [price, level] of depthSnapshot) {
+            // Skip levels outside our range
+            if (price < config.minPrice || price > config.maxPrice) continue;
 
-        // --- 10-tick Volume Imbalance ---
-        const tickSize = 0.01;
-        const tickRange = 10;
-        const bidLowerBound = bestBid - tickRange * tickSize;
-        const askUpperBound = bestAsk + tickRange * tickSize;
+            // Find the appropriate bin
+            const binPrice = this.roundToTick(
+                Math.floor(price / binIncrement) * binIncrement
+            );
 
-        let imbalanceBidVolume = 0;
-        for (const [price, qty] of this.orderBook.bids) {
-            if (price >= bidLowerBound && price <= bestBid) {
-                imbalanceBidVolume += qty;
+            const bin = bins.get(binPrice);
+            if (bin) {
+                bin.bid += level.bid;
+                bin.ask += level.ask;
+                if (level.bid > 0) bin.bidCount!++;
+                if (level.ask > 0) bin.askCount!++;
             }
         }
 
-        let imbalanceAskVolume = 0;
-        for (const [price, qty] of this.orderBook.asks) {
-            if (price >= bestAsk && price <= askUpperBound) {
-                imbalanceAskVolume += qty;
+        // Filter out empty bins (optional - depends on requirements)
+        const nonEmptyBins = new Map<number, PriceLevel>();
+        for (const [price, bin] of bins) {
+            if (bin.bid > 0 || bin.ask > 0) {
+                nonEmptyBins.set(price, bin);
             }
         }
 
-        const imbalance =
-            imbalanceBidVolume === 0 && imbalanceAskVolume === 0
-                ? 0
-                : (imbalanceBidVolume - imbalanceAskVolume) /
-                  (imbalanceBidVolume + imbalanceAskVolume || 1);
-        this.volumeImbalanceHistory.push(imbalance);
-        if (this.volumeImbalanceHistory.length > 30)
-            this.volumeImbalanceHistory.shift();
-        const volumeImbalance =
-            this.volumeImbalanceHistory.reduce((sum, val) => sum + val, 0) /
-            this.volumeImbalanceHistory.length;
+        return nonEmptyBins;
+    }
 
-        const ratio = totalAsk / (totalBid || 1);
-        const supportPercent = (totalBid / (totalAsk || 1)) * 100;
-
-        this.askVolumeHistory.push(totalAsk);
-        this.bidVolumeHistory.push(totalBid);
-        if (this.askVolumeHistory.length > 30) this.askVolumeHistory.shift();
-        if (this.bidVolumeHistory.length > 30) this.bidVolumeHistory.shift();
-
-        const askStable =
-            this.askVolumeHistory.length < 30 ||
-            this.askVolumeHistory.every(
-                (vol, idx) =>
-                    idx === 0 || vol >= this.askVolumeHistory[idx - 1] * 0.8
+    /**
+     * Validate incoming snapshot
+     */
+    private validateSnapshot(snapshot: OrderBookSnapshot): boolean {
+        if (!snapshot || typeof snapshot !== "object") {
+            this.logger.warn(
+                "[OrderBookProcessor] Invalid snapshot: not an object"
             );
-        const bidStable =
-            this.bidVolumeHistory.length < 30 ||
-            this.bidVolumeHistory.every(
-                (vol, idx) =>
-                    idx === 0 || vol >= this.bidVolumeHistory[idx - 1] * 0.8
-            );
+            return false;
+        }
 
-        let direction: {
-            type: "Down" | "Up" | "Stable";
-            probability: number;
-        };
-        if (ratio > 2 && supportPercent < 50 && askStable) {
-            direction = { type: "Down", probability: 70 };
-        } else if (ratio < 0.5 && supportPercent > 75 && bidStable) {
-            direction = { type: "Up", probability: 65 };
-        } else {
-            direction = { type: "Stable", probability: 80 };
+        if (
+            !snapshot.depthSnapshot ||
+            !(snapshot.depthSnapshot instanceof Map)
+        ) {
+            this.logger.warn(
+                "[OrderBookProcessor] Invalid snapshot: missing depthSnapshot"
+            );
+            return false;
+        }
+
+        if (typeof snapshot.midPrice !== "number" || snapshot.midPrice <= 0) {
+            this.logger.warn(
+                "[OrderBookProcessor] Invalid snapshot: invalid midPrice"
+            );
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Round price to tick precision
+     */
+    private roundToTick(price: number): number {
+        return Math.round(price / this.tickSize) * this.tickSize;
+    }
+
+    /**
+     * Handle processing errors
+     */
+    private handleError(error: Error, snapshot: OrderBookSnapshot): void {
+        this.errorCount++;
+        this.lastError = error.message;
+        this.errorWindow.push(Date.now());
+
+        // Clean old errors
+        const cutoff = Date.now() - 60000;
+        this.errorWindow.splice(
+            0,
+            this.errorWindow.findIndex((t) => t > cutoff)
+        );
+
+        this.logger.error("[OrderBookProcessor] Processing error", {
+            error: error.message,
+            midPrice: snapshot.midPrice,
+            depthSize: snapshot.depthSnapshot.size,
+            errorCount: this.errorCount,
+        });
+
+        this.metricsCollector.incrementMetric("orderbookProcessingErrors");
+    }
+
+    /**
+     * Get processor health status
+     */
+    public getHealth(): ProcessorHealth {
+        const now = Date.now();
+        const lastUpdateAge = now - this.lastProcessedTime;
+        const avgProcessingTime = this.getAverageProcessingTime();
+
+        let status: "healthy" | "degraded" | "unhealthy" = "healthy";
+
+        if (
+            lastUpdateAge > 10000 ||
+            this.errorWindow.length > this.maxErrorRate
+        ) {
+            status = "unhealthy";
+        } else if (lastUpdateAge > 5000 || avgProcessingTime > 100) {
+            status = "degraded";
         }
 
         return {
-            priceLevels,
-            ratio,
-            supportPercent,
-            askStable,
-            bidStable,
-            direction,
-            volumeImbalance,
+            status,
+            lastUpdateMs: lastUpdateAge,
+            bufferedUpdates: this.recentSnapshots.length,
+            errorRate: this.errorWindow.length,
+            processingLatencyMs: avgProcessingTime,
+        };
+    }
+
+    /**
+     * Get processor statistics
+     */
+    public getStats(): ProcessorStats {
+        const times = this.processingTimes.getAll();
+        const avgTime =
+            times.length > 0
+                ? times.reduce((a, b) => a + b, 0) / times.length
+                : 0;
+
+        const p99Time =
+            times.length > 0
+                ? times.sort((a, b) => a - b)[Math.floor(times.length * 0.99)]
+                : 0;
+
+        return {
+            processedUpdates: this.processedCount,
+            avgProcessingTimeMs: avgTime,
+            p99ProcessingTimeMs: p99Time,
+            errorCount: this.errorCount,
+            lastError: this.lastError,
+        };
+    }
+
+    /**
+     * Get average processing time
+     */
+    private getAverageProcessingTime(): number {
+        const times = this.processingTimes.getAll();
+        return times.length > 0
+            ? times.reduce((a, b) => a + b, 0) / times.length
+            : 0;
+    }
+
+    /**
+     * Get binning configuration (for monitoring/debugging)
+     */
+    public getBinConfig(): {
+        binSize: number;
+        numLevels: number;
+        tickSize: number;
+        precision: number;
+        binIncrement: number;
+    } {
+        return {
+            binSize: this.binSize,
+            numLevels: this.numLevels,
+            tickSize: this.tickSize,
+            precision: this.precision,
+            binIncrement: this.tickSize * this.binSize,
         };
     }
 }

@@ -12,20 +12,6 @@
                 <div class="chartAreaWrapper50">
                     <canvas id="orderBookChart"></canvas>
                 </div>
-                <div
-                    id="directionText"
-                    class="indicator-text direction-text"
-                ></div>
-                <div id="ratioText" class="indicator-text ratio-text"></div>
-                <div id="supportText" class="indicator-text support-text"></div>
-                <div
-                    id="stabilityText"
-                    class="indicator-text stability-text"
-                ></div>
-                <div
-                    id="volumeImbalance"
-                    class="indicator-text stability-text"
-                ></div>
             </section>
 
             <section class="chart-container" id="tradesContainer">
@@ -42,6 +28,38 @@
             </section>
             <section class="gauge-container" id="delayGaugeContainer">
                 <canvas id="delayGauge"></canvas>
+            </section>
+            <!-- Anomaly List (add below the Trade Delay Gauge section) -->
+            <section class="anomaly-list-container" id="anomalyListContainer">
+                <div class="anomaly-list-header">
+                    <span>Anomalies</span>
+                    <span class="anomaly-filter">
+                        <label
+                            ><input
+                                type="checkbox"
+                                value="critical"
+                                checked
+                            />Critical</label
+                        >
+                        <label
+                            ><input
+                                type="checkbox"
+                                value="high"
+                                checked
+                            />High</label
+                        >
+                        <label
+                            ><input
+                                type="checkbox"
+                                value="medium"
+                            />Medium</label
+                        >
+                        <label
+                            ><input type="checkbox" value="info" />Info</label
+                        >
+                    </span>
+                </div>
+                <div class="anomaly-list" id="anomalyList"></div>
             </section>
         </main>
         <script

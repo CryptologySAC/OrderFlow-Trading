@@ -3,7 +3,7 @@
 import type { IStorage } from "../infrastructure/storage.js";
 import type { IBinanceDataFeed } from "../utils/binance.js";
 import type { ITradesProcessor } from "../tradesProcessor.js";
-import type { IOrderBookProcessor } from "../orderBookProcessor.js";
+import type { OrderBookProcessor } from "../orderBookProcessor.js";
 import type { ISignalLogger } from "../services/signalLogger.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
@@ -21,7 +21,7 @@ export interface Dependencies {
     storage: IStorage;
     binanceFeed: IBinanceDataFeed;
     tradesProcessor: ITradesProcessor;
-    orderBookProcessor: IOrderBookProcessor;
+    orderBookProcessor: OrderBookProcessor;
     signalLogger: ISignalLogger;
 
     // Infrastructure

@@ -25,8 +25,15 @@ import { RateLimiter } from "./infrastructure/rateLimiter.js";
 import { CircuitBreaker } from "./infrastructure/circuitBreaker.js";
 
 // Service imports
-import type { EnrichedTradeEvent } from "./types/marketEvents.js";
-import { OrderflowPreprocessor } from "./market/ordeFlowPreprocessor.js";
+import type {
+    EnrichedTradeEvent,
+    OrderBookSnapshot,
+} from "./types/marketEvents.js";
+import { OrderflowPreprocessor } from "./market/orderFlowPreprocessor.js";
+import {
+    OrderBookState,
+    OrderBookStateOptions,
+} from "./market/orderBookState.js";
 import {
     WebSocketManager,
     type ExtendedWebSocket,
@@ -34,7 +41,11 @@ import {
 import { SignalManager } from "./trading/signalManager.js";
 import { DataStreamManager } from "./trading/dataStreamManager.js";
 import { SignalCoordinator } from "./services/signalCoordinator.js";
-import { AnomalyDetector, AnomalyEvent } from "./services/anomalyDetector.js";
+import {
+    AnomalyDetector,
+    AnomalyEvent,
+    AnomalyDetectorOptions,
+} from "./services/anomalyDetector.js";
 import { AlertManager } from "./alerts/alertManager.js";
 
 // Indicator imports
@@ -87,6 +98,7 @@ import { BinanceDataFeed } from "./utils/binance.js";
 import { TradesProcessor } from "./tradesProcessor.js";
 import { OrderBookProcessor } from "./orderBookProcessor.js";
 import { SignalLogger } from "./services/signalLogger.js";
+import type { WebSocketMessage } from "./utils/interfaces.js";
 
 EventEmitter.defaultMaxListeners = 20;
 
@@ -106,7 +118,8 @@ export class OrderFlowDashboard {
     private readonly dataStreamManager: DataStreamManager;
 
     // Market
-    private readonly preprocessor: OrderflowPreprocessor;
+    private orderBook: OrderBookState | null = null;
+    private preprocessor: OrderflowPreprocessor | null = null;
 
     // Coordinators
     private readonly signalCoordinator: SignalCoordinator;
@@ -136,6 +149,50 @@ export class OrderFlowDashboard {
     private readonly purgeIntervalMs = 10 * 60 * 1000; // 10 minutes
     private purgeIntervalId?: NodeJS.Timeout;
 
+    public static async create(
+        dependencies: Dependencies,
+        delayFn: (cb: () => void, ms: number) => unknown = setTimeout
+    ): Promise<OrderFlowDashboard> {
+        const instance = new OrderFlowDashboard(dependencies, delayFn);
+        await instance.initialize(dependencies);
+        return instance;
+    }
+
+    private async initialize(dependencies: Dependencies): Promise<void> {
+        // TODO Initialize Market with real options
+        const options: OrderBookStateOptions = {
+            symbol: Config.SYMBOL,
+            pricePrecision: Config.PRICE_PRECISION,
+            maxLevels: 5000,
+            maxPriceDistance: 10000,
+            pruneIntervalMs: 30000,
+            maxErrorRate: 20,
+            staleThresholdMs: 900_000, // 15 minutes
+        };
+        this.orderBook = await OrderBookState.create(
+            options,
+            dependencies.logger,
+            dependencies.metricsCollector
+        );
+        this.preprocessor = new OrderflowPreprocessor(
+            {
+                //TODO Config
+                pricePrecision: Config.PRICE_PRECISION,
+                bandTicks: 10,
+                tickSize: 0.01,
+            },
+            this.orderBook,
+            dependencies.logger,
+            dependencies.metricsCollector
+        );
+        this.logger.info(
+            "[OrderFlowDashboard] Orderflow preprocessor initialized"
+        );
+        this.setupEventHandlers();
+        this.setupHttpServer();
+        this.setupGracefulShutdown();
+    }
+
     constructor(
         private readonly dependencies: Dependencies,
         private readonly delayFn: (
@@ -153,10 +210,6 @@ export class OrderFlowDashboard {
         // Initialize coordinators
         this.signalCoordinator = dependencies.signalCoordinator;
         this.anomalyDetector = dependencies.anomalyDetector;
-        this.anomalyDetector.on("anomaly", (event: AnomalyEvent) => {
-            this.logger.warn("Market anomaly detected:", { event });
-            // TODO Take action (pause trading, alert, etc.)
-        });
 
         // Initialize managers
         this.wsManager = new WebSocketManager(
@@ -231,38 +284,6 @@ export class OrderFlowDashboard {
             dependencies.metricsCollector,
             dependencies.signalLogger
         );
-
-        this.accumulationDetector.on(
-            "accumulation",
-            (event: AccumulationResult) => {
-                //TODO make this robust
-                this.logger.warn("Market accumulation detected:", { event });
-            }
-        );
-
-        // Initialize Market
-        this.preprocessor = new OrderflowPreprocessor({
-            //TODO Config
-            pricePrecision: 2,
-            bandTicks: 10,
-            tickSize: 0.01,
-        });
-
-        // All detectors subscribe to enriched trades:
-        this.preprocessor.on(
-            "enriched_trade",
-            (enrichedTrade: EnrichedTradeEvent) => {
-                // TODO
-                this.absorptionDetector.onEnrichedTrade(enrichedTrade);
-                this.anomalyDetector.onEnrichedTrade(enrichedTrade);
-                this.accumulationDetector.onEnrichedTrade(enrichedTrade);
-            }
-        );
-
-        // Setup event handlers
-        this.setupEventHandlers();
-        this.setupHttpServer();
-        this.setupGracefulShutdown();
     }
 
     private DeltaCVDConfirmationCallback = (event: unknown): void => {
@@ -397,6 +418,21 @@ export class OrderFlowDashboard {
                 })
             );
         }
+    }
+
+    // TODO Make this real
+    private createAnomalyDetectorSettings(): AnomalyDetectorOptions {
+        return {
+            windowSize: 1200,
+            minHistory: 200,
+            anomalyCooldownMs: 20000, // 20 seconds
+            volumeImbalanceThreshold: 0.85,
+            absorptionRatioThreshold: 4.2,
+            icebergDetectionWindow: 120000,
+            orderSizeAnomalyThreshold: 4.5,
+            normalSpreadBps: 12,
+            tickSize: 0.01,
+        };
     }
 
     private createAccumulationDetectorSettings(): AccumulationSettings {
@@ -575,6 +611,60 @@ export class OrderFlowDashboard {
                 this.handleError(error as Error, "signal_broadcast");
             });
         });
+
+        if (this.preprocessor)
+            this.preprocessor.on(
+                "enriched_trade",
+                (enrichedTrade: EnrichedTradeEvent) => {
+                    // TODO
+                    this.absorptionDetector.onEnrichedTrade(enrichedTrade);
+                    this.anomalyDetector.onEnrichedTrade(enrichedTrade);
+                    this.accumulationDetector.onEnrichedTrade(enrichedTrade);
+
+                    const aggTradeMessage: WebSocketMessage =
+                        this.dependencies.tradesProcessor.onEnrichedTrade(
+                            enrichedTrade
+                        );
+                    if (aggTradeMessage) {
+                        this.wsManager.broadcast(aggTradeMessage);
+                    }
+                }
+            );
+        this.preprocessor?.on(
+            "orderbook_update",
+            (orderBookUpdate: OrderBookSnapshot) => {
+                const orderBookMessage: WebSocketMessage =
+                    this.dependencies.orderBookProcessor.onOrderBookUpdate(
+                        orderBookUpdate
+                    );
+                if (orderBookMessage)
+                    this.wsManager.broadcast(orderBookMessage);
+            }
+        );
+
+        this.accumulationDetector.on(
+            "accumulation",
+            (event: AccumulationResult) => {
+                //TODO make this robust
+                this.logger.warn("Market accumulation detected:", { event });
+            }
+        );
+
+        this.anomalyDetector.on("anomaly", (event: AnomalyEvent) => {
+            if (
+                event &&
+                (event.severity === "critical" || event.severity === "high")
+            ) {
+                this.logger.warn("Market anomaly detected:", { event });
+            }
+            const message: WebSocketMessage = {
+                type: "anomaly",
+                data: event,
+                now: Date.now(),
+            };
+            this.wsManager.broadcast(message);
+            // TODO Take action (pause trading, alert, etc.)
+        });
     }
 
     /**
@@ -630,7 +720,7 @@ export class OrderFlowDashboard {
 
         try {
             // Update detectors
-            this.preprocessor.handleAggTrade(data);
+            if (this.preprocessor) this.preprocessor.handleAggTrade(data);
             this.exhaustionDetector.addTrade(data);
             this.deltaCVDConfirmation.addTrade(data);
 
@@ -645,8 +735,8 @@ export class OrderFlowDashboard {
             this.analyzeSwingOpportunity(tradeData.price, tradeData);
 
             // Process and broadcast
-            const message = this.dependencies.tradesProcessor.addTrade(data);
-            this.wsManager.broadcast(message);
+            //const message = this.dependencies.tradesProcessor.addTrade(data);
+            //this.wsManager.broadcast(message);
 
             const processingTime = Date.now() - startTime;
             this.metricsCollector.updateMetric(
@@ -676,16 +766,9 @@ export class OrderFlowDashboard {
         const startTime = Date.now();
 
         try {
-            // Update detectors
-            this.preprocessor.handleDepth(data);
+            // Update preprocessor
+            if (this.preprocessor) this.preprocessor.handleDepth(data);
             this.exhaustionDetector.addDepth(data);
-
-            // Process and broadcast
-            const message =
-                this.dependencies.orderBookProcessor.processWebSocketUpdate(
-                    data
-                );
-            this.wsManager.broadcast(message);
 
             const processingTime = Date.now() - startTime;
             this.metricsCollector.updateMetric(
@@ -994,16 +1077,9 @@ export class OrderFlowDashboard {
         const correlationId = randomUUID();
 
         try {
-            // Preload trades
+            // TODO Preload trades
             await this.dependencies.circuitBreaker.execute(
                 () => this.dependencies.tradesProcessor.fillBacklog(),
-                correlationId
-            );
-
-            // Fetch initial orderbook
-            await this.dependencies.circuitBreaker.execute(
-                () =>
-                    this.dependencies.orderBookProcessor.fetchInitialOrderBook(),
                 correlationId
             );
 
@@ -1140,10 +1216,34 @@ export class OrderFlowDashboard {
 export function createDependencies(): Dependencies {
     const logger = new Logger(process.env.NODE_ENV === "development");
     const metricsCollector = new MetricsCollector();
+    const signalLogger = new SignalLogger("signals.csv");
     const rateLimiter = new RateLimiter(60000, 100);
     const circuitBreaker = new CircuitBreaker(5, 60000, 10000);
+    const orderBookProcessor = new OrderBookProcessor(
+        {
+            binSize: 10,
+            numLevels: 10,
+            maxBufferSize: 1000,
+            tickSize: Config.TICK_SIZE,
+            precision: Config.PRICE_PRECISION,
+        },
+        logger,
+        metricsCollector
+    );
 
-    const anomalyDetector = new AnomalyDetector();
+    const anomalyDetector = new AnomalyDetector({
+        windowSize: 1200,
+        minHistory: 200,
+        anomalyCooldownMs: 20000, // 20 seconds
+        volumeImbalanceThreshold: 0.85,
+        absorptionRatioThreshold: 4.2,
+        icebergDetectionWindow: 120000,
+        orderSizeAnomalyThreshold: 4.5,
+        normalSpreadBps: 12,
+        tickSize: 0.01,
+        logger,
+    });
+
     const signalCoordinator = new SignalCoordinator(
         {
             requiredConfirmations: 1,
@@ -1169,8 +1269,8 @@ export function createDependencies(): Dependencies {
         storage: new Storage(),
         binanceFeed: new BinanceDataFeed(),
         tradesProcessor: new TradesProcessor(logger),
-        orderBookProcessor: new OrderBookProcessor(),
-        signalLogger: new SignalLogger("signals.csv"),
+        orderBookProcessor,
+        signalLogger,
         logger,
         metricsCollector,
         rateLimiter,

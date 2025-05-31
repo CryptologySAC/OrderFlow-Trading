@@ -88,3 +88,100 @@ canvas {
     height: 600px;
     padding: 10px;
 }
+
+.anomaly-list-container {
+    position: absolute;
+    left: 2320px;
+    top: 200px;
+    width: 380px;
+    height: 600px;
+    background: white;
+    border: 1px solid #ccc;
+    padding: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.anomaly-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    margin-bottom: 8px;
+    font-size: 16px;
+}
+.anomaly-filter label {
+    margin-right: 10px;
+    font-weight: normal;
+}
+
+.anomaly-list {
+    overflow-y: auto;
+    flex: 1;
+    font-size: 14px;
+}
+.anomaly-row {
+    padding: 5px 0;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+}
+.anomaly-row.critical {
+    color: #fff;
+    background: #e53935;
+    font-weight: bold;
+}
+.anomaly-row.high {
+    color: #fff;
+    background: #ffb300;
+    font-weight: bold;
+}
+.anomaly-row.medium {
+    color: #333;
+    background: #fffde7;
+}
+.anomaly-row.info {
+    color: #333;
+    background: #e3f2fd;
+}
+.anomaly-type {
+    display: inline-block;
+    width: 24px;
+    text-align: center;
+    font-size: 18px;
+    margin-right: 8px;
+}
+
+.anomaly-badge {
+    position: absolute;
+    z-index: 50;
+    right: 50px;
+    top: 80px;
+    padding: 8px 16px;
+    border-radius: 16px;
+    color: #fff;
+    font-weight: bold;
+    font-size: 18px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    pointer-events: none;
+    animation: badgefade 4s linear forwards;
+}
+.anomaly-badge.critical {
+    background: #e53935;
+}
+.anomaly-badge.high {
+    background: #ffb300;
+    color: #333;
+}
+@keyframes badgefade {
+    0% {
+        opacity: 1;
+    }
+    80% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
+}

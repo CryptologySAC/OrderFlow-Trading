@@ -9,6 +9,11 @@ dotenv.config();
 export class Config {
     // Symbol configuration
     static readonly SYMBOL = (process.env.SYMBOL ?? "LTCUSDT").toUpperCase();
+    static readonly PRICE_PRECISION = parseInt(
+        process.env.PRICE_PRECISION ?? "2",
+        10
+    );
+    static readonly TICK_SIZE = 1 / Math.pow(10, this.PRICE_PRECISION);
 
     // Server configuration
     static readonly HTTP_PORT = parseInt(process.env.PORT ?? "3000", 10);

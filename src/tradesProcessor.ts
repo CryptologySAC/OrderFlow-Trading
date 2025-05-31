@@ -4,15 +4,20 @@ import { randomUUID } from "crypto";
 import { Storage } from "./infrastructure/storage.js";
 import { BinanceDataFeed } from "./utils/binance.js";
 import { SpotWebsocketStreams, SpotWebsocketAPI } from "@binance/spot";
-import { WebSocketMessage } from "./utils/interfaces.js";
-import { PlotTrade } from "./utils/types.js";
+import type { WebSocketMessage } from "./utils/interfaces.js";
+import type { PlotTrade } from "./utils/types.js";
+import type {
+    EnrichedTradeEvent,
+    //AggressiveTrade,
+} from "./types/marketEvents.js";
+
 import { Logger } from "./infrastructure/logger.js";
 import { MetricsCollector } from "./infrastructure/metricsCollector.js";
 
 export interface ITradesProcessor {
     fillBacklog(): Promise<void>;
     requestBacklog(amount: number): PlotTrade[];
-    addTrade(data: SpotWebsocketStreams.AggTradeResponse): WebSocketMessage;
+    onEnrichedTrade(event: EnrichedTradeEvent): WebSocketMessage;
 }
 
 export class TradesProcessor implements ITradesProcessor {
@@ -58,13 +63,6 @@ export class TradesProcessor implements ITradesProcessor {
                     break;
                 }
 
-                //const inserted = this.storage.saveAggregatedTradesBulk(
-                //    aggregatedTrades,
-                //    this.symbol
-                //);
-                //console.info(
-                //    `Preloaded and inserted ${inserted} aggTrades for ${this.symbol}`
-                //);
                 for (const trade of aggregatedTrades) {
                     if (trade.T && trade.T > this.thresholdTime) {
                         this.thresholdTime = trade.T;
@@ -134,7 +132,7 @@ export class TradesProcessor implements ITradesProcessor {
     /**
      * Process and store a live trade, returning a formatted message
      */
-    public addTrade(
+    protected addTrade(
         data: SpotWebsocketStreams.AggTradeResponse
     ): WebSocketMessage {
         try {
@@ -156,6 +154,39 @@ export class TradesProcessor implements ITradesProcessor {
             };
         } catch (error) {
             this.handleError(error as Error, "addTrade");
+            return {
+                type: "error",
+                now: Date.now(),
+                data: error,
+            };
+        }
+    }
+
+    /**
+     * Process and store an EnrichedTradeEvent (from event stream), returning a formatted message
+     */
+    public onEnrichedTrade(event: EnrichedTradeEvent): WebSocketMessage {
+        try {
+            // Save as generic trade (you may want to create a more specific handler if needed)
+            // If EnrichedTradeEvent is compatible with agg trade, you could store it directly:
+            this.storage.saveAggregatedTrade(event.originalTrade, this.symbol);
+
+            const processedTrade: PlotTrade = {
+                time: event.timestamp ?? 0,
+                price: event.price ?? 0,
+                quantity: event.quantity ?? 0,
+                orderType: event.buyerIsMaker ? "SELL" : "BUY",
+                symbol: event.pair,
+                tradeId: event.originalTrade?.a ?? event.timestamp ?? 0,
+            };
+
+            return {
+                type: "trade",
+                now: Date.now(),
+                data: processedTrade,
+            };
+        } catch (error) {
+            this.handleError(error as Error, "onEnrichedTrade");
             return {
                 type: "error",
                 now: Date.now(),

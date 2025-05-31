@@ -16,7 +16,7 @@ export async function main(): Promise<void> {
         const dependencies = createDependencies();
 
         // Create dashboard
-        const dashboard = new OrderFlowDashboard(dependencies);
+        const dashboard = await OrderFlowDashboard.create(dependencies);
 
         // Start the application
         await dashboard.startDashboard();
