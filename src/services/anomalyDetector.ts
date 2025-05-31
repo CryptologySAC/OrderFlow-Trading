@@ -1,4 +1,10 @@
 // src/services/anomalyDetector.ts
+/**********************************************************************
+ * AnomalyDetector
+ * Emits `"anomaly"` (and `"anomaly:{symbol}"`) EventEmitter events
+ * when market anomalies are detected in orderflow and orderbook data.
+ *********************************************************************/
+
 import { EventEmitter } from "events";
 import type { MarketAnomaly } from "../utils/types.js";
 import type { SpoofingDetector } from "../services/spoofingDetector.js";
@@ -7,19 +13,33 @@ import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
 
 export interface AnomalyDetectorOptions {
+    /** Rolling trade window size for statistics (default: 1000 trades) */
     windowSize?: number;
-    normalSpreadBps?: number; // basis points
+    /** Baseline bid/ask spread in basis points (default: 10 = 0.1%) */
+    normalSpreadBps?: number;
+    /** Minimum number of trades before detection (default: 100) */
     minHistory?: number;
+    /** Optional spoofing detector instance for spoof wall detection. */
     spoofingDetector?: SpoofingDetector;
+    /** Logger instance for diagnostics and anomaly logging */
     logger?: Logger;
+    /** Minimum ms between duplicate anomaly events (default: 10,000ms) */
     anomalyCooldownMs?: number;
+    /** Threshold for order book/flow imbalance detection (default: 0.7) */
     volumeImbalanceThreshold?: number;
+    /** Absorption ratio required for absorption anomaly (default: 3.0) */
     absorptionRatioThreshold?: number;
+    /** Milliseconds to track iceberg refill patterns (default: 60,000ms) */
     icebergDetectionWindow?: number;
+    /** Order size anomaly z-score threshold (default: 3) */
     orderSizeAnomalyThreshold?: number;
+    /** Price increment for tick/zone rounding (default: 0.01) */
     tickSize?: number;
 }
 
+/**
+ * All supported anomaly types detected and emitted by AnomalyDetector.
+ */
 export type AnomalyType =
     | "flash_crash"
     | "liquidity_void"
@@ -35,12 +55,18 @@ export type AnomalyType =
     | "order_size_anomaly"
     | "whale_activity";
 
+/**
+ * Structure of an emitted anomaly event.
+ */
 export interface AnomalyEvent extends MarketAnomaly {
     type: AnomalyType;
     severity: "critical" | "high" | "medium" | "info";
     details: Record<string, unknown>;
 }
 
+/**
+ * Represents a snapshot of recent market state for detection/scoring.
+ */
 interface MarketSnapshot {
     price: number;
     aggressiveVolume: number;
@@ -55,6 +81,9 @@ interface MarketSnapshot {
     bestAsk?: number;
 }
 
+/**
+ * Aggregate flow metrics for flow imbalance detection.
+ */
 interface FlowMetrics {
     buyVolume: number;
     sellVolume: number;
@@ -73,6 +102,9 @@ interface OrderSizeStats {
     sortedSizes: number[]; // size bucket -> count
 }
 
+/**
+ * Represents a candidate iceberg order for detection logic.
+ */
 interface IcebergCandidate {
     price: number;
     side: "buy" | "sell";
@@ -83,6 +115,14 @@ interface IcebergCandidate {
     refillPattern: number[]; // time deltas between refills
 }
 
+/**
+ * High-level, production-grade anomaly detection engine for real-time orderflow.
+ * Emits "anomaly" and "anomaly:{symbol}" events when any anomaly is detected.
+ *
+ * @remarks
+ * Use this detector for systematic monitoring of market risk, manipulation, regime shifts, or structural failures
+ * in high-frequency trading, risk engines, or orderflow research.
+ */
 export class AnomalyDetector extends EventEmitter {
     private marketHistory: RollingWindow<MarketSnapshot>;
     private readonly windowSize: number;
@@ -151,6 +191,10 @@ export class AnomalyDetector extends EventEmitter {
         {};
     private recentAnomalies: AnomalyEvent[] = [];
 
+    /**
+     * Construct a new AnomalyDetector.
+     * @param options AnomalyDetectorOptions (all fields optional)
+     */
     constructor(options: AnomalyDetectorOptions = {}) {
         super();
         this.windowSize = options.windowSize ?? 1000;
@@ -182,7 +226,10 @@ export class AnomalyDetector extends EventEmitter {
     }
 
     /**
-     * Update best bid/ask from orderbook updates
+     * Update the best bid/ask quotes from orderbook.
+     * Call on every depth snapshot to keep spread and passive liquidity stats in sync.
+     * @param bestBid Current best bid price.
+     * @param bestAsk Current best ask price.
      */
     public updateBestQuotes(bestBid: number, bestAsk: number): void {
         this.currentBestBid = bestBid;
@@ -191,7 +238,9 @@ export class AnomalyDetector extends EventEmitter {
     }
 
     /**
-     * Main entry point - process enriched trades
+     * Main entry point: process a new EnrichedTradeEvent.
+     * Updates rolling windows and runs anomaly checks.
+     * @param trade Enriched trade event (with aggressive and passive context)
      */
     public onEnrichedTrade(trade: EnrichedTradeEvent): void {
         try {
@@ -250,12 +299,19 @@ export class AnomalyDetector extends EventEmitter {
     }
 
     /**
-     * Order size distribution tracking
+     * Tracks order size for order size anomaly, iceberg, whale detection.
+     * @param size Order size
+     * @param price Trade price
+     * @param time Timestamp (ms)
      */
     private trackOrderSize(size: number, price: number, time: number): void {
         this.orderSizeHistory.push({ size, price, time });
     }
 
+    /**
+     * Calculates distribution statistics for order size anomaly detection.
+     * @returns OrderSizeStats object
+     */
     private calculateOrderSizeStats(): OrderSizeStats {
         const now = Date.now();
         const sizes = this.orderSizeHistory
@@ -305,7 +361,8 @@ export class AnomalyDetector extends EventEmitter {
     }
 
     /**
-     * Check for anomalous order sizes
+     * Detects order size anomaly (large/small trades).
+     * @param snapshot MarketSnapshot
      */
     private checkOrderSizeAnomaly(snapshot: MarketSnapshot): void {
         const stats = this.calculateOrderSizeStats();
@@ -393,7 +450,10 @@ export class AnomalyDetector extends EventEmitter {
     }
 
     /**
-     * Iceberg order detection
+     * Update price/volume history for iceberg detection and pruning.
+     * @param price Price
+     * @param volume Volume
+     * @param time Timestamp (ms)
      */
     private updatePriceVolumeHistory(
         price: number,
@@ -421,6 +481,11 @@ export class AnomalyDetector extends EventEmitter {
         }
     }
 
+    /**
+     * Estimates remaining iceberg size from candidate.
+     * @param candidate IcebergCandidate
+     * @returns Estimated size
+     */
     private estimateIcebergSize(candidate: IcebergCandidate): number {
         const stats = this.getOrderSizeStats();
 
@@ -480,6 +545,11 @@ export class AnomalyDetector extends EventEmitter {
         );
     }
 
+    /**
+     * Helper: calculates percentile rank of a value among sorted sizes.
+     * @param value Value to rank
+     * @returns Percentile (0-100)
+     */
     private calculatePercentileRank(value: number): number {
         const stats = this.getOrderSizeStats();
         const sortedSizes = stats.sortedSizes;
@@ -493,6 +563,10 @@ export class AnomalyDetector extends EventEmitter {
     }
 
     /**
+     * Run all anomaly detection routines on the latest market snapshot.
+     * @param snapshot Current market snapshot.
+     * @param spreadBps Optional spread for liquidity checks.
+     *
      * Runs all anomaly checks in a specific order on the latest market snapshot.
      *
      * Detection order:
@@ -535,10 +609,19 @@ export class AnomalyDetector extends EventEmitter {
         this.checkOrderSizeAnomaly(snapshot);
     }
 
+    /**
+     * Helper: round price to nearest tickSize.
+     * @param price
+     * @returns Rounded price
+     */
     private roundToTick(price: number): number {
         return Math.round(price / this.tickSize) * this.tickSize;
     }
 
+    /**
+     * Detects iceberg orders via refill pattern and passive absorption.
+     * @param snapshot MarketSnapshot
+     */
     private checkIceberg(snapshot: MarketSnapshot): void {
         // Use rolling order size percentiles and refill patterns at this price/side
         const price = this.roundToTick(snapshot.price);
@@ -645,6 +728,10 @@ export class AnomalyDetector extends EventEmitter {
         }
     }
 
+    /**
+     * Detects flash crash via extreme deviation from mean/stddev.
+     * @param snapshot MarketSnapshot
+     */
     private checkFlashCrash(snapshot: MarketSnapshot): void {
         const prices = this.marketHistory.toArray().map((h) => h.price);
         const mean = this.calculateMean(prices);
@@ -677,6 +764,11 @@ export class AnomalyDetector extends EventEmitter {
         }
     }
 
+    /**
+     * Detects liquidity void via wide spread and low passive depth.
+     * @param snapshot MarketSnapshot
+     * @param spreadBps Number
+     */
     private checkLiquidityVoid(
         snapshot: MarketSnapshot,
         spreadBps?: number
@@ -730,6 +822,10 @@ export class AnomalyDetector extends EventEmitter {
         }
     }
 
+    /**
+     * Detects orderbook imbalance via passive volume asymmetry.
+     * @param snapshot MarketSnapshot
+     */
     private checkOrderbookImbalance(snapshot: MarketSnapshot): void {
         const bidVolume = snapshot.zonePassiveBidVolume;
         const askVolume = snapshot.zonePassiveAskVolume;
@@ -770,6 +866,10 @@ export class AnomalyDetector extends EventEmitter {
         }
     }
 
+    /**
+     * Detects aggressive flow imbalance in recent window.
+     * @param snapshot MarketSnapshot
+     */
     private checkFlowImbalance(snapshot: MarketSnapshot): void {
         const flowMetrics = this.calculateFlowMetrics();
         const confidence = Math.min(1, Math.abs(flowMetrics.flowImbalance));
@@ -813,6 +913,10 @@ export class AnomalyDetector extends EventEmitter {
         }
     }
 
+    /**
+     * Detects absorption by comparing passive/aggressive ratio and price range.
+     * @param snapshot MarketSnapshot
+     */
     private checkAbsorption(snapshot: MarketSnapshot): void {
         const now = Date.now();
         const recentSnapshots = this.marketHistory
@@ -871,7 +975,12 @@ export class AnomalyDetector extends EventEmitter {
         });
     }
 
-    // Multi-factor confidence model for absorption
+    /**
+     * Calculates confidence for absorption anomaly.
+     * @param snapshot MarketSnapshot
+     * @param recentSnapshots MarketSnapshot[]
+     * @returns Confidence score [0,1]
+     */
     private calculateAbsorptionConfidence(
         snapshot: MarketSnapshot,
         recentSnapshots: MarketSnapshot[]
@@ -932,6 +1041,10 @@ export class AnomalyDetector extends EventEmitter {
         return Math.min(1, confidence);
     }
 
+    /**
+     * Detects exhaustion by declining aggressive flow.
+     * @param snapshot MarketSnapshot
+     */
     private checkExhaustion(snapshot: MarketSnapshot): void {
         const now = Date.now();
         const flows = this.recentFlowWindow
@@ -974,7 +1087,12 @@ export class AnomalyDetector extends EventEmitter {
         });
     }
 
-    // Multi-factor confidence model for exhaustion
+    /**
+     * Calculates confidence for exhaustion anomaly.
+     * @param snapshot MarketSnapshot
+     * @param flows Recent flow array
+     * @returns Confidence score [0,1]
+     */
     private calculateExhaustionConfidence(
         snapshot: MarketSnapshot,
         flows: { volume: number; side: "buy" | "sell"; time: number }[]
@@ -1032,6 +1150,10 @@ export class AnomalyDetector extends EventEmitter {
         return Math.min(1, confidence);
     }
 
+    /**
+     * Detects whale activity via outlier order sizes.
+     * @param snapshot MarketSnapshot
+     */
     private checkWhaleActivity(snapshot: MarketSnapshot): void {
         // Use the rolling window of order sizes to establish quantiles
         const now = Date.now();
@@ -1107,6 +1229,10 @@ export class AnomalyDetector extends EventEmitter {
         });
     }
 
+    /**
+     * Detects momentum ignition: sudden burst of directional flow.
+     * @param snapshot MarketSnapshot
+     */
     private checkMomentumIgnition(snapshot: MarketSnapshot): void {
         // Sudden surge in directional flow
         const now = Date.now();
@@ -1146,6 +1272,10 @@ export class AnomalyDetector extends EventEmitter {
         }
     }
 
+    /**
+     * Detects API/data feed gaps by trade timestamp jump.
+     * @param snapshot MarketSnapshot
+     */
     private checkApiGap(snapshot: MarketSnapshot): void {
         const arr = this.marketHistory.toArray();
         const len = arr.length;
@@ -1178,6 +1308,10 @@ export class AnomalyDetector extends EventEmitter {
         }
     }
 
+    /**
+     * Detects extreme volatility via rolling stddev of returns.
+     * @param snapshot MarketSnapshot
+     */
     private checkExtremeVolatility(snapshot: MarketSnapshot): void {
         const now = Date.now();
         const recentPrices = this.marketHistory
@@ -1223,6 +1357,10 @@ export class AnomalyDetector extends EventEmitter {
         }
     }
 
+    /**
+     * Detects spoofing via the provided spoofingDetector.
+     * @param snapshot MarketSnapshot
+     */
     private checkSpoofing(snapshot: MarketSnapshot): void {
         if (!this.spoofingDetector) return;
 
@@ -1279,7 +1417,9 @@ export class AnomalyDetector extends EventEmitter {
         });
     }
 
-    // Helper methods
+    /**
+     * Helper: flow metrics in window.
+     */
     private calculateFlowMetrics(): FlowMetrics {
         const now = Date.now();
         let buyVolume = 0;
@@ -1304,17 +1444,30 @@ export class AnomalyDetector extends EventEmitter {
         return { buyVolume, sellVolume, netFlow, flowImbalance };
     }
 
+    /**
+     * Helper: dominant flow side in rolling window.
+     */
     private getDominantFlowSide(): "buy" | "sell" | "neutral" {
         const metrics = this.calculateFlowMetrics();
         if (Math.abs(metrics.flowImbalance) < 0.1) return "neutral";
         return metrics.netFlow > 0 ? "buy" : "sell";
     }
 
+    /**
+     * Helper: dominant flow side in a flow array.
+     */
     private getDominantSide(flows: { side: "buy" | "sell" }[]): "buy" | "sell" {
         const buys = flows.filter((f) => f.side === "buy").length;
         return buys > flows.length / 2 ? "buy" : "sell";
     }
 
+    /**
+     * Emit an anomaly event (global and per-symbol).
+     * Deduplicates based on severity and cooldown.
+     * @param anomaly AnomalyEvent to emit.
+     * @fires AnomalyDetector#anomaly
+     * @fires AnomalyDetector#anomaly:{symbol}
+     */
     private emitAnomaly(anomaly: AnomalyEvent): void {
         const now = Date.now();
         const last = this.lastEmitted[anomaly.type];
@@ -1339,8 +1492,18 @@ export class AnomalyDetector extends EventEmitter {
         this.recentAnomalies.push(payload);
         if (this.recentAnomalies.length > 500) this.recentAnomalies.shift();
 
-        // emit both a global and a symbol-scoped event
+        /**
+         * Emitted when any anomaly is detected.
+         * @event AnomalyDetector#anomaly
+         * @type {AnomalyEvent}
+         */
         this.emit("anomaly", payload);
+
+        /**
+         * Emitted when an anomaly is detected for the current symbol.
+         * @event AnomalyDetector#anomaly:{symbol}
+         * @type {AnomalyEvent}
+         */
         if (this.lastTradeSymbol) {
             this.emit(`anomaly:${this.lastTradeSymbol}`, payload);
         }
@@ -1351,10 +1514,16 @@ export class AnomalyDetector extends EventEmitter {
         });
     }
 
+    /**
+     * Helper: mean of values.
+     */
     private calculateMean(values: number[]): number {
         return values.reduce((sum, val) => sum + val, 0) / (values.length || 1);
     }
 
+    /**
+     * Helper: stddev of values (requires mean).
+     */
     private calculateStdDev(values: number[], mean: number): number {
         const variance =
             values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
@@ -1362,6 +1531,9 @@ export class AnomalyDetector extends EventEmitter {
         return Math.sqrt(variance);
     }
 
+    /**
+     * Returns current market health, recent anomaly stats, and recommendation.
+     */
     public getMarketHealth(): {
         isHealthy: boolean;
         recentAnomalies: number;
