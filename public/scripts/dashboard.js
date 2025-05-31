@@ -755,7 +755,7 @@ function initializeOrderBookChart(ctx) {
                     ),
                     borderColor: "rgba(255, 0, 0, 0.5)",
                     borderWidth: 1,
-                    barThickness: 2,
+                    barThickness: 10,
                 },
                 {
                     label: "Bids",
@@ -767,7 +767,7 @@ function initializeOrderBookChart(ctx) {
                     ),
                     borderColor: "rgba(0, 128, 0, 0.5)",
                     borderWidth: 1,
-                    barThickness: 2,
+                    barThickness: 10,
                 },
             ],
         },

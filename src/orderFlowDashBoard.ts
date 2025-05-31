@@ -95,8 +95,11 @@ import type { TimeContext } from "./utils/types.js";
 // Storage and processors
 import { Storage } from "./infrastructure/storage.js";
 import { BinanceDataFeed } from "./utils/binance.js";
-import { TradesProcessor } from "./tradesProcessor.js";
-import { OrderBookProcessor } from "./orderBookProcessor.js";
+import { TradesProcessor } from "./clients/tradesProcessor.js";
+import {
+    OrderBookProcessor,
+    OrderBookProcessorOptions,
+} from "./clients/orderBookProcessor.js";
 import { SignalLogger } from "./services/signalLogger.js";
 import type { WebSocketMessage } from "./utils/interfaces.js";
 
@@ -179,7 +182,7 @@ export class OrderFlowDashboard {
                 //TODO Config
                 pricePrecision: Config.PRICE_PRECISION,
                 bandTicks: 10,
-                tickSize: 0.01,
+                tickSize: Config.TICK_SIZE,
             },
             this.orderBook,
             dependencies.logger,
@@ -587,6 +590,13 @@ export class OrderFlowDashboard {
      */
     private setupEventHandlers(): void {
         // Handle data stream events
+        if (!this.dataStreamManager) {
+            throw new Error("Data stream manager is not initialized");
+        }
+
+        this.logger.info(
+            "[OrderFlowDashboard] Setting up data stream event handlers..."
+        );
         this.dataStreamManager.on(
             "trade",
             (data: SpotWebsocketStreams.AggTradeResponse) => {
@@ -612,7 +622,10 @@ export class OrderFlowDashboard {
             });
         });
 
-        if (this.preprocessor)
+        if (this.preprocessor) {
+            this.logger.info(
+                "[OrderFlowDashboard] Setting up preprocessor event handlers..."
+            );
             this.preprocessor.on(
                 "enriched_trade",
                 (enrichedTrade: EnrichedTradeEvent) => {
@@ -630,41 +643,54 @@ export class OrderFlowDashboard {
                     }
                 }
             );
-        this.preprocessor?.on(
-            "orderbook_update",
-            (orderBookUpdate: OrderBookSnapshot) => {
-                const orderBookMessage: WebSocketMessage =
-                    this.dependencies.orderBookProcessor.onOrderBookUpdate(
-                        orderBookUpdate
-                    );
-                if (orderBookMessage)
-                    this.wsManager.broadcast(orderBookMessage);
-            }
-        );
+            this.preprocessor?.on(
+                "orderbook_update",
+                (orderBookUpdate: OrderBookSnapshot) => {
+                    const orderBookMessage: WebSocketMessage =
+                        this.dependencies.orderBookProcessor.onOrderBookUpdate(
+                            orderBookUpdate
+                        );
+                    if (orderBookMessage)
+                        this.wsManager.broadcast(orderBookMessage);
+                }
+            );
+        }
 
-        this.accumulationDetector.on(
-            "accumulation",
-            (event: AccumulationResult) => {
-                //TODO make this robust
-                this.logger.warn("Market accumulation detected:", { event });
-            }
-        );
+        if (this.accumulationDetector) {
+            this.logger.info(
+                "[OrderFlowDashboard] Setting up accumulation detector event handlers..."
+            );
+            this.accumulationDetector.on(
+                "accumulation",
+                (event: AccumulationResult) => {
+                    //TODO make this robust
+                    this.logger.warn("Market accumulation detected:", {
+                        event,
+                    });
+                }
+            );
+        }
 
-        this.anomalyDetector.on("anomaly", (event: AnomalyEvent) => {
-            if (
-                event &&
-                (event.severity === "critical" || event.severity === "high")
-            ) {
-                this.logger.warn("Market anomaly detected:", { event });
-            }
-            const message: WebSocketMessage = {
-                type: "anomaly",
-                data: event,
-                now: Date.now(),
-            };
-            this.wsManager.broadcast(message);
-            // TODO Take action (pause trading, alert, etc.)
-        });
+        if (this.anomalyDetector) {
+            this.logger.info(
+                "[OrderFlowDashboard] Setting up anomaly detector event handlers..."
+            );
+            this.anomalyDetector.on("anomaly", (event: AnomalyEvent) => {
+                if (
+                    event &&
+                    (event.severity === "critical" || event.severity === "high")
+                ) {
+                    this.logger.warn("Market anomaly detected:", { event });
+                }
+                const message: WebSocketMessage = {
+                    type: "anomaly",
+                    data: event,
+                    now: Date.now(),
+                };
+                this.wsManager.broadcast(message);
+                // TODO Take action (pause trading, alert, etc.)
+            });
+        }
     }
 
     /**
@@ -1226,6 +1252,15 @@ export function createDependencies(): Dependencies {
             maxBufferSize: 1000,
             tickSize: Config.TICK_SIZE,
             precision: Config.PRICE_PRECISION,
+        } as OrderBookProcessorOptions,
+        logger,
+        metricsCollector
+    );
+
+    const tradesProcessor = new TradesProcessor(
+        {
+            symbol: Config.SYMBOL,
+            storageTime: Config.MAX_STORAGE_TIME,
         },
         logger,
         metricsCollector
@@ -1268,7 +1303,7 @@ export function createDependencies(): Dependencies {
     return {
         storage: new Storage(),
         binanceFeed: new BinanceDataFeed(),
-        tradesProcessor: new TradesProcessor(logger),
+        tradesProcessor,
         orderBookProcessor,
         signalLogger,
         logger,

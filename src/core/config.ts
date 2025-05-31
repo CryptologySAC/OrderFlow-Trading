@@ -14,6 +14,10 @@ export class Config {
         10
     );
     static readonly TICK_SIZE = 1 / Math.pow(10, this.PRICE_PRECISION);
+    static readonly MAX_STORAGE_TIME = parseInt(
+        process.env.MAX_STORAGE_TIME ?? "5400000",
+        10
+    ); // 90 minutes
 
     // Server configuration
     static readonly HTTP_PORT = parseInt(process.env.PORT ?? "3000", 10);

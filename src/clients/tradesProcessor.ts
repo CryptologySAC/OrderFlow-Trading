@@ -1,18 +1,14 @@
-import dotenv from "dotenv";
-dotenv.config();
+// src/clients/tradesProcessor.ts
 import { randomUUID } from "crypto";
-import { Storage } from "./infrastructure/storage.js";
-import { BinanceDataFeed } from "./utils/binance.js";
-import { SpotWebsocketStreams, SpotWebsocketAPI } from "@binance/spot";
-import type { WebSocketMessage } from "./utils/interfaces.js";
-import type { PlotTrade } from "./utils/types.js";
-import type {
-    EnrichedTradeEvent,
-    //AggressiveTrade,
-} from "./types/marketEvents.js";
+import { Storage } from "../infrastructure/storage.js";
+import { BinanceDataFeed } from "../utils/binance.js";
+import { SpotWebsocketAPI } from "@binance/spot";
+import type { WebSocketMessage } from "../utils/interfaces.js";
+import type { PlotTrade } from "../utils/types.js";
+import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 
-import { Logger } from "./infrastructure/logger.js";
-import { MetricsCollector } from "./infrastructure/metricsCollector.js";
+import { Logger } from "../infrastructure/logger.js";
+import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 
 export interface ITradesProcessor {
     fillBacklog(): Promise<void>;
@@ -20,21 +16,32 @@ export interface ITradesProcessor {
     onEnrichedTrade(event: EnrichedTradeEvent): WebSocketMessage;
 }
 
+export interface TradesProcessorOptions {
+    symbol?: string;
+    storageTime?: number; // in milliseconds
+}
+
 export class TradesProcessor implements ITradesProcessor {
     private readonly binanceFeed = new BinanceDataFeed();
-    private readonly symbol: string = process.env.SYMBOL ?? "LTCUSDT";
+    private readonly symbol: string;
     private readonly storage = new Storage();
-    private readonly storageTime: number =
-        parseInt(process.env.MAX_STORAGE_TIME ?? "", 10) || 1000 * 60 * 90;
-    private thresholdTime: number = Date.now() - this.storageTime;
+    private readonly storageTime: number;
+    private thresholdTime: number;
     private aggTradeTemp: SpotWebsocketAPI.TradesAggregateResponseResultInner[] =
         [];
-    private readonly logger;
-    private readonly metricsCollector: MetricsCollector =
-        new MetricsCollector();
+    private readonly logger: Logger;
+    private readonly metricsCollector: MetricsCollector;
 
-    constructor(logger: Logger) {
+    constructor(
+        options: TradesProcessorOptions,
+        logger: Logger,
+        metricsCollector: MetricsCollector
+    ) {
         this.logger = logger;
+        this.metricsCollector = metricsCollector;
+        this.symbol = options.symbol ?? "LTCUSDT";
+        this.storageTime = options.storageTime ?? 1000 * 60 * 90;
+        this.thresholdTime = Date.now() - this.storageTime;
     }
 
     /**
@@ -130,45 +137,23 @@ export class TradesProcessor implements ITradesProcessor {
     }
 
     /**
-     * Process and store a live trade, returning a formatted message
-     */
-    protected addTrade(
-        data: SpotWebsocketStreams.AggTradeResponse
-    ): WebSocketMessage {
-        try {
-            this.storage.saveAggregatedTrade(data, this.symbol);
-
-            const processedTrade: PlotTrade = {
-                time: data.T ?? 0,
-                price: data.p && !isNaN(+data.p) ? parseFloat(data.p) : 0,
-                quantity: data.q && !isNaN(+data.q) ? parseFloat(data.q) : 0,
-                orderType: data.m ? "SELL" : "BUY",
-                symbol: this.symbol,
-                tradeId: data.a ?? 0,
-            };
-
-            return {
-                type: "trade",
-                now: Date.now(),
-                data: processedTrade,
-            };
-        } catch (error) {
-            this.handleError(error as Error, "addTrade");
-            return {
-                type: "error",
-                now: Date.now(),
-                data: error,
-            };
-        }
-    }
-
-    /**
      * Process and store an EnrichedTradeEvent (from event stream), returning a formatted message
      */
     public onEnrichedTrade(event: EnrichedTradeEvent): WebSocketMessage {
         try {
             // Save as generic trade (you may want to create a more specific handler if needed)
             // If EnrichedTradeEvent is compatible with agg trade, you could store it directly:
+            if (!event.originalTrade) {
+                this.logger.warn(
+                    "[TradesProcessor] EnrichedTradeEvent missing originalTrade",
+                    { event }
+                );
+                return {
+                    type: "error",
+                    now: Date.now(),
+                    data: "EnrichedTradeEvent missing originalTrade",
+                };
+            }
             this.storage.saveAggregatedTrade(event.originalTrade, this.symbol);
 
             const processedTrade: PlotTrade = {
@@ -177,7 +162,8 @@ export class TradesProcessor implements ITradesProcessor {
                 quantity: event.quantity ?? 0,
                 orderType: event.buyerIsMaker ? "SELL" : "BUY",
                 symbol: event.pair,
-                tradeId: event.originalTrade?.a ?? event.timestamp ?? 0,
+                tradeId:
+                    event.originalTrade?.a ?? event.timestamp ?? Date.now(),
             };
 
             return {

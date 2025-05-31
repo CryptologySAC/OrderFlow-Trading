@@ -119,9 +119,9 @@ export class OrderflowPreprocessor
     // Should be called on every aggtrade event
     public handleAggTrade(trade: SpotWebsocketStreams.AggTradeResponse): void {
         try {
-            if (!this.isValidTrade(trade) || !this.bookState) {
+            if (!this.isValidTrade(trade)) {
                 this.metricsCollector.incrementMetric("invalidTrades");
-                return;
+                throw new Error("Invalid trade data received");
             }
 
             const aggressive = this.normalizeTradeData(trade);
@@ -194,8 +194,11 @@ export class OrderflowPreprocessor
         trade: SpotWebsocketStreams.AggTradeResponse
     ): AggressiveTrade {
         const price = parseFloat(trade.p!);
-        const normalizedPrice =
-            Math.round(price / this.tickSize) * this.tickSize;
+        const normalizedPrice = parseFloat(
+            (Math.round(price / this.tickSize) * this.tickSize).toFixed(
+                this.pricePrecision
+            )
+        );
 
         return {
             price: normalizedPrice,

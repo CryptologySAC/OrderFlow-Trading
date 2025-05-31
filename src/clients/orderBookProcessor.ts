@@ -1,8 +1,9 @@
-import type { OrderBookSnapshot, PassiveLevel } from "./types/marketEvents.js";
-import type { WebSocketMessage } from "./utils/interfaces.js";
-import { Logger } from "./infrastructure/logger.js";
-import { MetricsCollector } from "./infrastructure/metricsCollector.js";
-import { CircularBuffer } from "./utils/utils.js";
+// src/clients/orderBookProcessor.ts
+import type { OrderBookSnapshot, PassiveLevel } from "../types/marketEvents.js";
+import type { WebSocketMessage } from "../utils/interfaces.js";
+import { Logger } from "../infrastructure/logger.js";
+import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import { CircularBuffer } from "../utils/utils.js";
 
 export interface IOrderBookProcessor {
     onOrderBookUpdate(event: OrderBookSnapshot): WebSocketMessage;
@@ -37,7 +38,7 @@ interface BinConfig {
     numLevels: number;
 }
 
-interface ProcessorHealth {
+export interface ProcessorHealth {
     status: "healthy" | "degraded" | "unhealthy";
     lastUpdateMs: number;
     bufferedUpdates: number;
@@ -45,12 +46,20 @@ interface ProcessorHealth {
     processingLatencyMs: number;
 }
 
-interface ProcessorStats {
+export interface ProcessorStats {
     processedUpdates: number;
     avgProcessingTimeMs: number;
     p99ProcessingTimeMs: number;
     errorCount: number;
     lastError?: string;
+}
+
+export interface OrderBookProcessorOptions {
+    binSize?: number; // Number of price levels per bin
+    numLevels?: number; // Total number of bins to maintain
+    maxBufferSize?: number; // Max size of the recent snapshots buffer
+    tickSize?: number; // Minimum price increment
+    precision?: number; // Decimal precision for prices
 }
 
 export class OrderBookProcessor implements IOrderBookProcessor {
@@ -81,13 +90,7 @@ export class OrderBookProcessor implements IOrderBookProcessor {
     private cachedBins?: Map<number, PriceLevel>;
 
     constructor(
-        config: {
-            binSize?: number;
-            numLevels?: number;
-            maxBufferSize?: number;
-            tickSize?: number;
-            precision?: number;
-        },
+        config: OrderBookProcessorOptions = {},
         logger: Logger,
         metricsCollector: MetricsCollector
     ) {
@@ -243,17 +246,27 @@ export class OrderBookProcessor implements IOrderBookProcessor {
             // Skip levels outside our range
             if (price < config.minPrice || price > config.maxPrice) continue;
 
-            // Find the appropriate bin
-            const binPrice = this.roundToTick(
-                Math.floor(price / binIncrement) * binIncrement
-            );
-
-            const bin = bins.get(binPrice);
-            if (bin) {
-                bin.bid += level.bid;
-                bin.ask += level.ask;
-                if (level.bid > 0) bin.bidCount!++;
-                if (level.ask > 0) bin.askCount!++;
+            // Bids
+            if (level.bid > 0) {
+                const bidBinPrice = this.roundToTick(
+                    Math.floor(price / binIncrement) * binIncrement
+                );
+                const bin = bins.get(bidBinPrice);
+                if (bin) {
+                    bin.bid += level.bid;
+                    bin.bidCount!++;
+                }
+            }
+            // Asks
+            if (level.ask > 0) {
+                const askBinPrice = this.roundToTick(
+                    Math.ceil(price / binIncrement) * binIncrement
+                );
+                const bin = bins.get(askBinPrice);
+                if (bin) {
+                    bin.ask += level.ask;
+                    bin.askCount!++;
+                }
             }
         }
 
@@ -303,7 +316,11 @@ export class OrderBookProcessor implements IOrderBookProcessor {
      * Round price to tick precision
      */
     private roundToTick(price: number): number {
-        return Math.round(price / this.tickSize) * this.tickSize;
+        return parseFloat(
+            (Math.round(price / this.tickSize) * this.tickSize).toFixed(
+                this.precision
+            )
+        );
     }
 
     /**
@@ -316,10 +333,10 @@ export class OrderBookProcessor implements IOrderBookProcessor {
 
         // Clean old errors
         const cutoff = Date.now() - 60000;
-        this.errorWindow.splice(
-            0,
-            this.errorWindow.findIndex((t) => t > cutoff)
-        );
+        const firstRecent = this.errorWindow.findIndex((t) => t > cutoff);
+        if (firstRecent > 0) {
+            this.errorWindow.splice(0, firstRecent);
+        }
 
         this.logger.error("[OrderBookProcessor] Processing error", {
             error: error.message,
