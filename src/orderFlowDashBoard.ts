@@ -633,6 +633,7 @@ export class OrderFlowDashboard {
                     this.absorptionDetector.onEnrichedTrade(enrichedTrade);
                     this.anomalyDetector.onEnrichedTrade(enrichedTrade);
                     this.accumulationDetector.onEnrichedTrade(enrichedTrade);
+                    this.exhaustionDetector.onEnrichedTrade(enrichedTrade);
 
                     const aggTradeMessage: WebSocketMessage =
                         this.dependencies.tradesProcessor.onEnrichedTrade(
@@ -747,7 +748,6 @@ export class OrderFlowDashboard {
         try {
             // Update detectors
             if (this.preprocessor) this.preprocessor.handleAggTrade(data);
-            this.exhaustionDetector.addTrade(data);
             this.deltaCVDConfirmation.addTrade(data);
 
             // Update swing predictor
@@ -794,7 +794,6 @@ export class OrderFlowDashboard {
         try {
             // Update preprocessor
             if (this.preprocessor) this.preprocessor.handleDepth(data);
-            this.exhaustionDetector.addDepth(data);
 
             const processingTime = Date.now() - startTime;
             this.metricsCollector.updateMetric(
@@ -1244,7 +1243,7 @@ export function createDependencies(): Dependencies {
     const metricsCollector = new MetricsCollector();
     const signalLogger = new SignalLogger("signals.csv");
     const rateLimiter = new RateLimiter(60000, 100);
-    const circuitBreaker = new CircuitBreaker(5, 60000, 10000);
+    const circuitBreaker = new CircuitBreaker(5, 60000, logger);
     const orderBookProcessor = new OrderBookProcessor(
         {
             binSize: 10,

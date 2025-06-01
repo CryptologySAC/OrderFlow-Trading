@@ -1,6 +1,7 @@
 // src/indicators/base/detectorUtils.ts
 import { SpotWebsocketStreams } from "@binance/spot";
-import type { TradeData } from "../../utils/utils.js";
+import type { AggressiveTrade } from "../../types/marketEvents.js";
+import { randomUUID } from "crypto";
 
 export class DetectorUtils {
     /**
@@ -58,10 +59,14 @@ export class DetectorUtils {
     /**
      * Check if trade data is valid
      */
-    public static isValidTrade(
-        trade: SpotWebsocketStreams.AggTradeResponse
-    ): boolean {
-        return !!(trade.T && trade.p && trade.q);
+    public static isValidTrade(trade: AggressiveTrade): boolean {
+        return !!(
+            trade.timestamp &&
+            trade.price &&
+            trade.quantity &&
+            trade.price > 0 &&
+            trade.quantity > 0
+        );
     }
 
     /**
@@ -69,13 +74,15 @@ export class DetectorUtils {
      */
     public static normalizeTradeData(
         trade: SpotWebsocketStreams.AggTradeResponse
-    ): TradeData {
+    ): AggressiveTrade {
         return {
             price: parseFloat(trade.p!),
             quantity: parseFloat(trade.q!),
             timestamp: trade.T!,
             buyerIsMaker: trade.m || false,
             originalTrade: trade,
+            pair: trade.s ?? "",
+            tradeId: trade.a ? trade.a.toString() : randomUUID(),
         };
     }
 }

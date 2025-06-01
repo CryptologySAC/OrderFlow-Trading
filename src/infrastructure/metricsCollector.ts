@@ -30,6 +30,22 @@ export interface Metrics {
     tradesProcessed?: number;
     tradesProcessingTime?: number;
     absorptionDetected?: number;
+    detector_absorptionSignals?: number;
+    detector_exhaustionSignals?: number;
+    detector_absorptionAggressive_volume?: number;
+    detector_exhaustionAggressive_volume?: number;
+    detector_absorptionPassive_volume?: number;
+    detector_exhaustionPassive_volume?: number;
+    absorptionDetectionAttempts?: number;
+    absorptionZonesActive?: number;
+    absorptionDetectionErrors?: number;
+    absorptionSignalsGenerated?: number;
+    absorptionPpoofingRejected?: number;
+    exhaustionDetectionAttempts?: number;
+    exhaustionDetectionErrors?: number;
+    exhaustionSpoofingRejected?: number;
+    exhaustionRefillRejected?: number;
+    exhaustionSignalsGenerated?: number;
 }
 
 /**

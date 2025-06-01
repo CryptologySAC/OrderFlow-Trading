@@ -9,7 +9,7 @@ import type { EnrichedTradeEvent } from "../../types/marketEvents.js";
  * Abstract base for all detectors (handles logging/metrics/signalLogger).
  */
 export abstract class Detector extends EventEmitter {
-    protected readonly logger: Logger;
+    public readonly logger: Logger;
     protected readonly metricsCollector: MetricsCollector;
     protected readonly signalLogger?: ISignalLogger;
 

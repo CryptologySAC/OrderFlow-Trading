@@ -6,8 +6,12 @@ import { Logger } from "../../infrastructure/logger.js";
 import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../../services/signalLogger.js";
 import { RollingWindow } from "../../utils/rollingWindow.js";
-import type { EnrichedTradeEvent } from "../../types/marketEvents.js";
 import { DetectorUtils } from "./detectorUtils.js";
+
+import type {
+    EnrichedTradeEvent,
+    AggressiveTrade,
+} from "../../types/marketEvents.js";
 
 import {
     CircularBuffer,
@@ -16,7 +20,6 @@ import {
     PassiveVolumeTracker,
     AutoCalibrator,
     PriceConfirmationManager,
-    TradeData,
     DepthLevel,
 } from "../../utils/utils.js";
 import {
@@ -29,7 +32,15 @@ import type {
     BaseDetectorSettings,
     DetectorFeatures,
     DetectorCallback,
+    PendingDetection,
 } from "../interfaces/detectorInterfaces.js";
+
+export type ZoneSample = {
+    bid: number;
+    ask: number;
+    total: number;
+    timestamp: number;
+};
 
 /**
  * Abstract base class for orderflow detectors
@@ -37,7 +48,7 @@ import type {
 export abstract class BaseDetector extends Detector implements IDetector {
     // Data storage
     protected readonly depth = new TimeAwareCache<number, DepthLevel>(300000);
-    protected readonly trades = new CircularBuffer<TradeData>(10000);
+    protected readonly trades = new CircularBuffer<AggressiveTrade>(10000);
 
     // Configuration
     protected readonly windowMs: number;
@@ -70,13 +81,20 @@ export abstract class BaseDetector extends Detector implements IDetector {
     // Abstract method for detector type
     protected abstract readonly detectorType: "absorption" | "exhaustion";
 
+    protected lastTradeId: string | null = null;
+    private zoneCleanupInterval: NodeJS.Timeout | null = null;
+
     // NEW: rolling window for passive volume tracking (strict apples-to-apples orderflow logic)
     protected readonly rollingPassiveVolume: RollingWindow;
     protected readonly zoneAgg = new Map<
         number,
-        { trades: TradeData[]; vol: number }
+        { trades: AggressiveTrade[]; vol: number }
     >();
     private totalPassive = 0;
+    protected readonly zonePassiveHistory: Map<
+        number,
+        RollingWindow<ZoneSample>
+    > = new Map();
 
     constructor(
         callback: DetectorCallback,
@@ -144,6 +162,37 @@ export abstract class BaseDetector extends Detector implements IDetector {
     }
 
     /**
+     * Setup periodic cleanup of old zone data
+     */
+    protected setupZoneCleanup(): void {
+        this.zoneCleanupInterval = setInterval(() => {
+            this.cleanupOldZoneData();
+        }, this.windowMs);
+    }
+
+    /**
+     * Clean up old zone data beyond retention window
+     */
+    protected cleanupOldZoneData(): void {
+        const cutoff = Date.now() - this.windowMs * 2;
+        let cleanedCount = 0;
+
+        for (const [zone, window] of this.zonePassiveHistory) {
+            const lastTimestamp = window.toArray().at(-1)?.timestamp ?? 0;
+            if (lastTimestamp < cutoff) {
+                this.zonePassiveHistory.delete(zone);
+                cleanedCount++;
+            }
+        }
+
+        if (cleanedCount > 0) {
+            this.logger.debug(
+                `[${this.constructor.name}] Cleaned ${cleanedCount} old zones`
+            );
+        }
+    }
+
+    /**
      * Validate detector settings
      */
     protected validateSettings(settings: BaseDetectorSettings): void {
@@ -173,17 +222,8 @@ export abstract class BaseDetector extends Detector implements IDetector {
     /**
      * Add a new trade to the detector
      */
-    public addTrade(trade: SpotWebsocketStreams.AggTradeResponse): void {
-        if (!DetectorUtils.isValidTrade(trade)) {
-            this.logger.warn(
-                `[${this.constructor.name}] Invalid trade data received`
-            );
-            return;
-        }
-
+    public addTrade(tradeData: AggressiveTrade): void {
         try {
-            const tradeData: TradeData =
-                DetectorUtils.normalizeTradeData(trade);
             this.trades.add(tradeData);
             const zone = this.calculateZone(tradeData.price);
             const bucket = this.zoneAgg.get(zone) ?? { trades: [], vol: 0 };
@@ -212,12 +252,283 @@ export abstract class BaseDetector extends Detector implements IDetector {
         }
     }
 
-    protected checkForSignal(triggerTrade: TradeData): void {
+    protected checkForSignal(triggerTrade: AggressiveTrade): void {
         void triggerTrade;
     }
 
     public onEnrichedTrade(event: EnrichedTradeEvent): void {
-        void event;
+        try {
+            const zone = this.calculateZone(event.price);
+
+            // Ensure zone history exists
+            this.ensureZoneHistory(zone);
+
+            // Update zone passive history
+            this.updateZonePassiveHistory(zone, event);
+
+            // Add trade with deduplication
+            if (this.lastTradeId !== event.tradeId) {
+                this.lastTradeId = event.tradeId;
+                this.addTrade(event);
+            }
+
+            // Let subclasses handle specific logic
+            this.onEnrichedTradeSpecific(event);
+        } catch (error) {
+            this.handleError(
+                error as Error,
+                `${this.constructor.name}.onEnrichedTrade`
+            );
+        }
+    }
+
+    /**
+     * Ensure zone history window exists
+     */
+    protected ensureZoneHistory(zone: number): void {
+        if (!this.zonePassiveHistory.has(zone)) {
+            this.zonePassiveHistory.set(
+                zone,
+                new RollingWindow<ZoneSample>(100, false)
+            );
+        }
+    }
+
+    /**
+     * Update zone passive history with new snapshot
+     */
+    protected updateZonePassiveHistory(
+        zone: number,
+        event: EnrichedTradeEvent
+    ): void {
+        const zoneHistory = this.zonePassiveHistory.get(zone)!;
+
+        const lastSnapshot =
+            zoneHistory.count() > 0 ? zoneHistory.toArray().at(-1)! : null;
+        const newSnapshot: ZoneSample = {
+            bid: event.zonePassiveBidVolume,
+            ask: event.zonePassiveAskVolume,
+            total: event.zonePassiveBidVolume + event.zonePassiveAskVolume,
+            timestamp: event.timestamp,
+        };
+
+        // Only add if values changed (avoid duplicate snapshots)
+        if (
+            !lastSnapshot ||
+            lastSnapshot.bid !== newSnapshot.bid ||
+            lastSnapshot.ask !== newSnapshot.ask
+        ) {
+            zoneHistory.push(newSnapshot);
+        }
+    }
+
+    /**
+     * Subclass-specific enriched trade handling
+     */
+    protected abstract onEnrichedTradeSpecific(event: EnrichedTradeEvent): void;
+
+    /**
+     * Group trades by price zones
+     */
+    protected groupTradesByZone(
+        trades: AggressiveTrade[],
+        zoneTicks: number
+    ): Map<number, AggressiveTrade[]> {
+        const byPrice = new Map<number, AggressiveTrade[]>();
+
+        // Group by exact price first
+        for (const trade of trades) {
+            const price = +trade.price.toFixed(this.pricePrecision);
+            if (!byPrice.has(price)) {
+                byPrice.set(price, []);
+            }
+            byPrice.get(price)!.push(trade);
+        }
+
+        // Then group prices into zones
+        const zoneMap = new Map<number, AggressiveTrade[]>();
+        const tickSize = Math.pow(10, -this.pricePrecision);
+        const zoneSize = zoneTicks * tickSize;
+
+        for (const [price, tradesAtPrice] of byPrice) {
+            const zone = +(Math.round(price / zoneSize) * zoneSize).toFixed(
+                this.pricePrecision
+            );
+            if (!zoneMap.has(zone)) {
+                zoneMap.set(zone, []);
+            }
+            zoneMap.get(zone)!.push(...tradesAtPrice);
+        }
+
+        return zoneMap;
+    }
+
+    /**
+     * Calculate zone volumes with common logic
+     */
+    protected calculateZoneVolumes(
+        zone: number,
+        tradesAtZone: AggressiveTrade[],
+        zoneTicks: number,
+        useMultiZone: boolean = this.features.multiZone ?? false
+    ): {
+        aggressive: number;
+        passive: number;
+        trades: SpotWebsocketStreams.AggTradeResponse[];
+    } {
+        if (useMultiZone) {
+            return this.sumVolumesInBand(zone, Math.floor(zoneTicks / 2));
+        }
+
+        const now = Date.now();
+        const aggressive = tradesAtZone.reduce((sum, t) => sum + t.quantity, 0);
+        const trades = tradesAtZone.map((t) => t.originalTrade);
+
+        // Get passive volume from zone history
+        const zoneHistory = this.zonePassiveHistory.get(zone);
+        const passiveSnapshots = zoneHistory
+            ? zoneHistory
+                  .toArray()
+                  .filter((s) => now - s.timestamp <= this.windowMs)
+            : [];
+
+        const passive =
+            passiveSnapshots.length > 0
+                ? DetectorUtils.calculateMean(
+                      passiveSnapshots.map((s) => s.total)
+                  )
+                : 0;
+
+        return { aggressive, passive, trades };
+    }
+
+    /**
+     * Generic detection handler
+     */
+    protected handleDetection(params: {
+        zone: number;
+        price: number;
+        side: "buy" | "sell";
+        trades: SpotWebsocketStreams.AggTradeResponse[];
+        aggressive: number;
+        passive: number;
+        refilled: boolean;
+        metadata?: Record<string, unknown>;
+    }): void {
+        const detection: PendingDetection = {
+            id: randomUUID(),
+            time: Date.now(),
+            price: params.price,
+            side: params.side,
+            zone: params.zone,
+            trades: params.trades,
+            aggressive: params.aggressive,
+            passive: params.passive,
+            refilled: params.refilled,
+            confirmed: false,
+            metadata: params.metadata,
+        };
+
+        if (this.features.priceResponse) {
+            this.priceConfirmationManager.addPendingDetection(detection);
+            this.logger.info(
+                `[${this.constructor.name}] Pending ${this.detectorType} at ${params.price}`,
+                {
+                    zone: params.zone,
+                    side: params.side,
+                    aggressive: params.aggressive,
+                    passive: params.passive,
+                }
+            );
+        } else {
+            this.fireDetection(detection);
+        }
+
+        if (this.features.autoCalibrate) {
+            this.autoCalibrator.recordSignal();
+        }
+
+        // Emit metrics
+        this.metricsCollector.incrementMetric(
+            `detector_${this.detectorType}Signals`
+        );
+        this.metricsCollector.updateMetric(
+            `detector_${this.detectorType}Aggressive_volume`,
+            params.aggressive
+        );
+        this.metricsCollector.updateMetric(
+            `detector_${this.detectorType}Passive_volume`,
+            params.passive
+        );
+    }
+
+    /**
+     * Fire detection callback
+     */
+    protected fireDetection(detection: PendingDetection): void {
+        this.callback({
+            id: detection.id || randomUUID(),
+            price: detection.price,
+            side: detection.side,
+            trades: detection.trades,
+            totalAggressiveVolume: detection.aggressive,
+            passiveVolume: detection.passive,
+            zone: detection.zone,
+            refilled: detection.refilled,
+            detectedAt: Date.now(),
+            detectorSource: this.detectorType,
+        });
+
+        this.logger.info(
+            `[${this.constructor.name}] Signal fired at ${detection.price}`,
+            {
+                zone: detection.zone,
+                side: detection.side,
+                type: this.detectorType,
+                aggressive: detection.aggressive,
+                passive: detection.passive,
+            }
+        );
+
+        // Log to signal logger if available
+        if (this.signalLogger) {
+            this.signalLogger.logEvent({
+                symbol: this.symbol,
+                type: this.detectorType,
+                signalPrice: detection.price,
+                side: detection.side,
+                aggressiveVolume: detection.aggressive,
+                passiveVolume: detection.passive,
+                timestamp: detection.time.toString(),
+                zone: detection.zone,
+                metadata: detection.metadata,
+                refilled: detection.refilled,
+                confirmed: detection.confirmed,
+            });
+        }
+    }
+
+    /**
+     * Cleanup resources
+     */
+    public cleanup(): void {
+        this.logger.info(`[${this.constructor.name}] Cleanup initiated`);
+
+        // Clear zone cleanup interval
+        if (this.zoneCleanupInterval) {
+            clearInterval(this.zoneCleanupInterval);
+            this.zoneCleanupInterval = null;
+        }
+
+        // Force cleanup of caches
+        this.depth.forceCleanup();
+        this.lastSignal.forceCleanup();
+
+        // Clear zone data
+        this.zonePassiveHistory.clear();
+        this.zoneAgg.clear();
+
+        this.logger.info(`[${this.constructor.name}] Cleanup completed`);
     }
 
     /**
@@ -286,10 +597,33 @@ export abstract class BaseDetector extends Detector implements IDetector {
         }
     }
 
+    protected checkPassiveImbalance(zone: number): {
+        imbalance: number;
+        dominantSide: "bid" | "ask" | "neutral";
+    } {
+        const zoneHistory = this.zonePassiveHistory.get(zone);
+        if (!zoneHistory || zoneHistory.count() === 0) {
+            return { imbalance: 0, dominantSide: "neutral" };
+        }
+
+        const recent = zoneHistory.toArray().slice(-10);
+        const avgBid = DetectorUtils.calculateMean(recent.map((s) => s.bid));
+        const avgAsk = DetectorUtils.calculateMean(recent.map((s) => s.ask));
+
+        const total = avgBid + avgAsk;
+        if (total === 0) return { imbalance: 0, dominantSide: "neutral" };
+
+        const imbalance = (avgBid - avgAsk) / total;
+        const dominantSide =
+            imbalance > 0.2 ? "bid" : imbalance < -0.2 ? "ask" : "neutral";
+
+        return { imbalance, dominantSide };
+    }
+
     /**
      * Get trade side
      */
-    protected getTradeSide(trade: TradeData): "buy" | "sell" {
+    protected getTradeSide(trade: AggressiveTrade): "buy" | "sell" {
         if (this.features.sideOverride) {
             this.logger.debug(
                 `[${this.constructor.name}] Side override enabled`,
@@ -364,6 +698,61 @@ export abstract class BaseDetector extends Detector implements IDetector {
     }
 
     /**
+     * Check cooldown
+     */
+    protected checkCooldown(zone: number, side: "buy" | "sell"): boolean {
+        const eventKey = `${zone}_${side}`;
+        const now = Date.now();
+        const lastSignalTime = this.lastSignal.get(eventKey) || 0;
+
+        if (now - lastSignalTime <= this.eventCooldownMs) {
+            return false;
+        }
+
+        this.lastSignal.set(eventKey, now);
+        return true;
+    }
+
+    /**
+     * Check if price was spoofed
+     */
+    protected isSpoofed(
+        price: number,
+        side: "buy" | "sell",
+        timestamp: number
+    ): boolean {
+        if (
+            this.spoofingDetector.wasSpoofed(
+                price,
+                side,
+                timestamp,
+                (p, from, to) => this.getAggressiveAtPrice(p, from, to)
+            )
+        ) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Check for passive refill
+     */
+    protected checkRefill(
+        price: number,
+        side: "buy" | "sell",
+        passiveQty: number
+    ): boolean {
+        if (this.features.passiveHistory) {
+            return this.passiveVolumeTracker.hasPassiveRefilled(price, side);
+        }
+        return this.passiveVolumeTracker.checkRefillStatus(
+            price,
+            side,
+            passiveQty
+        );
+    }
+
+    /**
      * Sum volumes in band
      */
     protected sumVolumesInBand(
@@ -424,16 +813,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
         }
 
         return stats;
-    }
-
-    /**
-     * Cleanup resources
-     */
-    public cleanup(): void {
-        this.logger.info(`[${this.constructor.name}] Manual cleanup triggered`);
-        // Caches handle their own cleanup, but we can force it if needed
-        this.depth.forceCleanup();
-        this.lastSignal.forceCleanup();
     }
 
     /**
