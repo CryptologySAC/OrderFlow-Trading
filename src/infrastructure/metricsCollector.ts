@@ -25,6 +25,10 @@ export interface Metrics {
     orderbookProcessingErrors?: number;
     orderbookUpdatesProcessed?: number;
     orderbookProcessingTime?: number;
+    tradesErrors?: number;
+    tradesSaveDropped?: number;
+    tradesProcessed?: number;
+    tradesProcessingTime?: number;
 }
 
 /**
