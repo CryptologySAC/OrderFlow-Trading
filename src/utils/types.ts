@@ -62,6 +62,8 @@ export interface Detected {
     refilled?: boolean;
     detectedAt: number; // Timestamp for sequencing
     detectorSource: "absorption" | "exhaustion"; // Track source
+    metadata?: Record<string, unknown>; // Additional context
+    confirmed?: boolean; // Number of confirmations received
 }
 
 /* ===========================

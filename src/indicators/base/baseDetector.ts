@@ -183,7 +183,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
                 this.adaptiveZoneCalculator.updatePrice(tradeData.price);
             }
 
-            this.checkForSignal(tradeData);
+            //this.checkForSignal(tradeData);
 
             if (this.features.priceResponse) {
                 this.processConfirmations(tradeData.price);
@@ -460,7 +460,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
     /**
      * Abstract method - must be implemented by subclasses
      */
-    protected abstract checkForSignal(triggerTrade: TradeData): void;
+    //protected abstract checkForSignal(triggerTrade: TradeData): void;
 
     /**
      * Get aggressive volume at a specific price within a time window
@@ -599,5 +599,71 @@ export abstract class BaseDetector extends Detector implements IDetector {
                 ? (spreadInfo.spread * 100).toFixed(3) + "%"
                 : "N/A",
         });
+    }
+
+    /**
+     * Calculate price zone based on zone ticks
+     */
+    protected calculateZone(price: number): number {
+        const zoneTicks = this.getEffectiveZoneTicks();
+        const tickSize = Math.pow(10, -this.pricePrecision);
+        const zoneSize = zoneTicks * tickSize;
+
+        // Round price to nearest zone
+        return +(Math.round(price / zoneSize) * zoneSize).toFixed(
+            this.pricePrecision
+        );
+    }
+
+    /**
+     * Calculate mean of numeric array
+     */
+    protected calculateMean(values: number[]): number {
+        if (values.length === 0) return 0;
+        return values.reduce((sum, val) => sum + val, 0) / values.length;
+    }
+
+    /**
+     * Calculate standard deviation
+     */
+    protected calculateStdDev(values: number[]): number {
+        if (values.length === 0) return 0;
+
+        const mean = this.calculateMean(values);
+        const squaredDiffs = values.map((val) => Math.pow(val - mean, 2));
+        const variance = this.calculateMean(squaredDiffs);
+
+        return Math.sqrt(variance);
+    }
+
+    /**
+     * Calculate median
+     */
+    protected calculateMedian(values: number[]): number {
+        if (values.length === 0) return 0;
+
+        const sorted = [...values].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+
+        if (sorted.length % 2 === 0) {
+            return (sorted[mid - 1] + sorted[mid]) / 2;
+        }
+
+        return sorted[mid];
+    }
+
+    /**
+     * Calculate percentile
+     */
+    protected calculatePercentile(
+        values: number[],
+        percentile: number
+    ): number {
+        if (values.length === 0) return 0;
+
+        const sorted = [...values].sort((a, b) => a - b);
+        const index = Math.ceil((percentile / 100) * sorted.length) - 1;
+
+        return sorted[Math.max(0, index)];
     }
 }

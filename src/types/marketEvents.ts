@@ -8,6 +8,7 @@ export interface AggressiveTrade {
     timestamp: number;
     buyerIsMaker: boolean;
     pair: string;
+    tradeId: string;
     originalTrade: SpotWebsocketStreams.AggTradeResponse;
 }
 

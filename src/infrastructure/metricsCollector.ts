@@ -29,6 +29,7 @@ export interface Metrics {
     tradesSaveDropped?: number;
     tradesProcessed?: number;
     tradesProcessingTime?: number;
+    absorptionDetected?: number;
 }
 
 /**

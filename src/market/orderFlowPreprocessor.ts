@@ -9,6 +9,7 @@ import type {
 import { OrderBookState } from "./orderBookState.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import { randomUUID } from "crypto";
 
 export interface OrderflowPreprocessorOptions {
     pricePrecision?: number;
@@ -207,6 +208,7 @@ export class OrderflowPreprocessor
             buyerIsMaker: !!trade.m,
             pair: trade.s ?? "",
             originalTrade: trade,
+            tradeId: trade.a ? trade.a.toString() : randomUUID(),
         };
     }
 

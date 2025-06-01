@@ -25,6 +25,7 @@ export interface SignalEvent {
     direction?: "up" | "down";
     windowTrades?: number;
     triggerType?: "absorption" | "exhaustion";
+    metadata?: Record<string, unknown>;
 }
 
 export interface ISignalLogger {
