@@ -6,7 +6,8 @@ import { Logger } from "../../infrastructure/logger.js";
 import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../../services/signalLogger.js";
 import { RollingWindow } from "../../utils/rollingWindow.js";
-//import type { EnrichedTradeEvent } from "../../types/marketEvents.js";
+import type { EnrichedTradeEvent } from "../../types/marketEvents.js";
+import { DetectorUtils } from "./detectorUtils.js";
 
 import {
     CircularBuffer,
@@ -71,6 +72,11 @@ export abstract class BaseDetector extends Detector implements IDetector {
 
     // NEW: rolling window for passive volume tracking (strict apples-to-apples orderflow logic)
     protected readonly rollingPassiveVolume: RollingWindow;
+    protected readonly zoneAgg = new Map<
+        number,
+        { trades: TradeData[]; vol: number }
+    >();
+    private totalPassive = 0;
 
     constructor(
         callback: DetectorCallback,
@@ -168,7 +174,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
      * Add a new trade to the detector
      */
     public addTrade(trade: SpotWebsocketStreams.AggTradeResponse): void {
-        if (!this.isValidTrade(trade)) {
+        if (!DetectorUtils.isValidTrade(trade)) {
             this.logger.warn(
                 `[${this.constructor.name}] Invalid trade data received`
             );
@@ -176,14 +182,20 @@ export abstract class BaseDetector extends Detector implements IDetector {
         }
 
         try {
-            const tradeData = this.normalizeTradeData(trade);
+            const tradeData: TradeData =
+                DetectorUtils.normalizeTradeData(trade);
             this.trades.add(tradeData);
+            const zone = this.calculateZone(tradeData.price);
+            const bucket = this.zoneAgg.get(zone) ?? { trades: [], vol: 0 };
+            bucket.trades.push(tradeData);
+            bucket.vol += tradeData.quantity;
+            this.zoneAgg.set(zone, bucket);
 
             if (this.features.adaptiveZone) {
                 this.adaptiveZoneCalculator.updatePrice(tradeData.price);
             }
 
-            //this.checkForSignal(tradeData);
+            this.checkForSignal(tradeData);
 
             if (this.features.priceResponse) {
                 this.processConfirmations(tradeData.price);
@@ -200,9 +212,13 @@ export abstract class BaseDetector extends Detector implements IDetector {
         }
     }
 
-    //protected onEnrichedTrade(event: EnrichedTradeEvent): void {
-    //   void event
-    //}
+    protected checkForSignal(triggerTrade: TradeData): void {
+        void triggerTrade;
+    }
+
+    public onEnrichedTrade(event: EnrichedTradeEvent): void {
+        void event;
+    }
 
     /**
      * Add depth update
@@ -219,46 +235,13 @@ export abstract class BaseDetector extends Detector implements IDetector {
                 (update.a as [string, string][]) || []
             );
 
-            // NEW: track passive volume as rolling window
-            let passive = 0;
-            const allPrices = Array.from(this.depth.keys());
-            for (const price of allPrices) {
-                const level = this.depth.get(price);
-                if (level) {
-                    passive += level.bid + level.ask;
-                }
-            }
-            this.rollingPassiveVolume.push(passive);
+            this.rollingPassiveVolume.push(this.totalPassive);
         } catch (error) {
             this.handleError(
                 error as Error,
                 `${this.constructor.name}.addDepth`
             );
         }
-    }
-
-    /**
-     * Check if trade data is valid
-     */
-    protected isValidTrade(
-        trade: SpotWebsocketStreams.AggTradeResponse
-    ): boolean {
-        return !!(trade.T && trade.p && trade.q);
-    }
-
-    /**
-     * Normalize trade data
-     */
-    protected normalizeTradeData(
-        trade: SpotWebsocketStreams.AggTradeResponse
-    ): TradeData {
-        return {
-            price: parseFloat(trade.p!),
-            quantity: parseFloat(trade.q!),
-            timestamp: trade.T!,
-            buyerIsMaker: trade.m || false,
-            originalTrade: trade,
-        };
     }
 
     /**
@@ -271,39 +254,35 @@ export abstract class BaseDetector extends Detector implements IDetector {
         for (const [priceStr, qtyStr] of updates) {
             const price = parseFloat(priceStr);
             const qty = parseFloat(qtyStr);
+            if (isNaN(price) || isNaN(qty)) continue;
 
-            if (isNaN(price) || isNaN(qty)) {
-                this.logger.warn(
-                    `[${this.constructor.name}] Invalid depth data`,
-                    { price: priceStr, quantity: qtyStr }
-                );
-                continue;
-            }
+            const prev = this.depth.get(price) || { bid: 0, ask: 0 };
+            const delta = side === "bid" ? qty - prev.bid : qty - prev.ask;
 
-            const level = this.depth.get(price) || { bid: 0, ask: 0 };
-            level[side] = qty;
+            // update running sum once
+            this.totalPassive += delta;
 
-            if (level.bid === 0 && level.ask === 0) {
-                this.depth.delete(price);
+            // mutate level & cache
+            prev[side] = qty;
+            if (prev.bid === 0 && prev.ask === 0) {
+                this.depth.set(price, { bid: 0, ask: 0 });
             } else {
-                this.depth.set(price, level);
+                this.depth.set(price, prev);
             }
 
-            if (this.features.spoofingDetection) {
+            if (this.features.spoofingDetection)
                 this.spoofingDetector.trackPassiveChange(
                     price,
-                    level.bid,
-                    level.ask
+                    prev.bid,
+                    prev.ask
                 );
-            }
 
-            if (this.features.passiveHistory) {
+            if (this.features.passiveHistory)
                 this.passiveVolumeTracker.updatePassiveVolume(
                     price,
-                    level.bid,
-                    level.ask
+                    prev.bid,
+                    prev.ask
                 );
-            }
         }
     }
 
@@ -458,11 +437,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
     }
 
     /**
-     * Abstract method - must be implemented by subclasses
-     */
-    //protected abstract checkForSignal(triggerTrade: TradeData): void;
-
-    /**
      * Get aggressive volume at a specific price within a time window
      */
     protected getAggressiveVolumeAtPrice(
@@ -476,17 +450,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
                 now - t.timestamp <= windowMs &&
                 Math.abs(t.price - price) < precision
         );
-        //this.logger.info("DEBUG getAggressiveVolumeAtPrice", {
-        //    price,
-        //    windowMs,
-        //    filteredCount: filtered.length,
-        //    sampleTradePrices: this.trades
-        //        .getAll()
-        //        .slice(-10)
-        //        .map((t) => t.price),
-        //    checkPrice: price,
-        //    precision,
-        //});
+
         return filtered.reduce((sum, t) => sum + t.quantity, 0);
     }
 
@@ -502,14 +466,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
                 t.timestamp < to &&
                 Math.abs(t.price - price) < precision
         );
-        //this.logger.info("DEBUG getAggressiveAtPrice", {
-        //    price,
-        //    from,
-        //    to,
-        //    filteredCount: filtered.length,
-        //    sampleTradePrices: filtered.map((t) => t.price),
-        //    precision,
-        //});
+
         return filtered.reduce((sum, t) => sum + t.quantity, 0);
     }
 
@@ -613,57 +570,5 @@ export abstract class BaseDetector extends Detector implements IDetector {
         return +(Math.round(price / zoneSize) * zoneSize).toFixed(
             this.pricePrecision
         );
-    }
-
-    /**
-     * Calculate mean of numeric array
-     */
-    protected calculateMean(values: number[]): number {
-        if (values.length === 0) return 0;
-        return values.reduce((sum, val) => sum + val, 0) / values.length;
-    }
-
-    /**
-     * Calculate standard deviation
-     */
-    protected calculateStdDev(values: number[]): number {
-        if (values.length === 0) return 0;
-
-        const mean = this.calculateMean(values);
-        const squaredDiffs = values.map((val) => Math.pow(val - mean, 2));
-        const variance = this.calculateMean(squaredDiffs);
-
-        return Math.sqrt(variance);
-    }
-
-    /**
-     * Calculate median
-     */
-    protected calculateMedian(values: number[]): number {
-        if (values.length === 0) return 0;
-
-        const sorted = [...values].sort((a, b) => a - b);
-        const mid = Math.floor(sorted.length / 2);
-
-        if (sorted.length % 2 === 0) {
-            return (sorted[mid - 1] + sorted[mid]) / 2;
-        }
-
-        return sorted[mid];
-    }
-
-    /**
-     * Calculate percentile
-     */
-    protected calculatePercentile(
-        values: number[],
-        percentile: number
-    ): number {
-        if (values.length === 0) return 0;
-
-        const sorted = [...values].sort((a, b) => a - b);
-        const index = Math.ceil((percentile / 100) * sorted.length) - 1;
-
-        return sorted[Math.max(0, index)];
     }
 }
