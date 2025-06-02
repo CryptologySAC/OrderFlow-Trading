@@ -741,6 +741,10 @@ export class OrderFlowDashboard {
         });
 
         // Handle signal events
+        // Handle data stream events
+        if (!this.signalManager) {
+            throw new Error("Signal Manager is not initialized");
+        }
         // Listen to final trading signals
         this.signalManager.on("signalGenerated", (tradingSignal: Signal) => {
             this.logger.info("Ready to trade:", { tradingSignal });
@@ -759,6 +763,19 @@ export class OrderFlowDashboard {
                 });
             }
         );
+
+        this.signalManager.on(
+            "criticalAnomalyDetected",
+            ({ anomaly, recommendedAction }) => {
+                console.log(`CRITICAL: ${anomaly.type} - ${recommendedAction}`);
+                // Notify risk management, pause trading, etc.
+            }
+        );
+
+        this.signalManager.on("emergencyPause", ({ reason, duration }) => {
+            console.log(`EMERGENCY PAUSE: ${reason} for ${duration}ms`);
+            // Halt all trading activity
+        });
 
         if (this.preprocessor) {
             this.logger.info(
@@ -815,19 +832,12 @@ export class OrderFlowDashboard {
                 "[OrderFlowDashboard] Setting up anomaly detector event handlers..."
             );
             this.anomalyDetector.on("anomaly", (event: AnomalyEvent) => {
-                if (
-                    event &&
-                    (event.severity === "critical" || event.severity === "high")
-                ) {
-                    this.logger.warn("Market anomaly detected:", { event });
-                }
                 const message: WebSocketMessage = {
                     type: "anomaly",
                     data: event,
                     now: Date.now(),
                 };
                 this.wsManager.broadcast(message);
-                // TODO Take action (pause trading, alert, etc.)
             });
         }
     }
