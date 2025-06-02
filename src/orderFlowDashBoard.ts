@@ -25,6 +25,7 @@ import { RateLimiter } from "./infrastructure/rateLimiter.js";
 import { CircuitBreaker } from "./infrastructure/circuitBreaker.js";
 
 // Service imports
+import { DetectorFactory } from "./utils/detectorFactory.js";
 import type {
     EnrichedTradeEvent,
     OrderBookSnapshot,
@@ -49,6 +50,7 @@ import {
 import { AlertManager } from "./alerts/alertManager.js";
 
 // Indicator imports
+import { AccumulationSettings } from "./indicators/interfaces/detectorInterfaces.js";
 import {
     AbsorptionDetector,
     type AbsorptionSettings,
@@ -58,10 +60,7 @@ import {
     type ExhaustionSettings,
 } from "./indicators/exhaustionDetector.js";
 import { SwingMetrics } from "./indicators/swingMetrics.js";
-import {
-    AccumulationDetector,
-    AccumulationSettings,
-} from "./indicators/accumulationDetector.js";
+import { AccumulationDetector } from "./indicators/accumulationDetector.js";
 import { MomentumDivergence } from "./indicators/momentumDivergence.js";
 import {
     DeltaCVDConfirmation,
@@ -238,33 +237,31 @@ export class OrderFlowDashboard {
             this.metricsCollector
         );
 
-        // Initialize detectors with settings
-        this.absorptionDetector = new AbsorptionDetector(
-            (data) => {
-                void this.signalManager
-                    .processAbsorption(data)
-                    .catch((error) => {
-                        this.handleError(error as Error, "absorption_callback");
-                    });
+        this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
+            (signal) => {
+                console.log("Absorption signal:", signal);
             },
             this.createAbsorptionSettings(),
-            this.logger,
-            this.metricsCollector,
-            dependencies.signalLogger
+            dependencies,
+            { id: "ltcusdt-absorption-main" }
         );
 
-        this.exhaustionDetector = new ExhaustionDetector(
-            (data) => {
-                void this.signalManager
-                    .processExhaustion(data)
-                    .catch((error) => {
-                        this.handleError(error as Error, "exhaustion_callback");
-                    });
+        this.exhaustionDetector = DetectorFactory.createExhaustionDetector(
+            (signal) => {
+                console.log("Exhaustion signal:", signal);
             },
             this.createExhaustionSettings(),
-            this.logger,
-            this.metricsCollector,
-            dependencies.signalLogger
+            dependencies,
+            { id: "ltcusdt-exhaustion-main" }
+        );
+
+        this.accumulationDetector = DetectorFactory.createAccumulationDetector(
+            (signal) => {
+                console.log("Accumulation signal:", signal);
+            },
+            this.createAccumulationDetectorSettings(),
+            dependencies,
+            { id: "ltcusdt-accumulation-main" }
         );
 
         // Initialize other components
@@ -280,13 +277,16 @@ export class OrderFlowDashboard {
             this.createSwingPredictorSettings()
         );
 
-        this.accumulationDetector = new AccumulationDetector(
-            Config.SYMBOL,
-            this.createAccumulationDetectorSettings(),
-            dependencies.logger,
-            dependencies.metricsCollector,
-            dependencies.signalLogger
-        );
+        setInterval(() => {
+            const stats = DetectorFactory.getFactoryStats();
+            console.log("Factory stats:", stats);
+        }, 60000);
+
+        // Cleanup on exit
+        process.on("SIGINT", () => {
+            DetectorFactory.destroyAll();
+            process.exit(0);
+        });
     }
 
     private DeltaCVDConfirmationCallback = (event: unknown): void => {
@@ -440,14 +440,13 @@ export class OrderFlowDashboard {
 
     private createAccumulationDetectorSettings(): AccumulationSettings {
         return {
+            symbol: Config.SYMBOL,
             windowMs: Config.ACCUMULATION_DETECTOR.WINDOW_MS,
             minDurationMs: Config.ACCUMULATION_DETECTOR.MIN_DURATION_MS,
-            zoneSize: Config.ACCUMULATION_DETECTOR.ZONE_SIZE,
             minRatio: Config.ACCUMULATION_DETECTOR.MIN_RATIO,
             minRecentActivityMs:
                 Config.ACCUMULATION_DETECTOR.MIN_RECENT_ACTIVITY_MS,
             minAggVolume: Config.ACCUMULATION_DETECTOR.MIN_AGG_VOLUME,
-            trackSide: Config.ACCUMULATION_DETECTOR.TRACK_SIDE,
             pricePrecision: Config.ACCUMULATION_DETECTOR.PRICE_PRECISION,
         };
     }
@@ -484,11 +483,14 @@ export class OrderFlowDashboard {
             Config.ABSORPTION
         );
         return {
-            windowMs: Config.ABSORPTION.WINDOW_MS,
             minAggVolume: Config.ABSORPTION.MIN_AGG_VOLUME,
-            pricePrecision: Config.ABSORPTION.PRICE_PRECISION,
+            absorptionThreshold: Config.ABSORPTION.THRESHOLD,
+            windowMs: Config.ABSORPTION.WINDOW_MS,
             zoneTicks: Config.ABSORPTION.ZONE_TICKS,
             eventCooldownMs: Config.ABSORPTION.EVENT_COOLDOWN_MS,
+            minPassiveMultiplier: Config.ABSORPTION.MIN_PASSIVE_MULTIPLIER,
+            maxAbsorptionRatio: Config.ABSORPTION.MAX_ABSORPTION_RATIO,
+            pricePrecision: Config.ABSORPTION.PRICE_PRECISION,
             minInitialMoveTicks: Config.ABSORPTION.MOVE_TICKS,
             confirmationTimeoutMs: Config.ABSORPTION.CONFIRMATION_TIMEOUT,
             maxRevisitTicks: Config.ABSORPTION.MAX_REVISIT_TICKS,
@@ -526,6 +528,22 @@ export class OrderFlowDashboard {
                     process.env.ABSORPTION_AUTO_CALIBRATE,
                     true
                 ),
+                icebergDetection: parseBool(
+                    process.env.ABSORPTION_ICEBERG_DETECTION,
+                    true
+                ),
+                liquidityGradient: parseBool(
+                    process.env.ABSORPTION_LIQUIDITY_GRADIENT,
+                    true
+                ),
+                spreadAdjustment: parseBool(
+                    process.env.ABSORPTION_SPREAD_AJUSTMENT,
+                    true
+                ),
+                absorptionVelocity: parseBool(
+                    process.env.ABSORPTION_VELOCITY,
+                    true
+                ),
             },
         };
     }
@@ -539,11 +557,13 @@ export class OrderFlowDashboard {
             Config.EXHAUSTION
         );
         return {
-            windowMs: Config.EXHAUSTION.WINDOW_MS,
             minAggVolume: Config.EXHAUSTION.MIN_AGG_VOLUME,
-            pricePrecision: Config.EXHAUSTION.PRICE_PRECISION,
+            exhaustionThreshold: Config.EXHAUSTION.THRESHOLD,
+            windowMs: Config.EXHAUSTION.WINDOW_MS,
             zoneTicks: Config.EXHAUSTION.ZONE_TICKS,
             eventCooldownMs: Config.EXHAUSTION.EVENT_COOLDOWN_MS,
+            maxPassiveRatio: Config.EXHAUSTION.MAX_PASSIVE_RATIO,
+            pricePrecision: Config.EXHAUSTION.PRICE_PRECISION,
             minInitialMoveTicks: Config.EXHAUSTION.MOVE_TICKS,
             confirmationTimeoutMs: Config.EXHAUSTION.CONFIRMATION_TIMEOUT,
             maxRevisitTicks: Config.EXHAUSTION.MAX_REVISIT_TICKS,
@@ -556,30 +576,43 @@ export class OrderFlowDashboard {
                 testLogMinSpoof: Config.SPOOFING.TEST_LOG_MIN_SPOOF,
             },
             features: {
+                priceResponse: parseBool(
+                    process.env.EXHAUSTION_PRICE_RESPONSE,
+                    true
+                ),
+                depletionTracking: parseBool(
+                    process.env.EXHAUSTION_DEPLETION_TRACKING,
+                    true
+                ),
+                spreadAdjustment: parseBool(
+                    process.env.EXHAUSTION_SPREAD_AJUSTMENT,
+                    true
+                ),
                 spoofingDetection: parseBool(
                     process.env.EXHAUSTION_SPOOFING_DETECTION,
+                    true
+                ),
+                autoCalibrate: parseBool(
+                    process.env.EXHAUSTION_AUTO_CALIBRATE,
                     true
                 ),
                 adaptiveZone: parseBool(
                     process.env.EXHAUSTION_ADAPTIVE_ZONE,
                     true
                 ),
+                multiZone: parseBool(process.env.EXHAUSTION_MULTI_ZONE, true),
+                volumeVelocity: parseBool(
+                    process.env.EXHAUSTION_VOLUME_VELOCITY,
+                    true
+                ),
                 passiveHistory: parseBool(
                     process.env.EXHAUSTION_PASSIVE_HISTORY,
                     true
                 ),
-                multiZone: parseBool(process.env.EXHAUSTION_MULTI_ZONE, true),
-                priceResponse: parseBool(
-                    process.env.EXHAUSTION_PRICE_RESPONSE,
-                    true
-                ),
+
                 sideOverride: parseBool(
                     process.env.EXHAUSTION_SIDE_OVERRIDE,
                     false
-                ),
-                autoCalibrate: parseBool(
-                    process.env.EXHAUSTION_AUTO_CALIBRATE,
-                    true
                 ),
             },
         };
@@ -713,10 +746,10 @@ export class OrderFlowDashboard {
                     circuitBreakerState:
                         this.dependencies.circuitBreaker.getState(),
                     metrics: {
-                        signalsGenerated: metrics.signalsGenerated,
+                        signalsGenerated: metrics.legacy.signalsGenerated, //TODO
                         averageLatency:
                             this.metricsCollector.getAverageLatency(),
-                        errorsCount: metrics.errorsCount,
+                        errorsCount: metrics.legacy.errorsCount, //TODO
                     },
                     correlationId,
                 };

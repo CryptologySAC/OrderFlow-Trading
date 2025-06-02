@@ -390,7 +390,7 @@ export class PriceConfirmationManager {
         confirmationTimeoutMs: number,
         logger?: ISignalLogger,
         symbol?: string,
-        eventType: "absorption" | "exhaustion" = "absorption"
+        eventType: "absorption" | "exhaustion" | "accumulation" = "absorption"
     ): PendingDetection[] {
         const tick = 1 / Math.pow(10, pricePrecision);
         const now = Date.now();

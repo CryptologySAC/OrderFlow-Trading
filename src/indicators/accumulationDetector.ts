@@ -1,246 +1,549 @@
-/**********************************************************************
- *  AccumulationDetector
- *  Emits `"accumulation"` EventEmitter events when passive > taker flow
- *  in a price zone for longer than minDurationMs.
- *********************************************************************/
+// src/indicators/accumulationDetector.ts
 
-import { EventEmitter } from "events";
+import { SpotWebsocketStreams } from "@binance/spot";
+import { BaseDetector } from "./base/baseDetector.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
-import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
-import { AccumulationResult } from "../types/signalTypes.js";
 
-/* ------------------------------------------------------------------ *
- *  Settings
- * ------------------------------------------------------------------ */
+import type {
+    EnrichedTradeEvent,
+    AggressiveTrade,
+} from "../types/marketEvents.js";
+import type {
+    DetectorCallback,
+    AccumulationSettings,
+    AccumulationFeatures,
+    IAccumulationDetector,
+} from "./interfaces/detectorInterfaces.js";
 
-export interface AccumulationSettings {
-    windowMs?: number; // length of rolling window   (default 15 min)
-    minDurationMs?: number; // min life of zone           (default 5 min)
-    zoneSize?: number; // USDT per zone              (default 0.02)
-    minRatio?: number; // passive / aggressive >     (default 1.2)
-    minRecentActivityMs?: number; // trade staleness threshold  (default 60 s)
-    minAggVolume?: number; // min taker qty in zone      (default 5)
-    trackSide?: boolean; // separate bid/ask zones     (default true)
-    pricePrecision?: number; // toFixed digits             (default 2)
-}
+/**
+ * Enhanced AccumulationDetector - detects sustained passive > aggressive flow
+ * Production-ready with standardized architecture and features
+ */
+export class AccumulationDetector
+    extends BaseDetector
+    implements IAccumulationDetector
+{
+    protected readonly detectorType = "accumulation" as const;
+    protected readonly features: AccumulationFeatures;
 
-/* ------------------------------------------------------------------ *
- *  Internal structures
- * ------------------------------------------------------------------ */
+    // Accumulation-specific configuration
+    private readonly minDurationMs: number;
+    private readonly minRatio: number;
+    private readonly minRecentActivityMs: number;
+    private readonly accumulationThreshold: number;
 
-interface ZoneData {
-    aggressiveQty: RollingWindow<number>;
-    timestamps: RollingWindow<number>;
-    startTime: number;
-    lastUpdate: number;
-    tradeCount: number;
-    side: "buy" | "sell";
-}
-
-interface PassiveVolumeSnap {
-    volume: number;
-    lastUpdate: number;
-}
-
-/* ------------------------------------------------------------------ *
- *  Detector
- * ------------------------------------------------------------------ */
-
-export class AccumulationDetector extends EventEmitter {
-    private readonly zones = new Map<string, ZoneData>();
-    private readonly passiveByZone = new Map<string, PassiveVolumeSnap>();
-
-    private readonly settings: Required<AccumulationSettings>;
+    // Enhanced tracking structures
+    private readonly zoneData = new Map<number, ZoneAccumulationData>();
     private lastCleanup = Date.now();
-    private readonly cleanupIntervalMs = 60_000;
+    private readonly cleanupIntervalMs = 60000;
 
     constructor(
-        /** Unused – kept for signature parity with AbsorptionDetector */
-        _callback: unknown,
+        callback: DetectorCallback,
         settings: AccumulationSettings = {},
-        private readonly logger: Logger,
-        private readonly metrics: MetricsCollector,
-        private readonly signalLogger?: ISignalLogger
+        logger: Logger,
+        metricsCollector: MetricsCollector,
+        signalLogger?: ISignalLogger
     ) {
-        super();
-        this.settings = {
-            windowMs: settings.windowMs ?? 900_000,
-            minDurationMs: settings.minDurationMs ?? 300_000,
-            zoneSize: settings.zoneSize ?? 0.02,
-            minRatio: settings.minRatio ?? 1.2,
-            minRecentActivityMs: settings.minRecentActivityMs ?? 60_000,
-            minAggVolume: settings.minAggVolume ?? 5,
-            trackSide: settings.trackSide ?? true,
-            pricePrecision: settings.pricePrecision ?? 2,
+        super(callback, settings, logger, metricsCollector, signalLogger);
+
+        // Initialize accumulation-specific settings
+        this.minDurationMs = settings.minDurationMs ?? 300000; // 5 minutes
+        this.minRatio = settings.minRatio ?? 1.5;
+        this.minRecentActivityMs = settings.minRecentActivityMs ?? 60000; // 1 minute
+        this.accumulationThreshold = settings.accumulationThreshold ?? 0.6;
+
+        // Merge accumulation-specific features
+        this.features = {
+            sideTracking: true,
+            durationWeighting: true,
+            volumeVelocity: false,
+            strengthAnalysis: true,
+            ...settings.features,
         };
-    }
 
-    /* -------------------------------------------------------------- *
-     *  Public entry – called for every EnrichedTradeEvent
-     * -------------------------------------------------------------- */
-    public onEnrichedTrade(evt: EnrichedTradeEvent): void {
-        try {
-            this.consumeTrade(evt);
-            const signal: AccumulationResult = this.detectAccumulation(
-                evt.price
-            );
-            if (signal.isAccumulating) {
-                /** Emit event for listeners (dashboard, strategy, etc.) */
-                this.emit("accumulation", signal);
-                this.metrics.incrementMetric("accumulationDetected");
+        this.logger.info(
+            `[AccumulationDetector] Initialized with enhanced features`,
+            {
+                minDurationMs: this.minDurationMs,
+                minRatio: this.minRatio,
+                accumulationThreshold: this.accumulationThreshold,
+                features: this.features,
             }
-        } catch (err) {
-            this.logger.error?.("[AccumulationDetector] processing error", {
-                err,
-            });
-            this.metrics.incrementMetric("accumulationErrors");
-        }
+        );
+
+        // Setup cleanup interval
+        setInterval(() => this.cleanupOldData(), this.cleanupIntervalMs);
     }
 
-    /* -------------------------------------------------------------- *
-     *  In-memory aggregation
-     * -------------------------------------------------------------- */
-    private consumeTrade(e: EnrichedTradeEvent): void {
-        const {
-            price,
-            quantity,
-            timestamp,
-            buyerIsMaker,
-            zonePassiveBidVolume = 0,
-            zonePassiveAskVolume = 0,
-        } = e;
+    /**
+     * Accumulation-specific trade handling (called by base class)
+     */
+    protected onEnrichedTradeSpecific(event: EnrichedTradeEvent): void {
+        // Track accumulation in zones
+        this.updateZoneAccumulation(event);
+    }
 
-        const isBidSide = buyerIsMaker; // m=true ⇒ bid side liquidity hit
-        const key = this.zoneKey(price, isBidSide);
+    /**
+     * Main detection loop for accumulation patterns
+     */
+    protected checkForSignal(triggerTrade: AggressiveTrade): void {
         const now = Date.now();
 
-        /* ---- ensure zone exists ---- */
-        let zone = this.zones.get(key);
-        if (!zone) {
-            const cap = Math.ceil(this.settings.windowMs / 3_000); // ~1 trade / 3 s
-            zone = {
-                aggressiveQty: new RollingWindow<number>(cap, true),
-                timestamps: new RollingWindow<number>(cap, true),
-                startTime: timestamp,
-                lastUpdate: timestamp,
+        try {
+            // Check all active zones for accumulation patterns
+            for (const [zone, data] of this.zoneData) {
+                if (now - data.lastUpdate > this.minRecentActivityMs) {
+                    continue; // Skip stale zones
+                }
+
+                this.analyzeZoneForAccumulation(zone, data, triggerTrade);
+            }
+
+            // Record detection attempt metrics
+            this.metricsCollector.incrementCounter(
+                "accumulation.detection.attempts"
+            );
+            this.metricsCollector.recordGauge(
+                "accumulation.zones.active",
+                this.zoneData.size
+            );
+        } catch (error) {
+            this.handleError(
+                error as Error,
+                "AccumulationDetector.checkForSignal"
+            );
+            this.metricsCollector.incrementCounter(
+                "accumulation.detection.errors"
+            );
+        }
+    }
+
+    /**
+     * Update zone accumulation data
+     */
+    private updateZoneAccumulation(event: EnrichedTradeEvent): void {
+        const zone = this.calculateZone(event.price);
+        const side = this.getTradeSide(event);
+        const now = Date.now();
+
+        // Get or create zone data
+        if (!this.zoneData.has(zone)) {
+            const windowSize = Math.ceil(this.windowMs / 3000); // ~1 sample per 3 seconds
+            this.zoneData.set(zone, {
+                aggressiveVolume: new RollingWindow<number>(windowSize, true),
+                timestamps: new RollingWindow<number>(windowSize, true),
+                sides: new RollingWindow<"buy" | "sell">(windowSize, false),
+                startTime: event.timestamp,
+                lastUpdate: event.timestamp,
                 tradeCount: 0,
-                side: isBidSide ? "sell" : "buy",
-            };
-            this.zones.set(key, zone);
+                currentPassiveBid: 0,
+                currentPassiveAsk: 0,
+                accumulationStrength: 0,
+                dominantSide: side,
+            });
         }
 
-        /* ---- store trade ---- */
-        zone.aggressiveQty.push(quantity);
-        zone.timestamps.push(timestamp);
-        zone.lastUpdate = timestamp;
-        zone.tradeCount++;
+        const zoneData = this.zoneData.get(zone)!;
 
-        /* ---- overwrite passive snapshot ---- */
-        const passiveVol = isBidSide
-            ? zonePassiveBidVolume
-            : zonePassiveAskVolume;
-        this.passiveByZone.set(key, {
-            volume: passiveVol,
-            lastUpdate: timestamp,
+        // Update aggressive volume tracking
+        zoneData.aggressiveVolume.push(event.quantity);
+        zoneData.timestamps.push(event.timestamp);
+        zoneData.sides.push(side);
+        zoneData.lastUpdate = event.timestamp;
+        zoneData.tradeCount++;
+
+        // Update passive volumes from enriched trade data
+        zoneData.currentPassiveBid = event.zonePassiveBidVolume || 0;
+        zoneData.currentPassiveAsk = event.zonePassiveAskVolume || 0;
+
+        // Prune old data
+        this.pruneZoneData(zoneData, now);
+    }
+
+    /**
+     * Analyze zone for accumulation patterns
+     */
+    private analyzeZoneForAccumulation(
+        zone: number,
+        zoneData: ZoneAccumulationData,
+        triggerTrade: AggressiveTrade
+    ): void {
+        const price = triggerTrade.price;
+        const side = this.getTradeSide(triggerTrade);
+
+        // Check cooldown
+        if (!this.checkCooldown(zone, side)) {
+            return;
+        }
+
+        // Analyze accumulation conditions
+        const conditions = this.analyzeAccumulationConditions(zone, zoneData);
+        const score = this.calculateAccumulationScore(conditions);
+
+        //TODO
+        this.logger.debug(`[AccumulationDetector] Zone analysis`, {
+            zone,
+            price,
+            side,
+            score,
+            conditions: {
+                ratio: conditions.ratio,
+                duration: conditions.duration,
+                strength: conditions.strength,
+            },
         });
 
-        /* ---- prune window by time ---- */
-        this.pruneZone(zone, now);
-        this.maybeCleanup(now);
+        // Check score threshold
+        if (score < this.accumulationThreshold) {
+            return;
+        }
+
+        // Calculate volumes for signal
+        const volumes = this.calculateAccumulationVolumes(zone, zoneData);
+
+        // Volume threshold check
+        if (volumes.aggressive < this.minAggVolume) {
+            this.logger.debug(`[AccumulationDetector] Insufficient volume`, {
+                aggressive: volumes.aggressive,
+                required: this.minAggVolume,
+            });
+            return;
+        }
+
+        // Spoofing check
+        if (
+            this.features.spoofingDetection &&
+            this.isSpoofed(price, side, triggerTrade.timestamp)
+        ) {
+            this.logger.debug(
+                `[AccumulationDetector] Signal rejected - spoofing detected`
+            );
+            this.metricsCollector.incrementCounter(
+                "accumulation.spoofing.rejected"
+            );
+            return;
+        }
+
+        // Signal detected
+        this.handleDetection({
+            zone,
+            price,
+            side: conditions.dominantSide,
+            trades: volumes.trades,
+            aggressive: volumes.aggressive,
+            passive: volumes.passive,
+            refilled: false, // Accumulation doesn't use refill concept
+            metadata: {
+                accumulationScore: score,
+                duration: conditions.duration,
+                ratio: conditions.ratio,
+                strength: conditions.strength,
+                dominantSide: conditions.dominantSide,
+                conditions,
+                detectorVersion: "2.0",
+            },
+        });
+
+        this.metricsCollector.incrementCounter(
+            "accumulation.signals.generated"
+        );
+        this.metricsCollector.recordHistogram("accumulation.score", score);
+        this.metricsCollector.recordHistogram(
+            "accumulation.duration",
+            conditions.duration
+        );
     }
 
-    /* -------------------------------------------------------------- *
-     *  Detection logic for a given price
-     * -------------------------------------------------------------- */
-    private detectAccumulation(price: number): AccumulationResult {
-        const sideKeys = this.settings.trackSide
-            ? ["buy", "sell"]
-            : [undefined];
+    /**
+     * Analyze accumulation conditions
+     */
+    private analyzeAccumulationConditions(
+        zone: number,
+        zoneData: ZoneAccumulationData
+    ): AccumulationConditions {
+        const now = Date.now();
+        const duration = now - zoneData.startTime;
+        const recentActivity = now - zoneData.lastUpdate;
 
-        let best: AccumulationResult = {
-            isAccumulating: false,
-            strength: 0,
-            duration: 0,
-            zone: 0,
-            ratio: 0,
+        // Calculate aggressive volume
+        const aggressiveVolume = zoneData.aggressiveVolume.sum();
+
+        // Calculate relevant passive volume based on dominant side
+        const sideCounts = this.countSides(zoneData.sides.toArray());
+        const dominantSide = sideCounts.buy > sideCounts.sell ? "buy" : "sell";
+
+        // For buy accumulation, we care about ask liquidity (what buyers hit)
+        // For sell accumulation, we care about bid liquidity (what sellers hit)
+        const relevantPassive =
+            dominantSide === "buy"
+                ? zoneData.currentPassiveAsk
+                : zoneData.currentPassiveBid;
+
+        const totalPassive =
+            zoneData.currentPassiveBid + zoneData.currentPassiveAsk;
+        const ratio =
+            aggressiveVolume > 0 ? relevantPassive / aggressiveVolume : 0;
+
+        // Calculate strength factors
+        let strength = 0;
+        if (this.features.strengthAnalysis) {
+            strength = this.calculateStrength(
+                ratio,
+                duration,
+                aggressiveVolume,
+                totalPassive
+            );
+        }
+
+        // Calculate velocity if enabled
+        let velocity = 0;
+        if (this.features.volumeVelocity) {
+            velocity = this.calculateAccumulationVelocity(zoneData);
+        }
+
+        return {
+            ratio,
+            duration,
+            aggressiveVolume,
+            relevantPassive,
+            totalPassive,
+            strength,
+            velocity,
+            dominantSide,
+            recentActivity,
+            tradeCount: zoneData.tradeCount,
+            meetsMinDuration: duration >= this.minDurationMs,
+            meetsMinRatio: ratio >= this.minRatio,
+            isRecentlyActive: recentActivity < this.minRecentActivityMs,
         };
+    }
 
-        for (const side of sideKeys) {
-            const key = this.zoneKey(price, side === "buy");
-            const zone = this.zones.get(key);
-            if (!zone || zone.aggressiveQty.sum() === 0) continue;
+    /**
+     * Calculate accumulation confidence score
+     */
+    private calculateAccumulationScore(
+        conditions: AccumulationConditions
+    ): number {
+        let score = 0;
 
-            const now = Date.now();
-            const duration = now - zone.startTime;
-            const aggVol = zone.aggressiveQty.sum();
-            const passiveVol = this.passiveByZone.get(key)?.volume ?? 0;
-            const ratio = passiveVol / (aggVol || 1);
+        // Factor 1: Ratio strength (passive vs aggressive)
+        if (conditions.ratio >= this.minRatio * 2)
+            score += 0.3; // Very strong
+        else if (conditions.ratio >= this.minRatio * 1.5)
+            score += 0.2; // Strong
+        else if (conditions.ratio >= this.minRatio) score += 0.1; // Meets minimum
 
-            const accumulating =
-                ratio > this.settings.minRatio &&
-                duration > this.settings.minDurationMs &&
-                now - zone.lastUpdate < this.settings.minRecentActivityMs &&
-                aggVol > this.settings.minAggVolume;
+        // Factor 2: Duration weighting
+        if (this.features.durationWeighting) {
+            const durationFactor = Math.min(
+                conditions.duration / this.minDurationMs,
+                3
+            ); // Cap at 3x
+            if (durationFactor >= 2)
+                score += 0.25; // Long accumulation
+            else if (durationFactor >= 1.5)
+                score += 0.15; // Medium duration
+            else if (durationFactor >= 1) score += 0.1; // Minimum duration
+        }
 
-            if (!accumulating) continue;
+        // Factor 3: Strength analysis
+        if (this.features.strengthAnalysis && conditions.strength > 0.7) {
+            score += 0.2;
+        } else if (conditions.strength > 0.5) {
+            score += 0.1;
+        }
 
-            const strength = Math.min(ratio / (this.settings.minRatio * 2), 1);
-            if (!best.isAccumulating || strength > best.strength) {
-                best = {
-                    isAccumulating: true,
-                    strength,
-                    duration,
-                    zone: parseFloat(key),
-                    ratio,
-                };
+        // Factor 4: Volume significance
+        const volumeSignificance = Math.min(
+            conditions.aggressiveVolume / this.minAggVolume,
+            3
+        );
+        if (volumeSignificance >= 2) score += 0.1;
+        else if (volumeSignificance >= 1.5) score += 0.05;
+
+        // Factor 5: Velocity (if enabled)
+        if (this.features.volumeVelocity && conditions.velocity > 0.6) {
+            score += 0.05;
+        }
+
+        // Penalties
+        if (!conditions.meetsMinDuration) score *= 0.5;
+        if (!conditions.meetsMinRatio) score *= 0.3;
+        if (!conditions.isRecentlyActive) score *= 0.2;
+
+        return Math.max(0, Math.min(1, score));
+    }
+
+    /**
+     * Calculate zone volumes for signal
+     */
+    private calculateAccumulationVolumes(
+        zone: number,
+        zoneData: ZoneAccumulationData
+    ): {
+        aggressive: number;
+        passive: number;
+        trades: SpotWebsocketStreams.AggTradeResponse[];
+    } {
+        const aggressive = zoneData.aggressiveVolume.sum();
+        const passive = zoneData.currentPassiveBid + zoneData.currentPassiveAsk;
+
+        // Create mock trades for compatibility (accumulation doesn't track individual trades)
+        const trades: SpotWebsocketStreams.AggTradeResponse[] = [
+            {
+                e: "aggTrade",
+                E: Date.now(),
+                s: this.symbol,
+                a: Date.now(), // Mock trade ID
+                p: zone.toString(),
+                q: aggressive.toString(),
+                f: Date.now(),
+                l: Date.now(),
+                T: zoneData.lastUpdate,
+                m: zoneData.dominantSide === "sell", // Mock maker flag
+            },
+        ];
+
+        return { aggressive, passive, trades };
+    }
+
+    /**
+     * Helper methods
+     */
+    private countSides(sides: ("buy" | "sell")[]): {
+        buy: number;
+        sell: number;
+    } {
+        return sides.reduce(
+            (counts, side) => {
+                counts[side]++;
+                return counts;
+            },
+            { buy: 0, sell: 0 }
+        );
+    }
+
+    private calculateStrength(
+        ratio: number,
+        duration: number,
+        aggressiveVolume: number,
+        passiveVolume: number
+    ): number {
+        // Composite strength calculation
+        const ratioStrength = Math.min(ratio / (this.minRatio * 2), 1);
+        const durationStrength = Math.min(
+            duration / (this.minDurationMs * 2),
+            1
+        );
+        const volumeBalance =
+            Math.min(passiveVolume / Math.max(aggressiveVolume, 1), 3) / 3;
+
+        return (
+            ratioStrength * 0.4 + durationStrength * 0.3 + volumeBalance * 0.3
+        );
+    }
+
+    private calculateAccumulationVelocity(
+        zoneData: ZoneAccumulationData
+    ): number {
+        const timestamps = zoneData.timestamps.toArray();
+        const volumes = zoneData.aggressiveVolume.toArray();
+
+        if (timestamps.length < 3) return 0;
+
+        // Calculate volume accumulation rate over time
+        const timeSpan = timestamps[timestamps.length - 1] - timestamps[0];
+        const totalVolume = volumes.reduce((sum, vol) => sum + vol, 0);
+
+        if (timeSpan <= 0) return 0;
+
+        const rate = (totalVolume / timeSpan) * 1000; // per second
+        return Math.min(rate / 10, 1); // Normalize to 0-1
+    }
+
+    private pruneZoneData(zoneData: ZoneAccumulationData, now: number): void {
+        const cutoff = now - this.windowMs;
+
+        // Remove old samples
+        while (zoneData.timestamps.count() > 0) {
+            const oldestTime = zoneData.timestamps.toArray()[0];
+            if (oldestTime >= cutoff) break;
+
+            // Remove oldest sample from all arrays
+            const timestamps = zoneData.timestamps.toArray().slice(1);
+            const volumes = zoneData.aggressiveVolume.toArray().slice(1);
+            const sides = zoneData.sides.toArray().slice(1);
+
+            // Rebuild windows
+            const capacity = Math.max(timestamps.length, 10);
+            zoneData.timestamps = new RollingWindow<number>(capacity, true);
+            zoneData.aggressiveVolume = new RollingWindow<number>(
+                capacity,
+                true
+            );
+            zoneData.sides = new RollingWindow<"buy" | "sell">(capacity, false);
+
+            // Repopulate
+            timestamps.forEach((t) => zoneData.timestamps.push(t));
+            volumes.forEach((v) => zoneData.aggressiveVolume.push(v));
+            sides.forEach((s) => zoneData.sides.push(s));
+
+            // Update start time
+            zoneData.startTime = timestamps.length > 0 ? timestamps[0] : now;
+        }
+    }
+
+    private cleanupOldData(): void {
+        const now = Date.now();
+        const cutoff = now - this.windowMs * 2;
+        let cleanedCount = 0;
+
+        for (const [zone, data] of this.zoneData) {
+            if (data.lastUpdate < cutoff) {
+                this.zoneData.delete(zone);
+                cleanedCount++;
             }
         }
-        return best;
-    }
 
-    /* -------------------------------------------------------------- *
-     *  Helpers
-     * -------------------------------------------------------------- */
-    private zoneKey(price: number, isBid: boolean | undefined): string {
-        const base = (
-            Math.round(price / this.settings.zoneSize) * this.settings.zoneSize
-        ).toFixed(this.settings.pricePrecision);
-        if (!this.settings.trackSide) return base;
-        return `${base}_${isBid === undefined ? "both" : isBid ? "buy" : "sell"}`;
-    }
-
-    private pruneZone(z: ZoneData, now: number): void {
-        while (
-            z.timestamps.count() &&
-            now - z.timestamps.toArray()[0] > this.settings.windowMs
-        ) {
-            /* drop oldest sample by rebuilding windows minus first element */
-            const ts = z.timestamps.toArray().slice(1);
-            const qty = z.aggressiveQty.toArray().slice(1);
-            const cap = z.timestamps.count() || 1;
-
-            z.timestamps = new RollingWindow<number>(cap, true);
-            z.aggressiveQty = new RollingWindow<number>(cap, true);
-            ts.forEach((t) => z.timestamps.push(t));
-            qty.forEach((q) => z.aggressiveQty.push(q));
-            z.startTime = ts.length ? ts[0] : now;
+        if (cleanedCount > 0) {
+            this.logger.debug(
+                `[AccumulationDetector] Cleaned ${cleanedCount} old zones`
+            );
         }
-    }
-
-    private maybeCleanup(now: number): void {
-        if (now - this.lastCleanup < this.cleanupIntervalMs) return;
-
-        const cutoff = now - this.settings.windowMs;
-        const passiveCut = now - this.settings.minRecentActivityMs * 2;
-
-        for (const [k, z] of this.zones)
-            if (z.lastUpdate < cutoff) this.zones.delete(k);
-        for (const [k, p] of this.passiveByZone)
-            if (p.lastUpdate < passiveCut) this.passiveByZone.delete(k);
 
         this.lastCleanup = now;
     }
+}
+
+// Type definitions
+interface ZoneAccumulationData {
+    aggressiveVolume: RollingWindow<number>;
+    timestamps: RollingWindow<number>;
+    sides: RollingWindow<"buy" | "sell">;
+    startTime: number;
+    lastUpdate: number;
+    tradeCount: number;
+    currentPassiveBid: number;
+    currentPassiveAsk: number;
+    accumulationStrength: number;
+    dominantSide: "buy" | "sell";
+}
+
+interface AccumulationConditions {
+    ratio: number; // passive/aggressive ratio
+    duration: number; // accumulation duration
+    aggressiveVolume: number; // total aggressive volume
+    relevantPassive: number; // passive volume on relevant side
+    totalPassive: number; // total passive volume
+    strength: number; // composite strength score
+    velocity: number; // accumulation velocity
+    dominantSide: "buy" | "sell"; // which side is accumulating
+    recentActivity: number; // ms since last activity
+    tradeCount: number; // number of trades
+    meetsMinDuration: boolean; // meets minimum duration
+    meetsMinRatio: boolean; // meets minimum ratio
+    isRecentlyActive: boolean; // recently active
 }

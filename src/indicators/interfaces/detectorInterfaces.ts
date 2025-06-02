@@ -1,7 +1,6 @@
 // src/indicators/interfaces/detectorInterfaces.ts
 
 import { SpotWebsocketStreams } from "@binance/spot";
-import type { Detected } from "../../utils/types.js";
 import type { SpoofingDetectorConfig } from "../../services/spoofingDetector.js";
 
 /**
@@ -13,6 +12,24 @@ export interface IDetector {
     //addDepth(update: SpotWebsocketStreams.DiffBookDepthResponse): void;
     getStats(): DetectorStats;
     cleanup(): void;
+}
+
+/**
+ * Detected orderflow event with deduplication support
+ */
+export interface Detected {
+    id: string; // Unique identifier for deduplication
+    side: "buy" | "sell";
+    price: number;
+    trades: SpotWebsocketStreams.AggTradeResponse[];
+    totalAggressiveVolume: number;
+    passiveVolume?: number;
+    zone?: number;
+    refilled?: boolean;
+    detectedAt: number; // Timestamp for sequencing
+    detectorSource: "absorption" | "exhaustion" | "accumulation";
+    metadata?: Record<string, unknown>; // Additional context
+    confirmed?: boolean; // Number of confirmations received
 }
 
 /**
@@ -53,7 +70,16 @@ export interface BaseDetectorSettings {
     metricsReportingIntervalMs?: number; // Metrics reporting frequency
     errorThresholdPerMinute?: number; // Max errors before circuit breaker
     circuitBreakerTimeoutMs?: number; // Circuit breaker reset time
-    features?: AbsorptionFeatures | ExhaustionFeatures;
+    features?: AbsorptionFeatures | ExhaustionFeatures | AccumulationFeatures;
+}
+
+export interface AccumulationSettings extends BaseDetectorSettings {
+    features?: AccumulationFeatures;
+    // Accumulation-specific settings
+    minDurationMs?: number; // Minimum accumulation duration
+    minRatio?: number; // Min passive/aggressive ratio
+    minRecentActivityMs?: number; // Trade staleness threshold
+    accumulationThreshold?: number; // Confidence threshold (0-1)
 }
 
 export interface AbsorptionFeatures extends DetectorFeatures {
@@ -71,6 +97,14 @@ export interface ExhaustionFeatures extends DetectorFeatures {
     volumeVelocity?: boolean; // Consider rate of volume change
 }
 
+export interface AccumulationFeatures extends DetectorFeatures {
+    // Accumulation-specific features
+    sideTracking?: boolean; // Track buy/sell sides separately
+    durationWeighting?: boolean; // Weight signals by duration
+    volumeVelocity?: boolean; // Consider accumulation velocity
+    strengthAnalysis?: boolean; // Advanced strength calculation
+}
+
 /**
  * Common feature flags
  */
@@ -82,6 +116,7 @@ export interface DetectorFeatures {
     priceResponse?: boolean;
     sideOverride?: boolean;
     autoCalibrate?: boolean;
+    spreadAdjustment?: boolean;
 }
 
 /**
@@ -104,6 +139,9 @@ export interface IAbsorptionDetector extends IDetector {
 export interface IExhaustionDetector extends IDetector {
     // Exhaustion-specific methods if any
 }
+
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface IAccumulationDetector {}
 
 // Update PendingDetection interface to include metadata
 export interface PendingDetection {

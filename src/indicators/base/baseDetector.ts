@@ -79,7 +79,10 @@ export abstract class BaseDetector extends Detector implements IDetector {
     protected readonly callback: DetectorCallback;
 
     // Abstract method for detector type
-    protected abstract readonly detectorType: "absorption" | "exhaustion";
+    protected abstract readonly detectorType:
+        | "absorption"
+        | "exhaustion"
+        | "accumulation";
 
     protected lastTradeId: string | null = null;
     private zoneCleanupInterval: NodeJS.Timeout | null = null;
@@ -149,16 +152,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
         // NEW: initialize rolling window for passive volume, window size based on windowMs (1 sample per second)
         const rollingWindowSize = Math.max(Math.ceil(this.windowMs / 1000), 10);
         this.rollingPassiveVolume = new RollingWindow(rollingWindowSize);
-
-        this.logger.info(`[${this.constructor.name}] Initialized`, {
-            features: this.features,
-            symbol: this.symbol,
-            settings: {
-                windowMs: this.windowMs,
-                minAggVolume: this.minAggVolume,
-                pricePrecision: this.pricePrecision,
-            },
-        });
     }
 
     /**
@@ -796,14 +789,22 @@ export abstract class BaseDetector extends Detector implements IDetector {
      * Get detector statistics
      */
     public getStats(): DetectorStats {
+        // Calculate actual depth levels from zone passive history
+        let totalDepthSamples = 0;
+        for (const [zone, window] of this.zonePassiveHistory) {
+            totalDepthSamples += window.count();
+            void zone;
+        }
+
         const stats: DetectorStats = {
             tradesInBuffer: this.trades.length,
-            depthLevels: this.depth.size(),
+            depthLevels: totalDepthSamples, // ← ONLY CHANGE: Use actual zone data instead of empty cache
             pendingConfirmations:
                 this.priceConfirmationManager.getPendingCount(),
             currentMinVolume: this.minAggVolume,
         };
 
+        // Keep all your existing adaptive zone logic unchanged
         if (this.features.adaptiveZone) {
             stats.adaptiveZoneTicks =
                 this.adaptiveZoneCalculator.getAdaptiveZoneTicks(
@@ -909,32 +910,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
         const spread = (bestAsk - bestBid) / bestBid;
 
         return { spread, bestBid, bestAsk };
-    }
-
-    /**
-     * Debug current state
-     */
-    protected debugCurrentState(): void {
-        const now = Date.now();
-        const recentTrades = this.trades.filter(
-            (t) => now - t.timestamp <= 5000
-        );
-        const totalVolume = recentTrades.reduce(
-            (sum, t) => sum + t.quantity,
-            0
-        );
-        const spreadInfo = this.getCurrentSpread();
-
-        this.logger.info(`[${this.constructor.name}] Debug State`, {
-            recentTradeCount: recentTrades.length,
-            recentVolume: totalVolume.toFixed(2),
-            bestBid: spreadInfo?.bestBid.toFixed(this.pricePrecision),
-            bestAsk: spreadInfo?.bestAsk.toFixed(this.pricePrecision),
-            depthLevels: this.depth.size(),
-            spreadPercent: spreadInfo
-                ? (spreadInfo.spread * 100).toFixed(3) + "%"
-                : "N/A",
-        });
     }
 
     /**

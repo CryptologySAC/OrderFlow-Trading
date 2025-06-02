@@ -111,15 +111,6 @@ export class AbsorptionDetector
             ...settings.features,
         };
 
-        this.logger.info(
-            `[AbsorptionDetector] Initialized with enhanced features`,
-            {
-                absorptionThreshold: this.absorptionThreshold,
-                minPassiveMultiplier: this.minPassiveMultiplier,
-                features: this.features,
-            }
-        );
-
         // Setup periodic cleanup for absorption tracking
         setInterval(() => this.cleanupAbsorptionHistory(), this.windowMs);
     }
@@ -518,6 +509,7 @@ export class AbsorptionDetector
         );
         const score = this.calculateAbsorptionScore(conditions);
 
+        //TODO
         this.logger.debug(`[AbsorptionDetector] Zone analysis`, {
             zone,
             price,
@@ -574,7 +566,7 @@ export class AbsorptionDetector
             this.logger.debug(
                 `[AbsorptionDetector] Signal rejected - spoofing detected`
             );
-            this.metricsCollector.incrementMetric("absorptionPpoofingRejected");
+            this.metricsCollector.incrementMetric("absorptionSpoofingRejected");
             return;
         }
 

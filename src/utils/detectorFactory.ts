@@ -16,7 +16,9 @@ import type {
     DetectorCallback,
     BaseDetectorSettings,
     DetectorStats,
+    AccumulationSettings,
 } from "../indicators/interfaces/detectorInterfaces.js";
+import { AccumulationDetector } from "../indicators/accumulationDetector.js";
 
 /**
  * Production detector factory with monitoring, validation, and lifecycle management
@@ -114,6 +116,96 @@ export class DetectorFactory {
         );
 
         return detector;
+    }
+
+    /**
+     * Create production-ready accumulation detector
+     */
+    public static createAccumulationDetector(
+        callback: DetectorCallback,
+        settings: AccumulationSettings,
+        dependencies: DetectorDependencies,
+        options: DetectorFactoryOptions = {}
+    ): AccumulationDetector {
+        const id = options.id || `accumulation-${Date.now()}`;
+
+        this.validateCreationLimits();
+        this.validateProductionConfig(settings);
+
+        const productionSettings = this.applyProductionDefaults(
+            settings,
+            "accumulation"
+        );
+
+        const detector = new AccumulationDetector(
+            this.wrapCallback(callback, id, dependencies.logger),
+            productionSettings,
+            dependencies.logger,
+            dependencies.metricsCollector,
+            dependencies.signalLogger
+        );
+
+        this.registerDetector(id, detector, dependencies, options);
+
+        dependencies.logger.info(
+            `[DetectorFactory] Created AccumulationDetector`,
+            {
+                id,
+                settings: productionSettings,
+                features: productionSettings.features,
+            }
+        );
+
+        return detector;
+    }
+
+    /**
+     * Create all three detectors as a suite
+     */
+    public static createDetectorSuite(
+        callback: DetectorCallback,
+        baseSettings: BaseDetectorSettings,
+        dependencies: DetectorDependencies,
+        options: {
+            absorption?: Partial<AbsorptionSettings>;
+            exhaustion?: Partial<ExhaustionSettings>;
+            accumulation?: Partial<AccumulationSettings>;
+            idPrefix?: string;
+        } = {}
+    ): DetectorSuite {
+        const prefix = options.idPrefix || baseSettings.symbol || "suite";
+
+        const absorptionDetector = this.createAbsorptionDetector(
+            callback,
+            { ...baseSettings, ...options.absorption },
+            dependencies,
+            { id: `${prefix}-absorption` }
+        );
+
+        const exhaustionDetector = this.createExhaustionDetector(
+            callback,
+            { ...baseSettings, ...options.exhaustion },
+            dependencies,
+            { id: `${prefix}-exhaustion` }
+        );
+
+        const accumulationDetector = this.createAccumulationDetector(
+            callback,
+            { ...baseSettings, ...options.accumulation },
+            dependencies,
+            { id: `${prefix}-accumulation` }
+        );
+
+        dependencies.logger.info(`[DetectorFactory] Created detector suite`, {
+            prefix,
+            detectors: ["absorption", "exhaustion", "accumulation"],
+        });
+
+        return {
+            absorption: absorptionDetector,
+            exhaustion: exhaustionDetector,
+            accumulation: accumulationDetector,
+        };
     }
 
     /**
@@ -343,7 +435,7 @@ export class DetectorFactory {
 
     private static applyProductionDefaults(
         settings: BaseDetectorSettings,
-        detectorType: "absorption" | "exhaustion" | "generic"
+        detectorType: "absorption" | "exhaustion" | "accumulation" | "generic"
     ): BaseDetectorSettings {
         const baseDefaults: BaseDetectorSettings = {
             windowMs: 90000,
@@ -394,6 +486,25 @@ export class DetectorFactory {
                 },
                 ...settings,
             };
+        }
+
+        if (detectorType === "accumulation") {
+            return {
+                ...baseDefaults,
+                // Accumulation-specific defaults
+                minDurationMs: 300000, // 5 minutes
+                minRatio: 1.5,
+                minRecentActivityMs: 60000,
+                accumulationThreshold: 0.6,
+                features: {
+                    ...baseDefaults.features,
+                    sideTracking: true,
+                    durationWeighting: true,
+                    volumeVelocity: false,
+                    strengthAnalysis: true,
+                },
+                ...settings,
+            } as AccumulationSettings;
         }
 
         return { ...baseDefaults, ...settings };
@@ -543,7 +654,7 @@ class HealthChecker {
         this.lastHealthCheck = Date.now();
 
         try {
-            //TODO const stats = this.detector.getStats();
+            const stats = this.detector.getStats();
             const memoryUsage = DetectorFactory["getMemoryUsage"]();
 
             // Check memory usage
@@ -558,18 +669,18 @@ class HealthChecker {
             }
 
             // Report metrics
-            //this.dependencies.metricsCollector.recordGauge(
-            //    `detector.${this.detectorId}.trades_buffer`,
-            //    stats.tradesInBuffer
-            //);
-            //this.dependencies.metricsCollector.recordGauge(
-            //    `detector.${this.detectorId}.depth_levels`,
-            //    stats.depthLevels
-            //);
-            //this.dependencies.metricsCollector.recordGauge(
-            //    `detector.${this.detectorId}.memory_usage`,
-            //    memoryUsage
-            //);
+            this.dependencies.metricsCollector.recordGauge(
+                `detector.${this.detectorId}.trades_buffer`,
+                stats.tradesInBuffer
+            );
+            this.dependencies.metricsCollector.recordGauge(
+                `detector.${this.detectorId}.depth_levels`,
+                stats.depthLevels
+            );
+            this.dependencies.metricsCollector.recordGauge(
+                `detector.${this.detectorId}.memory_usage`,
+                memoryUsage
+            );
 
             // Reset error count on successful check
             this.errorCount = 0;
@@ -590,6 +701,12 @@ class HealthChecker {
 }
 
 // Type definitions
+// Enhanced type definitions
+export interface DetectorSuite {
+    absorption: AbsorptionDetector;
+    exhaustion: ExhaustionDetector;
+    accumulation: AccumulationDetector;
+}
 
 export interface DetectorDependencies {
     logger: Logger;

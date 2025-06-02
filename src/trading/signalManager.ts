@@ -155,10 +155,6 @@ export class SignalManager extends EventEmitter {
      * Check for market anomalies
      */
     private checkMarketAnomaly(price: number): MarketAnomaly | null {
-        // TODO This would need orderbook data in real implementation
-        void price;
-        return null;
-        /*
         const marketHealth = this.anomalyDetector.getMarketHealth();
         if (marketHealth.isHealthy || !marketHealth.highestSeverity) {
             return null;
@@ -173,7 +169,6 @@ export class SignalManager extends EventEmitter {
         };
 
         return marketAnomaly;
-        */
     }
 
     /**
@@ -184,6 +179,10 @@ export class SignalManager extends EventEmitter {
         anomaly: MarketAnomaly | null
     ): Signal {
         const originalSignal = confirmedSignal.originalSignals[0];
+        if (!originalSignal) {
+            throw new Error('No original signal found');
+        }
+
         const signalType = originalSignal.type;
         const side: "buy" | "sell" =
             signalType === "exhaustion" ? "sell" : "buy";

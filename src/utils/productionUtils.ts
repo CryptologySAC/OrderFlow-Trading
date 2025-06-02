@@ -34,17 +34,25 @@ export class ProductionUtils {
         metricsCollector: MetricsCollector,
         operationName: string
     ): T {
-        //TODO const startTime = Date.now();
+        const startTime = Date.now();
         try {
             const result = operation();
-            //TODO const duration = Date.now() - startTime;
-            //metricsCollector.recordHistogram(`${operationName}.duration`, duration);
+            const duration = Date.now() - startTime;
+            metricsCollector.recordHistogram(
+                `${operationName}.duration`,
+                duration
+            );
             return result;
         } catch (error) {
-            //TODO const duration = Date.now() - startTime;
-            //metricsCollector.recordHistogram(`${operationName}.error_duration`, duration);
-            metricsCollector.incrementMetric(`errorsCount`); //TODO
-            void operationName; // TODO
+            const duration = Date.now() - startTime;
+            metricsCollector.recordHistogram(
+                `${operationName}.error_duration`,
+                duration
+            );
+            metricsCollector.incrementCounter(
+                `${operationName}.error_duration`
+            );
+            void operationName;
             throw error;
         }
     }

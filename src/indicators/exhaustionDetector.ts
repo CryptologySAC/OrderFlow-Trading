@@ -83,15 +83,6 @@ export class ExhaustionDetector
             volumeVelocity: false,
             ...settings.features,
         };
-
-        this.logger.info(
-            `[ExhaustionDetector] Initialized with enhanced features`,
-            {
-                exhaustionThreshold: this.exhaustionThreshold,
-                maxPassiveRatio: this.maxPassiveRatio,
-                features: this.features,
-            }
-        );
     }
 
     /* ------------------------------------------------------------------ */
@@ -238,6 +229,7 @@ export class ExhaustionDetector
         const conditions = this.analyzeExhaustionConditions(price, side, zone);
         const score = this.calculateExhaustionScore(conditions);
 
+        //TODO
         this.logger.debug(`[ExhaustionDetector] Zone analysis`, {
             zone,
             price,

@@ -26,17 +26,22 @@ export class Config {
 
     // Exhaustion detector settings
     static readonly EXHAUSTION = {
-        WINDOW_MS: parseInt(process.env.WINDOW_MS ?? "90000", 10),
         MIN_AGG_VOLUME: parseInt(
             process.env.EXHAUSTION_MIN_AGG_VOLUME ?? "600",
             10
         ),
-        PRICE_PRECISION: parseInt(process.env.PRICE_PRECISION ?? "2", 10),
+        THRESHOLD: parseFloat(process.env.EXHAUSTION_THRESHOLD ?? "0.75"),
+        WINDOW_MS: parseInt(process.env.WINDOW_MS ?? "90000", 10),
         ZONE_TICKS: parseInt(process.env.ZONE_TICKS ?? "3", 10),
         EVENT_COOLDOWN_MS: parseInt(
-            process.env.EXHAUSTION_EVENT_COOLDOWN_MS ?? "15000",
+            process.env.EVENT_COOLDOWN_MS ?? "15000",
             10
         ),
+        MAX_PASSIVE_RATIO: parseFloat(
+            process.env.EXHAUSTION_MAX_PASSIVE_RATIO ?? "0.5"
+        ),
+        PRICE_PRECISION: parseInt(process.env.PRICE_PRECISION ?? "2", 10),
+
         MOVE_TICKS: parseInt(process.env.EXHAUSTION_MOVE_TICKS ?? "12", 10),
         CONFIRMATION_TIMEOUT: parseInt(
             process.env.EXHAUSTION_CONFIRMATION_TIMEOUT ?? "60000",
@@ -50,17 +55,25 @@ export class Config {
 
     // Absorption detector settings
     static readonly ABSORPTION = {
-        WINDOW_MS: parseInt(process.env.WINDOW_MS ?? "90000", 10),
         MIN_AGG_VOLUME: parseInt(
             process.env.ABSORPTION_MIN_AGG_VOLUME ?? "600",
             10
         ),
-        PRICE_PRECISION: parseInt(process.env.PRICE_PRECISION ?? "2", 10),
+        THRESHOLD: parseFloat(process.env.EXHAUSTION_THRESHOLD ?? "0.75"),
+        WINDOW_MS: parseInt(process.env.WINDOW_MS ?? "90000", 10),
         ZONE_TICKS: parseInt(process.env.ZONE_TICKS ?? "3", 10),
         EVENT_COOLDOWN_MS: parseInt(
-            process.env.ABSORPTION_EVENT_COOLDOWN_MS ?? "15000",
+            process.env.EVENT_COOLDOWN_MS ?? "15000",
             10
         ),
+        MIN_PASSIVE_MULTIPLIER: parseFloat(
+            process.env.ABSORPTION_MIN_PASSIVE_MULTIPLIER ?? "2.0"
+        ),
+        MAX_ABSORPTION_RATIO: parseFloat(
+            process.env.ABSORPTION_MAX_ABSORPTION_RATIO ?? "0.3"
+        ),
+        PRICE_PRECISION: parseInt(process.env.PRICE_PRECISION ?? "2", 10),
+
         MOVE_TICKS: parseInt(process.env.ABSORPTION_MOVE_TICKS ?? "12", 10),
         CONFIRMATION_TIMEOUT: parseInt(
             process.env.ABSORPTION_CONFIRMATION_TIMEOUT ?? "60000",

@@ -48,23 +48,7 @@ export interface TradeData {
     originalTrade: SpotWebsocketStreams.AggTradeResponse;
 }
 
-/**
- * Detected orderflow event with deduplication support
- */
-export interface Detected {
-    id: string; // Unique identifier for deduplication
-    side: "buy" | "sell";
-    price: number;
-    trades: SpotWebsocketStreams.AggTradeResponse[];
-    totalAggressiveVolume: number;
-    passiveVolume?: number;
-    zone?: number;
-    refilled?: boolean;
-    detectedAt: number; // Timestamp for sequencing
-    detectorSource: "absorption" | "exhaustion"; // Track source
-    metadata?: Record<string, unknown>; // Additional context
-    confirmed?: boolean; // Number of confirmations received
-}
+
 
 /* ===========================
    SIGNAL MANAGEMENT TYPES
