@@ -767,7 +767,7 @@ export class OrderFlowDashboard {
         this.signalManager.on(
             "criticalAnomalyDetected",
             ({ anomaly, recommendedAction }) => {
-                console.log(`CRITICAL: ${anomaly.type} - ${recommendedAction}`);
+                console.log(`CRITICAL: ${anomaly} - ${recommendedAction}`);
                 // Notify risk management, pause trading, etc.
             }
         );

@@ -13,6 +13,12 @@ import { AnomalyDetector, AnomalyEvent } from "../services/anomalyDetector.js";
 import { AlertManager } from "../alerts/alertManager.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import {
+    ANOMALY_SIGNAL_IMPACT_MATRIX,
+    calculateAnomalyAdjustedConfidence,
+    getAnomalyFilteringRules,
+    type AnomalySignalImpact,
+} from "./anomalySignalImpact.js";
 
 import {
     calculateProfitTarget,
@@ -20,10 +26,14 @@ import {
 } from "../utils/calculations.js";
 
 export interface SignalManagerConfig {
-    confidenceThreshold: number;
-    enableAnomalyDetection: boolean;
-    enableAlerts: boolean;
-    signalTimeout: number; // ms
+    enableAnomalyFiltering?: boolean;
+    anomalyConfidenceThreshold?: number;
+    blockSignalsDuringCritical?: boolean;
+    maxActiveAnomalies?: number;
+    confidenceThreshold?: number;
+    signalTimeout?: number;
+    enableAnomalyDetection?: boolean;
+    enableAlerts?: boolean;
 }
 
 interface SignalCorrelation {
@@ -37,12 +47,14 @@ interface SignalCorrelation {
  * Manages trading signal generation and processing
  */
 export class SignalManager extends EventEmitter {
-    private readonly config: SignalManagerConfig;
+    private readonly config: Required<SignalManagerConfig>;
+    private activeAnomalies = new Map<string, AnomalyEvent>();
+    private anomalyImpactCache = new Map<string, number>();
+    private signalBlocklist = new Set<string>(); // Temporarily blocked signal types
+    private lastAnomalyCleanup = 0;
     private readonly recentSignals = new Map<string, ProcessedSignal>();
     private readonly correlations = new Map<string, SignalCorrelation>();
     private readonly signalHistory: ProcessedSignal[] = [];
-    private activeAnomalies = new Map<string, AnomalyEvent>();
-    private anomalyImpactCache = new Map<string, number>();
     private lastAnomalyCheck = 0;
 
     // Keep track of signals for correlation analysis
@@ -59,11 +71,16 @@ export class SignalManager extends EventEmitter {
         super();
 
         this.config = {
-            confidenceThreshold: 0.7,
-            enableAnomalyDetection: true,
-            enableAlerts: true,
-            signalTimeout: 300000, // 5 minutes
-            ...config,
+            enableAnomalyFiltering: config.enableAnomalyFiltering ?? true,
+            anomalyConfidenceThreshold:
+                config.anomalyConfidenceThreshold ?? 0.3,
+            blockSignalsDuringCritical:
+                config.blockSignalsDuringCritical ?? true,
+            maxActiveAnomalies: config.maxActiveAnomalies ?? 20,
+            confidenceThreshold: config.confidenceThreshold ?? 0.75,
+            signalTimeout: config.signalTimeout ?? 300000,
+            enableAnomalyDetection: config.enableAnomalyDetection ?? true,
+            enableAlerts: config.enableAlerts ?? true,
         };
 
         this.logger.info("SignalManager initialized", {
@@ -82,83 +99,740 @@ export class SignalManager extends EventEmitter {
     }
 
     /**
-     * Setup real-time anomaly event handlers
+     * Main signal processing with full anomaly integration
+     */
+    public processSignal(signal: ProcessedSignal): ConfirmedSignal | null {
+        try {
+            // 1. Clean up expired anomalies
+            this.cleanupExpiredAnomalies();
+
+            // 2. Check if signal type is temporarily blocked
+            if (this.isSignalTypeBlocked(signal.type)) {
+                this.logger.debug("Signal blocked due to anomaly filtering", {
+                    signalId: signal.id,
+                    signalType: signal.type,
+                    blockedReasons: Array.from(this.signalBlocklist),
+                });
+
+                this.recordMetric("signal_blocked_by_anomaly", signal.type);
+                return null;
+            }
+
+            // 3. Apply anomaly-based confidence adjustment
+            const anomalyAdjustment: {
+                adjustedConfidence: number;
+                impactFactors: Array<{
+                    anomalyType: string;
+                    impact: "positive" | "negative" | "neutral";
+                    multiplier: number;
+                    decayedMultiplier: number;
+                    reasoning: string;
+                }>;
+            } = this.calculateAnomalyConfidenceAdjustment(signal);
+
+            // 4. Check if adjusted confidence meets threshold
+            if (
+                anomalyAdjustment.adjustedConfidence <
+                this.config.anomalyConfidenceThreshold
+            ) {
+                this.logger.debug(
+                    "Signal rejected due to low anomaly-adjusted confidence",
+                    {
+                        signalId: signal.id,
+                        originalConfidence: signal.confidence,
+                        adjustedConfidence:
+                            anomalyAdjustment.adjustedConfidence,
+                        threshold: this.config.anomalyConfidenceThreshold,
+                        impactFactors: anomalyAdjustment.impactFactors,
+                    }
+                );
+
+                this.recordMetric(
+                    "signal_rejected_low_confidence",
+                    signal.type
+                );
+                return null;
+            }
+
+            // 5. Get market anomaly context (existing method)
+            const marketAnomaly = this.checkMarketAnomaly(signal.data.price);
+
+            // 6. Calculate signal correlations (existing method)
+            const correlation = this.calculateSignalCorrelation(signal);
+
+            // 7. Create confirmed signal with anomaly context
+            const confirmedSignal = this.createAnomalyAwareConfirmedSignal(
+                signal,
+                correlation,
+                marketAnomaly,
+                anomalyAdjustment
+            );
+
+            // 8. Log and emit metrics
+            this.logSignalProcessing(
+                signal,
+                confirmedSignal,
+                anomalyAdjustment
+            );
+
+            return confirmedSignal;
+        } catch (error) {
+            this.logger.error(
+                "Failed to process signal with anomaly integration",
+                {
+                    signalId: signal.id,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
+            return null;
+        }
+    }
+
+    /**
+     * Setup anomaly event handlers
      */
     private setupAnomalyEventHandlers(): void {
-        // Listen to all anomalies
         this.anomalyDetector.on("anomaly", (anomaly: AnomalyEvent) => {
             this.handleAnomalyEvent(anomaly);
         });
 
-        // Optionally listen to symbol-specific anomalies if you have a specific symbol
-        // this.anomalyDetector.on(`anomaly:${symbol}`, (anomaly: AnomalyEvent) => {
-        //     this.handleSymbolSpecificAnomaly(anomaly);
-        // });
-
-        this.logger.debug("Anomaly event handlers setup", {
+        this.logger.debug("Anomaly event handlers initialized", {
             component: "SignalManager",
-            operation: "setupAnomalyEventHandlers",
+            anomalyFilteringEnabled: this.config.enableAnomalyFiltering,
         });
     }
 
     /**
      * Handle real-time anomaly events
      */
+    /**
+     * Handle incoming anomaly events
+     */
     private handleAnomalyEvent(anomaly: AnomalyEvent): void {
         try {
-            this.logger.info("Anomaly event received", {
-                component: "SignalManager",
-                operation: "handleAnomalyEvent",
-                anomalyType: anomaly.type,
-                severity: anomaly.severity,
-                detectedAt: anomaly.detectedAt,
-            });
-
-            // Store active anomaly for signal processing context
+            // Store active anomaly
             this.activeAnomalies.set(anomaly.type, anomaly);
 
-            // Calculate impact score for this anomaly type
-            const impactScore = this.calculateAnomalyImpact(anomaly);
+            // Update signal filtering based on anomaly
+            this.updateSignalFiltering(anomaly);
+
+            // Cache impact score
+            const impactScore = this.calculateAnomalyImpactScore(anomaly);
             this.anomalyImpactCache.set(anomaly.type, impactScore);
 
-            // Update metrics
-            this.metricsCollector.incrementCounter(
-                "signal_manager_anomalies_detected_total",
-                1,
-                {
-                    anomaly_type: anomaly.type,
-                    severity: anomaly.severity,
-                    recommended_action: anomaly.recommendedAction,
-                }
-            );
+            // Handle critical anomalies
+            if (
+                anomaly.severity === "critical" &&
+                this.config.blockSignalsDuringCritical
+            ) {
+                this.handleCriticalAnomaly(anomaly);
+            }
 
-            this.metricsCollector.setGauge(
-                "signal_manager_active_anomalies_count",
-                this.activeAnomalies.size
-            );
-
-            this.metricsCollector.recordHistogram(
-                "signal_manager_anomaly_impact_score",
+            // Emit anomaly context event
+            this.emit("anomalyContextUpdated", {
+                anomaly,
+                activeCount: this.activeAnomalies.size,
+                blockedSignalTypes: Array.from(this.signalBlocklist),
                 impactScore,
-                {
-                    anomaly_type: anomaly.type,
-                    severity: anomaly.severity,
-                }
-            );
+            });
 
-            // Take immediate action based on anomaly severity
-            this.handleCriticalAnomalies(anomaly);
+            // Record metrics
+            this.recordAnomalyMetrics(anomaly);
 
-            // Clean up old anomalies
-            this.cleanupExpiredAnomalies();
+            this.logger.info("Anomaly processed and integrated", {
+                anomalyType: anomaly.type,
+                severity: anomaly.severity,
+                activeAnomalies: this.activeAnomalies.size,
+                blockedSignalTypes: this.signalBlocklist.size,
+            });
         } catch (error) {
             this.logger.error("Failed to handle anomaly event", {
-                component: "SignalManager",
-                operation: "handleAnomalyEvent",
                 anomalyType: anomaly.type,
                 error: error instanceof Error ? error.message : String(error),
             });
         }
+    }
+
+    /**
+     * Update signal filtering rules based on new anomaly
+     */
+    private updateSignalFiltering(anomaly: AnomalyEvent): void {
+        if (!this.config.enableAnomalyFiltering) return;
+
+        const filteringRules = getAnomalyFilteringRules();
+        const rules = filteringRules[anomaly.type];
+
+        if (!rules) return;
+
+        const blockKey = `${anomaly.type}:${Date.now()}`;
+
+        // Block signal types based on filtering rules
+        if (rules.meanReversion.block) {
+            this.signalBlocklist.add(`mean_reversion:${blockKey}`);
+            this.logger.debug("Blocking mean reversion signals", {
+                anomaly: anomaly.type,
+                reason: rules.meanReversion.reason,
+            });
+        }
+
+        if (rules.momentum.block) {
+            this.signalBlocklist.add(`momentum:${blockKey}`);
+            this.logger.debug("Blocking momentum signals", {
+                anomaly: anomaly.type,
+                reason: rules.momentum.reason,
+            });
+        }
+
+        if (rules.breakout.block) {
+            this.signalBlocklist.add(`breakout:${blockKey}`);
+            this.logger.debug("Blocking breakout signals", {
+                anomaly: anomaly.type,
+                reason: rules.breakout.reason,
+            });
+        }
+
+        // Auto-remove blocks after anomaly expires
+        setTimeout(
+            () => {
+                this.signalBlocklist.delete(`mean_reversion:${blockKey}`);
+                this.signalBlocklist.delete(`momentum:${blockKey}`);
+                this.signalBlocklist.delete(`breakout:${blockKey}`);
+            },
+            this.getAnomalyDuration(anomaly.type) * 60 * 1000
+        );
+    }
+
+    /**
+     * Check if signal type is currently blocked
+     */
+    private isSignalTypeBlocked(signalType: string): boolean {
+        for (const blockedType of this.signalBlocklist) {
+            if (blockedType.startsWith(`${signalType}:`)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Calculate anomaly-adjusted confidence for a signal
+     */
+    private calculateAnomalyConfidenceAdjustment(signal: ProcessedSignal): {
+        adjustedConfidence: number;
+        impactFactors: Array<{
+            anomalyType: string;
+            impact: "positive" | "negative" | "neutral";
+            multiplier: number;
+            decayedMultiplier: number;
+            reasoning: string;
+        }>;
+    } {
+        const activeAnomalies = Array.from(this.activeAnomalies.values()).map(
+            (a) => ({
+                type: a.type,
+                detectedAt: a.detectedAt,
+                severity: a.severity,
+            })
+        );
+
+        return calculateAnomalyAdjustedConfidence(
+            signal.confidence,
+            signal.type as "meanReversion" | "momentum" | "breakout",
+            activeAnomalies
+        );
+    }
+
+    /**
+     * Create confirmed signal with comprehensive anomaly awareness
+     */
+    private createAnomalyAwareConfirmedSignal(
+        signal: ProcessedSignal,
+        correlation: SignalCorrelation,
+        marketAnomaly: MarketAnomaly | null,
+        anomalyAdjustment: {
+            adjustedConfidence: number;
+            impactFactors: Array<{
+                anomalyType: string;
+                impact: "positive" | "negative" | "neutral";
+                multiplier: number;
+                decayedMultiplier: number;
+                reasoning: string;
+            }>;
+        }
+    ): ConfirmedSignal {
+        // Calculate final confidence incorporating all factors
+        let finalConfidence = anomalyAdjustment.adjustedConfidence;
+
+        // Apply correlation boost
+        if (correlation.strength > 0) {
+            finalConfidence = Math.min(
+                finalConfidence * (1 + correlation.strength * 0.15),
+                1.0
+            );
+        }
+
+        // Apply market anomaly adjustment
+        if (marketAnomaly && marketAnomaly.severity === "high") {
+            finalConfidence *= 0.85;
+        }
+
+        const confirmedSignal: ConfirmedSignal = {
+            id: `confirmed_${signal.id}`,
+            originalSignals: [
+                {
+                    id: signal.id,
+                    type: signal.type,
+                    confidence: signal.confidence,
+                    detectorId: signal.detectorId,
+                    confirmations: new Set([signal.detectorId]),
+                    metadata: signal.data,
+                },
+            ],
+            confidence: finalConfidence,
+            finalPrice: signal.data.price,
+            confirmedAt: Date.now(),
+            correlationData: {
+                correlatedSignals: correlation.correlatedSignals.length,
+                correlationStrength: correlation.strength,
+            },
+            anomalyData: {
+                detected: marketAnomaly !== null,
+                anomaly: marketAnomaly,
+                activeAnomaliesCount: this.activeAnomalies.size,
+                confidenceAdjustment: {
+                    originalConfidence: signal.confidence,
+                    adjustedConfidence: anomalyAdjustment.adjustedConfidence,
+                    finalConfidence,
+                    impactFactors: anomalyAdjustment.impactFactors,
+                },
+                supportingAnomalies: this.getSupportingAnomalies(signal.type),
+                opposingAnomalies: this.getOpposingAnomalies(signal.type),
+            },
+        };
+
+        return confirmedSignal;
+    }
+
+    /**
+     * Get anomalies that support the signal type
+     */
+    private getSupportingAnomalies(
+        signalType: string
+    ): Array<{ type: string; impact: number; reasoning: string }> {
+        const supporting: Array<{
+            type: string;
+            impact: number;
+            reasoning: string;
+        }> = [];
+
+        for (const [type, anomaly] of this.activeAnomalies) {
+            const impactConfig = ANOMALY_SIGNAL_IMPACT_MATRIX[type];
+            if (!impactConfig) continue;
+            void anomaly; //TODO
+
+            const signalImpact = impactConfig[
+                signalType as keyof AnomalySignalImpact
+            ] as {
+                impact: "positive" | "negative" | "neutral";
+                multiplier: number;
+                reasoning: string;
+            };
+            if (signalImpact.impact === "positive") {
+                supporting.push({
+                    type,
+                    impact: signalImpact.multiplier,
+                    reasoning: signalImpact.reasoning,
+                });
+            }
+        }
+
+        return supporting.sort((a, b) => b.impact - a.impact);
+    }
+
+    /**
+     * Get anomalies that oppose the signal type
+     */
+    private getOpposingAnomalies(
+        signalType: string
+    ): Array<{ type: string; impact: number; reasoning: string }> {
+        const opposing: Array<{
+            type: string;
+            impact: number;
+            reasoning: string;
+        }> = [];
+
+        for (const [type, anomaly] of this.activeAnomalies) {
+            const impactConfig = ANOMALY_SIGNAL_IMPACT_MATRIX[type];
+            if (!impactConfig) continue;
+            void anomaly; //TODO
+
+            const signalImpact = impactConfig[
+                signalType as keyof AnomalySignalImpact
+            ] as {
+                impact: "positive" | "negative" | "neutral";
+                multiplier: number;
+                reasoning: string;
+            };
+            if (signalImpact.impact === "negative") {
+                opposing.push({
+                    type,
+                    impact: signalImpact.multiplier,
+                    reasoning: signalImpact.reasoning,
+                });
+            }
+        }
+
+        return opposing.sort((a, b) => a.impact - b.impact); // Sort by most negative impact
+    }
+
+    /**
+     * Handle critical anomalies with immediate actions
+     */
+    private handleCriticalAnomaly(anomaly: AnomalyEvent): void {
+        this.logger.warn(
+            "Critical anomaly detected - implementing emergency measures",
+            {
+                anomalyType: anomaly.type,
+                severity: anomaly.severity,
+                recommendedAction: anomaly.recommendedAction,
+            }
+        );
+
+        // Block all signal types temporarily for flash crashes and liquidity voids
+        if (
+            anomaly.type === "flash_crash" ||
+            anomaly.type === "liquidity_void"
+        ) {
+            const blockKey = `emergency:${anomaly.type}:${Date.now()}`;
+            this.signalBlocklist.add(`mean_reversion:${blockKey}`);
+            this.signalBlocklist.add(`momentum:${blockKey}`);
+            this.signalBlocklist.add(`breakout:${blockKey}`);
+
+            // Auto-remove emergency blocks after 60 seconds
+            setTimeout(() => {
+                this.signalBlocklist.delete(`mean_reversion:${blockKey}`);
+                this.signalBlocklist.delete(`momentum:${blockKey}`);
+                this.signalBlocklist.delete(`breakout:${blockKey}`);
+            }, 60000);
+        }
+
+        // Emit critical anomaly event
+        this.emit("criticalAnomalyDetected", {
+            anomaly,
+            timestamp: Date.now(),
+            emergencyMeasures: {
+                signalsBlocked: true,
+                blockDuration: 60000,
+                recommendedAction: anomaly.recommendedAction,
+            },
+        });
+    }
+
+    /**
+     * Calculate overall impact score for an anomaly
+     */
+    private calculateAnomalyImpactScore(anomaly: AnomalyEvent): number {
+        let score = 0;
+
+        // Base score by severity
+        switch (anomaly.severity) {
+            case "critical":
+                score = 1.0;
+                break;
+            case "high":
+                score = 0.8;
+                break;
+            case "medium":
+                score = 0.5;
+                break;
+            case "info":
+                score = 0.2;
+                break;
+        }
+
+        // Adjust by confidence if available
+        if (
+            anomaly.details.confidence &&
+            typeof anomaly.details.confidence === "number"
+        ) {
+            score *= anomaly.details.confidence;
+        }
+
+        return score;
+    }
+
+    /**
+     * Get anomaly duration from impact matrix
+     */
+    private getAnomalyDuration(anomalyType: string): number {
+        const config = ANOMALY_SIGNAL_IMPACT_MATRIX[anomalyType];
+        return config?.timeDecay || 30; // Default 30 minutes
+    }
+
+    /**
+     * Clean up expired anomalies and signal blocks
+     */
+    private cleanupExpiredAnomalies(): void {
+        const now = Date.now();
+
+        // Only run cleanup every 30 seconds
+        if (now - this.lastAnomalyCleanup < 30000) return;
+        this.lastAnomalyCleanup = now;
+
+        let removedCount = 0;
+
+        // Remove expired anomalies
+        for (const [type, anomaly] of this.activeAnomalies) {
+            const duration = this.getAnomalyDuration(type) * 60 * 1000; // Convert to ms
+            if (now - anomaly.detectedAt > duration) {
+                this.activeAnomalies.delete(type);
+                this.anomalyImpactCache.delete(type);
+                removedCount++;
+            }
+        }
+
+        // Clean up orphaned signal blocks
+        for (const blockKey of this.signalBlocklist) {
+            if (blockKey.includes(":")) {
+                const timestamp = parseInt(blockKey.split(":").pop() || "0");
+                if (now - timestamp > 300000) {
+                    // 5 minutes max
+                    this.signalBlocklist.delete(blockKey);
+                }
+            }
+        }
+
+        if (removedCount > 0) {
+            this.logger.debug("Cleaned up expired anomalies", {
+                removedCount,
+                activeCount: this.activeAnomalies.size,
+                blockedSignalTypes: this.signalBlocklist.size,
+            });
+
+            // Update metrics
+            this.metricsCollector.setGauge(
+                "signal_manager_active_anomalies_count",
+                this.activeAnomalies.size
+            );
+        }
+    }
+
+    /**
+     * Enhanced market anomaly check using real-time context
+     */
+    private checkMarketAnomaly(price: number): MarketAnomaly | null {
+        try {
+            // Get current market health from anomaly detector
+            const marketHealth = this.anomalyDetector.getMarketHealth();
+            if (marketHealth.isHealthy || !marketHealth.highestSeverity) {
+                return null;
+            }
+
+            // Check for recent critical anomalies
+            const criticalAnomalies = Array.from(
+                this.activeAnomalies.values()
+            ).filter(
+                (a) =>
+                    a.severity === "critical" &&
+                    Date.now() - a.detectedAt < 60000
+            );
+
+            if (criticalAnomalies.length > 0) {
+                const mostRecent = criticalAnomalies.sort(
+                    (a, b) => b.detectedAt - a.detectedAt
+                )[0];
+
+                return {
+                    affectedPriceRange: mostRecent.affectedPriceRange,
+                    detectedAt: mostRecent.detectedAt,
+                    severity: mostRecent.severity,
+                    recommendedAction: mostRecent.recommendedAction,
+                    type: `realtime_${mostRecent.type}`,
+                    details: {
+                        ...mostRecent.details,
+                        realtimeDetection: true,
+                        activeAnomalies: this.activeAnomalies.size,
+                    },
+                };
+            }
+
+            // Fallback to market health check
+            return {
+                affectedPriceRange: { min: price * 0.99, max: price * 1.01 },
+                detectedAt: Date.now(),
+                severity: marketHealth.highestSeverity,
+                recommendedAction: marketHealth.recommendation,
+                type: "health_check",
+                details: {
+                    marketHealth,
+                    activeAnomaliesCount: this.activeAnomalies.size,
+                    recentAnomalies: marketHealth.recentAnomalies,
+                },
+            };
+        } catch (error) {
+            this.logger.error("Failed to check market anomaly", {
+                error: error instanceof Error ? error.message : String(error),
+            });
+            return null;
+        }
+    }
+
+    /**
+     * Record anomaly-related metrics
+     */
+    private recordAnomalyMetrics(anomaly: AnomalyEvent): void {
+        this.metricsCollector.incrementCounter(
+            "signal_manager_anomalies_detected_total",
+            1,
+            {
+                anomaly_type: anomaly.type,
+                severity: anomaly.severity,
+                recommended_action: anomaly.recommendedAction,
+            }
+        );
+
+        this.metricsCollector.setGauge(
+            "signal_manager_active_anomalies_count",
+            this.activeAnomalies.size
+        );
+
+        const impactScore = this.calculateAnomalyImpactScore(anomaly);
+        this.metricsCollector.recordHistogram(
+            "signal_manager_anomaly_impact_score",
+            impactScore,
+            {
+                anomaly_type: anomaly.type,
+                severity: anomaly.severity,
+            }
+        );
+    }
+
+    /**
+     * Record signal processing metrics
+     */
+    private recordMetric(metricName: string, signalType: string): void {
+        this.metricsCollector.incrementCounter(
+            `signal_manager_${metricName}_total`,
+            1,
+            { signal_type: signalType }
+        );
+    }
+
+    /**
+     * Log comprehensive signal processing information
+     */
+    private logSignalProcessing(
+        signal: ProcessedSignal,
+        confirmedSignal: ConfirmedSignal,
+        anomalyAdjustment: ReturnType<typeof calculateAnomalyAdjustedConfidence>
+    ): void {
+        this.logger.info("Signal processed with anomaly integration", {
+            signalId: signal.id,
+            signalType: signal.type,
+            confidence: {
+                original: signal.confidence,
+                anomalyAdjusted: anomalyAdjustment.adjustedConfidence,
+                final: confirmedSignal.confidence,
+            },
+            anomalyContext: {
+                activeAnomalies: this.activeAnomalies.size,
+                impactFactors: anomalyAdjustment.impactFactors.length,
+                supportingAnomalies:
+                    confirmedSignal.anomalyData?.supportingAnomalies?.length ||
+                    0,
+                opposingAnomalies:
+                    confirmedSignal.anomalyData?.opposingAnomalies?.length || 0,
+            },
+        });
+    }
+
+    /**
+     * Get current anomaly context for external systems
+     */
+    public getAnomalyContext(): {
+        activeAnomalies: AnomalyEvent[];
+        blockedSignalTypes: string[];
+        totalImpact: number;
+        criticalCount: number;
+        lastUpdate: number;
+    } {
+        const active = Array.from(this.activeAnomalies.values());
+        const totalImpact = Array.from(this.anomalyImpactCache.values()).reduce(
+            (sum, impact) => sum + impact,
+            0
+        );
+        const criticalCount = active.filter(
+            (a) => a.severity === "critical"
+        ).length;
+        const blockedSignalTypes = Array.from(this.signalBlocklist);
+
+        return {
+            activeAnomalies: active,
+            blockedSignalTypes,
+            totalImpact: Math.min(1.0, totalImpact),
+            criticalCount,
+            lastUpdate: Date.now(),
+        };
+    }
+
+    /**
+     * Initialize anomaly-related metrics
+     */
+    private initializeMetrics(): void {
+        try {
+            this.metricsCollector.createCounter(
+                "signal_manager_anomalies_detected_total",
+                "Total number of anomalies detected",
+                ["anomaly_type", "severity", "recommended_action"]
+            );
+
+            this.metricsCollector.createCounter(
+                "signal_manager_signal_blocked_by_anomaly_total",
+                "Total number of signals blocked by anomalies",
+                ["signal_type"]
+            );
+
+            this.metricsCollector.createCounter(
+                "signal_manager_signal_rejected_low_confidence_total",
+                "Total number of signals rejected due to low anomaly-adjusted confidence",
+                ["signal_type"]
+            );
+
+            this.metricsCollector.createGauge(
+                "signal_manager_active_anomalies_count",
+                "Current number of active anomalies"
+            );
+
+            this.metricsCollector.createHistogram(
+                "signal_manager_anomaly_impact_score",
+                "Impact scores of detected anomalies",
+                ["anomaly_type", "severity"],
+                [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+            );
+
+            this.logger.debug("Anomaly metrics initialized", {
+                component: "SignalManager",
+            });
+        } catch (error) {
+            this.logger.error("Failed to initialize anomaly metrics", {
+                component: "SignalManager",
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }
+
+    // Placeholder methods - implement based on your existing SignalManager
+    private calculateSignalCorrelation(
+        signal: ProcessedSignal
+    ): SignalCorrelation {
+        // Your existing correlation logic
+        return {
+            signalId: signal.id,
+            correlatedSignals: [],
+            strength: 0,
+            timestamp: Date.now(),
+        };
     }
 
     /**
@@ -251,7 +925,7 @@ export class SignalManager extends EventEmitter {
     /**
      * Enhanced market anomaly check using real-time context
      */
-    private checkMarketAnomaly(price: number): MarketAnomaly | null {
+    private checkMarketAnomaly_old(price: number): MarketAnomaly | null {
         try {
             // Get current market health
             const marketHealth = this.anomalyDetector.getMarketHealth();
@@ -381,6 +1055,7 @@ export class SignalManager extends EventEmitter {
                   }
                 : {
                       detected: false,
+                      anomaly: null,
                       activeAnomalyImpact,
                       activeAnomaliesCount: this.activeAnomalies.size,
                   },
@@ -415,53 +1090,6 @@ export class SignalManager extends EventEmitter {
         }
 
         return Math.min(1.0, totalImpact);
-    }
-
-    /**
-     * Clean up expired anomalies
-     */
-    private cleanupExpiredAnomalies(): void {
-        const now = Date.now();
-        const expireTime = 300000; // 5 minutes
-
-        for (const [type, anomaly] of this.activeAnomalies) {
-            if (now - anomaly.detectedAt > expireTime) {
-                this.activeAnomalies.delete(type);
-                this.anomalyImpactCache.delete(type);
-            }
-        }
-
-        // Update gauge
-        this.metricsCollector.setGauge(
-            "signal_manager_active_anomalies_count",
-            this.activeAnomalies.size
-        );
-    }
-
-    /**
-     * Get current anomaly context for external systems
-     */
-    public getAnomalyContext(): {
-        activeAnomalies: AnomalyEvent[];
-        totalImpact: number;
-        criticalCount: number;
-        lastUpdate: number;
-    } {
-        const active = Array.from(this.activeAnomalies.values());
-        const totalImpact = Array.from(this.anomalyImpactCache.values()).reduce(
-            (sum, impact) => sum + impact,
-            0
-        );
-        const criticalCount = active.filter(
-            (a) => a.severity === "critical"
-        ).length;
-
-        return {
-            activeAnomalies: active,
-            totalImpact: Math.min(1.0, totalImpact),
-            criticalCount,
-            lastUpdate: Date.now(),
-        };
     }
 
     /**
@@ -876,128 +1504,5 @@ export class SignalManager extends EventEmitter {
             historySize: this.signalHistory.length,
             config: this.config,
         };
-    }
-
-    /**
-     * Initialize metrics with MetricsCollector
-     */
-    private initializeMetrics(): void {
-        try {
-            // Counters
-            this.metricsCollector.createCounter(
-                "signal_manager_signals_received_total",
-                "Total number of signals received from coordinator",
-                ["signal_type", "detector_id"]
-            );
-
-            this.metricsCollector.createCounter(
-                "signal_manager_signals_confirmed_total",
-                "Total number of signals confirmed and converted to trading signals",
-                ["signal_type", "detector_id", "trading_side"]
-            );
-
-            this.metricsCollector.createCounter(
-                "signal_manager_signals_rejected_total",
-                "Total number of signals rejected",
-                ["signal_type", "rejection_reason", "detector_id"]
-            );
-
-            this.metricsCollector.createCounter(
-                "signal_manager_anomaly_rejections_total",
-                "Total number of signals rejected due to anomalies",
-                ["signal_type", "anomaly_severity"]
-            );
-
-            this.metricsCollector.createCounter(
-                "signal_manager_alerts_sent_total",
-                "Total number of alerts sent",
-                ["signal_type", "trading_side"]
-            );
-
-            this.metricsCollector.createCounter(
-                "signal_manager_alert_errors_total",
-                "Total number of alert errors",
-                ["signal_type", "error_type"]
-            );
-
-            this.metricsCollector.createCounter(
-                "signal_manager_errors_total",
-                "Total number of signal processing errors",
-                ["signal_type", "detector_id", "error_type"]
-            );
-
-            // Histograms
-            this.metricsCollector.createHistogram(
-                "signal_manager_processing_duration_seconds",
-                "Time spent processing signals in SignalManager",
-                ["signal_type", "detector_id"],
-                [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 2, 5]
-            );
-
-            this.metricsCollector.createHistogram(
-                "signal_manager_confidence_score",
-                "Final confidence scores of confirmed signals",
-                ["signal_type", "detector_id"],
-                [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-            );
-
-            this.metricsCollector.createHistogram(
-                "signal_manager_correlation_strength",
-                "Correlation strength between signals",
-                ["signal_type"],
-                [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-            );
-
-            // Gauges
-            this.metricsCollector.createGauge(
-                "signal_manager_recent_signals_count",
-                "Current number of recent signals in memory"
-            );
-
-            this.metricsCollector.createGauge(
-                "signal_manager_signal_history_size",
-                "Current size of signal history"
-            );
-
-            this.metricsCollector.createGauge(
-                "signal_manager_correlations_count",
-                "Current number of signal correlations tracked"
-            );
-
-            this.metricsCollector.createGauge(
-                "signal_manager_correlated_signals_count",
-                "Number of correlated signals for the most recent signal"
-            );
-
-            this.logger.debug("SignalManager metrics initialized", {
-                component: "SignalManager",
-                operation: "initializeMetrics",
-            });
-
-            // Add anomaly-specific metrics
-            this.metricsCollector.createCounter(
-                "signal_manager_anomalies_detected_total",
-                "Total number of anomalies detected",
-                ["anomaly_type", "severity", "recommended_action"]
-            );
-
-            this.metricsCollector.createGauge(
-                "signal_manager_active_anomalies_count",
-                "Current number of active anomalies"
-            );
-
-            this.metricsCollector.createHistogram(
-                "signal_manager_anomaly_impact_score",
-                "Impact scores of detected anomalies",
-                ["anomaly_type", "severity"],
-                [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-            );
-        } catch (error) {
-            this.logger.error("Failed to initialize SignalManager metrics", {
-                component: "SignalManager",
-                operation: "initializeMetrics",
-                error: error instanceof Error ? error.message : String(error),
-            });
-        }
     }
 }

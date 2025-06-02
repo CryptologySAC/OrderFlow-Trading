@@ -169,9 +169,34 @@ export interface CorrelationData {
 
 export interface AnomalyData {
     detected: boolean;
-    anomaly?: MarketAnomaly;
+    anomaly: MarketAnomaly | null;
     activeAnomalyImpact?: number;
     activeAnomaliesCount?: number;
+    opposingAnomalies?: Array<{
+        type: string;
+        impact: number;
+        reasoning: string;
+    }>;
+    supportingAnomalies?: Array<{
+        type: string;
+        impact: number;
+        reasoning: string;
+    }>;
+    confidenceAdjustment?: AnomalyImpactFactors;
+}
+
+export interface AnomalyImpactFactors {
+    originalConfidence: number;
+    adjustedConfidence: number;
+    finalConfidence: number;
+    anomalyType?: string;
+    impactFactors: Array<{
+        anomalyType: string;
+        impact: "positive" | "negative" | "neutral";
+        multiplier: number;
+        decayedMultiplier: number;
+        reasoning: string;
+    }>;
 }
 
 // Update your ConfirmedSignal interface to include these new fields
