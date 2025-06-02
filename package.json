@@ -16,7 +16,9 @@
         "streamer": "bin/app"
     },
     "scripts": {
-        "start": "node dist/app/index.js",
+        "start": "bin/app",
+        "start:dev": "NODE_ENV=development bin/app",
+        "rebuild": "yarn build && yarn start:dev",
         "build:watch": "yarn clean && yarn compile -w",
         "check": "yarn lint && yarn build && yarn test",
         "clean": "rm -r dist",

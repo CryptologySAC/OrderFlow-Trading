@@ -1,3 +1,5 @@
+// src/orderFlowDashboard.ts
+
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
@@ -8,719 +10,857 @@ const __dirname = dirname(__filename);
 
 import express from "express";
 import * as path from "node:path";
-import * as ws from "ws";
-import { SpotWebsocketStreams } from "@binance/spot";
-import { TradesProcessor } from "./tradesProcessor.js";
-import { BinanceDataFeed, IBinanceDataFeed } from "./binance.js";
-import {
-    OrderBookProcessor,
-    IOrderBookProcessor,
-} from "./orderBookProcessor.js";
-import { Signal, WebSocketMessage, Detected } from "./interfaces.js";
-import { Storage } from "./storage.js";
-import {
-    AbsorptionDetector,
-    AbsorptionSettings,
-} from "./absorptionDetector.js";
-import {
-    ExhaustionDetector,
-    ExhaustionSettings,
-} from "./exhaustionDetector.js";
-import { DeltaCVDConfirmation } from "./deltaCVDCOnfirmation.js";
-import { SwingPredictor, SwingPrediction } from "./swingPredictor.js";
-import { parseBool } from "./utils.js";
-import { SignalLogger, ISignalLogger } from "./signalLogger.js";
-
 import { EventEmitter } from "events";
 import { randomUUID } from "crypto";
+import { SpotWebsocketStreams } from "@binance/spot";
+
+// Core imports
+import { Config } from "./core/config.js";
+import { SignalProcessingError, WebSocketError } from "./core/errors.js";
+
+// Infrastructure imports
+import { Logger } from "./infrastructure/logger.js";
+import { MetricsCollector } from "./infrastructure/metricsCollector.js";
+import { RateLimiter } from "./infrastructure/rateLimiter.js";
+import { CircuitBreaker } from "./infrastructure/circuitBreaker.js";
+
+// Service imports
+import { DetectorFactory } from "./utils/detectorFactory.js";
+import type {
+    EnrichedTradeEvent,
+    OrderBookSnapshot,
+} from "./types/marketEvents.js";
+import { OrderflowPreprocessor } from "./market/orderFlowPreprocessor.js";
+import {
+    OrderBookState,
+    OrderBookStateOptions,
+} from "./market/orderBookState.js";
+import {
+    WebSocketManager,
+    type ExtendedWebSocket,
+} from "./websocket/websocketManager.js";
+import { SignalManager } from "./trading/signalManager.js";
+import { DataStreamManager } from "./trading/dataStreamManager.js";
+import { SignalCoordinator } from "./services/signalCoordinator.js";
+import {
+    AnomalyDetector,
+    AnomalyEvent,
+    AnomalyDetectorOptions,
+} from "./services/anomalyDetector.js";
+import { AlertManager } from "./alerts/alertManager.js";
+
+// Indicator imports
+import { AccumulationSettings } from "./indicators/interfaces/detectorInterfaces.js";
+import {
+    AbsorptionDetector,
+    type AbsorptionSettings,
+} from "./indicators/absorptionDetector.js";
+import {
+    ExhaustionDetector,
+    type ExhaustionSettings,
+} from "./indicators/exhaustionDetector.js";
+import { SwingMetrics } from "./indicators/swingMetrics.js";
+import { AccumulationDetector } from "./indicators/accumulationDetector.js";
+import { MomentumDivergence } from "./indicators/momentumDivergence.js";
+import {
+    DeltaCVDConfirmation,
+    DeltaCVDConfirmationSettings,
+} from "./indicators/deltaCVDConfirmation.js";
+import {
+    SwingPredictor,
+    SwingPredictorConfig,
+    type SwingPrediction,
+} from "./indicators/swingPredictor.js";
+
+// Utils imports
+import { parseBool, TradeData } from "./utils/utils.js";
+import {
+    calculateProfitTarget,
+    calculateStopLoss,
+} from "./utils/calculations.js";
+
+// Types
+import type { Dependencies } from "./types/dependencies.js";
+import type { VolumeNodes } from "./indicators/swingMetrics.js";
+import type {
+    Signal,
+    AccumulationResult,
+    DivergenceResult,
+    SwingSignalData,
+    DeltaCVDConfirmationEvent,
+} from "./types/signalTypes.js";
+import type {
+    TimeContext,
+    DetectorRegisteredEvent,
+    SignalQueuedEvent,
+    SignalProcessedEvent,
+    SignalFailedEvent,
+    DetectorErrorEvent,
+} from "./utils/types.js";
+
+// Storage and processors
+import { Storage } from "./infrastructure/storage.js";
+import { BinanceDataFeed } from "./utils/binance.js";
+import { TradesProcessor } from "./clients/tradesProcessor.js";
+import {
+    OrderBookProcessor,
+    OrderBookProcessorOptions,
+} from "./clients/orderBookProcessor.js";
+import { SignalLogger } from "./services/signalLogger.js";
+import type { WebSocketMessage } from "./utils/interfaces.js";
+
 EventEmitter.defaultMaxListeners = 20;
 
-// Enhanced Error Types
-class SignalProcessingError extends Error {
-    constructor(
-        message: string,
-        public readonly context: Record<string, unknown>,
-        public readonly correlationId?: string
-    ) {
-        super(message);
-        this.name = "SignalProcessingError";
-    }
-}
-
-class WebSocketError extends Error {
-    constructor(
-        message: string,
-        public readonly clientId: string,
-        public readonly correlationId?: string
-    ) {
-        super(message);
-        this.name = "WebSocketError";
-    }
-}
-
-class ConnectionError extends Error {
-    constructor(
-        message: string,
-        public readonly service: string,
-        public readonly correlationId?: string
-    ) {
-        super(message);
-        this.name = "ConnectionError";
-    }
-}
-
-// Configuration Management
-class Config {
-    static readonly SYMBOL = (process.env.SYMBOL ?? "LTCUSDT").toUpperCase();
-    static readonly HTTP_PORT = parseInt(process.env.PORT ?? "3000", 10);
-    static readonly WS_PORT = parseInt(process.env.WS_PORT ?? "3001", 10);
-    static readonly WEBHOOK_URL = process.env.WEBHOOK_URL;
-
-    // Exhaustion Settings
-    static readonly EXHAUSTION_WINDOW_MS = parseInt(
-        process.env.EXHAUSTION_WINDOW_MS ?? "90000",
-        10
-    );
-    static readonly EXHAUSTION_MIN_AGG_VOLUME = parseInt(
-        process.env.EXHAUSTION_MIN_AGG_VOLUME ?? "600",
-        10
-    );
-    static readonly EXHAUSTION_PRICE_PRECISION = parseInt(
-        process.env.EXHAUSTION_PRICE_PRECISION ?? "2",
-        10
-    );
-    static readonly EXHAUSTION_ZONE_TICKS = parseInt(
-        process.env.EXHAUSTION_ZONE_TICKS ?? "3",
-        10
-    );
-    static readonly EXHAUSTION_EVENT_COOLDOWN_MS = parseInt(
-        process.env.EXHAUSTION_EVENT_COOLDOWN_MS ?? "15000",
-        10
-    );
-    static readonly EXHAUSTION_MOVE_TICKS = parseInt(
-        process.env.EXHAUSTION_MOVE_TICKS ?? "12",
-        10
-    );
-    static readonly EXHAUSTION_CONFIRMATION_TIMEOUT = parseInt(
-        process.env.EXHAUSTION_CONFIRMATION_TIMEOUT ?? "60000",
-        10
-    );
-    static readonly EXHAUSTION_MAX_REVISIT_TICKS = parseInt(
-        process.env.EXHAUSTION_MAX_REVISIT_TICKS ?? "5",
-        10
-    );
-
-    // Absorption Settings
-    static readonly ABSORPTION_WINDOW_MS = parseInt(
-        process.env.ABSORPTION_WINDOW_MS ?? "90000",
-        10
-    );
-    static readonly ABSORPTION_MIN_AGG_VOLUME = parseInt(
-        process.env.ABSORPTION_MIN_AGG_VOLUME ?? "600",
-        10
-    );
-    static readonly ABSORPTION_PRICE_PRECISION = parseInt(
-        process.env.ABSORPTION_PRICE_PRECISION ?? "2",
-        10
-    );
-    static readonly ABSORPTION_ZONE_TICKS = parseInt(
-        process.env.ABSORPTION_ZONE_TICKS ?? "3",
-        10
-    );
-    static readonly ABSORPTION_EVENT_COOLDOWN_MS = parseInt(
-        process.env.ABSORPTION_EVENT_COOLDOWN_MS ?? "15000",
-        10
-    );
-    static readonly ABSORPTION_MOVE_TICKS = parseInt(
-        process.env.ABSORPTION_MOVE_TICKS ?? "12",
-        10
-    );
-    static readonly ABSORPTION_CONFIRMATION_TIMEOUT = parseInt(
-        process.env.ABSORPTION_CONFIRMATION_TIMEOUT ?? "60000",
-        10
-    );
-    static readonly ABSORPTION_MAX_REVISIT_TICKS = parseInt(
-        process.env.ABSORPTION_MAX_REVISIT_TICKS ?? "5",
-        10
-    );
-
-    static validate(): void {
-        const requiredEnvVars = ["SYMBOL"];
-        const missing = requiredEnvVars.filter(
-            (envVar) => !process.env[envVar]
-        );
-
-        if (missing.length > 0) {
-            throw new Error(
-                `Missing required environment variables: ${missing.join(", ")}`
-            );
-        }
-
-        if (this.HTTP_PORT < 1 || this.HTTP_PORT > 65535) {
-            throw new Error(`Invalid HTTP_PORT: ${this.HTTP_PORT}`);
-        }
-
-        if (this.WS_PORT < 1 || this.WS_PORT > 65535) {
-            throw new Error(`Invalid WS_PORT: ${this.WS_PORT}`);
-        }
-    }
-}
-
-// Circuit Breaker Implementation
-enum CircuitState {
-    CLOSED = "CLOSED",
-    OPEN = "OPEN",
-    HALF_OPEN = "HALF_OPEN",
-}
-
-class CircuitBreaker {
-    private state: CircuitState = CircuitState.CLOSED;
-    private failureCount = 0;
-    private lastFailureTime = 0;
-    private successCount = 0;
-
-    constructor(
-        private readonly threshold: number = 5,
-        private readonly timeout: number = 60000,
-        private readonly monitoringPeriod: number = 10000
-    ) {}
-
-    async execute<T>(
-        operation: () => Promise<T>,
-        correlationId?: string
-    ): Promise<T> {
-        if (this.state === CircuitState.OPEN) {
-            if (Date.now() - this.lastFailureTime > this.timeout) {
-                this.state = CircuitState.HALF_OPEN;
-                this.successCount = 0;
-            } else {
-                throw new Error(
-                    `Circuit breaker is OPEN. Correlation ID: ${correlationId}`
-                );
-            }
-        }
-
-        try {
-            const result = await operation();
-            this.onSuccess();
-            return result;
-        } catch (error) {
-            this.onFailure();
-            throw error;
-        }
-    }
-
-    private onSuccess(): void {
-        this.failureCount = 0;
-        if (this.state === CircuitState.HALF_OPEN) {
-            this.successCount++;
-            if (this.successCount >= 3) {
-                this.state = CircuitState.CLOSED;
-            }
-        }
-    }
-
-    private onFailure(): void {
-        this.failureCount++;
-        this.lastFailureTime = Date.now();
-        if (this.failureCount >= this.threshold) {
-            this.state = CircuitState.OPEN;
-        }
-    }
-
-    getState(): CircuitState {
-        return this.state;
-    }
-}
-
-// Enhanced Interfaces
-interface IStorage {
-    purgeOldEntries(): void;
-}
-
-interface ITradesProcessor {
-    addTrade(data: SpotWebsocketStreams.AggTradeResponse): WebSocketMessage;
-    requestBacklog(amount: number): unknown[];
-    fillBacklog(): Promise<void>;
-}
-
-// Rate Limiter
-class RateLimiter {
-    private requests = new Map<string, number[]>();
-
-    constructor(
-        private readonly windowMs: number = 60000,
-        private readonly maxRequests: number = 100
-    ) {
-        // Cleanup old entries every minute
-        setInterval(() => this.cleanup(), this.windowMs);
-    }
-
-    isAllowed(clientId: string): boolean {
-        const now = Date.now();
-        const clientRequests = this.requests.get(clientId) || [];
-
-        // Remove old requests outside the window
-        const validRequests = clientRequests.filter(
-            (time) => now - time < this.windowMs
-        );
-
-        if (validRequests.length >= this.maxRequests) {
-            return false;
-        }
-
-        validRequests.push(now);
-        this.requests.set(clientId, validRequests);
-        return true;
-    }
-
-    private cleanup(): void {
-        const now = Date.now();
-        for (const [clientId, requests] of this.requests.entries()) {
-            const validRequests = requests.filter(
-                (time) => now - time < this.windowMs
-            );
-            if (validRequests.length === 0) {
-                this.requests.delete(clientId);
-            } else {
-                this.requests.set(clientId, validRequests);
-            }
-        }
-    }
-}
-
-// Metrics Collection
-interface Metrics {
-    signalsGenerated: number;
-    connectionsActive: number;
-    processingLatency: number[];
-    errorsCount: number;
-    circuitBreakerState: string;
-    uptime: number;
-}
-
-class MetricsCollector {
-    private metrics: Metrics = {
-        signalsGenerated: 0,
-        connectionsActive: 0,
-        processingLatency: [],
-        errorsCount: 0,
-        circuitBreakerState: "CLOSED",
-        uptime: Date.now(),
-    };
-
-    updateMetric(metric: keyof Metrics, value: number | string): void {
-        if (metric === "processingLatency" && typeof value === "number") {
-            this.metrics.processingLatency.push(value);
-            // Keep only last 1000 entries
-            if (this.metrics.processingLatency.length > 1000) {
-                this.metrics.processingLatency =
-                    this.metrics.processingLatency.slice(-1000);
-            }
-        } else if (typeof value === "number") {
-            (this.metrics[metric] as number) = value;
-        } else if (typeof value === "string") {
-            (this.metrics[metric] as string) = value;
-        }
-    }
-
-    incrementMetric(metric: keyof Metrics): void {
-        if (typeof this.metrics[metric] === "number") {
-            this.metrics[metric]++;
-        }
-    }
-
-    getMetrics(): Metrics {
-        return {
-            ...this.metrics,
-            uptime: Date.now() - this.metrics.uptime,
-        };
-    }
-
-    getAverageLatency(): number {
-        const latencies = this.metrics.processingLatency;
-        return latencies.length > 0
-            ? latencies.reduce((a, b) => a + b, 0) / latencies.length
-            : 0;
-    }
-}
-
-// Enhanced Logger
-class Logger {
-    private correlationContext = new Map<string, string>();
-
-    info(
-        message: string,
-        context?: Record<string, unknown>,
-        correlationId?: string
-    ): void {
-        this.log("INFO", message, context, correlationId);
-    }
-
-    error(
-        message: string,
-        context?: Record<string, unknown>,
-        correlationId?: string
-    ): void {
-        this.log("ERROR", message, context, correlationId);
-    }
-
-    warn(
-        message: string,
-        context?: Record<string, unknown>,
-        correlationId?: string
-    ): void {
-        this.log("WARN", message, context, correlationId);
-    }
-
-    private log(
-        level: string,
-        message: string,
-        context?: Record<string, unknown>,
-        correlationId?: string
-    ): void {
-        const timestamp = new Date().toISOString();
-        const logEntry = {
-            timestamp,
-            level,
-            message,
-            correlationId,
-            ...context,
-        };
-
-        console.log(JSON.stringify(logEntry));
-    }
-
-    setCorrelationId(id: string, context: string): void {
-        this.correlationContext.set(id, context);
-    }
-
-    removeCorrelationId(id: string): void {
-        this.correlationContext.delete(id);
-    }
-}
-
-function isValidWSRequest(
-    obj: unknown
-): obj is { type: string; data?: unknown } {
-    return (
-        typeof obj === "object" &&
-        obj !== null &&
-        "type" in obj &&
-        typeof (obj as { type: unknown }).type === "string"
-    );
-}
-
-// Dependencies Interface
-interface Dependencies {
-    storage: IStorage;
-    binanceFeed: IBinanceDataFeed;
-    tradesProcessor: ITradesProcessor;
-    orderBookProcessor: IOrderBookProcessor;
-    signalLogger: ISignalLogger;
-    logger: Logger;
-    metricsCollector: MetricsCollector;
-    rateLimiter: RateLimiter;
-    circuitBreaker: CircuitBreaker;
-}
-
-type WS = ws.WebSocket;
-interface ExtendedWebSocket extends WS {
-    clientId?: string;
-    correlationId?: string;
-}
-
-type WSHandler<T = unknown> = (
-    ws: ExtendedWebSocket,
-    data: T,
-    correlationId?: string
-) => void | Promise<void>;
-
+/**
+ * Main Order Flow Dashboard Controller
+ * Coordinates all subsystems and manages application lifecycle
+ */
 export class OrderFlowDashboard {
-    private readonly intervalMs: number = 10 * 60 * 1000; // 10 minutes
-    private readonly httpServer: express.Application = express();
-    private readonly BroadCastWebSocket: ws.WebSocketServer;
+    // Infrastructure components
+    private readonly httpServer = express();
+    private readonly logger: Logger;
+    private readonly metricsCollector: MetricsCollector;
+
+    // Managers
+    private readonly wsManager: WebSocketManager;
+    private readonly signalManager: SignalManager;
+    private readonly dataStreamManager: DataStreamManager;
+
+    // Market
+    private orderBook: OrderBookState | null = null;
+    private preprocessor: OrderflowPreprocessor | null = null;
+
+    // Coordinators
+    private readonly signalCoordinator: SignalCoordinator;
+    private readonly anomalyDetector: AnomalyDetector;
+
+    // Detectors
     private readonly absorptionDetector: AbsorptionDetector;
     private readonly exhaustionDetector: ExhaustionDetector;
     private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
+    private readonly swingPredictor: SwingPredictor;
+
+    // Indicators
+    private readonly swingMetrics = new SwingMetrics();
+    private readonly accumulationDetector: AccumulationDetector;
+    private readonly momentumDivergence = new MomentumDivergence();
+
+    // Time context
+    private timeContext: TimeContext = {
+        wallTime: Date.now(),
+        marketTime: Date.now(),
+        mode: "realtime",
+        speed: 1,
+    };
+
+    // State
     private isShuttingDown = false;
-    private activeConnections = new Set<ExtendedWebSocket>();
+    private readonly purgeIntervalMs = 10 * 60 * 1000; // 10 minutes
+    private purgeIntervalId?: NodeJS.Timeout;
 
-    private swingPredictor = new SwingPredictor({
-        lookaheadMs: 10000,
-        retraceTicks: 1,
-        pricePrecision: 2,
-        signalCooldownMs: 1000,
-        onSwingPredicted: this.handleSwingPrediction.bind(this),
-    });
+    public static async create(
+        dependencies: Dependencies,
+        delayFn: (cb: () => void, ms: number) => unknown = setTimeout
+    ): Promise<OrderFlowDashboard> {
+        const instance = new OrderFlowDashboard(dependencies, delayFn);
+        await instance.initialize(dependencies);
+        return instance;
+    }
 
-    private readonly exhaustionSettings: ExhaustionSettings = {
-        windowMs: Config.EXHAUSTION_WINDOW_MS,
-        minAggVolume: Config.EXHAUSTION_MIN_AGG_VOLUME,
-        pricePrecision: Config.EXHAUSTION_PRICE_PRECISION,
-        zoneTicks: Config.EXHAUSTION_ZONE_TICKS,
-        eventCooldownMs: Config.EXHAUSTION_EVENT_COOLDOWN_MS,
-        minInitialMoveTicks: Config.EXHAUSTION_MOVE_TICKS,
-        confirmationTimeoutMs: Config.EXHAUSTION_CONFIRMATION_TIMEOUT,
-        maxRevisitTicks: Config.EXHAUSTION_MAX_REVISIT_TICKS,
-        features: {
-            spoofingDetection: parseBool(
-                process.env.EXHAUSTION_SPOOFING_DETECTION,
-                true
-            ),
-            adaptiveZone: parseBool(process.env.EXHAUSTION_ADAPTIVE_ZONE, true),
-            passiveHistory: parseBool(
-                process.env.EXHAUSTION_PASSIVE_HISTORY,
-                true
-            ),
-            multiZone: parseBool(process.env.EXHAUSTION_MULTI_ZONE, true),
-            priceResponse: parseBool(
-                process.env.EXHAUSTION_PRICE_RESPONSE,
-                true
-            ),
-            sideOverride: parseBool(
-                process.env.EXHAUSTION_SIDE_OVERRIDE,
-                false
-            ),
-            autoCalibrate: parseBool(
-                process.env.EXHAUSTION_AUTO_CALIBRATE,
-                true
-            ),
-        },
-    };
-
-    private readonly absorptionSettings: AbsorptionSettings = {
-        windowMs: Config.ABSORPTION_WINDOW_MS,
-        minAggVolume: Config.ABSORPTION_MIN_AGG_VOLUME,
-        pricePrecision: Config.ABSORPTION_PRICE_PRECISION,
-        zoneTicks: Config.ABSORPTION_ZONE_TICKS,
-        eventCooldownMs: Config.ABSORPTION_EVENT_COOLDOWN_MS,
-        minInitialMoveTicks: Config.ABSORPTION_MOVE_TICKS,
-        confirmationTimeoutMs: Config.ABSORPTION_CONFIRMATION_TIMEOUT,
-        maxRevisitTicks: Config.ABSORPTION_MAX_REVISIT_TICKS,
-        features: {
-            spoofingDetection: parseBool(
-                process.env.ABSORPTION_SPOOFING_DETECTION,
-                true
-            ),
-            adaptiveZone: parseBool(process.env.ABSORPTION_ADAPTIVE_ZONE, true),
-            passiveHistory: parseBool(
-                process.env.ABSORPTION_PASSIVE_HISTORY,
-                true
-            ),
-            multiZone: parseBool(process.env.ABSORPTION_MULTI_ZONE, true),
-            priceResponse: parseBool(
-                process.env.ABSORPTION_PRICE_RESPONSE,
-                true
-            ),
-            sideOverride: parseBool(
-                process.env.ABSORPTION_SIDE_OVERRIDE,
-                false
-            ),
-            autoCalibrate: parseBool(
-                process.env.ABSORPTION_AUTO_CALIBRATE,
-                true
-            ),
-        },
-    };
-
-    private wsHandlers: Record<string, WSHandler> = {
-        ping: (ws, _, correlationId) => {
-            ws.send(
-                JSON.stringify({
-                    type: "pong",
-                    now: Date.now(),
-                    correlationId,
-                })
-            );
-        },
-        backlog: (ws, data, correlationId) => {
-            const startTime = Date.now();
-            try {
-                let amount = 1000;
-                if (data && typeof data === "object" && "amount" in data) {
-                    const rawAmount = (data as { amount?: string | number })
-                        .amount;
-                    amount = parseInt(rawAmount as string, 10);
-                    if (
-                        !Number.isInteger(amount) ||
-                        amount <= 0 ||
-                        amount > 100000
-                    ) {
-                        throw new WebSocketError(
-                            "Invalid backlog amount",
-                            ws.clientId || "unknown",
-                            correlationId
-                        );
-                    }
-                }
-
-                let backlog =
-                    this.dependencies.tradesProcessor.requestBacklog(amount);
-                backlog = backlog.reverse();
-                ws.send(
-                    JSON.stringify({
-                        type: "backlog",
-                        data: backlog,
-                        now: Date.now(),
-                        correlationId,
-                    })
-                );
-
-                const processingTime = Date.now() - startTime;
-                this.dependencies.metricsCollector.updateMetric(
-                    "processingLatency",
-                    processingTime
-                );
-            } catch (error) {
-                this.dependencies.metricsCollector.incrementMetric(
-                    "errorsCount"
-                );
-                this.handleError(
-                    error as Error,
-                    "backlog_handler",
-                    correlationId
-                );
-                ws.send(
-                    JSON.stringify({
-                        type: "error",
-                        message: (error as Error).message,
-                        correlationId,
-                    })
-                );
-            }
-        },
-    };
+    private async initialize(dependencies: Dependencies): Promise<void> {
+        // TODO Initialize Market with real options
+        const options: OrderBookStateOptions = {
+            symbol: Config.SYMBOL,
+            pricePrecision: Config.PRICE_PRECISION,
+            maxLevels: 5000,
+            maxPriceDistance: 10000,
+            pruneIntervalMs: 30000,
+            maxErrorRate: 20,
+            staleThresholdMs: 900_000, // 15 minutes
+        };
+        this.orderBook = await OrderBookState.create(
+            options,
+            dependencies.logger,
+            dependencies.metricsCollector
+        );
+        this.preprocessor = new OrderflowPreprocessor(
+            {
+                //TODO Config
+                pricePrecision: Config.PRICE_PRECISION,
+                bandTicks: 10,
+                tickSize: Config.TICK_SIZE,
+            },
+            this.orderBook,
+            dependencies.logger,
+            dependencies.metricsCollector
+        );
+        this.logger.info(
+            "[OrderFlowDashboard] Orderflow preprocessor initialized"
+        );
+        this.setupEventHandlers();
+        this.setupHttpServer();
+        this.setupGracefulShutdown();
+    }
 
     constructor(
-        private dependencies: Dependencies,
-        private delayFn: (cb: () => void, ms: number) => unknown = setTimeout
+        private readonly dependencies: Dependencies,
+        private readonly delayFn: (
+            cb: () => void,
+            ms: number
+        ) => unknown = setTimeout
     ) {
         // Validate configuration
         Config.validate();
 
-        this.exhaustionDetector = new ExhaustionDetector(
-            (data) =>
-                void this.handleDetection(
-                    () => this.onExhaustionDetected(data),
-                    "exhaustion"
-                ),
-            this.exhaustionSettings,
-            dependencies.signalLogger
+        // Initialize infrastructure
+        this.logger = dependencies.logger;
+        this.metricsCollector = dependencies.metricsCollector;
+
+        // Initialize coordinators
+        this.signalCoordinator = dependencies.signalCoordinator;
+        this.anomalyDetector = dependencies.anomalyDetector;
+
+        // Initialize managers
+        this.wsManager = new WebSocketManager(
+            Config.WS_PORT,
+            this.logger,
+            dependencies.rateLimiter,
+            this.metricsCollector,
+            this.createWSHandlers()
         );
 
-        this.absorptionDetector = new AbsorptionDetector(
-            (data) =>
-                void this.handleDetection(
-                    () => this.onAbsorptionDetected(data),
-                    "absorption"
-                ),
-            this.absorptionSettings,
-            dependencies.signalLogger
+        this.signalManager = dependencies.signalManager;
+
+        this.dataStreamManager = new DataStreamManager(
+            { symbol: Config.SYMBOL },
+            dependencies.binanceFeed,
+            dependencies.circuitBreaker,
+            this.logger,
+            this.metricsCollector
         );
 
+        DetectorFactory.initialize(dependencies);
+
+        this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
+            (signal) => {
+                console.log("Absorption signal:", signal);
+            },
+            this.createAbsorptionSettings(),
+            dependencies,
+            { id: "ltcusdt-absorption-main" }
+        );
+        this.signalCoordinator.registerDetector(
+            this.absorptionDetector,
+            ["absorption"],
+            100,
+            true
+        );
+
+        this.exhaustionDetector = DetectorFactory.createExhaustionDetector(
+            (signal) => {
+                console.log("Exhaustion signal:", signal);
+            },
+            this.createExhaustionSettings(),
+            dependencies,
+            { id: "ltcusdt-exhaustion-main" }
+        );
+        this.signalCoordinator.registerDetector(
+            this.exhaustionDetector,
+            ["exhaustion"],
+            90,
+            true
+        );
+
+        this.accumulationDetector = DetectorFactory.createAccumulationDetector(
+            (signal) => {
+                console.log("Accumulation signal:", signal);
+            },
+            this.createAccumulationDetectorSettings(),
+            dependencies,
+            { id: "ltcusdt-accumulation-main" }
+        );
+        this.signalCoordinator.registerDetector(
+            this.accumulationDetector,
+            ["accumulation"],
+            50,
+            true
+        );
+
+        // Initialize other components
         this.deltaCVDConfirmation = new DeltaCVDConfirmation(
-            (confirmed) => {
-                const correlationId = randomUUID();
-                try {
-                    const confirmedSignal: Signal = {
-                        type: `${confirmed.confirmedType}_confirmed` as Signal["type"],
-                        time: confirmed.time,
-                        price: confirmed.price,
-                        takeProfit: confirmed.price * 1.01,
-                        stopLoss: confirmed.price * 0.99,
-                        closeReason: confirmed.reason,
-                    };
+            this.DeltaCVDConfirmationCallback,
+            this.createDeltaCVDSettings(),
+            this.logger,
+            this.metricsCollector,
+            dependencies.signalLogger
+        );
 
-                    this.swingPredictor.onSignal(confirmedSignal);
-                } catch (error) {
-                    this.handleError(
-                        error as Error,
-                        "delta_cvd_confirmation",
+        this.swingPredictor = new SwingPredictor(
+            this.createSwingPredictorSettings()
+        );
+
+        this.signalCoordinator.start();
+        this.logger.info("SignalCoordinator started");
+        this.logger.info("Status:", this.signalCoordinator.getStatus());
+        const signalCoordinatorInfo = this.signalCoordinator.getDetectorInfo();
+        this.logger.info("Detectors:", { signalCoordinatorInfo });
+
+        setInterval(() => {
+            const stats = DetectorFactory.getFactoryStats();
+            this.logger.info("Factory stats:", { stats });
+            const signalCoordinatorInfo =
+                this.signalCoordinator.getDetectorInfo();
+            this.logger.info("Detectors:", { signalCoordinatorInfo });
+        }, 60000);
+
+        // Cleanup on exit
+        process.on("SIGINT", () => {
+            DetectorFactory.destroyAll();
+            void this.signalCoordinator.stop();
+            process.exit(0);
+        });
+    }
+
+    private DeltaCVDConfirmationCallback = (event: unknown): void => {
+        if (!this.isDeltaCVDConfirmationEvent(event)) {
+            this.handleError(
+                new SignalProcessingError(
+                    "Invalid Delta CVD confirmation event",
+                    { event }
+                ),
+                "delta_cvd_confirmation",
+                randomUUID()
+            );
+            return;
+        }
+
+        // TypeScript now knows event is DeltaCVDConfirmationEvent
+        const correlationId = randomUUID();
+        try {
+            const signal: Signal = {
+                id: correlationId,
+                type: "cvd_confirmation",
+                time: event.time, // No error - TypeScript knows the type
+                price: event.price, // No error
+                side: event.side, // No error
+                closeReason: "delta_divergence",
+                signalData: event,
+            };
+
+            this.swingPredictor.onSignal(signal);
+        } catch (error) {
+            this.handleError(
+                error instanceof Error ? error : new Error("Unknown error"),
+                "delta_cvd_confirmation",
+                correlationId
+            );
+        }
+    };
+
+    /**
+     * Create WebSocket handlers
+     */
+    private createWSHandlers(): Record<
+        string,
+        (ws: ExtendedWebSocket, data: unknown, correlationId?: string) => void
+    > {
+        return {
+            ping: (ws, _, correlationId) => {
+                ws.send(
+                    JSON.stringify({
+                        type: "pong",
+                        now: Date.now(),
+                        correlationId,
+                    })
+                );
+            },
+            backlog: (ws, data, correlationId) => {
+                this.handleBacklogRequest(ws, data, correlationId);
+            },
+        };
+    }
+
+    private isDeltaCVDConfirmationEvent(
+        value: unknown
+    ): value is DeltaCVDConfirmationEvent {
+        if (typeof value !== "object" || value === null) {
+            return false;
+        }
+
+        const obj = value as Record<string, unknown>;
+
+        return (
+            typeof obj.time === "number" &&
+            typeof obj.price === "number" &&
+            typeof obj.side === "string" &&
+            (obj.side === "buy" || obj.side === "sell")
+        );
+    }
+
+    /**
+     * Handle backlog request
+     */
+    private handleBacklogRequest(
+        ws: ExtendedWebSocket,
+        data: unknown,
+        correlationId?: string
+    ): void {
+        const startTime = Date.now();
+        try {
+            let amount = 1000;
+            if (data && typeof data === "object" && "amount" in data) {
+                const rawAmount = (data as { amount?: string | number }).amount;
+                amount = parseInt(rawAmount as string, 10);
+                if (
+                    !Number.isInteger(amount) ||
+                    amount <= 0 ||
+                    amount > 100000
+                ) {
+                    throw new WebSocketError(
+                        "Invalid backlog amount",
+                        ws.clientId || "unknown",
                         correlationId
                     );
                 }
+            }
+
+            let backlog =
+                this.dependencies.tradesProcessor.requestBacklog(amount);
+            backlog = backlog.reverse();
+
+            ws.send(
+                JSON.stringify({
+                    type: "backlog",
+                    data: backlog,
+                    now: Date.now(),
+                    correlationId,
+                })
+            );
+
+            const processingTime = Date.now() - startTime;
+            this.metricsCollector.updateMetric(
+                "processingLatency",
+                processingTime
+            );
+        } catch (error) {
+            this.metricsCollector.incrementMetric("errorsCount");
+            this.handleError(error as Error, "backlog_handler", correlationId);
+            ws.send(
+                JSON.stringify({
+                    type: "error",
+                    message: (error as Error).message,
+                    correlationId,
+                })
+            );
+        }
+    }
+
+    // TODO Make this real
+    private createAnomalyDetectorSettings(): AnomalyDetectorOptions {
+        return {
+            windowSize: 1200,
+            minHistory: 200,
+            anomalyCooldownMs: 20000, // 20 seconds
+            volumeImbalanceThreshold: 0.85,
+            absorptionRatioThreshold: 4.2,
+            icebergDetectionWindow: 120000,
+            orderSizeAnomalyThreshold: 4.5,
+            normalSpreadBps: 12,
+            tickSize: 0.01,
+        };
+    }
+
+    private createAccumulationDetectorSettings(): AccumulationSettings {
+        return {
+            symbol: Config.SYMBOL,
+            windowMs: Config.ACCUMULATION_DETECTOR.WINDOW_MS,
+            minDurationMs: Config.ACCUMULATION_DETECTOR.MIN_DURATION_MS,
+            minRatio: Config.ACCUMULATION_DETECTOR.MIN_RATIO,
+            minRecentActivityMs:
+                Config.ACCUMULATION_DETECTOR.MIN_RECENT_ACTIVITY_MS,
+            minAggVolume: Config.ACCUMULATION_DETECTOR.MIN_AGG_VOLUME,
+            pricePrecision: Config.ACCUMULATION_DETECTOR.PRICE_PRECISION,
+        };
+    }
+
+    private createDeltaCVDSettings(): DeltaCVDConfirmationSettings {
+        return {
+            windowSec: Config.DELTA_CVD_CONFIRMATION.WINDOW_SEC,
+            minWindowTrades: Config.DELTA_CVD_CONFIRMATION.MIN_WINDOW_TRADES,
+            minWindowVolume: Config.DELTA_CVD_CONFIRMATION.MIN_WINDOW_VOLUME,
+            minRateOfChange: Config.DELTA_CVD_CONFIRMATION.MIN_RATE_OF_CHANGE, // Use adaptive if 0
+            pricePrecision: Config.DELTA_CVD_CONFIRMATION.PRICE_PRECISION,
+            dynamicThresholds: Config.DELTA_CVD_CONFIRMATION.DYNAMIC_THRESHOLDS,
+            logDebug: Config.DELTA_CVD_CONFIRMATION.LOG_DEBUG,
+        };
+    }
+
+    private createSwingPredictorSettings(): SwingPredictorConfig {
+        return {
+            lookaheadMs: Config.SWING_PREDICTOR.LOOKAHEAD_MS,
+            retraceTicks: Config.SWING_PREDICTOR.RETRACE_TICKS,
+            pricePrecision: Config.SWING_PREDICTOR.PRICE_PRECISION,
+            signalCooldownMs: Config.SWING_PREDICTOR.SIGNAL_COOLDOWN_MS,
+            onSwingPredicted: this.handleSwingPrediction.bind(this),
+        };
+    }
+
+    /**
+     * Create absorption detector settings
+     */
+    private createAbsorptionSettings(): AbsorptionSettings {
+        console.log("Spoofing Settings:", Config.SPOOFING);
+        console.log(
+            "Creating absorption settings with config:",
+            Config.ABSORPTION
+        );
+        return {
+            minAggVolume: Config.ABSORPTION.MIN_AGG_VOLUME,
+            absorptionThreshold: Config.ABSORPTION.THRESHOLD,
+            windowMs: Config.ABSORPTION.WINDOW_MS,
+            zoneTicks: Config.ABSORPTION.ZONE_TICKS,
+            eventCooldownMs: Config.ABSORPTION.EVENT_COOLDOWN_MS,
+            minPassiveMultiplier: Config.ABSORPTION.MIN_PASSIVE_MULTIPLIER,
+            maxAbsorptionRatio: Config.ABSORPTION.MAX_ABSORPTION_RATIO,
+            pricePrecision: Config.ABSORPTION.PRICE_PRECISION,
+            minInitialMoveTicks: Config.ABSORPTION.MOVE_TICKS,
+            confirmationTimeoutMs: Config.ABSORPTION.CONFIRMATION_TIMEOUT,
+            maxRevisitTicks: Config.ABSORPTION.MAX_REVISIT_TICKS,
+            symbol: Config.SYMBOL,
+            spoofing: {
+                tickSize: Config.SPOOFING.TICK_SIZE,
+                wallTicks: Config.SPOOFING.WALL_TICKS,
+                minWallSize: Config.SPOOFING.MIN_WALL_SIZE,
+                dynamicWallWidth: Config.SPOOFING.DYNAMIC_WALL_WIDTH,
+                testLogMinSpoof: Config.SPOOFING.TEST_LOG_MIN_SPOOF,
             },
-            {
-                lookback: 90,
-                cvdLength: 20,
-                slopeThreshold: 0.08,
-                deltaThreshold: 30,
+            features: {
+                spoofingDetection: parseBool(
+                    process.env.ABSORPTION_SPOOFING_DETECTION,
+                    true
+                ),
+                adaptiveZone: parseBool(
+                    process.env.ABSORPTION_ADAPTIVE_ZONE,
+                    true
+                ),
+                passiveHistory: parseBool(
+                    process.env.ABSORPTION_PASSIVE_HISTORY,
+                    true
+                ),
+                multiZone: parseBool(process.env.ABSORPTION_MULTI_ZONE, true),
+                priceResponse: parseBool(
+                    process.env.ABSORPTION_PRICE_RESPONSE,
+                    true
+                ),
+                sideOverride: parseBool(
+                    process.env.ABSORPTION_SIDE_OVERRIDE,
+                    false
+                ),
+                autoCalibrate: parseBool(
+                    process.env.ABSORPTION_AUTO_CALIBRATE,
+                    true
+                ),
+                icebergDetection: parseBool(
+                    process.env.ABSORPTION_ICEBERG_DETECTION,
+                    true
+                ),
+                liquidityGradient: parseBool(
+                    process.env.ABSORPTION_LIQUIDITY_GRADIENT,
+                    true
+                ),
+                spreadAdjustment: parseBool(
+                    process.env.ABSORPTION_SPREAD_AJUSTMENT,
+                    true
+                ),
+                absorptionVelocity: parseBool(
+                    process.env.ABSORPTION_VELOCITY,
+                    true
+                ),
+            },
+        };
+    }
+
+    /**
+     * Create exhaustion detector settings
+     */
+    private createExhaustionSettings(): ExhaustionSettings {
+        console.log(
+            "Creating exhaustion settings with config:",
+            Config.EXHAUSTION
+        );
+        return {
+            minAggVolume: Config.EXHAUSTION.MIN_AGG_VOLUME,
+            exhaustionThreshold: Config.EXHAUSTION.THRESHOLD,
+            windowMs: Config.EXHAUSTION.WINDOW_MS,
+            zoneTicks: Config.EXHAUSTION.ZONE_TICKS,
+            eventCooldownMs: Config.EXHAUSTION.EVENT_COOLDOWN_MS,
+            maxPassiveRatio: Config.EXHAUSTION.MAX_PASSIVE_RATIO,
+            pricePrecision: Config.EXHAUSTION.PRICE_PRECISION,
+            minInitialMoveTicks: Config.EXHAUSTION.MOVE_TICKS,
+            confirmationTimeoutMs: Config.EXHAUSTION.CONFIRMATION_TIMEOUT,
+            maxRevisitTicks: Config.EXHAUSTION.MAX_REVISIT_TICKS,
+            symbol: Config.SYMBOL,
+            spoofing: {
+                tickSize: Config.SPOOFING.TICK_SIZE,
+                wallTicks: Config.SPOOFING.WALL_TICKS,
+                minWallSize: Config.SPOOFING.MIN_WALL_SIZE,
+                dynamicWallWidth: Config.SPOOFING.DYNAMIC_WALL_WIDTH,
+                testLogMinSpoof: Config.SPOOFING.TEST_LOG_MIN_SPOOF,
+            },
+            features: {
+                priceResponse: parseBool(
+                    process.env.EXHAUSTION_PRICE_RESPONSE,
+                    true
+                ),
+                depletionTracking: parseBool(
+                    process.env.EXHAUSTION_DEPLETION_TRACKING,
+                    true
+                ),
+                spreadAdjustment: parseBool(
+                    process.env.EXHAUSTION_SPREAD_AJUSTMENT,
+                    true
+                ),
+                spoofingDetection: parseBool(
+                    process.env.EXHAUSTION_SPOOFING_DETECTION,
+                    true
+                ),
+                autoCalibrate: parseBool(
+                    process.env.EXHAUSTION_AUTO_CALIBRATE,
+                    true
+                ),
+                adaptiveZone: parseBool(
+                    process.env.EXHAUSTION_ADAPTIVE_ZONE,
+                    true
+                ),
+                multiZone: parseBool(process.env.EXHAUSTION_MULTI_ZONE, true),
+                volumeVelocity: parseBool(
+                    process.env.EXHAUSTION_VOLUME_VELOCITY,
+                    true
+                ),
+                passiveHistory: parseBool(
+                    process.env.EXHAUSTION_PASSIVE_HISTORY,
+                    true
+                ),
+
+                sideOverride: parseBool(
+                    process.env.EXHAUSTION_SIDE_OVERRIDE,
+                    false
+                ),
+            },
+        };
+    }
+
+    /**
+     * Setup event handlers
+     */
+    private setupEventHandlers(): void {
+        // Listen to coordinator events
+        this.signalCoordinator.on(
+            "detectorRegistered",
+            (info: DetectorRegisteredEvent) => {
+                this.logger.info("Detector registered:", { info });
             }
         );
 
-        this.BroadCastWebSocket = new ws.WebSocketServer({
-            port: Config.WS_PORT,
+        this.signalCoordinator.on(
+            "signalQueued",
+            ({ job, queueSize }: SignalQueuedEvent) => {
+                this.logger.info(
+                    `Signal queued: ${job.id}, queue size: ${queueSize}`
+                );
+            }
+        );
+
+        this.signalCoordinator.on(
+            "signalProcessed",
+            ({
+                job,
+                processedSignal,
+                processingTimeMs,
+            }: SignalProcessedEvent) => {
+                this.logger.info(`Signal processed in ${processingTimeMs}ms:`, {
+                    signalId: processedSignal.id,
+                    jobId: job.id,
+                });
+                // TODO
+                const signal: Signal = {
+                    time: Date.now(),
+                    type: processedSignal.type,
+                    price: processedSignal.data.price,
+                    id: processedSignal.id,
+                    side: processedSignal.data.side,
+                    confidence: processedSignal.confidence,
+                };
+                void signal; //this.broadcastSignal(signal);
+            }
+        );
+
+        this.signalCoordinator.on(
+            "signalFailed",
+            ({ job, error }: SignalFailedEvent) => {
+                this.logger.error(`Signal failed permanently:`, {
+                    jobId: job.id,
+                    errorMessage: error.message,
+                });
+            }
+        );
+
+        this.signalCoordinator.on(
+            "detectorError",
+            ({ detectorId, error }: DetectorErrorEvent) => {
+                this.logger.error(`Detector ${detectorId} error:`, {
+                    errorMessage: error.message,
+                });
+            }
+        );
+
+        // Handle data stream events
+        if (!this.dataStreamManager) {
+            throw new Error("Data stream manager is not initialized");
+        }
+
+        this.logger.info(
+            "[OrderFlowDashboard] Setting up data stream event handlers..."
+        );
+        this.dataStreamManager.on(
+            "trade",
+            (data: SpotWebsocketStreams.AggTradeResponse) => {
+                this.processTrade(data);
+            }
+        );
+
+        this.dataStreamManager.on(
+            "depth",
+            (data: SpotWebsocketStreams.DiffBookDepthResponse) => {
+                this.processDepth(data);
+            }
+        );
+
+        this.dataStreamManager.on("error", (error: Error) => {
+            this.handleError(error, "data_stream");
         });
-        this.setupWebSocketServer();
-        this.setupHealthCheck();
-        this.setupGracefulShutdown();
-        this.broadcastMessage = this.broadcastMessage.bind(this);
+
+        // Handle signal events
+        // Listen to final trading signals
+        this.signalManager.on("signalGenerated", (tradingSignal: Signal) => {
+            this.logger.info("Ready to trade:", { tradingSignal });
+            void this.broadcastSignal(tradingSignal).catch((error) => {
+                this.handleError(error as Error, "signal_broadcast");
+            });
+        });
+
+        this.signalManager.on(
+            "signalRejected",
+            ({ signal, reason, anomaly }) => {
+                this.logger.error("Signal rejected:", {
+                    reason,
+                    anomaly,
+                    signal,
+                });
+            }
+        );
+
+        if (this.preprocessor) {
+            this.logger.info(
+                "[OrderFlowDashboard] Setting up preprocessor event handlers..."
+            );
+            this.preprocessor.on(
+                "enriched_trade",
+                (enrichedTrade: EnrichedTradeEvent) => {
+                    // TODO
+                    this.absorptionDetector.onEnrichedTrade(enrichedTrade);
+                    this.anomalyDetector.onEnrichedTrade(enrichedTrade);
+                    this.accumulationDetector.onEnrichedTrade(enrichedTrade);
+                    this.exhaustionDetector.onEnrichedTrade(enrichedTrade);
+
+                    const aggTradeMessage: WebSocketMessage =
+                        this.dependencies.tradesProcessor.onEnrichedTrade(
+                            enrichedTrade
+                        );
+                    if (aggTradeMessage) {
+                        this.wsManager.broadcast(aggTradeMessage);
+                    }
+                }
+            );
+            this.preprocessor?.on(
+                "orderbook_update",
+                (orderBookUpdate: OrderBookSnapshot) => {
+                    const orderBookMessage: WebSocketMessage =
+                        this.dependencies.orderBookProcessor.onOrderBookUpdate(
+                            orderBookUpdate
+                        );
+                    if (orderBookMessage)
+                        this.wsManager.broadcast(orderBookMessage);
+                }
+            );
+        }
+
+        if (this.accumulationDetector) {
+            this.logger.info(
+                "[OrderFlowDashboard] Setting up accumulation detector event handlers..."
+            );
+            this.accumulationDetector.on(
+                "accumulation",
+                (event: AccumulationResult) => {
+                    //TODO make this robust
+                    this.logger.warn("Market accumulation detected:", {
+                        event,
+                    });
+                }
+            );
+        }
+
+        if (this.anomalyDetector) {
+            this.logger.info(
+                "[OrderFlowDashboard] Setting up anomaly detector event handlers..."
+            );
+            this.anomalyDetector.on("anomaly", (event: AnomalyEvent) => {
+                if (
+                    event &&
+                    (event.severity === "critical" || event.severity === "high")
+                ) {
+                    this.logger.warn("Market anomaly detected:", { event });
+                }
+                const message: WebSocketMessage = {
+                    type: "anomaly",
+                    data: event,
+                    now: Date.now(),
+                };
+                this.wsManager.broadcast(message);
+                // TODO Take action (pause trading, alert, etc.)
+            });
+        }
     }
 
-    private setupWebSocketServer(): void {
-        this.BroadCastWebSocket.on("connection", (ws: ExtendedWebSocket) => {
-            const clientId = randomUUID();
-            const correlationId = randomUUID();
+    /**
+     * Setup HTTP server
+     */
+    private setupHttpServer(): void {
+        const publicPath = path.join(__dirname, "../public");
+        this.httpServer.use(express.static(publicPath));
 
-            ws.clientId = clientId;
-            ws.correlationId = correlationId;
-            this.activeConnections.add(ws);
-
-            this.dependencies.metricsCollector.updateMetric(
-                "connectionsActive",
-                this.activeConnections.size
-            );
-            this.dependencies.logger.info(
-                "Client connected",
-                { clientId },
-                correlationId
-            );
-
-            ws.on("close", () => {
-                this.activeConnections.delete(ws);
-                this.dependencies.metricsCollector.updateMetric(
-                    "connectionsActive",
-                    this.activeConnections.size
-                );
-                this.dependencies.logger.info(
-                    "Client disconnected",
-                    { clientId },
-                    correlationId
-                );
-            });
-
-            ws.on("message", (message) => this.handleWSMessage(ws, message));
-
-            ws.on("error", (error) => {
-                this.handleError(error, "websocket_connection", correlationId);
-            });
-        });
-    }
-
-    private setupHealthCheck(): void {
         this.httpServer.get("/health", (req, res) => {
             const correlationId = randomUUID();
             try {
-                const metrics = this.dependencies.metricsCollector.getMetrics();
+                const metrics = this.metricsCollector.getMetrics();
                 const health = {
                     status: "healthy",
                     timestamp: new Date().toISOString(),
                     uptime: process.uptime(),
-                    connections: this.activeConnections.size,
+                    connections: this.wsManager.getConnectionCount(),
                     circuitBreakerState:
                         this.dependencies.circuitBreaker.getState(),
                     metrics: {
-                        signalsGenerated: metrics.signalsGenerated,
+                        signalsGenerated: metrics.legacy.signalsGenerated, //TODO
                         averageLatency:
-                            this.dependencies.metricsCollector.getAverageLatency(),
-                        errorsCount: metrics.errorsCount,
+                            this.metricsCollector.getAverageLatency(),
+                        errorsCount: metrics.legacy.errorsCount, //TODO
                     },
                     correlationId,
                 };
 
                 res.json(health);
-                this.dependencies.logger.info(
+                this.logger.info(
                     "Health check requested",
                     health,
                     correlationId
@@ -736,431 +876,281 @@ export class OrderFlowDashboard {
         });
     }
 
-    private setupGracefulShutdown(): void {
-        const gracefulShutdown = (signal: string) => {
-            this.dependencies.logger.info(
-                `Received ${signal}, starting graceful shutdown`
-            );
-            this.isShuttingDown = true;
-
-            // Close WebSocket server
-            this.BroadCastWebSocket.close(() => {
-                this.dependencies.logger.info("WebSocket server closed");
-            });
-
-            // Close all active connections
-            this.activeConnections.forEach((ws) => {
-                ws.close(1001, "Server shutting down");
-            });
-
-            // Give some time for cleanup
-            setTimeout(() => {
-                this.dependencies.logger.info("Graceful shutdown completed");
-                process.exit(0);
-            }, 5000);
-        };
-
-        process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-        process.on("SIGINT", () => gracefulShutdown("SIGINT"));
-    }
-
-    private handleError(
-        error: Error,
-        context: string,
-        correlationId?: string
-    ): void {
-        this.dependencies.metricsCollector.incrementMetric("errorsCount");
-
-        const errorContext = {
-            context,
-            errorName: error.name,
-            errorMessage: error.message,
-            stack: error.stack,
-            timestamp: new Date().toISOString(),
-            correlationId: correlationId || randomUUID(),
-        };
-
-        if (
-            error instanceof SignalProcessingError ||
-            error instanceof WebSocketError ||
-            error instanceof ConnectionError
-        ) {
-            errorContext.correlationId = error.correlationId ?? randomUUID();
-        }
-
-        this.dependencies.logger.error(
-            `[${context}] ${error.message}`,
-            errorContext,
-            correlationId
-        );
-    }
-
-    private async handleDetection(
-        detectionFn: () => Promise<void>,
-        type: string
-    ): Promise<void> {
+    /**
+     * Process incoming trade data
+     */
+    private processTrade(data: SpotWebsocketStreams.AggTradeResponse): void {
         const correlationId = randomUUID();
+        const startTime = Date.now();
+
         try {
-            await this.dependencies.circuitBreaker.execute(
-                detectionFn,
-                correlationId
+            // Update detectors
+            if (this.preprocessor) this.preprocessor.handleAggTrade(data);
+            this.deltaCVDConfirmation.addTrade(data);
+
+            // Update swing predictor
+            this.swingPredictor.onPrice(
+                parseFloat(data.p ?? "0"),
+                data.T ?? Date.now()
+            );
+
+            // Process for indicators
+            const tradeData = this.normalizeTradeData(data);
+            this.analyzeSwingOpportunity(tradeData.price, tradeData);
+
+            // Process and broadcast
+            //const message = this.dependencies.tradesProcessor.addTrade(data);
+            //this.wsManager.broadcast(message);
+
+            const processingTime = Date.now() - startTime;
+            this.metricsCollector.updateMetric(
+                "processingLatency",
+                processingTime
             );
         } catch {
             this.handleError(
                 new SignalProcessingError(
-                    `${type} detection failed`,
-                    { type },
+                    "Error processing trade data",
+                    { data },
                     correlationId
                 ),
-                "signal_detection",
+                "trade_processing",
                 correlationId
             );
         }
     }
 
-    private handleWSMessage(ws: ExtendedWebSocket, message: ws.RawData): void {
+    /**
+     * Process incoming depth data
+     */
+    private processDepth(
+        data: SpotWebsocketStreams.DiffBookDepthResponse
+    ): void {
         const correlationId = randomUUID();
+        const startTime = Date.now();
 
+        try {
+            // Update preprocessor
+            if (this.preprocessor) this.preprocessor.handleDepth(data);
+
+            const processingTime = Date.now() - startTime;
+            this.metricsCollector.updateMetric(
+                "processingLatency",
+                processingTime
+            );
+        } catch {
+            this.handleError(
+                new SignalProcessingError(
+                    "Error processing depth data",
+                    { data },
+                    correlationId
+                ),
+                "depth_processing",
+                correlationId
+            );
+        }
+    }
+
+    /**
+     * Normalize trade data
+     */
+    private normalizeTradeData(
+        data: SpotWebsocketStreams.AggTradeResponse
+    ): TradeData {
+        return {
+            price: parseFloat(data.p || "0"),
+            quantity: parseFloat(data.q || "0"),
+            timestamp: data.T || Date.now(),
+            buyerIsMaker: data.m || false,
+            originalTrade: data,
+        };
+    }
+
+    /**
+     * Analyze swing opportunity
+     */
+    // TODO
+    private analyzeSwingOpportunity(
+        currentPrice: number,
+        trade: TradeData
+    ): void {
+        // Update all indicators
+        this.swingMetrics.addTrade(trade);
+        this.momentumDivergence.addDataPoint(
+            trade.price,
+            trade.quantity,
+            trade.timestamp
+        );
+
+        // Check for swing signals
+        const volumeNodes: VolumeNodes =
+            this.swingMetrics.getVolumeNodes(currentPrice);
+        const accumulation: AccumulationResult = {
+            price: 0,
+            side: "buy",
+            confidence: 0,
+            isAccumulating: false,
+            strength: 0,
+            zone: 0,
+            duration: 0,
+            ratio: 0,
+        };
+        // TODO this.accumulationDetector.detectAccumulation(currentPrice);
+        const divergence: DivergenceResult =
+            this.momentumDivergence.detectDivergence();
+
+        // Signal generation logic
         if (
-            !this.dependencies.rateLimiter.isAllowed(ws.clientId || "unknown")
+            this.shouldGenerateSwingSignal(
+                currentPrice,
+                accumulation,
+                divergence,
+                volumeNodes
+            )
         ) {
-            ws.send(
-                JSON.stringify({
-                    type: "error",
-                    message: "Rate limit exceeded",
-                    correlationId,
-                })
-            );
-            return;
-        }
-
-        let raw: string;
-        try {
-            if (typeof message === "string") raw = message;
-            else if (message instanceof Buffer) raw = message.toString();
-            else
-                throw new WebSocketError(
-                    "Unexpected message format",
-                    ws.clientId || "unknown",
-                    correlationId
+            void this.generateSwingSignal(
+                currentPrice,
+                accumulation,
+                divergence
+            ).catch((error) => {
+                this.handleError(
+                    error as Error,
+                    "swing_signal_generation",
+                    randomUUID()
                 );
-
-            const parsed: unknown = JSON.parse(raw);
-            if (!isValidWSRequest(parsed)) {
-                throw new WebSocketError(
-                    "Invalid message shape",
-                    ws.clientId || "unknown",
-                    correlationId
-                );
-            }
-
-            const { type, data } = parsed;
-            const handler = this.wsHandlers[type];
-            if (!handler) {
-                ws.send(
-                    JSON.stringify({
-                        type: "error",
-                        message: "Unknown request type",
-                        correlationId,
-                    })
-                );
-                return;
-            }
-
-            Promise.resolve(handler(ws, data, correlationId)).catch(
-                (err: Error) => {
-                    this.handleError(err, `ws_handler_${type}`, correlationId);
-                    ws.send(
-                        JSON.stringify({
-                            type: "error",
-                            message: err.message,
-                            correlationId,
-                        })
-                    );
-                }
-            );
-        } catch (err) {
-            this.handleError(err as Error, "ws_message_parse", correlationId);
-            ws.send(
-                JSON.stringify({
-                    type: "error",
-                    message: (err as Error).message,
-                    correlationId,
-                })
-            );
-        }
-    }
-
-    private startWebServer(): void {
-        const publicPath = path.join(__dirname, "../public");
-        this.dependencies.logger.info("Serving static files from", {
-            publicPath,
-        });
-        this.httpServer.use(express.static(publicPath));
-        this.httpServer.listen(Config.HTTP_PORT, () => {
-            this.dependencies.logger.info(
-                `Server running at http://localhost:${Config.HTTP_PORT}`
-            );
-        });
-    }
-
-    private async preloadTrades(): Promise<void> {
-        const correlationId = randomUUID();
-        try {
-            await this.dependencies.circuitBreaker.execute(
-                () => this.dependencies.tradesProcessor.fillBacklog(),
-                correlationId
-            );
-        } catch {
-            this.handleError(
-                new ConnectionError(
-                    "Error preloading trades",
-                    "trades_processor",
-                    correlationId
-                ),
-                "preload_trades",
-                correlationId
-            );
-        }
-    }
-
-    private async fetchInitialOrderBook(): Promise<void> {
-        const correlationId = randomUUID();
-        try {
-            await this.dependencies.circuitBreaker.execute(
-                () =>
-                    this.dependencies.orderBookProcessor.fetchInitialOrderBook(),
-                correlationId
-            );
-        } catch {
-            this.handleError(
-                new ConnectionError(
-                    "Error preloading order book",
-                    "order_book_processor",
-                    correlationId
-                ),
-                "fetch_initial_orderbook",
-                correlationId
-            );
-        }
-    }
-
-    private sendToClients(message: WebSocketMessage): void {
-        if (this.isShuttingDown) return;
-
-        this.BroadCastWebSocket.clients.forEach((client) => {
-            if (client.readyState === WebSocket.OPEN) {
-                try {
-                    client.send(JSON.stringify(message));
-                } catch (error) {
-                    this.handleError(error as Error, "send_to_client");
-                }
-            }
-        });
-    }
-
-    private broadcastMessage(message: WebSocketMessage): void {
-        try {
-            this.sendToClients(message);
-        } catch (error) {
-            this.handleError(error as Error, "broadcast_message");
-        }
-    }
-
-    private async getFromBinanceAPI(): Promise<void> {
-        const correlationId = randomUUID();
-
-        try {
-            const connection = await this.dependencies.circuitBreaker.execute(
-                () => this.dependencies.binanceFeed.connectToStreams(),
-                correlationId
-            );
-
-            connection.on("close", (): void => {
-                if (this.isShuttingDown) return;
-
-                this.dependencies.logger.warn(
-                    "Stream closed. Attempting reconnect in 5s...",
-                    {},
-                    correlationId
-                );
-                this.delayFn(() => {
-                    this.getFromBinanceAPI().catch(() => {
-                        this.handleError(
-                            new ConnectionError(
-                                "Reconnection failed",
-                                "binance_api",
-                                correlationId
-                            ),
-                            "binance_reconnect",
-                            correlationId
-                        );
-                    });
-                }, 5000);
             });
-
-            const streamAggTrade = connection.aggTrade({
-                symbol: Config.SYMBOL,
-            });
-            const streamDepth = connection.diffBookDepth({
-                symbol: Config.SYMBOL,
-                updateSpeed: "100ms",
-            });
-
-            streamDepth.on(
-                "message",
-                (data: SpotWebsocketStreams.DiffBookDepthResponse): void => {
-                    const processingCorrelationId = randomUUID();
-                    const startTime = Date.now();
-                    try {
-                        this.absorptionDetector.addDepth(data);
-                        this.exhaustionDetector.addDepth(data);
-                        const message: WebSocketMessage =
-                            this.dependencies.orderBookProcessor.processWebSocketUpdate(
-                                data
-                            );
-                        this.broadcastMessage(message);
-
-                        const processingTime = Date.now() - startTime;
-                        this.dependencies.metricsCollector.updateMetric(
-                            "processingLatency",
-                            processingTime
-                        );
-                    } catch {
-                        this.handleError(
-                            new SignalProcessingError(
-                                "Error processing depth data",
-                                { data },
-                                processingCorrelationId
-                            ),
-                            "depth_processing",
-                            processingCorrelationId
-                        );
-                    }
-                }
-            );
-
-            streamAggTrade.on(
-                "message",
-                (data: SpotWebsocketStreams.AggTradeResponse): void => {
-                    const processingCorrelationId = randomUUID();
-                    const startTime = Date.now();
-                    try {
-                        this.absorptionDetector.addTrade(data);
-                        this.exhaustionDetector.addTrade(data);
-                        this.deltaCVDConfirmation.addTrade(data);
-                        this.swingPredictor.onPrice(
-                            parseFloat(data.p ?? "0"),
-                            data.T ?? Date.now()
-                        );
-                        const processedData: WebSocketMessage =
-                            this.dependencies.tradesProcessor.addTrade(data);
-                        this.broadcastMessage(processedData);
-
-                        const processingTime = Date.now() - startTime;
-                        this.dependencies.metricsCollector.updateMetric(
-                            "processingLatency",
-                            processingTime
-                        );
-                    } catch {
-                        this.handleError(
-                            new SignalProcessingError(
-                                "Error processing trade data",
-                                { data },
-                                processingCorrelationId
-                            ),
-                            "trade_processing",
-                            processingCorrelationId
-                        );
-                    }
-                }
-            );
-        } catch (error) {
-            this.handleError(
-                new ConnectionError(
-                    "Error connecting to Binance streams",
-                    "binance_api",
-                    correlationId
-                ),
-                "binance_connection",
-                correlationId
-            );
-            throw error;
         }
     }
 
-    private async sendWebhookMessage(
-        webhookUrl: string,
-        message: object,
-        correlationId?: string
+    /**
+     * Should generate swing signal
+     */
+    private shouldGenerateSwingSignal(
+        currentPrice: number,
+        accumulation: AccumulationResult,
+        divergence: DivergenceResult,
+        volumeNodes: VolumeNodes
+    ): boolean {
+        let confirmations = 0;
+
+        if (accumulation.isAccumulating && accumulation.strength > 0.5) {
+            confirmations++;
+        }
+
+        if (divergence.type === "bullish" && divergence.strength > 0.3) {
+            confirmations++;
+        }
+
+        // Check if price is near a low volume node
+        const nearLVN = volumeNodes.lvn.some(
+            (lvn) => Math.abs(lvn - currentPrice) < currentPrice * 0.001
+        );
+        if (nearLVN) {
+            confirmations++;
+        }
+
+        return confirmations >= 2;
+    }
+
+    /**
+     * Generate swing signal
+     */
+    private async generateSwingSignal(
+        currentPrice: number,
+        accumulation: AccumulationResult,
+        divergence: DivergenceResult
     ): Promise<void> {
-        try {
-            await this.dependencies.circuitBreaker.execute(async () => {
-                const response = await fetch(webhookUrl, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "X-Correlation-ID": correlationId || randomUUID(),
-                    },
-                    body: JSON.stringify(message),
-                });
+        const side: "buy" | "sell" =
+            divergence.type === "bullish" || accumulation.isAccumulating
+                ? "buy"
+                : "sell";
 
-                if (!response.ok) {
-                    throw new ConnectionError(
-                        `Webhook request failed: ${response.status} ${response.statusText}`,
-                        "webhook",
+        const profitTarget = calculateProfitTarget(currentPrice, side);
+        const stopLoss = calculateStopLoss(currentPrice, side);
+
+        const signalData: SwingSignalData = {
+            accumulation,
+            divergence,
+            expectedGainPercent: profitTarget.netGain,
+            swingType: side === "buy" ? "low" : "high",
+            strength: Math.max(accumulation.strength, divergence.strength),
+        };
+        const signal: Signal = {
+            id: randomUUID(),
+            side,
+            type: "flow",
+            time: Date.now(),
+            price: currentPrice,
+            takeProfit: profitTarget.price,
+            stopLoss,
+            closeReason: "swing_detection",
+            signalData,
+        };
+
+        // Send alert via AlertManager
+        await this.dependencies.alertManager.sendAlert(signal);
+
+        // Also broadcast to WebSocket clients
+        await this.broadcastSignal(signal);
+    }
+
+    /**
+     * Handle swing prediction
+     */
+    private handleSwingPrediction(prediction: SwingPrediction): void {
+        const correlationId = randomUUID();
+
+        try {
+            void this.broadcastSignal(prediction as unknown as Signal).catch(
+                () => {
+                    this.handleError(
+                        new SignalProcessingError(
+                            "Error broadcasting swing prediction",
+                            { prediction },
+                            correlationId
+                        ),
+                        "swing_prediction",
                         correlationId
                     );
                 }
-
-                this.dependencies.logger.info(
-                    "Webhook message sent successfully",
-                    { webhookUrl },
-                    correlationId
-                );
-            }, correlationId);
+            );
         } catch (error) {
-            this.handleError(error as Error, "webhook_send", correlationId);
+            this.handleError(
+                error as Error,
+                "swing_prediction_handler",
+                correlationId
+            );
         }
     }
 
-    public async broadcastSignal(signal: Signal): Promise<void> {
+    /**
+     * Broadcast signal to clients
+     */
+    private async broadcastSignal(signal: Signal): Promise<void> {
         const correlationId = randomUUID();
-
         try {
-            this.dependencies.logger.info(
-                "Broadcasting signal",
-                { signal },
-                correlationId
-            );
-            this.dependencies.metricsCollector.incrementMetric(
-                "signalsGenerated"
-            );
+            this.logger.info("Broadcasting signal", { signal }, correlationId);
+            this.metricsCollector.incrementMetric("signalsGenerated");
 
+            // Send webhook if configured
             if (Config.WEBHOOK_URL) {
-                const message = {
-                    type: signal.type,
-                    time: signal.time,
-                    price: signal.price,
-                    takeProfit: signal.takeProfit,
-                    stopLoss: signal.stopLoss,
-                    label: signal.closeReason,
-                    correlationId,
-                };
                 await this.sendWebhookMessage(
                     Config.WEBHOOK_URL,
-                    message,
-                    correlationId
-                );
-            } else {
-                this.dependencies.logger.warn(
-                    "No webhook URL provided",
-                    {},
+                    {
+                        type: signal.type,
+                        time: signal.time,
+                        price: signal.price,
+                        takeProfit: signal.takeProfit,
+                        stopLoss: signal.stopLoss,
+                        label: signal.closeReason,
+                        correlationId,
+                    },
                     correlationId
                 );
             }
 
-            this.sendToClients({
+            // Broadcast to WebSocket clients
+            this.wsManager.broadcast({
                 type: "signal",
                 data: signal,
                 now: Date.now(),
@@ -1178,190 +1168,198 @@ export class OrderFlowDashboard {
         }
     }
 
-    private purgeDatabase(): void {
-        const intervalId = setInterval(() => {
-            if (this.isShuttingDown) {
-                clearInterval(intervalId);
-                return;
-            }
+    /**
+     * Send webhook message
+     */
+    private async sendWebhookMessage(
+        webhookUrl: string,
+        message: object,
+        correlationId?: string
+    ): Promise<void> {
+        try {
+            await this.dependencies.circuitBreaker.execute(async () => {
+                const response = await fetch(webhookUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Correlation-ID": correlationId || randomUUID(),
+                    },
+                    body: JSON.stringify(message),
+                });
 
-            const correlationId = randomUUID();
-            this.dependencies.logger.info(
-                "Starting scheduled purge",
-                {},
+                if (!response.ok) {
+                    throw new Error(
+                        `Webhook request failed: ${response.status} ${response.statusText}`
+                    );
+                }
+
+                this.logger.info(
+                    "Webhook message sent successfully",
+                    { webhookUrl },
+                    correlationId
+                );
+            }, correlationId);
+        } catch (error) {
+            this.handleError(error as Error, "webhook_send", correlationId);
+        }
+    }
+
+    /**
+     * Handle errors
+     */
+    private handleError(
+        error: Error,
+        context: string,
+        correlationId?: string
+    ): void {
+        this.metricsCollector.incrementMetric("errorsCount");
+
+        const errorContext = {
+            context,
+            errorName: error.name,
+            errorMessage: error.message,
+            stack: error.stack,
+            timestamp: new Date().toISOString(),
+            correlationId: correlationId || randomUUID(),
+        };
+
+        if (
+            error instanceof SignalProcessingError ||
+            error instanceof WebSocketError
+        ) {
+            errorContext.correlationId = error.correlationId ?? randomUUID();
+        }
+
+        this.logger.error(
+            `[${context}] ${error.message}`,
+            errorContext,
+            correlationId
+        );
+    }
+
+    /**
+     * Preload historical data
+     */
+    private async preloadData(): Promise<void> {
+        const correlationId = randomUUID();
+
+        try {
+            // TODO Preload trades
+            await this.dependencies.circuitBreaker.execute(
+                () => this.dependencies.tradesProcessor.fillBacklog(),
                 correlationId
             );
 
+            this.logger.info(
+                "Historical data preloaded successfully",
+                {},
+                correlationId
+            );
+        } catch (error) {
+            this.handleError(error as Error, "preload_data", correlationId);
+            throw error;
+        }
+    }
+
+    /**
+     * Start periodic tasks
+     */
+    private startPeriodicTasks(): void {
+        // Update circuit breaker metrics
+        setInterval(() => {
+            const state = this.dependencies.circuitBreaker.getState();
+            this.metricsCollector.updateMetric("circuitBreakerState", state);
+        }, 30000);
+
+        // Database purge
+        this.purgeIntervalId = setInterval(() => {
+            if (this.isShuttingDown) return;
+
+            const correlationId = randomUUID();
+            this.logger.info("Starting scheduled purge", {}, correlationId);
+
             try {
                 this.dependencies.storage.purgeOldEntries();
-                this.dependencies.logger.info(
+                this.logger.info(
                     "Scheduled purge completed successfully",
                     {},
                     correlationId
                 );
             } catch (error) {
                 this.handleError(
-                    new Error(
-                        `Scheduled purge failed: ${(error as Error).message}`
-                    ),
+                    error as Error,
                     "database_purge",
                     correlationId
                 );
             }
-        }, this.intervalMs);
+        }, this.purgeIntervalMs);
+    }
 
-        // Cleanup on shutdown
-        const cleanup = () => {
-            this.dependencies.logger.info("Stopping purge timer");
-            clearInterval(intervalId);
+    /**
+     * Start HTTP server
+     */
+    private async startHttpServer(): Promise<void> {
+        return new Promise((resolve) => {
+            this.httpServer.listen(Config.HTTP_PORT, () => {
+                this.logger.info(
+                    `HTTP server running at http://localhost:${Config.HTTP_PORT}`
+                );
+                resolve();
+            });
+        });
+    }
+
+    /**
+     * Setup graceful shutdown
+     */
+    private setupGracefulShutdown(): void {
+        const shutdown = async (signal: string): Promise<void> => {
+            this.logger.info(`Received ${signal}, starting graceful shutdown`);
+            this.isShuttingDown = true;
+
+            // Clear intervals
+            if (this.purgeIntervalId) {
+                clearInterval(this.purgeIntervalId);
+            }
+
+            // Shutdown components
+            this.wsManager.shutdown();
+            await this.dataStreamManager.disconnect();
+
+            // Give time for cleanup
+            setTimeout(() => {
+                this.logger.info("Graceful shutdown completed");
+                process.exit(0);
+            }, 5000);
         };
 
-        process.on("SIGINT", cleanup);
-        process.on("SIGTERM", cleanup);
+        process.on("SIGTERM", () => void shutdown("SIGTERM"));
+        process.on("SIGINT", () => void shutdown("SIGINT"));
     }
 
-    private async onExhaustionDetected(detected: Detected): Promise<void> {
-        const correlationId = randomUUID();
-        const time = Date.now();
-
-        try {
-            const signal: Signal = {
-                time,
-                price: detected.price,
-                type: "exhaustion",
-                takeProfit:
-                    detected.price + (detected.side === "buy" ? -0.005 : 0.005),
-                stopLoss:
-                    detected.price + (detected.side === "buy" ? 0.005 : -0.005),
-                closeReason: "exhaustion",
-                signalData: detected,
-            };
-
-            this.dependencies.logger.info(
-                "Exhaustion detected",
-                { detected },
-                correlationId
-            );
-            await this.broadcastSignal(signal);
-            this.deltaCVDConfirmation.confirmSignal(
-                "exhaustion",
-                detected.price,
-                time
-            );
-        } catch {
-            this.handleError(
-                new SignalProcessingError(
-                    "Error handling exhaustion detection",
-                    { detected },
-                    correlationId
-                ),
-                "exhaustion_detection",
-                correlationId
-            );
-        }
-    }
-
-    private async onAbsorptionDetected(detected: Detected): Promise<void> {
-        const correlationId = randomUUID();
-        const time = Date.now();
-
-        try {
-            const signal: Signal = {
-                time,
-                price: detected.price,
-                type: "absorption",
-                takeProfit:
-                    detected.price + (detected.side === "buy" ? -0.005 : 0.005),
-                stopLoss:
-                    detected.price + (detected.side === "buy" ? 0.005 : -0.005),
-                closeReason: "absorption",
-                signalData: detected,
-            };
-
-            this.dependencies.logger.info(
-                "Absorption detected",
-                { detected },
-                correlationId
-            );
-            await this.broadcastSignal(signal);
-            this.deltaCVDConfirmation.confirmSignal(
-                "absorption",
-                detected.price,
-                time
-            );
-        } catch {
-            this.handleError(
-                new SignalProcessingError(
-                    "Error handling absorption detection",
-                    { detected },
-                    correlationId
-                ),
-                "absorption_detection",
-                correlationId
-            );
-        }
-    }
-
-    private handleSwingPrediction(prediction: SwingPrediction): void {
-        const correlationId = randomUUID();
-
-        try {
-            this.broadcastSignal(prediction).catch(() => {
-                this.handleError(
-                    new SignalProcessingError(
-                        "Error broadcasting swing prediction",
-                        { prediction },
-                        correlationId
-                    ),
-                    "swing_prediction",
-                    correlationId
-                );
-            });
-        } catch (error) {
-            this.handleError(
-                error as Error,
-                "swing_prediction_handler",
-                correlationId
-            );
-        }
-    }
-
-    // Update circuit breaker state metrics
-    private updateCircuitBreakerMetrics(): void {
-        const state = this.dependencies.circuitBreaker.getState();
-        this.dependencies.metricsCollector.updateMetric(
-            "circuitBreakerState",
-            state
-        );
-    }
-
+    /**
+     * Start the dashboard
+     */
     public async startDashboard(): Promise<void> {
         const correlationId = randomUUID();
 
         try {
-            this.dependencies.logger.info(
+            this.logger.info(
                 "Starting Order Flow Dashboard",
                 {},
                 correlationId
             );
 
-            // Update circuit breaker metrics periodically
-            setInterval(() => this.updateCircuitBreakerMetrics(), 30000);
+            // Start components in parallel
+            await Promise.all([this.startHttpServer(), this.preloadData()]);
 
-            this.startWebServer();
+            // Connect to data streams
+            await this.dataStreamManager.connect();
 
-            const preloadTrades = this.preloadTrades();
-            const fetchInitialOrderBook = this.fetchInitialOrderBook();
-            const getFromBinanceAPI = this.getFromBinanceAPI();
+            // Start periodic tasks
+            this.startPeriodicTasks();
 
-            await Promise.all([
-                preloadTrades,
-                fetchInitialOrderBook,
-                getFromBinanceAPI,
-            ]);
-
-            this.purgeDatabase();
-            this.dependencies.logger.info(
+            this.logger.info(
                 "Order Flow Dashboard started successfully",
                 {},
                 correlationId
@@ -1379,27 +1377,104 @@ export class OrderFlowDashboard {
     }
 }
 
-// Factory function to create dependencies
+/**
+ * Factory function to create dependencies
+ */
 export function createDependencies(): Dependencies {
-    const logger = new Logger();
+    const logger = new Logger(process.env.NODE_ENV === "development");
     const metricsCollector = new MetricsCollector();
-    const rateLimiter = new RateLimiter();
-    const circuitBreaker = new CircuitBreaker();
+    const signalLogger = new SignalLogger("signals.csv");
+    const rateLimiter = new RateLimiter(60000, 100);
+    const circuitBreaker = new CircuitBreaker(5, 60000, logger);
+
+    const orderBookProcessor = new OrderBookProcessor(
+        {
+            binSize: 10,
+            numLevels: 10,
+            maxBufferSize: 1000,
+            tickSize: Config.TICK_SIZE,
+            precision: Config.PRICE_PRECISION,
+        } as OrderBookProcessorOptions,
+        logger,
+        metricsCollector
+    );
+
+    const tradesProcessor = new TradesProcessor(
+        {
+            symbol: Config.SYMBOL,
+            storageTime: Config.MAX_STORAGE_TIME,
+        },
+        logger,
+        metricsCollector
+    );
+
+    const anomalyDetector = new AnomalyDetector({
+        windowSize: 1200,
+        minHistory: 200,
+        anomalyCooldownMs: 20000, // 20 seconds
+        volumeImbalanceThreshold: 0.85,
+        absorptionRatioThreshold: 4.2,
+        icebergDetectionWindow: 120000,
+        orderSizeAnomalyThreshold: 4.5,
+        normalSpreadBps: 12,
+        tickSize: 0.01,
+        logger,
+    });
+
+    const alertManager = new AlertManager(
+        process.env.ALERT_WEBHOOK_URL,
+        parseInt(process.env.ALERT_COOLDOWN_MS || "300000", 10)
+    );
+
+    // TODO
+    const signalManager = new SignalManager(
+        anomalyDetector,
+        alertManager,
+        logger,
+        metricsCollector,
+        {
+            confidenceThreshold: 0.75,
+            enableAnomalyDetection: true,
+            enableAlerts: true,
+        }
+    );
+
+    /*
+    config: Partial<SignalCoordinatorConfig> = {},
+        logger: Logger,
+        metricsCollector: MetricsCollector,
+        signalLogger: SignalLogger,
+        signalManager: SignalManager,
+        detectorFactory: DetectorFactory,
+)
+*/
+    const signalCoordinator = new SignalCoordinator(
+        {
+            maxConcurrentProcessing: 10, // TODO
+        },
+        logger,
+        metricsCollector,
+        signalLogger,
+        signalManager
+    );
 
     return {
-        storage: new Storage() as IStorage,
-        binanceFeed: new BinanceDataFeed() as IBinanceDataFeed,
-        tradesProcessor: new TradesProcessor() as ITradesProcessor,
-        orderBookProcessor: new OrderBookProcessor() as IOrderBookProcessor,
-        signalLogger: new SignalLogger("signals.csv") as ISignalLogger,
+        storage: new Storage(),
+        binanceFeed: new BinanceDataFeed(),
+        tradesProcessor,
+        orderBookProcessor,
+        signalLogger,
         logger,
         metricsCollector,
         rateLimiter,
         circuitBreaker,
+        alertManager,
+        signalCoordinator,
+        anomalyDetector,
+        signalManager,
     };
 }
 
-// Usage example:
-// const dependencies = createDependencies();
-// const dashboard = new OrderFlowDashboard(dependencies);
-// await dashboard.startDashboard();
+// Export for use
+export { Config } from "./core/config.js";
+export type { Dependencies } from "./types/dependencies.js";

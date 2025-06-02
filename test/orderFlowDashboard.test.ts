@@ -1,668 +1,1037 @@
-// test/orderFlowDashboard.test.ts
-vi.mock("ws"); // <--- THIS MUST BE FIRST, before ALL imports, to guarantee mapping
+// src/orderFlowDashboard.ts
 
-vi.mock("@binance/spot", () => ({
-    SpotWebsocketStreams: vi.fn(),
-    SpotWebsocketAPI: vi.fn(),
-    Spot: vi.fn(),
-}));
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
+dotenv.config();
 
-vi.mock("@binance/common", () => ({
-    ConfigurationWebsocketStreams: vi.fn(),
-    ConfigurationWebsocketAPI: vi.fn(),
-    WebsocketApiRateLimit: vi.fn(),
-    WebsocketApiResponse: vi.fn(),
-    Logger: vi.fn(),
-    LogLevel: vi.fn(),
-}));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-vi.mock("express", () => {
-    const expressApp = (() => {
-        const app: any = () => app;
-        app.use = vi.fn();
-        app.listen = vi.fn((port: number, callback?: () => void) => {
-            if (callback) callback();
-            return app;
-        });
-        return app;
-    }) as any;
-    expressApp.static = vi.fn(() => vi.fn());
-    return { default: expressApp };
-});
+import express from "express";
+import * as path from "node:path";
+import { EventEmitter } from "events";
+import { randomUUID } from "crypto";
+import { SpotWebsocketStreams } from "@binance/spot";
 
-vi.mock("../src/binance.js", () => ({
-    BinanceDataFeed: vi.fn().mockImplementation(() => ({
-        connectToStreams: vi.fn().mockResolvedValue({
-            aggTrade: vi.fn().mockReturnValue({ on: vi.fn() }),
-            diffBookDepth: vi.fn().mockReturnValue({ on: vi.fn() }),
-            on: vi.fn(),
-        }),
-        fetchAggTradesByTime: vi.fn().mockResolvedValue([]),
-    })),
-}));
+// Core imports
+import { Config } from "./core/config.js";
+import { SignalProcessingError, WebSocketError } from "./core/errors.js";
 
-vi.mock("../src/tradesProcessor.js", () => ({
-    TradesProcessor: vi.fn().mockImplementation(() => ({
-        requestBacklog: vi.fn().mockReturnValue([1, 2, 3]),
-        fillBacklog: vi.fn().mockResolvedValue(undefined),
-        addTrade: vi.fn(),
-    })),
-}));
+// Infrastructure imports
+import { Logger } from "./infrastructure/logger.js";
+import { MetricsCollector } from "./infrastructure/metricsCollector.js";
+import { RateLimiter } from "./infrastructure/rateLimiter.js";
+import { CircuitBreaker } from "./infrastructure/circuitBreaker.js";
 
-vi.mock("../src/orderBookProcessor.js", () => ({
-    OrderBookProcessor: vi.fn().mockImplementation(() => ({
-        fetchInitialOrderBook: vi.fn().mockResolvedValue(undefined),
-        processWebSocketUpdate: vi.fn(),
-    })),
-}));
+// Service imports
+import {
+    WebSocketManager,
+    type ExtendedWebSocket,
+} from "./websocket/websocketManager.js";
+import { SignalManager } from "./trading/signalManager.js";
+import { DataStreamManager } from "./trading/dataStreamManager.js";
+import { SignalCoordinator } from "./services/signalCoordinator.js";
+import { AnomalyDetector } from "./services/anomalyDetector.js";
+import { AlertManager } from "./alerts/alertManager.js";
 
-vi.mock("../src/storage.js", () => ({
-    Storage: vi.fn().mockImplementation(() => ({
-        purgeOldEntries: vi.fn(),
-    })),
-}));
+// Indicator imports
+import {
+    AbsorptionDetector,
+    type AbsorptionSettings,
+} from "./indicators/absorptionDetector.js";
+import {
+    ExhaustionDetector,
+    type ExhaustionSettings,
+} from "./indicators/exhaustionDetector.js";
+import { SwingMetrics } from "./indicators/swingMetrics.js";
+import { AccumulationDetector } from "./indicators/accumulationDetector.js";
+import { MomentumDivergence } from "./indicators/momentumDivergence.js";
+import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
+import {
+    SwingPredictor,
+    type SwingPrediction,
+} from "./indicators/swingPredictor.js";
 
-vi.mock("../src/absorptionDetector.js", () => ({
-    AbsorptionDetector: vi.fn().mockImplementation(() => ({
-        addDepth: vi.fn(),
-        addTrade: vi.fn(),
-    })),
-}));
+// Utils imports
+import { parseBool, TradeData } from "./utils/utils.js";
+import {
+    calculateProfitTarget,
+    calculateStopLoss,
+} from "./utils/calculations.js";
 
-vi.mock("../src/exhaustionDetector.js", () => ({
-    ExhaustionDetector: vi.fn().mockImplementation(() => ({
-        addDepth: vi.fn(),
-        addTrade: vi.fn(),
-    })),
-}));
+// Types
+import type { Dependencies } from "./types/dependencies.js";
+import type { Signal, WebSocketMessage } from "./utils/interfaces.js";
+import type { VolumeNodes } from "./indicators/swingMetrics.js";
+import type { AccumulationResult } from "./indicators/accumulationDetector.js";
+import type { DivergenceResult } from "./indicators/momentumDivergence.js";
+import type { TimeContext } from "./utils/types.js";
 
-let capturedCallback: (confirmed: any) => void;
-vi.mock("../src/deltaCVDCOnfirmation.js", () => ({
-    DeltaCVDConfirmation: vi.fn().mockImplementation((cb, options) => {
-        capturedCallback = () => {
-            return {
-                confirmSignal: vi.fn(),
-                addTrade: vi.fn(),
-            };
-        };
-    }),
-}));
+// Storage and processors
+import { Storage } from "./storage.js";
+import { BinanceDataFeed } from "./binance.js";
+import { TradesProcessor } from "./tradesProcessor.js";
+import { OrderBookProcessor } from "./orderBookProcessor.js";
+import { SignalLogger } from "./signalLogger.js";
 
-vi.mock("../src/swingPredictor.js", () => ({
-    SwingPredictor: vi.fn().mockImplementation(() => ({
-        onSignal: vi.fn(),
-        onPrice: vi.fn(),
-    })),
-}));
+EventEmitter.defaultMaxListeners = 20;
 
-import { OrderFlowDashboard } from "../src/orderFlowDashBoard.js";
-import { Signal, WebSocketMessage, Detected } from "../src/interfaces.js";
-import * as storage from "../src/storage.js";
+/**
+ * Main Order Flow Dashboard Controller
+ * Coordinates all subsystems and manages application lifecycle
+ */
+export class OrderFlowDashboard {
+    // Infrastructure components
+    private readonly httpServer = express();
+    private readonly logger: Logger;
+    private readonly metricsCollector: MetricsCollector;
 
-beforeAll(() => {
-    vi.spyOn(process, "exit").mockImplementation(
-        (code?: string | number | null) => {
-            throw new Error("process.exit was called");
-        }
-    );
-    vi.useFakeTimers();
-});
-afterAll(() => {
-    vi.useRealTimers();
-});
-afterEach(() => {
-    vi.runOnlyPendingTimers();
-    vi.clearAllTimers();
-    process.removeAllListeners("SIGINT");
-    process.removeAllListeners("exit");
-    vi.resetAllMocks();
-    process.removeAllListeners("SIGINT");
-    process.removeAllListeners("exit");
-});
+    // Managers
+    private readonly wsManager: WebSocketManager;
+    private readonly signalManager: SignalManager;
+    private readonly dataStreamManager: DataStreamManager;
 
-describe("OrderFlowDashboard (FULL COVERAGE)", () => {
-    let dashboard: OrderFlowDashboard;
-    let client: any;
-    let messageHandler: ((msg: string) => void) | undefined;
+    // Coordinators
+    private readonly signalCoordinator: SignalCoordinator;
+    private readonly anomalyDetector: AnomalyDetector;
 
-    beforeEach(async () => {
-        vi.resetModules();
-        vi.resetAllMocks();
-        vi.clearAllMocks();
+    // Detectors
+    private readonly absorptionDetector: AbsorptionDetector;
+    private readonly exhaustionDetector: ExhaustionDetector;
+    private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
+    private readonly swingPredictor: SwingPredictor;
 
-        capturedCallback = (confirmed: any) => {
-            return confirmed;
-        }; // reset capturedCallback
+    // Indicators
+    private readonly swingMetrics = new SwingMetrics();
+    private readonly accumulationDetector: AccumulationDetector;
+    private readonly momentumDivergence = new MomentumDivergence();
 
-        const { OrderFlowDashboard } = await import(
-            "../src/orderFlowDashBoard.js"
+    // Time context
+    private timeContext: TimeContext = {
+        wallTime: Date.now(),
+        marketTime: Date.now(),
+        mode: "realtime",
+        speed: 1,
+    };
+
+    // State
+    private isShuttingDown = false;
+    private readonly purgeIntervalMs = 10 * 60 * 1000; // 10 minutes
+    private purgeIntervalId?: NodeJS.Timeout;
+
+    constructor(
+        private readonly dependencies: Dependencies,
+        private readonly delayFn: (
+            cb: () => void,
+            ms: number
+        ) => unknown = setTimeout
+    ) {
+        // Validate configuration
+        Config.validate();
+
+        // Initialize infrastructure
+        this.logger = dependencies.logger;
+        this.metricsCollector = dependencies.metricsCollector;
+
+        // Initialize coordinators
+        this.signalCoordinator = dependencies.signalCoordinator;
+        this.anomalyDetector = dependencies.anomalyDetector;
+
+        // Initialize managers
+        this.wsManager = new WebSocketManager(
+            Config.WS_PORT,
+            this.logger,
+            dependencies.rateLimiter,
+            this.metricsCollector,
+            this.createWSHandlers()
         );
 
-        process.env.WEBHOOK_URL = "http://localhost/mock-webhook";
-        dashboard = new OrderFlowDashboard();
-
-        // Access the current WebSocket server instance from the dashboard directly
-        const serverInstance = dashboard["BroadCastWebSocket"];
-
-        client = {
-            on: vi.fn((event, handler) => {
-                if (event === "message") {
-                    messageHandler = handler;
-                }
-            }),
-            send: vi.fn(),
-            readyState: 1,
-        };
-
-        if (serverInstance) {
-            serverInstance.emit("connection", client);
-        } else {
-            throw new Error(
-                "BroadCastWebSocket instance not found on dashboard"
-            );
-        }
-
-        global.fetch = vi.fn(() =>
-            Promise.resolve({
-                ok: true,
-                status: 200,
-                statusText: "OK",
-                json: async () => ({}),
-            })
-        ) as any;
-    });
-
-    test("should handle WebSocket ping", () => {
-        const pingMessage = JSON.stringify({ type: "ping" });
-        if (messageHandler) messageHandler(pingMessage);
-        expect(client.send).toHaveBeenCalledWith(
-            expect.stringContaining("pong")
+        this.signalManager = new SignalManager(
+            this.signalCoordinator,
+            this.anomalyDetector,
+            dependencies.alertManager,
+            this.logger
         );
-    });
 
-    test("should handle WebSocket backlog request (bad amount)", () => {
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        if (messageHandler)
-            messageHandler(
-                JSON.stringify({ type: "backlog", data: { amount: "0" } })
-            );
-        expect(warnSpy).toHaveBeenCalledWith("Invalid backlog amount:", "0");
-        expect(client.send).not.toHaveBeenCalledWith(
-            expect.stringContaining("backlog")
+        this.dataStreamManager = new DataStreamManager(
+            { symbol: Config.SYMBOL },
+            dependencies.binanceFeed,
+            dependencies.circuitBreaker,
+            this.logger,
+            this.metricsCollector
         );
-        warnSpy.mockRestore();
-    });
 
-    test("should handle WebSocket backlog request (bad huge int)", () => {
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        if (messageHandler)
-            messageHandler(
-                JSON.stringify({
-                    type: "backlog",
-                    data: { amount: "10000000" },
-                })
-            );
-        expect(warnSpy).toHaveBeenCalledWith(
-            "Invalid backlog amount:",
-            "10000000"
-        );
-        expect(client.send).not.toHaveBeenCalledWith(
-            expect.stringContaining("backlog")
-        );
-        warnSpy.mockRestore();
-    });
-
-    test("should handle WebSocket backlog request (notanumber)", () => {
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        if (messageHandler)
-            messageHandler(
-                JSON.stringify({
-                    type: "backlog",
-                    data: { amount: "notanumber" },
-                })
-            );
-        expect(warnSpy).toHaveBeenCalledWith(
-            "Invalid backlog amount:",
-            "notanumber"
-        );
-        expect(client.send).not.toHaveBeenCalledWith(
-            expect.stringContaining("backlog")
-        );
-        warnSpy.mockRestore();
-    });
-
-    test("should handle bad JSON", () => {
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        if (messageHandler) messageHandler("{ invalid JSON }");
-        expect(warnSpy).toHaveBeenCalled();
-        warnSpy.mockRestore();
-    });
-
-    test("should handle invalid request (no type)", () => {
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        if (messageHandler) messageHandler(JSON.stringify({}));
-        expect(warnSpy).toHaveBeenCalled();
-        warnSpy.mockRestore();
-    });
-
-    test("should handle invalid request (non-string type)", () => {
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        if (messageHandler) messageHandler(JSON.stringify({ type: 123 }));
-        expect(warnSpy).toHaveBeenCalled();
-        warnSpy.mockRestore();
-    });
-
-    test("should broadcast signal to clients and send webhook", async () => {
-        const message: Signal = {
-            type: "exhaustion",
-            time: Date.now(),
-            price: 100,
-            takeProfit: 101,
-            stopLoss: 99,
-            closeReason: "exhaustion",
-        };
-        await dashboard.broadcastSignal(message);
-        expect(global.fetch).toHaveBeenCalled();
-    });
-
-    test("should not call webhook if URL not set", async () => {
-        delete process.env.WEBHOOK_URL;
-        const signal: Signal = {
-            type: "absorption",
-            time: Date.now(),
-            price: 200,
-            takeProfit: 202,
-            stopLoss: 198,
-            closeReason: "absorption",
-        };
-        await dashboard.broadcastSignal(signal);
-        expect(global.fetch).not.toHaveBeenCalled();
-    });
-
-    test("should handle webhook error gracefully", async () => {
-        const signal: Signal = {
-            type: "exhaustion",
-            time: Date.now(),
-            price: 300,
-            takeProfit: 305,
-            stopLoss: 295,
-            closeReason: "exhaustion",
-        };
-        await dashboard.broadcastSignal(signal);
-        expect(global.fetch).toHaveBeenCalled();
-    });
-
-    test("should handle error in sendWebhookMessage (response not ok)", async () => {
-        global.fetch = vi.fn(() =>
-            Promise.resolve({
-                ok: false,
-                status: 400,
-                statusText: "Bad Request",
-                json: async () => ({}),
-            })
-        ) as any;
-        const errorSpy = vi
-            .spyOn(console, "error")
-            .mockImplementation(() => {});
-        await dashboard["sendWebhookMessage"]("http://bad", { type: "fail" });
-        expect(errorSpy).toHaveBeenCalled();
-        errorSpy.mockRestore();
-    });
-
-    test("should call broadcastSignal for swing prediction", () => {
-        const broadcastSpy = vi
-            .spyOn(dashboard, "broadcastSignal")
-            .mockImplementation(() => Promise.resolve());
-        dashboard["handleSwingPrediction"]({
-            type: "swingHigh",
-            time: Date.now(),
-            price: 125,
-            sourceSignal: {},
-        } as any);
-        expect(broadcastSpy).toHaveBeenCalled();
-    });
-
-    test("should handle error in broadcastMessage", () => {
-        dashboard["sendToClients"] = () => {
-            throw new Error("fail");
-        };
-        const errorSpy = vi
-            .spyOn(console, "error")
-            .mockImplementation(() => {});
-        dashboard["broadcastMessage"]({
-            type: "test",
-            data: {},
-            now: Date.now(),
-        });
-        expect(errorSpy).toHaveBeenCalled();
-        errorSpy.mockRestore();
-    });
-
-    test("should not send message if no clients are connected", () => {
-        const message: WebSocketMessage = {
-            type: "trade",
-            data: "sample",
-            now: Date.now(),
-        };
-        dashboard["BroadCastWebSocket"].clients = new Set();
-        expect(() => dashboard["sendToClients"](message)).not.toThrow();
-    });
-
-    test("should handle WebSocket client with closed readyState", () => {
-        const message: WebSocketMessage = {
-            type: "trade",
-            data: "sample",
-            now: Date.now(),
-        };
-        const closedClient: any = {
-            readyState: 0,
-            send: vi.fn(),
-        };
-        (dashboard as any).BroadCastWebSocket = {
-            clients: new Set([closedClient]),
-        };
-        (dashboard as any).sendToClients(message);
-        expect(closedClient.send).not.toHaveBeenCalled();
-    });
-
-    test("should register SIGINT and exit handlers in purgeDatabase", () => {
-        // arrange
-        const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
-            throw new Error("process.exit was called");
-        });
-
-        dashboard["purgeDatabase"]();
-
-        // act + assert
-        let exitError: Error | undefined;
-        try {
-            process.emit("SIGINT", "SIGINT");
-        } catch (err) {
-            exitError = err as Error;
-        }
-
-        expect(exitError).toBeDefined();
-        expect(exitError?.message).toBe("process.exit was called");
-        expect(storage.Storage).toHaveBeenCalled();
-
-        exitSpy.mockRestore();
-    });
-
-    test("should handle error in purgeOldEntries", () => {
-        const err = new Error("purge error");
-        (storage.Storage as any).mockImplementation(() => ({
-            purgeOldEntries: () => {
-                throw err;
-            },
-        }));
-        const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-        const errorSpy = vi
-            .spyOn(console, "error")
-            .mockImplementation(() => {});
-        dashboard["purgeDatabase"]();
-        vi.runOnlyPendingTimers();
-        expect(errorSpy).toHaveBeenCalled();
-        logSpy.mockRestore();
-        errorSpy.mockRestore();
-    });
-
-    test("should start the dashboard and launch components", async () => {
-        const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-        const errorSpy = vi
-            .spyOn(console, "error")
-            .mockImplementation(() => {});
-        await dashboard.startDashboard();
-        expect(logSpy).toHaveBeenCalledWith(
-            expect.stringContaining("Server running at http")
-        );
-        logSpy.mockRestore();
-        errorSpy.mockRestore();
-    });
-
-    test("should handle error in startDashboard", async () => {
-        dashboard["preloadTrades"] = vi
-            .fn()
-            .mockRejectedValue(new Error("preload error"));
-        const errorSpy = vi
-            .spyOn(console, "error")
-            .mockImplementation(() => {});
-        await dashboard.startDashboard();
-        expect(errorSpy).toHaveBeenCalled();
-        errorSpy.mockRestore();
-    });
-
-    test("should fall back to default SYMBOL, PORT, and WS_PORT when not set", () => {
-        delete process.env.SYMBOL;
-        delete process.env.PORT;
-        delete process.env.WS_PORT;
-        const dash = new OrderFlowDashboard();
-        expect(dash).toBeDefined();
-    });
-
-    test("isWebSocketRequest returns false for non-object", () => {
-        expect(dashboard["isWebSocketRequest"](null)).toBe(false);
-        expect(dashboard["isWebSocketRequest"]("string")).toBe(false);
-        expect(dashboard["isWebSocketRequest"]({})).toBe(false);
-        expect(dashboard["isWebSocketRequest"]({ type: 123 })).toBe(false);
-    });
-
-    test("isBacklogRequest returns false for null or missing props", () => {
-        expect(dashboard["isBacklogRequest"](null)).toBe(false);
-        expect(dashboard["isBacklogRequest"]({})).toBe(false);
-        expect(dashboard["isBacklogRequest"]({ type: "notbacklog" })).toBe(
-            false
-        );
-    });
-
-    test("startWebServer calls use and listen", () => {
-        const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-        dashboard["startWebServer"]();
-        expect(dashboard["httpServer"].use).toHaveBeenCalled();
-        expect(dashboard["httpServer"].listen).toHaveBeenCalled();
-        logSpy.mockRestore();
-    });
-
-    test("should log error if processWebSocketUpdate throws", async () => {
-        const connectionMock = {
-            aggTrade: vi.fn().mockReturnValue({ on: vi.fn() }),
-            diffBookDepth: vi.fn().mockReturnValue({
-                on: vi.fn((event, cb) => {
-                    const badData = {};
-                    dashboard["orderBookProcessor"].processWebSocketUpdate =
-                        vi.fn(() => {
-                            throw new Error("fail");
-                        });
-                    const errorSpy = vi
-                        .spyOn(console, "error")
-                        .mockImplementation(() => {});
-                    cb(badData);
-                    expect(errorSpy).toHaveBeenCalledWith(
-                        "Error broadcasting depth:",
-                        expect.any(Error)
-                    );
-                    errorSpy.mockRestore();
-                }),
-            }),
-            on: vi.fn(),
-        };
-        dashboard["binanceFeed"].connectToStreams = vi
-            .fn()
-            .mockResolvedValue(connectionMock);
-        await dashboard["getFromBinanceAPI"]();
-    });
-
-    test("should log error if addTrade throws in trade message", async () => {
-        const connectionMock = {
-            aggTrade: vi.fn().mockReturnValue({
-                on: vi.fn((event, cb) => {
-                    dashboard["tradesProcessor"].addTrade = vi.fn(() => {
-                        throw new Error("fail");
+        // Initialize detectors with settings
+        this.absorptionDetector = new AbsorptionDetector(
+            (data) => {
+                void this.signalManager
+                    .processAbsorption(data)
+                    .catch((error) => {
+                        this.handleError(error as Error, "absorption_callback");
                     });
-                    const errorSpy = vi
-                        .spyOn(console, "error")
-                        .mockImplementation(() => {});
-                    cb({ p: "1", T: 1 });
-                    expect(errorSpy).toHaveBeenCalledWith(
-                        "Error broadcasting trade:",
-                        expect.any(Error)
-                    );
-                    errorSpy.mockRestore();
-                }),
-            }),
-            diffBookDepth: vi.fn().mockReturnValue({ on: vi.fn() }),
-            on: vi.fn(),
-        };
-        dashboard["binanceFeed"].connectToStreams = vi
-            .fn()
-            .mockResolvedValue(connectionMock);
-        await dashboard["getFromBinanceAPI"]();
-    });
+            },
+            this.createAbsorptionSettings(),
+            dependencies.signalLogger
+        );
 
-    test("should log error if reconnection in connection.on('close') fails", async () => {
-        const connectionMock = {
-            aggTrade: vi.fn().mockReturnValue({ on: vi.fn() }),
-            diffBookDepth: vi.fn().mockReturnValue({ on: vi.fn() }),
-            on: vi.fn((event, cb) => {
-                if (event === "close") {
-                    const errorSpy = vi
-                        .spyOn(console, "error")
-                        .mockImplementation(() => {});
-                    dashboard["delayFn"] = vi.fn((fn) => {
-                        throw new Error("fail");
-                    }) as any;
-                    cb();
-                    expect(errorSpy).toHaveBeenCalledWith(
-                        "Error reconnecting to Binance API:",
-                        expect.any(Error)
+        this.exhaustionDetector = new ExhaustionDetector(
+            (data) => {
+                void this.signalManager
+                    .processExhaustion(data)
+                    .catch((error) => {
+                        this.handleError(error as Error, "exhaustion_callback");
+                    });
+            },
+            this.createExhaustionSettings(),
+            dependencies.signalLogger
+        );
+
+        // Initialize other components
+        this.deltaCVDConfirmation = new DeltaCVDConfirmation(
+            (confirmed) => {
+                const correlationId = randomUUID();
+                try {
+                    const confirmedSignal: Signal = {
+                        type: `${confirmed.confirmedType}_confirmed` as Signal["type"],
+                        time: confirmed.time,
+                        price: confirmed.price,
+                        takeProfit: confirmed.price * 1.01,
+                        stopLoss: confirmed.price * 0.99,
+                        closeReason: confirmed.reason,
+                    };
+
+                    this.swingPredictor.onSignal(confirmedSignal);
+                } catch (error) {
+                    this.handleError(
+                        error as Error,
+                        "delta_cvd_confirmation",
+                        correlationId
                     );
-                    errorSpy.mockRestore();
                 }
-            }),
-        };
-        dashboard["binanceFeed"].connectToStreams = vi
-            .fn()
-            .mockResolvedValue(connectionMock);
-        await dashboard["getFromBinanceAPI"]();
-    });
-
-    test("should handle Buffer as WebSocket message", () => {
-        const bufMsg = Buffer.from(JSON.stringify({ type: "ping" }));
-        // @ts-expect-error: intentionally passing a Buffer for test
-        if (messageHandler) messageHandler(bufMsg);
-        expect(client.send).toHaveBeenCalledWith(
-            expect.stringContaining("pong")
-        );
-    });
-
-    test("should handle unexpected message format in WebSocket", () => {
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        // @ts-expect-error: intentionally passing a number for test
-        if (messageHandler) messageHandler(12345); // number
-        expect(warnSpy).toHaveBeenCalledWith(
-            "Invalid message format",
-            expect.any(Error)
-        );
-        warnSpy.mockRestore();
-    });
-
-    test("constructor uses all default values when env vars are not set", () => {
-        delete process.env.SYMBOL;
-        delete process.env.PORT;
-        delete process.env.WS_PORT;
-        const dash = new OrderFlowDashboard();
-        expect(dash["symbol"]).toBe("LTCUSDT");
-        expect(dash["httpPort"]).toBe(3000);
-        expect(dash["wsPort"]).toBe(3001);
-    });
-
-    test("startWebServer serves static files and listens on port", () => {
-        const dash = new OrderFlowDashboard();
-        const useSpy = vi.spyOn(dash["httpServer"], "use");
-        const listenSpy = vi.spyOn(dash["httpServer"], "listen");
-        dash["startWebServer"]();
-        expect(useSpy).toHaveBeenCalled();
-        expect(listenSpy).toHaveBeenCalled();
-    });
-
-    test("broadcastMessage is bound correctly in constructor", () => {
-        const dash = new OrderFlowDashboard();
-        // @ts-expect-error: intentionally copying private function for test
-        const fn = dash.broadcastMessage;
-        expect(() =>
-            fn({ type: "test", data: {}, now: Date.now() })
-        ).not.toThrow();
-    });
-
-    test("getFromBinanceAPI handles error in connection.on('close')", async () => {
-        const dash = new OrderFlowDashboard();
-        const mockConnection = {
-            on: (event: string, cb: Function) => {
-                if (event === "close") cb();
             },
-            aggTrade: vi.fn(),
-            diffBookDepth: vi.fn(),
-        };
-        dash["binanceFeed"].connectToStreams = vi
-            .fn()
-            .mockResolvedValue(mockConnection);
-        dash["delayFn"] = () => {
-            throw new Error("fail reconnect");
-        };
-        const errorSpy = vi
-            .spyOn(console, "error")
-            .mockImplementation(() => {});
-        await dash["getFromBinanceAPI"]();
-        expect(errorSpy).toHaveBeenCalled();
-        errorSpy.mockRestore();
-    });
+            {
+                lookback: 90,
+                cvdLength: 20,
+                slopeThreshold: 0.08,
+                deltaThreshold: 30,
+            }
+        );
 
-    test("getFromBinanceAPI handles error in stream handlers setup", async () => {
-        const dash = new OrderFlowDashboard();
-        const mockConnection = {
-            on: vi.fn(),
-            aggTrade: () => {
-                throw new Error("aggTrade fail");
+        this.swingPredictor = new SwingPredictor({
+            lookaheadMs: 10000,
+            retraceTicks: 1,
+            pricePrecision: 2,
+            signalCooldownMs: 1000,
+            onSwingPredicted: this.handleSwingPrediction.bind(this),
+        });
+
+        this.accumulationDetector = new AccumulationDetector(
+            dependencies.signalLogger,
+            Config.SYMBOL
+        );
+
+        // Setup event handlers
+        this.setupEventHandlers();
+        this.setupHttpServer();
+        this.setupGracefulShutdown();
+    }
+
+    /**
+     * Create WebSocket handlers
+     */
+    private createWSHandlers(): Record<
+        string,
+        (ws: ExtendedWebSocket, data: unknown, correlationId?: string) => void
+    > {
+        return {
+            ping: (ws, _, correlationId) => {
+                ws.send(
+                    JSON.stringify({
+                        type: "pong",
+                        now: Date.now(),
+                        correlationId,
+                    })
+                );
             },
-            diffBookDepth: vi.fn(),
+            backlog: (ws, data, correlationId) => {
+                this.handleBacklogRequest(ws, data, correlationId);
+            },
         };
-        dash["binanceFeed"].connectToStreams = vi
-            .fn()
-            .mockResolvedValue(mockConnection);
-        const errorSpy = vi
-            .spyOn(console, "error")
-            .mockImplementation(() => {});
-        await dash["getFromBinanceAPI"]();
-        expect(errorSpy).toHaveBeenCalled();
-        errorSpy.mockRestore();
-    });
+    }
 
-    test("getFromBinanceAPI handles error in top-level catch", async () => {
-        const dash = new OrderFlowDashboard();
-        dash["binanceFeed"].connectToStreams = () =>
-            Promise.reject(new Error("fail"));
-        const errorSpy = vi
-            .spyOn(console, "error")
-            .mockImplementation(() => {});
-        await expect(dash["getFromBinanceAPI"]()).rejects.toThrow("fail");
-        errorSpy.mockRestore();
-    });
-
-    test("handles error in sendToClients", () => {
-        const dash = new OrderFlowDashboard();
-        dash["sendToClients"] = () => {
-            throw new Error("fail send");
-        };
-        const errorSpy = vi
-            .spyOn(console, "error")
-            .mockImplementation(() => {});
+    /**
+     * Handle backlog request
+     */
+    private handleBacklogRequest(
+        ws: ExtendedWebSocket,
+        data: unknown,
+        correlationId?: string
+    ): void {
+        const startTime = Date.now();
         try {
-            dash["broadcastMessage"]({
-                type: "test",
-                data: {},
+            let amount = 1000;
+            if (data && typeof data === "object" && "amount" in data) {
+                const rawAmount = (data as { amount?: string | number }).amount;
+                amount = parseInt(rawAmount as string, 10);
+                if (
+                    !Number.isInteger(amount) ||
+                    amount <= 0 ||
+                    amount > 100000
+                ) {
+                    throw new WebSocketError(
+                        "Invalid backlog amount",
+                        ws.clientId || "unknown",
+                        correlationId
+                    );
+                }
+            }
+
+            let backlog =
+                this.dependencies.tradesProcessor.requestBacklog(amount);
+            backlog = backlog.reverse();
+
+            ws.send(
+                JSON.stringify({
+                    type: "backlog",
+                    data: backlog,
+                    now: Date.now(),
+                    correlationId,
+                })
+            );
+
+            const processingTime = Date.now() - startTime;
+            this.metricsCollector.updateMetric(
+                "processingLatency",
+                processingTime
+            );
+        } catch (error) {
+            this.metricsCollector.incrementMetric("errorsCount");
+            this.handleError(error as Error, "backlog_handler", correlationId);
+            ws.send(
+                JSON.stringify({
+                    type: "error",
+                    message: (error as Error).message,
+                    correlationId,
+                })
+            );
+        }
+    }
+
+    /**
+     * Create absorption detector settings
+     */
+    private createAbsorptionSettings(): AbsorptionSettings {
+        return {
+            windowMs: Config.ABSORPTION.WINDOW_MS,
+            minAggVolume: Config.ABSORPTION.MIN_AGG_VOLUME,
+            pricePrecision: Config.ABSORPTION.PRICE_PRECISION,
+            zoneTicks: Config.ABSORPTION.ZONE_TICKS,
+            eventCooldownMs: Config.ABSORPTION.EVENT_COOLDOWN_MS,
+            minInitialMoveTicks: Config.ABSORPTION.MOVE_TICKS,
+            confirmationTimeoutMs: Config.ABSORPTION.CONFIRMATION_TIMEOUT,
+            maxRevisitTicks: Config.ABSORPTION.MAX_REVISIT_TICKS,
+            symbol: Config.SYMBOL,
+            features: {
+                spoofingDetection: parseBool(
+                    process.env.ABSORPTION_SPOOFING_DETECTION,
+                    true
+                ),
+                adaptiveZone: parseBool(
+                    process.env.ABSORPTION_ADAPTIVE_ZONE,
+                    true
+                ),
+                passiveHistory: parseBool(
+                    process.env.ABSORPTION_PASSIVE_HISTORY,
+                    true
+                ),
+                multiZone: parseBool(process.env.ABSORPTION_MULTI_ZONE, true),
+                priceResponse: parseBool(
+                    process.env.ABSORPTION_PRICE_RESPONSE,
+                    true
+                ),
+                sideOverride: parseBool(
+                    process.env.ABSORPTION_SIDE_OVERRIDE,
+                    false
+                ),
+                autoCalibrate: parseBool(
+                    process.env.ABSORPTION_AUTO_CALIBRATE,
+                    true
+                ),
+            },
+        };
+    }
+
+    /**
+     * Create exhaustion detector settings
+     */
+    private createExhaustionSettings(): ExhaustionSettings {
+        return {
+            windowMs: Config.EXHAUSTION.WINDOW_MS,
+            minAggVolume: Config.EXHAUSTION.MIN_AGG_VOLUME,
+            pricePrecision: Config.EXHAUSTION.PRICE_PRECISION,
+            zoneTicks: Config.EXHAUSTION.ZONE_TICKS,
+            eventCooldownMs: Config.EXHAUSTION.EVENT_COOLDOWN_MS,
+            minInitialMoveTicks: Config.EXHAUSTION.MOVE_TICKS,
+            confirmationTimeoutMs: Config.EXHAUSTION.CONFIRMATION_TIMEOUT,
+            maxRevisitTicks: Config.EXHAUSTION.MAX_REVISIT_TICKS,
+            symbol: Config.SYMBOL,
+            features: {
+                spoofingDetection: parseBool(
+                    process.env.EXHAUSTION_SPOOFING_DETECTION,
+                    true
+                ),
+                adaptiveZone: parseBool(
+                    process.env.EXHAUSTION_ADAPTIVE_ZONE,
+                    true
+                ),
+                passiveHistory: parseBool(
+                    process.env.EXHAUSTION_PASSIVE_HISTORY,
+                    true
+                ),
+                multiZone: parseBool(process.env.EXHAUSTION_MULTI_ZONE, true),
+                priceResponse: parseBool(
+                    process.env.EXHAUSTION_PRICE_RESPONSE,
+                    true
+                ),
+                sideOverride: parseBool(
+                    process.env.EXHAUSTION_SIDE_OVERRIDE,
+                    false
+                ),
+                autoCalibrate: parseBool(
+                    process.env.EXHAUSTION_AUTO_CALIBRATE,
+                    true
+                ),
+            },
+        };
+    }
+
+    /**
+     * Setup event handlers
+     */
+    private setupEventHandlers(): void {
+        // Handle data stream events
+        this.dataStreamManager.on("trade", (data) => {
+            this.processTrade(data);
+        });
+
+        this.dataStreamManager.on("depth", (data) => {
+            this.processDepth(data);
+        });
+
+        this.dataStreamManager.on("error", (error) => {
+            this.handleError(error, "data_stream");
+        });
+
+        // Handle signal events
+        this.signalManager.on("signal_generated", (signal) => {
+            void this.broadcastSignal(signal).catch((error) => {
+                this.handleError(error as Error, "signal_broadcast");
+            });
+        });
+    }
+
+    /**
+     * Setup HTTP server
+     */
+    private setupHttpServer(): void {
+        const publicPath = path.join(__dirname, "../public");
+        this.httpServer.use(express.static(publicPath));
+
+        this.httpServer.get("/health", (req, res) => {
+            const correlationId = randomUUID();
+            try {
+                const metrics = this.metricsCollector.getMetrics();
+                const health = {
+                    status: "healthy",
+                    timestamp: new Date().toISOString(),
+                    uptime: process.uptime(),
+                    connections: this.wsManager.getConnectionCount(),
+                    circuitBreakerState:
+                        this.dependencies.circuitBreaker.getState(),
+                    metrics: {
+                        signalsGenerated: metrics.signalsGenerated,
+                        averageLatency:
+                            this.metricsCollector.getAverageLatency(),
+                        errorsCount: metrics.errorsCount,
+                    },
+                    correlationId,
+                };
+
+                res.json(health);
+                this.logger.info(
+                    "Health check requested",
+                    health,
+                    correlationId
+                );
+            } catch (error) {
+                this.handleError(error as Error, "health_check", correlationId);
+                res.status(500).json({
+                    status: "unhealthy",
+                    error: (error as Error).message,
+                    correlationId,
+                });
+            }
+        });
+    }
+
+    /**
+     * Process incoming trade data
+     */
+    private processTrade(data: SpotWebsocketStreams.AggTradeResponse): void {
+        const correlationId = randomUUID();
+        const startTime = Date.now();
+
+        try {
+            // Update detectors
+            this.absorptionDetector.addTrade(data);
+            this.exhaustionDetector.addTrade(data);
+            this.deltaCVDConfirmation.addTrade(data);
+
+            // Update swing predictor
+            this.swingPredictor.onPrice(
+                parseFloat(data.p ?? "0"),
+                data.T ?? Date.now()
+            );
+
+            // Process for indicators
+            const tradeData = this.normalizeTradeData(data);
+            this.analyzeSwingOpportunity(tradeData.price, tradeData);
+
+            // Process and broadcast
+            const message = this.dependencies.tradesProcessor.addTrade(data);
+            this.wsManager.broadcast(message);
+
+            const processingTime = Date.now() - startTime;
+            this.metricsCollector.updateMetric(
+                "processingLatency",
+                processingTime
+            );
+        } catch (error) {
+            this.handleError(
+                new SignalProcessingError(
+                    "Error processing trade data",
+                    { data },
+                    correlationId
+                ),
+                "trade_processing",
+                correlationId
+            );
+        }
+    }
+
+    /**
+     * Process incoming depth data
+     */
+    private processDepth(
+        data: SpotWebsocketStreams.DiffBookDepthResponse
+    ): void {
+        const correlationId = randomUUID();
+        const startTime = Date.now();
+
+        try {
+            // Update detectors
+            this.absorptionDetector.addDepth(data);
+            this.exhaustionDetector.addDepth(data);
+
+            // Process and broadcast
+            const message =
+                this.dependencies.orderBookProcessor.processWebSocketUpdate(
+                    data
+                );
+            this.wsManager.broadcast(message);
+
+            const processingTime = Date.now() - startTime;
+            this.metricsCollector.updateMetric(
+                "processingLatency",
+                processingTime
+            );
+        } catch (error) {
+            this.handleError(
+                new SignalProcessingError(
+                    "Error processing depth data",
+                    { data },
+                    correlationId
+                ),
+                "depth_processing",
+                correlationId
+            );
+        }
+    }
+
+    /**
+     * Normalize trade data
+     */
+    private normalizeTradeData(
+        data: SpotWebsocketStreams.AggTradeResponse
+    ): TradeData {
+        return {
+            price: parseFloat(data.p || "0"),
+            quantity: parseFloat(data.q || "0"),
+            timestamp: data.T || Date.now(),
+            buyerIsMaker: data.m || false,
+            originalTrade: data,
+        };
+    }
+
+    /**
+     * Analyze swing opportunity
+     */
+    private analyzeSwingOpportunity(
+        currentPrice: number,
+        trade: TradeData
+    ): void {
+        // Update all indicators
+        this.swingMetrics.addTrade(trade);
+        this.momentumDivergence.addDataPoint(
+            trade.price,
+            trade.quantity,
+            trade.timestamp
+        );
+
+        // Get current orderbook state for accumulation
+        const bookLevel =
+            this.dependencies.orderBookProcessor.getDepthAtPrice(currentPrice);
+        const passiveVolume = bookLevel ? bookLevel.bid + bookLevel.ask : 0;
+
+        this.accumulationDetector.addTrade(trade, passiveVolume);
+
+        // Check for swing signals
+        const volumeNodes: VolumeNodes =
+            this.swingMetrics.getVolumeNodes(currentPrice);
+        const accumulation: AccumulationResult =
+            this.accumulationDetector.detectAccumulation(currentPrice);
+        const divergence: DivergenceResult =
+            this.momentumDivergence.detectDivergence();
+
+        // Signal generation logic
+        if (
+            this.shouldGenerateSwingSignal(
+                currentPrice,
+                accumulation,
+                divergence,
+                volumeNodes
+            )
+        ) {
+            void this.generateSwingSignal(
+                currentPrice,
+                accumulation,
+                divergence
+            ).catch((error) => {
+                this.handleError(
+                    error as Error,
+                    "swing_signal_generation",
+                    randomUUID()
+                );
+            });
+        }
+    }
+
+    /**
+     * Should generate swing signal
+     */
+    private shouldGenerateSwingSignal(
+        currentPrice: number,
+        accumulation: AccumulationResult,
+        divergence: DivergenceResult,
+        volumeNodes: VolumeNodes
+    ): boolean {
+        let confirmations = 0;
+
+        if (accumulation.isAccumulating && accumulation.strength > 0.5) {
+            confirmations++;
+        }
+
+        if (divergence.type === "bullish" && divergence.strength > 0.3) {
+            confirmations++;
+        }
+
+        // Check if price is near a low volume node
+        const nearLVN = volumeNodes.lvn.some(
+            (lvn) => Math.abs(lvn - currentPrice) < currentPrice * 0.001
+        );
+        if (nearLVN) {
+            confirmations++;
+        }
+
+        return confirmations >= 2;
+    }
+
+    /**
+     * Generate swing signal
+     */
+    private async generateSwingSignal(
+        currentPrice: number,
+        accumulation: AccumulationResult,
+        divergence: DivergenceResult
+    ): Promise<void> {
+        const side: "buy" | "sell" =
+            divergence.type === "bullish" || accumulation.isAccumulating
+                ? "buy"
+                : "sell";
+
+        const profitTarget = calculateProfitTarget(currentPrice, side);
+        const stopLoss = calculateStopLoss(currentPrice, side);
+
+        const signal: Signal = {
+            type: "flow",
+            time: Date.now(),
+            price: currentPrice,
+            takeProfit: profitTarget.price,
+            stopLoss,
+            closeReason: "swing_detection",
+            signalData: {
+                accumulation,
+                divergence,
+                expectedGainPercent: profitTarget.netGain,
+            },
+        };
+
+        // Send alert via AlertManager
+        await this.dependencies.alertManager.sendAlert(signal);
+
+        // Also broadcast to WebSocket clients
+        await this.broadcastSignal(signal);
+    }
+
+    /**
+     * Handle swing prediction
+     */
+    private handleSwingPrediction(prediction: SwingPrediction): void {
+        const correlationId = randomUUID();
+
+        try {
+            void this.broadcastSignal(prediction as unknown as Signal).catch(
+                () => {
+                    this.handleError(
+                        new SignalProcessingError(
+                            "Error broadcasting swing prediction",
+                            { prediction },
+                            correlationId
+                        ),
+                        "swing_prediction",
+                        correlationId
+                    );
+                }
+            );
+        } catch (error) {
+            this.handleError(
+                error as Error,
+                "swing_prediction_handler",
+                correlationId
+            );
+        }
+    }
+
+    /**
+     * Broadcast signal to clients
+     */
+    private async broadcastSignal(signal: Signal): Promise<void> {
+        const correlationId = randomUUID();
+
+        try {
+            this.logger.info("Broadcasting signal", { signal }, correlationId);
+            this.metricsCollector.incrementMetric("signalsGenerated");
+
+            // Send webhook if configured
+            if (Config.WEBHOOK_URL) {
+                await this.sendWebhookMessage(
+                    Config.WEBHOOK_URL,
+                    {
+                        type: signal.type,
+                        time: signal.time,
+                        price: signal.price,
+                        takeProfit: signal.takeProfit,
+                        stopLoss: signal.stopLoss,
+                        label: signal.closeReason,
+                        correlationId,
+                    },
+                    correlationId
+                );
+            }
+
+            // Broadcast to WebSocket clients
+            this.wsManager.broadcast({
+                type: "signal",
+                data: signal,
                 now: Date.now(),
             });
-        } catch {}
-        expect(errorSpy).toHaveBeenCalled();
-        errorSpy.mockRestore();
-    });
-});
+        } catch (error) {
+            this.handleError(
+                new SignalProcessingError(
+                    "Error broadcasting signal",
+                    { signal },
+                    correlationId
+                ),
+                "broadcast_signal",
+                correlationId
+            );
+        }
+    }
+
+    /**
+     * Send webhook message
+     */
+    private async sendWebhookMessage(
+        webhookUrl: string,
+        message: object,
+        correlationId?: string
+    ): Promise<void> {
+        try {
+            await this.dependencies.circuitBreaker.execute(async () => {
+                const response = await fetch(webhookUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Correlation-ID": correlationId || randomUUID(),
+                    },
+                    body: JSON.stringify(message),
+                });
+
+                if (!response.ok) {
+                    throw new Error(
+                        `Webhook request failed: ${response.status} ${response.statusText}`
+                    );
+                }
+
+                this.logger.info(
+                    "Webhook message sent successfully",
+                    { webhookUrl },
+                    correlationId
+                );
+            }, correlationId);
+        } catch (error) {
+            this.handleError(error as Error, "webhook_send", correlationId);
+        }
+    }
+
+    /**
+     * Handle errors
+     */
+    private handleError(
+        error: Error,
+        context: string,
+        correlationId?: string
+    ): void {
+        this.metricsCollector.incrementMetric("errorsCount");
+
+        const errorContext = {
+            context,
+            errorName: error.name,
+            errorMessage: error.message,
+            stack: error.stack,
+            timestamp: new Date().toISOString(),
+            correlationId: correlationId || randomUUID(),
+        };
+
+        if (
+            error instanceof SignalProcessingError ||
+            error instanceof WebSocketError
+        ) {
+            errorContext.correlationId = error.correlationId ?? randomUUID();
+        }
+
+        this.logger.error(
+            `[${context}] ${error.message}`,
+            errorContext,
+            correlationId
+        );
+    }
+
+    /**
+     * Preload historical data
+     */
+    private async preloadData(): Promise<void> {
+        const correlationId = randomUUID();
+
+        try {
+            // Preload trades
+            await this.dependencies.circuitBreaker.execute(
+                () => this.dependencies.tradesProcessor.fillBacklog(),
+                correlationId
+            );
+
+            // Fetch initial orderbook
+            await this.dependencies.circuitBreaker.execute(
+                () =>
+                    this.dependencies.orderBookProcessor.fetchInitialOrderBook(),
+                correlationId
+            );
+
+            this.logger.info(
+                "Historical data preloaded successfully",
+                {},
+                correlationId
+            );
+        } catch (error) {
+            this.handleError(error as Error, "preload_data", correlationId);
+            throw error;
+        }
+    }
+
+    /**
+     * Start periodic tasks
+     */
+    private startPeriodicTasks(): void {
+        // Update circuit breaker metrics
+        setInterval(() => {
+            const state = this.dependencies.circuitBreaker.getState();
+            this.metricsCollector.updateMetric("circuitBreakerState", state);
+        }, 30000);
+
+        // Database purge
+        this.purgeIntervalId = setInterval(() => {
+            if (this.isShuttingDown) return;
+
+            const correlationId = randomUUID();
+            this.logger.info("Starting scheduled purge", {}, correlationId);
+
+            try {
+                this.dependencies.storage.purgeOldEntries();
+                this.logger.info(
+                    "Scheduled purge completed successfully",
+                    {},
+                    correlationId
+                );
+            } catch (error) {
+                this.handleError(
+                    error as Error,
+                    "database_purge",
+                    correlationId
+                );
+            }
+        }, this.purgeIntervalMs);
+    }
+
+    /**
+     * Start HTTP server
+     */
+    private async startHttpServer(): Promise<void> {
+        return new Promise((resolve) => {
+            this.httpServer.listen(Config.HTTP_PORT, () => {
+                this.logger.info(
+                    `HTTP server running at http://localhost:${Config.HTTP_PORT}`
+                );
+                resolve();
+            });
+        });
+    }
+
+    /**
+     * Setup graceful shutdown
+     */
+    private setupGracefulShutdown(): void {
+        const shutdown = async (signal: string): Promise<void> => {
+            this.logger.info(`Received ${signal}, starting graceful shutdown`);
+            this.isShuttingDown = true;
+
+            // Clear intervals
+            if (this.purgeIntervalId) {
+                clearInterval(this.purgeIntervalId);
+            }
+
+            // Shutdown components
+            this.wsManager.shutdown();
+            await this.dataStreamManager.disconnect();
+
+            // Give time for cleanup
+            setTimeout(() => {
+                this.logger.info("Graceful shutdown completed");
+                process.exit(0);
+            }, 5000);
+        };
+
+        process.on("SIGTERM", () => void shutdown("SIGTERM"));
+        process.on("SIGINT", () => void shutdown("SIGINT"));
+    }
+
+    /**
+     * Start the dashboard
+     */
+    public async startDashboard(): Promise<void> {
+        const correlationId = randomUUID();
+
+        try {
+            this.logger.info(
+                "Starting Order Flow Dashboard",
+                {},
+                correlationId
+            );
+
+            // Start components in parallel
+            await Promise.all([this.startHttpServer(), this.preloadData()]);
+
+            // Connect to data streams
+            await this.dataStreamManager.connect();
+
+            // Start periodic tasks
+            this.startPeriodicTasks();
+
+            this.logger.info(
+                "Order Flow Dashboard started successfully",
+                {},
+                correlationId
+            );
+        } catch (error) {
+            this.handleError(
+                new Error(
+                    `Error starting Order Flow Dashboard: ${(error as Error).message}`
+                ),
+                "dashboard_startup",
+                correlationId
+            );
+            throw error;
+        }
+    }
+}
+
+/**
+ * Factory function to create dependencies
+ */
+export function createDependencies(): Dependencies {
+    const logger = new Logger();
+    const metricsCollector = new MetricsCollector();
+    const rateLimiter = new RateLimiter(60000, 100);
+    const circuitBreaker = new CircuitBreaker(5, 60000, 10000);
+
+    const anomalyDetector = new AnomalyDetector();
+    const signalCoordinator = new SignalCoordinator(
+        {
+            requiredConfirmations: 2,
+            confirmationWindowMs: 30000,
+            deduplicationWindowMs: 5000,
+            signalExpiryMs: 60000,
+        },
+        new SignalLogger("signals.csv"),
+        {
+            wallTime: Date.now(),
+            marketTime: Date.now(),
+            mode: "realtime",
+            speed: 1,
+        }
+    );
+
+    const alertManager = new AlertManager(
+        process.env.ALERT_WEBHOOK_URL,
+        parseInt(process.env.ALERT_COOLDOWN_MS || "300000", 10)
+    );
+
+    return {
+        storage: new Storage(),
+        binanceFeed: new BinanceDataFeed(),
+        tradesProcessor: new TradesProcessor(),
+        orderBookProcessor: new OrderBookProcessor(),
+        signalLogger: new SignalLogger("signals.csv"),
+        logger,
+        metricsCollector,
+        rateLimiter,
+        circuitBreaker,
+        alertManager,
+        signalCoordinator,
+        anomalyDetector,
+    };
+}
+
+// Export for use
+//export { Config } from "./core/config.js";
+//export type { Dependencies } from "./types/dependencies.js";

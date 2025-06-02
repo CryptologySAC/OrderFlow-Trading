@@ -34,6 +34,85 @@ let tradesChart = null;
 let orderBookChart = null;
 let delayGauge = null;
 
+let anomalyList = [];
+const anomalySeverityOrder = ["critical", "high", "medium", "info"];
+let anomalyFilters = new Set(["critical", "high"]);
+
+// Used to control badge display
+let badgeTimeout = null;
+let latestBadgeElem = null;
+
+function getAnomalyIcon(type) {
+    switch (type) {
+        case "flash_crash":
+            return "⚡";
+        case "liquidity_void":
+            return "💧";
+        case "absorption":
+            return "A";
+        case "exhaustion":
+            return "E";
+        case "whale_activity":
+            return "🐋";
+        case "momentum_ignition":
+            return "🔥";
+        case "spoofing":
+            return "👻";
+        case "iceberg_order":
+            return "🧊";
+        case "orderbook_imbalance":
+            return "≠";
+        case "flow_imbalance":
+            return "⇄";
+        default:
+            return "•";
+    }
+}
+function capitalize(str) {
+    return str[0].toUpperCase() + str.slice(1);
+}
+function formatAgo(ts) {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    return `${m}m ago`;
+}
+
+function renderAnomalyList() {
+    const listElem = document.getElementById("anomalyList");
+    if (!listElem) return;
+    // Filter
+    const filtered = anomalyList.filter((a) => anomalyFilters.has(a.severity));
+    listElem.innerHTML = filtered
+        .map(
+            (a) => `
+            <div class="anomaly-row ${a.severity}">
+                <span class="anomaly-type">${getAnomalyIcon(a.type)}</span>
+                <span>${capitalize(a.type)}</span>
+                <span style="margin-left:8px">${a.affectedPriceRange.min.toFixed(2)} - ${a.affectedPriceRange.max.toFixed(2)}</span>
+                <span style="margin-left:8px">${a.severity}</span>
+                <span style="margin-left:8px">${a.recommendedAction}</span>
+                <span style="margin-left:auto">${formatAgo(a.detectedAt || a.time || Date.now())}</span>
+            </div>
+        `
+        )
+        .join("");
+}
+function showAnomalyBadge(anomaly) {
+    // Remove previous badge
+    if (latestBadgeElem) latestBadgeElem.remove();
+    const badge = document.createElement("div");
+    badge.className = `anomaly-badge ${anomaly.severity}`;
+    badge.innerHTML = `${getAnomalyIcon(anomaly.type)} ${capitalize(anomaly.type)} @ ${anomaly.price.toFixed(2)}`;
+    document.body.appendChild(badge);
+    latestBadgeElem = badge;
+    if (badgeTimeout) clearTimeout(badgeTimeout);
+    badgeTimeout = setTimeout(() => {
+        badge.remove();
+        latestBadgeElem = null;
+    }, 4000);
+}
+
 // Improve Trade Chart update performance
 let chartUpdateScheduled = false;
 function scheduleTradesChartUpdate() {
@@ -109,51 +188,86 @@ function createTrade(x, y, quantity, orderType) {
     return { x, y, quantity, orderType };
 }
 
+/**
+ * Build a label string for orderflow signals for chart annotations.
+ * @param {Signal} signal - Signal object as per the new interface
+ * @returns {string} - Formatted label text for Chart.js or other UI
+ */
 function buildSignalLabel(signal) {
-    let color,
-        letter,
-        extraInfo = "";
+    if (!signal) return "Invalid Signal";
 
-    if (signal.type.startsWith("exhaustion")) {
-        letter = "E";
-        color = signal.type.includes("confirmed")
-            ? "rgba(0, 90, 255, 0.5)" // Blue for confirmed
-            : signal.signalData.side === "sell"
-              ? "rgba(255, 0, 0, 0.5)"
-              : "rgba(0, 200, 0, 0.5)"; // Red/Green
-    } else if (signal.type.startsWith("absorption")) {
-        letter = "A";
-        color = signal.type.includes("confirmed")
-            ? "rgba(0, 90, 255, 1)"
-            : signal.signalData.side === "sell"
-              ? "rgba(255, 0, 0, 1)"
-              : "rgba(0, 200, 0, 1)";
-    } else {
-        letter = "?";
-        color = "rgba(128,128,128,0.5)";
+    // 1. Main signal summary (type/side/price/time)
+    let label = `[${signal.type?.toUpperCase() ?? "?"}] ${signal.side?.toUpperCase() ?? "?"} @ ${signal.price?.toFixed(2) ?? "?"}`;
+    label += signal.time
+        ? `\n${new Date(signal.time).toLocaleTimeString()}`
+        : "";
+
+    // 2. TP/SL
+    if (signal.takeProfit) label += `\nTP: ${signal.takeProfit.toFixed(2)}`;
+    if (signal.stopLoss) label += ` | SL: ${signal.stopLoss.toFixed(2)}`;
+
+    // 3. Confidence/Confirmations
+    if (signal.confidence !== undefined)
+        label += `\nConf: ${(signal.confidence * 100).toFixed(0)}%`;
+    if (signal.confirmations?.length)
+        label += ` | Confirms: ${signal.confirmations.join(", ")}`;
+
+    // 4. Zone/Volumes/Refilled
+    if (signal.zone !== undefined) label += `\nZone: ${signal.zone}`;
+    if (signal.totalAggressiveVolume !== undefined)
+        label += ` | Agg: ${Number(signal.totalAggressiveVolume).toFixed(2)}`;
+    if (signal.passiveVolume !== undefined)
+        label += ` | Passive: ${Number(signal.passiveVolume).toFixed(2)}`;
+    if (signal.refilled !== undefined)
+        label += ` | Ref: ${signal.refilled ? "Yes" : "No"}`;
+
+    // 5. Reason/closeReason
+    if (signal.closeReason) label += `\nReason: ${signal.closeReason}`;
+
+    // 6. Anomaly
+    if (signal.anomaly && signal.anomaly.detected)
+        label += `\nAnomaly: ${signal.anomaly.type || "?"} (${signal.anomaly.severity || "?"})`;
+
+    // 7. Signal-specific details
+    if (signal.signalData) {
+        if ("absorptionType" in signal.signalData) {
+            label += `\nAbsorption: ${signal.signalData.absorptionType}`;
+            if (signal.signalData.spoofed) label += " | Spoofed!";
+            if (signal.signalData.recentAggressive !== undefined)
+                label += `\nAgg: ${Number(signal.signalData.recentAggressive).toFixed(2)}`;
+            if (signal.signalData.rollingZonePassive !== undefined)
+                label += ` | RollingPassive: ${Number(signal.signalData.rollingZonePassive).toFixed(2)}`;
+            if (signal.signalData.avgPassive !== undefined)
+                label += ` | AvgPassive: ${Number(signal.signalData.avgPassive).toFixed(2)}`;
+        }
+        if ("exhaustionType" in signal.signalData) {
+            label += `\nExhaustion: ${signal.signalData.exhaustionType}`;
+            if (signal.signalData.spoofed) label += " | Spoofed!";
+            if (signal.signalData.recentAggressive !== undefined)
+                label += `\nAgg: ${Number(signal.signalData.recentAggressive).toFixed(2)}`;
+            if (signal.signalData.oppositeQty !== undefined)
+                label += ` | OppQty: ${Number(signal.signalData.oppositeQty).toFixed(2)}`;
+            if (signal.signalData.avgLiquidity !== undefined)
+                label += ` | AvgBook: ${Number(signal.signalData.avgLiquidity).toFixed(2)}`;
+            if (signal.signalData.spread !== undefined)
+                label += ` | Spread: ${(signal.signalData.spread * 100).toFixed(3)}%`;
+        }
+        if ("swingType" in signal.signalData) {
+            label += `\nSwing: ${signal.signalData.swingType} | Str: ${signal.signalData.strength}`;
+        }
+        if ("divergence" in signal.signalData) {
+            label += `\nDiv: ${signal.signalData.divergence}`;
+        }
+        // Add more per-type details as needed.
     }
 
-    // Compose info for testing
-    if (signal.totalAggressiveVolume !== undefined)
-        extraInfo += `\nAgg: ${signal.totalAggressiveVolume}`;
-    if (signal.passiveVolume !== undefined)
-        extraInfo += `\nPass: ${signal.passiveVolume}`;
-    if (signal.refilled !== undefined)
-        extraInfo += `\nRefilled: ${signal.refilled ? "Y" : "N"}`;
-    if (signal.zone) extraInfo += `\nZone: ${signal.zone}`;
-    if (signal.closeReason) extraInfo += `\n(${signal.closeReason})`;
+    // 8. Invalidation (for signal lifecycle tracking)
+    if (signal.isInvalidated) label += "\n❌ Invalidated";
 
-    return {
-        type: "label",
-        xValue: signal.time,
-        yValue: signal.price,
-        content: `${letter}\n${extraInfo.trim()}`,
-        backgroundColor: color,
-        color: "white",
-        font: { size: 14 },
-        padding: 8,
-        id: `label.${signal.time}.${signal.type}`,
-    };
+    // Optional: truncate if label is too long for chart
+    if (label.length > 250) label = label.slice(0, 245) + "...";
+
+    return label;
 }
 
 // Configure Websocket
@@ -237,6 +351,23 @@ const tradeWebsocket = new TradeWebSocket({
             );
 
             switch (message.type) {
+                case "anomaly":
+                    console.log("Anomaly received:", message.data);
+                    anomalyList.unshift(message.data);
+                    // Limit list length
+                    if (anomalyList.length > 100)
+                        anomalyList = anomalyList.slice(0, 100);
+                    renderAnomalyList();
+                    // Badge only for high/critical
+                    if (
+                        message.data.severity === "high" ||
+                        message.data.severity === "critical"
+                    ) {
+                        //showAnomalyBadge(message.data);
+                    }
+                    // Annotate chart if desired (optional, see below)
+                    //addAnomalyChartLabel(message.data);
+                    break;
                 case "trade":
                     const trade = message.data;
                     if (isValidTrade(trade)) {
@@ -281,10 +412,27 @@ const tradeWebsocket = new TradeWebSocket({
                     break;
 
                 case "signal":
-                    const label = message.data;
-                    tradesChart.options.plugins.annotation.annotations[
-                        label.id || `label.${label.time}.${label.type}`
-                    ] = buildSignalLabel(label);
+                    const label = buildSignalLabel(message.data);
+                    const id = message.data.id;
+
+                    tradesChart.options.plugins.annotation.annotations[id] = {
+                        type: "label",
+                        xValue: message.data.time,
+                        yValue: message.data.price,
+                        content: label,
+                        backgroundColor: "rgba(90, 50, 255, 0.5)",
+                        color: "white",
+                        font: {
+                            size: 12,
+                            family: "monospace",
+                        },
+                        borderRadius: 4,
+                        padding: 8,
+                        position: {
+                            x: "center",
+                            y: "center",
+                        },
+                    };
                     tradesChart.update("none");
                     console.log("Signal label added:", label);
                     break;
@@ -328,7 +476,6 @@ const tradeWebsocket = new TradeWebSocket({
                                     : "rgba(0, 0, 0, 0)"
                             );
                         scheduleOrderBookUpdate();
-                        updateIndicators();
                     } else {
                         console.warn(
                             "Order book chart not initialized; skipping update"
@@ -354,21 +501,9 @@ let tradeTimeoutId = null;
  * Global order book data.
  * @type {Object}
  * @property {Array<Object>} priceLevels - Array of price levels with price, bid, and ask.
- * @property {number} ratio - Ask/bid ratio.
- * @property {number} supportPercent - Bid support percentage.
- * @property {boolean} askStable - Ask volume stability.
- * @property {boolean} bidStable - Bid volume stability.
- * @property {Object} direction - Market direction with type and probability.
- * @property {number} volumeImbalance - Volume imbalance metric.
  */
 let orderBookData = {
     priceLevels: [],
-    ratio: 0,
-    supportPercent: 0,
-    askStable: true,
-    bidStable: false,
-    direction: { type: "Stable", probability: 80 },
-    volumeImbalance: 0,
 };
 
 /**
@@ -700,48 +835,6 @@ function setRange(duration) {
 }
 
 /**
- * Updates HTML indicators with order book data.
- */
-function updateIndicators() {
-    if (directionText) {
-        directionText.textContent = `Direction: ${orderBookData.direction.type} (${orderBookData.direction.probability}%)`;
-        directionText.style.color =
-            orderBookData.direction.type === "Down"
-                ? "red"
-                : orderBookData.direction.type === "Up"
-                  ? "green"
-                  : "gray";
-    }
-
-    if (ratioText) {
-        ratioText.textContent = `Ask/Bid Ratio: ${orderBookData.ratio.toFixed(2)} (Threshold: 2)`;
-    }
-
-    if (supportText) {
-        supportText.textContent = `Bid Support: ${orderBookData.supportPercent.toFixed(2)}% (Threshold: 50%)`;
-    }
-
-    if (stabilityText) {
-        stabilityText.textContent = `Ask Volume Stability: ${orderBookData.askStable ? "Stable" : "Unstable"}`;
-        stabilityText.style.color = orderBookData.askStable ? "green" : "red";
-    }
-
-    if (volumeImbalance) {
-        volumeImbalance.textContent = `Volume Imbalance: ${orderBookData.volumeImbalance.toFixed(2)} (Short < -0.65 | Long > 0.65)`;
-        volumeImbalance.style.color =
-            orderBookData.volumeImbalance > 0.65
-                ? "green"
-                : orderBookData.volumeImbalance < -0.65
-                  ? "red"
-                  : "gray";
-    }
-
-    if (orderBookContainer) {
-        orderBookContainer.style.border = `3px solid ${orderBookData.askStable ? "green" : "red"}`;
-    }
-}
-
-/**
  * Sets up Interact.js for draggable and resizable chart containers.
  */
 function setupInteract() {
@@ -751,6 +844,53 @@ function setupInteract() {
     }
 
     interact(".chart-container")
+        .draggable({
+            inertia: true,
+            modifiers: [
+                interact.modifiers.restrictRect({
+                    restriction: ".dashboard",
+                    endOnly: true,
+                }),
+            ],
+            listeners: {
+                move(event) {
+                    const target = event.target;
+                    const x =
+                        (parseFloat(target.getAttribute("data-x")) || 0) +
+                        event.dx;
+                    const y =
+                        (parseFloat(target.getAttribute("data-y")) || 0) +
+                        event.dy;
+                    target.style.transform = `translate(${x}px, ${y}px)`;
+                    target.setAttribute("data-x", x);
+                    target.setAttribute("data-y", y);
+                },
+            },
+        })
+        .resizable({
+            edges: { left: true, right: true, bottom: true, top: true },
+            modifiers: [
+                interact.modifiers.restrictSize({
+                    min: { width: 600, height: 600 },
+                }),
+            ],
+            listeners: {
+                move(event) {
+                    const target = event.target;
+                    target.style.width = `${event.rect.width}px`;
+                    target.style.height = `${event.rect.height}px`;
+                    const canvas = target.querySelector("canvas");
+                    if (canvas) {
+                        canvas.width = event.rect.width;
+                        canvas.height = event.rect.height;
+                        const chart = Chart.getChart(canvas.id);
+                        if (chart) chart.resize();
+                    }
+                },
+            },
+        });
+
+    interact(".anomaly-list-container")
         .draggable({
             inertia: true,
             modifiers: [
@@ -872,5 +1012,47 @@ function initialize() {
     }
 }
 
+function addAnomalyChartLabel(anomaly) {
+    if (!window.tradesChart) return;
+    const now = anomaly.time || anomaly.detectedAt || Date.now();
+    window.tradesChart.options.plugins.annotation.annotations =
+        window.tradesChart.options.plugins.annotation.annotations || {};
+    window.tradesChart.options.plugins.annotation.annotations[
+        `anomaly.${now}`
+    ] = {
+        type: "label",
+        xValue: anomaly.time || anomaly.detectedAt,
+        yValue: anomaly.price,
+        content: `${getAnomalyIcon(anomaly.type)}`,
+        backgroundColor:
+            anomaly.severity === "critical"
+                ? "rgba(229,57,53,0.8)"
+                : anomaly.severity === "high"
+                  ? "rgba(255,179,0,0.85)"
+                  : anomaly.severity === "medium"
+                    ? "rgba(255,241,118,0.5)"
+                    : "rgba(33,150,243,0.5)",
+        color: "#fff",
+        font: { size: 18, weight: "bold" },
+        padding: 6,
+        borderRadius: 6,
+        id: `anomaly.${now}`,
+    };
+    window.tradesChart.update("none");
+}
+
 // Start application
 document.addEventListener("DOMContentLoaded", initialize);
+
+document.addEventListener("DOMContentLoaded", () => {
+    const filterBox = document.querySelector(".anomaly-filter");
+    if (filterBox) {
+        filterBox.querySelectorAll("input[type=checkbox]").forEach((box) => {
+            box.addEventListener("change", () => {
+                if (box.checked) anomalyFilters.add(box.value);
+                else anomalyFilters.delete(box.value);
+                renderAnomalyList();
+            });
+        });
+    }
+});
