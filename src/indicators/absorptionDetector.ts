@@ -1,13 +1,10 @@
 // src/indicators/absorptionDetector.ts
-
-import { randomUUID } from "crypto";
 import { SpotWebsocketStreams } from "@binance/spot";
 import { BaseDetector, ZoneSample } from "./base/baseDetector.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
-import type { PendingDetection } from "../utils/utils.js";
 import type {
     IAbsorptionDetector,
     DetectorCallback,
@@ -16,6 +13,7 @@ import type {
 } from "./interfaces/detectorInterfaces.js";
 import { EnrichedTradeEvent, AggressiveTrade } from "../types/marketEvents.js";
 import { DetectorUtils } from "./base/detectorUtils.js";
+import { AbsorptionSignalData, SignalType } from "../types/signalTypes.js";
 
 export interface AbsorptionSettings extends BaseDetectorSettings {
     features?: AbsorptionFeatures;
@@ -87,13 +85,14 @@ export class AbsorptionDetector
     private readonly liquidityLayers = new Map<number, LiquidityLayer[]>();
 
     constructor(
+        id: string,
         callback: DetectorCallback,
         settings: AbsorptionSettings = {},
         logger: Logger,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger
     ) {
-        super(callback, settings, logger, metricsCollector, signalLogger);
+        super(id, callback, settings, logger, metricsCollector, signalLogger);
 
         // Initialize absorption-specific settings
         this.absorptionThreshold = settings.absorptionThreshold ?? 0.7;
@@ -113,6 +112,10 @@ export class AbsorptionDetector
 
         // Setup periodic cleanup for absorption tracking
         setInterval(() => this.cleanupAbsorptionHistory(), this.windowMs);
+    }
+
+    protected getSignalType(): SignalType {
+        return "absorption";
     }
 
     public onEnrichedTrade(event: EnrichedTradeEvent): void {
@@ -272,40 +275,6 @@ export class AbsorptionDetector
         }
 
         return refillEvents >= 2;
-    }
-
-    private detectPassiveRefill_old(
-        price: number,
-        side: "buy" | "sell",
-        zone: number
-    ): boolean {
-        const zoneHistory = this.zonePassiveHistory.get(zone);
-        if (!zoneHistory || zoneHistory.count() < 10) return false;
-
-        const snapshots = zoneHistory.toArray();
-        const relevantSide = side === "buy" ? "ask" : "bid";
-
-        let refillCount = 0;
-        let previousLevel = snapshots[0][relevantSide];
-
-        // Count how many times passive increased after decreasing
-        for (let i = 1; i < snapshots.length; i++) {
-            const currentLevel = snapshots[i][relevantSide];
-
-            // If it dropped then came back up
-            if (
-                i > 1 &&
-                snapshots[i - 1][relevantSide] < previousLevel * 0.8 &&
-                currentLevel > previousLevel * 0.9
-            ) {
-                refillCount++;
-            }
-
-            previousLevel = currentLevel;
-        }
-
-        // Multiple refills indicate iceberg
-        return refillCount >= 2;
     }
 
     /**
@@ -570,16 +539,15 @@ export class AbsorptionDetector
             return;
         }
 
-        // Signal detected
-        this.handleDetection({
+        const signal: AbsorptionSignalData = {
             zone,
             price,
             side,
-            trades: volumes.trades,
             aggressive: volumes.aggressive,
             passive: volumes.passive,
             refilled: conditions.hasRefill,
-            metadata: {
+            confidence: score,
+            metrics: {
                 absorptionScore: score,
                 absorptionRatio,
                 icebergDetected: conditions.icebergSignal,
@@ -587,11 +555,24 @@ export class AbsorptionDetector
                 conditions,
                 detectorVersion: "2.0",
             },
-        });
+        };
 
+        this.handleDetection(signal);
+
+        this.metricsCollector.updateMetric(
+            `detector_${this.detectorType}Aggressive_volume`,
+            signal.aggressive
+        );
+        this.metricsCollector.updateMetric(
+            `detector_${this.detectorType}Passive_volume`,
+            signal.passive
+        );
         this.metricsCollector.incrementMetric("absorptionSignalsGenerated");
-        //this.metricsCollector.recordHistogram('absorption.score', score);
-        //this.metricsCollector.recordHistogram('absorption.ratio', absorptionRatio);
+        this.metricsCollector.recordHistogram("absorption.score", score);
+        this.metricsCollector.recordHistogram(
+            "absorption.ratio",
+            absorptionRatio
+        );
     }
 
     private calculateAbsorptionMetrics(zone: number): {
@@ -649,100 +630,6 @@ export class AbsorptionDetector
         const refillRate = increases / (passiveSnapshots.length - 1);
 
         return { absorptionRatio, passiveStrength, refillRate };
-    }
-
-    private analyzeZoneForAbsorption_old(
-        zone: number,
-        tradesAtZone: AggressiveTrade[],
-        triggerTrade: AggressiveTrade,
-        zoneTicks: number
-    ): void {
-        // Get the most recent trade price in the zone
-        const latestTrade = tradesAtZone[tradesAtZone.length - 1];
-        const price = +latestTrade.price.toFixed(this.pricePrecision);
-        const side = this.getTradeSide(latestTrade);
-
-        // Skip if no orderbook data
-        let bookLevel = this.depth.get(price);
-        if (!bookLevel || (bookLevel.bid === 0 && bookLevel.ask === 0)) {
-            const zoneHist = this.zonePassiveHistory.get(zone);
-            const lastSnap = zoneHist?.toArray().at(-1);
-            if (lastSnap) {
-                bookLevel = { bid: lastSnap.bid, ask: lastSnap.ask };
-            }
-        }
-        if (!bookLevel) return; // still nothing ⇒ skip zone
-
-        // Check cooldown first
-        if (!this.checkCooldown(zone, side)) return;
-
-        // New absorption detection logic
-        const absorptionDetected = this.checkAbsorptionConditions(
-            price,
-            side,
-            zone
-        );
-
-        if (absorptionDetected) {
-            // Calculate volumes for the signal
-            const volumes = this.calculateZoneVolumes(
-                zone,
-                tradesAtZone,
-                zoneTicks
-            );
-
-            // Check for spoofing
-            if (
-                this.features.spoofingDetection &&
-                this.isSpoofed(price, side, triggerTrade.timestamp)
-            ) {
-                return;
-            }
-
-            // Get comprehensive passive metrics
-            const metrics = this.calculateAbsorptionMetrics(zone);
-            const imbalance = this.checkPassiveImbalance(zone);
-            const hasRefill = this.detectPassiveRefill_old(price, side, zone);
-
-            // Multi-factor absorption detection
-            const absorptionScore = this.calculateAbsorptionScore_old({
-                absorptionRatio: metrics.absorptionRatio,
-                passiveStrength: metrics.passiveStrength,
-                refillRate: metrics.refillRate,
-                hasRefill,
-                imbalance: Math.abs(imbalance.imbalance),
-                aggressiveVolume: volumes.aggressive,
-                minAggVolume: this.minAggVolume,
-            });
-            this.logger.debug(" Absorption score:", {
-                absorptionScore,
-                metrics,
-            });
-
-            if (absorptionScore > 0.7) {
-                // Threshold for detection
-                // Create detailed signal
-                const signal = {
-                    zone,
-                    price,
-                    side,
-                    trades: volumes.trades,
-                    aggressive: volumes.aggressive,
-                    passive: volumes.passive,
-                    refilled: hasRefill,
-                    metrics: {
-                        absorptionRatio: metrics.absorptionRatio,
-                        passiveStrength: metrics.passiveStrength,
-                        refillRate: metrics.refillRate,
-                        imbalance: imbalance.imbalance,
-                        dominantSide: imbalance.dominantSide,
-                        confidence: absorptionScore,
-                    },
-                };
-
-                this.handleAbsorption(signal);
-            }
-        }
     }
 
     /**
@@ -942,48 +829,6 @@ export class AbsorptionDetector
         return Math.min(1, refillRate * 0.7 + strengthRate * 0.3);
     }
 
-    private calculateAbsorptionScore_old(f: {
-        absorptionRatio: number; // aggressive / passive  (0–1)
-        passiveStrength: number; // 0–∞
-        refillRate: number; // 0–1
-        hasRefill: boolean;
-        imbalance: number; // 0–1
-        aggressiveVolume: number;
-        minAggVolume: number;
-    }): number {
-        let s = 0;
-
-        /* Factor 1 – Smaller ratio → stronger absorption */
-        if (f.absorptionRatio < 0.02)
-            s += 0.3; // ≥50× passive
-        else if (f.absorptionRatio < 0.05) s += 0.2;
-        else if (f.absorptionRatio < 0.1) s += 0.1;
-
-        /* F2 – Passive strength */
-        if (f.passiveStrength > 1.3) s += 0.2;
-        else if (f.passiveStrength > 1.15) s += 0.1;
-        else if (f.passiveStrength < 0.85) s -= 0.05; // shrinking book
-
-        /* F3 – Refill behaviour */
-        if (f.hasRefill) s += 0.25;
-        else if (f.refillRate > 0.66) s += 0.15;
-        else if (f.refillRate > 0.33) s += 0.05;
-
-        /* F4 – Trade size significance */
-        const volRatio = f.aggressiveVolume / f.minAggVolume;
-        if (volRatio >= 4) s += 0.1;
-        else if (volRatio >= 2) s += 0.05;
-        else if (volRatio < 1) s -= 0.05; // insignificant hit
-
-        /* F5 – Passive imbalance */
-        if (f.imbalance >= 0.7) s += 0.1;
-        else if (f.imbalance >= 0.4) s += 0.05;
-        else if (f.imbalance < 0.2) s -= 0.05; // flat book
-
-        /* Clip to 0–1 */
-        return Math.max(0, Math.min(1, s));
-    }
-
     /**
      * Calculate zone volumes with common logic
      */
@@ -1021,45 +866,5 @@ export class AbsorptionDetector
                 : 0;
 
         return { aggressive, passive, trades };
-    }
-
-    /**
-     * Handle absorption detection
-     */
-    private handleAbsorption(params: {
-        zone: number;
-        price: number;
-        side: "buy" | "sell";
-        trades: SpotWebsocketStreams.AggTradeResponse[];
-        aggressive: number;
-        passive: number;
-        refilled: boolean;
-    }): void {
-        const detection: PendingDetection = {
-            id: randomUUID(),
-            time: Date.now(),
-            price: params.price,
-            side: params.side,
-            zone: params.zone,
-            trades: params.trades,
-            aggressive: params.aggressive,
-            passive: params.passive,
-            refilled: params.refilled,
-            confirmed: false,
-        };
-
-        if (this.features.priceResponse) {
-            this.priceConfirmationManager.addPendingDetection(detection);
-            this.logger.info(
-                `[AbsorptionDetector] Pending absorption at ${params.price}`
-            );
-        } else {
-            // Fire immediately
-            this.fireDetection(detection);
-        }
-
-        if (this.features.autoCalibrate) {
-            this.autoCalibrator.recordSignal();
-        }
     }
 }

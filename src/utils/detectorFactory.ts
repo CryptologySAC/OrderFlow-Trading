@@ -19,6 +19,7 @@ import type {
     AccumulationSettings,
 } from "../indicators/interfaces/detectorInterfaces.js";
 import { AccumulationDetector } from "../indicators/accumulationDetector.js";
+import { SignalType } from "../types/signalTypes.js";
 
 /**
  * Production detector factory with monitoring, validation, and lifecycle management
@@ -35,6 +36,17 @@ export class DetectorFactory {
         performanceMonitoring: true,
         memoryThresholdMB: 500,
     };
+    /**
+     * Static dependencies for the factory
+     */
+    private static dependencies: DetectorDependencies | null = null;
+
+    /**
+     * Initialize factory with dependencies (call this once at startup)
+     */
+    public static initialize(deps: DetectorDependencies): void {
+        this.dependencies = deps;
+    }
 
     /**
      * Create production-ready absorption detector
@@ -56,6 +68,7 @@ export class DetectorFactory {
         );
 
         const detector = new AbsorptionDetector(
+            id,
             this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
             dependencies.logger,
@@ -97,6 +110,7 @@ export class DetectorFactory {
         );
 
         const detector = new ExhaustionDetector(
+            id,
             this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
             dependencies.logger,
@@ -138,6 +152,7 @@ export class DetectorFactory {
         );
 
         const detector = new AccumulationDetector(
+            id,
             this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
             dependencies.logger,
@@ -206,6 +221,106 @@ export class DetectorFactory {
             exhaustion: exhaustionDetector,
             accumulation: accumulationDetector,
         };
+    }
+
+    /**
+     * Get all available detector types and their configurations
+     */
+    public static getAvailableDetectors(): Array<{
+        type: string;
+        config: Record<string, unknown>;
+    }> {
+        return [
+            { type: "absorption", config: {} },
+            { type: "exhaustion", config: {} },
+            { type: "accumulation", config: {} },
+        ];
+    }
+
+    /**
+     * Create a detector instance by type (for SignalCoordinator)
+     */
+    public static create(
+        type: string,
+        config: Record<string, unknown>
+    ): BaseDetector {
+        if (!this.dependencies) {
+            throw new Error(
+                "DetectorFactory not initialized. Call DetectorFactory.initialize() first."
+            );
+        }
+
+        const callback: DetectorCallback = (signal) => {
+            // Default callback - will be overridden by coordinator
+            void signal;
+        };
+
+        const baseSettings = config as BaseDetectorSettings;
+
+        switch (type) {
+            case "absorption":
+                return this.createAbsorptionDetector(
+                    callback,
+                    baseSettings as AbsorptionSettings,
+                    this.dependencies
+                );
+            case "exhaustion":
+                return this.createExhaustionDetector(
+                    callback,
+                    baseSettings as ExhaustionSettings,
+                    this.dependencies
+                );
+            case "accumulation":
+                return this.createAccumulationDetector(
+                    callback,
+                    baseSettings as AccumulationSettings,
+                    this.dependencies
+                );
+            default:
+                throw new Error(`Unknown detector type: ${type}`);
+        }
+    }
+
+    /**
+     * Get metadata for a detector type
+     */
+    public static getDetectorMetadata(type: string): {
+        supportedSignalTypes: string[];
+        priority: number;
+        enabled: boolean;
+    } {
+        const metadata: Record<
+            string,
+            {
+                supportedSignalTypes: SignalType[];
+                priority: number;
+                enabled: boolean;
+            }
+        > = {
+            absorption: {
+                supportedSignalTypes: ["absorption"],
+                priority: 7,
+                enabled: true,
+            },
+            exhaustion: {
+                supportedSignalTypes: ["exhaustion"],
+                priority: 8,
+                enabled: true,
+            },
+            accumulation: {
+                supportedSignalTypes: ["accumulation"],
+                priority: 6,
+                enabled: true,
+            },
+        };
+
+        return (
+            metadata[type] || {
+                supportedSignalTypes: [],
+                priority: 5,
+                enabled: false,
+            }
+        );
     }
 
     /**

@@ -49,6 +49,7 @@ export interface DetectorStats {
     memoryUsageMB?: number; // Current memory usage
     circuitBreakerTripped?: boolean; // Circuit breaker status
     lastCleanupTime?: number; // Last cleanup timestamp
+    status?: "healthy" | "unknown";
 }
 
 /**

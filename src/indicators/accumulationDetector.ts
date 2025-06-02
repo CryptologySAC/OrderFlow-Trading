@@ -17,6 +17,7 @@ import type {
     AccumulationFeatures,
     IAccumulationDetector,
 } from "./interfaces/detectorInterfaces.js";
+import { SignalType, AccumulationResult } from "../types/signalTypes.js";
 
 /**
  * Enhanced AccumulationDetector - detects sustained passive > aggressive flow
@@ -41,13 +42,14 @@ export class AccumulationDetector
     private readonly cleanupIntervalMs = 60000;
 
     constructor(
+        id: string,
         callback: DetectorCallback,
         settings: AccumulationSettings = {},
         logger: Logger,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger
     ) {
-        super(callback, settings, logger, metricsCollector, signalLogger);
+        super(id, callback, settings, logger, metricsCollector, signalLogger);
 
         // Initialize accumulation-specific settings
         this.minDurationMs = settings.minDurationMs ?? 300000; // 5 minutes
@@ -76,6 +78,10 @@ export class AccumulationDetector
 
         // Setup cleanup interval
         setInterval(() => this.cleanupOldData(), this.cleanupIntervalMs);
+    }
+
+    protected getSignalType(): SignalType {
+        return "accumulation";
     }
 
     /**
@@ -227,15 +233,16 @@ export class AccumulationDetector
             return;
         }
 
-        // Signal detected
-        this.handleDetection({
+        const signal: AccumulationResult = {
+            duration: conditions.duration,
             zone,
+            ratio: conditions.ratio,
+            strength: conditions.strength,
+            isAccumulating: conditions.isRecentlyActive,
+
             price,
             side: conditions.dominantSide,
-            trades: volumes.trades,
-            aggressive: volumes.aggressive,
-            passive: volumes.passive,
-            refilled: false, // Accumulation doesn't use refill concept
+            confidence: score,
             metadata: {
                 accumulationScore: score,
                 duration: conditions.duration,
@@ -245,7 +252,9 @@ export class AccumulationDetector
                 conditions,
                 detectorVersion: "2.0",
             },
-        });
+        };
+
+        this.handleDetection(signal);
 
         this.metricsCollector.incrementCounter(
             "accumulation.signals.generated"

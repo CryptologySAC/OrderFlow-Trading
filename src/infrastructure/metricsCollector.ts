@@ -667,6 +667,62 @@ export class MetricsCollector {
 
         this.lastRateCalculation = now;
     }
+
+    /**
+     * Create a counter metric (alias for existing functionality)
+     */
+    public createCounter(
+        name: string,
+        help: string,
+        labelNames: string[] = []
+    ): void {
+        this.registerMetric(name, "counter", help, undefined, labelNames);
+    }
+
+    /**
+     * Create a histogram metric (alias for existing functionality)
+     */
+    public createHistogram(
+        name: string,
+        help: string,
+        labelNames: string[] = [],
+        buckets: number[] = []
+    ): void {
+        void buckets; //TODO
+        this.registerMetric(name, "histogram", help, "ms", labelNames);
+        // Initialize histogram if not exists
+        if (!this.histograms.has(name)) {
+            this.histograms.set(name, {
+                count: 0,
+                sum: 0,
+                buckets: new Map(),
+                timestamps: [],
+                values: [],
+            });
+        }
+    }
+
+    /**
+     * Create a gauge metric (alias for existing functionality)
+     */
+    public createGauge(
+        name: string,
+        help: string,
+        labelNames: string[] = []
+    ): void {
+        this.registerMetric(name, "gauge", help, undefined, labelNames);
+    }
+
+    /**
+     * Set gauge value (alias for existing recordGauge)
+     */
+    public setGauge(
+        name: string,
+        value: number,
+        labels: Record<string, string> = {}
+    ): void {
+        this.recordGauge(name, value, labels);
+    }
 }
 
 // =====================================================

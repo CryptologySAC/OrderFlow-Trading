@@ -12,6 +12,7 @@ import { CircuitBreaker } from "../infrastructure/circuitBreaker.js";
 import { AlertManager } from "../alerts/alertManager.js";
 import { SignalCoordinator } from "../services/signalCoordinator.js";
 import { AnomalyDetector } from "../services/anomalyDetector.js";
+import { SignalManager } from "../trading/signalManager.js";
 
 /**
  * Application dependencies interface
@@ -34,4 +35,5 @@ export interface Dependencies {
     alertManager: AlertManager;
     signalCoordinator: SignalCoordinator;
     anomalyDetector: AnomalyDetector;
+    signalManager: SignalManager;
 }

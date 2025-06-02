@@ -1,6 +1,5 @@
 // src/indicators/exhaustionDetector.ts
 import { randomUUID } from "crypto";
-import { SpotWebsocketStreams } from "@binance/spot";
 import { BaseDetector, ZoneSample } from "./base/baseDetector.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
@@ -18,7 +17,11 @@ import type {
     BaseDetectorSettings,
     ExhaustionFeatures,
 } from "./interfaces/detectorInterfaces.js";
-import type { PendingDetection } from "../utils/utils.js";
+import {
+    SignalType,
+    SignalCandidate,
+    ExhaustionSignalData,
+} from "../types/signalTypes.js";
 
 export interface ExhaustionSettings extends BaseDetectorSettings {
     features?: ExhaustionFeatures;
@@ -63,13 +66,14 @@ export class ExhaustionDetector
     private readonly minDepletionFactor: number;
 
     constructor(
+        id: string,
         callback: DetectorCallback,
         settings: ExhaustionSettings = {},
         logger: Logger,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger
     ) {
-        super(callback, settings, logger, metricsCollector, signalLogger);
+        super(id, callback, settings, logger, metricsCollector, signalLogger);
 
         // Initialize exhaustion-specific settings
         this.exhaustionThreshold = settings.exhaustionThreshold ?? 0.7;
@@ -83,6 +87,10 @@ export class ExhaustionDetector
             volumeVelocity: false,
             ...settings.features,
         };
+    }
+
+    protected getSignalType(): SignalType {
+        return "exhaustion";
     }
 
     /* ------------------------------------------------------------------ */
@@ -177,30 +185,6 @@ export class ExhaustionDetector
         }
     }
 
-    /* ------------------------------------------------------------------ */
-    /*  Detection loop                                                    */
-    /* ------------------------------------------------------------------ */
-    protected checkForSignal_old(triggerTrade: AggressiveTrade): void {
-        const zoneTicks = this.getEffectiveZoneTicks();
-        const now = Date.now();
-
-        const recentTrades = this.trades.filter(
-            (t) => now - t.timestamp <= this.windowMs
-        );
-        if (recentTrades.length === 0) return;
-
-        const zoneMap = this.groupTradesByZone(recentTrades, zoneTicks);
-
-        for (const [zone, tradesAtZone] of zoneMap) {
-            this.analyzeZoneForExhaustion(
-                zone,
-                tradesAtZone,
-                triggerTrade,
-                zoneTicks
-            );
-        }
-    }
-
     /**
      * Analyze a specific zone for exhaustion patterns
      */
@@ -283,72 +267,28 @@ export class ExhaustionDetector
             return;
         }
 
-        // Signal detected - handle it
-        this.handleDetection({
-            zone,
+        const signal: ExhaustionSignalData = {
             price,
             side,
-            trades: volumes.trades,
             aggressive: volumes.aggressive,
-            passive: volumes.passive,
-            refilled,
-            metadata: {
-                exhaustionScore: score,
+            oppositeQty,
+            avgLiquidity: conditions.avgLiquidity,
+            spread: conditions.spread,
+            confidence: score,
+            meta: {
                 conditions,
                 detectorVersion: "2.0",
             },
-        });
+        };
 
-        this.metricsCollector.incrementMetric("exhaustionSignalsGenerated");
-        //this.metricsCollector.recordHistogram('exhaustion.score', score);
-    }
+        this.handleDetection(signal);
 
-    private analyzeZoneForExhaustion_old(
-        zone: number,
-        tradesAtZone: AggressiveTrade[],
-        triggerTrade: AggressiveTrade,
-        zoneTicks: number
-    ): void {
-        const latestTrade = tradesAtZone[tradesAtZone.length - 1];
-        const price = +latestTrade.price.toFixed(this.pricePrecision);
-        const side = this.getTradeSide(latestTrade);
-
-        const bookLevel = this.depth.get(price);
-        if (!bookLevel) return;
-
-        if (!this.checkCooldown(zone, side)) return;
-
-        const factors = this.checkExhaustionConditions(price, side);
-        const score = this.calculateExhaustionScore_old(factors);
-        if (score < 0.7) return;
-
-        const volumes = this.calculateZoneVolumes(
-            zone,
-            tradesAtZone,
-            zoneTicks
+        this.metricsCollector.updateMetric(
+            `detector_${this.detectorType}Aggressive_volume`,
+            signal.aggressive
         );
-
-        if (
-            this.features.spoofingDetection &&
-            this.isSpoofed(price, side, triggerTrade.timestamp)
-        ) {
-            return;
-        }
-
-        const oppositeQty = side === "buy" ? bookLevel.ask : bookLevel.bid;
-        const refilled = this.checkRefill(price, side, oppositeQty);
-
-        if (refilled) return;
-
-        this.handleExhaustion({
-            zone,
-            price,
-            side,
-            trades: volumes.trades,
-            aggressive: volumes.aggressive,
-            passive: volumes.passive,
-            refilled,
-        });
+        this.metricsCollector.incrementMetric("exhaustionSignalsGenerated");
+        this.metricsCollector.recordHistogram("exhaustion.score", score);
     }
 
     /**
@@ -559,73 +499,31 @@ export class ExhaustionDetector
         return Math.max(0, Math.min(1, score));
     }
 
-    private calculateExhaustionScore_old(f: {
-        ratio: number; // aggr / passive (0-∞, lower = stronger)
-        passiveStrength: number; // currentPassive / avgLiquidity
-        refillGap: number; // positive gap = depletion
-        imbalance: number; // 0-1
-        spread: number; // current spread ratio
-        recentAgg: number;
-    }): number {
-        let s = 0;
-
-        /* Ratio: <0.05 → strong depletion */
-        if (f.ratio < 0.02) s += 0.35;
-        else if (f.ratio < 0.05) s += 0.25;
-        else if (f.ratio < 0.1) s += 0.15;
-
-        /* Passive strength: ↓ means depletion */
-        if (f.passiveStrength < 0.3) s += 0.2;
-        else if (f.passiveStrength < 0.5) s += 0.1;
-
-        /* Refill gap */
-        if (f.refillGap < 0) s += 0.1; // continuing drop
-
-        /* Imbalance */
-        if (f.imbalance > 0.7) s += 0.1;
-        else if (f.imbalance > 0.4) s += 0.05;
-
-        /* Spread */
-        if (f.spread > 0.002) s += 0.05;
-
-        /* Agg volume significance already in ratio; can add bonus if huge */
-        return Math.max(0, Math.min(1, s));
-    }
-
     /* ------------------------------------------------------------------ */
     /*  Spoofing, refill, cooldown – inherited helpers from BaseDetector  */
     /* ------------------------------------------------------------------ */
 
-    private handleExhaustion(params: {
-        zone: number;
-        price: number;
-        side: "buy" | "sell";
-        trades: SpotWebsocketStreams.AggTradeResponse[];
-        aggressive: number;
-        passive: number;
-        refilled: boolean;
-    }): void {
-        const detection: PendingDetection = {
+    private handleExhaustion(
+        exhaustionSignal: ExhaustionSignalData,
+        confidence: number
+    ): void {
+        const detection: SignalCandidate = {
             id: randomUUID(),
-            time: Date.now(),
-            price: params.price,
-            side: params.side,
-            zone: params.zone,
-            trades: params.trades,
-            aggressive: params.aggressive,
-            passive: params.passive,
-            refilled: params.refilled,
-            confirmed: false,
+            type: "exhaustion",
+            side: exhaustionSignal.side,
+            confidence,
+            timestamp: Date.now(),
+            data: exhaustionSignal,
         };
-
-        if (this.features.priceResponse) {
-            this.priceConfirmationManager.addPendingDetection(detection);
-            this.logger.info(
-                `[ExhaustionDetector] Pending exhaustion at ${params.price}`
-            );
-        } else {
-            this.fireDetection(detection);
-        }
+        // TODO if (this.features.priceResponse) {
+        //    this.priceConfirmationManager.addPendingDetection(detection);
+        //    this.logger.info(
+        //        `[ExhaustionDetector] Pending exhaustion at ${params.price}`
+        //    );
+        //} else {
+        this.emitSignalCandidate(detection);
+        //this.fireDetection(detection);
+        //}
 
         if (this.features.autoCalibrate) {
             this.autoCalibrator.recordSignal();

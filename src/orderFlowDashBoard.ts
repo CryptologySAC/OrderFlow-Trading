@@ -89,7 +89,14 @@ import type {
     SwingSignalData,
     DeltaCVDConfirmationEvent,
 } from "./types/signalTypes.js";
-import type { TimeContext } from "./utils/types.js";
+import type {
+    TimeContext,
+    DetectorRegisteredEvent,
+    SignalQueuedEvent,
+    SignalProcessedEvent,
+    SignalFailedEvent,
+    DetectorErrorEvent,
+} from "./utils/types.js";
 
 // Storage and processors
 import { Storage } from "./infrastructure/storage.js";
@@ -222,12 +229,7 @@ export class OrderFlowDashboard {
             this.createWSHandlers()
         );
 
-        this.signalManager = new SignalManager(
-            this.signalCoordinator,
-            this.anomalyDetector,
-            dependencies.alertManager,
-            this.logger
-        );
+        this.signalManager = dependencies.signalManager;
 
         this.dataStreamManager = new DataStreamManager(
             { symbol: Config.SYMBOL },
@@ -237,6 +239,8 @@ export class OrderFlowDashboard {
             this.metricsCollector
         );
 
+        DetectorFactory.initialize(dependencies);
+
         this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
             (signal) => {
                 console.log("Absorption signal:", signal);
@@ -244,6 +248,12 @@ export class OrderFlowDashboard {
             this.createAbsorptionSettings(),
             dependencies,
             { id: "ltcusdt-absorption-main" }
+        );
+        this.signalCoordinator.registerDetector(
+            this.absorptionDetector,
+            ["absorption"],
+            100,
+            true
         );
 
         this.exhaustionDetector = DetectorFactory.createExhaustionDetector(
@@ -254,6 +264,12 @@ export class OrderFlowDashboard {
             dependencies,
             { id: "ltcusdt-exhaustion-main" }
         );
+        this.signalCoordinator.registerDetector(
+            this.exhaustionDetector,
+            ["exhaustion"],
+            90,
+            true
+        );
 
         this.accumulationDetector = DetectorFactory.createAccumulationDetector(
             (signal) => {
@@ -262,6 +278,12 @@ export class OrderFlowDashboard {
             this.createAccumulationDetectorSettings(),
             dependencies,
             { id: "ltcusdt-accumulation-main" }
+        );
+        this.signalCoordinator.registerDetector(
+            this.accumulationDetector,
+            ["accumulation"],
+            50,
+            true
         );
 
         // Initialize other components
@@ -277,14 +299,24 @@ export class OrderFlowDashboard {
             this.createSwingPredictorSettings()
         );
 
+        this.signalCoordinator.start();
+        this.logger.info("SignalCoordinator started");
+        this.logger.info("Status:", this.signalCoordinator.getStatus());
+        const signalCoordinatorInfo = this.signalCoordinator.getDetectorInfo();
+        this.logger.info("Detectors:", { signalCoordinatorInfo });
+
         setInterval(() => {
             const stats = DetectorFactory.getFactoryStats();
-            console.log("Factory stats:", stats);
+            this.logger.info("Factory stats:", { stats });
+            const signalCoordinatorInfo =
+                this.signalCoordinator.getDetectorInfo();
+            this.logger.info("Detectors:", { signalCoordinatorInfo });
         }, 60000);
 
         // Cleanup on exit
         process.on("SIGINT", () => {
             DetectorFactory.destroyAll();
+            void this.signalCoordinator.stop();
             process.exit(0);
         });
     }
@@ -622,6 +654,66 @@ export class OrderFlowDashboard {
      * Setup event handlers
      */
     private setupEventHandlers(): void {
+        // Listen to coordinator events
+        this.signalCoordinator.on(
+            "detectorRegistered",
+            (info: DetectorRegisteredEvent) => {
+                this.logger.info("Detector registered:", { info });
+            }
+        );
+
+        this.signalCoordinator.on(
+            "signalQueued",
+            ({ job, queueSize }: SignalQueuedEvent) => {
+                this.logger.info(
+                    `Signal queued: ${job.id}, queue size: ${queueSize}`
+                );
+            }
+        );
+
+        this.signalCoordinator.on(
+            "signalProcessed",
+            ({
+                job,
+                processedSignal,
+                processingTimeMs,
+            }: SignalProcessedEvent) => {
+                this.logger.info(`Signal processed in ${processingTimeMs}ms:`, {
+                    signalId: processedSignal.id,
+                    jobId: job.id,
+                });
+                // TODO
+                const signal: Signal = {
+                    time: Date.now(),
+                    type: processedSignal.type,
+                    price: processedSignal.data.price,
+                    id: processedSignal.id,
+                    side: processedSignal.data.side,
+                    confidence: processedSignal.confidence,
+                };
+                void this.broadcastSignal(signal);
+            }
+        );
+
+        this.signalCoordinator.on(
+            "signalFailed",
+            ({ job, error }: SignalFailedEvent) => {
+                this.logger.error(`Signal failed permanently:`, {
+                    jobId: job.id,
+                    errorMessage: error.message,
+                });
+            }
+        );
+
+        this.signalCoordinator.on(
+            "detectorError",
+            ({ detectorId, error }: DetectorErrorEvent) => {
+                this.logger.error(`Detector ${detectorId} error:`, {
+                    errorMessage: error.message,
+                });
+            }
+        );
+
         // Handle data stream events
         if (!this.dataStreamManager) {
             throw new Error("Data stream manager is not initialized");
@@ -649,11 +741,24 @@ export class OrderFlowDashboard {
         });
 
         // Handle signal events
-        this.signalManager.on("signal_generated", (signal: Signal) => {
-            void this.broadcastSignal(signal).catch((error) => {
+        // Listen to final trading signals
+        this.signalManager.on("signalGenerated", (tradingSignal: Signal) => {
+            this.logger.info("Ready to trade:", { tradingSignal });
+            void this.broadcastSignal(tradingSignal).catch((error) => {
                 this.handleError(error as Error, "signal_broadcast");
             });
         });
+
+        this.signalManager.on(
+            "signalRejected",
+            ({ signal, reason, anomaly }) => {
+                this.logger.error("Signal rejected:", {
+                    reason,
+                    anomaly,
+                    signal,
+                });
+            }
+        );
 
         if (this.preprocessor) {
             this.logger.info(
@@ -864,6 +969,7 @@ export class OrderFlowDashboard {
     /**
      * Analyze swing opportunity
      */
+    // TODO
     private analyzeSwingOpportunity(
         currentPrice: number,
         trade: TradeData
@@ -880,6 +986,9 @@ export class OrderFlowDashboard {
         const volumeNodes: VolumeNodes =
             this.swingMetrics.getVolumeNodes(currentPrice);
         const accumulation: AccumulationResult = {
+            price: 0,
+            side: "buy",
+            confidence: 0,
             isAccumulating: false,
             strength: 0,
             zone: 0,
@@ -1277,6 +1386,7 @@ export function createDependencies(): Dependencies {
     const signalLogger = new SignalLogger("signals.csv");
     const rateLimiter = new RateLimiter(60000, 100);
     const circuitBreaker = new CircuitBreaker(5, 60000, logger);
+
     const orderBookProcessor = new OrderBookProcessor(
         {
             binSize: 10,
@@ -1311,25 +1421,40 @@ export function createDependencies(): Dependencies {
         logger,
     });
 
-    const signalCoordinator = new SignalCoordinator(
-        {
-            requiredConfirmations: 1,
-            confirmationWindowMs: 30000,
-            deduplicationWindowMs: 5000,
-            signalExpiryMs: 60000,
-        },
-        new SignalLogger("signals.csv"),
-        {
-            wallTime: Date.now(),
-            marketTime: Date.now(),
-            mode: "realtime",
-            speed: 1,
-        }
-    );
-
     const alertManager = new AlertManager(
         process.env.ALERT_WEBHOOK_URL,
         parseInt(process.env.ALERT_COOLDOWN_MS || "300000", 10)
+    );
+
+    // TODO
+    const signalManager = new SignalManager(
+        anomalyDetector,
+        alertManager,
+        logger,
+        {
+            confidenceThreshold: 0.75,
+            enableAnomalyDetection: true,
+            enableAlerts: true,
+        }
+    );
+
+    /*
+    config: Partial<SignalCoordinatorConfig> = {},
+        logger: Logger,
+        metricsCollector: MetricsCollector,
+        signalLogger: SignalLogger,
+        signalManager: SignalManager,
+        detectorFactory: DetectorFactory,
+)
+*/
+    const signalCoordinator = new SignalCoordinator(
+        {
+            maxConcurrentProcessing: 10, // TODO
+        },
+        logger,
+        metricsCollector,
+        signalLogger,
+        signalManager
     );
 
     return {
@@ -1345,6 +1470,7 @@ export function createDependencies(): Dependencies {
         alertManager,
         signalCoordinator,
         anomalyDetector,
+        signalManager,
     };
 }
 

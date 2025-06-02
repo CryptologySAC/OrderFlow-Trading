@@ -7,6 +7,13 @@ import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../../services/signalLogger.js";
 import { RollingWindow } from "../../utils/rollingWindow.js";
 import { DetectorUtils } from "./detectorUtils.js";
+import {
+    SignalType,
+    SignalCandidate,
+    AbsorptionSignalData,
+    ExhaustionSignalData,
+    AccumulationResult,
+} from "../../types/signalTypes.js";
 
 import type {
     EnrichedTradeEvent,
@@ -32,7 +39,6 @@ import type {
     BaseDetectorSettings,
     DetectorFeatures,
     DetectorCallback,
-    PendingDetection,
 } from "../interfaces/detectorInterfaces.js";
 
 export type ZoneSample = {
@@ -100,13 +106,14 @@ export abstract class BaseDetector extends Detector implements IDetector {
     > = new Map();
 
     constructor(
+        id: string,
         callback: DetectorCallback,
         settings: BaseDetectorSettings & { features?: DetectorFeatures },
         logger: Logger,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger
     ) {
-        super(logger, metricsCollector, signalLogger);
+        super(id, logger, metricsCollector, signalLogger);
 
         // Validate settings
         this.validateSettings(settings);
@@ -398,30 +405,25 @@ export abstract class BaseDetector extends Detector implements IDetector {
     /**
      * Generic detection handler
      */
-    protected handleDetection(params: {
-        zone: number;
-        price: number;
-        side: "buy" | "sell";
-        trades: SpotWebsocketStreams.AggTradeResponse[];
-        aggressive: number;
-        passive: number;
-        refilled: boolean;
-        metadata?: Record<string, unknown>;
-    }): void {
-        const detection: PendingDetection = {
+    protected handleDetection(
+        pendingSignal:
+            | AbsorptionSignalData
+            | ExhaustionSignalData
+            | AccumulationResult
+    ): void {
+        const detection: SignalCandidate = {
             id: randomUUID(),
-            time: Date.now(),
-            price: params.price,
-            side: params.side,
-            zone: params.zone,
-            trades: params.trades,
-            aggressive: params.aggressive,
-            passive: params.passive,
-            refilled: params.refilled,
-            confirmed: false,
-            metadata: params.metadata,
+            type: "absorption",
+            side: pendingSignal.side,
+            confidence: pendingSignal.confidence,
+            timestamp: Date.now(),
+            data: pendingSignal,
         };
 
+        this.emitSignalCandidate(detection);
+
+        // TODO
+        /*
         if (this.features.priceResponse) {
             this.priceConfirmationManager.addPendingDetection(detection);
             this.logger.info(
@@ -434,8 +436,9 @@ export abstract class BaseDetector extends Detector implements IDetector {
                 }
             );
         } else {
-            this.fireDetection(detection);
+            this.emitSignalCandidate(detection);
         }
+        */
 
         if (this.features.autoCalibrate) {
             this.autoCalibrator.recordSignal();
@@ -445,60 +448,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
         this.metricsCollector.incrementMetric(
             `detector_${this.detectorType}Signals`
         );
-        this.metricsCollector.updateMetric(
-            `detector_${this.detectorType}Aggressive_volume`,
-            params.aggressive
-        );
-        this.metricsCollector.updateMetric(
-            `detector_${this.detectorType}Passive_volume`,
-            params.passive
-        );
-    }
-
-    /**
-     * Fire detection callback
-     */
-    protected fireDetection(detection: PendingDetection): void {
-        this.callback({
-            id: detection.id || randomUUID(),
-            price: detection.price,
-            side: detection.side,
-            trades: detection.trades,
-            totalAggressiveVolume: detection.aggressive,
-            passiveVolume: detection.passive,
-            zone: detection.zone,
-            refilled: detection.refilled,
-            detectedAt: Date.now(),
-            detectorSource: this.detectorType,
-        });
-
-        this.logger.info(
-            `[${this.constructor.name}] Signal fired at ${detection.price}`,
-            {
-                zone: detection.zone,
-                side: detection.side,
-                type: this.detectorType,
-                aggressive: detection.aggressive,
-                passive: detection.passive,
-            }
-        );
-
-        // Log to signal logger if available
-        if (this.signalLogger) {
-            this.signalLogger.logEvent({
-                symbol: this.symbol,
-                type: this.detectorType,
-                signalPrice: detection.price,
-                side: detection.side,
-                aggressiveVolume: detection.aggressive,
-                passiveVolume: detection.passive,
-                timestamp: detection.time.toString(),
-                zone: detection.zone,
-                metadata: detection.metadata,
-                refilled: detection.refilled,
-                confirmed: detection.confirmed,
-            });
-        }
     }
 
     /**
@@ -786,6 +735,14 @@ export abstract class BaseDetector extends Detector implements IDetector {
     }
 
     /**
+     * Get detector status (alias for existing getStats)
+     */
+    public getStatus(): string {
+        const stats = this.getStats();
+        return stats.status || "unknown";
+    }
+
+    /**
      * Get detector statistics
      */
     public getStats(): DetectorStats {
@@ -802,6 +759,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
             pendingConfirmations:
                 this.priceConfirmationManager.getPendingCount(),
             currentMinVolume: this.minAggVolume,
+            status: "unknown", //TODO
         };
 
         // Keep all your existing adaptive zone logic unchanged
@@ -925,4 +883,53 @@ export abstract class BaseDetector extends Detector implements IDetector {
             this.pricePrecision
         );
     }
+
+    /**
+     * Emit a signal candidate when a pattern is detected
+     */
+    protected emitSignalCandidate(signalCandidate: SignalCandidate): void {
+        this.logger.debug(`Signal candidate emitted`, {
+            component: this.constructor.name,
+            signalId: signalCandidate.id,
+            type: signalCandidate.type,
+            price: signalCandidate.data.price,
+            confidence: signalCandidate.confidence,
+        });
+
+        // Emit for SignalCoordinator to pick up
+        this.emit("signalCandidate", signalCandidate);
+    }
+
+    /**
+     * Emit error event
+     */
+    protected emitError(error: Error, context?: Record<string, unknown>): void {
+        this.logger.error(`Detector error`, {
+            component: this.constructor.name,
+            detectorId: this.id,
+            error: error.message,
+            context,
+        });
+
+        this.emit("error", error);
+    }
+
+    /**
+     * Emit status change event
+     */
+    protected emitStatusChange(newStatus: string, oldStatus?: string): void {
+        this.logger.info(`Detector status changed`, {
+            component: this.constructor.name,
+            detectorId: this.id,
+            oldStatus,
+            newStatus,
+        });
+
+        this.emit("statusChange", newStatus);
+    }
+
+    /**
+     * Abstract method - each detector must implement
+     */
+    protected abstract getSignalType(): SignalType;
 }

@@ -4,6 +4,7 @@ import { Logger } from "../../infrastructure/logger.js";
 import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../../services/signalLogger.js";
 import type { EnrichedTradeEvent } from "../../types/marketEvents.js";
+import type { SignalCandidate } from "../../types/signalTypes.js";
 
 /**
  * Abstract base for all detectors (handles logging/metrics/signalLogger).
@@ -12,13 +13,16 @@ export abstract class Detector extends EventEmitter {
     public readonly logger: Logger;
     protected readonly metricsCollector: MetricsCollector;
     protected readonly signalLogger?: ISignalLogger;
+    protected readonly id: string;
 
     constructor(
+        id: string,
         logger: Logger,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger
     ) {
         super();
+        this.id = id;
         this.logger = logger;
         this.metricsCollector = metricsCollector;
         this.signalLogger = signalLogger;
@@ -48,5 +52,33 @@ export abstract class Detector extends EventEmitter {
             },
             correlationId
         );
+    }
+
+    /**
+     * Get detector ID
+     */
+    public getId(): string {
+        return this.id || `${this.constructor.name}_${Date.now()}`;
+    }
+
+    /**
+     * Emit signal candidate (call this when a signal is detected)
+     */
+    protected emitSignalCandidate(candidate: SignalCandidate): void {
+        this.emit("signalCandidate", candidate);
+    }
+
+    /**
+     * Emit error
+     */
+    protected emitError(error: Error): void {
+        this.emit("error", error);
+    }
+
+    /**
+     * Emit status change
+     */
+    protected emitStatusChange(status: string): void {
+        this.emit("statusChange", status);
     }
 }

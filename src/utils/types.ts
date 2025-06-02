@@ -3,7 +3,12 @@ import {
     AccumulationResult,
     DivergenceResult,
     SwingSignalData,
+    ProcessedSignal,
+    SignalCandidate,
+    SignalType,
 } from "../types/signalTypes.js";
+
+import { BaseDetector } from "../indicators/base/baseDetector.js";
 /* ===========================
    BINANCE SPECIFIC TYPES
    =========================== */
@@ -47,8 +52,6 @@ export interface TradeData {
     buyerIsMaker: boolean;
     originalTrade: SpotWebsocketStreams.AggTradeResponse;
 }
-
-
 
 /* ===========================
    SIGNAL MANAGEMENT TYPES
@@ -471,4 +474,43 @@ export interface TradeRecord {
     pnl?: number;
     pnlPercent?: number;
     exitReason?: string;
+}
+
+export interface ProcessingJob {
+    id: string;
+    candidate: SignalCandidate;
+    detector: BaseDetector;
+    startTime: number;
+    retryCount: number;
+    priority: number;
+}
+
+// Add these interfaces to your types file
+export interface DetectorRegisteredEvent {
+    detectorId: string;
+    signalTypes: SignalType[];
+    priority: number;
+    enabled: boolean;
+    factoryManaged: boolean;
+}
+
+export interface SignalQueuedEvent {
+    job: ProcessingJob;
+    queueSize: number;
+}
+
+export interface SignalProcessedEvent {
+    job: ProcessingJob;
+    processedSignal: ProcessedSignal;
+    processingTimeMs: number;
+}
+
+export interface SignalFailedEvent {
+    job: ProcessingJob;
+    error: Error;
+}
+
+export interface DetectorErrorEvent {
+    detectorId: string;
+    error: Error;
 }

@@ -3,8 +3,12 @@ import { MarketAnomaly } from "../utils/types.js";
 export type SignalType =
     | "absorption"
     | "exhaustion"
+    | "accumulation"
+    | "distribution"
     | "absorption_confirmed"
     | "exhaustion_confirmed"
+    | "accumulation_confirmed"
+    | "distribution_confirmed"
     | "flow"
     | "swingHigh"
     | "swingLow"
@@ -55,21 +59,24 @@ export interface Signal {
 }
 
 export interface AbsorptionSignalData {
-    absorptionType: "classic" | "relative" | "iceberg" | "other";
-    recentAggressive: number;
-    rollingZonePassive: number;
-    avgPassive: number;
-    spoofed?: boolean;
-    passiveHistory?: number[];
-    meta?: Record<string, unknown>;
+    price: number;
+    zone: number;
+    side: "buy" | "sell";
+    aggressive: number;
+    passive: number;
+    refilled: boolean;
+    confidence: number;
+    metrics: Record<string, unknown>;
 }
 
 export interface ExhaustionSignalData {
-    exhaustionType: "absolute" | "relative" | "spread" | "extreme";
-    recentAggressive: number;
+    price: number;
+    side: "buy" | "sell";
+    aggressive: number;
     oppositeQty: number;
     avgLiquidity: number;
     spread: number;
+    confidence: number;
     spoofed?: boolean;
     passiveHistory?: number[];
     meta?: Record<string, unknown>;
@@ -100,21 +107,15 @@ export interface DivergenceResult {
 }
 
 export interface AccumulationResult {
+    price: number;
+    side: "buy" | "sell";
     isAccumulating: boolean;
     strength: number;
     duration: number;
     zone: number;
     ratio: number;
-}
-
-export interface TradingSignalData {
     confidence: number;
-    confirmations: string[];
-    meta: Record<string, unknown>;
-    anomalyCheck: {
-        detected: boolean;
-        anomaly?: MarketAnomaly;
-    };
+    metadata?: Record<string, unknown>;
 }
 
 export interface BaseSignalEvent {
@@ -133,4 +134,75 @@ export interface DeltaCVDConfirmationEvent extends BaseSignalEvent {
     meta?: unknown;
     delta?: number;
     slope?: number;
+}
+
+export interface SignalCandidate {
+    id: string;
+    type: SignalType;
+    side: "buy" | "sell";
+    confidence: number;
+    timestamp: number;
+    data: AbsorptionSignalData | ExhaustionSignalData | AccumulationResult;
+}
+
+export interface ProcessedSignal {
+    id: string;
+    originalCandidate: SignalCandidate;
+    type: SignalType;
+    confidence: number;
+    timestamp: Date;
+    detectorId: string;
+    processingMetadata: {
+        processedAt: Date;
+        processingVersion: string;
+        enrichments: Record<string, unknown>[];
+    };
+    data: AbsorptionSignalData | ExhaustionSignalData | AccumulationResult;
+}
+
+// Add these interfaces to your types file
+
+export interface CorrelationData {
+    correlatedSignals: number;
+    correlationStrength: number;
+}
+
+export interface AnomalyData {
+    detected: boolean;
+    anomaly?: MarketAnomaly;
+}
+
+// Update your ConfirmedSignal interface to include these new fields
+export interface ConfirmedSignal {
+    id: string;
+    originalSignals: Array<{
+        id: string;
+        type: SignalType;
+        confidence: number;
+        detectorId: string;
+        confirmations: Set<string>;
+        metadata:
+            | AbsorptionSignalData
+            | ExhaustionSignalData
+            | AccumulationResult
+            | TradingSignalData;
+    }>;
+    confidence: number;
+    finalPrice: number;
+    confirmedAt: number;
+    correlationData: CorrelationData;
+    anomalyData: AnomalyData;
+}
+
+// Update TradingSignalData to include correlation data
+export interface TradingSignalData {
+    confidence: number;
+    confirmations: string[];
+    meta:
+        | AbsorptionSignalData
+        | ExhaustionSignalData
+        | AccumulationResult
+        | TradingSignalData;
+    anomalyCheck: AnomalyData;
+    correlationData?: CorrelationData;
 }
