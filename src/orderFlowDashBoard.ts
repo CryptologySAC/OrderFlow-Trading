@@ -99,7 +99,10 @@ import type {
 } from "./utils/types.js";
 
 // Storage and processors
-import { Storage } from "./infrastructure/storage.js";
+import { getDB } from "./infrastructure/db.js";
+import { runMigrations } from "./infrastructure/migrate.js";
+import { Storage } from "./storage/storage.js";
+import { PipelineStorage } from "./storage/pipelineStorage.js";
 import { BinanceDataFeed } from "./utils/binance.js";
 import { TradesProcessor } from "./clients/tradesProcessor.js";
 import {
@@ -1396,6 +1399,10 @@ export function createDependencies(): Dependencies {
     const signalLogger = new SignalLogger("signals.csv");
     const rateLimiter = new RateLimiter(60000, 100);
     const circuitBreaker = new CircuitBreaker(5, 60000, logger);
+    const db = getDB("trades.db");
+    runMigrations(db);
+    const pipelineStore = new PipelineStorage(db, {});
+    const storage = new Storage(db);
 
     const orderBookProcessor = new OrderBookProcessor(
         {
@@ -1414,6 +1421,7 @@ export function createDependencies(): Dependencies {
             symbol: Config.SYMBOL,
             storageTime: Config.MAX_STORAGE_TIME,
         },
+        storage,
         logger,
         metricsCollector
     );
@@ -1442,6 +1450,7 @@ export function createDependencies(): Dependencies {
         alertManager,
         logger,
         metricsCollector,
+        pipelineStore,
         {
             confidenceThreshold: 0.75,
             enableAnomalyDetection: true,
@@ -1465,11 +1474,12 @@ export function createDependencies(): Dependencies {
         logger,
         metricsCollector,
         signalLogger,
-        signalManager
+        signalManager,
+        pipelineStore
     );
 
     return {
-        storage: new Storage(),
+        storage,
         binanceFeed: new BinanceDataFeed(),
         tradesProcessor,
         orderBookProcessor,

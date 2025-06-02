@@ -1,4 +1,4 @@
-import BetterSqlite3, { Database, Statement } from "better-sqlite3";
+import { Database, Statement } from "better-sqlite3";
 import { SpotWebsocketAPI } from "@binance/spot";
 
 /**
@@ -43,9 +43,10 @@ export class Storage implements IStorage {
     private readonly insertAggregatedTrade: Statement;
     private readonly getAggregatedTrades: Statement;
     private readonly purgeAggregatedTrades: Statement;
+    private readonly upsertQueue: Statement;
 
-    constructor(dbPath = "trades.db") {
-        this.db = new BetterSqlite3(dbPath, {});
+    constructor(db: Database) {
+        this.db = db;
 
         // Handle process signals for graceful DB closure
         ["SIGINT", "SIGTERM"].forEach((signal) =>
@@ -75,6 +76,13 @@ export class Storage implements IStorage {
         `);
 
         // Prepare statements
+        this.upsertQueue = this.db.prepare(`
+  INSERT INTO coordinator_queue (jobId, detectorId, candidateJson, priority,
+                                 retryCount, enqueuedAt)
+  VALUES (@jobId,@detectorId,@candidateJson,@priority,@retryCount,@enqueuedAt)
+  ON CONFLICT(jobId) DO UPDATE SET retryCount = excluded.retryCount
+`);
+
         this.insertAggregatedTrade = this.db.prepare(`
             INSERT OR IGNORE INTO aggregated_trades (
                 aggregatedTradeId, firstTradeId, lastTradeId, tradeTime, symbol, price, quantity, isBuyerMaker, orderType, bestMatch

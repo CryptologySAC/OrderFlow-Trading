@@ -1,6 +1,6 @@
 // src/types/dependencies.ts
 
-import type { IStorage } from "../infrastructure/storage.js";
+import type { IStorage } from "../storage/storage.js";
 import type { IBinanceDataFeed } from "../utils/binance.js";
 import type { ITradesProcessor } from "../clients/tradesProcessor.js";
 import type { OrderBookProcessor } from "../clients/orderBookProcessor.js";

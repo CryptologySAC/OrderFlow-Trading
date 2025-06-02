@@ -12,6 +12,7 @@ import type { MarketAnomaly } from "../utils/types.js";
 import { AnomalyDetector, AnomalyEvent } from "../services/anomalyDetector.js";
 import { AlertManager } from "../alerts/alertManager.js";
 import { Logger } from "../infrastructure/logger.js";
+import type { IPipelineStorage } from "../storage/pipelineStorage.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import {
     ANOMALY_SIGNAL_IMPACT_MATRIX,
@@ -66,6 +67,7 @@ export class SignalManager extends EventEmitter {
         private readonly alertManager: AlertManager,
         private readonly logger: Logger,
         private readonly metricsCollector: MetricsCollector,
+        private readonly storage: IPipelineStorage,
         config: Partial<SignalManagerConfig> = {}
     ) {
         super();
@@ -83,6 +85,11 @@ export class SignalManager extends EventEmitter {
             enableAlerts: config.enableAlerts ?? true,
         };
 
+        // restore persisted anomalies on restart
+        for (const a of this.storage.getActiveAnomalies()) {
+            this.activeAnomalies.set(a.type, a);
+        }
+
         this.logger.info("SignalManager initialized", {
             component: "SignalManager",
             config: this.config,
@@ -95,6 +102,7 @@ export class SignalManager extends EventEmitter {
         // Clean up old signals periodically
         setInterval(() => {
             this.cleanupOldSignals();
+            this.storage.purgeSignalHistory();
         }, 60000); // Every minute
     }
 
@@ -195,6 +203,7 @@ export class SignalManager extends EventEmitter {
     private setupAnomalyEventHandlers(): void {
         this.anomalyDetector.on("anomaly", (anomaly: AnomalyEvent) => {
             this.handleAnomalyEvent(anomaly);
+            this.storage.saveActiveAnomaly(anomaly);
         });
 
         this.logger.debug("Anomaly event handlers initialized", {
@@ -270,6 +279,7 @@ export class SignalManager extends EventEmitter {
         // Block signal types based on filtering rules
         if (rules.meanReversion.block) {
             this.signalBlocklist.add(`mean_reversion:${blockKey}`);
+            this.storage.removeActiveAnomaly(anomaly.type);
             this.logger.debug("Blocking mean reversion signals", {
                 anomaly: anomaly.type,
                 reason: rules.meanReversion.reason,
@@ -411,6 +421,7 @@ export class SignalManager extends EventEmitter {
             },
         };
 
+        this.storage.saveSignalHistory(signal);
         return confirmedSignal;
     }
 

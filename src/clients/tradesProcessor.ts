@@ -1,6 +1,6 @@
 // src/clients/tradesProcessor.ts
 import { randomUUID } from "crypto";
-import { Storage } from "../infrastructure/storage.js";
+import { Storage } from "../storage/storage.js";
 import { BinanceDataFeed } from "../utils/binance.js";
 import { SpotWebsocketAPI } from "@binance/spot";
 import type { WebSocketMessage } from "../utils/interfaces.js";
@@ -58,7 +58,7 @@ interface SaveQueueItem {
 export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     private readonly binanceFeed = new BinanceDataFeed();
     private readonly symbol: string;
-    private readonly storage: Storage = new Storage();
+    private readonly storage: Storage;
     private readonly storageTime: number;
     private readonly maxBacklogRetries: number;
     private readonly backlogBatchSize: number;
@@ -97,12 +97,14 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
 
     constructor(
         options: TradesProcessorOptions,
+        storage: Storage,
         logger: Logger,
         metricsCollector: MetricsCollector
     ) {
         super();
         this.logger = logger;
         this.metricsCollector = metricsCollector;
+        this.storage = storage;
 
         // Configuration
         this.symbol = options.symbol ?? "LTCUSDT";

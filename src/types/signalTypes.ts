@@ -155,7 +155,7 @@ export interface ProcessedSignal {
     processingMetadata: {
         processedAt: Date;
         processingVersion: string;
-        enrichments: Record<string, unknown>[];
+        enrichments?: Record<string, unknown>[];
     };
     data: AbsorptionSignalData | ExhaustionSignalData | AccumulationResult;
 }
