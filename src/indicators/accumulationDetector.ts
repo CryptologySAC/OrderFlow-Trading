@@ -189,19 +189,6 @@ export class AccumulationDetector
         const conditions = this.analyzeAccumulationConditions(zone, zoneData);
         const score = this.calculateAccumulationScore(conditions);
 
-        //TODO
-        this.logger.debug(`[AccumulationDetector] Zone analysis`, {
-            zone,
-            price,
-            side,
-            score,
-            conditions: {
-                ratio: conditions.ratio,
-                duration: conditions.duration,
-                strength: conditions.strength,
-            },
-        });
-
         // Check score threshold
         if (score < this.accumulationThreshold) {
             return;

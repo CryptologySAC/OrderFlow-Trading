@@ -691,7 +691,7 @@ export class OrderFlowDashboard {
                     side: processedSignal.data.side,
                     confidence: processedSignal.confidence,
                 };
-                void this.broadcastSignal(signal);
+                void signal; //this.broadcastSignal(signal);
             }
         );
 
@@ -1431,6 +1431,7 @@ export function createDependencies(): Dependencies {
         anomalyDetector,
         alertManager,
         logger,
+        metricsCollector,
         {
             confidenceThreshold: 0.75,
             enableAnomalyDetection: true,

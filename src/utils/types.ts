@@ -164,7 +164,20 @@ export interface MarketAnomaly {
         | "momentum_ignition"
         | "iceberg_order"
         | "order_size_anomaly"
-        | "whale_activity";
+        | "whale_activity"
+        | "realtime_flash_crash"
+        | "realtime_api_gap"
+        | "realtime_liquidity_void"
+        | "realtime_extreme_volatility"
+        | "realtime_spoofing"
+        | "realtime_orderbook_imbalance"
+        | "realtime_flow_imbalance"
+        | "realtime_whale_activity"
+        | "realtime_absorption"
+        | "realtime_exhaustion"
+        | "realtime_momentum_ignition"
+        | "realtime_iceberg_order"
+        | "realtime_order_size_anomaly";
     detectedAt: number;
     severity: "low" | "medium" | "high" | "critical" | "info";
     affectedPriceRange: { min: number; max: number };
@@ -189,6 +202,7 @@ export interface MarketAnomaly {
         | "monitor"
         | "watch_support"
         | "watch_resistance";
+    details: Record<string, unknown>;
 }
 
 /* ===========================

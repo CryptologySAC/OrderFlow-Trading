@@ -1,5 +1,4 @@
 // src/indicators/exhaustionDetector.ts
-import { randomUUID } from "crypto";
 import { BaseDetector, ZoneSample } from "./base/baseDetector.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
@@ -17,11 +16,7 @@ import type {
     BaseDetectorSettings,
     ExhaustionFeatures,
 } from "./interfaces/detectorInterfaces.js";
-import {
-    SignalType,
-    SignalCandidate,
-    ExhaustionSignalData,
-} from "../types/signalTypes.js";
+import { SignalType, ExhaustionSignalData } from "../types/signalTypes.js";
 
 export interface ExhaustionSettings extends BaseDetectorSettings {
     features?: ExhaustionFeatures;
@@ -212,15 +207,6 @@ export class ExhaustionDetector
         // Analyze exhaustion conditions
         const conditions = this.analyzeExhaustionConditions(price, side, zone);
         const score = this.calculateExhaustionScore(conditions);
-
-        //TODO
-        this.logger.debug(`[ExhaustionDetector] Zone analysis`, {
-            zone,
-            price,
-            side,
-            score,
-            conditions,
-        });
 
         // Check if score meets threshold
         if (score < this.exhaustionThreshold) {
@@ -497,36 +483,5 @@ export class ExhaustionDetector
         }
 
         return Math.max(0, Math.min(1, score));
-    }
-
-    /* ------------------------------------------------------------------ */
-    /*  Spoofing, refill, cooldown – inherited helpers from BaseDetector  */
-    /* ------------------------------------------------------------------ */
-
-    private handleExhaustion(
-        exhaustionSignal: ExhaustionSignalData,
-        confidence: number
-    ): void {
-        const detection: SignalCandidate = {
-            id: randomUUID(),
-            type: "exhaustion",
-            side: exhaustionSignal.side,
-            confidence,
-            timestamp: Date.now(),
-            data: exhaustionSignal,
-        };
-        // TODO if (this.features.priceResponse) {
-        //    this.priceConfirmationManager.addPendingDetection(detection);
-        //    this.logger.info(
-        //        `[ExhaustionDetector] Pending exhaustion at ${params.price}`
-        //    );
-        //} else {
-        this.emitSignalCandidate(detection);
-        //this.fireDetection(detection);
-        //}
-
-        if (this.features.autoCalibrate) {
-            this.autoCalibrator.recordSignal();
-        }
     }
 }

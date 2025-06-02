@@ -478,20 +478,6 @@ export class AbsorptionDetector
         );
         const score = this.calculateAbsorptionScore(conditions);
 
-        //TODO
-        this.logger.debug(`[AbsorptionDetector] Zone analysis`, {
-            zone,
-            price,
-            side,
-            score,
-            conditions: {
-                absorptionRatio: conditions.absorptionRatio,
-                passiveStrength: conditions.passiveStrength,
-                hasRefill: conditions.hasRefill,
-                icebergSignal: conditions.icebergSignal,
-            },
-        });
-
         // Check score threshold
         if (score < this.absorptionThreshold) {
             return;

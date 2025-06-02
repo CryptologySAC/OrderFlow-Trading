@@ -170,6 +170,8 @@ export interface CorrelationData {
 export interface AnomalyData {
     detected: boolean;
     anomaly?: MarketAnomaly;
+    activeAnomalyImpact?: number;
+    activeAnomaliesCount?: number;
 }
 
 // Update your ConfirmedSignal interface to include these new fields
