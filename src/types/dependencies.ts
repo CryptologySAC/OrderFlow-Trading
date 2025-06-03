@@ -13,6 +13,7 @@ import { AlertManager } from "../alerts/alertManager.js";
 import { SignalCoordinator } from "../services/signalCoordinator.js";
 import { AnomalyDetector } from "../services/anomalyDetector.js";
 import { SignalManager } from "../trading/signalManager.js";
+import { SpoofingDetector } from "../services/spoofingDetector.js";
 
 /**
  * Application dependencies interface
@@ -36,4 +37,5 @@ export interface Dependencies {
     signalCoordinator: SignalCoordinator;
     anomalyDetector: AnomalyDetector;
     signalManager: SignalManager;
+    spoofingDetector: SpoofingDetector;
 }

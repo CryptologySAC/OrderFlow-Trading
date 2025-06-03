@@ -5,6 +5,7 @@ import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
 import { DetectorUtils } from "./base/detectorUtils.js";
+import { SpoofingDetector } from "../services/spoofingDetector.js";
 
 import type {
     EnrichedTradeEvent,
@@ -65,10 +66,19 @@ export class ExhaustionDetector
         callback: DetectorCallback,
         settings: ExhaustionSettings = {},
         logger: Logger,
+        spoofingDetector: SpoofingDetector,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger
     ) {
-        super(id, callback, settings, logger, metricsCollector, signalLogger);
+        super(
+            id,
+            callback,
+            settings,
+            logger,
+            spoofingDetector,
+            metricsCollector,
+            signalLogger
+        );
 
         // Initialize exhaustion-specific settings
         this.exhaustionThreshold = settings.exhaustionThreshold ?? 0.7;

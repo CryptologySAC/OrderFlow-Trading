@@ -5,6 +5,8 @@ import { RollingWindow } from "../utils/rollingWindow.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
+import { SpoofingDetector } from "../services/spoofingDetector.js";
+
 import type {
     IAbsorptionDetector,
     DetectorCallback,
@@ -89,10 +91,19 @@ export class AbsorptionDetector
         callback: DetectorCallback,
         settings: AbsorptionSettings = {},
         logger: Logger,
+        spoofingDetector: SpoofingDetector,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger
     ) {
-        super(id, callback, settings, logger, metricsCollector, signalLogger);
+        super(
+            id,
+            callback,
+            settings,
+            logger,
+            spoofingDetector,
+            metricsCollector,
+            signalLogger
+        );
 
         // Initialize absorption-specific settings
         this.absorptionThreshold = settings.absorptionThreshold ?? 0.7;

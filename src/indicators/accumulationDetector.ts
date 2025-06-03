@@ -5,6 +5,7 @@ import { BaseDetector } from "./base/baseDetector.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
+import { SpoofingDetector } from "../services/spoofingDetector.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
 
 import type {
@@ -46,10 +47,19 @@ export class AccumulationDetector
         callback: DetectorCallback,
         settings: AccumulationSettings = {},
         logger: Logger,
+        spoofingDetector: SpoofingDetector,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger
     ) {
-        super(id, callback, settings, logger, metricsCollector, signalLogger);
+        super(
+            id,
+            callback,
+            settings,
+            logger,
+            spoofingDetector,
+            metricsCollector,
+            signalLogger
+        );
 
         // Initialize accumulation-specific settings
         this.minDurationMs = settings.minDurationMs ?? 300000; // 5 minutes

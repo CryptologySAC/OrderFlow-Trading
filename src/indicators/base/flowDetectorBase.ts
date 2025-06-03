@@ -5,6 +5,7 @@ import { BaseDetector } from "./baseDetector.js";
 import { Logger } from "../../infrastructure/logger.js";
 import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../../services/signalLogger.js";
+import { SpoofingDetector } from "../../services/spoofingDetector.js";
 import { RollingWindow } from "../../utils/rollingWindow.js";
 
 import type {
@@ -72,10 +73,19 @@ export abstract class FlowDetectorBase extends BaseDetector {
         callback: DetectorCallback,
         settings: SuperiorFlowSettings = {},
         logger: Logger,
+        spoofingDetector: SpoofingDetector,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger
     ) {
-        super(id, callback, settings, logger, metricsCollector, signalLogger);
+        super(
+            id,
+            callback,
+            settings,
+            logger,
+            spoofingDetector,
+            metricsCollector,
+            signalLogger
+        );
         this.flowDirection = settings.flowDirection ?? "accumulation";
         this.detectorType = this.flowDirection;
         this.symbol = settings.symbol ?? "LTCUSDT";

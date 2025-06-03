@@ -18,6 +18,7 @@ import type {
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
+import { SpoofingDetector } from "../services/spoofingDetector.js";
 import type {
     DetectorCallback,
     BaseDetectorSettings,
@@ -118,10 +119,19 @@ export class DeltaCVDConfirmation extends BaseDetector {
         callback: DetectorCallback,
         settings: DeltaCVDConfirmationSettings = {},
         logger: Logger,
+        spoofingDetector: SpoofingDetector,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger
     ) {
-        super(id, callback, settings, logger, metricsCollector, signalLogger);
+        super(
+            id,
+            callback,
+            settings,
+            logger,
+            spoofingDetector,
+            metricsCollector,
+            signalLogger
+        );
 
         // Basic settings
         this.windows = settings.windowsSec

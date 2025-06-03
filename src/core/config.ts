@@ -1,7 +1,8 @@
 // src/core/config.ts
 import dotenv from "dotenv";
 dotenv.config();
-
+import { AnomalyDetectorOptions } from "../services/anomalyDetector.js";
+import { SpoofingDetectorConfig } from "../services/spoofingDetector.js";
 /**
  * Centralized configuration management
  */
@@ -168,5 +169,31 @@ export class Config {
         if (this.WS_PORT < 1 || this.WS_PORT > 65535) {
             throw new Error(`Invalid WS_PORT: ${this.WS_PORT}`);
         }
+    }
+
+    // TODO get from .env
+    static anomalyDetectorConfig(): AnomalyDetectorOptions {
+        return {
+            windowSize: 400,
+            anomalyCooldownMs: 300_000,
+            icebergDetectionWindow: 600_000,
+            volumeImbalanceThreshold: 0.65,
+            absorptionRatioThreshold: 2.5,
+            normalSpreadBps: 10,
+            minHistory: 50,
+            orderSizeAnomalyThreshold: 3,
+            tickSize: 0.01,
+        };
+    }
+
+    //TODO get from .env
+    static spoofingDetectorConfig(): SpoofingDetectorConfig {
+        return {
+            tickSize: 0.01,
+            wallTicks: 15,
+            minWallSize: 50,
+            dynamicWallWidth: true,
+            testLogMinSpoof: 100,
+        };
     }
 }

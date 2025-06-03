@@ -26,6 +26,7 @@ import type {
 } from "../indicators/interfaces/detectorInterfaces.js";
 import { AccumulationDetector } from "../indicators/accumulationDetector.js";
 import { SignalType } from "../types/signalTypes.js";
+import { SpoofingDetector } from "../services/spoofingDetector.js";
 
 /**
  * Production detector factory with monitoring, validation, and lifecycle management
@@ -78,6 +79,7 @@ export class DetectorFactory {
             this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
             dependencies.logger,
+            dependencies.spoofingDetector,
             dependencies.metricsCollector,
             dependencies.signalLogger
         );
@@ -120,6 +122,7 @@ export class DetectorFactory {
             this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
             dependencies.logger,
+            dependencies.spoofingDetector,
             dependencies.metricsCollector,
             dependencies.signalLogger
         );
@@ -162,6 +165,7 @@ export class DetectorFactory {
             this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
             dependencies.logger,
+            dependencies.spoofingDetector,
             dependencies.metricsCollector,
             dependencies.signalLogger
         );
@@ -204,6 +208,7 @@ export class DetectorFactory {
             this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
             dependencies.logger,
+            dependencies.spoofingDetector,
             dependencies.metricsCollector,
             dependencies.signalLogger
         );
@@ -246,6 +251,7 @@ export class DetectorFactory {
             this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
             dependencies.logger,
+            dependencies.spoofingDetector,
             dependencies.metricsCollector,
             dependencies.signalLogger
         );
@@ -961,6 +967,7 @@ export interface DetectorSuite {
 
 export interface DetectorDependencies {
     logger: Logger;
+    spoofingDetector: SpoofingDetector;
     metricsCollector: MetricsCollector;
     signalLogger?: ISignalLogger;
 }

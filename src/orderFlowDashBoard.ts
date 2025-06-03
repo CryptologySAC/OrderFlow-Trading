@@ -111,6 +111,7 @@ import {
 } from "./clients/orderBookProcessor.js";
 import { SignalLogger } from "./services/signalLogger.js";
 import type { WebSocketMessage } from "./utils/interfaces.js";
+import { SpoofingDetector } from "./services/spoofingDetector.js";
 
 EventEmitter.defaultMaxListeners = 20;
 
@@ -1380,6 +1381,9 @@ export function createDependencies(): Dependencies {
     runMigrations(db);
     const pipelineStore = new PipelineStorage(db, {});
     const storage = new Storage(db);
+    const spoofingDetector = new SpoofingDetector(
+        Config.spoofingDetectorConfig()
+    );
 
     const orderBookProcessor = new OrderBookProcessor(
         {
@@ -1403,18 +1407,11 @@ export function createDependencies(): Dependencies {
         metricsCollector
     );
 
-    const anomalyDetector = new AnomalyDetector({
-        windowSize: 1200,
-        minHistory: 200,
-        anomalyCooldownMs: 20000, // 20 seconds
-        volumeImbalanceThreshold: 0.85,
-        absorptionRatioThreshold: 4.2,
-        icebergDetectionWindow: 120000,
-        orderSizeAnomalyThreshold: 4.5,
-        normalSpreadBps: 12,
-        tickSize: 0.01,
+    const anomalyDetector = new AnomalyDetector(
+        Config.anomalyDetectorConfig(),
         logger,
-    });
+        spoofingDetector
+    );
 
     const alertManager = new AlertManager(
         process.env.ALERT_WEBHOOK_URL,
@@ -1469,6 +1466,7 @@ export function createDependencies(): Dependencies {
         signalCoordinator,
         anomalyDetector,
         signalManager,
+        spoofingDetector,
     };
 }
 

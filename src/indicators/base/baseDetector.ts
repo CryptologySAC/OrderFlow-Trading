@@ -27,10 +27,7 @@ import {
     PriceConfirmationManager,
     DepthLevel,
 } from "../../utils/utils.js";
-import {
-    SpoofingDetector,
-    SpoofingDetectorConfig,
-} from "../../services/spoofingDetector.js";
+import { SpoofingDetector } from "../../services/spoofingDetector.js";
 import type {
     IDetector,
     DetectorStats,
@@ -61,7 +58,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
     protected zoneTicks: number;
     protected readonly eventCooldownMs: number;
     protected readonly symbol: string;
-    private readonly spoofingSettings: SpoofingDetectorConfig;
 
     // Confirmation parameters
     protected readonly minInitialMoveTicks: number;
@@ -105,6 +101,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
         callback: DetectorCallback,
         settings: BaseDetectorSettings & { features?: DetectorFeatures },
         logger: Logger,
+        spoofingDetector: SpoofingDetector,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger
     ) {
@@ -124,13 +121,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
         this.confirmationTimeoutMs = settings.confirmationTimeoutMs ?? 60000;
         this.maxRevisitTicks = settings.maxRevisitTicks ?? 5;
         this.symbol = settings.symbol ?? "LTCUSDT";
-        this.spoofingSettings = {
-            tickSize: 0.01,
-            wallTicks: 10,
-            minWallSize: 20,
-            dynamicWallWidth: false,
-            ...settings.spoofing,
-        };
 
         // Initialize features with defaults
         this.features = {
@@ -145,7 +135,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
         };
 
         // Initialize feature modules
-        this.spoofingDetector = new SpoofingDetector(this.spoofingSettings);
+        this.spoofingDetector = spoofingDetector;
         this.adaptiveZoneCalculator = new AdaptiveZoneCalculator();
         this.passiveVolumeTracker = new PassiveVolumeTracker();
         this.autoCalibrator = new AutoCalibrator();
