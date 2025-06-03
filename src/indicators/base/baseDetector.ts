@@ -13,6 +13,7 @@ import {
     AbsorptionSignalData,
     ExhaustionSignalData,
     AccumulationResult,
+    DeltaCVDConfirmationResult,
 } from "../../types/signalTypes.js";
 
 import type {
@@ -85,10 +86,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
     protected readonly callback: DetectorCallback;
 
     // Abstract method for detector type
-    protected abstract readonly detectorType:
-        | "absorption"
-        | "exhaustion"
-        | "accumulation";
+    protected abstract readonly detectorType: SignalType;
 
     protected lastTradeId: string | null = null;
     private zoneCleanupInterval: NodeJS.Timeout | null = null;
@@ -237,9 +235,10 @@ export abstract class BaseDetector extends Detector implements IDetector {
 
             this.checkForSignal(tradeData);
 
-            if (this.features.priceResponse) {
-                this.processConfirmations(tradeData.price);
-            }
+            //TODO
+            //if (this.features.priceResponse) {
+            //    this.processConfirmations(tradeData.price);
+            //}
 
             if (this.features.autoCalibrate) {
                 this.performAutoCalibration();
@@ -410,6 +409,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
             | AbsorptionSignalData
             | ExhaustionSignalData
             | AccumulationResult
+            | DeltaCVDConfirmationResult
     ): void {
         const detection: SignalCandidate = {
             id: randomUUID(),
@@ -445,7 +445,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
         }
 
         // Emit metrics
-        this.metricsCollector.incrementMetric(
+        this.metricsCollector.incrementCounter(
             `detector_${this.detectorType}Signals`
         );
     }
@@ -603,39 +603,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
                 );
                 this.minAggVolume = newMinVolume;
             }
-        }
-    }
-
-    /**
-     * Process pending confirmations
-     */
-    protected processConfirmations(currentPrice: number): void {
-        const confirmed =
-            this.priceConfirmationManager.processPendingConfirmations(
-                currentPrice,
-                this.pricePrecision,
-                this.minInitialMoveTicks,
-                this.maxRevisitTicks,
-                this.confirmationTimeoutMs,
-                this.signalLogger,
-                this.symbol,
-                this.detectorType
-            );
-
-        // Fire callbacks for confirmed detections
-        for (const detection of confirmed) {
-            this.callback({
-                id: detection.id || randomUUID(),
-                price: detection.price,
-                side: detection.side,
-                trades: detection.trades,
-                totalAggressiveVolume: detection.aggressive,
-                passiveVolume: detection.passive,
-                zone: detection.zone,
-                refilled: detection.refilled,
-                detectedAt: Date.now(),
-                detectorSource: this.detectorType,
-            });
         }
     }
 

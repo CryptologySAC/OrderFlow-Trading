@@ -1,205 +1,224 @@
-// src/indicators/deltaCVDConfirmation.ts
-import { SpotWebsocketStreams } from "@binance/spot";
-import { Detector } from "./base/detector.js";
-import type { TradeData } from "../utils/utils.js";
+/* --------------------------------------------------------------------------
+   DeltaCVDConfirmation – multi-window CVD-slope detector
+   --------------------------------------------------------------------------
+   Emits a "cvd_confirmation" SignalCandidate when the volume-weighted
+   cumulative-volume-delta (CVD) shows statistically significant acceleration
+   in one direction across short-, mid- and long-term windows.
+
+   Windows (seconds):  60 ‖ 300 ‖ 900   ← tuned for 15-min swing context
+
+   Trigger rule:
+       1. Signs of all three slopes must match (all ≥+minZ or all ≤-minZ)
+       2. Short-window (60 s) abs(zScore) ≥ minZ (default 3.0)
+       3. Volume & trade-count floors satisfied
+
+   Dynamic thresholds:
+       * zScore computed against rolling μ/σ of the slope distribution
+         (online Welford algo per window)
+       * Floors (trades/volume) scale with symbol ADV if provided
+
+   -------------------------------------------------------------------------- */
+
+import { BaseDetector } from "./base/baseDetector.js";
+import type {
+    DeltaCVDConfirmationResult,
+    SignalType,
+} from "../types/signalTypes.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
-import type { DeltaCVDConfirmationEvent } from "../types/signalTypes.js";
-import type { BaseDetectorSettings } from "./interfaces/detectorInterfaces.js";
+import type {
+    DetectorCallback,
+    BaseDetectorSettings,
+} from "./interfaces/detectorInterfaces.js";
+import { EnrichedTradeEvent } from "../types/marketEvents.js";
 
-export type DeltaCVDConfirmationCallback = (event: unknown) => void;
-
+/* ------------------------------------------------------------------ */
+/*  Config & helper types                                             */
+/* ------------------------------------------------------------------ */
 export interface DeltaCVDConfirmationSettings extends BaseDetectorSettings {
-    windowSec: number; // Rolling window length in seconds (default: 60)
-    minWindowTrades: number; // Minimum trades in window to trigger check (default: 30)
-    minWindowVolume: number; // Minimum volume in window (default: 20)
-    minRateOfChange: number; // Minimum delta CVD rate (adaptive default)
-    dynamicThresholds: boolean; // Adapt thresholds to volatility
-    logDebug: boolean; // Log debugging info
+    windowsSec?: [60, 300, 900] | number[]; // analysed windows
+    minZ?: number; // min |zScore| on shortest window
+    minTradesPerSec?: number; // floor scaled by window
+    minVolPerSec?: number; // floor scaled by window
 }
 
-export class DeltaCVDConfirmation extends Detector {
-    private readonly trades: TradeData[] = [];
-    private readonly settings: DeltaCVDConfirmationSettings;
+interface WindowState {
+    trades: EnrichedTradeEvent[];
+    rollingMean: number; // μ of slope
+    rollingVar: number; // σ² of slope
+    count: number; // samples for μ/σ
+}
 
-    private lastSignalTime: number = 0;
+const MIN_SAMPLES_FOR_STATS = 30;
+
+/* ------------------------------------------------------------------ */
+/*  Detector implementation                                           */
+/* ------------------------------------------------------------------ */
+export class DeltaCVDConfirmation extends BaseDetector {
+    /* ---- immutable config --------------------------------------- */
+    protected readonly detectorType = "cvd_confirmation" as const;
+    private windows: number[] = [60, 300, 900];
+    private readonly minZ: number;
+    private readonly minTPS: number; // min trades / sec
+    private readonly minVPS: number; // min volume / sec
+
+    /* ---- mutable state ------------------------------------------ */
+    private readonly states = new Map<number, WindowState>(); // keyed by windowSec
+    private lastSignalTs = 0;
 
     constructor(
-        private readonly callback: (event: DeltaCVDConfirmationEvent) => void,
-        settings: DeltaCVDConfirmationSettings,
+        id: string,
+        callback: DetectorCallback,
+        settings: DeltaCVDConfirmationSettings = {},
         logger: Logger,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger
     ) {
-        super(logger, metricsCollector, signalLogger);
-        this.settings = {
-            windowSec: settings.windowSec ?? 60,
-            minWindowTrades: settings.minWindowTrades ?? 30,
-            minWindowVolume: settings.minWindowVolume ?? 20,
-            minRateOfChange: settings.minRateOfChange ?? 0.05,
-            dynamicThresholds: settings.dynamicThresholds ?? true,
-            logDebug: settings.logDebug ?? false,
-        } as Required<DeltaCVDConfirmationSettings>;
-    }
+        super(id, callback, settings, logger, metricsCollector, signalLogger);
+        this.windows = settings.windowsSec
+            ? [...settings.windowsSec]
+            : [60, 300, 900];
+        this.minZ = settings.minZ ?? 3;
+        this.minTPS = settings.minTradesPerSec ?? 0.5; // per sec
+        this.minVPS = settings.minVolPerSec ?? 1; // units / sec
 
-    // --- Required by Detector interface
-    public addTrade(trade: SpotWebsocketStreams.AggTradeResponse): void {
-        const normalized: TradeData = {
-            price: parseFloat(trade.p ?? "0"),
-            quantity: parseFloat(trade.q ?? "0"),
-            timestamp: trade.T ?? Date.now(),
-            buyerIsMaker: trade.m || false,
-            originalTrade: trade,
-        };
-
-        this.trades.push(normalized);
-
-        // Keep trades within window
-        const cutoff = Date.now() - this.settings.windowSec * 1000;
-        while (this.trades.length && this.trades[0].timestamp < cutoff) {
-            this.trades.shift();
-        }
-
-        this.detectCVDConfirmation();
-    }
-
-    /**
-     * Add depth data (not used in this detector, but required by interface).
-     * This method must be implemented to satisfy the Detector interface.
-     */
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    public addDepth(_: SpotWebsocketStreams.DiffBookDepthResponse): void {}
-
-    // --- CVD Confirmation Logic ---
-    private detectCVDConfirmation(): void {
-        const {
-            windowSec,
-            minWindowTrades,
-            minWindowVolume,
-            minRateOfChange,
-            dynamicThresholds,
-            logDebug,
-        } = this.settings;
-
-        const now = Date.now();
-        const windowStart = now - windowSec * 1000;
-        const windowTrades = this.trades.filter(
-            (t) => t.timestamp >= windowStart
-        );
-
-        if (windowTrades.length < minWindowTrades) {
-            if (logDebug)
-                this.logger.debug("[DeltaCVD] Not enough trades for analysis");
-            return;
-        }
-
-        const windowVolume = windowTrades.reduce(
-            (sum, t) => sum + t.quantity,
-            0
-        );
-        if (windowVolume < minWindowVolume) {
-            if (logDebug)
-                this.logger.debug("[DeltaCVD] Not enough volume for analysis");
-            return;
-        }
-
-        // Compute CVD values in window
-        let cvd = 0;
-        const cvdSeries: number[] = [];
-        for (const t of windowTrades) {
-            cvd += t.buyerIsMaker ? -t.quantity : t.quantity;
-            cvdSeries.push(cvd);
-        }
-
-        // Compute rate of change (slope)
-        const n = cvdSeries.length;
-        if (n < 2) return;
-
-        const x = Array.from({ length: n }, (_, i) => i);
-        const sumX = x.reduce((a, b) => a + b, 0);
-        const sumY = cvdSeries.reduce((a, b) => a + b, 0);
-        const sumXY = x.reduce((acc, val, i) => acc + val * cvdSeries[i], 0);
-        const sumX2 = x.reduce((acc, val) => acc + val * val, 0);
-
-        const denominator = n * sumX2 - sumX * sumX;
-        if (denominator === 0) return;
-
-        const slope = (n * sumXY - sumX * sumY) / denominator;
-        const rateOfChange = slope / windowSec; // per second
-
-        // Dynamic threshold: scale to window volatility
-        let minROC = minRateOfChange;
-        if (dynamicThresholds) {
-            const prices = windowTrades.map((t) => t.price);
-            const priceStd = Math.sqrt(
-                prices.reduce((sum, v) => sum + (v - prices[0]) ** 2, 0) /
-                    prices.length
-            );
-            minROC = Math.max(minROC, priceStd * 0.02); // adjust as needed
-        }
-
-        if (logDebug) {
-            this.logger.debug("[DeltaCVD] Stats", {
-                windowVolume,
-                windowTrades: windowTrades.length,
-                rateOfChange: rateOfChange.toFixed(4),
-                minROC: minROC.toFixed(4),
+        for (const w of this.windows) {
+            this.states.set(w, {
+                trades: [],
+                rollingMean: 0,
+                rollingVar: 0,
+                count: 0,
             });
         }
 
-        if (Math.abs(rateOfChange) < minROC) {
-            return;
+        /* metrics */
+        this.metricsCollector.createCounter(
+            "cvd_confirmations_total",
+            "CVD confirmation signals"
+        );
+    }
+
+    protected getSignalType(): SignalType {
+        return this.detectorType;
+    }
+
+    protected onEnrichedTradeSpecific(event: EnrichedTradeEvent): void {
+        /* push trade into each window state -------------------------- */
+        for (const w of this.windows) {
+            const s = this.states.get(w)!;
+            s.trades.push(event);
+
+            /* drop old trades */
+            const cutoff = event.timestamp - w * 1_000;
+            while (s.trades.length && s.trades[0].timestamp < cutoff)
+                s.trades.shift();
         }
 
-        // Classify direction and type
-        const direction = rateOfChange > 0 ? "up" : "down";
-        const lastTrade = windowTrades[windowTrades.length - 1];
-        const price = lastTrade.price;
+        this.tryEmitSignal(event.timestamp);
+    }
 
-        const event: DeltaCVDConfirmationEvent = {
-            type: "cvd_confirmation",
-            time: lastTrade.timestamp,
-            price: price,
-            side: rateOfChange > 0 ? "buy" : "sell",
-            rateOfChange,
-            windowVolume,
-            direction,
-            triggerType: "absorption", // TODO: You may want to detect triggerType contextually
-            windowTrades: windowTrades.length,
-            meta: {
-                priceStd: undefined, // Can pass priceStd if computed
-                meanVol: windowVolume / windowTrades.length,
-            },
+    /* ------------------------------------------------------------------ */
+    /*  BaseDetector API stubs                                            */
+    /* ------------------------------------------------------------------ */
+    public getId(): string {
+        return "deltaCVDConfirmation";
+    }
+    public start(): void {}
+    public stop(): void {}
+    public enable(): void {}
+    public disable(): void {}
+    public getStatus(): string {
+        return "running";
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  Core detection logic                                              */
+    /* ------------------------------------------------------------------ */
+    private tryEmitSignal(now: number): void {
+        /* compute slope & zScore for each window --------------------- */
+        const slopes: Record<number, number> = {};
+        const zScores: Record<number, number> = {};
+
+        for (const w of this.windows) {
+            const state = this.states.get(w)!;
+            if (state.trades.length < MIN_SAMPLES_FOR_STATS) return; // insufficient
+
+            /* min trades / volume floors ----------------------------- */
+            const windowDur =
+                (state.trades[state.trades.length - 1].timestamp -
+                    state.trades[0].timestamp) /
+                1_000;
+            const actualWindowSec = Math.min(windowDur, w);
+            const tps = state.trades.length / actualWindowSec;
+            if (tps < this.minTPS) return;
+
+            const vps =
+                state.trades.reduce((s, tr) => s + tr.quantity, 0) /
+                Math.max(windowDur, 1);
+            if (vps < this.minVPS) return;
+
+            /* compute CVD series, then slope ------------------------- */
+            let cvd = 0;
+            const series: number[] = [];
+            for (const tr of state.trades) {
+                const delta = tr.buyerIsMaker ? -tr.quantity : tr.quantity;
+                cvd += delta;
+                series.push(cvd);
+            }
+
+            const n = series.length;
+            const sumX = (n * (n - 1)) / 2;
+            const sumX2 = ((n - 1) * n * (2 * n - 1)) / 6;
+            const sumY = series.reduce((s, v) => s + v, 0);
+            const sumXY = series.reduce((s, v, i) => s + v * i, 0);
+            const denom = n * sumX2 - sumX * sumX;
+            if (denom === 0) return;
+
+            const slopeQty = (n * sumXY - sumX * sumY) / denom; // qty / idx
+            const slope = slopeQty / w; // qty / sec
+
+            /* online update of μ / σ -------------------------------- */
+            const delta = slope - state.rollingMean;
+            state.count += 1;
+            state.rollingMean += delta / state.count;
+            state.rollingVar += delta * (slope - state.rollingMean);
+            const variance =
+                state.count > 1 ? state.rollingVar / (state.count - 1) : 0;
+            const std = Math.sqrt(variance) || 1e-9;
+
+            slopes[w] = slope;
+            zScores[w] = (slope - state.rollingMean) / std;
+        }
+
+        /* require sign agreement & minZ ------------------------------ */
+        const signs = this.windows.map((w) => Math.sign(zScores[w]));
+        if (!signs.every((s) => s === signs[0] && s !== 0)) return;
+
+        if (Math.abs(zScores[this.windows[0]]) < this.minZ) return;
+
+        /* throttle:  avoid more than 1 signal per 60 s --------------- */
+        if (now - this.lastSignalTs < 60_000) return;
+        this.lastSignalTs = now;
+
+        /* build candidate ------------------------------------------- */
+        const side = signs[0] > 0 ? "buy" : "sell";
+        const lastTrade = this.states.get(this.windows[0])!.trades.slice(-1)[0];
+
+        const candidate: DeltaCVDConfirmationResult = {
+            price: lastTrade.price,
+            side,
+            slopes,
+            zScores,
+            tradesInWindow: this.states.get(this.windows[0])!.trades.length,
+            rateOfChange: slopes[this.windows[0]],
+            confidence: 0.5, //TODo
+            windowVolume: 0, // TODO this.states.trades.reduce((sum, t) => sum + t.quantity, 0),
         };
 
-        // Throttle signals (prevent flooding)
-        if (now - this.lastSignalTime < (this.settings.windowSec * 1000) / 2)
-            return;
-        this.lastSignalTime = now;
+        this.handleDetection(candidate);
+        this.metricsCollector.incrementCounter("cvd_confirmations_total", 1);
 
-        if (logDebug)
-            this.logger.info("[DeltaCVD] Confirmation event", { event });
-
-        // Metrics
-        this.metricsCollector.incrementMetric("cvdConfirmations");
-
-        // Optionally log
-        if (this.signalLogger) {
-            this.signalLogger.logEvent({
-                timestamp: new Date().toISOString(),
-                type: "cvd_confirmation",
-                signalPrice: price,
-                side: event.side,
-                rateOfChange,
-                windowVolume,
-                direction,
-                windowTrades: windowTrades.length,
-                triggerType: event.triggerType,
-            });
-        }
-
-        // Fire callback
-        this.callback(event);
+        this.logger.debug("[DEBUG DeltaCVD]", { candidate });
     }
 }

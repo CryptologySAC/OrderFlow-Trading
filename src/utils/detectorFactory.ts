@@ -11,6 +11,10 @@ import {
     ExhaustionDetector,
     ExhaustionSettings,
 } from "../indicators/exhaustionDetector.js";
+import {
+    DeltaCVDConfirmation,
+    DeltaCVDConfirmationSettings,
+} from "../indicators/deltaCVDConfirmation.js";
 
 import type {
     DetectorCallback,
@@ -175,6 +179,48 @@ export class DetectorFactory {
     }
 
     /**
+     * Create production-ready accumulation detector
+     */
+    public static createDeltaCVDConfirmationDetector(
+        callback: DetectorCallback,
+        settings: DeltaCVDConfirmationSettings,
+        dependencies: DetectorDependencies,
+        options: DetectorFactoryOptions = {}
+    ): DeltaCVDConfirmation {
+        const id = options.id || `cvd_confirmation-${Date.now()}`;
+
+        this.validateCreationLimits();
+        this.validateProductionConfig(settings);
+
+        const productionSettings = this.applyProductionDefaults(
+            settings,
+            "cvd_confirmation"
+        );
+
+        const detector = new DeltaCVDConfirmation(
+            id,
+            this.wrapCallback(callback, id, dependencies.logger),
+            productionSettings,
+            dependencies.logger,
+            dependencies.metricsCollector,
+            dependencies.signalLogger
+        );
+
+        this.registerDetector(id, detector, dependencies, options);
+
+        dependencies.logger.info(
+            `[DetectorFactory] Created Delta CVD Confirmation`,
+            {
+                id,
+                settings: productionSettings,
+                features: productionSettings.features,
+            }
+        );
+
+        return detector;
+    }
+
+    /**
      * Create all three detectors as a suite
      */
     public static createDetectorSuite(
@@ -185,6 +231,7 @@ export class DetectorFactory {
             absorption?: Partial<AbsorptionSettings>;
             exhaustion?: Partial<ExhaustionSettings>;
             accumulation?: Partial<AccumulationSettings>;
+            cvd_confirmation?: Partial<DeltaCVDConfirmationSettings>;
             idPrefix?: string;
         } = {}
     ): DetectorSuite {
@@ -211,15 +258,28 @@ export class DetectorFactory {
             { id: `${prefix}-accumulation` }
         );
 
+        const deltaCVDDetector = this.createDeltaCVDConfirmationDetector(
+            callback,
+            { ...baseSettings, ...options.accumulation },
+            dependencies,
+            { id: `${prefix}-cvd_confirmation` }
+        );
+
         dependencies.logger.info(`[DetectorFactory] Created detector suite`, {
             prefix,
-            detectors: ["absorption", "exhaustion", "accumulation"],
+            detectors: [
+                "absorption",
+                "exhaustion",
+                "accumulation",
+                "cvd_confirmation",
+            ],
         });
 
         return {
             absorption: absorptionDetector,
             exhaustion: exhaustionDetector,
             accumulation: accumulationDetector,
+            cvd_confirmation: deltaCVDDetector,
         };
     }
 
@@ -234,6 +294,7 @@ export class DetectorFactory {
             { type: "absorption", config: {} },
             { type: "exhaustion", config: {} },
             { type: "accumulation", config: {} },
+            { type: "cvd_confirmation", config: {} },
         ];
     }
 
@@ -276,6 +337,12 @@ export class DetectorFactory {
                     baseSettings as AccumulationSettings,
                     this.dependencies
                 );
+            case "cvd_confirmation":
+                return this.createDeltaCVDConfirmationDetector(
+                    callback,
+                    baseSettings as DeltaCVDConfirmationSettings,
+                    this.dependencies
+                );
             default:
                 throw new Error(`Unknown detector type: ${type}`);
         }
@@ -299,17 +366,22 @@ export class DetectorFactory {
         > = {
             absorption: {
                 supportedSignalTypes: ["absorption"],
-                priority: 7,
+                priority: 100,
                 enabled: true,
             },
             exhaustion: {
                 supportedSignalTypes: ["exhaustion"],
-                priority: 8,
+                priority: 90,
                 enabled: true,
             },
             accumulation: {
                 supportedSignalTypes: ["accumulation"],
-                priority: 6,
+                priority: 50,
+                enabled: true,
+            },
+            cvd_confirmation: {
+                supportedSignalTypes: ["cvd_confirmation"],
+                priority: 50,
                 enabled: true,
             },
         };
@@ -550,7 +622,12 @@ export class DetectorFactory {
 
     private static applyProductionDefaults(
         settings: BaseDetectorSettings,
-        detectorType: "absorption" | "exhaustion" | "accumulation" | "generic"
+        detectorType:
+            | "absorption"
+            | "exhaustion"
+            | "accumulation"
+            | "cvd_confirmation"
+            | "generic"
     ): BaseDetectorSettings {
         const baseDefaults: BaseDetectorSettings = {
             windowMs: 90000,
@@ -599,6 +676,13 @@ export class DetectorFactory {
                     spreadAdjustment: true,
                     volumeVelocity: false,
                 },
+                ...settings,
+            };
+        }
+
+        if (detectorType === "cvd_confirmation") {
+            return {
+                ...baseDefaults,
                 ...settings,
             };
         }
@@ -821,6 +905,7 @@ export interface DetectorSuite {
     absorption: AbsorptionDetector;
     exhaustion: ExhaustionDetector;
     accumulation: AccumulationDetector;
+    cvd_confirmation: DeltaCVDConfirmation;
 }
 
 export interface DetectorDependencies {

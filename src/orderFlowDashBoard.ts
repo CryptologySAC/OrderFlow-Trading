@@ -87,7 +87,6 @@ import type {
     AccumulationResult,
     DivergenceResult,
     SwingSignalData,
-    DeltaCVDConfirmationEvent,
 } from "./types/signalTypes.js";
 import type {
     TimeContext,
@@ -290,12 +289,20 @@ export class OrderFlowDashboard {
         );
 
         // Initialize other components
-        this.deltaCVDConfirmation = new DeltaCVDConfirmation(
-            this.DeltaCVDConfirmationCallback,
-            this.createDeltaCVDSettings(),
-            this.logger,
-            this.metricsCollector,
-            dependencies.signalLogger
+        this.deltaCVDConfirmation =
+            DetectorFactory.createDeltaCVDConfirmationDetector(
+                (signal) => {
+                    console.log("Delta CVD signal:", signal);
+                },
+                this.createDeltaCVDSettings(),
+                dependencies,
+                { id: "ltcusdt-cvdConfirmation-main" }
+            );
+        this.signalCoordinator.registerDetector(
+            this.deltaCVDConfirmation,
+            ["cvd_confirmation"],
+            30,
+            true
         );
 
         this.swingPredictor = new SwingPredictor(
@@ -325,39 +332,7 @@ export class OrderFlowDashboard {
     }
 
     private DeltaCVDConfirmationCallback = (event: unknown): void => {
-        if (!this.isDeltaCVDConfirmationEvent(event)) {
-            this.handleError(
-                new SignalProcessingError(
-                    "Invalid Delta CVD confirmation event",
-                    { event }
-                ),
-                "delta_cvd_confirmation",
-                randomUUID()
-            );
-            return;
-        }
-
-        // TypeScript now knows event is DeltaCVDConfirmationEvent
-        const correlationId = randomUUID();
-        try {
-            const signal: Signal = {
-                id: correlationId,
-                type: "cvd_confirmation",
-                time: event.time, // No error - TypeScript knows the type
-                price: event.price, // No error
-                side: event.side, // No error
-                closeReason: "delta_divergence",
-                signalData: event,
-            };
-
-            this.swingPredictor.onSignal(signal);
-        } catch (error) {
-            this.handleError(
-                error instanceof Error ? error : new Error("Unknown error"),
-                "delta_cvd_confirmation",
-                correlationId
-            );
-        }
+        void event; //todo
     };
 
     /**
@@ -381,23 +356,6 @@ export class OrderFlowDashboard {
                 this.handleBacklogRequest(ws, data, correlationId);
             },
         };
-    }
-
-    private isDeltaCVDConfirmationEvent(
-        value: unknown
-    ): value is DeltaCVDConfirmationEvent {
-        if (typeof value !== "object" || value === null) {
-            return false;
-        }
-
-        const obj = value as Record<string, unknown>;
-
-        return (
-            typeof obj.time === "number" &&
-            typeof obj.price === "number" &&
-            typeof obj.side === "string" &&
-            (obj.side === "buy" || obj.side === "sell")
-        );
     }
 
     /**
@@ -488,13 +446,11 @@ export class OrderFlowDashboard {
 
     private createDeltaCVDSettings(): DeltaCVDConfirmationSettings {
         return {
-            windowSec: Config.DELTA_CVD_CONFIRMATION.WINDOW_SEC,
-            minWindowTrades: Config.DELTA_CVD_CONFIRMATION.MIN_WINDOW_TRADES,
-            minWindowVolume: Config.DELTA_CVD_CONFIRMATION.MIN_WINDOW_VOLUME,
-            minRateOfChange: Config.DELTA_CVD_CONFIRMATION.MIN_RATE_OF_CHANGE, // Use adaptive if 0
-            pricePrecision: Config.DELTA_CVD_CONFIRMATION.PRICE_PRECISION,
-            dynamicThresholds: Config.DELTA_CVD_CONFIRMATION.DYNAMIC_THRESHOLDS,
-            logDebug: Config.DELTA_CVD_CONFIRMATION.LOG_DEBUG,
+            windowsSec: [90, 300, 900], //TODO
+            minTradesPerSec: Config.DELTA_CVD_CONFIRMATION.MIN_WINDOW_TRADES,
+            minVolPerSec: Config.DELTA_CVD_CONFIRMATION.MIN_WINDOW_VOLUME,
+            minZ: Config.DELTA_CVD_CONFIRMATION.MIN_RATE_OF_CHANGE, // Use adaptive if 0
+            symbol: Config.SYMBOL,
         };
     }
 
@@ -792,6 +748,7 @@ export class OrderFlowDashboard {
                     this.anomalyDetector.onEnrichedTrade(enrichedTrade);
                     this.accumulationDetector.onEnrichedTrade(enrichedTrade);
                     this.exhaustionDetector.onEnrichedTrade(enrichedTrade);
+                    this.deltaCVDConfirmation.onEnrichedTrade(enrichedTrade);
 
                     const aggTradeMessage: WebSocketMessage =
                         this.dependencies.tradesProcessor.onEnrichedTrade(
@@ -899,7 +856,6 @@ export class OrderFlowDashboard {
         try {
             // Update detectors
             if (this.preprocessor) this.preprocessor.handleAggTrade(data);
-            this.deltaCVDConfirmation.addTrade(data);
 
             // Update swing predictor
             this.swingPredictor.onPrice(

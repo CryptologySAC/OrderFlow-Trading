@@ -52,7 +52,7 @@ export interface Signal {
     signalData?:
         | AbsorptionSignalData
         | ExhaustionSignalData
-        | DeltaCVDConfirmationEvent
+        | DeltaCVDConfirmationResult
         | SwingSignalData
         | FlowSignalData
         | TradingSignalData;
@@ -125,15 +125,17 @@ export interface BaseSignalEvent {
     side: "buy" | "sell";
 }
 
-export interface DeltaCVDConfirmationEvent extends BaseSignalEvent {
+export interface DeltaCVDConfirmationResult {
+    price: number;
+    side: "buy" | "sell";
     rateOfChange: number;
     windowVolume: number;
-    direction: "up" | "down";
-    triggerType: "absorption" | "exhaustion";
-    windowTrades: number;
-    meta?: unknown;
+    tradesInWindow: number;
     delta?: number;
-    slope?: number;
+    slopes: Record<number, number>;
+    zScores: Record<number, number>;
+    confidence: number;
+    metadata?: Record<string, unknown>;
 }
 
 export interface SignalCandidate {
@@ -142,7 +144,11 @@ export interface SignalCandidate {
     side: "buy" | "sell";
     confidence: number;
     timestamp: number;
-    data: AbsorptionSignalData | ExhaustionSignalData | AccumulationResult;
+    data:
+        | AbsorptionSignalData
+        | ExhaustionSignalData
+        | AccumulationResult
+        | DeltaCVDConfirmationResult;
 }
 
 export interface ProcessedSignal {
@@ -157,7 +163,11 @@ export interface ProcessedSignal {
         processingVersion: string;
         enrichments?: Record<string, unknown>[];
     };
-    data: AbsorptionSignalData | ExhaustionSignalData | AccumulationResult;
+    data:
+        | AbsorptionSignalData
+        | ExhaustionSignalData
+        | AccumulationResult
+        | DeltaCVDConfirmationResult;
 }
 
 // Add these interfaces to your types file
@@ -212,7 +222,8 @@ export interface ConfirmedSignal {
             | AbsorptionSignalData
             | ExhaustionSignalData
             | AccumulationResult
-            | TradingSignalData;
+            | TradingSignalData
+            | DeltaCVDConfirmationResult;
     }>;
     confidence: number;
     finalPrice: number;
@@ -229,7 +240,8 @@ export interface TradingSignalData {
         | AbsorptionSignalData
         | ExhaustionSignalData
         | AccumulationResult
-        | TradingSignalData;
+        | TradingSignalData
+        | DeltaCVDConfirmationResult;
     anomalyCheck: AnomalyData;
     correlationData?: CorrelationData;
 }

@@ -81,7 +81,7 @@ export class AccumulationDetector
     }
 
     protected getSignalType(): SignalType {
-        return "accumulation";
+        return this.detectorType;
     }
 
     /**

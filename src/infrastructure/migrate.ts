@@ -41,5 +41,12 @@ export function runMigrations(db: Database): void {
           ON signal_history (timestamp DESC);
       CREATE INDEX IF NOT EXISTS idx_hist_sym_ts
           ON signal_history (symbol, timestamp DESC);
+
+      CREATE TABLE IF NOT EXISTS depth_snapshots (
+          id TEXT PRIMARY KEY,
+          symbol TEXT NOT NULL,
+          json BLOB NOT NULL,
+          ts INTEGER NOT NULL
+       );
   `);
 }

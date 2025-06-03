@@ -96,7 +96,7 @@ export class Config {
     };
 
     static readonly DELTA_CVD_CONFIRMATION = {
-        WINDOW_SEC: parseInt(process.env.DELTACVD_WINDOW_SEC ?? "60", 10),
+        WINDOW_SEC: parseInt(process.env.WINDOW_MS ?? "90000", 10),
         MIN_WINDOW_TRADES: parseInt(
             process.env.DELTACVD_MIN_WINDOW_TRADES ?? "30",
             10
