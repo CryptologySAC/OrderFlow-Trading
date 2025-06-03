@@ -15,6 +15,8 @@ import {
     DeltaCVDConfirmation,
     DeltaCVDConfirmationSettings,
 } from "../indicators/deltaCVDConfirmation.js";
+import { DistributionDetector } from "../indicators/distributionDetector.js";
+import { SuperiorFlowSettings } from "../indicators/base/flowDetectorBase.js";
 
 import type {
     DetectorCallback,
@@ -38,7 +40,7 @@ export class DetectorFactory {
         maxRestartAttempts: 3,
         circuitBreakerEnabled: true,
         performanceMonitoring: true,
-        memoryThresholdMB: 500,
+        memoryThresholdMB: 1500,
     };
     /**
      * Static dependencies for the factory
@@ -181,6 +183,48 @@ export class DetectorFactory {
     /**
      * Create production-ready accumulation detector
      */
+    public static createDistributionDetector(
+        callback: DetectorCallback,
+        settings: SuperiorFlowSettings,
+        dependencies: DetectorDependencies,
+        options: DetectorFactoryOptions = {}
+    ): DistributionDetector {
+        const id = options.id || `distribution-${Date.now()}`;
+
+        this.validateCreationLimits();
+        this.validateProductionConfig(settings);
+
+        const productionSettings = this.applyProductionDefaults(
+            settings,
+            "distribution"
+        );
+
+        const detector = new DistributionDetector(
+            id,
+            this.wrapCallback(callback, id, dependencies.logger),
+            productionSettings,
+            dependencies.logger,
+            dependencies.metricsCollector,
+            dependencies.signalLogger
+        );
+
+        this.registerDetector(id, detector, dependencies, options);
+
+        dependencies.logger.info(
+            `[DetectorFactory] Created DistributionDetector`,
+            {
+                id,
+                settings: productionSettings,
+                features: productionSettings.features,
+            }
+        );
+
+        return detector;
+    }
+
+    /**
+     * Create production-ready accumulation detector
+     */
     public static createDeltaCVDConfirmationDetector(
         callback: DetectorCallback,
         settings: DeltaCVDConfirmationSettings,
@@ -294,6 +338,7 @@ export class DetectorFactory {
             { type: "absorption", config: {} },
             { type: "exhaustion", config: {} },
             { type: "accumulation", config: {} },
+            { type: "distribution", config: {} },
             { type: "cvd_confirmation", config: {} },
         ];
     }
@@ -337,6 +382,12 @@ export class DetectorFactory {
                     baseSettings as AccumulationSettings,
                     this.dependencies
                 );
+            case "distribution":
+                return this.createDistributionDetector(
+                    callback,
+                    baseSettings as SuperiorFlowSettings,
+                    this.dependencies
+                );
             case "cvd_confirmation":
                 return this.createDeltaCVDConfirmationDetector(
                     callback,
@@ -376,7 +427,12 @@ export class DetectorFactory {
             },
             accumulation: {
                 supportedSignalTypes: ["accumulation"],
-                priority: 50,
+                priority: 70,
+                enabled: true,
+            },
+            distribution: {
+                supportedSignalTypes: ["distribution"],
+                priority: 70,
                 enabled: true,
             },
             cvd_confirmation: {
@@ -622,12 +678,7 @@ export class DetectorFactory {
 
     private static applyProductionDefaults(
         settings: BaseDetectorSettings,
-        detectorType:
-            | "absorption"
-            | "exhaustion"
-            | "accumulation"
-            | "cvd_confirmation"
-            | "generic"
+        detectorType: SignalType
     ): BaseDetectorSettings {
         const baseDefaults: BaseDetectorSettings = {
             windowMs: 90000,

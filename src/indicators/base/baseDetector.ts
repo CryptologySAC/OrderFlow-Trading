@@ -10,10 +10,7 @@ import { DetectorUtils } from "./detectorUtils.js";
 import {
     SignalType,
     SignalCandidate,
-    AbsorptionSignalData,
-    ExhaustionSignalData,
-    AccumulationResult,
-    DeltaCVDConfirmationResult,
+    DetectorResultType,
 } from "../../types/signalTypes.js";
 
 import type {
@@ -404,13 +401,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
     /**
      * Generic detection handler
      */
-    protected handleDetection(
-        pendingSignal:
-            | AbsorptionSignalData
-            | ExhaustionSignalData
-            | AccumulationResult
-            | DeltaCVDConfirmationResult
-    ): void {
+    protected handleDetection(pendingSignal: DetectorResultType): void {
         const detection: SignalCandidate = {
             id: randomUUID(),
             type: "absorption",

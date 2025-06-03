@@ -59,6 +59,7 @@ import {
     ExhaustionDetector,
     type ExhaustionSettings,
 } from "./indicators/exhaustionDetector.js";
+import { DistributionDetector } from "./indicators/distributionDetector.js";
 import { SwingMetrics } from "./indicators/swingMetrics.js";
 import { AccumulationDetector } from "./indicators/accumulationDetector.js";
 import { MomentumDivergence } from "./indicators/momentumDivergence.js";
@@ -139,12 +140,13 @@ export class OrderFlowDashboard {
     // Detectors
     private readonly absorptionDetector: AbsorptionDetector;
     private readonly exhaustionDetector: ExhaustionDetector;
-    private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
-    private readonly swingPredictor: SwingPredictor;
+    private readonly distributionDetector: DistributionDetector;
+    private readonly accumulationDetector: AccumulationDetector;
 
     // Indicators
     private readonly swingMetrics = new SwingMetrics();
-    private readonly accumulationDetector: AccumulationDetector;
+    private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
+    private readonly swingPredictor: SwingPredictor;
     private readonly momentumDivergence = new MomentumDivergence();
 
     // Time context
@@ -284,6 +286,21 @@ export class OrderFlowDashboard {
         this.signalCoordinator.registerDetector(
             this.accumulationDetector,
             ["accumulation"],
+            50,
+            true
+        );
+
+        this.distributionDetector = DetectorFactory.createDistributionDetector(
+            (signal) => {
+                console.log("Distribution signal:", signal);
+            },
+            { symbol: Config.SYMBOL },
+            dependencies,
+            { id: "ltcusdt-distribution-main" }
+        );
+        this.signalCoordinator.registerDetector(
+            this.distributionDetector,
+            ["distribution"],
             50,
             true
         );
@@ -650,7 +667,7 @@ export class OrderFlowDashboard {
                     side: processedSignal.data.side,
                     confidence: processedSignal.confidence,
                 };
-                void signal; //this.broadcastSignal(signal);
+                void this.broadcastSignal(signal); //TODO
             }
         );
 
@@ -749,6 +766,7 @@ export class OrderFlowDashboard {
                     this.accumulationDetector.onEnrichedTrade(enrichedTrade);
                     this.exhaustionDetector.onEnrichedTrade(enrichedTrade);
                     this.deltaCVDConfirmation.onEnrichedTrade(enrichedTrade);
+                    this.distributionDetector.onEnrichedTrade(enrichedTrade);
 
                     const aggTradeMessage: WebSocketMessage =
                         this.dependencies.tradesProcessor.onEnrichedTrade(
@@ -1043,6 +1061,9 @@ export class OrderFlowDashboard {
             expectedGainPercent: profitTarget.netGain,
             swingType: side === "buy" ? "low" : "high",
             strength: Math.max(accumulation.strength, divergence.strength),
+            side,
+            price: currentPrice,
+            confidence: NaN,
         };
         const signal: Signal = {
             id: randomUUID(),

@@ -1375,6 +1375,8 @@ export class SignalManager extends EventEmitter {
             meta: originalSignal.metadata,
             anomalyCheck: confirmedSignal.anomalyData,
             correlationData: confirmedSignal.correlationData,
+            side,
+            price: confirmedSignal.finalPrice,
         };
 
         const signal: Signal = {

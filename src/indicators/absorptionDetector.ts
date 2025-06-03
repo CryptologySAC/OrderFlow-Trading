@@ -492,10 +492,6 @@ export class AbsorptionDetector
 
         // Volume threshold check
         if (volumes.aggressive < this.minAggVolume) {
-            this.logger.debug(`[AbsorptionDetector] Insufficient volume`, {
-                aggressive: volumes.aggressive,
-                required: this.minAggVolume,
-            });
             return;
         }
 
