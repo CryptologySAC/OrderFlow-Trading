@@ -491,6 +491,58 @@ export class OrderFlowDashboard {
             this.handleError(error, "data_stream");
         });
 
+        this.dataStreamManager.on("disconnected", (reason: string) => {
+            this.logger.warn("[OrderFlowDashboard] Data stream disconnected", {
+                reason,
+            });
+            // Notify components that data stream is down
+            this.dependencies.tradesProcessor.emit("stream_disconnected", {
+                reason,
+            });
+        });
+
+        this.dataStreamManager.on("connected", () => {
+            this.logger.info(
+                "[OrderFlowDashboard] Data stream reconnected successfully"
+            );
+            // Notify components that data stream is back up
+            this.dependencies.tradesProcessor.emit("stream_connected");
+            if (this.orderBook) {
+                void this.orderBook.recover().catch((error) => {
+                    this.logger.error(
+                        "[OrderFlowDashboard] OrderBook recovery failed after reconnection",
+                        { error }
+                    );
+                });
+            }
+        });
+
+        this.dataStreamManager.on(
+            "reconnecting",
+            ({ attempt, delay, maxAttempts }) => {
+                this.logger.info(
+                    "[OrderFlowDashboard] Data stream reconnecting",
+                    {
+                        attempt,
+                        delay,
+                        maxAttempts,
+                    }
+                );
+            }
+        );
+
+        this.dataStreamManager.on("unhealthy", () => {
+            this.logger.warn(
+                "[OrderFlowDashboard] Data stream health degraded"
+            );
+        });
+
+        this.dataStreamManager.on("healthy", () => {
+            this.logger.info(
+                "[OrderFlowDashboard] Data stream health restored"
+            );
+        });
+
         // Handle signal events
         // Handle data stream events
         if (!this.signalManager) {

@@ -1288,64 +1288,73 @@ function setupInteract() {
             },
         });
 
-    interact(".gauge-container").draggable({
-        inertia: true,
-        modifiers: [
-            interact.modifiers.restrictRect({
-                restriction: ".dashboard",
-                endOnly: true,
-            }),
-        ],
-        listeners: {
-            start(event) {
-                const t = event.target;
-                t.setAttribute("data-prev-x", t.getAttribute("data-x") || 0);
-                t.setAttribute("data-prev-y", t.getAttribute("data-y") || 0);
-            },
-            move(event) {
-                const target = event.target;
-                let x =
-                    (parseFloat(target.getAttribute("data-x")) || 0) + event.dx;
-                let y =
-                    (parseFloat(target.getAttribute("data-y")) || 0) + event.dy;
-                x = snap(x);
-                y = snap(y);
-                ({ x, y } = snapToOthers(
-                    x,
-                    y,
-                    target.offsetWidth,
-                    target.offsetHeight,
-                    target
-                ));
-                target.style.transform = `translate(${x}px, ${y}px)`;
-                target.setAttribute("data-x", x);
-                target.setAttribute("data-y", y);
-                scheduleLayoutAdjust(target);
-            },
-            end(event) {
-                const target = event.target;
-                if (isOverlapping(target)) {
-                    const px =
-                        parseFloat(target.getAttribute("data-prev-x")) || 0;
-                    const py =
-                        parseFloat(target.getAttribute("data-prev-y")) || 0;
-                    target.style.transform = `translate(${px}px, ${py}px)`;
-                    target.setAttribute("data-x", px);
-                    target.setAttribute("data-y", py);
-                } else {
-                    target.setAttribute(
+    interact(".gauge-container")
+        .draggable({
+            inertia: true,
+            modifiers: [
+                interact.modifiers.restrictRect({
+                    restriction: ".dashboard",
+                    endOnly: true,
+                }),
+            ],
+            listeners: {
+                start(event) {
+                    const t = event.target;
+                    t.setAttribute(
                         "data-prev-x",
-                        target.getAttribute("data-x")
+                        t.getAttribute("data-x") || 0
                     );
-                    target.setAttribute(
+                    t.setAttribute(
                         "data-prev-y",
-                        target.getAttribute("data-y")
+                        t.getAttribute("data-y") || 0
                     );
-                }
-                adjustLayout(target);
+                },
+                move(event) {
+                    const target = event.target;
+                    let x =
+                        (parseFloat(target.getAttribute("data-x")) || 0) +
+                        event.dx;
+                    let y =
+                        (parseFloat(target.getAttribute("data-y")) || 0) +
+                        event.dy;
+                    x = snap(x);
+                    y = snap(y);
+                    ({ x, y } = snapToOthers(
+                        x,
+                        y,
+                        target.offsetWidth,
+                        target.offsetHeight,
+                        target
+                    ));
+                    target.style.transform = `translate(${x}px, ${y}px)`;
+                    target.setAttribute("data-x", x);
+                    target.setAttribute("data-y", y);
+                    scheduleLayoutAdjust(target);
+                },
+                end(event) {
+                    const target = event.target;
+                    if (isOverlapping(target)) {
+                        const px =
+                            parseFloat(target.getAttribute("data-prev-x")) || 0;
+                        const py =
+                            parseFloat(target.getAttribute("data-prev-y")) || 0;
+                        target.style.transform = `translate(${px}px, ${py}px)`;
+                        target.setAttribute("data-x", px);
+                        target.setAttribute("data-y", py);
+                    } else {
+                        target.setAttribute(
+                            "data-prev-x",
+                            target.getAttribute("data-x")
+                        );
+                        target.setAttribute(
+                            "data-prev-y",
+                            target.getAttribute("data-y")
+                        );
+                    }
+                    adjustLayout(target);
+                },
             },
-        },
-    })
+        })
         .resizable({
             edges: { left: true, right: true, bottom: true, top: true },
             modifiers: [
@@ -1364,8 +1373,14 @@ function setupInteract() {
                         "data-prev-h",
                         parseFloat(t.style.height) || t.offsetHeight
                     );
-                    t.setAttribute("data-prev-x", t.getAttribute("data-x") || 0);
-                    t.setAttribute("data-prev-y", t.getAttribute("data-y") || 0);
+                    t.setAttribute(
+                        "data-prev-x",
+                        t.getAttribute("data-x") || 0
+                    );
+                    t.setAttribute(
+                        "data-prev-y",
+                        t.getAttribute("data-y") || 0
+                    );
                 },
                 move(event) {
                     const target = event.target;
@@ -1394,8 +1409,12 @@ function setupInteract() {
                             parseFloat(target.getAttribute("data-prev-x")) || 0;
                         const py =
                             parseFloat(target.getAttribute("data-prev-y")) || 0;
-                        const pw = parseFloat(target.getAttribute("data-prev-w"));
-                        const ph = parseFloat(target.getAttribute("data-prev-h"));
+                        const pw = parseFloat(
+                            target.getAttribute("data-prev-w")
+                        );
+                        const ph = parseFloat(
+                            target.getAttribute("data-prev-h")
+                        );
                         target.style.width = `${pw}px`;
                         target.style.height = `${ph}px`;
                         target.style.transform = `translate(${px}px, ${py}px)`;

@@ -14,7 +14,10 @@ describe("market/OrderBookState", () => {
     });
 
     it("updates depth and tracks best bid/ask", async () => {
-        vi.spyOn(BinanceDataFeed.prototype, "getDepthSnapshot").mockResolvedValue({
+        vi.spyOn(
+            BinanceDataFeed.prototype,
+            "getDepthSnapshot"
+        ).mockResolvedValue({
             lastUpdateId: 1,
             bids: [["100", "1"]],
             asks: [["101", "1"]],

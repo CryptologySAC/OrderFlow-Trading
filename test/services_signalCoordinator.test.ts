@@ -20,7 +20,7 @@ const storage = {
     close: vi.fn(),
 };
 
-class DummyDetector extends (require("events").EventEmitter) {
+class DummyDetector extends require("events").EventEmitter {
     getId() {
         return "det";
     }

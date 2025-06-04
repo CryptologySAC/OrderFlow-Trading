@@ -12,7 +12,11 @@ vi.mock("../src/infrastructure/metricsCollector");
 describe("trading/DataStreamManager", () => {
     it("connects and disconnects", async () => {
         const manager = new DataStreamManager(
-            { symbol: "T", enableHeartbeat: false, enableStreamHealthCheck: false },
+            {
+                symbol: "T",
+                enableHeartbeat: false,
+                enableStreamHealthCheck: false,
+            },
             new BinanceDataFeed(),
             new CircuitBreaker(5, 1000, new Logger()),
             new Logger(),

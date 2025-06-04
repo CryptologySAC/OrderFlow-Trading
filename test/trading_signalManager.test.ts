@@ -20,7 +20,11 @@ const storage = {
 
 describe("trading/SignalManager", () => {
     it("processes signal and returns confirmation", () => {
-        const ad = new AnomalyDetector({ minHistory: 1 }, new Logger(), new DummySpoof() as any);
+        const ad = new AnomalyDetector(
+            { minHistory: 1 },
+            new Logger(),
+            new DummySpoof() as any
+        );
         const manager = new SignalManager(
             ad,
             alertManager,
