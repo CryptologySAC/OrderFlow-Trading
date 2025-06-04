@@ -3,7 +3,7 @@
 import {
     OrderFlowDashboard,
     createDependencies,
-} from "./orderFlowDashboard.js";
+} from "./orderFlowDashBoard.js";
 
 /**
  * Main entry point for the Order Flow Trading application
@@ -20,8 +20,9 @@ export async function main(): Promise<void> {
         await dashboard.startDashboard();
 
         console.log("Order Flow Trading system started successfully");
-    } catch (error) {
-        console.error("Failed to start Order Flow Trading system:", error);
+    } catch (error: unknown) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        console.error("Failed to start Order Flow Trading system:", err);
         process.exit(1);
     }
 }
