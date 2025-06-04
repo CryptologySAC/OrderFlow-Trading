@@ -3,22 +3,18 @@ import { BaseDetector } from "../src/indicators/base/baseDetector";
 import { Logger } from "../src/infrastructure/logger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { SpoofingDetector } from "../src/services/spoofingDetector";
-import type { AggressiveTrade } from "../src/types/marketEvents";
-import { RollingWindow } from "../src/utils/rollingWindow";
+import type { EnrichedTradeEvent, AggressiveTrade } from "../src/types/marketEvents";
 
 vi.mock("../src/infrastructure/logger");
 vi.mock("../src/infrastructure/metricsCollector");
 
 class TestDetector extends BaseDetector {
+    public signals: { zone: number; aggressive: number; passive: number }[] = [];
     protected detectorType = "test" as const;
     constructor() {
         const logger = new Logger();
         const metrics = new MetricsCollector();
-        const spoof = new SpoofingDetector({
-            tickSize: 0.01,
-            wallTicks: 1,
-            minWallSize: 1,
-        });
+        const spoof = new SpoofingDetector({ tickSize: 0.01, wallTicks: 1, minWallSize: 1 });
         super(
             "1",
             () => {},
@@ -31,7 +27,7 @@ class TestDetector extends BaseDetector {
                     adaptiveZone: false,
                     autoCalibrate: false,
                     priceResponse: false,
-                    passiveHistory: false,
+                    passiveHistory: true,
                     spoofingDetection: false,
                 },
             },
@@ -41,23 +37,33 @@ class TestDetector extends BaseDetector {
         );
     }
     protected onEnrichedTradeSpecific(): void {}
-    protected checkForSignal(): void {}
     protected getSignalType() {
         return "test" as const;
     }
-    public calcZone(p: number) {
-        return this.calculateZone(p);
-    }
-    public group(trades: AggressiveTrade[], ticks: number) {
-        return this.groupTradesByZone(trades, ticks);
-    }
-    public volumes(zone: number, trades: AggressiveTrade[], ticks: number) {
-        return this.calculateZoneVolumes(zone, trades, ticks);
-    }
-    public cooldown(zone: number, side: "buy" | "sell") {
-        return this.checkCooldown(zone, side);
+    protected checkForSignal(trade: AggressiveTrade): void {
+        const zone = this.calculateZone(trade.price);
+        const bucket = this.zoneAgg.get(zone)!;
+        const { aggressive, passive } = this.calculateZoneVolumes(zone, bucket.trades, this.zoneTicks);
+        const side = trade.buyerIsMaker ? "sell" : "buy";
+        if (aggressive >= 2 && this.checkCooldown(zone, side)) {
+            this.signals.push({ zone, aggressive, passive });
+        }
     }
 }
+
+const makeEvent = (price: number, qty: number, ts: number): EnrichedTradeEvent => ({
+    price,
+    quantity: qty,
+    timestamp: ts,
+    buyerIsMaker: false,
+    pair: "TEST",
+    tradeId: String(ts),
+    originalTrade: {} as any,
+    passiveBidVolume: 1,
+    passiveAskVolume: 1,
+    zonePassiveBidVolume: 1,
+    zonePassiveAskVolume: 1,
+});
 
 describe("indicators/BaseDetector", () => {
     let det: TestDetector;
@@ -69,40 +75,24 @@ describe("indicators/BaseDetector", () => {
         vi.useRealTimers();
     });
 
-    const trade = (
-        price: number,
-        qty: number,
-        ts: number
-    ): AggressiveTrade => ({
-        price,
-        quantity: qty,
-        timestamp: ts,
-        buyerIsMaker: false,
-        pair: "TEST",
-        tradeId: String(ts),
-        originalTrade: {} as any,
+    it("groups trades into zones and emits once per threshold", () => {
+        const now = Date.now();
+        det.onEnrichedTrade(makeEvent(100.01, 1, now));
+        det.onEnrichedTrade(makeEvent(100.02, 1, now + 1));
+        det.onEnrichedTrade(makeEvent(100.07, 1, now + 2));
+        expect(det.signals.length).toBe(1);
+        expect(det.signals[0]).toMatchObject({ zone: 100.02, aggressive: 2, passive: 2 });
     });
 
-    it("calculates zones and groups trades", () => {
-        const trades = [
-            trade(100.01, 1, 1),
-            trade(100.02, 1, 2),
-            trade(100.07, 1, 3),
-        ];
-        const grouped = det.group(trades, 2);
-        expect(grouped.size).toBe(2);
-        expect(det.calcZone(100.01)).toBe(100.02);
-    });
-
-    it("computes volumes and cooldown", () => {
-        const zone = det.calcZone(100);
-        const win = new RollingWindow<any>(10, false);
-        win.push({ bid: 1, ask: 1, total: 2, timestamp: Date.now() });
-        (det as any).zonePassiveHistory.set(zone, win);
-        const vols = det.volumes(zone, [trade(100, 2, Date.now())], 2);
-        expect(vols.aggressive).toBe(2);
-        expect(vols.passive).toBe(2);
-        expect(det.cooldown(zone, "buy")).toBe(true);
-        expect(det.cooldown(zone, "buy")).toBe(false);
+    it("enforces cooldown between detections", () => {
+        const now = Date.now();
+        det.onEnrichedTrade(makeEvent(100, 1, now));
+        det.onEnrichedTrade(makeEvent(100, 1, now + 1));
+        expect(det.signals.length).toBe(1);
+        det.onEnrichedTrade(makeEvent(100, 1, now + 2));
+        expect(det.signals.length).toBe(1);
+        vi.advanceTimersByTime(1001);
+        det.onEnrichedTrade(makeEvent(100, 1, now + 1001));
+        expect(det.signals.length).toBe(2);
     });
 });
