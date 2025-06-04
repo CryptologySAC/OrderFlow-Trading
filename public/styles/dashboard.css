@@ -1,9 +1,76 @@
+/* CSS Variables for Light/Dark Mode */
+:root {
+    --bg-primary: #f4f4f4;
+    --bg-secondary: #ffffff;
+    --text-primary: #000000;
+    --text-secondary: #333333;
+    --border-color: #ccc;
+    --border-light: #eee;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    --gauge-bg: #fff;
+    --chart-grid: rgba(102, 102, 102, 0.1);
+    --chart-annotation: rgba(102, 102, 102, 0.4);
+    --button-bg: #ffffff;
+    --button-border: #ccc;
+    --button-hover: #e6e6e6;
+    --anomaly-info-bg: #e3f2fd;
+    --anomaly-medium-bg: #fffde7;
+    --resize-handle-hover: #007bff;
+    --resize-handle-active: #0056b3;
+}
+
+/* Dark mode variables */
+[data-theme="dark"] {
+    --bg-primary: #1a1a1a;
+    --bg-secondary: #2d2d2d;
+    --text-primary: #ffffff;
+    --text-secondary: #e0e0e0;
+    --border-color: #404040;
+    --border-light: #333333;
+    --shadow-color: rgba(0, 0, 0, 0.3);
+    --gauge-bg: #2d2d2d;
+    --chart-grid: rgba(255, 255, 255, 0.25);
+    --chart-annotation: rgba(255, 255, 255, 0.6);
+    --button-bg: #3d3d3d;
+    --button-border: #555555;
+    --button-hover: #4a4a4a;
+    --anomaly-info-bg: #1e3a5f;
+    --anomaly-medium-bg: #3d3b00;
+    --resize-handle-hover: #4dabf7;
+    --resize-handle-active: #339af0;
+}
+
+/* Auto dark mode based on system preference */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+        --bg-primary: #1a1a1a;
+        --bg-secondary: #2d2d2d;
+        --text-primary: #ffffff;
+        --text-secondary: #e0e0e0;
+        --border-color: #404040;
+        --border-light: #333333;
+        --shadow-color: rgba(0, 0, 0, 0.3);
+        --gauge-bg: #2d2d2d;
+        --chart-grid: rgba(255, 255, 255, 0.25);
+        --chart-annotation: rgba(255, 255, 255, 0.6);
+        --button-bg: #3d3d3d;
+        --button-border: #555555;
+        --button-hover: #4a4a4a;
+        --anomaly-info-bg: #1e3a5f;
+        --anomaly-medium-bg: #3d3b00;
+        --resize-handle-hover: #4dabf7;
+        --resize-handle-active: #339af0;
+    }
+}
+
 body {
     font-family: Arial, sans-serif;
     margin: 0;
     padding: 20px;
-    background-color: #f4f4f4;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
     overflow: hidden;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .dashboard {
@@ -39,12 +106,26 @@ body {
 .chart-container,
 .gauge-container,
 .anomaly-list-container {
-    background: white;
-    border: 1px solid #ccc;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
     padding: 10px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    margin: 1vh 0;
+    box-shadow: 0 2px 5px var(--shadow-color);
     box-sizing: border-box;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.chart-container,
+.gauge-container {
+    margin: 1vh 0;
+}
+
+.anomaly-list-container {
+    margin: 1vh 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
 }
 
 /* Remove margin between gauge and anomaly list in column 3 */
@@ -61,6 +142,7 @@ body {
     justify-content: center;
     align-items: center;
     height: 20vh;
+    flex-shrink: 0;
 }
 
 #orderBookContainer {
@@ -75,12 +157,6 @@ body {
     flex-direction: column;
 }
 
-#anomalyListContainer {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
 
 .resize-handle {
     position: absolute;
@@ -96,11 +172,11 @@ body {
 }
 
 .resize-handle:hover {
-    border-right-color: #007bff;
+    border-right-color: var(--resize-handle-hover);
 }
 
 .resize-handle:active {
-    border-right-color: #0056b3;
+    border-right-color: var(--resize-handle-active);
 }
 
 canvas {
@@ -149,6 +225,20 @@ canvas {
     margin: 0 5px;
     padding: 5px 10px;
     cursor: pointer;
+    background: var(--button-bg);
+    border: 1px solid var(--button-border);
+    color: var(--text-primary);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.rangeSelector button:hover {
+    background: var(--button-hover);
+}
+
+.rangeSelector button.active {
+    background: var(--resize-handle-hover);
+    color: white;
+    border-color: var(--resize-handle-hover);
 }
 
 .reset-layout-btn {
@@ -163,6 +253,22 @@ canvas {
 .reset-layout-btn:hover {
     background-color: #c82333 !important;
     border-color: #bd2130 !important;
+}
+
+.theme-toggle-btn {
+    background: var(--button-bg) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--button-border) !important;
+    border-radius: 3px;
+    font-size: 12px;
+    margin-left: 10px !important;
+    padding: 5px 10px !important;
+    cursor: pointer;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.theme-toggle-btn:hover {
+    background: var(--button-hover) !important;
 }
 
 .chartAreaWrapper {
@@ -189,6 +295,7 @@ canvas {
     font-weight: bold;
     margin-bottom: 8px;
     font-size: 16px;
+    flex-shrink: 0;
 }
 .anomaly-filter label {
     margin-right: 10px;
@@ -199,15 +306,19 @@ canvas {
     overflow-y: auto;
     flex: 1;
     font-size: 14px;
+    min-height: 0;
 }
 .anomaly-row {
-    padding: 3px 5px;
-    border-bottom: 1px solid #eee;
+    padding: 3px 5px 3px 5px;
+    border-bottom: 1px solid var(--border-light);
     display: flex;
     align-items: center;
     font-family: 'Courier New', monospace;
     font-size: 12px;
     line-height: 1.2;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.3s ease;
 }
 .anomaly-row.critical {
     color: #fff;
@@ -220,49 +331,55 @@ canvas {
     font-weight: bold;
 }
 .anomaly-row.medium {
-    color: #333;
-    background: #fffde7;
+    color: var(--text-secondary);
+    background: var(--anomaly-medium-bg);
 }
 .anomaly-row.info {
-    color: #333;
-    background: #e3f2fd;
+    color: var(--text-secondary);
+    background: var(--anomaly-info-bg);
 }
-/* Fixed-width columns for perfect alignment */
+/* Flexible columns that distribute available space evenly */
 .anomaly-icon {
-    display: inline-block;
-    width: 20px;
+    flex: 0 0 24px;
     text-align: center;
     font-size: 14px;
-    margin-right: 6px;
-    flex-shrink: 0;
+    margin-right: 8px;
 }
 
 .anomaly-label {
-    display: inline-block;
-    width: 110px;
+    flex: 3;
     text-align: left;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    margin-right: 6px;
-    flex-shrink: 0;
+    margin-right: 8px;
+    min-width: 0;
 }
 
 .anomaly-price {
-    display: inline-block;
-    width: 75px;
-    text-align: center;
-    margin-right: 6px;
-    flex-shrink: 0;
+    flex: 2;
+    text-align: left;
+    margin-right: 8px;
     font-weight: bold;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.anomaly-action {
+    flex: 1.5;
+    text-align: center;
+    margin-right: 8px;
+    font-weight: normal;
+    font-size: 11px;
+    white-space: nowrap;
 }
 
 .anomaly-time {
-    display: inline-block;
-    width: 45px;
+    flex: 0 0 50px;
     text-align: right;
-    flex-shrink: 0;
     opacity: 0.8;
+    padding-right: 5px;
+    box-sizing: border-box;
 }
 
 /* Legacy class for backwards compatibility */
@@ -334,5 +451,6 @@ canvas {
     
     .gauge-container {
         height: 15vh;
+        flex-shrink: 0;
     }
 }

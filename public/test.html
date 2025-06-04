@@ -44,15 +44,21 @@
             min-width: 150px;
             max-width: 30%;
             background: lightcoral;
-            gap: 0; /* Remove gap between gauge and anomaly list */
         }
 
         #column3 .content:first-child {
             margin-bottom: 0;
+            height: 20vh;
+            flex-shrink: 0;
         }
 
         #column3 .content:last-child {
             margin-top: 0;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
         }
 
         .resize-handle {
@@ -85,18 +91,22 @@
         .anomaly-list-demo {
             border: 1px solid #ddd;
             border-radius: 4px;
-            overflow: hidden;
+            overflow-y: auto;
             margin: 10px 0;
+            flex: 1;
+            min-height: 0;
         }
 
         .anomaly-row {
-            padding: 3px 5px;
+            padding: 3px 5px 3px 5px;
             border-bottom: 1px solid #eee;
             display: flex;
             align-items: center;
             font-family: 'Courier New', monospace;
             font-size: 12px;
             line-height: 1.2;
+            width: 100%;
+            box-sizing: border-box;
         }
 
         .anomaly-row:last-child {
@@ -121,40 +131,46 @@
         }
 
         .anomaly-icon {
-            display: inline-block;
-            width: 20px;
+            flex: 0 0 24px;
             text-align: center;
             font-size: 14px;
-            margin-right: 6px;
-            flex-shrink: 0;
+            margin-right: 8px;
         }
 
         .anomaly-label {
-            display: inline-block;
-            width: 110px;
+            flex: 3;
             text-align: left;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            margin-right: 6px;
-            flex-shrink: 0;
+            margin-right: 8px;
+            min-width: 0;
         }
 
         .anomaly-price {
-            display: inline-block;
-            width: 75px;
-            text-align: center;
-            margin-right: 6px;
-            flex-shrink: 0;
+            flex: 2;
+            text-align: left;
+            margin-right: 8px;
             font-weight: bold;
+            white-space: nowrap;
+            min-width: 0;
+        }
+
+        .anomaly-action {
+            flex: 1.5;
+            text-align: center;
+            margin-right: 8px;
+            font-weight: normal;
+            font-size: 11px;
+            white-space: nowrap;
         }
 
         .anomaly-time {
-            display: inline-block;
-            width: 45px;
+            flex: 0 0 50px;
             text-align: right;
-            flex-shrink: 0;
             opacity: 0.8;
+            padding-right: 5px;
+            box-sizing: border-box;
         }
     </style>
 </head>
@@ -188,36 +204,42 @@
                         <span class="anomaly-icon">⚡</span>
                         <span class="anomaly-label">Flash Crash</span>
                         <span class="anomaly-price">88.00-89.50</span>
+                        <span class="anomaly-action">Exit</span>
                         <span class="anomaly-time">1s ago</span>
                     </div>
                     <div class="anomaly-row critical">
                         <span class="anomaly-icon">🔥</span>
                         <span class="anomaly-label">Momentum Ignition</span>
                         <span class="anomaly-price">88.10-88.25</span>
+                        <span class="anomaly-action">Buy</span>
                         <span class="anomaly-time">2s ago</span>
                     </div>
                     <div class="anomaly-row high">
                         <span class="anomaly-icon">🐋</span>
                         <span class="anomaly-label">Whale Activity</span>
                         <span class="anomaly-price">87.80</span>
+                        <span class="anomaly-action">Wait</span>
                         <span class="anomaly-time">8s ago</span>
                     </div>
                     <div class="anomaly-row high">
                         <span class="anomaly-icon">⚖️</span>
                         <span class="anomaly-label">Orderbook Imbalance</span>
                         <span class="anomaly-price">87.95-88.05</span>
+                        <span class="anomaly-action">Reduce</span>
                         <span class="anomaly-time">15s ago</span>
                     </div>
                     <div class="anomaly-row medium">
                         <span class="anomaly-icon">🔵</span>
                         <span class="anomaly-label">Absorption</span>
                         <span class="anomaly-price">88.50</span>
+                        <span class="anomaly-action">Add</span>
                         <span class="anomaly-time">1m ago</span>
                     </div>
                     <div class="anomaly-row medium">
                         <span class="anomaly-icon">🧊</span>
                         <span class="anomaly-label">Iceberg Order</span>
                         <span class="anomaly-price">88.75-88.80</span>
+                        <span class="anomaly-action">Monitor</span>
                         <span class="anomaly-time">2m ago</span>
                     </div>
                 </div>

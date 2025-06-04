@@ -216,6 +216,46 @@ function getAnomalyLabel(type) {
             return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
 }
+
+function getReadableAction(action) {
+    if (!action) return 'Monitor';
+    
+    switch (action.toLowerCase()) {
+        case "buy_signal":
+        case "buy":
+            return "Buy";
+        case "sell_signal":
+        case "sell":
+            return "Sell";
+        case "hold_position":
+        case "hold":
+            return "Hold";
+        case "close_position":
+        case "close":
+            return "Close";
+        case "reduce_position":
+        case "reduce":
+            return "Reduce";
+        case "increase_position":
+        case "increase":
+            return "Add";
+        case "wait_for_confirmation":
+        case "wait":
+            return "Wait";
+        case "monitor_closely":
+        case "monitor":
+            return "Monitor";
+        case "avoid_trading":
+        case "avoid":
+            return "Avoid";
+        case "exit_immediately":
+        case "exit":
+            return "Exit";
+        default:
+            // Convert snake_case to Title Case
+            return action.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+}
 function capitalize(str) {
     return str[0].toUpperCase() + str.slice(1);
 }
@@ -238,6 +278,7 @@ function renderAnomalyList() {
                 <span class="anomaly-icon">${getAnomalyIcon(a.type)}</span>
                 <span class="anomaly-label">${getAnomalyLabel(a.type)}</span>
                 <span class="anomaly-price">${a.affectedPriceRange ? `${a.affectedPriceRange.min.toFixed(2)}-${a.affectedPriceRange.max.toFixed(2)}` : `${a.price?.toFixed(2) || 'N/A'}`}</span>
+                <span class="anomaly-action">${getReadableAction(a.recommendedAction)}</span>
                 <span class="anomaly-time">${formatAgo(a.detectedAt || a.time || Date.now())}</span>
             </div>
         `
@@ -601,8 +642,6 @@ const tradeWebsocket = new TradeWebSocket({
                         const labels = [];
                         const askData = [];
                         const bidData = [];
-                        const askColors = [];
-                        const bidColors = [];
                         
                         orderBookData.priceLevels.forEach((level) => {
                             const priceStr = level.price ? level.price.toFixed(2) : "0.00";
@@ -611,22 +650,21 @@ const tradeWebsocket = new TradeWebSocket({
                             labels.push(`${priceStr}_ask`);
                             askData.push(level.ask || 0);
                             bidData.push(null);
-                            askColors.push(level.ask ? `rgba(255, 0, 0, ${Math.min(level.ask / 2000, 1)})` : "rgba(0, 0, 0, 0)");
-                            bidColors.push("rgba(0, 0, 0, 0)");
                             
                             // Add bid position  
                             labels.push(`${priceStr}_bid`);
                             askData.push(null);
                             bidData.push(level.bid || 0);
-                            askColors.push("rgba(0, 0, 0, 0)");
-                            bidColors.push(level.bid ? `rgba(0, 128, 0, ${Math.min(level.bid / 2000, 1)})` : "rgba(0, 0, 0, 0)");
                         });
                         
                         orderBookChart.data.labels = labels;
                         orderBookChart.data.datasets[0].data = askData;
                         orderBookChart.data.datasets[1].data = bidData;
-                        orderBookChart.data.datasets[0].backgroundColor = askColors;
-                        orderBookChart.data.datasets[1].backgroundColor = bidColors;
+                        
+                        // Update colors based on current theme
+                        const currentTheme = getCurrentTheme();
+                        const actualTheme = currentTheme === 'system' ? getSystemTheme() : currentTheme;
+                        updateOrderBookBarColors(actualTheme);
                         
                         scheduleOrderBookUpdate();
                     } else {
@@ -828,6 +866,16 @@ function initializeDelayGauge(canvas) {
 
     if (typeof RadialGauge === "undefined") return null;
 
+    // Get current theme for initial colors
+    const currentTheme = getCurrentTheme();
+    const actualTheme = currentTheme === 'system' ? getSystemTheme() : currentTheme;
+    
+    // Theme-aware colors
+    const plateColor = actualTheme === 'dark' ? '#2d2d2d' : '#fff';
+    const textColor = actualTheme === 'dark' ? '#ffffff' : '#000000';
+    const tickColor = actualTheme === 'dark' ? '#e0e0e0' : '#444444';
+    const minorTickColor = actualTheme === 'dark' ? '#b0b0b0' : '#666666';
+
     return new RadialGauge({
         renderTo: canvas,
         width: 200,
@@ -846,12 +894,12 @@ function initializeDelayGauge(canvas) {
             { from: 500, to: 1000, color: "rgba(255, 165, 0, 0.3)" },
             { from: 1000, to: 2000, color: "rgba(255, 0, 0, 0.3)" },
         ],
-        colorPlate: "#fff",
-        colorMajorTicks: "#444",
-        colorMinorTicks: "#666",
-        colorTitle: "#000",
-        colorUnits: "#000",
-        colorNumbers: "#444",
+        colorPlate: plateColor,
+        colorMajorTicks: tickColor,
+        colorMinorTicks: minorTickColor,
+        colorTitle: textColor,
+        colorUnits: textColor,
+        colorNumbers: tickColor,
         colorNeedleStart: "rgba(240, 128, 128, 1)",
         colorNeedleEnd: "rgba(255, 160, 122, .9)",
         value: 0,
@@ -906,7 +954,7 @@ function initializeOrderBookChart(ctx) {
         labels.push(`${priceStr}_ask`);
         askData.push(level.ask);
         bidData.push(null);
-        askColors.push(level.ask ? `rgba(255, 0, 0, ${Math.min(level.ask / 2000, 1)})` : "rgba(0, 0, 0, 0)");
+        askColors.push("rgba(255, 0, 0, 0.5)"); // Placeholder, will be updated by theme
         bidColors.push("rgba(0, 0, 0, 0)");
         
         // Add bid position (lower part of price tick)
@@ -914,7 +962,7 @@ function initializeOrderBookChart(ctx) {
         askData.push(null);
         bidData.push(level.bid);
         askColors.push("rgba(0, 0, 0, 0)");
-        bidColors.push(level.bid ? `rgba(0, 128, 0, ${Math.min(level.bid / 2000, 1)})` : "rgba(0, 0, 0, 0)");
+        bidColors.push("rgba(0, 128, 0, 0.5)"); // Placeholder, will be updated by theme
     });
 
     return new Chart(ctx, {
@@ -1039,6 +1087,9 @@ function setRange(duration) {
         updateYAxisBounds();
         tradesChart.update();
     }
+    
+    // Save the new time range setting
+    saveTimeRange();
 }
 
 /**
@@ -1050,9 +1101,6 @@ function setupColumnResizing() {
         console.error("Interact.js not loaded");
         return;
     }
-
-    // Restore saved column widths on load
-    restoreColumnWidths();
 
     // Setup column resizing functionality
     interact('.resize-handle').draggable({
@@ -1132,6 +1180,134 @@ function saveColumnWidths() {
 }
 
 /**
+ * Save anomaly filter settings to localStorage
+ */
+function saveAnomalyFilters() {
+    try {
+        const filterSettings = {
+            filters: Array.from(anomalyFilters),
+            timestamp: Date.now()
+        };
+        
+        localStorage.setItem('dashboardAnomalyFilters', JSON.stringify(filterSettings));
+        console.log('Anomaly filters saved:', filterSettings);
+    } catch (error) {
+        console.warn('Failed to save anomaly filters to localStorage:', error);
+    }
+}
+
+/**
+ * Restore anomaly filter settings from localStorage
+ */
+function restoreAnomalyFilters() {
+    try {
+        const savedFilters = localStorage.getItem('dashboardAnomalyFilters');
+        
+        if (!savedFilters) {
+            console.log('No saved anomaly filters found, using defaults');
+            return;
+        }
+        
+        const filterSettings = JSON.parse(savedFilters);
+        
+        if (!filterSettings.filters || !Array.isArray(filterSettings.filters)) {
+            console.warn('Invalid saved anomaly filters, using defaults');
+            return;
+        }
+        
+        // Update the anomaly filters set
+        anomalyFilters.clear();
+        filterSettings.filters.forEach(filter => anomalyFilters.add(filter));
+        
+        // Update the UI checkboxes
+        const filterBox = document.querySelector('.anomaly-filter');
+        if (filterBox) {
+            filterBox.querySelectorAll('input[type=checkbox]').forEach((checkbox) => {
+                checkbox.checked = anomalyFilters.has(checkbox.value);
+            });
+        }
+        
+        console.log('Anomaly filters restored:', {
+            filters: filterSettings.filters,
+            savedAt: new Date(filterSettings.timestamp).toLocaleString()
+        });
+        
+        // Re-render the anomaly list with restored filters
+        renderAnomalyList();
+    } catch (error) {
+        console.warn('Failed to restore anomaly filters from localStorage:', error);
+    }
+}
+
+/**
+ * Save current time range setting to localStorage
+ */
+function saveTimeRange() {
+    try {
+        const rangeSettings = {
+            activeRange: activeRange,
+            timestamp: Date.now()
+        };
+        
+        localStorage.setItem('dashboardTimeRange', JSON.stringify(rangeSettings));
+        console.log('Time range saved:', rangeSettings);
+    } catch (error) {
+        console.warn('Failed to save time range to localStorage:', error);
+    }
+}
+
+/**
+ * Restore time range setting from localStorage
+ */
+function restoreTimeRange() {
+    try {
+        const savedRange = localStorage.getItem('dashboardTimeRange');
+        
+        if (!savedRange) {
+            console.log('No saved time range found, using default (90 minutes)');
+            return;
+        }
+        
+        const rangeSettings = JSON.parse(savedRange);
+        
+        if (rangeSettings.activeRange === undefined) {
+            console.warn('Invalid saved time range, using default');
+            return;
+        }
+        
+        // Update active range and apply to chart
+        activeRange = rangeSettings.activeRange;
+        
+        // Update the UI to show the selected range
+        const rangeSelector = document.querySelector('.rangeSelector');
+        if (rangeSelector) {
+            rangeSelector.querySelectorAll('button').forEach(button => {
+                const buttonRange = button.getAttribute('data-range');
+                const buttonRangeValue = buttonRange === 'all' ? null : parseInt(buttonRange);
+                
+                if (buttonRangeValue === activeRange) {
+                    button.classList.add('active');
+                } else {
+                    button.classList.remove('active');
+                }
+            });
+        }
+        
+        console.log('Time range restored:', {
+            range: activeRange === null ? 'all' : `${activeRange / 60000} minutes`,
+            savedAt: new Date(rangeSettings.timestamp).toLocaleString()
+        });
+        
+        // Apply the range to the chart if it exists
+        if (tradesChart) {
+            setRange(activeRange);
+        }
+    } catch (error) {
+        console.warn('Failed to restore time range from localStorage:', error);
+    }
+}
+
+/**
  * Restore column widths from localStorage
  */
 function restoreColumnWidths() {
@@ -1202,6 +1378,286 @@ function resetColumnWidths() {
     } catch (error) {
         console.warn('Failed to reset column widths:', error);
     }
+}
+
+/**
+ * Reset all dashboard settings to defaults
+ */
+function resetAllSettings() {
+    try {
+        // Reset column widths
+        resetColumnWidths();
+        
+        // Reset anomaly filters to default (critical and high)
+        anomalyFilters.clear();
+        anomalyFilters.add('critical');
+        anomalyFilters.add('high');
+        localStorage.removeItem('dashboardAnomalyFilters');
+        
+        // Update UI checkboxes
+        const filterBox = document.querySelector('.anomaly-filter');
+        if (filterBox) {
+            filterBox.querySelectorAll('input[type=checkbox]').forEach((checkbox) => {
+                checkbox.checked = anomalyFilters.has(checkbox.value);
+            });
+        }
+        renderAnomalyList();
+        
+        // Reset time range to default (90 minutes)
+        activeRange = 90 * 60000;
+        localStorage.removeItem('dashboardTimeRange');
+        
+        // Update UI range selector
+        const rangeSelector = document.querySelector('.rangeSelector');
+        if (rangeSelector) {
+            rangeSelector.querySelectorAll('button').forEach(button => {
+                const buttonRange = button.getAttribute('data-range');
+                const buttonRangeValue = buttonRange === 'all' ? null : parseInt(buttonRange);
+                
+                if (buttonRangeValue === activeRange) {
+                    button.classList.add('active');
+                } else {
+                    button.classList.remove('active');
+                }
+            });
+        }
+        
+        // Reset theme to system default
+        localStorage.removeItem('dashboardTheme');
+        applySystemTheme();
+        updateThemeToggleButton();
+        
+        // Apply to chart
+        if (tradesChart) {
+            setRange(activeRange);
+        }
+        
+        console.log('All dashboard settings reset to defaults');
+    } catch (error) {
+        console.warn('Failed to reset all settings:', error);
+    }
+}
+
+/**
+ * Theme management functions
+ */
+function getSystemTheme() {
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function getCurrentTheme() {
+    const saved = localStorage.getItem('dashboardTheme');
+    if (saved && (saved === 'light' || saved === 'dark')) {
+        return saved;
+    }
+    return 'system';
+}
+
+function applyTheme(theme) {
+    const body = document.body;
+    
+    if (theme === 'system') {
+        body.removeAttribute('data-theme');
+    } else {
+        body.setAttribute('data-theme', theme);
+    }
+    
+    // Update chart colors for dark/light mode
+    updateChartTheme(theme === 'system' ? getSystemTheme() : theme);
+}
+
+function applySystemTheme() {
+    applyTheme('system');
+}
+
+function saveTheme(theme) {
+    try {
+        if (theme === 'system') {
+            localStorage.removeItem('dashboardTheme');
+        } else {
+            localStorage.setItem('dashboardTheme', theme);
+        }
+        console.log('Theme saved:', theme);
+    } catch (error) {
+        console.warn('Failed to save theme to localStorage:', error);
+    }
+}
+
+function restoreTheme() {
+    try {
+        const savedTheme = getCurrentTheme();
+        applyTheme(savedTheme);
+        updateThemeToggleButton();
+        
+        console.log('Theme restored:', savedTheme);
+    } catch (error) {
+        console.warn('Failed to restore theme from localStorage:', error);
+    }
+}
+
+function toggleTheme() {
+    const current = getCurrentTheme();
+    let next;
+    
+    switch (current) {
+        case 'system':
+            next = 'light';
+            break;
+        case 'light':
+            next = 'dark';
+            break;
+        case 'dark':
+            next = 'system';
+            break;
+        default:
+            next = 'system';
+    }
+    
+    applyTheme(next);
+    saveTheme(next);
+    updateThemeToggleButton();
+}
+
+function updateThemeToggleButton() {
+    const button = document.getElementById('themeToggle');
+    if (!button) return;
+    
+    const current = getCurrentTheme();
+    const icons = {
+        'system': '🔄',
+        'light': '☀️',
+        'dark': '🌙'
+    };
+    
+    const labels = {
+        'system': 'System',
+        'light': 'Light',
+        'dark': 'Dark'
+    };
+    
+    button.innerHTML = `${icons[current]} ${labels[current]}`;
+    button.title = `Current theme: ${labels[current]}. Click to cycle through themes.`;
+}
+
+function updateChartTheme(theme) {
+    // Update chart colors based on theme
+    if (tradesChart) {
+        const gridColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.25)' : 'rgba(102, 102, 102, 0.1)';
+        const annotationColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'rgba(102, 102, 102, 0.4)';
+        const tickColor = theme === 'dark' ? '#e0e0e0' : '#666666';
+        
+        // Update grid colors
+        tradesChart.options.scales.x.grid.color = gridColor;
+        tradesChart.options.scales.y.grid = tradesChart.options.scales.y.grid || {};
+        tradesChart.options.scales.y.grid.color = gridColor;
+        
+        // Update tick colors
+        tradesChart.options.scales.x.ticks.color = tickColor;
+        tradesChart.options.scales.y.ticks.color = tickColor;
+        
+        // Update annotation colors
+        const annotations = tradesChart.options.plugins.annotation.annotations;
+        Object.keys(annotations).forEach(key => {
+            if (key.includes('15min') || !isNaN(key)) {
+                annotations[key].borderColor = annotationColor;
+            }
+        });
+        
+        tradesChart.update('none');
+    }
+    
+    // Update order book chart colors
+    if (orderBookChart) {
+        const gridColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.25)' : 'rgba(102, 102, 102, 0.1)';
+        const tickColor = theme === 'dark' ? '#e0e0e0' : '#666666';
+        
+        // Update grid colors
+        orderBookChart.options.scales.x.grid = orderBookChart.options.scales.x.grid || {};
+        orderBookChart.options.scales.x.grid.color = gridColor;
+        orderBookChart.options.scales.y.grid = orderBookChart.options.scales.y.grid || {};
+        orderBookChart.options.scales.y.grid.color = gridColor;
+        
+        // Update tick colors
+        orderBookChart.options.scales.x.ticks.color = tickColor;
+        orderBookChart.options.scales.y.ticks.color = tickColor;
+        
+        // Update order book bar colors with better visibility in dark mode
+        updateOrderBookBarColors(theme);
+        
+        orderBookChart.update('none');
+    }
+    
+    // Update gauge colors
+    if (delayGauge) {
+        const plateColor = theme === 'dark' ? '#2d2d2d' : '#fff';
+        const textColor = theme === 'dark' ? '#ffffff' : '#000000';
+        const tickColor = theme === 'dark' ? '#e0e0e0' : '#444444';
+        const minorTickColor = theme === 'dark' ? '#b0b0b0' : '#666666';
+        
+        delayGauge.update({
+            colorPlate: plateColor,
+            colorTitle: textColor,
+            colorUnits: textColor,
+            colorNumbers: tickColor,
+            colorMajorTicks: tickColor,
+            colorMinorTicks: minorTickColor
+        });
+        
+        // Force redraw to apply color changes
+        delayGauge.draw();
+    }
+}
+
+function updateOrderBookBarColors(theme) {
+    if (!orderBookChart || !orderBookData) return;
+    
+    const datasets = orderBookChart.data.datasets;
+    if (!datasets || datasets.length < 2) return;
+    
+    // Enhanced colors for better visibility in dark mode
+    const askColors = [];
+    const bidColors = [];
+    
+    orderBookData.priceLevels.forEach((level) => {
+        // Ask colors (red) - enhanced opacity for dark mode
+        const askOpacity = theme === 'dark' ? 
+            Math.min(level.ask / 1500, 0.9) : // Higher max opacity in dark mode
+            Math.min(level.ask / 2000, 1);
+        
+        const askColor = level.ask ? 
+            (theme === 'dark' ? 
+                `rgba(255, 80, 80, ${Math.max(askOpacity, 0.3)})` : // Brighter red with min opacity
+                `rgba(255, 0, 0, ${askOpacity})`) : 
+            "rgba(0, 0, 0, 0)";
+        
+        // Bid colors (green) - enhanced opacity for dark mode  
+        const bidOpacity = theme === 'dark' ? 
+            Math.min(level.bid / 1500, 0.9) : // Higher max opacity in dark mode
+            Math.min(level.bid / 2000, 1);
+        
+        const bidColor = level.bid ? 
+            (theme === 'dark' ? 
+                `rgba(80, 255, 80, ${Math.max(bidOpacity, 0.3)})` : // Brighter green with min opacity
+                `rgba(0, 128, 0, ${bidOpacity})`) : 
+            "rgba(0, 0, 0, 0)";
+        
+        // Add ask position
+        askColors.push(askColor);
+        bidColors.push("rgba(0, 0, 0, 0)");
+        
+        // Add bid position
+        askColors.push("rgba(0, 0, 0, 0)");
+        bidColors.push(bidColor);
+    });
+    
+    // Update the chart datasets
+    datasets[0].backgroundColor = askColors; // Asks
+    datasets[1].backgroundColor = bidColors; // Bids
+    
+    // Update border colors for better definition in dark mode
+    const borderOpacity = theme === 'dark' ? 0.8 : 0.5;
+    datasets[0].borderColor = theme === 'dark' ? `rgba(255, 120, 120, ${borderOpacity})` : `rgba(255, 0, 0, ${borderOpacity})`;
+    datasets[1].borderColor = theme === 'dark' ? `rgba(120, 255, 120, ${borderOpacity})` : `rgba(0, 128, 0, ${borderOpacity})`;
 }
 
 function triggerChartResize() {
@@ -1705,6 +2161,12 @@ function setupInteract() {
  * Initializes the application on DOM content loaded.
  */
 function initialize() {
+    // Restore ALL saved settings FIRST, before any UI setup or rendering
+    restoreTheme();
+    restoreColumnWidths();
+    restoreAnomalyFilters();
+    restoreTimeRange();
+
     // Validate DOM elements
     if (!tradesCanvas) {
         console.error("Trades chart canvas not found");
@@ -1737,7 +2199,7 @@ function initialize() {
     orderBookChart = initializeOrderBookChart(orderBookCtx);
     delayGauge = initializeDelayGauge(delayGaugeCanvas);
 
-    // Setup interact.js for column resizing
+    // Setup interact.js for column resizing (this includes restoreColumnWidths)
     setupColumnResizing();
 
     // Setup range selector
@@ -1745,6 +2207,11 @@ function initialize() {
         rangeSelector.addEventListener("click", (e) => {
             if (e.target.tagName === "BUTTON") {
                 const range = e.target.getAttribute("data-range");
+                
+                // Update UI active state
+                rangeSelector.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+                e.target.classList.add('active');
+                
                 setRange(range === "all" ? null : parseInt(range));
             }
         });
@@ -1756,8 +2223,26 @@ function initialize() {
     const resetLayoutBtn = document.getElementById("resetLayout");
     if (resetLayoutBtn) {
         resetLayoutBtn.addEventListener("click", () => {
-            if (confirm("Reset column layout to default? This will clear your saved layout preferences.")) {
-                resetColumnWidths();
+            if (confirm("Reset all dashboard settings to default? This will clear your saved layout, filter, and time range preferences.")) {
+                resetAllSettings();
+            }
+        });
+    }
+
+    // Setup theme toggle button
+    const themeToggleBtn = document.getElementById("themeToggle");
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener("click", toggleTheme);
+        updateThemeToggleButton();
+    }
+
+    // Listen for system theme changes
+    if (window.matchMedia) {
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        mediaQuery.addEventListener('change', () => {
+            const currentTheme = getCurrentTheme();
+            if (currentTheme === 'system') {
+                updateChartTheme(getSystemTheme());
             }
         });
     }
@@ -1803,6 +2288,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (box.checked) anomalyFilters.add(box.value);
                 else anomalyFilters.delete(box.value);
                 renderAnomalyList();
+                // Save the updated filter settings
+                saveAnomalyFilters();
             });
         });
     }
