@@ -79,6 +79,7 @@ describe("utils/utils", () => {
     });
 
     it("PriceConfirmationManager confirms", () => {
+        const logger = { logEvent: vi.fn() } as unknown as ISignalLogger;
         const mgr = new PriceConfirmationManager();
         mgr.addPendingDetection({
             time: Date.now(),
@@ -92,8 +93,17 @@ describe("utils/utils", () => {
             confirmed: false,
             id: "1",
         });
-        const confirmed = mgr.processPendingConfirmations(101, 2, 5, 10, 1000);
+        const confirmed = mgr.processPendingConfirmations(
+            101,
+            2,
+            5,
+            10,
+            1000,
+            logger,
+            "SYM"
+        );
         expect(confirmed.length).toBe(1);
+        expect(logger.logEvent).toHaveBeenCalled();
     });
 
     it("isValidBacklogRequest works", () => {
@@ -105,5 +115,159 @@ describe("utils/utils", () => {
         expect(calculateProfitTarget(100, "buy")).toBeGreaterThan(100);
         expect(calculateBreakeven(100, "sell")).toBeLessThan(100);
         expect(getAggressiveSide(false)).toBe("buy");
+    });
+
+    it("CircularBuffer filter and clear", () => {
+        const b = new CircularBuffer<number>(5);
+        b.add(1);
+        b.add(2);
+        b.add(3);
+        const even = b.filter((v) => v % 2 === 0);
+        expect(even).toEqual([2]);
+        b.clear();
+        expect(b.length).toBe(0);
+        expect([...b]).toEqual([]);
+    });
+
+    it("TimeAwareCache utilities", () => {
+        const c = new TimeAwareCache<string, number>(10);
+        c.set("a", 1);
+        expect(c.has("a")).toBe(true);
+        c.delete("a");
+        expect(c.has("a")).toBe(false);
+
+        c.set("b", 2);
+        vi.advanceTimersByTime(20);
+        c.forceCleanup();
+        expect(c.get("b")).toBeUndefined();
+
+        c.set("c", 3);
+        (c as any).lastCleanup = Date.now() - 61000;
+        vi.advanceTimersByTime(20);
+        c.set("d", 4); // triggers maybeCleanup removing "c"
+        expect(c.get("c")).toBeUndefined();
+        expect(c.size()).toBe(1);
+        expect(c.keys()).toEqual(["d"]);
+    });
+
+    it("AdaptiveZoneCalculator shifts window", () => {
+        const calc = new AdaptiveZoneCalculator(3);
+        calc.updatePrice(1);
+        calc.updatePrice(3);
+        calc.updatePrice(5);
+        calc.updatePrice(7); // trigger shift
+        expect(calc.getATR()).toBeGreaterThan(0);
+        expect(calc.getAdaptiveZoneTicks(1)).toBe(10);
+    });
+
+    it("PassiveVolumeTracker averages and refill check", () => {
+        const tracker = new PassiveVolumeTracker();
+        tracker.updatePassiveVolume(200, 10, 20);
+        vi.advanceTimersByTime(1000);
+        tracker.updatePassiveVolume(200, 20, 30);
+        vi.advanceTimersByTime(1000);
+        tracker.updatePassiveVolume(200, 30, 40);
+
+        expect(tracker.checkRefillStatus(200, "buy", 40)).toBe(true);
+        expect(tracker.getAveragePassive(200, 1500)).toBe(60);
+        expect(tracker.getAveragePassiveBySide(200, "buy", 1500)).toBe(35);
+        expect(tracker.getAveragePassiveBySide(200, "sell", 1500)).toBe(25);
+
+        vi.advanceTimersByTime(2000);
+        expect(tracker.getAveragePassiveBySide(200, "buy", 1000)).toBe(0);
+        expect(tracker.getAveragePassiveBySide(201, "buy", 1000)).toBe(0);
+        expect(tracker.getAveragePassive(200, 1000)).toBe(0);
+        expect(tracker.getAveragePassive(999, 1000)).toBe(0);
+    });
+
+    it("AutoCalibrator raises volume when busy", () => {
+        const auto = new AutoCalibrator();
+        for (let i = 0; i < 11; i++) {
+            auto.recordSignal();
+        }
+        vi.advanceTimersByTime(16 * 60 * 1000);
+        const result = auto.calibrate(100);
+        expect(result).toBeGreaterThan(100);
+    });
+
+    it("AutoCalibrator keeps volume when moderate", () => {
+        const auto = new AutoCalibrator();
+        for (let i = 0; i < 5; i++) auto.recordSignal();
+        vi.advanceTimersByTime(16 * 60 * 1000);
+        const result = auto.calibrate(50);
+        expect(result).toBe(50);
+    });
+
+    it("PriceConfirmationManager invalidates by revisit", () => {
+        const logger = { logEvent: vi.fn() } as unknown as ISignalLogger;
+        const mgr = new PriceConfirmationManager();
+        mgr.addPendingDetection({
+            time: Date.now(),
+            price: 100,
+            side: "buy",
+            zone: 1,
+            trades: [],
+            aggressive: 1,
+            passive: 1,
+            refilled: false,
+            confirmed: false,
+            id: "1",
+        });
+        mgr.processPendingConfirmations(
+            99.9,
+            2,
+            50,
+            5,
+            1000,
+            logger,
+            "SYM"
+        );
+        expect(logger.logEvent).toHaveBeenCalled();
+        expect(mgr.getPendingCount()).toBe(0);
+    });
+
+    it("PriceConfirmationManager keeps pending when idle", () => {
+        const mgr = new PriceConfirmationManager();
+        mgr.addPendingDetection({
+            time: Date.now(),
+            price: 100,
+            side: "buy",
+            zone: 1,
+            trades: [],
+            aggressive: 1,
+            passive: 1,
+            refilled: false,
+            confirmed: false,
+            id: "pending",
+        });
+        const res = mgr.processPendingConfirmations(100, 2, 5, 10, 1000);
+        expect(res.length).toBe(0);
+        expect(mgr.getPendingCount()).toBe(1);
+    });
+
+    it("PriceConfirmationManager invalidates by timeout", () => {
+        const logger = { logEvent: vi.fn() } as unknown as ISignalLogger;
+        const mgr = new PriceConfirmationManager();
+        mgr.addPendingDetection({
+            time: Date.now() - 2000,
+            price: 100,
+            side: "sell",
+            zone: 1,
+            trades: [],
+            aggressive: 1,
+            passive: 1,
+            refilled: false,
+            confirmed: false,
+            id: "2",
+        });
+        mgr.processPendingConfirmations(100, 2, 5, 10, 1000, logger, "SYM");
+        expect(logger.logEvent).toHaveBeenCalled();
+        expect(mgr.getPendingCount()).toBe(0);
+    });
+
+    it("profit and breakeven other sides", () => {
+        expect(calculateProfitTarget(100, "sell")).toBeLessThan(100);
+        expect(calculateBreakeven(100, "buy")).toBeGreaterThan(100);
+        expect(getAggressiveSide(true)).toBe("sell");
     });
 });
