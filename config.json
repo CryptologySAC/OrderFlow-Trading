@@ -113,7 +113,6 @@
                 "signalCooldownMs": 300000
             },
             "accumulationDetector": {
-                "windowMs": 60000,
                 "minDurationMs": 60000,
                 "zoneSize": 0.1,
                 "minRatio": 1.2,
