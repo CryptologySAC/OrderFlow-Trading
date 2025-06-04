@@ -39,10 +39,8 @@ export class Config {
     static readonly WINDOW_MS = Number(SYMBOL_CFG?.windowMs ?? 90000);
 
     // Server configuration
-    static readonly HTTP_PORT = Number(
-        process.env.PORT ?? cfg.httpPort ?? 3000
-    );
-    static readonly WS_PORT = Number(process.env.WS_PORT ?? cfg.wsPort ?? 3001);
+    static readonly HTTP_PORT = Number(cfg.httpPort ?? 3000);
+    static readonly WS_PORT = Number(cfg.wsPort ?? 3001);
     static readonly API_KEY = process.env.API_KEY;
     static readonly API_SECRET = process.env.API_SECRET;
     static readonly NODE_ENV = cfg.nodeEnv ?? "production";
@@ -315,13 +313,8 @@ export class Config {
      * Validate configuration on startup
      */
     static validate(): void {
-        const required = ["SYMBOL"];
-        const missing = required.filter((key) => !process.env[key]);
-
-        if (missing.length > 0) {
-            throw new Error(
-                `Missing required environment variables: ${missing.join(", ")}`
-            );
+        if (!this.SYMBOL) {
+            throw new Error("Missing SYMBOL configuration");
         }
 
         if (this.HTTP_PORT < 1 || this.HTTP_PORT > 65535) {
