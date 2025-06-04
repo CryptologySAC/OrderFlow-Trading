@@ -47,4 +47,22 @@ describe("services/SignalCoordinator", () => {
         });
         expect(storage.enqueueJob).toHaveBeenCalled();
     });
+
+    it("reports status correctly", async () => {
+        const coordinator = new SignalCoordinator(
+            {},
+            new Logger(),
+            new MetricsCollector(),
+            { logProcessedSignal: vi.fn(), logProcessingError: vi.fn() } as any,
+            { handleProcessedSignal: vi.fn() } as any,
+            storage as any
+        );
+        const det = new DummyDetector() as any;
+        coordinator.registerDetector(det, ["momentum"]);
+        expect(coordinator.getStatus().registeredDetectors).toBe(1);
+        coordinator.start();
+        expect(coordinator.getStatus().isRunning).toBe(true);
+        await coordinator.stop();
+        expect(coordinator.getStatus().isRunning).toBe(false);
+    });
 });
