@@ -128,7 +128,7 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-height: 0;
+    min-height: 200px;
     overflow: hidden;
 }
 
@@ -146,7 +146,9 @@ body {
     justify-content: center;
     align-items: center;
     height: 20vh;
-    flex-shrink: 0;
+    min-height: 180px;
+    max-height: 220px;
+    flex-shrink: 1;
 }
 
 #orderBookContainer {
@@ -460,6 +462,30 @@ canvas {
 
     .gauge-container {
         height: 15vh;
-        flex-shrink: 0;
+        min-height: 140px;
+        max-height: 180px;
+        flex-shrink: 1;
+    }
+    
+    .anomaly-list-container {
+        min-height: 150px;
+    }
+}
+
+/* Handle very short windows */
+@media (max-height: 600px) {
+    .gauge-container {
+        height: 15vh;
+        min-height: 120px;
+        max-height: 160px;
+    }
+    
+    .anomaly-list-container {
+        min-height: 120px;
+    }
+    
+    .anomaly-list-header {
+        margin-bottom: 4px;
+        font-size: 14px;
     }
 }
