@@ -99,6 +99,59 @@ function snapToOthers(x, y, width, height, target) {
     return { x, y };
 }
 
+function adjustLayout(movedEl) {
+    const elements = Array.from(
+        document.querySelectorAll(
+            ".chart-container, .anomaly-list-container, .gauge-container"
+        )
+    );
+
+    const queue = [movedEl];
+    const handled = new Set();
+
+    while (queue.length) {
+        const el = queue.shift();
+        handled.add(el);
+        const rect = el.getBoundingClientRect();
+        for (const other of elements) {
+            if (other === el) continue;
+            const oRect = other.getBoundingClientRect();
+            if (!rectsOverlap(rect, oRect)) continue;
+
+            let x = parseFloat(other.getAttribute("data-x")) || 0;
+            let y = parseFloat(other.getAttribute("data-y")) || 0;
+
+            const moveRight = rect.right + ITEM_MARGIN - oRect.left;
+            const moveLeft = oRect.right - rect.left + ITEM_MARGIN;
+            const moveDown = rect.bottom + ITEM_MARGIN - oRect.top;
+            const moveUp = oRect.bottom - rect.top + ITEM_MARGIN;
+
+            if (Math.abs(moveRight) < Math.abs(moveDown)) {
+                if (oRect.left >= rect.left) x += moveRight;
+                else x -= moveLeft;
+            } else {
+                if (oRect.top >= rect.top) y += moveDown;
+                else y -= moveUp;
+            }
+
+            x = snap(x);
+            y = snap(y);
+            ({ x, y } = snapToOthers(
+                x,
+                y,
+                other.offsetWidth,
+                other.offsetHeight,
+                other
+            ));
+            other.style.transform = `translate(${x}px, ${y}px)`;
+            other.setAttribute("data-x", x);
+            other.setAttribute("data-y", y);
+
+            if (!handled.has(other)) queue.push(other);
+        }
+    }
+}
+
 function getAnomalyIcon(type) {
     switch (type) {
         case "flash_crash":
@@ -962,6 +1015,7 @@ function setupInteract() {
                             target.getAttribute("data-y")
                         );
                     }
+                    adjustLayout(target);
                 },
             },
         })
@@ -1054,6 +1108,7 @@ function setupInteract() {
                             parseFloat(target.style.height)
                         );
                     }
+                    adjustLayout(target);
                 },
             },
         });
@@ -1120,6 +1175,7 @@ function setupInteract() {
                             target.getAttribute("data-y")
                         );
                     }
+                    adjustLayout(target);
                 },
             },
         })
@@ -1212,6 +1268,7 @@ function setupInteract() {
                             parseFloat(target.style.height)
                         );
                     }
+                    adjustLayout(target);
                 },
             },
         });
@@ -1269,6 +1326,7 @@ function setupInteract() {
                         target.getAttribute("data-y")
                     );
                 }
+                adjustLayout(target);
             },
         },
     });
