@@ -1,4 +1,4 @@
-export type AllowedSymbols = "LTCUSDT";
+export type AllowedSymbols = string;
 
 export interface ConfigType {
     nodeEnv: string;
@@ -17,7 +17,7 @@ type SymbolConfig = {
     pricePrecision: number;
     windowMs: number;
     bandTicks: number;
-    dataStream: DataStreamConfig;
+    dataStream?: DataStreamConfig;
     orderBookState: OrderBookStateConfig;
     emitDepthMetrics?: boolean;
     anomalyDetector?: AnomalyDetectorConfig;

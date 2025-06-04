@@ -116,8 +116,8 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         };
 
     private readonly configurationWebsocketAPI: ConfigurationWebsocketAPI = {
-        apiKey: Config.API_KEY as string,
-        apiSecret: Config.API_SECRET as string,
+        apiKey: process.env.API_KEY ?? "",
+        apiSecret: process.env.API_SECRET ?? "",
         wsURL: SPOT_WS_API_PROD_URL,
     };
 
@@ -136,10 +136,7 @@ export class BinanceDataFeed implements IBinanceDataFeed {
     }
 
     private validateConfiguration() {
-        const { API_KEY, API_SECRET } = {
-            API_KEY: Config.API_KEY,
-            API_SECRET: Config.API_SECRET,
-        };
+        const { API_KEY, API_SECRET } = process.env;
         if (!API_KEY || !API_SECRET) {
             throw new BinanceConfigurationError(
                 "Missing required API credentials: API_KEY and API_SECRET must be set"
