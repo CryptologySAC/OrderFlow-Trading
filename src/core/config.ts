@@ -1,7 +1,9 @@
 // src/core/config.ts
 import dotenv from "dotenv";
 dotenv.config();
-
+import { AnomalyDetectorOptions } from "../services/anomalyDetector.js";
+import { SpoofingDetectorConfig } from "../services/spoofingDetector.js";
+import { OrderBookStateOptions } from "../market/orderBookState.js";
 /**
  * Centralized configuration management
  */
@@ -96,7 +98,7 @@ export class Config {
     };
 
     static readonly DELTA_CVD_CONFIRMATION = {
-        WINDOW_SEC: parseInt(process.env.DELTACVD_WINDOW_SEC ?? "60", 10),
+        WINDOW_SEC: parseInt(process.env.WINDOW_MS ?? "90000", 10),
         MIN_WINDOW_TRADES: parseInt(
             process.env.DELTACVD_MIN_WINDOW_TRADES ?? "30",
             10
@@ -169,4 +171,37 @@ export class Config {
             throw new Error(`Invalid WS_PORT: ${this.WS_PORT}`);
         }
     }
+
+    // TODO get from .env
+    static readonly anomalyDetectorConfig: AnomalyDetectorOptions = {
+        windowSize: 400,
+        anomalyCooldownMs: 300_000,
+        icebergDetectionWindow: 600_000,
+        volumeImbalanceThreshold: 0.65,
+        absorptionRatioThreshold: 2.5,
+        normalSpreadBps: 10,
+        minHistory: 50,
+        orderSizeAnomalyThreshold: 3,
+        tickSize: 0.01,
+    };
+
+    //TODO get from .env
+    static readonly spoofingDetectorConfig: SpoofingDetectorConfig = {
+        tickSize: 0.01,
+        wallTicks: 15,
+        minWallSize: 50,
+        dynamicWallWidth: true,
+        testLogMinSpoof: 100,
+    };
+
+    //TODO get from .env
+    static readonly orderBookStateConfig: OrderBookStateOptions = {
+        symbol: Config.SYMBOL,
+        pricePrecision: Config.PRICE_PRECISION,
+        maxLevels: 2000,
+        maxPriceDistance: 0.02,
+        pruneIntervalMs: 60000,
+        maxErrorRate: 5,
+        staleThresholdMs: 300_000, // 15 minutes
+    };
 }

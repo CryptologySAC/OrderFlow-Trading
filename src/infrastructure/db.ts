@@ -1,0 +1,14 @@
+import BetterSqlite3, { Database } from "better-sqlite3";
+
+let dbInstance: Database | undefined;
+
+export function getDB(dbPath = "trades.db"): Database {
+    if (!dbInstance) {
+        dbInstance = new BetterSqlite3(dbPath);
+        dbInstance.pragma("journal_mode = WAL");
+        dbInstance.pragma("synchronous = NORMAL");
+        dbInstance.pragma("busy_timeout = 5000"); // wait up to 5 s on lock
+        dbInstance.pragma("foreign_keys = ON");
+    }
+    return dbInstance;
+}

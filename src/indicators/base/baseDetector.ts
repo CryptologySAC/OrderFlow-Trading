@@ -10,9 +10,7 @@ import { DetectorUtils } from "./detectorUtils.js";
 import {
     SignalType,
     SignalCandidate,
-    AbsorptionSignalData,
-    ExhaustionSignalData,
-    AccumulationResult,
+    DetectorResultType,
 } from "../../types/signalTypes.js";
 
 import type {
@@ -29,10 +27,7 @@ import {
     PriceConfirmationManager,
     DepthLevel,
 } from "../../utils/utils.js";
-import {
-    SpoofingDetector,
-    SpoofingDetectorConfig,
-} from "../../services/spoofingDetector.js";
+import { SpoofingDetector } from "../../services/spoofingDetector.js";
 import type {
     IDetector,
     DetectorStats,
@@ -63,7 +58,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
     protected zoneTicks: number;
     protected readonly eventCooldownMs: number;
     protected readonly symbol: string;
-    private readonly spoofingSettings: SpoofingDetectorConfig;
 
     // Confirmation parameters
     protected readonly minInitialMoveTicks: number;
@@ -85,10 +79,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
     protected readonly callback: DetectorCallback;
 
     // Abstract method for detector type
-    protected abstract readonly detectorType:
-        | "absorption"
-        | "exhaustion"
-        | "accumulation";
+    protected abstract readonly detectorType: SignalType;
 
     protected lastTradeId: string | null = null;
     private zoneCleanupInterval: NodeJS.Timeout | null = null;
@@ -110,6 +101,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
         callback: DetectorCallback,
         settings: BaseDetectorSettings & { features?: DetectorFeatures },
         logger: Logger,
+        spoofingDetector: SpoofingDetector,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger
     ) {
@@ -129,13 +121,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
         this.confirmationTimeoutMs = settings.confirmationTimeoutMs ?? 60000;
         this.maxRevisitTicks = settings.maxRevisitTicks ?? 5;
         this.symbol = settings.symbol ?? "LTCUSDT";
-        this.spoofingSettings = {
-            tickSize: 0.01,
-            wallTicks: 10,
-            minWallSize: 20,
-            dynamicWallWidth: false,
-            ...settings.spoofing,
-        };
 
         // Initialize features with defaults
         this.features = {
@@ -150,7 +135,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
         };
 
         // Initialize feature modules
-        this.spoofingDetector = new SpoofingDetector(this.spoofingSettings);
+        this.spoofingDetector = spoofingDetector;
         this.adaptiveZoneCalculator = new AdaptiveZoneCalculator();
         this.passiveVolumeTracker = new PassiveVolumeTracker();
         this.autoCalibrator = new AutoCalibrator();
@@ -237,9 +222,10 @@ export abstract class BaseDetector extends Detector implements IDetector {
 
             this.checkForSignal(tradeData);
 
-            if (this.features.priceResponse) {
-                this.processConfirmations(tradeData.price);
-            }
+            //TODO
+            //if (this.features.priceResponse) {
+            //    this.processConfirmations(tradeData.price);
+            //}
 
             if (this.features.autoCalibrate) {
                 this.performAutoCalibration();
@@ -405,12 +391,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
     /**
      * Generic detection handler
      */
-    protected handleDetection(
-        pendingSignal:
-            | AbsorptionSignalData
-            | ExhaustionSignalData
-            | AccumulationResult
-    ): void {
+    protected handleDetection(pendingSignal: DetectorResultType): void {
         const detection: SignalCandidate = {
             id: randomUUID(),
             type: "absorption",
@@ -445,7 +426,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
         }
 
         // Emit metrics
-        this.metricsCollector.incrementMetric(
+        this.metricsCollector.incrementCounter(
             `detector_${this.detectorType}Signals`
         );
     }
@@ -603,39 +584,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
                 );
                 this.minAggVolume = newMinVolume;
             }
-        }
-    }
-
-    /**
-     * Process pending confirmations
-     */
-    protected processConfirmations(currentPrice: number): void {
-        const confirmed =
-            this.priceConfirmationManager.processPendingConfirmations(
-                currentPrice,
-                this.pricePrecision,
-                this.minInitialMoveTicks,
-                this.maxRevisitTicks,
-                this.confirmationTimeoutMs,
-                this.signalLogger,
-                this.symbol,
-                this.detectorType
-            );
-
-        // Fire callbacks for confirmed detections
-        for (const detection of confirmed) {
-            this.callback({
-                id: detection.id || randomUUID(),
-                price: detection.price,
-                side: detection.side,
-                trades: detection.trades,
-                totalAggressiveVolume: detection.aggressive,
-                passiveVolume: detection.passive,
-                zone: detection.zone,
-                refilled: detection.refilled,
-                detectedAt: Date.now(),
-                detectorSource: this.detectorType,
-            });
         }
     }
 

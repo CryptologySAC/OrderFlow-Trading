@@ -326,7 +326,10 @@ export class OrderBookProcessor implements IOrderBookProcessor {
     /**
      * Handle processing errors
      */
-    private handleError(error: Error, snapshot: OrderBookSnapshot): void {
+    private handleError(
+        error: Error,
+        snapshot?: Partial<OrderBookSnapshot>
+    ): void {
         this.errorCount++;
         this.lastError = error.message;
         this.errorWindow.push(Date.now());
@@ -340,8 +343,11 @@ export class OrderBookProcessor implements IOrderBookProcessor {
 
         this.logger.error("[OrderBookProcessor] Processing error", {
             error: error.message,
-            midPrice: snapshot.midPrice,
-            depthSize: snapshot.depthSnapshot.size,
+            midPrice: snapshot?.midPrice,
+            depthSize:
+                snapshot?.depthSnapshot instanceof Map
+                    ? snapshot.depthSnapshot.size
+                    : undefined,
             errorCount: this.errorCount,
         });
 

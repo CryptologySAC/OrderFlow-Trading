@@ -31,10 +31,7 @@ import type {
     OrderBookSnapshot,
 } from "./types/marketEvents.js";
 import { OrderflowPreprocessor } from "./market/orderFlowPreprocessor.js";
-import {
-    OrderBookState,
-    OrderBookStateOptions,
-} from "./market/orderBookState.js";
+import { OrderBookState } from "./market/orderBookState.js";
 import {
     WebSocketManager,
     type ExtendedWebSocket,
@@ -59,6 +56,7 @@ import {
     ExhaustionDetector,
     type ExhaustionSettings,
 } from "./indicators/exhaustionDetector.js";
+import { DistributionDetector } from "./indicators/distributionDetector.js";
 import { SwingMetrics } from "./indicators/swingMetrics.js";
 import { AccumulationDetector } from "./indicators/accumulationDetector.js";
 import { MomentumDivergence } from "./indicators/momentumDivergence.js";
@@ -87,7 +85,6 @@ import type {
     AccumulationResult,
     DivergenceResult,
     SwingSignalData,
-    DeltaCVDConfirmationEvent,
 } from "./types/signalTypes.js";
 import type {
     TimeContext,
@@ -99,7 +96,10 @@ import type {
 } from "./utils/types.js";
 
 // Storage and processors
-import { Storage } from "./infrastructure/storage.js";
+import { getDB } from "./infrastructure/db.js";
+import { runMigrations } from "./infrastructure/migrate.js";
+import { Storage } from "./storage/storage.js";
+import { PipelineStorage } from "./storage/pipelineStorage.js";
 import { BinanceDataFeed } from "./utils/binance.js";
 import { TradesProcessor } from "./clients/tradesProcessor.js";
 import {
@@ -108,6 +108,7 @@ import {
 } from "./clients/orderBookProcessor.js";
 import { SignalLogger } from "./services/signalLogger.js";
 import type { WebSocketMessage } from "./utils/interfaces.js";
+import { SpoofingDetector } from "./services/spoofingDetector.js";
 
 EventEmitter.defaultMaxListeners = 20;
 
@@ -137,12 +138,13 @@ export class OrderFlowDashboard {
     // Detectors
     private readonly absorptionDetector: AbsorptionDetector;
     private readonly exhaustionDetector: ExhaustionDetector;
-    private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
-    private readonly swingPredictor: SwingPredictor;
+    private readonly distributionDetector: DistributionDetector;
+    private readonly accumulationDetector: AccumulationDetector;
 
     // Indicators
     private readonly swingMetrics = new SwingMetrics();
-    private readonly accumulationDetector: AccumulationDetector;
+    private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
+    private readonly swingPredictor: SwingPredictor;
     private readonly momentumDivergence = new MomentumDivergence();
 
     // Time context
@@ -168,18 +170,8 @@ export class OrderFlowDashboard {
     }
 
     private async initialize(dependencies: Dependencies): Promise<void> {
-        // TODO Initialize Market with real options
-        const options: OrderBookStateOptions = {
-            symbol: Config.SYMBOL,
-            pricePrecision: Config.PRICE_PRECISION,
-            maxLevels: 5000,
-            maxPriceDistance: 10000,
-            pruneIntervalMs: 30000,
-            maxErrorRate: 20,
-            staleThresholdMs: 900_000, // 15 minutes
-        };
         this.orderBook = await OrderBookState.create(
-            options,
+            Config.orderBookStateConfig,
             dependencies.logger,
             dependencies.metricsCollector
         );
@@ -286,13 +278,36 @@ export class OrderFlowDashboard {
             true
         );
 
+        this.distributionDetector = DetectorFactory.createDistributionDetector(
+            (signal) => {
+                console.log("Distribution signal:", signal);
+            },
+            { symbol: Config.SYMBOL },
+            dependencies,
+            { id: "ltcusdt-distribution-main" }
+        );
+        this.signalCoordinator.registerDetector(
+            this.distributionDetector,
+            ["distribution"],
+            50,
+            true
+        );
+
         // Initialize other components
-        this.deltaCVDConfirmation = new DeltaCVDConfirmation(
-            this.DeltaCVDConfirmationCallback,
-            this.createDeltaCVDSettings(),
-            this.logger,
-            this.metricsCollector,
-            dependencies.signalLogger
+        this.deltaCVDConfirmation =
+            DetectorFactory.createDeltaCVDConfirmationDetector(
+                (signal) => {
+                    console.log("Delta CVD signal:", signal);
+                },
+                this.createDeltaCVDSettings(),
+                dependencies,
+                { id: "ltcusdt-cvdConfirmation-main" }
+            );
+        this.signalCoordinator.registerDetector(
+            this.deltaCVDConfirmation,
+            ["cvd_confirmation"],
+            30,
+            true
         );
 
         this.swingPredictor = new SwingPredictor(
@@ -322,39 +337,7 @@ export class OrderFlowDashboard {
     }
 
     private DeltaCVDConfirmationCallback = (event: unknown): void => {
-        if (!this.isDeltaCVDConfirmationEvent(event)) {
-            this.handleError(
-                new SignalProcessingError(
-                    "Invalid Delta CVD confirmation event",
-                    { event }
-                ),
-                "delta_cvd_confirmation",
-                randomUUID()
-            );
-            return;
-        }
-
-        // TypeScript now knows event is DeltaCVDConfirmationEvent
-        const correlationId = randomUUID();
-        try {
-            const signal: Signal = {
-                id: correlationId,
-                type: "cvd_confirmation",
-                time: event.time, // No error - TypeScript knows the type
-                price: event.price, // No error
-                side: event.side, // No error
-                closeReason: "delta_divergence",
-                signalData: event,
-            };
-
-            this.swingPredictor.onSignal(signal);
-        } catch (error) {
-            this.handleError(
-                error instanceof Error ? error : new Error("Unknown error"),
-                "delta_cvd_confirmation",
-                correlationId
-            );
-        }
+        void event; //todo
     };
 
     /**
@@ -378,23 +361,6 @@ export class OrderFlowDashboard {
                 this.handleBacklogRequest(ws, data, correlationId);
             },
         };
-    }
-
-    private isDeltaCVDConfirmationEvent(
-        value: unknown
-    ): value is DeltaCVDConfirmationEvent {
-        if (typeof value !== "object" || value === null) {
-            return false;
-        }
-
-        const obj = value as Record<string, unknown>;
-
-        return (
-            typeof obj.time === "number" &&
-            typeof obj.price === "number" &&
-            typeof obj.side === "string" &&
-            (obj.side === "buy" || obj.side === "sell")
-        );
     }
 
     /**
@@ -455,21 +421,6 @@ export class OrderFlowDashboard {
         }
     }
 
-    // TODO Make this real
-    private createAnomalyDetectorSettings(): AnomalyDetectorOptions {
-        return {
-            windowSize: 1200,
-            minHistory: 200,
-            anomalyCooldownMs: 20000, // 20 seconds
-            volumeImbalanceThreshold: 0.85,
-            absorptionRatioThreshold: 4.2,
-            icebergDetectionWindow: 120000,
-            orderSizeAnomalyThreshold: 4.5,
-            normalSpreadBps: 12,
-            tickSize: 0.01,
-        };
-    }
-
     private createAccumulationDetectorSettings(): AccumulationSettings {
         return {
             symbol: Config.SYMBOL,
@@ -485,13 +436,11 @@ export class OrderFlowDashboard {
 
     private createDeltaCVDSettings(): DeltaCVDConfirmationSettings {
         return {
-            windowSec: Config.DELTA_CVD_CONFIRMATION.WINDOW_SEC,
-            minWindowTrades: Config.DELTA_CVD_CONFIRMATION.MIN_WINDOW_TRADES,
-            minWindowVolume: Config.DELTA_CVD_CONFIRMATION.MIN_WINDOW_VOLUME,
-            minRateOfChange: Config.DELTA_CVD_CONFIRMATION.MIN_RATE_OF_CHANGE, // Use adaptive if 0
-            pricePrecision: Config.DELTA_CVD_CONFIRMATION.PRICE_PRECISION,
-            dynamicThresholds: Config.DELTA_CVD_CONFIRMATION.DYNAMIC_THRESHOLDS,
-            logDebug: Config.DELTA_CVD_CONFIRMATION.LOG_DEBUG,
+            windowsSec: [90, 300, 900], //TODO
+            minTradesPerSec: Config.DELTA_CVD_CONFIRMATION.MIN_WINDOW_TRADES,
+            minVolPerSec: Config.DELTA_CVD_CONFIRMATION.MIN_WINDOW_VOLUME,
+            minZ: Config.DELTA_CVD_CONFIRMATION.MIN_RATE_OF_CHANGE, // Use adaptive if 0
+            symbol: Config.SYMBOL,
         };
     }
 
@@ -691,7 +640,7 @@ export class OrderFlowDashboard {
                     side: processedSignal.data.side,
                     confidence: processedSignal.confidence,
                 };
-                void signal; //this.broadcastSignal(signal);
+                void this.broadcastSignal(signal); //TODO
             }
         );
 
@@ -741,6 +690,10 @@ export class OrderFlowDashboard {
         });
 
         // Handle signal events
+        // Handle data stream events
+        if (!this.signalManager) {
+            throw new Error("Signal Manager is not initialized");
+        }
         // Listen to final trading signals
         this.signalManager.on("signalGenerated", (tradingSignal: Signal) => {
             this.logger.info("Ready to trade:", { tradingSignal });
@@ -760,6 +713,19 @@ export class OrderFlowDashboard {
             }
         );
 
+        this.signalManager.on(
+            "criticalAnomalyDetected",
+            ({ anomaly, recommendedAction }) => {
+                console.log(`CRITICAL: ${anomaly} - ${recommendedAction}`);
+                // Notify risk management, pause trading, etc.
+            }
+        );
+
+        this.signalManager.on("emergencyPause", ({ reason, duration }) => {
+            console.log(`EMERGENCY PAUSE: ${reason} for ${duration}ms`);
+            // Halt all trading activity
+        });
+
         if (this.preprocessor) {
             this.logger.info(
                 "[OrderFlowDashboard] Setting up preprocessor event handlers..."
@@ -772,6 +738,8 @@ export class OrderFlowDashboard {
                     this.anomalyDetector.onEnrichedTrade(enrichedTrade);
                     this.accumulationDetector.onEnrichedTrade(enrichedTrade);
                     this.exhaustionDetector.onEnrichedTrade(enrichedTrade);
+                    this.deltaCVDConfirmation.onEnrichedTrade(enrichedTrade);
+                    this.distributionDetector.onEnrichedTrade(enrichedTrade);
 
                     const aggTradeMessage: WebSocketMessage =
                         this.dependencies.tradesProcessor.onEnrichedTrade(
@@ -815,19 +783,12 @@ export class OrderFlowDashboard {
                 "[OrderFlowDashboard] Setting up anomaly detector event handlers..."
             );
             this.anomalyDetector.on("anomaly", (event: AnomalyEvent) => {
-                if (
-                    event &&
-                    (event.severity === "critical" || event.severity === "high")
-                ) {
-                    this.logger.warn("Market anomaly detected:", { event });
-                }
                 const message: WebSocketMessage = {
                     type: "anomaly",
                     data: event,
                     now: Date.now(),
                 };
                 this.wsManager.broadcast(message);
-                // TODO Take action (pause trading, alert, etc.)
             });
         }
     }
@@ -886,7 +847,6 @@ export class OrderFlowDashboard {
         try {
             // Update detectors
             if (this.preprocessor) this.preprocessor.handleAggTrade(data);
-            this.deltaCVDConfirmation.addTrade(data);
 
             // Update swing predictor
             this.swingPredictor.onPrice(
@@ -1074,6 +1034,9 @@ export class OrderFlowDashboard {
             expectedGainPercent: profitTarget.netGain,
             swingType: side === "buy" ? "low" : "high",
             strength: Math.max(accumulation.strength, divergence.strength),
+            side,
+            price: currentPrice,
+            confidence: NaN,
         };
         const signal: Signal = {
             id: randomUUID(),
@@ -1386,6 +1349,13 @@ export function createDependencies(): Dependencies {
     const signalLogger = new SignalLogger("signals.csv");
     const rateLimiter = new RateLimiter(60000, 100);
     const circuitBreaker = new CircuitBreaker(5, 60000, logger);
+    const db = getDB("trades.db");
+    runMigrations(db);
+    const pipelineStore = new PipelineStorage(db, {});
+    const storage = new Storage(db);
+    const spoofingDetector = new SpoofingDetector(
+        Config.spoofingDetectorConfig
+    );
 
     const orderBookProcessor = new OrderBookProcessor(
         {
@@ -1404,22 +1374,16 @@ export function createDependencies(): Dependencies {
             symbol: Config.SYMBOL,
             storageTime: Config.MAX_STORAGE_TIME,
         },
+        storage,
         logger,
         metricsCollector
     );
 
-    const anomalyDetector = new AnomalyDetector({
-        windowSize: 1200,
-        minHistory: 200,
-        anomalyCooldownMs: 20000, // 20 seconds
-        volumeImbalanceThreshold: 0.85,
-        absorptionRatioThreshold: 4.2,
-        icebergDetectionWindow: 120000,
-        orderSizeAnomalyThreshold: 4.5,
-        normalSpreadBps: 12,
-        tickSize: 0.01,
+    const anomalyDetector = new AnomalyDetector(
+        Config.anomalyDetectorConfig,
         logger,
-    });
+        spoofingDetector
+    );
 
     const alertManager = new AlertManager(
         process.env.ALERT_WEBHOOK_URL,
@@ -1432,6 +1396,7 @@ export function createDependencies(): Dependencies {
         alertManager,
         logger,
         metricsCollector,
+        pipelineStore,
         {
             confidenceThreshold: 0.75,
             enableAnomalyDetection: true,
@@ -1455,11 +1420,12 @@ export function createDependencies(): Dependencies {
         logger,
         metricsCollector,
         signalLogger,
-        signalManager
+        signalManager,
+        pipelineStore
     );
 
     return {
-        storage: new Storage(),
+        storage,
         binanceFeed: new BinanceDataFeed(),
         tradesProcessor,
         orderBookProcessor,
@@ -1472,6 +1438,7 @@ export function createDependencies(): Dependencies {
         signalCoordinator,
         anomalyDetector,
         signalManager,
+        spoofingDetector,
     };
 }
 

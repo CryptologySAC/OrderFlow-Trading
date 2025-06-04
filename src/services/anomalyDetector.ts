@@ -19,10 +19,6 @@ export interface AnomalyDetectorOptions {
     normalSpreadBps?: number;
     /** Minimum number of trades before detection (default: 100) */
     minHistory?: number;
-    /** Optional spoofing detector instance for spoof wall detection. */
-    spoofingDetector?: SpoofingDetector;
-    /** Logger instance for diagnostics and anomaly logging */
-    logger?: Logger;
     /** Minimum ms between duplicate anomaly events (default: 10,000ms) */
     anomalyCooldownMs?: number;
     /** Threshold for order book/flow imbalance detection (default: 0.7) */
@@ -195,13 +191,18 @@ export class AnomalyDetector extends EventEmitter {
      * Construct a new AnomalyDetector.
      * @param options AnomalyDetectorOptions (all fields optional)
      */
-    constructor(options: AnomalyDetectorOptions = {}) {
+    constructor(
+        options: AnomalyDetectorOptions = {},
+        logger: Logger,
+        spoofingDetector: SpoofingDetector
+    ) {
+        //TODO Metrics
         super();
         this.windowSize = options.windowSize ?? 1000;
         this.normalSpreadBps = options.normalSpreadBps ?? 10; // 0.1% normal spread
         this.minHistory = options.minHistory ?? 100;
-        this.spoofingDetector = options.spoofingDetector;
-        this.logger = options.logger;
+        this.spoofingDetector = spoofingDetector;
+        this.logger = logger;
         this.anomalyCooldownMs = options.anomalyCooldownMs ?? 10000;
         this.volumeImbalanceThreshold = options.volumeImbalanceThreshold ?? 0.7;
         this.absorptionRatioThreshold = options.absorptionRatioThreshold ?? 3.0;

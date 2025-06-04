@@ -11,6 +11,12 @@ import {
     ExhaustionDetector,
     ExhaustionSettings,
 } from "../indicators/exhaustionDetector.js";
+import {
+    DeltaCVDConfirmation,
+    DeltaCVDConfirmationSettings,
+} from "../indicators/deltaCVDConfirmation.js";
+import { DistributionDetector } from "../indicators/distributionDetector.js";
+import { SuperiorFlowSettings } from "../indicators/base/flowDetectorBase.js";
 
 import type {
     DetectorCallback,
@@ -20,6 +26,7 @@ import type {
 } from "../indicators/interfaces/detectorInterfaces.js";
 import { AccumulationDetector } from "../indicators/accumulationDetector.js";
 import { SignalType } from "../types/signalTypes.js";
+import { SpoofingDetector } from "../services/spoofingDetector.js";
 
 /**
  * Production detector factory with monitoring, validation, and lifecycle management
@@ -34,7 +41,7 @@ export class DetectorFactory {
         maxRestartAttempts: 3,
         circuitBreakerEnabled: true,
         performanceMonitoring: true,
-        memoryThresholdMB: 500,
+        memoryThresholdMB: 1500,
     };
     /**
      * Static dependencies for the factory
@@ -72,6 +79,7 @@ export class DetectorFactory {
             this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
             dependencies.logger,
+            dependencies.spoofingDetector,
             dependencies.metricsCollector,
             dependencies.signalLogger
         );
@@ -114,6 +122,7 @@ export class DetectorFactory {
             this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
             dependencies.logger,
+            dependencies.spoofingDetector,
             dependencies.metricsCollector,
             dependencies.signalLogger
         );
@@ -156,6 +165,7 @@ export class DetectorFactory {
             this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
             dependencies.logger,
+            dependencies.spoofingDetector,
             dependencies.metricsCollector,
             dependencies.signalLogger
         );
@@ -164,6 +174,92 @@ export class DetectorFactory {
 
         dependencies.logger.info(
             `[DetectorFactory] Created AccumulationDetector`,
+            {
+                id,
+                settings: productionSettings,
+                features: productionSettings.features,
+            }
+        );
+
+        return detector;
+    }
+
+    /**
+     * Create production-ready accumulation detector
+     */
+    public static createDistributionDetector(
+        callback: DetectorCallback,
+        settings: SuperiorFlowSettings,
+        dependencies: DetectorDependencies,
+        options: DetectorFactoryOptions = {}
+    ): DistributionDetector {
+        const id = options.id || `distribution-${Date.now()}`;
+
+        this.validateCreationLimits();
+        this.validateProductionConfig(settings);
+
+        const productionSettings = this.applyProductionDefaults(
+            settings,
+            "distribution"
+        );
+
+        const detector = new DistributionDetector(
+            id,
+            this.wrapCallback(callback, id, dependencies.logger),
+            productionSettings,
+            dependencies.logger,
+            dependencies.spoofingDetector,
+            dependencies.metricsCollector,
+            dependencies.signalLogger
+        );
+
+        this.registerDetector(id, detector, dependencies, options);
+
+        dependencies.logger.info(
+            `[DetectorFactory] Created DistributionDetector`,
+            {
+                id,
+                settings: productionSettings,
+                features: productionSettings.features,
+            }
+        );
+
+        return detector;
+    }
+
+    /**
+     * Create production-ready accumulation detector
+     */
+    public static createDeltaCVDConfirmationDetector(
+        callback: DetectorCallback,
+        settings: DeltaCVDConfirmationSettings,
+        dependencies: DetectorDependencies,
+        options: DetectorFactoryOptions = {}
+    ): DeltaCVDConfirmation {
+        const id = options.id || `cvd_confirmation-${Date.now()}`;
+
+        this.validateCreationLimits();
+        this.validateProductionConfig(settings);
+
+        const productionSettings = this.applyProductionDefaults(
+            settings,
+            "cvd_confirmation"
+        );
+
+        const detector = new DeltaCVDConfirmation(
+            id,
+            this.wrapCallback(callback, id, dependencies.logger),
+            productionSettings,
+            dependencies.logger,
+            dependencies.spoofingDetector,
+            dependencies.metricsCollector,
+            dependencies.signalLogger
+        );
+
+        this.registerDetector(id, detector, dependencies, options);
+
+        dependencies.logger.info(
+            `[DetectorFactory] Created Delta CVD Confirmation`,
             {
                 id,
                 settings: productionSettings,
@@ -185,6 +281,7 @@ export class DetectorFactory {
             absorption?: Partial<AbsorptionSettings>;
             exhaustion?: Partial<ExhaustionSettings>;
             accumulation?: Partial<AccumulationSettings>;
+            cvd_confirmation?: Partial<DeltaCVDConfirmationSettings>;
             idPrefix?: string;
         } = {}
     ): DetectorSuite {
@@ -211,15 +308,28 @@ export class DetectorFactory {
             { id: `${prefix}-accumulation` }
         );
 
+        const deltaCVDDetector = this.createDeltaCVDConfirmationDetector(
+            callback,
+            { ...baseSettings, ...options.accumulation },
+            dependencies,
+            { id: `${prefix}-cvd_confirmation` }
+        );
+
         dependencies.logger.info(`[DetectorFactory] Created detector suite`, {
             prefix,
-            detectors: ["absorption", "exhaustion", "accumulation"],
+            detectors: [
+                "absorption",
+                "exhaustion",
+                "accumulation",
+                "cvd_confirmation",
+            ],
         });
 
         return {
             absorption: absorptionDetector,
             exhaustion: exhaustionDetector,
             accumulation: accumulationDetector,
+            cvd_confirmation: deltaCVDDetector,
         };
     }
 
@@ -234,6 +344,8 @@ export class DetectorFactory {
             { type: "absorption", config: {} },
             { type: "exhaustion", config: {} },
             { type: "accumulation", config: {} },
+            { type: "distribution", config: {} },
+            { type: "cvd_confirmation", config: {} },
         ];
     }
 
@@ -276,6 +388,18 @@ export class DetectorFactory {
                     baseSettings as AccumulationSettings,
                     this.dependencies
                 );
+            case "distribution":
+                return this.createDistributionDetector(
+                    callback,
+                    baseSettings as SuperiorFlowSettings,
+                    this.dependencies
+                );
+            case "cvd_confirmation":
+                return this.createDeltaCVDConfirmationDetector(
+                    callback,
+                    baseSettings as DeltaCVDConfirmationSettings,
+                    this.dependencies
+                );
             default:
                 throw new Error(`Unknown detector type: ${type}`);
         }
@@ -299,17 +423,27 @@ export class DetectorFactory {
         > = {
             absorption: {
                 supportedSignalTypes: ["absorption"],
-                priority: 7,
+                priority: 100,
                 enabled: true,
             },
             exhaustion: {
                 supportedSignalTypes: ["exhaustion"],
-                priority: 8,
+                priority: 90,
                 enabled: true,
             },
             accumulation: {
                 supportedSignalTypes: ["accumulation"],
-                priority: 6,
+                priority: 70,
+                enabled: true,
+            },
+            distribution: {
+                supportedSignalTypes: ["distribution"],
+                priority: 70,
+                enabled: true,
+            },
+            cvd_confirmation: {
+                supportedSignalTypes: ["cvd_confirmation"],
+                priority: 50,
                 enabled: true,
             },
         };
@@ -550,7 +684,7 @@ export class DetectorFactory {
 
     private static applyProductionDefaults(
         settings: BaseDetectorSettings,
-        detectorType: "absorption" | "exhaustion" | "accumulation" | "generic"
+        detectorType: SignalType
     ): BaseDetectorSettings {
         const baseDefaults: BaseDetectorSettings = {
             windowMs: 90000,
@@ -599,6 +733,13 @@ export class DetectorFactory {
                     spreadAdjustment: true,
                     volumeVelocity: false,
                 },
+                ...settings,
+            };
+        }
+
+        if (detectorType === "cvd_confirmation") {
+            return {
+                ...baseDefaults,
                 ...settings,
             };
         }
@@ -821,10 +962,12 @@ export interface DetectorSuite {
     absorption: AbsorptionDetector;
     exhaustion: ExhaustionDetector;
     accumulation: AccumulationDetector;
+    cvd_confirmation: DeltaCVDConfirmation;
 }
 
 export interface DetectorDependencies {
     logger: Logger;
+    spoofingDetector: SpoofingDetector;
     metricsCollector: MetricsCollector;
     signalLogger?: ISignalLogger;
 }
