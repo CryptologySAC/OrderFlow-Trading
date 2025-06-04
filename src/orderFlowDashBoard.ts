@@ -93,6 +93,7 @@ import {
 import { SignalLogger } from "./services/signalLogger.js";
 import type { WebSocketMessage } from "./utils/interfaces.js";
 import { SpoofingDetector } from "./services/spoofingDetector.js";
+import { StatsBroadcaster } from "./services/statsBroadcaster.js";
 
 EventEmitter.defaultMaxListeners = 20;
 
@@ -143,6 +144,7 @@ export class OrderFlowDashboard {
     private isShuttingDown = false;
     private readonly purgeIntervalMs = 10 * 60 * 1000; // 10 minutes
     private purgeIntervalId?: NodeJS.Timeout;
+    private statsBroadcaster: StatsBroadcaster;
 
     public static async create(
         dependencies: Dependencies,
@@ -210,6 +212,7 @@ export class OrderFlowDashboard {
             this.metricsCollector
         );
 
+        this.statsBroadcaster = new StatsBroadcaster(this.metricsCollector, this.dataStreamManager, this.wsManager, this.logger);
         DetectorFactory.initialize(dependencies);
 
         this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
@@ -650,6 +653,7 @@ export class OrderFlowDashboard {
     /**
      * Setup HTTP server
      */
+    }
     private setupHttpServer(): void {
         const publicPath = path.join(__dirname, "../public");
         this.httpServer.use(express.static(publicPath));
@@ -663,27 +667,41 @@ export class OrderFlowDashboard {
                     timestamp: new Date().toISOString(),
                     uptime: process.uptime(),
                     connections: this.wsManager.getConnectionCount(),
-                    circuitBreakerState:
-                        this.dependencies.circuitBreaker.getState(),
+                    circuitBreakerState: this.dependencies.circuitBreaker.getState(),
                     metrics: {
-                        signalsGenerated: metrics.legacy.signalsGenerated, //TODO
-                        averageLatency:
-                            this.metricsCollector.getAverageLatency(),
-                        errorsCount: metrics.legacy.errorsCount, //TODO
+                        signalsGenerated: metrics.legacy.signalsGenerated,
+                        averageLatency: this.metricsCollector.getAverageLatency(),
+                        errorsCount: metrics.legacy.errorsCount,
                     },
                     correlationId,
                 };
-
                 res.json(health);
-                this.logger.info(
-                    "Health check requested",
-                    health,
-                    correlationId
-                );
+                this.logger.info("Health check requested", health, correlationId);
             } catch (error) {
                 this.handleError(error as Error, "health_check", correlationId);
                 res.status(500).json({
                     status: "unhealthy",
+                    error: (error as Error).message,
+                    correlationId,
+                });
+            }
+        });
+
+        this.httpServer.get("/stats", (req, res) => {
+            const correlationId = randomUUID();
+            try {
+                const stats = {
+                    metrics: this.metricsCollector.getMetrics(),
+                    health: this.metricsCollector.getHealthSummary(),
+                    dataStream: this.dataStreamManager.getDetailedMetrics(),
+                    correlationId,
+                };
+                res.json(stats);
+                this.logger.info("Stats requested", stats, correlationId);
+            } catch (error) {
+                this.handleError(error as Error, "stats_endpoint", correlationId);
+                res.status(500).json({
+                    status: "error",
                     error: (error as Error).message,
                     correlationId,
                 });
@@ -1083,6 +1101,7 @@ export class OrderFlowDashboard {
      */
     private startPeriodicTasks(): void {
         // Update circuit breaker metrics
+        this.statsBroadcaster.start();
         setInterval(() => {
             const state = this.dependencies.circuitBreaker.getState();
             this.metricsCollector.updateMetric("circuitBreakerState", state);
@@ -1144,6 +1163,7 @@ export class OrderFlowDashboard {
             await this.dataStreamManager.disconnect();
 
             // Give time for cleanup
+            this.statsBroadcaster.stop();
             setTimeout(() => {
                 this.logger.info("Graceful shutdown completed");
                 process.exit(0);
