@@ -1,14 +1,36 @@
 {
-    "nodeEnv": "development",
-    "symbol": "LTCUSDT",
-    "pricePrecision": 2,
-    "maxStorageTime": 5400000,
-    "httpPort": 3000,
-    "wsPort": 3001,
-    "webhookUrl": "",
-    "alertWebhookUrl": "",
-    "alertCooldownMs": 300000,
-    "anomalyDetector": {
+  "nodeEnv": "development",
+  "symbol": "LTCUSDT",
+  "httpPort": 3000,
+  "wsPort": 3001,
+  "alertWebhookUrl": "",
+  "alertCooldownMs": 300000,
+  "maxStorageTime": 5400000,
+  "symbols": {
+    "LTCUSDT": {
+      "pricePrecision": 2,
+      "windowMs": 90000,
+      "bandTicks": 5,
+      "emitDepthMetrics": false,
+      "dataStream": {
+        "reconnectDelay": 5000,
+        "maxReconnectAttempts": 10,
+        "depthUpdateSpeed": "100ms",
+        "enableHeartbeat": true,
+        "heartbeatInterval": 30000,
+        "maxBackoffDelay": 300000,
+        "streamHealthTimeout": 60000,
+        "enableStreamHealthCheck": true,
+        "reconnectOnHealthFailure": true
+      },
+      "orderBookState": {
+        "maxLevels": 2000,
+        "maxPriceDistance": 0.02,
+        "pruneIntervalMs": 60000,
+        "maxErrorRate": 5,
+        "staleThresholdMs": 300000
+      },
+      "anomalyDetector": {
         "windowSize": 400,
         "anomalyCooldownMs": 300000,
         "icebergDetectionWindow": 600000,
@@ -18,31 +40,14 @@
         "minHistory": 50,
         "orderSizeAnomalyThreshold": 3,
         "tickSize": 0.01
-    },
-    "spoofingDetector": {
-        "tickSize": 0.01,
+      },
+      "spoofingDetector": {
         "wallTicks": 15,
         "minWallSize": 50,
         "dynamicWallWidth": true,
         "testLogMinSpoof": 100
-    },
-    "orderBookState": {
-        "symbol": "LTCUSDT",
-        "pricePrecision": 2,
-        "maxLevels": 2000,
-        "maxPriceDistance": 0.02,
-        "pruneIntervalMs": 60000,
-        "maxErrorRate": 5,
-        "staleThresholdMs": 300000
-    },
-    "spoofing": {
-        "tickSize": 0.01,
-        "wallTicks": 5,
-        "minWallSize": 100,
-        "dynamicWallWidth": true,
-        "testLogMinSpoof": 1000
-    },
-    "exhaustion": {
+      },
+      "exhaustion": {
         "minAggVolume": 600,
         "threshold": 0.75,
         "windowMs": 90000,
@@ -54,19 +59,19 @@
         "confirmationTimeout": 60000,
         "maxRevisitTicks": 5,
         "features": {
-            "priceResponse": true,
-            "depletionTracking": true,
-            "spreadAdjustment": true,
-            "spoofingDetection": true,
-            "autoCalibrate": false,
-            "adaptiveZone": true,
-            "multiZone": true,
-            "volumeVelocity": true,
-            "passiveHistory": true,
-            "sideOverride": false
+          "priceResponse": true,
+          "depletionTracking": true,
+          "spreadAdjustment": true,
+          "spoofingDetection": true,
+          "autoCalibrate": false,
+          "adaptiveZone": true,
+          "multiZone": true,
+          "volumeVelocity": true,
+          "passiveHistory": true,
+          "sideOverride": false
         }
-    },
-    "absorption": {
+      },
+      "absorption": {
         "minAggVolume": 600,
         "threshold": 0.75,
         "windowMs": 90000,
@@ -79,35 +84,35 @@
         "confirmationTimeout": 60000,
         "maxRevisitTicks": 5,
         "features": {
-            "spoofingDetection": true,
-            "adaptiveZone": true,
-            "passiveHistory": true,
-            "multiZone": true,
-            "priceResponse": true,
-            "sideOverride": false,
-            "autoCalibrate": false,
-            "icebergDetection": true,
-            "liquidityGradient": true,
-            "spreadAdjustment": true,
-            "absorptionVelocity": true
+          "spoofingDetection": true,
+          "adaptiveZone": true,
+          "passiveHistory": true,
+          "multiZone": true,
+          "priceResponse": true,
+          "sideOverride": false,
+          "autoCalibrate": false,
+          "icebergDetection": true,
+          "liquidityGradient": true,
+          "spreadAdjustment": true,
+          "absorptionVelocity": true
         }
-    },
-    "deltaCvdConfirmation": {
-        "windowSec": 90000,
-        "minWindowTrades": 30,
-        "minWindowVolume": 20,
-        "minRateOfChange": 0,
+      },
+      "deltaCvdConfirmation": {
+        "windowSec": [60, 300, 900],
+        "minTradesPerSec": 0.5,
+        "minVolPerSec": 20,
+        "minZ": 3,
         "pricePrecision": 2,
         "dynamicThresholds": true,
         "logDebug": true
-    },
-    "swingPredictor": {
+      },
+      "swingPredictor": {
         "lookaheadMs": 60000,
         "retraceTicks": 10,
         "pricePrecision": 2,
         "signalCooldownMs": 300000
-    },
-    "accumulationDetector": {
+      },
+      "accumulationDetector": {
         "windowMs": 900000,
         "minDurationMs": 300000,
         "zoneSize": 0.02,
@@ -115,50 +120,9 @@
         "minRecentActivityMs": 60000,
         "minAggVolume": 5,
         "trackSide": false,
-        "pricePrecision": 2
-    },
-    "symbols": {
-        "LTCUSDT": {
-            "tickSize": 0.01,
-            "pricePrecision": 2,
-            "detectors": {
-                "absorption": {
-                    "windowMs": 90000,
-                    "minAggVolume": 600,
-                    "zoneTicks": 3,
-                    "eventCooldownMs": 15000,
-                    "minInitialMoveTicks": 10,
-                    "confirmationTimeoutMs": 60000,
-                    "maxRevisitTicks": 5,
-                    "features": {
-                        "spoofingDetection": true,
-                        "adaptiveZone": true,
-                        "passiveHistory": true,
-                        "multiZone": true,
-                        "priceResponse": true,
-                        "sideOverride": false,
-                        "autoCalibrate": false
-                    }
-                },
-                "exhaustion": {
-                    "windowMs": 120000,
-                    "minAggVolume": 400,
-                    "zoneTicks": 3,
-                    "eventCooldownMs": 10000,
-                    "minInitialMoveTicks": 8,
-                    "confirmationTimeoutMs": 50000,
-                    "maxRevisitTicks": 4,
-                    "features": {
-                        "spoofingDetection": true,
-                        "adaptiveZone": true,
-                        "passiveHistory": true,
-                        "multiZone": true,
-                        "priceResponse": true,
-                        "sideOverride": false,
-                        "autoCalibrate": false
-                    }
-                }
-            }
-        }
+        "pricePrecision": 2,
+        "accumulationThreshold": 0.6
+      }
     }
+  }
 }
