@@ -36,4 +36,27 @@ describe("market/OrderBookState", () => {
         expect(ob.getBestAsk()).toBe(101);
         expect(ob.getSpread()).toBe(1);
     });
+
+    it("ignores outdated updates", async () => {
+        vi.spyOn(
+            BinanceDataFeed.prototype,
+            "getDepthSnapshot"
+        ).mockResolvedValue({
+            lastUpdateId: 1,
+            bids: [["100", "1"]],
+            asks: [["101", "1"]],
+        });
+
+        const logger = new Logger();
+        const metrics = new MetricsCollector();
+        const ob = await OrderBookState.create(
+            { pricePrecision: 2, symbol: "TST" },
+            logger,
+            metrics
+        );
+
+        ob.updateDepth({ u: 1, b: [["100", "2"]], a: [["101", "1"]] } as any);
+        // Best bid should remain from snapshot
+        expect(ob.getBestBid()).toBe(100);
+    });
 });

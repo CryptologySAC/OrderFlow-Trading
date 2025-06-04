@@ -141,11 +141,10 @@ export class OrderBookState implements IOrderBookState {
             return;
         }
 
-        // Validate update sequence
+        // Validate update sequence - ignore outdated updates
         if (update.u && this.lastUpdateId && update.u <= this.lastUpdateId) {
-            throw new Error(
-                `Out of sequence update: ${update.u} <= ${this.lastUpdateId}`
-            );
+            // Skip duplicate/out-of-date update
+            return;
         }
         this.lastUpdateId = update.u ?? this.lastUpdateId;
 
@@ -362,9 +361,8 @@ export class OrderBookState implements IOrderBookState {
                     this.lastUpdateId &&
                     update.u <= this.lastUpdateId
                 ) {
-                    throw new Error(
-                        `Out of sequence update: ${update.u} <= ${this.lastUpdateId}`
-                    );
+                    // Skip duplicate/out-of-date update
+                    continue;
                 }
                 this.lastUpdateId = update.u ?? this.lastUpdateId;
 
