@@ -1,0 +1,26 @@
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import * as fs from "fs";
+import * as path from "path";
+import { SignalLogger } from "../src/services/signalLogger";
+
+import { Logger } from "../src/infrastructure/logger";
+vi.mock("../src/infrastructure/logger");
+
+describe("services/SignalLogger", () => {
+    let file: string;
+    beforeEach(() => {
+        file = path.join(process.cwd(), `test_log_${Date.now()}.csv`);
+        if (fs.existsSync(file)) fs.unlinkSync(file);
+    });
+    afterEach(() => {
+        if (fs.existsSync(file)) fs.unlinkSync(file);
+    });
+
+    it("writes header and row", () => {
+        const logger = new Logger();
+        const sl = new SignalLogger(file, logger);
+        sl.logEvent({ timestamp: "t", type: "a", signalPrice: 1, side: "buy" });
+        const contents = fs.readFileSync(file, "utf8");
+        expect(contents).toContain("timestamp,type");
+    });
+});
