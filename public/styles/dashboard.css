@@ -466,7 +466,7 @@ canvas {
         max-height: 180px;
         flex-shrink: 1;
     }
-    
+
     .anomaly-list-container {
         min-height: 150px;
     }
@@ -479,11 +479,11 @@ canvas {
         min-height: 120px;
         max-height: 160px;
     }
-    
+
     .anomaly-list-container {
         min-height: 120px;
     }
-    
+
     .anomaly-list-header {
         margin-bottom: 4px;
         font-size: 14px;
