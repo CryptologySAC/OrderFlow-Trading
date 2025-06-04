@@ -209,16 +209,21 @@ export class OrderFlowDashboard {
             data: unknown;
         };
 
-        return req.type === "backlog" &&
-            typeof req.data === "object" &&
-            req.data !== null &&
-            "amount" in req.data
-            ? typeof (req.data as { amount: unknown }).amount === "string" ||
-                  typeof (req.data as { amount: unknown }).amount ===
-                      "number" ||
-                  typeof (req.data as { amount: unknown }).amount ===
-                      "undefined"
-            : true;
+        if (
+            req.type !== "backlog" ||
+            typeof req.data !== "object" ||
+            req.data === null ||
+            !("amount" in req.data)
+        ) {
+            return false;
+        }
+
+        const amount = (req.data as { amount?: unknown }).amount;
+        return (
+            typeof amount === "string" ||
+            typeof amount === "number" ||
+            typeof amount === "undefined"
+        );
     }
 
     private startWebServer(): void {

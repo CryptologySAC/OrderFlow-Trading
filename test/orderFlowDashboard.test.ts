@@ -542,6 +542,11 @@ describe("OrderFlowDashboard (FULL COVERAGE)", () => {
         );
     });
 
+    test("isBacklogRequest returns true for valid backlog request", () => {
+        const req = { type: "backlog", data: { amount: "100" } };
+        expect(dashboard["isBacklogRequest"](req)).toBe(true);
+    });
+
     test("startWebServer calls use and listen", () => {
         const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
         dashboard["startWebServer"]();
