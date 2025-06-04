@@ -86,4 +86,111 @@ describe("WebSocketManager", () => {
         expect(a.send).toHaveBeenCalled();
         expect(b.send).toHaveBeenCalled();
     });
+
+    it("handles close events and updates metrics", () => {
+        const { server, metrics, logger, manager } = createManager();
+        const socket = new (ws as any).WebSocket();
+        server.clients.add(socket);
+        server.emit("connection", socket);
+        socket.emit("close");
+        expect(metrics.updateMetric).toHaveBeenLastCalledWith(
+            "connectionsActive",
+            manager.getConnectionCount()
+        );
+        expect(logger.info).toHaveBeenCalledWith(
+            "Client disconnected",
+            expect.any(Object),
+            expect.any(String)
+        );
+    });
+
+    it("logs socket errors", () => {
+        const { server, logger } = createManager();
+        const socket = new (ws as any).WebSocket();
+        server.clients.add(socket);
+        server.emit("connection", socket);
+        const err = new Error("boom");
+        socket.emit("error", err);
+        expect(logger.error).toHaveBeenCalledWith(
+            "WebSocket error",
+            { error: err, clientId: expect.any(String) },
+            expect.any(String)
+        );
+    });
+
+    it("rejects invalid message shape", () => {
+        const { server } = createManager();
+        const socket = new (ws as any).WebSocket();
+        server.clients.add(socket);
+        server.emit("connection", socket);
+        socket.emit("message", JSON.stringify({ bad: true }));
+        const payload = JSON.parse(socket.send.mock.calls[0][0]);
+        expect(payload.message).toBe("Invalid message shape");
+    });
+
+    it("handles unknown request types", () => {
+        const { server } = createManager();
+        const socket = new (ws as any).WebSocket();
+        server.clients.add(socket);
+        server.emit("connection", socket);
+        socket.emit("message", JSON.stringify({ type: "nope" }));
+        const payload = JSON.parse(socket.send.mock.calls[0][0]);
+        expect(payload.message).toBe("Unknown request type");
+    });
+
+    it("reports handler errors", async () => {
+        const handler = vi.fn().mockRejectedValue(new Error("fail"));
+        const { server, logger } = createManager({ bad: handler });
+        const socket = new (ws as any).WebSocket();
+        server.clients.add(socket);
+        server.emit("connection", socket);
+        socket.emit("message", JSON.stringify({ type: "bad" }));
+        await Promise.resolve();
+        expect(logger.error).toHaveBeenCalledWith(
+            "Handler error for bad",
+            { error: expect.any(Error) },
+            expect.any(String)
+        );
+        const payload = JSON.parse(socket.send.mock.calls[0][0]);
+        expect(payload.message).toBe("fail");
+    });
+
+    it("parses messages and throws on unexpected type", () => {
+        const { manager } = createManager();
+        const parse = (manager as any).parseMessage.bind(manager);
+        expect(parse(Buffer.from("hi"), "id", "cid")).toBe("hi");
+        expect(() => parse(123 as any, "id", "cid")).toThrow("Unexpected message format");
+    });
+
+    it("logs broadcast errors", () => {
+        const { manager, server, logger } = createManager();
+        const good = new (ws as any).WebSocket();
+        const bad = new (ws as any).WebSocket();
+        bad.send.mockImplementation(() => {
+            throw new Error("broken");
+        });
+        server.clients.add(good);
+        server.clients.add(bad);
+        server.emit("connection", good);
+        server.emit("connection", bad);
+        manager.broadcast({ type: "x", data: 1 });
+        expect(logger.error).toHaveBeenCalledWith(
+            "Broadcast error",
+            { error: expect.any(Error) }
+        );
+    });
+
+    it("shuts down and closes connections", () => {
+        const { manager, server } = createManager();
+        const a = new (ws as any).WebSocket();
+        const b = new (ws as any).WebSocket();
+        server.clients.add(a);
+        server.clients.add(b);
+        server.emit("connection", a);
+        server.emit("connection", b);
+        manager.shutdown();
+        expect(server.close).toHaveBeenCalled();
+        expect(a.close).toHaveBeenCalledWith(1001, "Server shutting down");
+        expect(b.close).toHaveBeenCalledWith(1001, "Server shutting down");
+    });
 });
