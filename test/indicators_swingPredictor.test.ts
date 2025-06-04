@@ -10,7 +10,10 @@ describe("indicators/SwingPredictor", () => {
     beforeEach(() => {
         vi.useFakeTimers();
         predicted = [];
-        predictor = new SwingPredictor({ lookaheadMs: 1000, retraceTicks: 1 }, cb);
+        predictor = new SwingPredictor(
+            { lookaheadMs: 1000, retraceTicks: 1 },
+            cb
+        );
     });
     afterEach(() => {
         vi.useRealTimers();

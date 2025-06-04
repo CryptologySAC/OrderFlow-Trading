@@ -1,6 +1,4 @@
-const WS_PORT = 3001;
-const wsUrl = `ws://${window.location.hostname}:${WS_PORT}`;
-
+const wsUrl = `wss://api.cryptology.pe/ltcusdt_trades`;
 let ws;
 let pingTimer;
 let connectionsGauge;
