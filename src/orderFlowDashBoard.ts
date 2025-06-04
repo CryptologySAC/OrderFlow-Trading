@@ -31,10 +31,7 @@ import type {
     OrderBookSnapshot,
 } from "./types/marketEvents.js";
 import { OrderflowPreprocessor } from "./market/orderFlowPreprocessor.js";
-import {
-    OrderBookState,
-    OrderBookStateOptions,
-} from "./market/orderBookState.js";
+import { OrderBookState } from "./market/orderBookState.js";
 import {
     WebSocketManager,
     type ExtendedWebSocket,
@@ -173,18 +170,8 @@ export class OrderFlowDashboard {
     }
 
     private async initialize(dependencies: Dependencies): Promise<void> {
-        // TODO Initialize Market with real options
-        const options: OrderBookStateOptions = {
-            symbol: Config.SYMBOL,
-            pricePrecision: Config.PRICE_PRECISION,
-            maxLevels: 5000,
-            maxPriceDistance: 10000,
-            pruneIntervalMs: 30000,
-            maxErrorRate: 20,
-            staleThresholdMs: 900_000, // 15 minutes
-        };
         this.orderBook = await OrderBookState.create(
-            options,
+            Config.orderBookStateConfig,
             dependencies.logger,
             dependencies.metricsCollector
         );
@@ -1382,7 +1369,7 @@ export function createDependencies(): Dependencies {
     const pipelineStore = new PipelineStorage(db, {});
     const storage = new Storage(db);
     const spoofingDetector = new SpoofingDetector(
-        Config.spoofingDetectorConfig()
+        Config.spoofingDetectorConfig
     );
 
     const orderBookProcessor = new OrderBookProcessor(
@@ -1408,7 +1395,7 @@ export function createDependencies(): Dependencies {
     );
 
     const anomalyDetector = new AnomalyDetector(
-        Config.anomalyDetectorConfig(),
+        Config.anomalyDetectorConfig,
         logger,
         spoofingDetector
     );

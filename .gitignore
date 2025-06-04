@@ -8,3 +8,4 @@ yarn.lock
 package-lock.json
 signals.csv
 trades.db-wal
+trades.db-shm
