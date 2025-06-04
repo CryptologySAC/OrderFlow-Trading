@@ -421,21 +421,6 @@ export class OrderFlowDashboard {
         }
     }
 
-    // TODO Make this real
-    private createAnomalyDetectorSettings(): AnomalyDetectorOptions {
-        return {
-            windowSize: 1200,
-            minHistory: 200,
-            anomalyCooldownMs: 20000, // 20 seconds
-            volumeImbalanceThreshold: 0.85,
-            absorptionRatioThreshold: 4.2,
-            icebergDetectionWindow: 120000,
-            orderSizeAnomalyThreshold: 4.5,
-            normalSpreadBps: 12,
-            tickSize: 0.01,
-        };
-    }
-
     private createAccumulationDetectorSettings(): AccumulationSettings {
         return {
             symbol: Config.SYMBOL,
