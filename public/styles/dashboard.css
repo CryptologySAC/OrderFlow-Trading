@@ -19,6 +19,12 @@ body {
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
+.gauge-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
 #orderBookContainer {
     width: 30vw;
     height: 50vh;
@@ -80,7 +86,6 @@ canvas {
     padding: 5px 10px;
     cursor: pointer;
 }
-
 
 .chartAreaWrapper {
     position: relative;
