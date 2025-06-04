@@ -17,7 +17,7 @@ type SymbolConfig = {
     pricePrecision: number;
     windowMs: number;
     bandTicks: number;
-    dataStream: DataStreamConfig;
+    dataStream?: DataStreamConfig;
     orderBookState: OrderBookStateConfig;
     emitDepthMetrics?: boolean;
     anomalyDetector?: AnomalyDetectorConfig;

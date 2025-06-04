@@ -18,25 +18,31 @@ import type { SwingPredictorConfig } from "../indicators/swingPredictor.js";
 const rawConfig = readFileSync(resolve(process.cwd(), "config.json"), "utf-8");
 const cfg: ConfigType = JSON.parse(rawConfig) as ConfigType;
 
+// Resolve symbol from env first then fallback to config
+const ENV_SYMBOL = process.env.SYMBOL?.toUpperCase();
+const CONFIG_SYMBOL = (ENV_SYMBOL ?? cfg.symbol) as AllowedSymbols;
+const SYMBOL_CFG =
+    cfg.symbols[CONFIG_SYMBOL as keyof typeof cfg.symbols] ??
+    (cfg.symbols as Record<string, unknown>)[cfg.symbol];
+const DATASTREAM_CFG = SYMBOL_CFG?.dataStream ?? {};
+
 /**
  * Centralized configuration management
  */
 
 export class Config {
     // Symbol configuration
-    static readonly SYMBOL: AllowedSymbols = cfg.symbol;
-    static readonly PRICE_PRECISION = Number(
-        cfg.symbols[cfg.symbol].pricePrecision ?? 2
-    );
+    static readonly SYMBOL: AllowedSymbols = CONFIG_SYMBOL;
+    static readonly PRICE_PRECISION = Number(SYMBOL_CFG?.pricePrecision ?? 2);
     static readonly TICK_SIZE = 1 / Math.pow(10, this.PRICE_PRECISION);
     static readonly MAX_STORAGE_TIME = Number(cfg.maxStorageTime ?? 5_400_000); // 90 minutes
-    static readonly WINDOW_MS = Number(
-        cfg.symbols[cfg.symbol].windowMs ?? 90000
-    );
+    static readonly WINDOW_MS = Number(SYMBOL_CFG?.windowMs ?? 90000);
 
     // Server configuration
-    static readonly HTTP_PORT = Number(cfg.httpPort ?? 3000);
-    static readonly WS_PORT = Number(cfg.wsPort ?? 3001);
+    static readonly HTTP_PORT = Number(
+        process.env.PORT ?? cfg.httpPort ?? 3000
+    );
+    static readonly WS_PORT = Number(process.env.WS_PORT ?? cfg.wsPort ?? 3001);
     static readonly API_KEY = process.env.API_KEY;
     static readonly API_SECRET = process.env.API_SECRET;
     static readonly NODE_ENV = cfg.nodeEnv ?? "production";
@@ -48,31 +54,23 @@ export class Config {
     static readonly PREPROCESSOR: OrderflowPreprocessorOptions = {
         symbol: Config.SYMBOL,
         pricePrecision: Config.PRICE_PRECISION,
-        bandTicks: cfg.symbols[cfg.symbol].bandTicks ?? 5,
+        bandTicks: SYMBOL_CFG?.bandTicks ?? 5,
         tickSize: Config.TICK_SIZE,
-        emitDepthMetrics: cfg.symbols[cfg.symbol].emitDepthMetrics ?? false,
+        emitDepthMetrics: SYMBOL_CFG?.emitDepthMetrics ?? false,
     };
 
     static readonly DATASTREAM: DataStreamConfig = {
         symbol: Config.SYMBOL,
-        reconnectDelay:
-            cfg.symbols[cfg.symbol].dataStream.reconnectDelay ?? 5000,
-        maxReconnectAttempts:
-            cfg.symbols[cfg.symbol].dataStream.maxReconnectAttempts ?? 10,
-        depthUpdateSpeed:
-            cfg.symbols[cfg.symbol].dataStream.depthUpdateSpeed ?? "100ms",
-        enableHeartbeat:
-            cfg.symbols[cfg.symbol].dataStream.enableHeartbeat ?? true,
-        heartbeatInterval:
-            cfg.symbols[cfg.symbol].dataStream.heartbeatInterval ?? 30000,
-        maxBackoffDelay:
-            cfg.symbols[cfg.symbol].dataStream.maxBackoffDelay ?? 300000,
-        streamHealthTimeout:
-            cfg.symbols[cfg.symbol].dataStream.streamHealthTimeout ?? 60000,
-        enableStreamHealthCheck:
-            cfg.symbols[cfg.symbol].dataStream.enableStreamHealthCheck ?? true,
+        reconnectDelay: DATASTREAM_CFG.reconnectDelay ?? 5000,
+        maxReconnectAttempts: DATASTREAM_CFG.maxReconnectAttempts ?? 10,
+        depthUpdateSpeed: DATASTREAM_CFG.depthUpdateSpeed ?? "100ms",
+        enableHeartbeat: DATASTREAM_CFG.enableHeartbeat ?? true,
+        heartbeatInterval: DATASTREAM_CFG.heartbeatInterval ?? 30000,
+        maxBackoffDelay: DATASTREAM_CFG.maxBackoffDelay ?? 300000,
+        streamHealthTimeout: DATASTREAM_CFG.streamHealthTimeout ?? 60000,
+        enableStreamHealthCheck: DATASTREAM_CFG.enableStreamHealthCheck ?? true,
         reconnectOnHealthFailure:
-            cfg.symbols[cfg.symbol].dataStream.reconnectOnHealthFailure ?? true,
+            DATASTREAM_CFG.reconnectOnHealthFailure ?? true,
     };
 
     static readonly ORDERBOOK_STATE: OrderBookStateOptions = {
@@ -317,14 +315,14 @@ export class Config {
      * Validate configuration on startup
      */
     static validate(): void {
-        //const required = ["symbol"];
-        //const missing = required.filter((key) => cfg[key] === undefined);
+        const required = ["SYMBOL"];
+        const missing = required.filter((key) => !process.env[key]);
 
-        //if (missing.length > 0) {
-        //    throw new Error(
-        //        `Missing required configuration values: ${missing.join(", ")}`
-        //    );
-        //}
+        if (missing.length > 0) {
+            throw new Error(
+                `Missing required environment variables: ${missing.join(", ")}`
+            );
+        }
 
         if (this.HTTP_PORT < 1 || this.HTTP_PORT > 65535) {
             throw new Error(`Invalid HTTP_PORT: ${this.HTTP_PORT}`);
