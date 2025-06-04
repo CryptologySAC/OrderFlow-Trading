@@ -14,7 +14,6 @@ export interface SwingPredictorConfig {
     retraceTicks?: number; // Ticks in opposite direction needed for confirmation
     pricePrecision?: number;
     signalCooldownMs?: number; // Prevent duplicate signals at same price/side
-    onSwingPredicted: (prediction: SwingPrediction) => void;
 }
 
 export class SwingPredictor {
@@ -37,12 +36,12 @@ export class SwingPredictor {
 
     private lastSignalTime: Map<string, number> = new Map();
 
-    constructor(config: SwingPredictorConfig) {
+    constructor(config: SwingPredictorConfig, onSwingPredicted: (p: SwingPrediction) => void) {
         this.lookaheadMs = config.lookaheadMs ?? 60000;
         this.retraceTicks = config.retraceTicks ?? 10;
         this.pricePrecision = config.pricePrecision ?? 2;
         this.signalCooldownMs = config.signalCooldownMs ?? 300000;
-        this.onSwingPredicted = config.onSwingPredicted;
+        this.onSwingPredicted = onSwingPredicted;
     }
 
     public onSignal(signal: Signal): void {

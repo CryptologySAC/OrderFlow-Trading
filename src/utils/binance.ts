@@ -13,9 +13,7 @@ import {
     Logger,
     LogLevel,
 } from "@binance/common";
-import dotenv from "dotenv";
-
-dotenv.config();
+import { Config } from "../core/config.js";
 
 // --- Error Types ---
 export class BinanceApiError extends Error {
@@ -118,8 +116,8 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         };
 
     private readonly configurationWebsocketAPI: ConfigurationWebsocketAPI = {
-        apiKey: process.env.API_KEY ?? "",
-        apiSecret: process.env.API_SECRET ?? "",
+        apiKey: Config.API_KEY as string,
+        apiSecret: Config.API_SECRET as string,
         wsURL: SPOT_WS_API_PROD_URL,
     };
 
@@ -138,7 +136,10 @@ export class BinanceDataFeed implements IBinanceDataFeed {
     }
 
     private validateConfiguration() {
-        const { API_KEY, API_SECRET } = process.env;
+        const { API_KEY, API_SECRET } = {
+            API_KEY: Config.API_KEY,
+            API_SECRET: Config.API_SECRET,
+        };
         if (!API_KEY || !API_SECRET) {
             throw new BinanceConfigurationError(
                 "Missing required API credentials: API_KEY and API_SECRET must be set"

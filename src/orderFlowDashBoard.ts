@@ -38,11 +38,7 @@ import {
 import { SignalManager } from "./trading/signalManager.js";
 import { DataStreamManager } from "./trading/dataStreamManager.js";
 import { SignalCoordinator } from "./services/signalCoordinator.js";
-import {
-    AnomalyDetector,
-    AnomalyEvent,
-    AnomalyDetectorOptions,
-} from "./services/anomalyDetector.js";
+import { AnomalyDetector, AnomalyEvent } from "./services/anomalyDetector.js";
 import { AlertManager } from "./alerts/alertManager.js";
 
 // Indicator imports
@@ -170,17 +166,12 @@ export class OrderFlowDashboard {
 
     private async initialize(dependencies: Dependencies): Promise<void> {
         this.orderBook = await OrderBookState.create(
-            Config.orderBookStateConfig,
+            Config.ORDERBOOK_STATE,
             dependencies.logger,
             dependencies.metricsCollector
         );
         this.preprocessor = new OrderflowPreprocessor(
-            {
-                //TODO Config
-                pricePrecision: Config.PRICE_PRECISION,
-                bandTicks: 10,
-                tickSize: Config.TICK_SIZE,
-            },
+            Config.PREPROCESSOR,
             this.orderBook,
             dependencies.logger,
             dependencies.metricsCollector
@@ -223,7 +214,7 @@ export class OrderFlowDashboard {
         this.signalManager = dependencies.signalManager;
 
         this.dataStreamManager = new DataStreamManager(
-            { symbol: Config.SYMBOL },
+            Config.DATASTREAM,
             dependencies.binanceFeed,
             dependencies.circuitBreaker,
             this.logger,
@@ -236,7 +227,7 @@ export class OrderFlowDashboard {
             (signal) => {
                 console.log("Absorption signal:", signal);
             },
-            this.createAbsorptionSettings(),
+            Config.ABSORPTION_DETECTOR,
             dependencies,
             { id: "ltcusdt-absorption-main" }
         );
@@ -251,7 +242,7 @@ export class OrderFlowDashboard {
             (signal) => {
                 console.log("Exhaustion signal:", signal);
             },
-            this.createExhaustionSettings(),
+            Config.EXHAUSTION_DETECTOR,
             dependencies,
             { id: "ltcusdt-exhaustion-main" }
         );
@@ -266,7 +257,7 @@ export class OrderFlowDashboard {
             (signal) => {
                 console.log("Accumulation signal:", signal);
             },
-            this.createAccumulationDetectorSettings(),
+            Config.ACCUMULATION_DETECTOR,
             dependencies,
             { id: "ltcusdt-accumulation-main" }
         );
@@ -298,7 +289,7 @@ export class OrderFlowDashboard {
                 (signal) => {
                     console.log("Delta CVD signal:", signal);
                 },
-                this.createDeltaCVDSettings(),
+                Config.DELTACVD_DETECTOR,
                 dependencies,
                 { id: "ltcusdt-cvdConfirmation-main" }
             );
@@ -310,7 +301,8 @@ export class OrderFlowDashboard {
         );
 
         this.swingPredictor = new SwingPredictor(
-            this.createSwingPredictorSettings()
+            Config.SWING_PREDICTOR,
+            this.handleSwingPrediction.bind(this)
         );
 
         this.signalCoordinator.start();
@@ -420,184 +412,8 @@ export class OrderFlowDashboard {
         }
     }
 
-    private createAccumulationDetectorSettings(): AccumulationSettings {
-        return {
-            symbol: Config.SYMBOL,
-            windowMs: Config.ACCUMULATION_DETECTOR.WINDOW_MS,
-            minDurationMs: Config.ACCUMULATION_DETECTOR.MIN_DURATION_MS,
-            minRatio: Config.ACCUMULATION_DETECTOR.MIN_RATIO,
-            minRecentActivityMs:
-                Config.ACCUMULATION_DETECTOR.MIN_RECENT_ACTIVITY_MS,
-            minAggVolume: Config.ACCUMULATION_DETECTOR.MIN_AGG_VOLUME,
-            pricePrecision: Config.ACCUMULATION_DETECTOR.PRICE_PRECISION,
-        };
-    }
-
-    private createDeltaCVDSettings(): DeltaCVDConfirmationSettings {
-        return {
-            windowsSec: [90, 300, 900], //TODO
-            minTradesPerSec: Config.DELTA_CVD_CONFIRMATION.MIN_WINDOW_TRADES,
-            minVolPerSec: Config.DELTA_CVD_CONFIRMATION.MIN_WINDOW_VOLUME,
-            minZ: Config.DELTA_CVD_CONFIRMATION.MIN_RATE_OF_CHANGE, // Use adaptive if 0
-            symbol: Config.SYMBOL,
-        };
-    }
-
-    private createSwingPredictorSettings(): SwingPredictorConfig {
-        return {
-            lookaheadMs: Config.SWING_PREDICTOR.LOOKAHEAD_MS,
-            retraceTicks: Config.SWING_PREDICTOR.RETRACE_TICKS,
-            pricePrecision: Config.SWING_PREDICTOR.PRICE_PRECISION,
-            signalCooldownMs: Config.SWING_PREDICTOR.SIGNAL_COOLDOWN_MS,
-            onSwingPredicted: this.handleSwingPrediction.bind(this),
-        };
-    }
-
-    /**
-     * Create absorption detector settings
-     */
-    private createAbsorptionSettings(): AbsorptionSettings {
-        console.log("Spoofing Settings:", Config.SPOOFING);
-        console.log(
-            "Creating absorption settings with config:",
-            Config.ABSORPTION
-        );
-        return {
-            minAggVolume: Config.ABSORPTION.MIN_AGG_VOLUME,
-            absorptionThreshold: Config.ABSORPTION.THRESHOLD,
-            windowMs: Config.ABSORPTION.WINDOW_MS,
-            zoneTicks: Config.ABSORPTION.ZONE_TICKS,
-            eventCooldownMs: Config.ABSORPTION.EVENT_COOLDOWN_MS,
-            minPassiveMultiplier: Config.ABSORPTION.MIN_PASSIVE_MULTIPLIER,
-            maxAbsorptionRatio: Config.ABSORPTION.MAX_ABSORPTION_RATIO,
-            pricePrecision: Config.ABSORPTION.PRICE_PRECISION,
-            minInitialMoveTicks: Config.ABSORPTION.MOVE_TICKS,
-            confirmationTimeoutMs: Config.ABSORPTION.CONFIRMATION_TIMEOUT,
-            maxRevisitTicks: Config.ABSORPTION.MAX_REVISIT_TICKS,
-            symbol: Config.SYMBOL,
-            spoofing: {
-                tickSize: Config.SPOOFING.TICK_SIZE,
-                wallTicks: Config.SPOOFING.WALL_TICKS,
-                minWallSize: Config.SPOOFING.MIN_WALL_SIZE,
-                dynamicWallWidth: Config.SPOOFING.DYNAMIC_WALL_WIDTH,
-                testLogMinSpoof: Config.SPOOFING.TEST_LOG_MIN_SPOOF,
-            },
-            features: {
-                spoofingDetection: parseBool(
-                    process.env.ABSORPTION_SPOOFING_DETECTION,
-                    true
-                ),
-                adaptiveZone: parseBool(
-                    process.env.ABSORPTION_ADAPTIVE_ZONE,
-                    true
-                ),
-                passiveHistory: parseBool(
-                    process.env.ABSORPTION_PASSIVE_HISTORY,
-                    true
-                ),
-                multiZone: parseBool(process.env.ABSORPTION_MULTI_ZONE, true),
-                priceResponse: parseBool(
-                    process.env.ABSORPTION_PRICE_RESPONSE,
-                    true
-                ),
-                sideOverride: parseBool(
-                    process.env.ABSORPTION_SIDE_OVERRIDE,
-                    false
-                ),
-                autoCalibrate: parseBool(
-                    process.env.ABSORPTION_AUTO_CALIBRATE,
-                    true
-                ),
-                icebergDetection: parseBool(
-                    process.env.ABSORPTION_ICEBERG_DETECTION,
-                    true
-                ),
-                liquidityGradient: parseBool(
-                    process.env.ABSORPTION_LIQUIDITY_GRADIENT,
-                    true
-                ),
-                spreadAdjustment: parseBool(
-                    process.env.ABSORPTION_SPREAD_AJUSTMENT,
-                    true
-                ),
-                absorptionVelocity: parseBool(
-                    process.env.ABSORPTION_VELOCITY,
-                    true
-                ),
-            },
-        };
-    }
-
-    /**
-     * Create exhaustion detector settings
-     */
-    private createExhaustionSettings(): ExhaustionSettings {
-        console.log(
-            "Creating exhaustion settings with config:",
-            Config.EXHAUSTION
-        );
-        return {
-            minAggVolume: Config.EXHAUSTION.MIN_AGG_VOLUME,
-            exhaustionThreshold: Config.EXHAUSTION.THRESHOLD,
-            windowMs: Config.EXHAUSTION.WINDOW_MS,
-            zoneTicks: Config.EXHAUSTION.ZONE_TICKS,
-            eventCooldownMs: Config.EXHAUSTION.EVENT_COOLDOWN_MS,
-            maxPassiveRatio: Config.EXHAUSTION.MAX_PASSIVE_RATIO,
-            pricePrecision: Config.EXHAUSTION.PRICE_PRECISION,
-            minInitialMoveTicks: Config.EXHAUSTION.MOVE_TICKS,
-            confirmationTimeoutMs: Config.EXHAUSTION.CONFIRMATION_TIMEOUT,
-            maxRevisitTicks: Config.EXHAUSTION.MAX_REVISIT_TICKS,
-            symbol: Config.SYMBOL,
-            spoofing: {
-                tickSize: Config.SPOOFING.TICK_SIZE,
-                wallTicks: Config.SPOOFING.WALL_TICKS,
-                minWallSize: Config.SPOOFING.MIN_WALL_SIZE,
-                dynamicWallWidth: Config.SPOOFING.DYNAMIC_WALL_WIDTH,
-                testLogMinSpoof: Config.SPOOFING.TEST_LOG_MIN_SPOOF,
-            },
-            features: {
-                priceResponse: parseBool(
-                    process.env.EXHAUSTION_PRICE_RESPONSE,
-                    true
-                ),
-                depletionTracking: parseBool(
-                    process.env.EXHAUSTION_DEPLETION_TRACKING,
-                    true
-                ),
-                spreadAdjustment: parseBool(
-                    process.env.EXHAUSTION_SPREAD_AJUSTMENT,
-                    true
-                ),
-                spoofingDetection: parseBool(
-                    process.env.EXHAUSTION_SPOOFING_DETECTION,
-                    true
-                ),
-                autoCalibrate: parseBool(
-                    process.env.EXHAUSTION_AUTO_CALIBRATE,
-                    true
-                ),
-                adaptiveZone: parseBool(
-                    process.env.EXHAUSTION_ADAPTIVE_ZONE,
-                    true
-                ),
-                multiZone: parseBool(process.env.EXHAUSTION_MULTI_ZONE, true),
-                volumeVelocity: parseBool(
-                    process.env.EXHAUSTION_VOLUME_VELOCITY,
-                    true
-                ),
-                passiveHistory: parseBool(
-                    process.env.EXHAUSTION_PASSIVE_HISTORY,
-                    true
-                ),
-
-                sideOverride: parseBool(
-                    process.env.EXHAUSTION_SIDE_OVERRIDE,
-                    false
-                ),
-            },
-        };
-    }
-
+    
+   
     /**
      * Setup event handlers
      */
@@ -1095,9 +911,9 @@ export class OrderFlowDashboard {
             this.metricsCollector.incrementMetric("signalsGenerated");
 
             // Send webhook if configured
-            if (Config.WEBHOOK_URL) {
+            if (Config.ALERT_WEBHOOK_URL) {
                 await this.sendWebhookMessage(
-                    Config.WEBHOOK_URL,
+                    Config.ALERT_WEBHOOK_URL,
                     {
                         type: signal.type,
                         time: signal.time,
@@ -1353,7 +1169,7 @@ export function createDependencies(): Dependencies {
     const pipelineStore = new PipelineStorage(db, {});
     const storage = new Storage(db);
     const spoofingDetector = new SpoofingDetector(
-        Config.spoofingDetectorConfig
+        Config.SPOOFING_DETECTOR
     );
 
     const orderBookProcessor = new OrderBookProcessor(
@@ -1379,7 +1195,7 @@ export function createDependencies(): Dependencies {
     );
 
     const anomalyDetector = new AnomalyDetector(
-        Config.anomalyDetectorConfig,
+        Config.ANOMALY_DETECTOR,
         logger,
         spoofingDetector
     );

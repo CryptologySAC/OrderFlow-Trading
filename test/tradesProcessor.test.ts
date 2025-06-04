@@ -36,18 +36,19 @@ describe("TradesProcessor", () => {
     });
 
     const createEvent = (): EnrichedTradeEvent => {
-        const originalTrade: SpotWebsocketAPI.TradesAggregateResponseResultInner = {
-            e: "aggTrade",
-            s: "TEST",
-            a: 1,
-            p: "100",
-            q: "2",
-            f: 1,
-            l: 1,
-            T: Date.now(),
-            m: false,
-            M: true,
-        } as any;
+        const originalTrade: SpotWebsocketAPI.TradesAggregateResponseResultInner =
+            {
+                e: "aggTrade",
+                s: "TEST",
+                a: 1,
+                p: "100",
+                q: "2",
+                f: 1,
+                l: 1,
+                T: Date.now(),
+                m: false,
+                M: true,
+            } as any;
         return {
             price: 100,
             quantity: 2,
@@ -74,22 +75,26 @@ describe("TradesProcessor", () => {
     });
 
     it("requests backlog from storage when memory empty", () => {
-        const storedTrade: SpotWebsocketAPI.TradesAggregateResponseResultInner = {
-            e: "aggTrade",
-            s: "TEST",
-            a: 2,
-            p: "101",
-            q: "1",
-            f: 2,
-            l: 2,
-            T: 1,
-            m: false,
-            M: true,
-        } as any;
+        const storedTrade: SpotWebsocketAPI.TradesAggregateResponseResultInner =
+            {
+                e: "aggTrade",
+                s: "TEST",
+                a: 2,
+                p: "101",
+                q: "1",
+                f: 2,
+                l: 2,
+                T: 1,
+                m: false,
+                M: true,
+            } as any;
         storage.getLatestAggregatedTrades.mockReturnValue([storedTrade]);
 
         const trades = processor.requestBacklog(1);
-        expect(storage.getLatestAggregatedTrades).toHaveBeenCalledWith(1, "TEST");
+        expect(storage.getLatestAggregatedTrades).toHaveBeenCalledWith(
+            1,
+            "TEST"
+        );
         expect(trades[0].price).toBe(101);
     });
 

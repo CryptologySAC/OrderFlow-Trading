@@ -14,7 +14,13 @@ const createManager = (handlers: Record<string, any> = {}) => {
     const metrics = new MetricsCollector();
     const limiter = new RateLimiter();
     limiter.isAllowed.mockReturnValue(true);
-    const manager = new WebSocketManager(1234, logger, limiter, metrics, handlers);
+    const manager = new WebSocketManager(
+        1234,
+        logger,
+        limiter,
+        metrics,
+        handlers
+    );
     const server: any = (ws as any).lastServerInstance();
     return { manager, logger, metrics, limiter, server };
 };
@@ -38,8 +44,10 @@ describe("WebSocketManager", () => {
         const socket = new (ws as any).WebSocket();
         server.clients.add(socket);
         server.emit("connection", socket);
-        socket.emit("message", "{}" );
-        expect(socket.send).toHaveBeenCalledWith(expect.stringContaining("Rate limit exceeded"));
+        socket.emit("message", "{}");
+        expect(socket.send).toHaveBeenCalledWith(
+            expect.stringContaining("Rate limit exceeded")
+        );
     });
 
     it("handles invalid json", () => {
@@ -59,7 +67,10 @@ describe("WebSocketManager", () => {
         const socket = new (ws as any).WebSocket();
         server.clients.add(socket);
         server.emit("connection", socket);
-        socket.emit("message", JSON.stringify({ type: "test", data: { a: 1 } }));
+        socket.emit(
+            "message",
+            JSON.stringify({ type: "test", data: { a: 1 } })
+        );
         expect(socket.send).not.toHaveBeenCalled();
     });
 

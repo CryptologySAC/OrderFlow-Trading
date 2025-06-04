@@ -1,7 +1,10 @@
 import { OrderBookProcessor } from "../src/clients/orderBookProcessor";
 import { Logger } from "../src/infrastructure/logger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
-import type { OrderBookSnapshot, PassiveLevel } from "../src/types/marketEvents";
+import type {
+    OrderBookSnapshot,
+    PassiveLevel,
+} from "../src/types/marketEvents";
 
 vi.mock("../src/infrastructure/logger");
 vi.mock("../src/infrastructure/metricsCollector");

@@ -9,7 +9,10 @@ vi.mock("@binance/spot", () => ({
     SPOT_WS_API_PROD_URL: "",
 }));
 
-import { BinanceDataFeed, BinanceConfigurationError } from "../src/utils/binance";
+import {
+    BinanceDataFeed,
+    BinanceConfigurationError,
+} from "../src/utils/binance";
 
 describe("utils/binance", () => {
     beforeEach(() => {

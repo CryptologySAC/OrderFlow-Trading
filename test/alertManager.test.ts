@@ -1,6 +1,9 @@
 import { AlertManager } from "../src/alerts/alertManager";
 import type { Signal, SwingSignalData } from "../src/types/signalTypes";
-import { calculateBreakeven, calculateProfitTarget } from "../src/utils/calculations";
+import {
+    calculateBreakeven,
+    calculateProfitTarget,
+} from "../src/utils/calculations";
 
 vi.mock("../src/utils/calculations");
 
@@ -59,8 +62,16 @@ describe("AlertManager", () => {
 
         (calculateBreakeven as any).mockReturnValue(101);
         (calculateProfitTarget as any)
-            .mockReturnValueOnce({ price: 110, percentGain: 0.01, netGain: 0.009 })
-            .mockReturnValueOnce({ price: 120, percentGain: 0.02, netGain: 0.018 });
+            .mockReturnValueOnce({
+                price: 110,
+                percentGain: 0.01,
+                netGain: 0.009,
+            })
+            .mockReturnValueOnce({
+                price: 120,
+                percentGain: 0.02,
+                netGain: 0.018,
+            });
 
         await manager.sendAlert(sampleSignal());
 
@@ -90,7 +101,10 @@ describe("AlertManager", () => {
 
     it("throws when webhook response not ok", async () => {
         const manager = new AlertManager("http://bad.com");
-        (global as any).fetch = vi.fn(async () => ({ ok: false, statusText: "Bad" }));
+        (global as any).fetch = vi.fn(async () => ({
+            ok: false,
+            statusText: "Bad",
+        }));
         await expect((manager as any).sendWebhook({})).rejects.toThrow();
     });
 });

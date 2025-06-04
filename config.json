@@ -1,4 +1,122 @@
 {
+    "nodeEnv": "development",
+    "symbol": "LTCUSDT",
+    "pricePrecision": 2,
+    "maxStorageTime": 5400000,
+    "httpPort": 3000,
+    "wsPort": 3001,
+    "webhookUrl": "",
+    "alertWebhookUrl": "",
+    "alertCooldownMs": 300000,
+    "anomalyDetector": {
+        "windowSize": 400,
+        "anomalyCooldownMs": 300000,
+        "icebergDetectionWindow": 600000,
+        "volumeImbalanceThreshold": 0.65,
+        "absorptionRatioThreshold": 2.5,
+        "normalSpreadBps": 10,
+        "minHistory": 50,
+        "orderSizeAnomalyThreshold": 3,
+        "tickSize": 0.01
+    },
+    "spoofingDetector": {
+        "tickSize": 0.01,
+        "wallTicks": 15,
+        "minWallSize": 50,
+        "dynamicWallWidth": true,
+        "testLogMinSpoof": 100
+    },
+    "orderBookState": {
+        "symbol": "LTCUSDT",
+        "pricePrecision": 2,
+        "maxLevels": 2000,
+        "maxPriceDistance": 0.02,
+        "pruneIntervalMs": 60000,
+        "maxErrorRate": 5,
+        "staleThresholdMs": 300000
+    },
+    "spoofing": {
+        "tickSize": 0.01,
+        "wallTicks": 5,
+        "minWallSize": 100,
+        "dynamicWallWidth": true,
+        "testLogMinSpoof": 1000
+    },
+    "exhaustion": {
+        "minAggVolume": 600,
+        "threshold": 0.75,
+        "windowMs": 90000,
+        "zoneTicks": 3,
+        "eventCooldownMs": 15000,
+        "maxPassiveRatio": 0.5,
+        "pricePrecision": 2,
+        "moveTicks": 12,
+        "confirmationTimeout": 60000,
+        "maxRevisitTicks": 5,
+        "features": {
+            "priceResponse": true,
+            "depletionTracking": true,
+            "spreadAdjustment": true,
+            "spoofingDetection": true,
+            "autoCalibrate": false,
+            "adaptiveZone": true,
+            "multiZone": true,
+            "volumeVelocity": true,
+            "passiveHistory": true,
+            "sideOverride": false
+        }
+    },
+    "absorption": {
+        "minAggVolume": 600,
+        "threshold": 0.75,
+        "windowMs": 90000,
+        "zoneTicks": 3,
+        "eventCooldownMs": 15000,
+        "minPassiveMultiplier": 2,
+        "maxAbsorptionRatio": 0.3,
+        "pricePrecision": 2,
+        "moveTicks": 12,
+        "confirmationTimeout": 60000,
+        "maxRevisitTicks": 5,
+        "features": {
+            "spoofingDetection": true,
+            "adaptiveZone": true,
+            "passiveHistory": true,
+            "multiZone": true,
+            "priceResponse": true,
+            "sideOverride": false,
+            "autoCalibrate": false,
+            "icebergDetection": true,
+            "liquidityGradient": true,
+            "spreadAdjustment": true,
+            "absorptionVelocity": true
+        }
+    },
+    "deltaCvdConfirmation": {
+        "windowSec": 90000,
+        "minWindowTrades": 30,
+        "minWindowVolume": 20,
+        "minRateOfChange": 0,
+        "pricePrecision": 2,
+        "dynamicThresholds": true,
+        "logDebug": true
+    },
+    "swingPredictor": {
+        "lookaheadMs": 60000,
+        "retraceTicks": 10,
+        "pricePrecision": 2,
+        "signalCooldownMs": 300000
+    },
+    "accumulationDetector": {
+        "windowMs": 900000,
+        "minDurationMs": 300000,
+        "zoneSize": 0.02,
+        "minRatio": 1.2,
+        "minRecentActivityMs": 60000,
+        "minAggVolume": 5,
+        "trackSide": false,
+        "pricePrecision": 2
+    },
     "symbols": {
         "LTCUSDT": {
             "tickSize": 0.01,

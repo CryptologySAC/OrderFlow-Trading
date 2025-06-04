@@ -92,13 +92,7 @@ describe("utils/utils", () => {
             confirmed: false,
             id: "1",
         });
-        const confirmed = mgr.processPendingConfirmations(
-            101,
-            2,
-            5,
-            10,
-            1000
-        );
+        const confirmed = mgr.processPendingConfirmations(101, 2, 5, 10, 1000);
         expect(confirmed.length).toBe(1);
     });
 
