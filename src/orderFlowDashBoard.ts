@@ -1148,10 +1148,10 @@ export class OrderFlowDashboard {
 export function createDependencies(): Dependencies {
     const logger = new Logger(process.env.NODE_ENV === "development");
     const metricsCollector = new MetricsCollector();
-    const signalLogger = new SignalLogger("signals.csv");
+    const signalLogger = new SignalLogger("./storage/signals.csv");
     const rateLimiter = new RateLimiter(60000, 100);
     const circuitBreaker = new CircuitBreaker(5, 60000, logger);
-    const db = getDB("trades.db");
+    const db = getDB("./storage/trades.db");
     runMigrations(db);
     const pipelineStore = new PipelineStorage(db, {});
     const storage = new Storage(db);

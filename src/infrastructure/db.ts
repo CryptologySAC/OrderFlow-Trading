@@ -2,7 +2,7 @@ import BetterSqlite3, { Database } from "better-sqlite3";
 
 let dbInstance: Database | undefined;
 
-export function getDB(dbPath = "trades.db"): Database {
+export function getDB(dbPath = "./storage/trades.db"): Database {
     if (!dbInstance) {
         dbInstance = new BetterSqlite3(dbPath);
         dbInstance.pragma("journal_mode = WAL");
