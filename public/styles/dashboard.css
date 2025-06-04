@@ -26,16 +26,16 @@ body {
 }
 
 #orderBookContainer {
-    width: 30vw;
+    width: 25vw;
     height: 50vh;
-    left: 1vw;
+    left: 0;
     top: 1vw;
 }
 
 #tradesContainer {
-    width: 50vw;
+    width: 60vw;
     height: 50vh;
-    left: 32vw;
+    left: 25vw;
     top: 1vw;
     display: flex;
     flex-direction: column;
@@ -44,7 +44,7 @@ body {
 #delayGaugeContainer {
     width: 15vw;
     height: 20vh;
-    left: 83vw;
+    left: 85vw;
     top: 1vw;
 }
 
@@ -103,7 +103,7 @@ canvas {
 
 .anomaly-list-container {
     position: absolute;
-    left: 83vw;
+    left: 85vw;
     top: 22vh;
     width: 15vw;
     height: 40vh;
@@ -195,5 +195,29 @@ canvas {
     }
     100% {
         opacity: 0;
+    }
+}
+
+@media (max-width: 768px) {
+    #tradesContainer {
+        width: 100vw;
+        left: 0;
+        top: 1vw;
+    }
+    #orderBookContainer {
+        width: 50vw;
+        left: 0;
+        top: 52vh;
+    }
+    #delayGaugeContainer,
+    .anomaly-list-container {
+        width: 50vw;
+        left: 50vw;
+    }
+    #delayGaugeContainer {
+        top: 52vh;
+    }
+    .anomaly-list-container {
+        top: 74vh;
     }
 }
