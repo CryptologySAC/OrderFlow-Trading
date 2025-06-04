@@ -394,7 +394,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
     protected handleDetection(pendingSignal: DetectorResultType): void {
         const detection: SignalCandidate = {
             id: randomUUID(),
-            type: "absorption",
+            type: this.getSignalType(),
             side: pendingSignal.side,
             confidence: pendingSignal.confidence,
             timestamp: Date.now(),
