@@ -12,13 +12,23 @@ describe("indicators/detectorUtils", () => {
     });
 
     it("validates and normalizes trades", () => {
-        const raw = { p: "100", q: "2", T: 1, m: false, s: "TEST", a: 1 } as any;
+        const raw = {
+            p: "100",
+            q: "2",
+            T: 1,
+            m: false,
+            s: "TEST",
+            a: 1,
+        } as any;
         const trade = DetectorUtils.normalizeTradeData(raw);
         expect(trade.price).toBe(100);
         expect(trade.quantity).toBe(2);
         expect(DetectorUtils.isValidTrade(trade as AggressiveTrade)).toBe(true);
         expect(
-            DetectorUtils.isValidTrade({ price: 0, quantity: 0 } as AggressiveTrade)
+            DetectorUtils.isValidTrade({
+                price: 0,
+                quantity: 0,
+            } as AggressiveTrade)
         ).toBe(false);
     });
 });

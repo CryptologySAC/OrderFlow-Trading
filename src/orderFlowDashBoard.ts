@@ -212,7 +212,12 @@ export class OrderFlowDashboard {
             this.metricsCollector
         );
 
-        this.statsBroadcaster = new StatsBroadcaster(this.metricsCollector, this.dataStreamManager, this.wsManager, this.logger);
+        this.statsBroadcaster = new StatsBroadcaster(
+            this.metricsCollector,
+            this.dataStreamManager,
+            this.wsManager,
+            this.logger
+        );
         DetectorFactory.initialize(dependencies);
 
         this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
@@ -653,7 +658,7 @@ export class OrderFlowDashboard {
     /**
      * Setup HTTP server
      */
-    }
+
     private setupHttpServer(): void {
         const publicPath = path.join(__dirname, "../public");
         this.httpServer.use(express.static(publicPath));
@@ -667,16 +672,22 @@ export class OrderFlowDashboard {
                     timestamp: new Date().toISOString(),
                     uptime: process.uptime(),
                     connections: this.wsManager.getConnectionCount(),
-                    circuitBreakerState: this.dependencies.circuitBreaker.getState(),
+                    circuitBreakerState:
+                        this.dependencies.circuitBreaker.getState(),
                     metrics: {
                         signalsGenerated: metrics.legacy.signalsGenerated,
-                        averageLatency: this.metricsCollector.getAverageLatency(),
+                        averageLatency:
+                            this.metricsCollector.getAverageLatency(),
                         errorsCount: metrics.legacy.errorsCount,
                     },
                     correlationId,
                 };
                 res.json(health);
-                this.logger.info("Health check requested", health, correlationId);
+                this.logger.info(
+                    "Health check requested",
+                    health,
+                    correlationId
+                );
             } catch (error) {
                 this.handleError(error as Error, "health_check", correlationId);
                 res.status(500).json({
@@ -699,7 +710,11 @@ export class OrderFlowDashboard {
                 res.json(stats);
                 this.logger.info("Stats requested", stats, correlationId);
             } catch (error) {
-                this.handleError(error as Error, "stats_endpoint", correlationId);
+                this.handleError(
+                    error as Error,
+                    "stats_endpoint",
+                    correlationId
+                );
                 res.status(500).json({
                     status: "error",
                     error: (error as Error).message,

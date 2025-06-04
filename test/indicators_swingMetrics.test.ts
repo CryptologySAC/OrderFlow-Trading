@@ -5,7 +5,12 @@ import type { TradeData } from "../src/utils/utils";
 describe("indicators/SwingMetrics", () => {
     let metrics: SwingMetrics;
 
-    const makeTrade = (price: number, qty: number, buyerIsMaker: boolean, ts: number): TradeData => ({
+    const makeTrade = (
+        price: number,
+        qty: number,
+        buyerIsMaker: boolean,
+        ts: number
+    ): TradeData => ({
         price,
         quantity: qty,
         timestamp: ts,

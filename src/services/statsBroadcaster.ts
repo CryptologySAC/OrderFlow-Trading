@@ -32,7 +32,9 @@ export class StatsBroadcaster {
                     now: Date.now(),
                 });
             } catch (err) {
-                this.logger.error("Stats broadcast error", { error: err as Error });
+                this.logger.error("Stats broadcast error", {
+                    error: err as Error,
+                });
             }
         }, this.intervalMs);
     }

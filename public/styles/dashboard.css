@@ -70,7 +70,9 @@ body {
     background-color: var(--bg-primary);
     color: var(--text-primary);
     overflow: hidden;
-    transition: background-color 0.3s ease, color 0.3s ease;
+    transition:
+        background-color 0.3s ease,
+        color 0.3s ease;
 }
 
 .dashboard {
@@ -111,7 +113,9 @@ body {
     padding: 10px;
     box-shadow: 0 2px 5px var(--shadow-color);
     box-sizing: border-box;
-    transition: background-color 0.3s ease, border-color 0.3s ease;
+    transition:
+        background-color 0.3s ease,
+        border-color 0.3s ease;
 }
 
 .chart-container,
@@ -157,7 +161,6 @@ body {
     flex-direction: column;
 }
 
-
 .resize-handle {
     position: absolute;
     top: 0;
@@ -190,7 +193,8 @@ canvas {
     height: 100%;
 }
 
-.chartAreaWrapper, .chartAreaWrapper50 {
+.chartAreaWrapper,
+.chartAreaWrapper50 {
     height: 100%;
 }
 
@@ -228,7 +232,9 @@ canvas {
     background: var(--button-bg);
     border: 1px solid var(--button-border);
     color: var(--text-primary);
-    transition: background-color 0.3s ease, border-color 0.3s ease;
+    transition:
+        background-color 0.3s ease,
+        border-color 0.3s ease;
 }
 
 .rangeSelector button:hover {
@@ -264,7 +270,9 @@ canvas {
     margin-left: 10px !important;
     padding: 5px 10px !important;
     cursor: pointer;
-    transition: background-color 0.3s ease, border-color 0.3s ease;
+    transition:
+        background-color 0.3s ease,
+        border-color 0.3s ease;
 }
 
 .theme-toggle-btn:hover {
@@ -286,7 +294,6 @@ canvas {
     padding: 10px;
     box-sizing: border-box;
 }
-
 
 .anomaly-list-header {
     display: flex;
@@ -313,7 +320,7 @@ canvas {
     border-bottom: 1px solid var(--border-light);
     display: flex;
     align-items: center;
-    font-family: 'Courier New', monospace;
+    font-family: "Courier New", monospace;
     font-size: 12px;
     line-height: 1.2;
     width: 100%;
@@ -431,24 +438,26 @@ canvas {
         height: auto;
         min-height: calc(100vh - 40px);
     }
-    
+
     .column {
         flex: none;
         height: auto;
         min-height: 30vh;
     }
-    
-    #column1, #column2, #column3 {
+
+    #column1,
+    #column2,
+    #column3 {
         flex: none;
         width: 100%;
         max-width: none;
         min-width: auto;
     }
-    
+
     .resize-handle {
         display: none;
     }
-    
+
     .gauge-container {
         height: 15vh;
         flex-shrink: 0;

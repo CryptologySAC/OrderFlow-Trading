@@ -14,7 +14,11 @@ class TestDetector extends BaseDetector {
     constructor() {
         const logger = new Logger();
         const metrics = new MetricsCollector();
-        const spoof = new SpoofingDetector({ tickSize: 0.01, wallTicks: 1, minWallSize: 1 });
+        const spoof = new SpoofingDetector({
+            tickSize: 0.01,
+            wallTicks: 1,
+            minWallSize: 1,
+        });
         super(
             "1",
             () => {},
@@ -38,11 +42,21 @@ class TestDetector extends BaseDetector {
     }
     protected onEnrichedTradeSpecific(): void {}
     protected checkForSignal(): void {}
-    protected getSignalType() { return "test" as const; }
-    public calcZone(p: number) { return this.calculateZone(p); }
-    public group(trades: AggressiveTrade[], ticks: number) { return this.groupTradesByZone(trades, ticks); }
-    public volumes(zone: number, trades: AggressiveTrade[], ticks: number) { return this.calculateZoneVolumes(zone, trades, ticks); }
-    public cooldown(zone: number, side: "buy" | "sell") { return this.checkCooldown(zone, side); }
+    protected getSignalType() {
+        return "test" as const;
+    }
+    public calcZone(p: number) {
+        return this.calculateZone(p);
+    }
+    public group(trades: AggressiveTrade[], ticks: number) {
+        return this.groupTradesByZone(trades, ticks);
+    }
+    public volumes(zone: number, trades: AggressiveTrade[], ticks: number) {
+        return this.calculateZoneVolumes(zone, trades, ticks);
+    }
+    public cooldown(zone: number, side: "buy" | "sell") {
+        return this.checkCooldown(zone, side);
+    }
 }
 
 describe("indicators/BaseDetector", () => {
@@ -55,7 +69,11 @@ describe("indicators/BaseDetector", () => {
         vi.useRealTimers();
     });
 
-    const trade = (price: number, qty: number, ts: number): AggressiveTrade => ({
+    const trade = (
+        price: number,
+        qty: number,
+        ts: number
+    ): AggressiveTrade => ({
         price,
         quantity: qty,
         timestamp: ts,
@@ -66,7 +84,11 @@ describe("indicators/BaseDetector", () => {
     });
 
     it("calculates zones and groups trades", () => {
-        const trades = [trade(100.01, 1, 1), trade(100.02, 1, 2), trade(100.07, 1, 3)];
+        const trades = [
+            trade(100.01, 1, 1),
+            trade(100.02, 1, 2),
+            trade(100.07, 1, 3),
+        ];
         const grouped = det.group(trades, 2);
         expect(grouped.size).toBe(2);
         expect(det.calcZone(100.01)).toBe(100.02);

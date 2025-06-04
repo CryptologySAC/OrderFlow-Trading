@@ -18,7 +18,8 @@ export interface WebSocketMessage {
         | "signal"
         | "anomaly"
         | "error"
-        | "test";
+        | "test"
+        | "stats";
     data: unknown;
     now: number;
 }
