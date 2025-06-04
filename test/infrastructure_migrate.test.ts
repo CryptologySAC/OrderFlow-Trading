@@ -11,7 +11,9 @@ describe("infrastructure/migrate", () => {
     it("creates required tables", () => {
         db = new Database(":memory:");
         runMigrations(db);
-        const rows = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+        const rows = db
+            .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+            .all();
         const names = rows.map((r: { name: string }) => r.name);
         expect(names).toContain("coordinator_queue");
         expect(names).toContain("signal_history");

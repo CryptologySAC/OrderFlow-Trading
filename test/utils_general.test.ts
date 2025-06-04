@@ -213,15 +213,7 @@ describe("utils/utils", () => {
             confirmed: false,
             id: "1",
         });
-        mgr.processPendingConfirmations(
-            99.9,
-            2,
-            50,
-            5,
-            1000,
-            logger,
-            "SYM"
-        );
+        mgr.processPendingConfirmations(99.9, 2, 50, 5, 1000, logger, "SYM");
         expect(logger.logEvent).toHaveBeenCalled();
         expect(mgr.getPendingCount()).toBe(0);
     });

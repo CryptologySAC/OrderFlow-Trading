@@ -27,6 +27,7 @@ import type {
 import { AccumulationDetector } from "../indicators/accumulationDetector.js";
 import { SignalType } from "../types/signalTypes.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
+import { Config } from "../core/config.js";
 
 /**
  * Production detector factory with monitoring, validation, and lifecycle management
@@ -661,15 +662,27 @@ export class DetectorFactory {
             errors.push("symbol is required in production");
         }
 
-        if (settings.windowMs && settings.windowMs < 5000) {
+        if (
+            settings.windowMs &&
+            settings.windowMs < 5000 &&
+            Config.NODE_ENV === "production"
+        ) {
             errors.push("windowMs should be at least 5000ms in production");
         }
 
-        if (settings.minAggVolume && settings.minAggVolume < 50) {
+        if (
+            settings.minAggVolume &&
+            settings.minAggVolume < 50 &&
+            Config.NODE_ENV === "production"
+        ) {
             errors.push("minAggVolume should be at least 50 in production");
         }
 
-        if (settings.eventCooldownMs && settings.eventCooldownMs < 1000) {
+        if (
+            settings.eventCooldownMs &&
+            settings.eventCooldownMs < 1000 &&
+            Config.NODE_ENV === "production"
+        ) {
             errors.push(
                 "eventCooldownMs should be at least 1000ms in production"
             );

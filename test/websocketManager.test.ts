@@ -159,7 +159,9 @@ describe("WebSocketManager", () => {
         const { manager } = createManager();
         const parse = (manager as any).parseMessage.bind(manager);
         expect(parse(Buffer.from("hi"), "id", "cid")).toBe("hi");
-        expect(() => parse(123 as any, "id", "cid")).toThrow("Unexpected message format");
+        expect(() => parse(123 as any, "id", "cid")).toThrow(
+            "Unexpected message format"
+        );
     });
 
     it("logs broadcast errors", () => {
@@ -174,10 +176,9 @@ describe("WebSocketManager", () => {
         server.emit("connection", good);
         server.emit("connection", bad);
         manager.broadcast({ type: "x", data: 1 });
-        expect(logger.error).toHaveBeenCalledWith(
-            "Broadcast error",
-            { error: expect.any(Error) }
-        );
+        expect(logger.error).toHaveBeenCalledWith("Broadcast error", {
+            error: expect.any(Error),
+        });
     });
 
     it("shuts down and closes connections", () => {
