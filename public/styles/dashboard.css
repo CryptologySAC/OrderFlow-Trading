@@ -27,16 +27,16 @@ body {
 
 #orderBookContainer {
     width: 25vw;
-    height: 50vh;
+    height: calc(100vh - 2vh);
     left: 0;
-    top: 1vw;
+    top: 1vh;
 }
 
 #tradesContainer {
     width: 60vw;
-    height: 50vh;
+    height: calc(100vh - 2vh);
     left: 25vw;
-    top: 1vw;
+    top: 1vh;
     display: flex;
     flex-direction: column;
 }
@@ -45,7 +45,7 @@ body {
     width: 15vw;
     height: 20vh;
     left: 85vw;
-    top: 1vw;
+    top: 1vh;
 }
 
 canvas {
@@ -105,8 +105,8 @@ canvas {
     position: absolute;
     left: 85vw;
     top: 22vh;
+    bottom: 1vh;
     width: 15vw;
-    height: 40vh;
     background: white;
     border: 1px solid #ccc;
     padding: 10px;
