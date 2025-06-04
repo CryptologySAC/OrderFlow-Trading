@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Column Resize Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+            overflow: hidden;
+        }
+
+        .dashboard {
+            display: flex;
+            height: calc(100vh - 40px);
+            gap: 0;
+        }
+
+        .column {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        #column1 {
+            flex: 0 0 25%;
+            min-width: 200px;
+            max-width: 50%;
+            background: lightblue;
+        }
+
+        #column2 {
+            flex: 1;
+            min-width: 300px;
+            background: lightgreen;
+        }
+
+        #column3 {
+            flex: 0 0 15%;
+            min-width: 150px;
+            max-width: 30%;
+            background: lightcoral;
+            gap: 0; /* Remove gap between gauge and anomaly list */
+        }
+
+        #column3 .content:first-child {
+            margin-bottom: 0;
+        }
+
+        #column3 .content:last-child {
+            margin-top: 0;
+        }
+
+        .resize-handle {
+            position: absolute;
+            top: 0;
+            right: -5px;
+            width: 10px;
+            height: 100%;
+            background: transparent;
+            cursor: col-resize;
+            z-index: 1000;
+            border-right: 2px solid transparent;
+            transition: border-color 0.2s;
+        }
+
+        .resize-handle:hover {
+            border-right-color: #007bff;
+        }
+
+        .resize-handle:active {
+            border-right-color: #0056b3;
+        }
+
+        .content {
+            padding: 20px;
+            flex: 1;
+        }
+
+        /* Anomaly list demo styles */
+        .anomaly-list-demo {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .anomaly-row {
+            padding: 3px 5px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.2;
+        }
+
+        .anomaly-row:last-child {
+            border-bottom: none;
+        }
+
+        .anomaly-row.critical {
+            color: #fff;
+            background: #e53935;
+            font-weight: bold;
+        }
+
+        .anomaly-row.high {
+            color: #fff;
+            background: #ffb300;
+            font-weight: bold;
+        }
+
+        .anomaly-row.medium {
+            color: #333;
+            background: #fffde7;
+        }
+
+        .anomaly-icon {
+            display: inline-block;
+            width: 20px;
+            text-align: center;
+            font-size: 14px;
+            margin-right: 6px;
+            flex-shrink: 0;
+        }
+
+        .anomaly-label {
+            display: inline-block;
+            width: 110px;
+            text-align: left;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-right: 6px;
+            flex-shrink: 0;
+        }
+
+        .anomaly-price {
+            display: inline-block;
+            width: 75px;
+            text-align: center;
+            margin-right: 6px;
+            flex-shrink: 0;
+            font-weight: bold;
+        }
+
+        .anomaly-time {
+            display: inline-block;
+            width: 45px;
+            text-align: right;
+            flex-shrink: 0;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <main class="dashboard">
+        <section class="column" id="column1">
+            <div class="content">
+                <h3>Order Book</h3>
+                <p>Column 1 - Order book chart goes here</p>
+            </div>
+            <div class="resize-handle" id="resize1"></div>
+        </section>
+
+        <section class="column" id="column2">
+            <div class="content">
+                <h3>Trading Chart</h3>
+                <p>Column 2 - Trading chart goes here</p>
+            </div>
+            <div class="resize-handle" id="resize2"></div>
+        </section>
+
+        <section class="column" id="column3">
+            <div class="content">
+                <h3>Trade Delay Gauge</h3>
+                <p>Gauge goes here</p>
+            </div>
+            <div class="content">
+                <h3>Anomalies List</h3>
+                <div class="anomaly-list-demo">
+                    <div class="anomaly-row critical">
+                        <span class="anomaly-icon">⚡</span>
+                        <span class="anomaly-label">Flash Crash</span>
+                        <span class="anomaly-price">88.00-89.50</span>
+                        <span class="anomaly-time">1s ago</span>
+                    </div>
+                    <div class="anomaly-row critical">
+                        <span class="anomaly-icon">🔥</span>
+                        <span class="anomaly-label">Momentum Ignition</span>
+                        <span class="anomaly-price">88.10-88.25</span>
+                        <span class="anomaly-time">2s ago</span>
+                    </div>
+                    <div class="anomaly-row high">
+                        <span class="anomaly-icon">🐋</span>
+                        <span class="anomaly-label">Whale Activity</span>
+                        <span class="anomaly-price">87.80</span>
+                        <span class="anomaly-time">8s ago</span>
+                    </div>
+                    <div class="anomaly-row high">
+                        <span class="anomaly-icon">⚖️</span>
+                        <span class="anomaly-label">Orderbook Imbalance</span>
+                        <span class="anomaly-price">87.95-88.05</span>
+                        <span class="anomaly-time">15s ago</span>
+                    </div>
+                    <div class="anomaly-row medium">
+                        <span class="anomaly-icon">🔵</span>
+                        <span class="anomaly-label">Absorption</span>
+                        <span class="anomaly-price">88.50</span>
+                        <span class="anomaly-time">1m ago</span>
+                    </div>
+                    <div class="anomaly-row medium">
+                        <span class="anomaly-icon">🧊</span>
+                        <span class="anomaly-label">Iceberg Order</span>
+                        <span class="anomaly-price">88.75-88.80</span>
+                        <span class="anomaly-time">2m ago</span>
+                    </div>
+                </div>
+                <small>Notice: Fixed-width columns for perfect alignment</small>
+            </div>
+        </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+    <script>
+        function setupColumnResizing() {
+            if (typeof interact === "undefined") {
+                console.error("Interact.js not loaded");
+                return;
+            }
+
+            // Restore saved column widths on load
+            restoreColumnWidths();
+
+            // Setup column resizing functionality
+            interact('.resize-handle').draggable({
+                axis: 'x',
+                listeners: {
+                    move(event) {
+                        const handle = event.target;
+                        const handleId = handle.id;
+                        const dashboard = document.querySelector('.dashboard');
+                        const dashboardRect = dashboard.getBoundingClientRect();
+                        
+                        if (handleId === 'resize1') {
+                            // Resizing between column 1 and column 2
+                            const column1 = document.getElementById('column1');
+                            const column1Rect = column1.getBoundingClientRect();
+                            
+                            const newWidth = Math.min(Math.max(column1Rect.width + event.dx, 200), dashboardRect.width * 0.5);
+                            const newPercent = (newWidth / dashboardRect.width) * 100;
+                            
+                            column1.style.flex = `0 0 ${newPercent}%`;
+                            
+                        } else if (handleId === 'resize2') {
+                            // Resizing between column 2 and column 3
+                            const column3 = document.getElementById('column3');
+                            const column3Rect = column3.getBoundingClientRect();
+                            
+                            const newWidth = Math.min(Math.max(column3Rect.width - event.dx, 150), dashboardRect.width * 0.3);
+                            const newPercent = (newWidth / dashboardRect.width) * 100;
+                            
+                            column3.style.flex = `0 0 ${newPercent}%`;
+                        }
+                        
+                        // Debounced save
+                        clearTimeout(window.resizeTimeout);
+                        window.resizeTimeout = setTimeout(() => {
+                            saveColumnWidths();
+                        }, 100);
+                    },
+                    end(event) {
+                        // Save column widths immediately when resize ends
+                        saveColumnWidths();
+                    }
+                }
+            });
+        }
+
+        function saveColumnWidths() {
+            try {
+                const dashboard = document.querySelector('.dashboard');
+                const dashboardRect = dashboard.getBoundingClientRect();
+                
+                const column1 = document.getElementById('column1');
+                const column3 = document.getElementById('column3');
+                
+                const column1Rect = column1.getBoundingClientRect();
+                const column3Rect = column3.getBoundingClientRect();
+                
+                const column1Percent = (column1Rect.width / dashboardRect.width) * 100;
+                const column3Percent = (column3Rect.width / dashboardRect.width) * 100;
+                
+                const columnWidths = {
+                    column1: column1Percent,
+                    column3: column3Percent,
+                    timestamp: Date.now()
+                };
+                
+                localStorage.setItem('dashboardColumnWidths', JSON.stringify(columnWidths));
+                console.log('Column widths saved:', columnWidths);
+            } catch (error) {
+                console.warn('Failed to save column widths to localStorage:', error);
+            }
+        }
+
+        function restoreColumnWidths() {
+            try {
+                const savedWidths = localStorage.getItem('dashboardColumnWidths');
+                
+                if (!savedWidths) {
+                    console.log('No saved column widths found, using defaults');
+                    return;
+                }
+                
+                const columnWidths = JSON.parse(savedWidths);
+                
+                if (!columnWidths.column1 || !columnWidths.column3) {
+                    console.warn('Invalid saved column widths, using defaults');
+                    return;
+                }
+                
+                const column1 = document.getElementById('column1');
+                const column3 = document.getElementById('column3');
+                
+                if (column1 && column3) {
+                    const column1Width = Math.min(Math.max(columnWidths.column1, 15), 50);
+                    const column3Width = Math.min(Math.max(columnWidths.column3, 10), 30);
+                    
+                    column1.style.flex = `0 0 ${column1Width}%`;
+                    column3.style.flex = `0 0 ${column3Width}%`;
+                    
+                    console.log('Column widths restored:', { 
+                        column1: column1Width, 
+                        column3: column3Width,
+                        savedAt: new Date(columnWidths.timestamp).toLocaleString()
+                    });
+                }
+            } catch (error) {
+                console.warn('Failed to restore column widths from localStorage:', error);
+            }
+        }
+
+        function resetColumnWidths() {
+            try {
+                const column1 = document.getElementById('column1');
+                const column3 = document.getElementById('column3');
+                
+                if (column1 && column3) {
+                    column1.style.flex = '0 0 25%';
+                    column3.style.flex = '0 0 15%';
+                    
+                    localStorage.removeItem('dashboardColumnWidths');
+                    console.log('Column widths reset to defaults');
+                }
+            } catch (error) {
+                console.warn('Failed to reset column widths:', error);
+            }
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            setupColumnResizing();
+            
+            // Add reset button
+            const resetBtn = document.createElement('button');
+            resetBtn.textContent = 'Reset Layout';
+            resetBtn.style.position = 'fixed';
+            resetBtn.style.top = '10px';
+            resetBtn.style.right = '10px';
+            resetBtn.style.zIndex = '1000';
+            resetBtn.onclick = () => {
+                if (confirm('Reset layout to default?')) {
+                    resetColumnWidths();
+                }
+            };
+            document.body.appendChild(resetBtn);
+        });
+    </script>
+</body>
+</html>

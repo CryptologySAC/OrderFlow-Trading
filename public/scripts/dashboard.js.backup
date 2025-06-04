@@ -170,9 +170,9 @@ function getAnomalyIcon(type) {
         case "liquidity_void":
             return "💧";
         case "absorption":
-            return "🔵";
+            return "A";
         case "exhaustion":
-            return "🔴";
+            return "E";
         case "whale_activity":
             return "🐋";
         case "momentum_ignition":
@@ -182,38 +182,11 @@ function getAnomalyIcon(type) {
         case "iceberg_order":
             return "🧊";
         case "orderbook_imbalance":
-            return "⚖️";
+            return "≠";
         case "flow_imbalance":
             return "⇄";
         default:
             return "•";
-    }
-}
-
-function getAnomalyLabel(type) {
-    switch (type) {
-        case "flash_crash":
-            return "Flash Crash";
-        case "liquidity_void":
-            return "Liquidity Void";
-        case "absorption":
-            return "Absorption";
-        case "exhaustion":
-            return "Exhaustion";
-        case "whale_activity":
-            return "Whale Activity";
-        case "momentum_ignition":
-            return "Momentum Ignition";
-        case "spoofing":
-            return "Spoofing";
-        case "iceberg_order":
-            return "Iceberg Order";
-        case "orderbook_imbalance":
-            return "Orderbook Imbalance";
-        case "flow_imbalance":
-            return "Flow Imbalance";
-        default:
-            return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
 }
 function capitalize(str) {
@@ -235,10 +208,12 @@ function renderAnomalyList() {
         .map(
             (a) => `
             <div class="anomaly-row ${a.severity}">
-                <span class="anomaly-icon">${getAnomalyIcon(a.type)}</span>
-                <span class="anomaly-label">${getAnomalyLabel(a.type)}</span>
-                <span class="anomaly-price">${a.affectedPriceRange ? `${a.affectedPriceRange.min.toFixed(2)}-${a.affectedPriceRange.max.toFixed(2)}` : `${a.price?.toFixed(2) || 'N/A'}`}</span>
-                <span class="anomaly-time">${formatAgo(a.detectedAt || a.time || Date.now())}</span>
+                <span class="anomaly-type">${getAnomalyIcon(a.type)}</span>
+                <span>${capitalize(a.type)}</span>
+                <span style="margin-left:8px">${a.affectedPriceRange.min.toFixed(2)} - ${a.affectedPriceRange.max.toFixed(2)}</span>
+                <span style="margin-left:8px">${a.severity}</span>
+                <span style="margin-left:8px">${a.recommendedAction}</span>
+                <span style="margin-left:auto">${formatAgo(a.detectedAt || a.time || Date.now())}</span>
             </div>
         `
         )
@@ -249,7 +224,7 @@ function showAnomalyBadge(anomaly) {
     if (latestBadgeElem) latestBadgeElem.remove();
     const badge = document.createElement("div");
     badge.className = `anomaly-badge ${anomaly.severity}`;
-    badge.innerHTML = `${getAnomalyIcon(anomaly.type)} ${getAnomalyLabel(anomaly.type)} @ ${anomaly.price?.toFixed(2) || 'N/A'}`;
+    badge.innerHTML = `${getAnomalyIcon(anomaly.type)} ${capitalize(anomaly.type)} @ ${anomaly.price.toFixed(2)}`;
     document.body.appendChild(badge);
     latestBadgeElem = badge;
     if (badgeTimeout) clearTimeout(badgeTimeout);
@@ -597,37 +572,30 @@ const tradeWebsocket = new TradeWebSocket({
 
                     orderBookData = message.data;
                     if (window.orderBookChart) {
-                        // Update chart data with new structure
-                        const labels = [];
-                        const askData = [];
-                        const bidData = [];
-                        const askColors = [];
-                        const bidColors = [];
-                        
-                        orderBookData.priceLevels.forEach((level) => {
-                            const priceStr = level.price ? level.price.toFixed(2) : "0.00";
-                            
-                            // Add ask position
-                            labels.push(`${priceStr}_ask`);
-                            askData.push(level.ask || 0);
-                            bidData.push(null);
-                            askColors.push(level.ask ? `rgba(255, 0, 0, ${Math.min(level.ask / 2000, 1)})` : "rgba(0, 0, 0, 0)");
-                            bidColors.push("rgba(0, 0, 0, 0)");
-                            
-                            // Add bid position  
-                            labels.push(`${priceStr}_bid`);
-                            askData.push(null);
-                            bidData.push(level.bid || 0);
-                            askColors.push("rgba(0, 0, 0, 0)");
-                            bidColors.push(level.bid ? `rgba(0, 128, 0, ${Math.min(level.bid / 2000, 1)})` : "rgba(0, 0, 0, 0)");
-                        });
-                        
-                        orderBookChart.data.labels = labels;
-                        orderBookChart.data.datasets[0].data = askData;
-                        orderBookChart.data.datasets[1].data = bidData;
-                        orderBookChart.data.datasets[0].backgroundColor = askColors;
-                        orderBookChart.data.datasets[1].backgroundColor = bidColors;
-                        
+                        orderBookChart.data.labels =
+                            orderBookData.priceLevels.map((level) =>
+                                level.price ? level.price.toFixed(2) : "0.00"
+                            );
+                        orderBookChart.data.datasets[1].data =
+                            orderBookData.priceLevels.map(
+                                (level) => level.bid || 0
+                            );
+                        orderBookChart.data.datasets[0].data =
+                            orderBookData.priceLevels.map(
+                                (level) => level.ask || 0
+                            );
+                        orderBookChart.data.datasets[1].backgroundColor =
+                            orderBookData.priceLevels.map((level) =>
+                                level.bid
+                                    ? `rgba(0, 128, 0, ${Math.min(level.bid / 2000, 1)})`
+                                    : "rgba(0, 0, 0, 0)"
+                            );
+                        orderBookChart.data.datasets[0].backgroundColor =
+                            orderBookData.priceLevels.map((level) =>
+                                level.ask
+                                    ? `rgba(255, 0, 0, ${Math.min(level.ask / 2000, 1)})`
+                                    : "rgba(0, 0, 0, 0)"
+                            );
                         scheduleOrderBookUpdate();
                     } else {
                         console.warn(
@@ -891,54 +859,36 @@ function initializeOrderBookChart(ctx) {
         throw new Error("Chart.js is not loaded");
     }
 
-    // Create labels for both bid and ask positions for each price level
-    const labels = [];
-    const askData = [];
-    const bidData = [];
-    const askColors = [];
-    const bidColors = [];
-    
-    orderBookData.priceLevels.forEach((level) => {
-        const basePrice = level.price;
-        const priceStr = basePrice.toFixed(2);
-        
-        // Add ask position (upper part of price tick)
-        labels.push(`${priceStr}_ask`);
-        askData.push(level.ask);
-        bidData.push(null);
-        askColors.push(level.ask ? `rgba(255, 0, 0, ${Math.min(level.ask / 2000, 1)})` : "rgba(0, 0, 0, 0)");
-        bidColors.push("rgba(0, 0, 0, 0)");
-        
-        // Add bid position (lower part of price tick)
-        labels.push(`${priceStr}_bid`);
-        askData.push(null);
-        bidData.push(level.bid);
-        askColors.push("rgba(0, 0, 0, 0)");
-        bidColors.push(level.bid ? `rgba(0, 128, 0, ${Math.min(level.bid / 2000, 1)})` : "rgba(0, 0, 0, 0)");
-    });
-
     return new Chart(ctx, {
         type: "bar",
         data: {
-            labels: labels,
+            labels: orderBookData.priceLevels.map((level) =>
+                level.price.toFixed(2)
+            ),
             datasets: [
                 {
                     label: "Asks",
-                    data: askData,
-                    backgroundColor: askColors,
+                    data: orderBookData.priceLevels.map((level) => level.ask),
+                    backgroundColor: orderBookData.priceLevels.map((level) =>
+                        level.ask
+                            ? `rgba(255, 0, 0, ${Math.min(level.ask / 2000, 1)})`
+                            : "rgba(0, 0, 0, 0)"
+                    ),
                     borderColor: "rgba(255, 0, 0, 0.5)",
                     borderWidth: 1,
-                    barPercentage: 0.9,
-                    categoryPercentage: 1.0,
+                    barThickness: 10,
                 },
                 {
-                    label: "Bids", 
-                    data: bidData,
-                    backgroundColor: bidColors,
+                    label: "Bids",
+                    data: orderBookData.priceLevels.map((level) => level.bid),
+                    backgroundColor: orderBookData.priceLevels.map((level) =>
+                        level.bid
+                            ? `rgba(0, 128, 0, ${Math.min(level.bid / 2000, 1)})`
+                            : "rgba(0, 0, 0, 0)"
+                    ),
                     borderColor: "rgba(0, 128, 0, 0.5)",
                     borderWidth: 1,
-                    barPercentage: 0.9,
-                    categoryPercentage: 1.0,
+                    barThickness: 10,
                 },
             ],
         },
@@ -956,22 +906,7 @@ function initializeOrderBookChart(ctx) {
                     title: { display: true, text: "Price (USDT)" },
                     offset: true,
                     reverse: true,
-                    ticks: {
-                        callback: function(value, index) {
-                            const label = this.getLabelForValue(index);
-                            if (label && label.includes('_ask')) {
-                                return label.split('_')[0]; // Only show price for ask positions
-                            }
-                            return '';
-                        }
-                    }
                 },
-            },
-            datasets: {
-                bar: {
-                    barPercentage: 0.45,
-                    categoryPercentage: 1.0,
-                }
             },
             plugins: {
                 legend: {
@@ -988,31 +923,10 @@ function initializeOrderBookChart(ctx) {
                 tooltip: {
                     callbacks: {
                         label: function (context) {
-                            const label = context.label;
-                            const isAsk = label.includes('_ask');
-                            const isBid = label.includes('_bid');
-                            const priceStr = label.split('_')[0];
-                            const price = parseFloat(priceStr);
-                            
-                            // Find the corresponding price level
-                            const level = orderBookData.priceLevels.find(l => 
-                                Math.abs(l.price - price) < 0.001
-                            );
-                            
-                            if (!level) return '';
-                            
-                            if (isAsk && level.ask > 0) {
-                                return `Ask: ${level.ask} LTC at $${price.toFixed(2)}`;
-                            } else if (isBid && level.bid > 0) {
-                                return `Bid: ${level.bid} LTC at $${price.toFixed(2)}`;
-                            }
-                            return '';
+                            const level =
+                                orderBookData.priceLevels[context.dataIndex];
+                            return `Price: $${level.price.toFixed(2)}, Bid: ${level.bid} LTC, Ask: ${level.ask} LTC, Direction: ${orderBookData.direction.type} (${orderBookData.direction.probability}%)`;
                         },
-                        title: function(context) {
-                            const label = context[0].label;
-                            const priceStr = label.split('_')[0];
-                            return `Price: $${priceStr}`;
-                        }
                     },
                 },
             },
@@ -1042,178 +956,7 @@ function setRange(duration) {
 }
 
 /**
- * Sets up column resizing capabilities using interact.js with localStorage persistence.
- * Elements are no longer draggable or individually resizable - only column width resizing is allowed.
- */
-function setupColumnResizing() {
-    if (typeof interact === "undefined") {
-        console.error("Interact.js not loaded");
-        return;
-    }
-
-    // Restore saved column widths on load
-    restoreColumnWidths();
-
-    // Setup column resizing functionality
-    interact('.resize-handle').draggable({
-        axis: 'x',
-        listeners: {
-            move(event) {
-                const handle = event.target;
-                const handleId = handle.id;
-                const dashboard = document.querySelector('.dashboard');
-                const dashboardRect = dashboard.getBoundingClientRect();
-                
-                if (handleId === 'resize1') {
-                    // Resizing between column 1 and column 2
-                    const column1 = document.getElementById('column1');
-                    const column1Rect = column1.getBoundingClientRect();
-                    
-                    const newWidth = Math.min(Math.max(column1Rect.width + event.dx, 200), dashboardRect.width * 0.5);
-                    const newPercent = (newWidth / dashboardRect.width) * 100;
-                    
-                    column1.style.flex = `0 0 ${newPercent}%`;
-                    
-                } else if (handleId === 'resize2') {
-                    // Resizing between column 2 and column 3
-                    const column3 = document.getElementById('column3');
-                    const column3Rect = column3.getBoundingClientRect();
-                    
-                    const newWidth = Math.min(Math.max(column3Rect.width - event.dx, 150), dashboardRect.width * 0.3);
-                    const newPercent = (newWidth / dashboardRect.width) * 100;
-                    
-                    column3.style.flex = `0 0 ${newPercent}%`;
-                }
-                
-                // Debounced chart resize and save
-                clearTimeout(window.resizeTimeout);
-                window.resizeTimeout = setTimeout(() => {
-                    triggerChartResize();
-                    saveColumnWidths();
-                }, 100);
-            },
-            end(event) {
-                // Save column widths immediately when resize ends
-                saveColumnWidths();
-            }
-        }
-    });
-}
-
-/**
- * Save current column widths to localStorage
- */
-function saveColumnWidths() {
-    try {
-        const dashboard = document.querySelector('.dashboard');
-        const dashboardRect = dashboard.getBoundingClientRect();
-        
-        const column1 = document.getElementById('column1');
-        const column3 = document.getElementById('column3');
-        
-        const column1Rect = column1.getBoundingClientRect();
-        const column3Rect = column3.getBoundingClientRect();
-        
-        const column1Percent = (column1Rect.width / dashboardRect.width) * 100;
-        const column3Percent = (column3Rect.width / dashboardRect.width) * 100;
-        
-        const columnWidths = {
-            column1: column1Percent,
-            column3: column3Percent,
-            timestamp: Date.now()
-        };
-        
-        localStorage.setItem('dashboardColumnWidths', JSON.stringify(columnWidths));
-        
-        console.log('Column widths saved:', columnWidths);
-    } catch (error) {
-        console.warn('Failed to save column widths to localStorage:', error);
-    }
-}
-
-/**
- * Restore column widths from localStorage
- */
-function restoreColumnWidths() {
-    try {
-        const savedWidths = localStorage.getItem('dashboardColumnWidths');
-        
-        if (!savedWidths) {
-            console.log('No saved column widths found, using defaults');
-            return;
-        }
-        
-        const columnWidths = JSON.parse(savedWidths);
-        
-        // Validate saved data
-        if (!columnWidths.column1 || !columnWidths.column3) {
-            console.warn('Invalid saved column widths, using defaults');
-            return;
-        }
-        
-        // Apply saved widths with validation
-        const column1 = document.getElementById('column1');
-        const column3 = document.getElementById('column3');
-        
-        if (column1 && column3) {
-            // Ensure widths are within valid ranges
-            const column1Width = Math.min(Math.max(columnWidths.column1, 15), 50); // 15-50%
-            const column3Width = Math.min(Math.max(columnWidths.column3, 10), 30); // 10-30%
-            
-            column1.style.flex = `0 0 ${column1Width}%`;
-            column3.style.flex = `0 0 ${column3Width}%`;
-            
-            console.log('Column widths restored:', { 
-                column1: column1Width, 
-                column3: column3Width,
-                savedAt: new Date(columnWidths.timestamp).toLocaleString()
-            });
-            
-            // Trigger chart resize after restoration
-            setTimeout(() => {
-                triggerChartResize();
-            }, 100);
-        }
-    } catch (error) {
-        console.warn('Failed to restore column widths from localStorage:', error);
-    }
-}
-
-/**
- * Reset column widths to default and clear localStorage
- */
-function resetColumnWidths() {
-    try {
-        const column1 = document.getElementById('column1');
-        const column3 = document.getElementById('column3');
-        
-        if (column1 && column3) {
-            column1.style.flex = '0 0 25%';
-            column3.style.flex = '0 0 15%';
-            
-            localStorage.removeItem('dashboardColumnWidths');
-            
-            setTimeout(() => {
-                triggerChartResize();
-            }, 100);
-            
-            console.log('Column widths reset to defaults');
-        }
-    } catch (error) {
-        console.warn('Failed to reset column widths:', error);
-    }
-}
-
-function triggerChartResize() {
-    // Trigger chart resize after column resize
-    if (tradesChart) tradesChart.resize();
-    if (orderBookChart) orderBookChart.resize();
-    if (delayGauge) delayGauge.update();
-}
-
-/**
  * Sets up Interact.js for draggable and resizable chart containers.
- * DEPRECATED: This function is no longer used for the new column-based layout.
  */
 function setupInteract() {
     if (typeof interact === "undefined") {
@@ -1737,8 +1480,8 @@ function initialize() {
     orderBookChart = initializeOrderBookChart(orderBookCtx);
     delayGauge = initializeDelayGauge(delayGaugeCanvas);
 
-    // Setup interact.js for column resizing
-    setupColumnResizing();
+    // Setup interact.js
+    setupInteract();
 
     // Setup range selector
     if (rangeSelector) {
@@ -1750,16 +1493,6 @@ function initialize() {
         });
     } else {
         console.warn("Range selector element not found");
-    }
-
-    // Setup reset layout button
-    const resetLayoutBtn = document.getElementById("resetLayout");
-    if (resetLayoutBtn) {
-        resetLayoutBtn.addEventListener("click", () => {
-            if (confirm("Reset column layout to default? This will clear your saved layout preferences.")) {
-                resetColumnWidths();
-            }
-        });
     }
 }
 

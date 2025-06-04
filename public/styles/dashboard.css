@@ -3,55 +3,119 @@ body {
     margin: 0;
     padding: 20px;
     background-color: #f4f4f4;
+    overflow: hidden;
 }
 
 .dashboard {
+    display: flex;
+    height: calc(100vh - 40px);
+    gap: 0;
+}
+
+.column {
     position: relative;
-    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+#column1 {
+    flex: 0 0 25%;
+    min-width: 200px;
+    max-width: 50%;
+}
+
+#column2 {
+    flex: 1;
+    min-width: 300px;
+}
+
+#column3 {
+    flex: 0 0 15%;
+    min-width: 150px;
+    max-width: 30%;
 }
 
 .chart-container,
-.gauge-container {
-    position: absolute;
+.gauge-container,
+.anomaly-list-container {
     background: white;
     border: 1px solid #ccc;
     padding: 10px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    margin: 1vh 0;
+    box-sizing: border-box;
+}
+
+/* Remove margin between gauge and anomaly list in column 3 */
+#column3 .gauge-container {
+    margin-bottom: 0;
+}
+
+#column3 .anomaly-list-container {
+    margin-top: 0;
 }
 
 .gauge-container {
     display: flex;
     justify-content: center;
     align-items: center;
+    height: 20vh;
 }
 
 #orderBookContainer {
-    width: 25vw;
-    height: calc(100vh - 2vh);
-    left: 0;
-    top: 1vh;
-}
-
-#tradesContainer {
-    width: 60vw;
-    height: calc(100vh - 2vh);
-    left: 25vw;
-    top: 1vh;
+    flex: 1;
     display: flex;
     flex-direction: column;
 }
 
-#delayGaugeContainer {
-    width: 15vw;
-    height: 20vh;
-    left: 85vw;
-    top: 1vh;
+#tradesContainer {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+#anomalyListContainer {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.resize-handle {
+    position: absolute;
+    top: 0;
+    right: -5px;
+    width: 10px;
+    height: 100%;
+    background: transparent;
+    cursor: col-resize;
+    z-index: 1000;
+    border-right: 2px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.resize-handle:hover {
+    border-right-color: #007bff;
+}
+
+.resize-handle:active {
+    border-right-color: #0056b3;
 }
 
 canvas {
     width: 100%;
     height: 100%;
     max-width: 100%;
+}
+
+/* Ensure charts and content fill their containers properly */
+.chart-container {
+    height: 100%;
+}
+
+.chartAreaWrapper, .chartAreaWrapper50 {
+    height: 100%;
 }
 
 .indicator-text {
@@ -87,33 +151,36 @@ canvas {
     cursor: pointer;
 }
 
+.reset-layout-btn {
+    background-color: #dc3545 !important;
+    color: white !important;
+    border: 1px solid #dc3545 !important;
+    border-radius: 3px;
+    font-size: 12px;
+    margin-left: 15px !important;
+}
+
+.reset-layout-btn:hover {
+    background-color: #c82333 !important;
+    border-color: #bd2130 !important;
+}
+
 .chartAreaWrapper {
     position: relative;
     flex: 1;
     padding: 10px;
     box-sizing: border-box;
     overflow: hidden;
+    height: 100%;
 }
 
 .chartAreaWrapper50 {
     position: relative;
-    height: calc(100% - 20px);
+    height: 100%;
     padding: 10px;
+    box-sizing: border-box;
 }
 
-.anomaly-list-container {
-    position: absolute;
-    left: 85vw;
-    top: 22vh;
-    bottom: 1vh;
-    width: 15vw;
-    background: white;
-    border: 1px solid #ccc;
-    padding: 10px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
 
 .anomaly-list-header {
     display: flex;
@@ -134,10 +201,13 @@ canvas {
     font-size: 14px;
 }
 .anomaly-row {
-    padding: 5px 0;
+    padding: 3px 5px;
     border-bottom: 1px solid #eee;
     display: flex;
     align-items: center;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.2;
 }
 .anomaly-row.critical {
     color: #fff;
@@ -157,12 +227,52 @@ canvas {
     color: #333;
     background: #e3f2fd;
 }
+/* Fixed-width columns for perfect alignment */
+.anomaly-icon {
+    display: inline-block;
+    width: 20px;
+    text-align: center;
+    font-size: 14px;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.anomaly-label {
+    display: inline-block;
+    width: 110px;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.anomaly-price {
+    display: inline-block;
+    width: 75px;
+    text-align: center;
+    margin-right: 6px;
+    flex-shrink: 0;
+    font-weight: bold;
+}
+
+.anomaly-time {
+    display: inline-block;
+    width: 45px;
+    text-align: right;
+    flex-shrink: 0;
+    opacity: 0.8;
+}
+
+/* Legacy class for backwards compatibility */
 .anomaly-type {
     display: inline-block;
-    width: 24px;
+    width: 20px;
     text-align: center;
-    font-size: 18px;
-    margin-right: 8px;
+    font-size: 14px;
+    margin-right: 6px;
+    flex-shrink: 0;
 }
 
 .anomaly-badge {
@@ -199,25 +309,30 @@ canvas {
 }
 
 @media (max-width: 768px) {
-    #tradesContainer {
-        width: 100vw;
-        left: 0;
-        top: 1vw;
+    .dashboard {
+        flex-direction: column;
+        height: auto;
+        min-height: calc(100vh - 40px);
     }
-    #orderBookContainer {
-        width: 50vw;
-        left: 0;
-        top: 52vh;
+    
+    .column {
+        flex: none;
+        height: auto;
+        min-height: 30vh;
     }
-    #delayGaugeContainer,
-    .anomaly-list-container {
-        width: 50vw;
-        left: 50vw;
+    
+    #column1, #column2, #column3 {
+        flex: none;
+        width: 100%;
+        max-width: none;
+        min-width: auto;
     }
-    #delayGaugeContainer {
-        top: 52vh;
+    
+    .resize-handle {
+        display: none;
     }
-    .anomaly-list-container {
-        top: 74vh;
+    
+    .gauge-container {
+        height: 15vh;
     }
 }
