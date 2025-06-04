@@ -17,20 +17,25 @@ describe("core/config", () => {
         process.env = env;
     });
 
-    it("uses environment variables", async () => {
-        process.env.SYMBOL = "ethusdt";
-        process.env.PORT = "4000";
-        process.env.WS_PORT = "4001";
+    it("loads configuration from config.json", async () => {
         const Config = await loadConfig();
-        expect(Config.SYMBOL).toBe("ETHUSDT");
-        expect(Config.HTTP_PORT).toBe(4000);
-        expect(Config.WS_PORT).toBe(4001);
+        expect(Config.SYMBOL).toBe("LTCUSDT");
+        expect(Config.HTTP_PORT).toBe(3000);
+        expect(Config.WS_PORT).toBe(3001);
         expect(Config.TICK_SIZE).toBe(1 / Math.pow(10, Config.PRICE_PRECISION));
     });
 
-    it("validate throws when required env missing", async () => {
+    it("ignores environment variables for ports", async () => {
+        process.env.PORT = "4000";
+        process.env.WS_PORT = "4001";
+        const Config = await loadConfig();
+        expect(Config.HTTP_PORT).toBe(3000);
+        expect(Config.WS_PORT).toBe(3001);
+    });
+
+    it("validate passes without SYMBOL env", async () => {
         delete process.env.SYMBOL;
         const Config = await loadConfig();
-        expect(() => Config.validate()).toThrow();
+        expect(() => Config.validate()).not.toThrow();
     });
 });
