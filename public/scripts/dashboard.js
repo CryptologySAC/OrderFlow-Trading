@@ -16,6 +16,7 @@ const PONG_WAIT_MS = 5000;
 const PADDING_TIME = 300000; // 5 minutes
 const FIFTEEN_MINUTES = 15 * 60 * 1000; // 15 minutes
 const TRADE_TIMEOUT_MS = 10000; // 10 seconds
+const GRID_SIZE = 20; // snapping grid for draggable/resizable elements
 
 // DOM references
 const tradesCanvas = document.getElementById("tradesChart");
@@ -41,6 +42,29 @@ let anomalyFilters = new Set(["critical", "high"]);
 // Used to control badge display
 let badgeTimeout = null;
 let latestBadgeElem = null;
+
+function snap(value) {
+    return Math.round(value / GRID_SIZE) * GRID_SIZE;
+}
+
+function rectsOverlap(r1, r2) {
+    return !(
+        r1.right <= r2.left ||
+        r1.left >= r2.right ||
+        r1.bottom <= r2.top ||
+        r1.top >= r2.bottom
+    );
+}
+
+function isOverlapping(target) {
+    const rect = target.getBoundingClientRect();
+    const others = Array.from(
+        document.querySelectorAll(
+            ".chart-container, .anomaly-list-container, .gauge-container"
+        )
+    ).filter((el) => el !== target);
+    return others.some((el) => rectsOverlap(rect, el.getBoundingClientRect()));
+}
 
 function getAnomalyIcon(type) {
     switch (type) {
@@ -853,17 +877,35 @@ function setupInteract() {
                 }),
             ],
             listeners: {
+                start(event) {
+                    const t = event.target;
+                    t.setAttribute("data-prev-x", t.getAttribute("data-x") || 0);
+                    t.setAttribute("data-prev-y", t.getAttribute("data-y") || 0);
+                },
                 move(event) {
                     const target = event.target;
-                    const x =
-                        (parseFloat(target.getAttribute("data-x")) || 0) +
+                    let x = (parseFloat(target.getAttribute("data-x")) || 0) +
                         event.dx;
-                    const y =
-                        (parseFloat(target.getAttribute("data-y")) || 0) +
+                    let y = (parseFloat(target.getAttribute("data-y")) || 0) +
                         event.dy;
+                    x = snap(x);
+                    y = snap(y);
                     target.style.transform = `translate(${x}px, ${y}px)`;
                     target.setAttribute("data-x", x);
                     target.setAttribute("data-y", y);
+                },
+                end(event) {
+                    const target = event.target;
+                    if (isOverlapping(target)) {
+                        const px = parseFloat(target.getAttribute("data-prev-x")) || 0;
+                        const py = parseFloat(target.getAttribute("data-prev-y")) || 0;
+                        target.style.transform = `translate(${px}px, ${py}px)`;
+                        target.setAttribute("data-x", px);
+                        target.setAttribute("data-y", py);
+                    } else {
+                        target.setAttribute("data-prev-x", target.getAttribute("data-x"));
+                        target.setAttribute("data-prev-y", target.getAttribute("data-y"));
+                    }
                 },
             },
         })
@@ -871,20 +913,69 @@ function setupInteract() {
             edges: { left: true, right: true, bottom: true, top: true },
             modifiers: [
                 interact.modifiers.restrictSize({
-                    min: { width: 600, height: 600 },
+                    min: { width: 200, height: 200 },
                 }),
             ],
             listeners: {
+                start(event) {
+                    const t = event.target;
+                    t.setAttribute(
+                        "data-prev-w",
+                        parseFloat(t.style.width) || t.offsetWidth
+                    );
+                    t.setAttribute(
+                        "data-prev-h",
+                        parseFloat(t.style.height) || t.offsetHeight
+                    );
+                    t.setAttribute("data-prev-x", t.getAttribute("data-x") || 0);
+                    t.setAttribute("data-prev-y", t.getAttribute("data-y") || 0);
+                },
                 move(event) {
                     const target = event.target;
-                    target.style.width = `${event.rect.width}px`;
-                    target.style.height = `${event.rect.height}px`;
+                    let x = (parseFloat(target.getAttribute("data-x")) || 0) +
+                        event.deltaRect.left;
+                    let y = (parseFloat(target.getAttribute("data-y")) || 0) +
+                        event.deltaRect.top;
+                    let width = snap(event.rect.width);
+                    let height = snap(event.rect.height);
+                    x = snap(x);
+                    y = snap(y);
+                    target.style.width = `${width}px`;
+                    target.style.height = `${height}px`;
+                    target.style.transform = `translate(${x}px, ${y}px)`;
+                    target.setAttribute("data-x", x);
+                    target.setAttribute("data-y", y);
                     const canvas = target.querySelector("canvas");
                     if (canvas) {
-                        canvas.width = event.rect.width;
-                        canvas.height = event.rect.height;
+                        canvas.width = width;
+                        canvas.height = height;
                         const chart = Chart.getChart(canvas.id);
                         if (chart) chart.resize();
+                    }
+                },
+                end(event) {
+                    const target = event.target;
+                    if (isOverlapping(target)) {
+                        const px = parseFloat(target.getAttribute("data-prev-x")) || 0;
+                        const py = parseFloat(target.getAttribute("data-prev-y")) || 0;
+                        const pw = parseFloat(target.getAttribute("data-prev-w"));
+                        const ph = parseFloat(target.getAttribute("data-prev-h"));
+                        target.style.width = `${pw}px`;
+                        target.style.height = `${ph}px`;
+                        target.style.transform = `translate(${px}px, ${py}px)`;
+                        target.setAttribute("data-x", px);
+                        target.setAttribute("data-y", py);
+                    } else {
+                        target.setAttribute("data-prev-x", target.getAttribute("data-x"));
+                        target.setAttribute("data-prev-y", target.getAttribute("data-y"));
+                        target.setAttribute(
+                            "data-prev-w",
+                            parseFloat(target.style.width)
+                        );
+                        target.setAttribute(
+                            "data-prev-h",
+                            parseFloat(target.style.height)
+                        );
                     }
                 },
             },
@@ -900,17 +991,35 @@ function setupInteract() {
                 }),
             ],
             listeners: {
+                start(event) {
+                    const t = event.target;
+                    t.setAttribute("data-prev-x", t.getAttribute("data-x") || 0);
+                    t.setAttribute("data-prev-y", t.getAttribute("data-y") || 0);
+                },
                 move(event) {
                     const target = event.target;
-                    const x =
-                        (parseFloat(target.getAttribute("data-x")) || 0) +
+                    let x = (parseFloat(target.getAttribute("data-x")) || 0) +
                         event.dx;
-                    const y =
-                        (parseFloat(target.getAttribute("data-y")) || 0) +
+                    let y = (parseFloat(target.getAttribute("data-y")) || 0) +
                         event.dy;
+                    x = snap(x);
+                    y = snap(y);
                     target.style.transform = `translate(${x}px, ${y}px)`;
                     target.setAttribute("data-x", x);
                     target.setAttribute("data-y", y);
+                },
+                end(event) {
+                    const target = event.target;
+                    if (isOverlapping(target)) {
+                        const px = parseFloat(target.getAttribute("data-prev-x")) || 0;
+                        const py = parseFloat(target.getAttribute("data-prev-y")) || 0;
+                        target.style.transform = `translate(${px}px, ${py}px)`;
+                        target.setAttribute("data-x", px);
+                        target.setAttribute("data-y", py);
+                    } else {
+                        target.setAttribute("data-prev-x", target.getAttribute("data-x"));
+                        target.setAttribute("data-prev-y", target.getAttribute("data-y"));
+                    }
                 },
             },
         })
@@ -918,20 +1027,55 @@ function setupInteract() {
             edges: { left: true, right: true, bottom: true, top: true },
             modifiers: [
                 interact.modifiers.restrictSize({
-                    min: { width: 600, height: 600 },
+                    min: { width: 200, height: 200 },
                 }),
             ],
             listeners: {
+                start(event) {
+                    const t = event.target;
+                    t.setAttribute("data-prev-w", parseFloat(t.style.width) || t.offsetWidth);
+                    t.setAttribute("data-prev-h", parseFloat(t.style.height) || t.offsetHeight);
+                    t.setAttribute("data-prev-x", t.getAttribute("data-x") || 0);
+                    t.setAttribute("data-prev-y", t.getAttribute("data-y") || 0);
+                },
                 move(event) {
                     const target = event.target;
-                    target.style.width = `${event.rect.width}px`;
-                    target.style.height = `${event.rect.height}px`;
+                    let x = (parseFloat(target.getAttribute("data-x")) || 0) + event.deltaRect.left;
+                    let y = (parseFloat(target.getAttribute("data-y")) || 0) + event.deltaRect.top;
+                    let width = snap(event.rect.width);
+                    let height = snap(event.rect.height);
+                    x = snap(x);
+                    y = snap(y);
+                    target.style.width = `${width}px`;
+                    target.style.height = `${height}px`;
+                    target.style.transform = `translate(${x}px, ${y}px)`;
+                    target.setAttribute("data-x", x);
+                    target.setAttribute("data-y", y);
                     const canvas = target.querySelector("canvas");
                     if (canvas) {
-                        canvas.width = event.rect.width;
-                        canvas.height = event.rect.height;
+                        canvas.width = width;
+                        canvas.height = height;
                         const chart = Chart.getChart(canvas.id);
                         if (chart) chart.resize();
+                    }
+                },
+                end(event) {
+                    const target = event.target;
+                    if (isOverlapping(target)) {
+                        const px = parseFloat(target.getAttribute("data-prev-x")) || 0;
+                        const py = parseFloat(target.getAttribute("data-prev-y")) || 0;
+                        const pw = parseFloat(target.getAttribute("data-prev-w"));
+                        const ph = parseFloat(target.getAttribute("data-prev-h"));
+                        target.style.width = `${pw}px`;
+                        target.style.height = `${ph}px`;
+                        target.style.transform = `translate(${px}px, ${py}px)`;
+                        target.setAttribute("data-x", px);
+                        target.setAttribute("data-y", py);
+                    } else {
+                        target.setAttribute("data-prev-x", target.getAttribute("data-x"));
+                        target.setAttribute("data-prev-y", target.getAttribute("data-y"));
+                        target.setAttribute("data-prev-w", parseFloat(target.style.width));
+                        target.setAttribute("data-prev-h", parseFloat(target.style.height));
                     }
                 },
             },
@@ -946,15 +1090,33 @@ function setupInteract() {
             }),
         ],
         listeners: {
-            move: function (event) {
+            start(event) {
+                const t = event.target;
+                t.setAttribute("data-prev-x", t.getAttribute("data-x") || 0);
+                t.setAttribute("data-prev-y", t.getAttribute("data-y") || 0);
+            },
+            move(event) {
                 const target = event.target;
-                const x =
-                    (parseFloat(target.getAttribute("data-x")) || 0) + event.dx;
-                const y =
-                    (parseFloat(target.getAttribute("data-y")) || 0) + event.dy;
+                let x = (parseFloat(target.getAttribute("data-x")) || 0) + event.dx;
+                let y = (parseFloat(target.getAttribute("data-y")) || 0) + event.dy;
+                x = snap(x);
+                y = snap(y);
                 target.style.transform = `translate(${x}px, ${y}px)`;
                 target.setAttribute("data-x", x);
                 target.setAttribute("data-y", y);
+            },
+            end(event) {
+                const target = event.target;
+                if (isOverlapping(target)) {
+                    const px = parseFloat(target.getAttribute("data-prev-x")) || 0;
+                    const py = parseFloat(target.getAttribute("data-prev-y")) || 0;
+                    target.style.transform = `translate(${px}px, ${py}px)`;
+                    target.setAttribute("data-x", px);
+                    target.setAttribute("data-y", py);
+                } else {
+                    target.setAttribute("data-prev-x", target.getAttribute("data-x"));
+                    target.setAttribute("data-prev-y", target.getAttribute("data-y"));
+                }
             },
         },
     });
