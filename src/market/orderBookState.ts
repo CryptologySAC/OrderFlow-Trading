@@ -187,10 +187,25 @@ export class OrderBookState implements IOrderBookState {
     }
 
     public getMidPrice(): number {
-        if (this._bestBid === 0 || this._bestAsk === Infinity) return 0;
-        return Number(
-            ((this._bestBid + this._bestAsk) / 2).toFixed(this.pricePrecision)
-        );
+        if (this.book.size === 0) return 0;
+
+        let minPrice = Infinity;
+        let maxPrice = 0;
+
+        for (const [price, level] of this.book) {
+            if (level.bid === 0 && level.ask === 0) continue;
+
+            if (price < minPrice) {
+                minPrice = price;
+            }
+            if (price > maxPrice) {
+                maxPrice = price;
+            }
+        }
+
+        if (minPrice === Infinity || maxPrice === 0) return 0;
+
+        return Number(((minPrice + maxPrice) / 2).toFixed(this.pricePrecision));
     }
 
     public sumBand(
