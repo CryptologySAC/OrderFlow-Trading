@@ -31,6 +31,8 @@ body {
     height: 50vh;
     left: 32vw;
     top: 1vw;
+    display: flex;
+    flex-direction: column;
 }
 
 #delayGaugeContainer {
@@ -82,8 +84,10 @@ canvas {
 
 .chartAreaWrapper {
     position: relative;
-    height: calc(100% - 20px);
+    flex: 1;
     padding: 10px;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .chartAreaWrapper50 {
