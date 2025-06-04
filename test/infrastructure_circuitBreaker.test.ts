@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { CircuitBreaker, CircuitState } from "../src/infrastructure/circuitBreaker";
+import {
+    CircuitBreaker,
+    CircuitState,
+} from "../src/infrastructure/circuitBreaker";
 import { Logger } from "../src/infrastructure/logger";
 
 vi.mock("../src/infrastructure/logger");
@@ -33,10 +36,14 @@ describe("infrastructure/circuitBreaker", () => {
 
     it("execute rejects when open", async () => {
         const cb = new CircuitBreaker(1, 1000, new Logger());
-        await expect(cb.execute(async () => {
-            throw new Error("fail");
-        })).rejects.toThrow();
-        await expect(cb.execute(async () => 1, "id")).rejects.toThrow(/Circuit breaker is OPEN/);
+        await expect(
+            cb.execute(async () => {
+                throw new Error("fail");
+            })
+        ).rejects.toThrow();
+        await expect(cb.execute(async () => 1, "id")).rejects.toThrow(
+            /Circuit breaker is OPEN/
+        );
     });
 
     it("state transitions to CLOSED after successes", async () => {

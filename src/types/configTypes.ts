@@ -21,7 +21,7 @@ type SymbolConfig = {
     orderBookState: OrderBookStateConfig;
     emitDepthMetrics?: boolean;
     anomalyDetector?: AnomalyDetectorConfig;
-    spoofingDetector?: SpoofingDetectorConfig;  
+    spoofingDetector?: SpoofingDetectorConfig;
     exhaustion?: ExhaustionDetectorConfig;
     absorption?: AbsorptionDetectorConfig;
     deltaCvdConfirmation?: DeltaCvdConfirmationConfig;
@@ -40,7 +40,7 @@ type DataStreamConfig = {
     streamHealthTimeout?: number;
     enableStreamHealthCheck?: boolean;
     reconnectOnHealthFailure?: boolean;
-}
+};
 
 type AnomalyDetectorConfig = {
     windowSize: number;

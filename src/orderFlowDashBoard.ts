@@ -42,31 +42,20 @@ import { AnomalyDetector, AnomalyEvent } from "./services/anomalyDetector.js";
 import { AlertManager } from "./alerts/alertManager.js";
 
 // Indicator imports
-import { AccumulationSettings } from "./indicators/interfaces/detectorInterfaces.js";
-import {
-    AbsorptionDetector,
-    type AbsorptionSettings,
-} from "./indicators/absorptionDetector.js";
-import {
-    ExhaustionDetector,
-    type ExhaustionSettings,
-} from "./indicators/exhaustionDetector.js";
+import { AbsorptionDetector } from "./indicators/absorptionDetector.js";
+import { ExhaustionDetector } from "./indicators/exhaustionDetector.js";
 import { DistributionDetector } from "./indicators/distributionDetector.js";
 import { SwingMetrics } from "./indicators/swingMetrics.js";
 import { AccumulationDetector } from "./indicators/accumulationDetector.js";
 import { MomentumDivergence } from "./indicators/momentumDivergence.js";
-import {
-    DeltaCVDConfirmation,
-    DeltaCVDConfirmationSettings,
-} from "./indicators/deltaCVDConfirmation.js";
+import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
 import {
     SwingPredictor,
-    SwingPredictorConfig,
     type SwingPrediction,
 } from "./indicators/swingPredictor.js";
 
 // Utils imports
-import { parseBool, TradeData } from "./utils/utils.js";
+import { TradeData } from "./utils/utils.js";
 import {
     calculateProfitTarget,
     calculateStopLoss,
@@ -412,8 +401,6 @@ export class OrderFlowDashboard {
         }
     }
 
-    
-   
     /**
      * Setup event handlers
      */
@@ -1168,9 +1155,7 @@ export function createDependencies(): Dependencies {
     runMigrations(db);
     const pipelineStore = new PipelineStorage(db, {});
     const storage = new Storage(db);
-    const spoofingDetector = new SpoofingDetector(
-        Config.SPOOFING_DETECTOR
-    );
+    const spoofingDetector = new SpoofingDetector(Config.SPOOFING_DETECTOR);
 
     const orderBookProcessor = new OrderBookProcessor(
         {

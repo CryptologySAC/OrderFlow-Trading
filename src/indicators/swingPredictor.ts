@@ -36,7 +36,10 @@ export class SwingPredictor {
 
     private lastSignalTime: Map<string, number> = new Map();
 
-    constructor(config: SwingPredictorConfig, onSwingPredicted: (p: SwingPrediction) => void) {
+    constructor(
+        config: SwingPredictorConfig,
+        onSwingPredicted: (p: SwingPrediction) => void
+    ) {
         this.lookaheadMs = config.lookaheadMs ?? 60000;
         this.retraceTicks = config.retraceTicks ?? 10;
         this.pricePrecision = config.pricePrecision ?? 2;

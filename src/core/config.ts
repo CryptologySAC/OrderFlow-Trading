@@ -15,7 +15,6 @@ import type { AccumulationSettings } from "../indicators/interfaces/detectorInte
 import type { DeltaCVDConfirmationSettings } from "../indicators/deltaCVDConfirmation.js";
 import type { SwingPredictorConfig } from "../indicators/swingPredictor.js";
 
-
 const rawConfig = readFileSync(resolve(process.cwd(), "config.json"), "utf-8");
 const cfg: ConfigType = JSON.parse(rawConfig) as ConfigType;
 
@@ -48,24 +47,33 @@ export class Config {
 
     static readonly PREPROCESSOR: OrderflowPreprocessorOptions = {
         symbol: Config.SYMBOL,
-                pricePrecision: Config.PRICE_PRECISION,
-                bandTicks: cfg.symbols[cfg.symbol].bandTicks ?? 5,
-                tickSize: Config.TICK_SIZE,
-                emitDepthMetrics: cfg.symbols[cfg.symbol].emitDepthMetrics ?? false,
-            }
+        pricePrecision: Config.PRICE_PRECISION,
+        bandTicks: cfg.symbols[cfg.symbol].bandTicks ?? 5,
+        tickSize: Config.TICK_SIZE,
+        emitDepthMetrics: cfg.symbols[cfg.symbol].emitDepthMetrics ?? false,
+    };
 
     static readonly DATASTREAM: DataStreamConfig = {
         symbol: Config.SYMBOL,
-        reconnectDelay: cfg.symbols[cfg.symbol].dataStream.reconnectDelay?? 5000,
-        maxReconnectAttempts: cfg.symbols[cfg.symbol].dataStream.maxReconnectAttempts ?? 10,
-        depthUpdateSpeed: cfg.symbols[cfg.symbol].dataStream.depthUpdateSpeed ?? "100ms",
-        enableHeartbeat: cfg.symbols[cfg.symbol].dataStream.enableHeartbeat ?? true,
-        heartbeatInterval: cfg.symbols[cfg.symbol].dataStream.heartbeatInterval ?? 30000,
-        maxBackoffDelay: cfg.symbols[cfg.symbol].dataStream.maxBackoffDelay ?? 300000,
-        streamHealthTimeout: cfg.symbols[cfg.symbol].dataStream.streamHealthTimeout ?? 60000,
-        enableStreamHealthCheck: cfg.symbols[cfg.symbol].dataStream.enableStreamHealthCheck ?? true,
-        reconnectOnHealthFailure: cfg.symbols[cfg.symbol].dataStream.reconnectOnHealthFailure ?? true,
-    }
+        reconnectDelay:
+            cfg.symbols[cfg.symbol].dataStream.reconnectDelay ?? 5000,
+        maxReconnectAttempts:
+            cfg.symbols[cfg.symbol].dataStream.maxReconnectAttempts ?? 10,
+        depthUpdateSpeed:
+            cfg.symbols[cfg.symbol].dataStream.depthUpdateSpeed ?? "100ms",
+        enableHeartbeat:
+            cfg.symbols[cfg.symbol].dataStream.enableHeartbeat ?? true,
+        heartbeatInterval:
+            cfg.symbols[cfg.symbol].dataStream.heartbeatInterval ?? 30000,
+        maxBackoffDelay:
+            cfg.symbols[cfg.symbol].dataStream.maxBackoffDelay ?? 300000,
+        streamHealthTimeout:
+            cfg.symbols[cfg.symbol].dataStream.streamHealthTimeout ?? 60000,
+        enableStreamHealthCheck:
+            cfg.symbols[cfg.symbol].dataStream.enableStreamHealthCheck ?? true,
+        reconnectOnHealthFailure:
+            cfg.symbols[cfg.symbol].dataStream.reconnectOnHealthFailure ?? true,
+    };
 
     static readonly ORDERBOOK_STATE: OrderBookStateOptions = {
         symbol: Config.SYMBOL,
@@ -88,6 +96,7 @@ export class Config {
     };
 
     static readonly ABSORPTION_DETECTOR: AbsorptionSettings = {
+        symbol: Config.SYMBOL,
         minAggVolume: Number(
             cfg.symbols[cfg.symbol].absorption?.minAggVolume ?? 600
         ),
@@ -109,7 +118,9 @@ export class Config {
             cfg.symbols[cfg.symbol].absorption?.pricePrecision ??
                 Config.PRICE_PRECISION
         ),
-        minInitialMoveTicks: Number(cfg.symbols[cfg.symbol].absorption?.moveTicks ?? 12),
+        minInitialMoveTicks: Number(
+            cfg.symbols[cfg.symbol].absorption?.moveTicks ?? 12
+        ),
         confirmationTimeoutMs: Number(
             cfg.symbols[cfg.symbol].absorption?.confirmationTimeout ?? 60000
         ),
@@ -127,7 +138,8 @@ export class Config {
                 cfg.symbols[cfg.symbol].absorption?.features?.passiveHistory ??
                 false,
             multiZone:
-                cfg.symbols[cfg.symbol].absorption?.features?.multiZone ?? false,
+                cfg.symbols[cfg.symbol].absorption?.features?.multiZone ??
+                false,
             priceResponse:
                 cfg.symbols[cfg.symbol].absorption?.features?.priceResponse ??
                 false,
@@ -153,30 +165,26 @@ export class Config {
     };
 
     static readonly EXHAUSTION_DETECTOR: ExhaustionSettings = {
+        symbol: Config.SYMBOL,
         minAggVolume: Number(
             cfg.symbols[cfg.symbol].exhaustion?.minAggVolume ?? 600
         ),
         exhaustionThreshold: Number(
             cfg.symbols[cfg.symbol].exhaustion?.threshold ?? 0.7
         ),
-        windowMs: Number(
-            Config.WINDOW_MS ?? 90000
-        ),
+        windowMs: Number(Config.WINDOW_MS ?? 90000),
         zoneTicks: cfg.symbols[cfg.symbol].exhaustion?.zoneTicks ?? 3,
-        eventCooldownMs: 
-            cfg.symbols[cfg.symbol].exhaustion?.eventCooldownMs ?? 15000
-        ,
-        maxPassiveRatio: 
-            cfg.symbols[cfg.symbol].exhaustion?.maxPassiveRatio ?? 0.5
-        ,
+        eventCooldownMs:
+            cfg.symbols[cfg.symbol].exhaustion?.eventCooldownMs ?? 15000,
+        maxPassiveRatio:
+            cfg.symbols[cfg.symbol].exhaustion?.maxPassiveRatio ?? 0.5,
         pricePrecision: Config.PRICE_PRECISION,
-        minInitialMoveTicks: cfg.symbols[cfg.symbol].exhaustion?.moveTicks ?? 12,
-        confirmationTimeoutMs: 
-            cfg.symbols[cfg.symbol].exhaustion?.confirmationTimeout ?? 60000
-        ,
+        minInitialMoveTicks:
+            cfg.symbols[cfg.symbol].exhaustion?.moveTicks ?? 12,
+        confirmationTimeoutMs:
+            cfg.symbols[cfg.symbol].exhaustion?.confirmationTimeout ?? 60000,
         maxRevisitTicks:
-            cfg.symbols[cfg.symbol].exhaustion?.maxRevisitTicks ?? 5
-        ,
+            cfg.symbols[cfg.symbol].exhaustion?.maxRevisitTicks ?? 5,
         features: {
             priceResponse:
                 cfg.symbols[cfg.symbol].exhaustion?.features?.priceResponse ??
@@ -197,7 +205,8 @@ export class Config {
                 cfg.symbols[cfg.symbol].exhaustion?.features?.adaptiveZone ??
                 false,
             multiZone:
-                cfg.symbols[cfg.symbol].exhaustion?.features?.multiZone ?? false,
+                cfg.symbols[cfg.symbol].exhaustion?.features?.multiZone ??
+                false,
             volumeVelocity:
                 cfg.symbols[cfg.symbol].exhaustion?.features?.volumeVelocity ??
                 false,
@@ -211,55 +220,48 @@ export class Config {
     };
 
     static readonly ACCUMULATION_DETECTOR: AccumulationSettings = {
+        symbol: Config.SYMBOL,
         windowMs: this.WINDOW_MS,
-        minDurationMs: 
+        minDurationMs:
             cfg.symbols[cfg.symbol].accumulationDetector?.minDurationMs ??
-                300_000
-        ,
-        minRatio: 
-            cfg.symbols[cfg.symbol].accumulationDetector?.minRatio ?? 1.2
-        ,
+            300_000,
+        minRatio: cfg.symbols[cfg.symbol].accumulationDetector?.minRatio ?? 1.2,
         minRecentActivityMs:
             cfg.symbols[cfg.symbol].accumulationDetector?.minRecentActivityMs ??
-                60_000
-        ,
-        minAggVolume: 
-            cfg.symbols[cfg.symbol].accumulationDetector?.minAggVolume ?? 5
-        ,
+            60_000,
+        minAggVolume:
+            cfg.symbols[cfg.symbol].accumulationDetector?.minAggVolume ?? 5,
         accumulationThreshold:
-            cfg.symbols[cfg.symbol].accumulationDetector?.accumulationThreshold ?? 0.6,
+            cfg.symbols[cfg.symbol].accumulationDetector
+                ?.accumulationThreshold ?? 0.6,
         pricePrecision: Config.PRICE_PRECISION,
     };
 
     static readonly DELTACVD_DETECTOR: DeltaCVDConfirmationSettings = {
-        windowsSec: 
-            cfg.symbols[cfg.symbol].deltaCvdConfirmation?.windowSec ?? [60, 300, 900],
-        
-        minTradesPerSec: 
-            cfg.symbols[cfg.symbol].deltaCvdConfirmation?.minTradesPerSec ?? 0.5
-        ,
+        symbol: Config.SYMBOL,
+        windowsSec: cfg.symbols[cfg.symbol].deltaCvdConfirmation?.windowSec ?? [
+            60, 300, 900,
+        ],
+
+        minTradesPerSec:
+            cfg.symbols[cfg.symbol].deltaCvdConfirmation?.minTradesPerSec ??
+            0.5,
         minVolPerSec: Number(
             cfg.symbols[cfg.symbol].deltaCvdConfirmation?.minVolPerSec ?? 20
         ),
-        minZ: 
-            cfg.symbols[cfg.symbol].deltaCvdConfirmation?.minZ ?? 3
-        , 
+        minZ: cfg.symbols[cfg.symbol].deltaCvdConfirmation?.minZ ?? 3,
         pricePrecision: Config.PRICE_PRECISION,
     };
 
-
     static readonly SWING_PREDICTOR: SwingPredictorConfig = {
-        lookaheadMs: 
-            cfg.symbols[cfg.symbol].swingPredictor?.lookaheadMs ?? 60000
-        ,
-        retraceTicks: 
-            cfg.symbols[cfg.symbol].swingPredictor?.retraceTicks ?? 10
-        ,
-        pricePrecision: 
+        lookaheadMs:
+            cfg.symbols[cfg.symbol].swingPredictor?.lookaheadMs ?? 60000,
+        retraceTicks:
+            cfg.symbols[cfg.symbol].swingPredictor?.retraceTicks ?? 10,
+        pricePrecision:
             cfg.symbols[cfg.symbol].swingPredictor?.pricePrecision ??
-                Config.PRICE_PRECISION
-        ,
-        signalCooldownMs: 
+            Config.PRICE_PRECISION,
+        signalCooldownMs:
             cfg.symbols[cfg.symbol].swingPredictor?.signalCooldownMs ?? 300000,
     };
 
