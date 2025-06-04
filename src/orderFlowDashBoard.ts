@@ -49,17 +49,17 @@ import { SwingMetrics } from "./indicators/swingMetrics.js";
 import { AccumulationDetector } from "./indicators/accumulationDetector.js";
 import { MomentumDivergence } from "./indicators/momentumDivergence.js";
 import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
-import {
-    SwingPredictor,
-    type SwingPrediction,
-} from "./indicators/swingPredictor.js";
+//import {
+//    SwingPredictor,
+//    type SwingPrediction,
+//} from "./indicators/swingPredictor.js";
 
 // Utils imports
 import { TradeData } from "./utils/utils.js";
-import {
-    calculateProfitTarget,
-    calculateStopLoss,
-} from "./utils/calculations.js";
+//import {
+//    calculateProfitTarget,
+//    calculateStopLoss,
+//} from "./utils/calculations.js";
 
 // Types
 import type { Dependencies } from "./types/dependencies.js";
@@ -68,7 +68,7 @@ import type {
     Signal,
     AccumulationResult,
     DivergenceResult,
-    SwingSignalData,
+    //    SwingSignalData,
 } from "./types/signalTypes.js";
 import type {
     TimeContext,
@@ -129,7 +129,7 @@ export class OrderFlowDashboard {
     // Indicators
     private readonly swingMetrics = new SwingMetrics();
     private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
-    private readonly swingPredictor: SwingPredictor;
+    //private readonly swingPredictor: SwingPredictor;
     private readonly momentumDivergence = new MomentumDivergence();
 
     // Time context
@@ -297,10 +297,10 @@ export class OrderFlowDashboard {
             true
         );
 
-        this.swingPredictor = new SwingPredictor(
-            Config.SWING_PREDICTOR,
-            this.handleSwingPrediction.bind(this)
-        );
+        //TODO this.swingPredictor = new SwingPredictor(
+        //    Config.SWING_PREDICTOR,
+        //this.handleSwingPrediction.bind(this)
+        //);
 
         this.signalCoordinator.start();
         this.logger.info("SignalCoordinator started");
@@ -441,16 +441,6 @@ export class OrderFlowDashboard {
                     signalId: processedSignal.id,
                     jobId: job.id,
                 });
-                // TODO
-                const signal: Signal = {
-                    time: Date.now(),
-                    type: processedSignal.type,
-                    price: processedSignal.data.price,
-                    id: processedSignal.id,
-                    side: processedSignal.data.side,
-                    confidence: processedSignal.confidence,
-                };
-                void this.broadcastSignal(signal); //TODO
             }
         );
 
@@ -557,12 +547,12 @@ export class OrderFlowDashboard {
             throw new Error("Signal Manager is not initialized");
         }
         // Listen to final trading signals
-        this.signalManager.on("signalGenerated", (tradingSignal: Signal) => {
-            this.logger.info("Ready to trade:", { tradingSignal });
-            void this.broadcastSignal(tradingSignal).catch((error) => {
-                this.handleError(error as Error, "signal_broadcast");
-            });
-        });
+        //this.signalManager.on("signalGenerated", (tradingSignal: Signal) => {
+        //    this.logger.info("Ready to trade:", { tradingSignal });
+        //    void this.broadcastSignal(tradingSignal).catch((error) => {
+        //        this.handleError(error as Error, "signal_broadcast");
+        //    });
+        //});
 
         this.signalManager.on(
             "signalRejected",
@@ -735,20 +725,6 @@ export class OrderFlowDashboard {
             // Update detectors
             if (this.preprocessor) this.preprocessor.handleAggTrade(data);
 
-            // Update swing predictor
-            this.swingPredictor.onPrice(
-                parseFloat(data.p ?? "0"),
-                data.T ?? Date.now()
-            );
-
-            // Process for indicators
-            const tradeData = this.normalizeTradeData(data);
-            this.analyzeSwingOpportunity(tradeData.price, tradeData);
-
-            // Process and broadcast
-            //const message = this.dependencies.tradesProcessor.addTrade(data);
-            //this.wsManager.broadcast(message);
-
             const processingTime = Date.now() - startTime;
             this.metricsCollector.updateMetric(
                 "processingLatency",
@@ -814,62 +790,6 @@ export class OrderFlowDashboard {
     }
 
     /**
-     * Analyze swing opportunity
-     */
-    // TODO
-    private analyzeSwingOpportunity(
-        currentPrice: number,
-        trade: TradeData
-    ): void {
-        // Update all indicators
-        this.swingMetrics.addTrade(trade);
-        this.momentumDivergence.addDataPoint(
-            trade.price,
-            trade.quantity,
-            trade.timestamp
-        );
-
-        // Check for swing signals
-        const volumeNodes: VolumeNodes =
-            this.swingMetrics.getVolumeNodes(currentPrice);
-        const accumulation: AccumulationResult = {
-            price: 0,
-            side: "buy",
-            confidence: 0,
-            isAccumulating: false,
-            strength: 0,
-            zone: 0,
-            duration: 0,
-            ratio: 0,
-        };
-        // TODO this.accumulationDetector.detectAccumulation(currentPrice);
-        const divergence: DivergenceResult =
-            this.momentumDivergence.detectDivergence();
-
-        // Signal generation logic
-        if (
-            this.shouldGenerateSwingSignal(
-                currentPrice,
-                accumulation,
-                divergence,
-                volumeNodes
-            )
-        ) {
-            void this.generateSwingSignal(
-                currentPrice,
-                accumulation,
-                divergence
-            ).catch((error) => {
-                this.handleError(
-                    error as Error,
-                    "swing_signal_generation",
-                    randomUUID()
-                );
-            });
-        }
-    }
-
-    /**
      * Should generate swing signal
      */
     private shouldGenerateSwingSignal(
@@ -897,80 +817,6 @@ export class OrderFlowDashboard {
         }
 
         return confirmations >= 2;
-    }
-
-    /**
-     * Generate swing signal
-     */
-    private async generateSwingSignal(
-        currentPrice: number,
-        accumulation: AccumulationResult,
-        divergence: DivergenceResult
-    ): Promise<void> {
-        const side: "buy" | "sell" =
-            divergence.type === "bullish" || accumulation.isAccumulating
-                ? "buy"
-                : "sell";
-
-        const profitTarget = calculateProfitTarget(currentPrice, side);
-        const stopLoss = calculateStopLoss(currentPrice, side);
-
-        const signalData: SwingSignalData = {
-            accumulation,
-            divergence,
-            expectedGainPercent: profitTarget.netGain,
-            swingType: side === "buy" ? "low" : "high",
-            strength: Math.max(accumulation.strength, divergence.strength),
-            side,
-            price: currentPrice,
-            confidence: NaN,
-        };
-        const signal: Signal = {
-            id: randomUUID(),
-            side,
-            type: "flow",
-            time: Date.now(),
-            price: currentPrice,
-            takeProfit: profitTarget.price,
-            stopLoss,
-            closeReason: "swing_detection",
-            signalData,
-        };
-
-        // Send alert via AlertManager
-        await this.dependencies.alertManager.sendAlert(signal);
-
-        // Also broadcast to WebSocket clients
-        await this.broadcastSignal(signal);
-    }
-
-    /**
-     * Handle swing prediction
-     */
-    private handleSwingPrediction(prediction: SwingPrediction): void {
-        const correlationId = randomUUID();
-
-        try {
-            void this.broadcastSignal(prediction as unknown as Signal).catch(
-                () => {
-                    this.handleError(
-                        new SignalProcessingError(
-                            "Error broadcasting swing prediction",
-                            { prediction },
-                            correlationId
-                        ),
-                        "swing_prediction",
-                        correlationId
-                    );
-                }
-            );
-        } catch (error) {
-            this.handleError(
-                error as Error,
-                "swing_prediction_handler",
-                correlationId
-            );
-        }
     }
 
     /**
