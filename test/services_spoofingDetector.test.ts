@@ -20,4 +20,13 @@ describe("services/SpoofingDetector", () => {
         const res = detector.wasSpoofed(100, "buy", now + 200, () => 0);
         expect(res).toBe(true);
     });
+
+    it("does not flag spoofing for small changes", () => {
+        const now = Date.now();
+        detector.trackPassiveChange(100, 0, 20);
+        vi.setSystemTime(now + 100);
+        detector.trackPassiveChange(100, 0, 19); // small reduction
+        const res = detector.wasSpoofed(100, "buy", now + 200, () => 0);
+        expect(res).toBe(false);
+    });
 });
