@@ -15,6 +15,7 @@ const alertManager = { sendAlert: vi.fn() } as any;
 const storage = {
     getActiveAnomalies: vi.fn().mockReturnValue([]),
     purgeSignalHistory: vi.fn(),
+    saveSignalHistory: vi.fn(),
 } as any;
 
 describe("trading/SignalManager", () => {
