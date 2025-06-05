@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { IndividualTradesManager } from "../src/data/individualTradesManager";
 import { Logger } from "../src/infrastructure/logger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
+import type { IBinanceDataFeed } from "../src/utils/binance";
 import type { AggTradeEvent, IndividualTrade } from "../src/types/marketEvents";
 
 vi.mock("../src/infrastructure/logger");
@@ -11,6 +12,14 @@ describe("data/IndividualTradesManager", () => {
     let manager: IndividualTradesManager;
     let logger: Logger;
     let metricsCollector: MetricsCollector;
+    const binanceFeed: IBinanceDataFeed = {
+        connectToStreams: vi.fn(),
+        tradesAggregate: vi.fn(),
+        fetchAggTradesByTime: vi.fn(),
+        getTrades: vi.fn().mockResolvedValue([]),
+        getDepthSnapshot: vi.fn(),
+        disconnect: vi.fn(),
+    };
 
     const mockConfig = {
         enabled: true,
@@ -37,7 +46,8 @@ describe("data/IndividualTradesManager", () => {
         manager = new IndividualTradesManager(
             mockConfig,
             logger,
-            metricsCollector
+            metricsCollector,
+            binanceFeed
         );
     });
 
@@ -50,7 +60,8 @@ describe("data/IndividualTradesManager", () => {
             const disabledManager = new IndividualTradesManager(
                 { ...mockConfig, enabled: false },
                 logger,
-                metricsCollector
+                metricsCollector,
+                binanceFeed
             );
 
             const mockTrade: AggTradeEvent = {
@@ -275,7 +286,8 @@ describe("data/IndividualTradesManager", () => {
             const shortTtlManager = new IndividualTradesManager(
                 shortTtlConfig,
                 logger,
-                metricsCollector
+                metricsCollector,
+                binanceFeed
             );
 
             // Manually add to cache
