@@ -523,13 +523,6 @@ export class AbsorptionDetector
         const absorptionRatio =
             volumes.passive > 0 ? volumes.aggressive / volumes.passive : 1;
         if (absorptionRatio > this.maxAbsorptionRatio) {
-            this.logger.debug(
-                `[AbsorptionDetector] No absorption detected: likely breakout or momentum`,
-                {
-                    ratio: absorptionRatio,
-                    maxAllowed: this.maxAbsorptionRatio,
-                }
-            );
             return;
         }
 

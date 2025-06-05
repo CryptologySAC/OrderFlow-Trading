@@ -56,10 +56,6 @@ import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
 
 // Utils imports
 import { TradeData } from "./utils/utils.js";
-//import {
-//    calculateProfitTarget,
-//    calculateStopLoss,
-//} from "./utils/calculations.js";
 
 // Types
 import type { Dependencies } from "./types/dependencies.js";

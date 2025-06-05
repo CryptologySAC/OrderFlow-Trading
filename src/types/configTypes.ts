@@ -19,6 +19,10 @@ type SymbolConfig = {
     bandTicks: number;
     dataStream?: DataStreamConfig;
     orderBookState: OrderBookStateConfig;
+    tradesProcessor?: TradesProcessorConfig;
+    signalManager?: SignalManagerConfig;
+    signalCoordinator?: SignalCoordinatorConfig;
+    orderBookProcessor?: OrderBookProcessorConfig;
     emitDepthMetrics?: boolean;
     anomalyDetector?: AnomalyDetectorConfig;
     spoofingDetector?: SpoofingDetectorConfig;
@@ -156,4 +160,37 @@ type DistributionDetectorConfig = {
     symbol: string;
     minAggVolume: number;
     pricePrecision: number;
+};
+
+type TradesProcessorConfig = {
+    storageTime?: number;
+    maxBacklogRetries?: number;
+    backlogBatchSize?: number;
+    maxMemoryTrades?: number;
+    saveQueueSize?: number;
+    healthCheckInterval?: number;
+};
+
+type SignalManagerConfig = {
+    confidenceThreshold?: number;
+    signalTimeout?: number;
+    enableMarketHealthCheck?: boolean;
+    enableAlerts?: boolean;
+};
+
+type SignalCoordinatorConfig = {
+    maxConcurrentProcessing?: number;
+    processingTimeoutMs?: number;
+    retryAttempts?: number;
+    retryDelayMs?: number;
+    enableMetrics?: boolean;
+    logLevel?: string;
+};
+
+type OrderBookProcessorConfig = {
+    binSize?: number;
+    numLevels?: number;
+    maxBufferSize?: number;
+    tickSize?: number;
+    precision?: number;
 };
