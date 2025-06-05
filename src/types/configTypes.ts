@@ -25,7 +25,6 @@ type SymbolConfig = {
     exhaustion?: ExhaustionDetectorConfig;
     absorption?: AbsorptionDetectorConfig;
     deltaCvdConfirmation?: DeltaCvdConfirmationConfig;
-    swingPredictor?: SwingPredictorConfig;
     accumulationDetector?: AccumulationDetectorConfig;
 };
 
@@ -130,13 +129,6 @@ type DeltaCvdConfirmationConfig = {
     pricePrecision: number;
     dynamicThresholds: true;
     logDebug: true;
-};
-
-type SwingPredictorConfig = {
-    lookaheadMs: number;
-    retraceTicks: number;
-    pricePrecision: number;
-    signalCooldownMs: number;
 };
 
 type AccumulationDetectorConfig = {

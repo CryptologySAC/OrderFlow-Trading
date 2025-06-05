@@ -13,7 +13,6 @@ import type { OrderflowPreprocessorOptions } from "../market/orderFlowPreprocess
 import type { DataStreamConfig } from "../trading/dataStreamManager.js";
 import type { AccumulationSettings } from "../indicators/interfaces/detectorInterfaces.js";
 import type { DeltaCVDConfirmationSettings } from "../indicators/deltaCVDConfirmation.js";
-import type { SwingPredictorConfig } from "../indicators/swingPredictor.js";
 
 const rawConfig = readFileSync(resolve(process.cwd(), "config.json"), "utf-8");
 const cfg: ConfigType = JSON.parse(rawConfig) as ConfigType;
@@ -247,18 +246,6 @@ export class Config {
         ),
         minZ: cfg.symbols[cfg.symbol].deltaCvdConfirmation?.minZ ?? 3,
         pricePrecision: Config.PRICE_PRECISION,
-    };
-
-    static readonly SWING_PREDICTOR: SwingPredictorConfig = {
-        lookaheadMs:
-            cfg.symbols[cfg.symbol].swingPredictor?.lookaheadMs ?? 60000,
-        retraceTicks:
-            cfg.symbols[cfg.symbol].swingPredictor?.retraceTicks ?? 10,
-        pricePrecision:
-            cfg.symbols[cfg.symbol].swingPredictor?.pricePrecision ??
-            Config.PRICE_PRECISION,
-        signalCooldownMs:
-            cfg.symbols[cfg.symbol].swingPredictor?.signalCooldownMs ?? 300000,
     };
 
     static readonly SPOOFING_DETECTOR: SpoofingDetectorConfig = {

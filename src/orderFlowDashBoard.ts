@@ -45,14 +45,8 @@ import { AlertManager } from "./alerts/alertManager.js";
 import { AbsorptionDetector } from "./indicators/absorptionDetector.js";
 import { ExhaustionDetector } from "./indicators/exhaustionDetector.js";
 import { DistributionDetector } from "./indicators/distributionDetector.js";
-import { SwingMetrics } from "./indicators/swingMetrics.js";
 import { AccumulationDetector } from "./indicators/accumulationDetector.js";
-import { MomentumDivergence } from "./indicators/momentumDivergence.js";
 import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
-//import {
-//    SwingPredictor,
-//    type SwingPrediction,
-//} from "./indicators/swingPredictor.js";
 
 // Utils imports
 import { TradeData } from "./utils/utils.js";
@@ -63,13 +57,7 @@ import { TradeData } from "./utils/utils.js";
 
 // Types
 import type { Dependencies } from "./types/dependencies.js";
-import type { VolumeNodes } from "./indicators/swingMetrics.js";
-import type {
-    Signal,
-    AccumulationResult,
-    DivergenceResult,
-    //    SwingSignalData,
-} from "./types/signalTypes.js";
+import type { Signal, AccumulationResult } from "./types/signalTypes.js";
 import type {
     TimeContext,
     DetectorRegisteredEvent,
@@ -127,10 +115,7 @@ export class OrderFlowDashboard {
     private readonly accumulationDetector: AccumulationDetector;
 
     // Indicators
-    private readonly swingMetrics = new SwingMetrics();
     private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
-    //private readonly swingPredictor: SwingPredictor;
-    private readonly momentumDivergence = new MomentumDivergence();
 
     // Time context
     private timeContext: TimeContext = {
@@ -787,36 +772,6 @@ export class OrderFlowDashboard {
             buyerIsMaker: data.m || false,
             originalTrade: data,
         };
-    }
-
-    /**
-     * Should generate swing signal
-     */
-    private shouldGenerateSwingSignal(
-        currentPrice: number,
-        accumulation: AccumulationResult,
-        divergence: DivergenceResult,
-        volumeNodes: VolumeNodes
-    ): boolean {
-        let confirmations = 0;
-
-        if (accumulation.isAccumulating && accumulation.strength > 0.5) {
-            confirmations++;
-        }
-
-        if (divergence.type === "bullish" && divergence.strength > 0.3) {
-            confirmations++;
-        }
-
-        // Check if price is near a low volume node
-        const nearLVN = volumeNodes.lvn.some(
-            (lvn) => Math.abs(lvn - currentPrice) < currentPrice * 0.001
-        );
-        if (nearLVN) {
-            confirmations++;
-        }
-
-        return confirmations >= 2;
     }
 
     /**
