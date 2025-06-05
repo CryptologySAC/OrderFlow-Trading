@@ -103,12 +103,18 @@ export class SignalManager extends EventEmitter {
                 return null;
             }
 
-            // 2. Confidence threshold check
-            if (signal.confidence < this.config.confidenceThreshold) {
+            // 2. Confidence threshold check (with floating-point rounding)
+            const roundedConfidence = Math.round(signal.confidence * 100) / 100;
+            const roundedThreshold =
+                Math.round(this.config.confidenceThreshold * 100) / 100;
+
+            if (roundedConfidence < roundedThreshold) {
                 this.logger.debug("Signal rejected due to low confidence", {
                     signalId: signal.id,
                     confidence: signal.confidence,
+                    roundedConfidence,
                     threshold: this.config.confidenceThreshold,
+                    roundedThreshold,
                 });
 
                 this.recordMetric(
