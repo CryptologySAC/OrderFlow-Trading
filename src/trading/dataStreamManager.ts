@@ -38,6 +38,12 @@ export interface DataStreamConfig {
     streamHealthTimeout?: number;
     enableStreamHealthCheck?: boolean;
     reconnectOnHealthFailure?: boolean;
+    // Hard reload configuration
+    enableHardReload?: boolean;
+    hardReloadAfterAttempts?: number;
+    hardReloadCooldownMs?: number;
+    maxHardReloads?: number;
+    hardReloadRestartCommand?: string;
 }
 
 /**
@@ -410,6 +416,37 @@ export class DataStreamManager extends EventEmitter {
                 `Max reconnection attempts (${this.maxReconnectAttempts}) exceeded`,
                 "binance_api"
             );
+
+            // Emit hard reload request if configured
+            const hardReloadAfterAttempts =
+                this.config.hardReloadAfterAttempts ??
+                this.maxReconnectAttempts;
+            if (
+                this.config.enableHardReload &&
+                this.reconnectAttempts >= hardReloadAfterAttempts
+            ) {
+                this.logger.error(
+                    "[DataStreamManager] Requesting hard reload after exhausted reconnection attempts",
+                    {
+                        symbol: this.config.symbol,
+                        reconnectAttempts: this.reconnectAttempts,
+                        maxReconnectAttempts: this.maxReconnectAttempts,
+                    }
+                );
+
+                this.emit("hardReloadRequired", {
+                    reason: "max_reconnect_attempts_exceeded",
+                    component: "DataStreamManager",
+                    attempts: this.reconnectAttempts,
+                    timestamp: Date.now(),
+                    metadata: {
+                        symbol: this.config.symbol,
+                        connectionState: this.connectionState,
+                        lastError: error.message,
+                    },
+                });
+            }
+
             this.emit("error", error);
             this.metricsCollector.incrementCounter(
                 "stream.reconnect.exhausted"

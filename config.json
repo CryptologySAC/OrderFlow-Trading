@@ -21,7 +21,12 @@
                 "maxBackoffDelay": 300000,
                 "streamHealthTimeout": 60000,
                 "enableStreamHealthCheck": true,
-                "reconnectOnHealthFailure": true
+                "reconnectOnHealthFailure": true,
+                "enableHardReload": true,
+                "hardReloadAfterAttempts": 10,
+                "hardReloadCooldownMs": 300000,
+                "maxHardReloads": 3,
+                "hardReloadRestartCommand": "npm run restart"
             },
             "orderBookState": {
                 "maxLevels": 2000,

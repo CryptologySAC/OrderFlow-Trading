@@ -70,6 +70,12 @@ export class Config {
         enableStreamHealthCheck: DATASTREAM_CFG.enableStreamHealthCheck ?? true,
         reconnectOnHealthFailure:
             DATASTREAM_CFG.reconnectOnHealthFailure ?? true,
+        enableHardReload: DATASTREAM_CFG.enableHardReload ?? false,
+        hardReloadAfterAttempts: DATASTREAM_CFG.hardReloadAfterAttempts ?? 10,
+        hardReloadCooldownMs: DATASTREAM_CFG.hardReloadCooldownMs ?? 300000,
+        maxHardReloads: DATASTREAM_CFG.maxHardReloads ?? 3,
+        hardReloadRestartCommand:
+            DATASTREAM_CFG.hardReloadRestartCommand ?? "process.exit",
     };
 
     static readonly ORDERBOOK_STATE: OrderBookStateOptions = {
