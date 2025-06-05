@@ -38,7 +38,6 @@ export interface Detected {
 export interface DetectorStats {
     tradesInBuffer: number;
     depthLevels: number;
-    pendingConfirmations: number;
     currentMinVolume: number;
     adaptiveZoneTicks?: number;
     rollingATR?: number;

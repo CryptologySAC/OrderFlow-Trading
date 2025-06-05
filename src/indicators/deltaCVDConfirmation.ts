@@ -254,14 +254,9 @@ export class DeltaCVDConfirmation extends BaseDetector {
     private updateMarketRegime(event: EnrichedTradeEvent): void {
         // Track price changes for volatility calculation
         if (this.recentPriceChanges.length > 0) {
-            //todoconst lastPrice =
-            //    this.recentPriceChanges[this.recentPriceChanges.length - 1];
-            //todo const priceChange = Math.abs(event.price - lastPrice) / lastPrice;
             this.recentPriceChanges.push(event.price);
 
             // Keep only recent price changes for volatility calculation
-            //todoconst volatilityCutoff =
-            //    event.timestamp - this.volatilityLookbackSec * 1000;
             while (
                 this.recentPriceChanges.length > 2 &&
                 this.recentPriceChanges.length > this.volatilityLookbackSec / 10

@@ -282,11 +282,6 @@ export class OrderFlowDashboard {
             true
         );
 
-        //TODO this.swingPredictor = new SwingPredictor(
-        //    Config.SWING_PREDICTOR,
-        //this.handleSwingPrediction.bind(this)
-        //);
-
         this.signalCoordinator.start();
         this.logger.info("SignalCoordinator started");
         this.logger.info("Status:", this.signalCoordinator.getStatus());

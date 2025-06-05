@@ -24,7 +24,6 @@ import {
     AdaptiveZoneCalculator,
     PassiveVolumeTracker,
     AutoCalibrator,
-    PriceConfirmationManager,
     DepthLevel,
 } from "../../utils/utils.js";
 import { SpoofingDetector } from "../../services/spoofingDetector.js";
@@ -73,7 +72,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
     protected readonly adaptiveZoneCalculator: AdaptiveZoneCalculator;
     protected readonly passiveVolumeTracker: PassiveVolumeTracker;
     protected readonly autoCalibrator: AutoCalibrator;
-    protected readonly priceConfirmationManager: PriceConfirmationManager;
 
     // Dependencies
     protected readonly callback: DetectorCallback;
@@ -139,7 +137,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
         this.adaptiveZoneCalculator = new AdaptiveZoneCalculator();
         this.passiveVolumeTracker = new PassiveVolumeTracker();
         this.autoCalibrator = new AutoCalibrator();
-        this.priceConfirmationManager = new PriceConfirmationManager();
 
         // NEW: initialize rolling window for passive volume, window size based on windowMs (1 sample per second)
         const rollingWindowSize = Math.max(Math.ceil(this.windowMs / 1000), 10);
@@ -402,24 +399,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
         };
 
         this.emitSignalCandidate(detection);
-
-        // TODO
-        /*
-        if (this.features.priceResponse) {
-            this.priceConfirmationManager.addPendingDetection(detection);
-            this.logger.info(
-                `[${this.constructor.name}] Pending ${this.detectorType} at ${params.price}`,
-                {
-                    zone: params.zone,
-                    side: params.side,
-                    aggressive: params.aggressive,
-                    passive: params.passive,
-                }
-            );
-        } else {
-            this.emitSignalCandidate(detection);
-        }
-        */
 
         if (this.features.autoCalibrate) {
             this.autoCalibrator.recordSignal();
@@ -704,8 +683,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
         const stats: DetectorStats = {
             tradesInBuffer: this.trades.length,
             depthLevels: totalDepthSamples, // ← ONLY CHANGE: Use actual zone data instead of empty cache
-            pendingConfirmations:
-                this.priceConfirmationManager.getPendingCount(),
             currentMinVolume: this.minAggVolume,
             status: "unknown", //TODO
         };

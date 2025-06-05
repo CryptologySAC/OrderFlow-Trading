@@ -1509,10 +1509,6 @@ export class AnomalyDetector extends EventEmitter {
             this.emit(`anomaly:${this.lastTradeSymbol}`, payload);
         }
 
-        //TODO this.logger?.warn?.("Market anomaly detected", {
-        //    type: payload.type,
-        //    severity: payload.severity,
-        //});
     }
 
     /**
