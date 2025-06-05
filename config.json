@@ -134,6 +134,35 @@
                 "symbol": "LTCUSDT",
                 "minAggVolume": 10,
                 "pricePrecision": 2
+            },
+            "tradesProcessor": {
+                "storageTime": 5400000,
+                "maxBacklogRetries": 3,
+                "backlogBatchSize": 1000,
+                "maxMemoryTrades": 50000,
+                "saveQueueSize": 5000,
+                "healthCheckInterval": 30000
+            },
+            "signalManager": {
+                "confidenceThreshold": 0.75,
+                "signalTimeout": 300000,
+                "enableMarketHealthCheck": true,
+                "enableAlerts": true
+            },
+            "signalCoordinator": {
+                "maxConcurrentProcessing": 5,
+                "processingTimeoutMs": 30000,
+                "retryAttempts": 3,
+                "retryDelayMs": 1000,
+                "enableMetrics": true,
+                "logLevel": "info"
+            },
+            "orderBookProcessor": {
+                "binSize": 5,
+                "numLevels": 100,
+                "maxBufferSize": 1000,
+                "tickSize": 0.01,
+                "precision": 2
             }
         }
     }
