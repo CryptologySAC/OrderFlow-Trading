@@ -41,6 +41,7 @@ export class SignalManager extends EventEmitter {
     private readonly recentSignals = new Map<string, ProcessedSignal>();
     private readonly correlations = new Map<string, SignalCorrelation>();
     private readonly signalHistory: ProcessedSignal[] = [];
+    private lastRejectReason?: string;
 
     // Keep track of signals for correlation analysis
     private readonly maxHistorySize = 100;
@@ -87,6 +88,7 @@ export class SignalManager extends EventEmitter {
      * No complex anomaly enhancement, just health-based allow/block decisions.
      */
     public processSignal(signal: ProcessedSignal): ConfirmedSignal | null {
+        this.lastRejectReason = undefined;
         try {
             // 1. Market health check (infrastructure safety)
             if (!this.checkMarketHealth()) {
@@ -97,6 +99,7 @@ export class SignalManager extends EventEmitter {
                 });
 
                 this.recordMetric("signal_blocked_by_health", signal.type);
+                this.lastRejectReason = "unhealthy_market";
                 return null;
             }
 
@@ -112,6 +115,7 @@ export class SignalManager extends EventEmitter {
                     "signal_rejected_low_confidence",
                     signal.type
                 );
+                this.lastRejectReason = "low_confidence";
                 return null;
             }
 
@@ -126,13 +130,14 @@ export class SignalManager extends EventEmitter {
 
             // 5. Log and emit metrics
             this.logSignalProcessing(signal, confirmedSignal);
-
+            this.lastRejectReason = undefined;
             return confirmedSignal;
         } catch (error) {
             this.logger.error("Failed to process signal", {
                 signalId: signal.id,
                 error: error instanceof Error ? error.message : String(error),
             });
+            this.lastRejectReason = "processing_error";
             return null;
         }
     }
@@ -304,7 +309,7 @@ export class SignalManager extends EventEmitter {
             if (!confirmedSignal) {
                 this.emit("signalRejected", {
                     signal,
-                    reason: "processing_failed",
+                    reason: this.lastRejectReason ?? "processing_failed",
                 });
                 return;
             }
@@ -682,6 +687,13 @@ export class SignalManager extends EventEmitter {
             marketHealth: this.getMarketHealthContext(),
             config: this.config,
         };
+    }
+
+    /**
+     * Retrieve the reason for the most recently rejected signal.
+     */
+    public getLastRejectReason(): string | undefined {
+        return this.lastRejectReason;
     }
 }
 
