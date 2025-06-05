@@ -167,7 +167,7 @@
             },
             "orderBookProcessor": {
                 "binSize": 5,
-                "numLevels": 100,
+                "numLevels": 20,
                 "maxBufferSize": 1000,
                 "tickSize": 0.01,
                 "precision": 2

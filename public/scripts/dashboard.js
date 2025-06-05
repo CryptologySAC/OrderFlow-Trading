@@ -647,7 +647,14 @@ const tradeWebsocket = new TradeWebSocket({
                         const askData = [];
                         const bidData = [];
 
-                        orderBookData.priceLevels.forEach((level) => {
+                        // Limit display to max 30 levels to prevent UI performance issues
+                        const maxLevels = 30;
+                        const levelsToShow = orderBookData.priceLevels.slice(
+                            0,
+                            maxLevels
+                        );
+
+                        levelsToShow.forEach((level) => {
                             const priceStr = level.price
                                 ? level.price.toFixed(2)
                                 : "0.00";

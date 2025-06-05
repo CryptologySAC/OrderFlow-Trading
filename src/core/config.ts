@@ -165,7 +165,7 @@ export class Config {
             cfg.symbols[cfg.symbol].orderBookProcessor?.binSize ?? 5
         ),
         numLevels: Number(
-            cfg.symbols[cfg.symbol].orderBookProcessor?.numLevels ?? 100
+            cfg.symbols[cfg.symbol].orderBookProcessor?.numLevels ?? 20
         ),
         maxBufferSize: Number(
             cfg.symbols[cfg.symbol].orderBookProcessor?.maxBufferSize ?? 1000

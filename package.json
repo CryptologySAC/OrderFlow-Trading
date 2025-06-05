@@ -35,7 +35,7 @@
         "updates": "npx npm-check-updates",
         "update": "npx npm-check-updates -u",
         "prepare": "husky",
-        "build": "yarn format && tsc -p tsconfig.build.json",
+        "build": "tsc -p tsconfig.build.json",
         "test": "vitest",
         "test:coverage": "vitest run --coverage",
         "dev": "ts-node --transpile-only src/index.ts"
