@@ -2323,13 +2323,11 @@ function initialize() {
 }
 
 function addAnomalyChartLabel(anomaly) {
-    if (!window.tradesChart) return;
+    if (!tradesChart) return;
     const now = anomaly.time || anomaly.detectedAt || Date.now();
-    window.tradesChart.options.plugins.annotation.annotations =
-        window.tradesChart.options.plugins.annotation.annotations || {};
-    window.tradesChart.options.plugins.annotation.annotations[
-        `anomaly.${now}`
-    ] = {
+    tradesChart.options.plugins.annotation.annotations =
+        tradesChart.options.plugins.annotation.annotations || {};
+    tradesChart.options.plugins.annotation.annotations[`anomaly.${now}`] = {
         type: "label",
         xValue: anomaly.time || anomaly.detectedAt,
         yValue: anomaly.price,
@@ -2348,7 +2346,7 @@ function addAnomalyChartLabel(anomaly) {
         borderRadius: 6,
         id: `anomaly.${now}`,
     };
-    window.tradesChart.update("none");
+    tradesChart.update("none");
 }
 
 // Start application
