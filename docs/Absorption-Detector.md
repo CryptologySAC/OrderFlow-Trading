@@ -107,14 +107,14 @@ detector.addDepth(orderBookMsg);
 
 ### Feature Flags
 
-| Flag                | Description                                                                      |
-| ------------------- | -------------------------------------------------------------------------------- |
-| `spoofingDetection` | Detects and ignores signals when wall is pulled or cancelled (“fake” liquidity)  |
-| `adaptiveZone`      | Dynamically adjusts zone width (tick band) using real-time volatility (ATR)      |
-| `passiveHistory`    | Tracks passive volume over time to spot “refills” (iceberg, hidden liquidity)    |
-| `multiZone`         | Aggregates volumes over a band of zones, not just single price                   |
-| `sideOverride`      | Allows custom research logic for aggressive/passive side (advanced/research)     |
-| `autoCalibrate`     | Dynamically tunes `minAggVolume` to adapt to market regime changes               |
+| Flag                | Description                                                                     |
+| ------------------- | ------------------------------------------------------------------------------- |
+| `spoofingDetection` | Detects and ignores signals when wall is pulled or cancelled (“fake” liquidity) |
+| `adaptiveZone`      | Dynamically adjusts zone width (tick band) using real-time volatility (ATR)     |
+| `passiveHistory`    | Tracks passive volume over time to spot “refills” (iceberg, hidden liquidity)   |
+| `multiZone`         | Aggregates volumes over a band of zones, not just single price                  |
+| `sideOverride`      | Allows custom research logic for aggressive/passive side (advanced/research)    |
+| `autoCalibrate`     | Dynamically tunes `minAggVolume` to adapt to market regime changes              |
 
 ---
 

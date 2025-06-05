@@ -1064,8 +1064,7 @@ export function createDependencies(): Dependencies {
 
     const anomalyDetector = new AnomalyDetector(
         Config.ANOMALY_DETECTOR,
-        logger,
-        spoofingDetector
+        logger
     );
 
     const alertManager = new AlertManager(
@@ -1082,7 +1081,6 @@ export function createDependencies(): Dependencies {
         pipelineStore,
         {
             confidenceThreshold: 0.75,
-            enableAnomalyDetection: true,
             enableAlerts: true,
         }
     );

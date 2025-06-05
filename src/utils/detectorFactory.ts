@@ -715,7 +715,6 @@ export class DetectorFactory {
                 adaptiveZone: true,
                 passiveHistory: true,
                 multiZone: true,
-                sideOverride: false,
                 autoCalibrate: true,
                 ...settings.features,
             },

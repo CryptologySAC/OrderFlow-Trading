@@ -19,18 +19,18 @@
 
 ## 🎚️ Feature Toggle Impact Matrix
 
-| Feature                | Detector   | Signal Volume | Signal Quality | CPU Impact | When to Enable   |
-| ---------------------- | ---------- | ------------- | -------------- | ---------- | ---------------- |
-| **icebergDetection**   | Absorption | **+30%** 📈   | **+20%** 📈    | Medium     | **Phase 2+**     |
-| **liquidityGradient**  | Absorption | **+15%** 📈   | **+25%** 📈    | High       | **Phase 2+**     |
-| **depletionTracking**  | Exhaustion | **+25%** 📈   | **+15%** 📈    | Medium     | **Phase 2+**     |
-| **spreadAdjustment**   | Both       | **-15%** 📉   | **+25%** 📈    | Low        | **Phase 3+**     |
-| **spoofingDetection**  | Both       | **-10%** 📉   | **+30%** 📈    | Medium     | **Phase 3+**     |
-| **autoCalibrate**      | Both       | **±10%** ↕️   | **+10%** 📈    | Low        | **Phase 2+**     |
-| **adaptiveZone**       | Both       | **+10%** 📈   | **+5%** 📈     | Medium     | **Phase 2+**     |
-| **multiZone**          | Both       | **+20%** 📈   | **+5%** 📈     | High       | **Phase 3+**     |
-| **absorptionVelocity** | Absorption | **+5%** 📈    | **+10%** 📈    | High       | **Phase 3+**     |
-| **volumeVelocity**     | Exhaustion | **+5%** 📈    | **+10%** 📈    | High       | **Phase 3+**     |
+| Feature                | Detector   | Signal Volume | Signal Quality | CPU Impact | When to Enable |
+| ---------------------- | ---------- | ------------- | -------------- | ---------- | -------------- |
+| **icebergDetection**   | Absorption | **+30%** 📈   | **+20%** 📈    | Medium     | **Phase 2+**   |
+| **liquidityGradient**  | Absorption | **+15%** 📈   | **+25%** 📈    | High       | **Phase 2+**   |
+| **depletionTracking**  | Exhaustion | **+25%** 📈   | **+15%** 📈    | Medium     | **Phase 2+**   |
+| **spreadAdjustment**   | Both       | **-15%** 📉   | **+25%** 📈    | Low        | **Phase 3+**   |
+| **spoofingDetection**  | Both       | **-10%** 📉   | **+30%** 📈    | Medium     | **Phase 3+**   |
+| **autoCalibrate**      | Both       | **±10%** ↕️   | **+10%** 📈    | Low        | **Phase 2+**   |
+| **adaptiveZone**       | Both       | **+10%** 📈   | **+5%** 📈     | Medium     | **Phase 2+**   |
+| **multiZone**          | Both       | **+20%** 📈   | **+5%** 📈     | High       | **Phase 3+**   |
+| **absorptionVelocity** | Absorption | **+5%** 📈    | **+10%** 📈    | High       | **Phase 3+**   |
+| **volumeVelocity**     | Exhaustion | **+5%** 📈    | **+10%** 📈    | High       | **Phase 3+**   |
 
 ---
 

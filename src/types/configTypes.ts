@@ -89,7 +89,6 @@ type ExhaustionDetectorConfig = {
         multiZone: true;
         volumeVelocity: true;
         passiveHistory: true;
-        sideOverride: false;
     };
 };
 
@@ -110,7 +109,6 @@ type AbsorptionDetectorConfig = {
         adaptiveZone: true;
         passiveHistory: true;
         multiZone: true;
-        sideOverride: false;
         autoCalibrate: false;
         icebergDetection: true;
         liquidityGradient: true;

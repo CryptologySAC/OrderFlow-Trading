@@ -66,8 +66,7 @@
                     "adaptiveZone": true,
                     "multiZone": true,
                     "volumeVelocity": true,
-                    "passiveHistory": true,
-                    "sideOverride": false
+                    "passiveHistory": true
                 }
             },
             "absorption": {
@@ -87,7 +86,6 @@
                     "adaptiveZone": true,
                     "passiveHistory": true,
                     "multiZone": true,
-                    "sideOverride": false,
                     "autoCalibrate": false,
                     "icebergDetection": true,
                     "liquidityGradient": true,

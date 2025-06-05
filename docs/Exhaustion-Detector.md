@@ -107,14 +107,14 @@ detector.addDepth(orderBookMsg);
 
 ### Feature Flags
 
-| Flag                | Description                                                                            |
-| ------------------- | -------------------------------------------------------------------------------------- |
-| `spoofingDetection` | Detects and ignores signals when passive liquidity is pulled before being exhausted    |
-| `adaptiveZone`      | Dynamically adjusts exhaustion band width using volatility (ATR)                       |
-| `passiveHistory`    | Tracks historical passive volume for detecting refilled walls                          |
-| `multiZone`         | Aggregates exhaustion over a band of neighboring zones                                 |
-| `sideOverride`      | Allows custom logic for aggressive/passive side (advanced/research)                    |
-| `autoCalibrate`     | Dynamically tunes `minAggVolume` for best detection frequency                          |
+| Flag                | Description                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------- |
+| `spoofingDetection` | Detects and ignores signals when passive liquidity is pulled before being exhausted |
+| `adaptiveZone`      | Dynamically adjusts exhaustion band width using volatility (ATR)                    |
+| `passiveHistory`    | Tracks historical passive volume for detecting refilled walls                       |
+| `multiZone`         | Aggregates exhaustion over a band of neighboring zones                              |
+| `sideOverride`      | Allows custom logic for aggressive/passive side (advanced/research)                 |
+| `autoCalibrate`     | Dynamically tunes `minAggVolume` for best detection frequency                       |
 
 ---
 

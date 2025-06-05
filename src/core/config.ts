@@ -135,9 +135,6 @@ export class Config {
             multiZone:
                 cfg.symbols[cfg.symbol].absorption?.features?.multiZone ??
                 false,
-            sideOverride:
-                cfg.symbols[cfg.symbol].absorption?.features?.sideOverride ??
-                false,
             autoCalibrate:
                 cfg.symbols[cfg.symbol].absorption?.features?.autoCalibrate ??
                 false,
@@ -202,9 +199,6 @@ export class Config {
             passiveHistory:
                 cfg.symbols[cfg.symbol].exhaustion?.features?.passiveHistory ??
                 false,
-            sideOverride:
-                cfg.symbols[cfg.symbol].exhaustion?.features?.sideOverride ??
-                false,
         },
     };
 
@@ -265,28 +259,19 @@ export class Config {
             cfg.symbols[cfg.symbol].anomalyDetector?.anomalyCooldownMs ??
                 300_000
         ),
-        icebergDetectionWindow: Number(
-            cfg.symbols[cfg.symbol].anomalyDetector?.icebergDetectionWindow ??
-                600_000
-        ),
+
         volumeImbalanceThreshold: Number(
             cfg.symbols[cfg.symbol].anomalyDetector?.volumeImbalanceThreshold ??
                 0.65
         ),
-        absorptionRatioThreshold: Number(
-            cfg.symbols[cfg.symbol].anomalyDetector?.absorptionRatioThreshold ??
-                2.5
-        ),
+
         normalSpreadBps: Number(
             cfg.symbols[cfg.symbol].anomalyDetector?.normalSpreadBps ?? 10
         ),
         minHistory: Number(
             cfg.symbols[cfg.symbol].anomalyDetector?.minHistory ?? 50
         ),
-        orderSizeAnomalyThreshold: Number(
-            cfg.symbols[cfg.symbol].anomalyDetector
-                ?.orderSizeAnomalyThreshold ?? 3
-        ),
+
         tickSize: this.TICK_SIZE,
     };
 

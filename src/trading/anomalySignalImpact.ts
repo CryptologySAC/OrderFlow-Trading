@@ -124,31 +124,6 @@ export const ANOMALY_SIGNAL_IMPACT_MATRIX: Record<string, AnomalySignalImpact> =
             priceRangeMultiplier: 1.5,
         },
 
-        // === MANIPULATION ANOMALIES ===
-
-        spoofing: {
-            meanReversion: {
-                impact: "negative",
-                multiplier: 0.4,
-                reasoning:
-                    "Spoofing creates false support/resistance levels. Mean reversion signals to fake levels are dangerous.",
-            },
-            momentum: {
-                impact: "negative",
-                multiplier: 0.3,
-                reasoning:
-                    "Spoof walls create false momentum signals and fake breakouts. Highly unreliable environment.",
-            },
-            breakout: {
-                impact: "negative",
-                multiplier: 0.2,
-                reasoning:
-                    "Spoofing specifically targets breakout traders. Breakout signals during spoofing are often traps.",
-            },
-            timeDecay: 20, // Manipulation can persist
-            priceRangeMultiplier: 1.5,
-        },
-
         // === LARGE PLAYER ANOMALIES ===
 
         whale_activity: {
@@ -172,29 +147,6 @@ export const ANOMALY_SIGNAL_IMPACT_MATRIX: Record<string, AnomalySignalImpact> =
             },
             timeDecay: 60, // Whale impact can last longer
             priceRangeMultiplier: 2.0,
-        },
-
-        iceberg_order: {
-            meanReversion: {
-                impact: "positive",
-                multiplier: 1.3,
-                reasoning:
-                    "Iceberg orders provide strong support/resistance. Price tends to revert to iceberg levels.",
-            },
-            momentum: {
-                impact: "negative",
-                multiplier: 0.7,
-                reasoning:
-                    "Iceberg orders absorb momentum and create resistance to trending moves.",
-            },
-            breakout: {
-                impact: "negative",
-                multiplier: 0.5,
-                reasoning:
-                    "Iceberg orders often prevent breakouts or create false breaks. Reduces breakout success rate.",
-            },
-            timeDecay: 120, // Icebergs can persist for hours
-            priceRangeMultiplier: 1.0,
         },
 
         // === FLOW ANOMALIES ===
@@ -266,54 +218,6 @@ export const ANOMALY_SIGNAL_IMPACT_MATRIX: Record<string, AnomalySignalImpact> =
             },
             timeDecay: 20,
             priceRangeMultiplier: 1.2,
-        },
-
-        // === ABSORPTION/EXHAUSTION ANOMALIES ===
-
-        absorption: {
-            meanReversion: {
-                impact: "positive",
-                multiplier: 1.6,
-                reasoning:
-                    "Absorption indicates strong buying/selling interest at level. Creates high-probability mean reversion setup.",
-            },
-            momentum: {
-                impact: "negative",
-                multiplier: 0.3,
-                reasoning:
-                    "Absorption stops momentum moves. Momentum signals during absorption are likely to fail.",
-            },
-            breakout: {
-                impact: "negative",
-                multiplier: 0.4,
-                reasoning:
-                    "Absorption prevents breakouts and creates false signals. Reduces breakout probability.",
-            },
-            timeDecay: 40, // Absorption levels can persist
-            priceRangeMultiplier: 1.0,
-        },
-
-        exhaustion: {
-            meanReversion: {
-                impact: "positive",
-                multiplier: 1.7,
-                reasoning:
-                    "Exhaustion signals end of trend and high probability reversal. Excellent mean reversion setup.",
-            },
-            momentum: {
-                impact: "negative",
-                multiplier: 0.2,
-                reasoning:
-                    "Exhaustion signals momentum failure. Momentum signals during exhaustion are contrarian indicators.",
-            },
-            breakout: {
-                impact: "negative",
-                multiplier: 0.3,
-                reasoning:
-                    "Exhaustion suggests lack of follow-through. Breakout signals during exhaustion often fail.",
-            },
-            timeDecay: 60, // Exhaustion can lead to extended consolidation
-            priceRangeMultiplier: 1.5,
         },
 
         // === SIZE ANOMALIES ===
@@ -449,20 +353,6 @@ export function getAnomalyFilteringRules(): Record<
                 reason: "Liquidity voids cause false breakouts",
             },
         },
-        spoofing: {
-            meanReversion: {
-                block: true,
-                reason: "Spoofing creates false support/resistance levels",
-            },
-            momentum: {
-                block: true,
-                reason: "Spoof walls generate false momentum signals",
-            },
-            breakout: {
-                block: true,
-                reason: "Spoofing specifically targets breakout traders",
-            },
-        },
         momentum_ignition: {
             meanReversion: {
                 block: true,
@@ -477,34 +367,6 @@ export function getAnomalyFilteringRules(): Record<
                 reason: "Momentum ignition often triggers valid breakouts",
             },
         },
-        exhaustion: {
-            meanReversion: {
-                block: false,
-                reason: "Exhaustion creates high-probability reversions",
-            },
-            momentum: {
-                block: true,
-                reason: "Exhaustion signals momentum failure",
-            },
-            breakout: {
-                block: true,
-                reason: "Exhaustion indicates lack of breakout follow-through",
-            },
-        },
-        absorption: {
-            meanReversion: {
-                block: false,
-                reason: "Absorption creates strong reversion levels",
-            },
-            momentum: {
-                block: true,
-                reason: "Absorption stops momentum moves",
-            },
-            breakout: {
-                block: true,
-                reason: "Absorption prevents breakout continuation",
-            },
-        },
     };
 }
 
@@ -515,14 +377,10 @@ export const ANOMALY_IMPACT_SUMMARY = {
     MEAN_REVERSION_POSITIVE: [
         "flash_crash", // Extreme oversold conditions
         "extreme_volatility", // More reversion opportunities
-        "exhaustion", // End of trend signals
-        "absorption", // Strong support/resistance
-        "iceberg_order", // Price drawn to iceberg levels
     ],
 
     MEAN_REVERSION_NEGATIVE: [
         "liquidity_void", // Wide spreads prevent reversion
-        "spoofing", // False support/resistance
         "whale_activity", // Can push price further
         "momentum_ignition", // Strong trend opposing reversion
         "flow_imbalance", // Continued directional pressure
@@ -539,10 +397,6 @@ export const ANOMALY_IMPACT_SUMMARY = {
         "flash_crash", // Breaks momentum trends
         "extreme_volatility", // Creates whipsaws
         "liquidity_void", // Choppy price action
-        "spoofing", // False momentum signals
-        "absorption", // Stops momentum moves
-        "exhaustion", // Momentum failure signal
-        "iceberg_order", // Absorbs momentum
     ],
 
     BREAKOUT_POSITIVE: [
@@ -556,9 +410,5 @@ export const ANOMALY_IMPACT_SUMMARY = {
         "flash_crash", // Invalidates support/resistance
         "extreme_volatility", // False breakouts and noise
         "liquidity_void", // False breaks due to wide spreads
-        "spoofing", // Targets breakout traders
-        "absorption", // Prevents breakouts
-        "exhaustion", // Lack of follow-through
-        "iceberg_order", // Creates false breaks
     ],
 };

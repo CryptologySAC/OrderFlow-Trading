@@ -126,7 +126,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
             adaptiveZone: true,
             passiveHistory: true,
             multiZone: true,
-            sideOverride: false,
             autoCalibrate: true,
             ...settings.features,
         };
@@ -520,13 +519,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
      * Get trade side
      */
     protected getTradeSide(trade: AggressiveTrade): "buy" | "sell" {
-        if (this.features.sideOverride) {
-            this.logger.debug(
-                `[${this.constructor.name}] Side override enabled`,
-                { originalSide: trade.buyerIsMaker ? "sell" : "buy" }
-            );
-        }
-        // Binance: m=true => buyer is maker, so aggressive sell
         return trade.buyerIsMaker ? "sell" : "buy";
     }
 
