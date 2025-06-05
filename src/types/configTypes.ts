@@ -26,6 +26,7 @@ type SymbolConfig = {
     absorption?: AbsorptionDetectorConfig;
     deltaCvdConfirmation?: DeltaCvdConfirmationConfig;
     accumulationDetector?: AccumulationDetectorConfig;
+    distributionDetector?: DistributionDetectorConfig;
 };
 
 type DataStreamConfig = {
@@ -136,4 +137,17 @@ type AccumulationDetectorConfig = {
     trackSide: false;
     pricePrecision: number;
     accumulationThreshold: number;
+};
+
+type DistributionDetectorConfig = {
+    minDurationMs: number;
+    minRatio: number;
+    minRecentActivityMs: number;
+    threshold: number;
+    volumeConcentrationWeight: number;
+    strengthAnalysis: boolean;
+    velocityAnalysis: boolean;
+    symbol: string;
+    minAggVolume: number;
+    pricePrecision: number;
 };

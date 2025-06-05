@@ -13,7 +13,7 @@ import type { OrderflowPreprocessorOptions } from "../market/orderFlowPreprocess
 import type { DataStreamConfig } from "../trading/dataStreamManager.js";
 import type { AccumulationSettings } from "../indicators/interfaces/detectorInterfaces.js";
 import type { DeltaCVDConfirmationSettings } from "../indicators/deltaCVDConfirmation.js";
-
+import type { SuperiorFlowSettings } from "../indicators/base/flowDetectorBase.js";
 const rawConfig = readFileSync(resolve(process.cwd(), "config.json"), "utf-8");
 const cfg: ConfigType = JSON.parse(rawConfig) as ConfigType;
 
@@ -233,6 +233,33 @@ export class Config {
             cfg.symbols[cfg.symbol].deltaCvdConfirmation?.minVolPerSec ?? 20
         ),
         minZ: cfg.symbols[cfg.symbol].deltaCvdConfirmation?.minZ ?? 3,
+        pricePrecision: Config.PRICE_PRECISION,
+    };
+
+    static readonly DISTRIBUTION_DETECTOR: SuperiorFlowSettings = {
+        symbol: Config.SYMBOL,
+        windowMs: this.WINDOW_MS,
+        minDurationMs:
+            cfg.symbols[cfg.symbol].distributionDetector?.minDurationMs ??
+            300_000, // 5 minutes
+        minRatio: cfg.symbols[cfg.symbol].distributionDetector?.minRatio ?? 1.8, // Higher threshold for distribution
+        minRecentActivityMs:
+            cfg.symbols[cfg.symbol].distributionDetector?.minRecentActivityMs ??
+            60_000,
+        threshold:
+            cfg.symbols[cfg.symbol].distributionDetector?.threshold ?? 0.65, // Higher confidence threshold
+        volumeConcentrationWeight:
+            cfg.symbols[cfg.symbol].distributionDetector
+                ?.volumeConcentrationWeight ?? 0.2,
+        strengthAnalysis:
+            cfg.symbols[cfg.symbol].distributionDetector?.strengthAnalysis ??
+            true,
+        velocityAnalysis:
+            cfg.symbols[cfg.symbol].distributionDetector?.velocityAnalysis ??
+            false,
+        flowDirection: "distribution",
+        minAggVolume:
+            cfg.symbols[cfg.symbol].distributionDetector?.minAggVolume ?? 8, // Higher volume threshold for distribution
         pricePrecision: Config.PRICE_PRECISION,
     };
 

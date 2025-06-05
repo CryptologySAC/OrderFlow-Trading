@@ -254,7 +254,7 @@ export class OrderFlowDashboard {
             (signal) => {
                 console.log("Distribution signal:", signal);
             },
-            { symbol: Config.SYMBOL },
+            Config.DISTRIBUTION_DETECTOR,
             dependencies,
             { id: "ltcusdt-distribution-main" }
         );
