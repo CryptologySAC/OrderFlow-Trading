@@ -135,9 +135,6 @@ export class Config {
             multiZone:
                 cfg.symbols[cfg.symbol].absorption?.features?.multiZone ??
                 false,
-            priceResponse:
-                cfg.symbols[cfg.symbol].absorption?.features?.priceResponse ??
-                false,
             sideOverride:
                 cfg.symbols[cfg.symbol].absorption?.features?.sideOverride ??
                 false,
@@ -181,9 +178,6 @@ export class Config {
         maxRevisitTicks:
             cfg.symbols[cfg.symbol].exhaustion?.maxRevisitTicks ?? 5,
         features: {
-            priceResponse:
-                cfg.symbols[cfg.symbol].exhaustion?.features?.priceResponse ??
-                false,
             depletionTracking:
                 cfg.symbols[cfg.symbol].exhaustion?.features
                     ?.depletionTracking ?? false,

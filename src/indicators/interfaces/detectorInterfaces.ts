@@ -113,7 +113,6 @@ export interface DetectorFeatures {
     adaptiveZone?: boolean;
     passiveHistory?: boolean;
     multiZone?: boolean;
-    priceResponse?: boolean;
     sideOverride?: boolean;
     autoCalibrate?: boolean;
     spreadAdjustment?: boolean;

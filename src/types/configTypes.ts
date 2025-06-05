@@ -81,7 +81,6 @@ type ExhaustionDetectorConfig = {
     confirmationTimeout: number;
     maxRevisitTicks: number;
     features: {
-        priceResponse: true;
         depletionTracking: true;
         spreadAdjustment: true;
         spoofingDetection: true;
@@ -111,7 +110,6 @@ type AbsorptionDetectorConfig = {
         adaptiveZone: true;
         passiveHistory: true;
         multiZone: true;
-        priceResponse: true;
         sideOverride: false;
         autoCalibrate: false;
         icebergDetection: true;

@@ -34,7 +34,6 @@ class TestDetector extends BaseDetector {
                     multiZone: false,
                     adaptiveZone: false,
                     autoCalibrate: false,
-                    priceResponse: false,
                     passiveHistory: true,
                     spoofingDetection: false,
                 },

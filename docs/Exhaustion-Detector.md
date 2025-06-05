@@ -74,7 +74,6 @@ const detector = new ExhaustionDetector(
             adaptiveZone: true,
             passiveHistory: true,
             multiZone: true,
-            priceResponse: true,
             autoCalibrate: true,
         },
         symbol: "LTCUSDT",
@@ -114,7 +113,6 @@ detector.addDepth(orderBookMsg);
 | `adaptiveZone`      | Dynamically adjusts exhaustion band width using volatility (ATR)                       |
 | `passiveHistory`    | Tracks historical passive volume for detecting refilled walls                          |
 | `multiZone`         | Aggregates exhaustion over a band of neighboring zones                                 |
-| `priceResponse`     | Requires a price reaction to confirm exhaustion (prevents acting on fake/late signals) |
 | `sideOverride`      | Allows custom logic for aggressive/passive side (advanced/research)                    |
 | `autoCalibrate`     | Dynamically tunes `minAggVolume` for best detection frequency                          |
 

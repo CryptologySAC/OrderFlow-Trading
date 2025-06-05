@@ -74,7 +74,6 @@ const detector = new AbsorptionDetector(
             adaptiveZone: true,
             passiveHistory: true,
             multiZone: true,
-            priceResponse: true,
             autoCalibrate: true,
         },
         symbol: "LTCUSDT",
@@ -114,7 +113,6 @@ detector.addDepth(orderBookMsg);
 | `adaptiveZone`      | Dynamically adjusts zone width (tick band) using real-time volatility (ATR)      |
 | `passiveHistory`    | Tracks passive volume over time to spot “refills” (iceberg, hidden liquidity)    |
 | `multiZone`         | Aggregates volumes over a band of zones, not just single price                   |
-| `priceResponse`     | Requires a price reaction for confirmation (prevents trading stale/fake signals) |
 | `sideOverride`      | Allows custom research logic for aggressive/passive side (advanced/research)     |
 | `autoCalibrate`     | Dynamically tunes `minAggVolume` to adapt to market regime changes               |
 

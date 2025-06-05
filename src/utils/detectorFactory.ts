@@ -715,7 +715,6 @@ export class DetectorFactory {
                 adaptiveZone: true,
                 passiveHistory: true,
                 multiZone: true,
-                priceResponse: true,
                 sideOverride: false,
                 autoCalibrate: true,
                 ...settings.features,
@@ -1059,7 +1058,6 @@ const absorptionDetector = DetectorFactory.createAbsorptionDetector(
         features: {
             icebergDetection: true,
             liquidityGradient: true,
-            priceResponse: true,
         },
     },
     dependencies,
@@ -1079,7 +1077,6 @@ const exhaustionDetector = DetectorFactory.createExhaustionDetector(
         features: {
             depletionTracking: true,
             spreadAdjustment: true,
-            priceResponse: true,
         },
     },
     dependencies,

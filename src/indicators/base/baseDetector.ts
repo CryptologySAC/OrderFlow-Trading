@@ -126,7 +126,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
             adaptiveZone: true,
             passiveHistory: true,
             multiZone: true,
-            priceResponse: true,
             sideOverride: false,
             autoCalibrate: true,
             ...settings.features,
@@ -218,11 +217,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
             }
 
             this.checkForSignal(tradeData);
-
-            //TODO
-            //if (this.features.priceResponse) {
-            //    this.processConfirmations(tradeData.price);
-            //}
 
             if (this.features.autoCalibrate) {
                 this.performAutoCalibration();

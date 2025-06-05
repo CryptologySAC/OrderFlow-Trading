@@ -59,7 +59,6 @@
                 "confirmationTimeout": 60000,
                 "maxRevisitTicks": 5,
                 "features": {
-                    "priceResponse": false,
                     "depletionTracking": true,
                     "spreadAdjustment": true,
                     "spoofingDetection": true,
@@ -88,7 +87,6 @@
                     "adaptiveZone": true,
                     "passiveHistory": true,
                     "multiZone": true,
-                    "priceResponse": false,
                     "sideOverride": false,
                     "autoCalibrate": false,
                     "icebergDetection": true,
