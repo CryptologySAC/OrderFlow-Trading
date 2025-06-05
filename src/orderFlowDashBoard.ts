@@ -22,6 +22,8 @@ import { Logger } from "./infrastructure/logger.js";
 import { MetricsCollector } from "./infrastructure/metricsCollector.js";
 import { RateLimiter } from "./infrastructure/rateLimiter.js";
 import { CircuitBreaker } from "./infrastructure/circuitBreaker.js";
+import { MicrostructureAnalyzer } from "./data/microstructureAnalyzer.js";
+import { IndividualTradesManager } from "./data/individualTradesManager.js";
 
 // Service imports
 import { DetectorFactory } from "./utils/detectorFactory.js";
@@ -150,7 +152,9 @@ export class OrderFlowDashboard {
             Config.PREPROCESSOR,
             this.orderBook,
             dependencies.logger,
-            dependencies.metricsCollector
+            dependencies.metricsCollector,
+            dependencies.individualTradesManager,
+            dependencies.microstructureAnalyzer
         );
         this.logger.info(
             "[OrderFlowDashboard] Orderflow preprocessor initialized"
@@ -1039,6 +1043,18 @@ export function createDependencies(): Dependencies {
     const pipelineStore = new PipelineStorage(db, {});
     const storage = new Storage(db);
     const spoofingDetector = new SpoofingDetector(Config.SPOOFING_DETECTOR);
+    const binanceFeed = new BinanceDataFeed();
+    const individualTradesManager = new IndividualTradesManager(
+        Config.INDIVIDUAL_TRADES_MANAGER,
+        logger,
+        metricsCollector,
+        binanceFeed
+    );
+    const microstructureAnalyzer = new MicrostructureAnalyzer(
+        Config.MICROSTRUCTURE_ANALYZER,
+        logger,
+        metricsCollector
+    );
 
     const orderBookProcessor = new OrderBookProcessor(
         {
@@ -1107,7 +1123,6 @@ export function createDependencies(): Dependencies {
 
     return {
         storage,
-        binanceFeed: new BinanceDataFeed(),
         tradesProcessor,
         orderBookProcessor,
         signalLogger,
@@ -1120,6 +1135,9 @@ export function createDependencies(): Dependencies {
         anomalyDetector,
         signalManager,
         spoofingDetector,
+        individualTradesManager,
+        microstructureAnalyzer,
+        binanceFeed,
     };
 }
 

@@ -322,8 +322,11 @@ export class MicrostructureAnalyzer {
 
     private detectCoordinatedTiming(timeGaps: number[]): boolean {
         // Look for suspicious timing patterns (e.g., exact intervals)
-        const uniqueGaps = new Set(timeGaps.filter((gap) => gap < 1000)); // Focus on sub-second gaps
-        return uniqueGaps.size < timeGaps.length * 0.3; // Many repeated timing intervals
+        const filteredGaps = timeGaps.filter((gap) => gap < 1000); // Focus on sub-second gaps
+        if (filteredGaps.length === 0) return false; // No sub-second gaps to analyze
+
+        const uniqueGaps = new Set(filteredGaps);
+        return uniqueGaps.size < filteredGaps.length * 0.3; // Many repeated timing intervals
     }
 
     private detectMarketMaking(trades: IndividualTrade[]): boolean {

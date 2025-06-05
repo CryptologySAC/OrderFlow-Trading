@@ -3,7 +3,11 @@ import { IndividualTradesManager } from "../src/data/individualTradesManager";
 import { Logger } from "../src/infrastructure/logger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import type { IBinanceDataFeed } from "../src/utils/binance";
-import type { AggTradeEvent, IndividualTrade } from "../src/types/marketEvents";
+import type {
+    AggTradeEvent,
+    EnrichedTradeEvent,
+    IndividualTrade,
+} from "../src/types/marketEvents";
 
 vi.mock("../src/infrastructure/logger");
 vi.mock("../src/infrastructure/metricsCollector");
@@ -215,7 +219,7 @@ describe("data/IndividualTradesManager", () => {
 
     describe("enhanceAggTradeWithIndividuals", () => {
         it("should return simple hybrid trade when fetching not needed", async () => {
-            const mockTrade: AggTradeEvent = {
+            const mockTrade: EnrichedTradeEvent = {
                 price: 100,
                 quantity: 1, // Small quantity
                 timestamp: Date.now(),
@@ -223,6 +227,10 @@ describe("data/IndividualTradesManager", () => {
                 pair: "LTCUSDT",
                 tradeId: "small_trade",
                 originalTrade: {} as any,
+                passiveBidVolume: 100,
+                passiveAskVolume: 150,
+                zonePassiveBidVolume: 500,
+                zonePassiveAskVolume: 600,
             };
 
             const result =
@@ -237,7 +245,29 @@ describe("data/IndividualTradesManager", () => {
             // Set up conditions for fetching
             manager.setAnomalyPeriod(true);
 
-            const mockTrade: AggTradeEvent = {
+            // Mock getTrades to return some individual trades
+            vi.mocked(binanceFeed.getTrades).mockResolvedValue([
+                {
+                    id: 1,
+                    price: "100.00",
+                    qty: "25.0",
+                    quoteQty: "2500.0",
+                    time: Date.now(),
+                    isBuyerMaker: false,
+                    isBestMatch: true,
+                },
+                {
+                    id: 2,
+                    price: "100.01",
+                    qty: "25.0",
+                    quoteQty: "2500.25",
+                    time: Date.now() + 100,
+                    isBuyerMaker: false,
+                    isBestMatch: true,
+                },
+            ]);
+
+            const mockTrade: EnrichedTradeEvent = {
                 price: 100,
                 quantity: 50,
                 timestamp: Date.now(),
@@ -248,6 +278,10 @@ describe("data/IndividualTradesManager", () => {
                     f: 1, // firstTradeId
                     l: 3, // lastTradeId
                 } as any,
+                passiveBidVolume: 100,
+                passiveAskVolume: 150,
+                zonePassiveBidVolume: 500,
+                zonePassiveAskVolume: 600,
             };
 
             const result =

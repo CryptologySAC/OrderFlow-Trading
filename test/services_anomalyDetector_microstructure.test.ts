@@ -34,37 +34,43 @@ describe("services/AnomalyDetector - Microstructure Analysis", () => {
     });
 
     const createMockHybridTrade = (
-        microstructure: Partial<MicrostructureMetrics>
-    ): HybridTradeEvent => ({
-        price: 100,
-        quantity: 50,
-        timestamp: Date.now(),
-        buyerIsMaker: false,
-        pair: "LTCUSDT",
-        tradeId: "test123",
-        originalTrade: {} as any,
-        passiveBidVolume: 100,
-        passiveAskVolume: 150,
-        zonePassiveBidVolume: 500,
-        zonePassiveAskVolume: 600,
-        hasIndividualData: true,
-        tradeComplexity: "complex",
-        fetchReason: "large_order",
-        microstructure: {
-            fragmentationScore: 0.5,
-            avgTradeSize: 10,
-            tradeSizeVariance: 25,
-            timingPattern: "uniform",
-            avgTimeBetweenTrades: 1000,
-            toxicityScore: 0.3,
-            directionalPersistence: 0.4,
-            suspectedAlgoType: "unknown",
-            coordinationIndicators: [],
-            sizingPattern: "consistent",
-            executionEfficiency: 0.7,
-            ...microstructure,
-        } as MicrostructureMetrics,
-    });
+        microstructure: Partial<MicrostructureMetrics> & {
+            tradeComplexity?: "simple" | "complex" | "highly_fragmented";
+        }
+    ): HybridTradeEvent => {
+        const { tradeComplexity, ...microstructureProps } = microstructure;
+
+        return {
+            price: 100,
+            quantity: 50,
+            timestamp: Date.now(),
+            buyerIsMaker: false,
+            pair: "LTCUSDT",
+            tradeId: "test123",
+            originalTrade: {} as any,
+            passiveBidVolume: 100,
+            passiveAskVolume: 150,
+            zonePassiveBidVolume: 500,
+            zonePassiveAskVolume: 600,
+            hasIndividualData: true,
+            tradeComplexity: tradeComplexity || "complex",
+            fetchReason: "large_order",
+            microstructure: {
+                fragmentationScore: 0.5,
+                avgTradeSize: 10,
+                tradeSizeVariance: 25,
+                timingPattern: "uniform",
+                avgTimeBetweenTrades: 1000,
+                toxicityScore: 0.3,
+                directionalPersistence: 0.4,
+                suspectedAlgoType: "unknown",
+                coordinationIndicators: [],
+                sizingPattern: "consistent",
+                executionEfficiency: 0.7,
+                ...microstructureProps,
+            } as MicrostructureMetrics,
+        };
+    };
 
     describe("coordinated activity detection", () => {
         it("should detect coordinated timing patterns", () => {
@@ -205,7 +211,7 @@ describe("services/AnomalyDetector - Microstructure Analysis", () => {
                 directionalPersistence: 0.9,
                 executionEfficiency: 0.8,
                 fragmentationScore: 0.3,
-                suspectedAlgoType: "iceberg",
+                suspectedAlgoType: "unknown", // Don't trigger algorithmic detection
             });
 
             detector.onEnrichedTrade(trade);
@@ -265,20 +271,23 @@ describe("services/AnomalyDetector - Microstructure Analysis", () => {
                 executionEfficiency: 0.7,
                 fragmentationScore: 0.4,
                 avgTradeSize: 25,
-                suspectedAlgoType: "splitting",
+                suspectedAlgoType: "unknown", // Don't trigger algorithmic detection
                 tradeComplexity: "highly_fragmented",
             });
 
             detector.onEnrichedTrade(trade);
 
+            // Should be only toxic flow anomaly
+            expect(emittedAnomalies).toHaveLength(1);
             const anomaly = emittedAnomalies[0];
+            expect(anomaly.type).toBe("toxic_flow");
             expect(anomaly.details.toxicityScore).toBe(0.9);
             expect(anomaly.details.directionalPersistence).toBe(0.85);
             expect(anomaly.details.executionEfficiency).toBe(0.7);
             expect(anomaly.details.fragmentationScore).toBe(0.4);
             expect(anomaly.details.avgTradeSize).toBe(25);
             expect(anomaly.details.tradeComplexity).toBe("highly_fragmented");
-            expect(anomaly.details.suspectedAlgoType).toBe("splitting");
+            expect(anomaly.details.suspectedAlgoType).toBe("unknown");
         });
     });
 

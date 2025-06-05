@@ -628,7 +628,17 @@ export class AnomalyDetector extends EventEmitter {
      */
     private emitAnomaly(anomaly: AnomalyEvent): void {
         const now = Date.now();
-        const last = this.lastEmitted[anomaly.type];
+
+        // Create a more specific key for algorithmic activity to allow different algo types
+        const cooldownKey =
+            anomaly.type === "algorithmic_activity" &&
+            typeof anomaly.details === "object" &&
+            anomaly.details !== null &&
+            "algoType" in anomaly.details
+                ? `${anomaly.type}_${(anomaly.details as { algoType: string }).algoType}`
+                : anomaly.type;
+
+        const last = this.lastEmitted[cooldownKey];
 
         // Allow critical anomalies through immediately, others respect cooldown
         const shouldEmit =
@@ -638,7 +648,7 @@ export class AnomalyDetector extends EventEmitter {
 
         if (!shouldEmit) return;
 
-        this.lastEmitted[anomaly.type] = {
+        this.lastEmitted[cooldownKey] = {
             severity: anomaly.severity,
             time: now,
         };
