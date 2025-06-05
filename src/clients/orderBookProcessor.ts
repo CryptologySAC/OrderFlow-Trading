@@ -270,15 +270,9 @@ export class OrderBookProcessor implements IOrderBookProcessor {
             }
         }
 
-        // Filter out empty bins (optional - depends on requirements)
-        const nonEmptyBins = new Map<number, PriceLevel>();
-        for (const [price, bin] of bins) {
-            if (bin.bid > 0 || bin.ask > 0) {
-                nonEmptyBins.set(price, bin);
-            }
-        }
-
-        return nonEmptyBins;
+        // Keep all bins to maintain balanced orderbook display
+        // Don't filter empty bins - this ensures consistent bid/ask level counts
+        return bins;
     }
 
     /**
