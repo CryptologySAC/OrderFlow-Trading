@@ -703,7 +703,7 @@ export class OrderFlowDashboard {
 
         try {
             // Update detectors
-            if (this.preprocessor) this.preprocessor.handleAggTrade(data);
+            if (this.preprocessor) void this.preprocessor.handleAggTrade(data);
 
             const processingTime = Date.now() - startTime;
             this.metricsCollector.updateMetric(

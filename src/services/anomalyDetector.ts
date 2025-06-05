@@ -9,7 +9,10 @@
 import { EventEmitter } from "events";
 import type { MarketAnomaly } from "../utils/types.js";
 import { Logger } from "../infrastructure/logger.js";
-import type { EnrichedTradeEvent } from "../types/marketEvents.js";
+import type {
+    EnrichedTradeEvent,
+    HybridTradeEvent,
+} from "../types/marketEvents.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
 
 export interface AnomalyDetectorOptions {
@@ -37,7 +40,10 @@ export type AnomalyType =
     | "extreme_volatility" // Market Health: Sudden volatility spike
     | "orderbook_imbalance" // Market Structure: Passive volume asymmetry
     | "flow_imbalance" // Market Structure: Aggressive flow asymmetry
-    | "whale_activity"; // Market Structure: Large order impact
+    | "whale_activity" // Market Structure: Large order impact
+    | "coordinated_activity" // Microstructure: Coordinated execution patterns
+    | "algorithmic_activity" // Microstructure: Detected algorithmic trading
+    | "toxic_flow"; // Microstructure: High toxicity/informed flow
 
 /**
  * Structure of an emitted anomaly event.
@@ -181,11 +187,11 @@ export class AnomalyDetector extends EventEmitter {
     }
 
     /**
-     * Main entry point: process a new EnrichedTradeEvent.
+     * Main entry point: process a new trade event (enriched or hybrid).
      * Updates rolling windows and runs market health checks.
-     * @param trade Enriched trade event (with aggressive and passive context)
+     * @param trade Enriched or hybrid trade event (with aggressive and passive context)
      */
-    public onEnrichedTrade(trade: EnrichedTradeEvent): void {
+    public onEnrichedTrade(trade: EnrichedTradeEvent | HybridTradeEvent): void {
         try {
             // Capture symbol for scoped emits
             this.lastTradeSymbol = trade.originalTrade.s ?? "";
@@ -236,6 +242,15 @@ export class AnomalyDetector extends EventEmitter {
             // Run market health checks once we have sufficient history
             if (this.marketHistory.count() >= this.minHistory) {
                 this.runMarketHealthChecks(snapshot, spreadBps);
+            }
+
+            // Additional microstructure analysis if this is a HybridTradeEvent
+            if (
+                "hasIndividualData" in trade &&
+                trade.hasIndividualData &&
+                trade.microstructure
+            ) {
+                this.checkMicrostructureAnomalies(trade);
             }
         } catch (err) {
             this.logger?.error?.("AnomalyDetector.onEnrichedTrade error", {
@@ -668,6 +683,145 @@ export class AnomalyDetector extends EventEmitter {
             values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
             (values.length || 1);
         return Math.sqrt(variance);
+    }
+
+    /**
+     * Check for microstructure anomalies in HybridTradeEvent with individual trades data.
+     * Analyzes coordination, algorithmic patterns, and flow toxicity.
+     */
+    private checkMicrostructureAnomalies(trade: HybridTradeEvent): void {
+        if (!trade.microstructure) {
+            return;
+        }
+
+        const microstructure = trade.microstructure;
+
+        // Check for coordinated activity (potential wash trading or coordination)
+        if (
+            microstructure.timingPattern === "coordinated" ||
+            microstructure.coordinationIndicators.length > 0
+        ) {
+            const coordinationStrength =
+                microstructure.coordinationIndicators.length > 0
+                    ? Math.max(
+                          ...microstructure.coordinationIndicators.map(
+                              (c) => c.strength
+                          )
+                      )
+                    : 0.5;
+
+            this.emitAnomaly({
+                type: "coordinated_activity",
+                severity: coordinationStrength > 0.8 ? "high" : "medium",
+                details: {
+                    coordinationScore:
+                        microstructure.coordinationIndicators.length,
+                    timingPattern: microstructure.timingPattern,
+                    coordinationIndicators:
+                        microstructure.coordinationIndicators,
+                    fragmentationScore: microstructure.fragmentationScore,
+                    tradeCount: trade.individualTrades?.length || 0,
+                    fetchReason: trade.fetchReason,
+                    price: trade.price,
+                    quantity: trade.quantity,
+                },
+                detectedAt: trade.timestamp,
+                affectedPriceRange: { min: trade.price, max: trade.price },
+                recommendedAction:
+                    coordinationStrength > 0.8
+                        ? "close_positions"
+                        : "reduce_size",
+            });
+        }
+
+        // Check for algorithmic activity detection
+        if (microstructure.suspectedAlgoType !== "unknown") {
+            const isHighRiskAlgo =
+                microstructure.suspectedAlgoType === "arbitrage" ||
+                microstructure.suspectedAlgoType === "splitting";
+
+            this.emitAnomaly({
+                type: "algorithmic_activity",
+                severity: isHighRiskAlgo ? "medium" : "info",
+                details: {
+                    algoType: microstructure.suspectedAlgoType,
+                    confidence: microstructure.fragmentationScore,
+                    executionEfficiency: microstructure.executionEfficiency,
+                    sizingPattern: microstructure.sizingPattern,
+                    timingPattern: microstructure.timingPattern,
+                    tradeCount: trade.individualTrades?.length || 0,
+                    fetchReason: trade.fetchReason,
+                    price: trade.price,
+                    quantity: trade.quantity,
+                },
+                detectedAt: trade.timestamp,
+                affectedPriceRange: { min: trade.price, max: trade.price },
+                recommendedAction: isHighRiskAlgo ? "reduce_size" : "continue",
+            });
+        }
+
+        // Check for toxic flow (highly informed trading)
+        if (microstructure.toxicityScore > 0.8) {
+            const severity =
+                microstructure.toxicityScore > 0.95
+                    ? "high"
+                    : microstructure.toxicityScore > 0.85
+                      ? "medium"
+                      : "info";
+
+            this.emitAnomaly({
+                type: "toxic_flow",
+                severity,
+                details: {
+                    toxicityScore: microstructure.toxicityScore,
+                    directionalPersistence:
+                        microstructure.directionalPersistence,
+                    executionEfficiency: microstructure.executionEfficiency,
+                    fragmentationScore: microstructure.fragmentationScore,
+                    avgTradeSize: microstructure.avgTradeSize,
+                    tradeComplexity: trade.tradeComplexity,
+                    fetchReason: trade.fetchReason,
+                    suspectedAlgoType: microstructure.suspectedAlgoType,
+                    price: trade.price,
+                    quantity: trade.quantity,
+                },
+                detectedAt: trade.timestamp,
+                affectedPriceRange: { min: trade.price, max: trade.price },
+                recommendedAction:
+                    severity === "high"
+                        ? "close_positions"
+                        : severity === "medium"
+                          ? "reduce_size"
+                          : "continue",
+            });
+        }
+
+        // Check for highly fragmented orders (potential order splitting to avoid detection)
+        if (
+            microstructure.fragmentationScore > 0.8 &&
+            trade.tradeComplexity === "highly_fragmented" &&
+            microstructure.executionEfficiency < 0.3
+        ) {
+            this.emitAnomaly({
+                type: "algorithmic_activity",
+                severity: "medium",
+                details: {
+                    algoType: "order_fragmentation",
+                    fragmentationScore: microstructure.fragmentationScore,
+                    executionEfficiency: microstructure.executionEfficiency,
+                    tradeCount: trade.individualTrades?.length || 0,
+                    avgTradeSize: microstructure.avgTradeSize,
+                    tradeSizeVariance: microstructure.tradeSizeVariance,
+                    sizingPattern: microstructure.sizingPattern,
+                    fetchReason: trade.fetchReason,
+                    price: trade.price,
+                    quantity: trade.quantity,
+                },
+                detectedAt: trade.timestamp,
+                affectedPriceRange: { min: trade.price, max: trade.price },
+                recommendedAction: "reduce_size",
+            });
+        }
     }
 
     /**
