@@ -128,7 +128,7 @@ export class Config {
 
     static readonly SIGNAL_MANAGER: SignalManagerConfig = {
         confidenceThreshold: Number(
-            cfg.symbols[cfg.symbol].signalManager?.confidenceThreshold ?? 0.75
+            cfg.symbols[cfg.symbol].signalManager?.confidenceThreshold ?? 0.65
         ),
         signalTimeout: Number(
             cfg.symbols[cfg.symbol].signalManager?.signalTimeout ?? 300000
@@ -297,7 +297,7 @@ export class Config {
         windowMs: this.WINDOW_MS,
         minDurationMs:
             cfg.symbols[cfg.symbol].accumulationDetector?.minDurationMs ??
-            300_000,
+            180_000,
         minRatio: cfg.symbols[cfg.symbol].accumulationDetector?.minRatio ?? 1.2,
         minRecentActivityMs:
             cfg.symbols[cfg.symbol].accumulationDetector?.minRecentActivityMs ??
@@ -306,7 +306,7 @@ export class Config {
             cfg.symbols[cfg.symbol].accumulationDetector?.minAggVolume ?? 5,
         accumulationThreshold:
             cfg.symbols[cfg.symbol].accumulationDetector
-                ?.accumulationThreshold ?? 0.6,
+                ?.accumulationThreshold ?? 0.55,
         pricePrecision: Config.PRICE_PRECISION,
     };
 

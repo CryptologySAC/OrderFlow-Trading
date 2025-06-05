@@ -122,14 +122,14 @@
                 "signalCooldownMs": 300000
             },
             "accumulationDetector": {
-                "minDurationMs": 60000,
+                "minDurationMs": 180000,
                 "zoneSize": 0.1,
                 "minRatio": 1.2,
-                "minRecentActivityMs": 15000,
+                "minRecentActivityMs": 60000,
                 "minAggVolume": 10,
                 "trackSide": true,
                 "pricePrecision": 2,
-                "accumulationThreshold": 0.6
+                "accumulationThreshold": 0.55
             },
             "distributionDetector": {
                 "minDurationMs": 60000,
@@ -152,7 +152,7 @@
                 "healthCheckInterval": 30000
             },
             "signalManager": {
-                "confidenceThreshold": 0.75,
+                "confidenceThreshold": 0.65,
                 "signalTimeout": 300000,
                 "enableMarketHealthCheck": true,
                 "enableAlerts": true

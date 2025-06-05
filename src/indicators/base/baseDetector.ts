@@ -648,11 +648,35 @@ export abstract class BaseDetector extends Detector implements IDetector {
     }
 
     /**
-     * Get detector status (alias for existing getStats)
+     * Get detector status - returns detailed operational information
      */
     public getStatus(): string {
         const stats = this.getStats();
-        return stats.status || "unknown";
+        const isHealthy = this.isDetectorHealthy();
+
+        if (!isHealthy) {
+            return `${this.detectorType} detector: UNHEALTHY`;
+        }
+
+        // Return detailed status for healthy detectors
+        const statusInfo: {
+            trades: number;
+            zones: number;
+            minVol: number;
+            health: string;
+            zoneTicks?: number;
+        } = {
+            trades: stats.tradesInBuffer,
+            zones: Math.min(this.zonePassiveHistory.size, 99),
+            minVol: stats.currentMinVolume,
+            health: "OK",
+        };
+
+        if (this.features.adaptiveZone && stats.adaptiveZoneTicks) {
+            statusInfo.zoneTicks = stats.adaptiveZoneTicks;
+        }
+
+        return `${this.detectorType} detector: ${JSON.stringify(statusInfo)}`;
     }
 
     /**
@@ -670,7 +694,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
             tradesInBuffer: this.trades.length,
             depthLevels: totalDepthSamples, // ← ONLY CHANGE: Use actual zone data instead of empty cache
             currentMinVolume: this.minAggVolume,
-            status: "unknown", //TODO
+            status: this.isDetectorHealthy() ? "healthy" : "unknown",
         };
 
         // Keep all your existing adaptive zone logic unchanged
@@ -683,6 +707,46 @@ export abstract class BaseDetector extends Detector implements IDetector {
         }
 
         return stats;
+    }
+
+    /**
+     * Check if detector is healthy based on data flow and operational state
+     */
+    protected isDetectorHealthy(): boolean {
+        const now = Date.now();
+
+        // Check if we have recent trades (within last 2 minutes)
+        const recentTrades = this.trades.filter(
+            (t) => now - t.timestamp < 120000
+        );
+        if (recentTrades.length === 0) {
+            return false; // No recent data
+        }
+
+        // Check if we have some depth data
+        if (this.zonePassiveHistory.size === 0) {
+            return false; // No market depth data
+        }
+
+        // Check if we have recent depth updates
+        let hasRecentDepth = false;
+        for (const [_, window] of this.zonePassiveHistory) {
+            void _;
+            const recent = window
+                .toArray()
+                .filter((sample) => now - sample.timestamp < 300000);
+            if (recent.length > 0) {
+                hasRecentDepth = true;
+                break;
+            }
+        }
+
+        if (!hasRecentDepth) {
+            return false; // Stale depth data
+        }
+
+        // All checks passed
+        return true;
     }
 
     /**
