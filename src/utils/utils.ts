@@ -373,6 +373,7 @@ export class AutoCalibrator {
 
 /**
  * Manages confirmation/invalidation for pending signals.
+ * @deprecated
  */
 export class PriceConfirmationManager {
     private pendingDetections: PendingDetection[] = [];

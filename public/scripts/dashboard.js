@@ -16,6 +16,8 @@ const PONG_WAIT_MS = 5000;
 const PADDING_TIME = 300000; // 5 minutes
 const FIFTEEN_MINUTES = 15 * 60 * 1000; // 15 minutes
 const TRADE_TIMEOUT_MS = 10000; // 10 seconds
+const GRID_SIZE = 20; // snapping grid for draggable/resizable elements
+const ITEM_MARGIN = 20; // fixed space between dashboard items
 
 // DOM references
 const tradesCanvas = document.getElementById("tradesChart");
@@ -42,6 +44,125 @@ let anomalyFilters = new Set(["critical", "high"]);
 let badgeTimeout = null;
 let latestBadgeElem = null;
 
+function snap(value) {
+    return Math.round(value / GRID_SIZE) * GRID_SIZE;
+}
+
+function rectsOverlap(r1, r2) {
+    return !(
+        r1.right <= r2.left ||
+        r1.left >= r2.right ||
+        r1.bottom <= r2.top ||
+        r1.top >= r2.bottom
+    );
+}
+
+function isOverlapping(target) {
+    const rect = target.getBoundingClientRect();
+    const others = Array.from(
+        document.querySelectorAll(
+            ".chart-container, .anomaly-list-container, .gauge-container"
+        )
+    ).filter((el) => el !== target);
+    return others.some((el) => {
+        const r = el.getBoundingClientRect();
+        return !(
+            rect.right + ITEM_MARGIN <= r.left ||
+            rect.left >= r.right + ITEM_MARGIN ||
+            rect.bottom + ITEM_MARGIN <= r.top ||
+            rect.top >= r.bottom + ITEM_MARGIN
+        );
+    });
+}
+
+function snapToOthers(x, y, width, height, target) {
+    const others = Array.from(
+        document.querySelectorAll(
+            ".chart-container, .anomaly-list-container, .gauge-container"
+        )
+    ).filter((el) => el !== target);
+    for (const el of others) {
+        const r = el.getBoundingClientRect();
+        if (Math.abs(x - (r.right + ITEM_MARGIN)) <= ITEM_MARGIN) {
+            x = r.right + ITEM_MARGIN;
+        }
+        if (Math.abs(x + width + ITEM_MARGIN - r.left) <= ITEM_MARGIN) {
+            x = r.left - width - ITEM_MARGIN;
+        }
+        if (Math.abs(y - (r.bottom + ITEM_MARGIN)) <= ITEM_MARGIN) {
+            y = r.bottom + ITEM_MARGIN;
+        }
+        if (Math.abs(y + height + ITEM_MARGIN - r.top) <= ITEM_MARGIN) {
+            y = r.top - height - ITEM_MARGIN;
+        }
+    }
+    return { x, y };
+}
+
+function adjustLayout(movedEl) {
+    const elements = Array.from(
+        document.querySelectorAll(
+            ".chart-container, .anomaly-list-container, .gauge-container"
+        )
+    );
+
+    const queue = [movedEl];
+    const handled = new Set();
+
+    while (queue.length) {
+        const el = queue.shift();
+        handled.add(el);
+        const rect = el.getBoundingClientRect();
+        for (const other of elements) {
+            if (other === el) continue;
+            const oRect = other.getBoundingClientRect();
+            if (!rectsOverlap(rect, oRect)) continue;
+
+            let x = parseFloat(other.getAttribute("data-x")) || 0;
+            let y = parseFloat(other.getAttribute("data-y")) || 0;
+
+            const moveRight = rect.right + ITEM_MARGIN - oRect.left;
+            const moveLeft = oRect.right - rect.left + ITEM_MARGIN;
+            const moveDown = rect.bottom + ITEM_MARGIN - oRect.top;
+            const moveUp = oRect.bottom - rect.top + ITEM_MARGIN;
+
+            if (Math.abs(moveRight) < Math.abs(moveDown)) {
+                if (oRect.left >= rect.left) x += moveRight;
+                else x -= moveLeft;
+            } else {
+                if (oRect.top >= rect.top) y += moveDown;
+                else y -= moveUp;
+            }
+
+            x = snap(x);
+            y = snap(y);
+            ({ x, y } = snapToOthers(
+                x,
+                y,
+                other.offsetWidth,
+                other.offsetHeight,
+                other
+            ));
+            other.style.transform = `translate(${x}px, ${y}px)`;
+            other.setAttribute("data-x", x);
+            other.setAttribute("data-y", y);
+
+            if (!handled.has(other)) queue.push(other);
+        }
+    }
+}
+
+let layoutAdjustScheduled = false;
+function scheduleLayoutAdjust(target) {
+    if (!layoutAdjustScheduled) {
+        layoutAdjustScheduled = true;
+        requestAnimationFrame(() => {
+            adjustLayout(target);
+            layoutAdjustScheduled = false;
+        });
+    }
+}
+
 function getAnomalyIcon(type) {
     switch (type) {
         case "flash_crash":
@@ -49,9 +170,9 @@ function getAnomalyIcon(type) {
         case "liquidity_void":
             return "💧";
         case "absorption":
-            return "A";
+            return "🔵";
         case "exhaustion":
-            return "E";
+            return "🔴";
         case "whale_activity":
             return "🐋";
         case "momentum_ignition":
@@ -61,11 +182,82 @@ function getAnomalyIcon(type) {
         case "iceberg_order":
             return "🧊";
         case "orderbook_imbalance":
-            return "≠";
+            return "⚖️";
         case "flow_imbalance":
             return "⇄";
         default:
             return "•";
+    }
+}
+
+function getAnomalyLabel(type) {
+    switch (type) {
+        case "flash_crash":
+            return "Flash Crash";
+        case "liquidity_void":
+            return "Liquidity Void";
+        case "absorption":
+            return "Absorption";
+        case "exhaustion":
+            return "Exhaustion";
+        case "whale_activity":
+            return "Whale Activity";
+        case "momentum_ignition":
+            return "Momentum Ignition";
+        case "spoofing":
+            return "Spoofing";
+        case "iceberg_order":
+            return "Iceberg Order";
+        case "orderbook_imbalance":
+            return "Orderbook Imbalance";
+        case "flow_imbalance":
+            return "Flow Imbalance";
+        default:
+            return type
+                .replace(/_/g, " ")
+                .replace(/\b\w/g, (l) => l.toUpperCase());
+    }
+}
+
+function getReadableAction(action) {
+    if (!action) return "Monitor";
+
+    switch (action.toLowerCase()) {
+        case "buy_signal":
+        case "buy":
+            return "Buy";
+        case "sell_signal":
+        case "sell":
+            return "Sell";
+        case "hold_position":
+        case "hold":
+            return "Hold";
+        case "close_position":
+        case "close":
+            return "Close";
+        case "reduce_position":
+        case "reduce":
+            return "Reduce";
+        case "increase_position":
+        case "increase":
+            return "Add";
+        case "wait_for_confirmation":
+        case "wait":
+            return "Wait";
+        case "monitor_closely":
+        case "monitor":
+            return "Monitor";
+        case "avoid_trading":
+        case "avoid":
+            return "Avoid";
+        case "exit_immediately":
+        case "exit":
+            return "Exit";
+        default:
+            // Convert snake_case to Title Case
+            return action
+                .replace(/_/g, " ")
+                .replace(/\b\w/g, (l) => l.toUpperCase());
     }
 }
 function capitalize(str) {
@@ -87,12 +279,11 @@ function renderAnomalyList() {
         .map(
             (a) => `
             <div class="anomaly-row ${a.severity}">
-                <span class="anomaly-type">${getAnomalyIcon(a.type)}</span>
-                <span>${capitalize(a.type)}</span>
-                <span style="margin-left:8px">${a.affectedPriceRange.min.toFixed(2)} - ${a.affectedPriceRange.max.toFixed(2)}</span>
-                <span style="margin-left:8px">${a.severity}</span>
-                <span style="margin-left:8px">${a.recommendedAction}</span>
-                <span style="margin-left:auto">${formatAgo(a.detectedAt || a.time || Date.now())}</span>
+                <span class="anomaly-icon">${getAnomalyIcon(a.type)}</span>
+                <span class="anomaly-label">${getAnomalyLabel(a.type)}</span>
+                <span class="anomaly-price">${a.affectedPriceRange ? `${a.affectedPriceRange.min.toFixed(2)}-${a.affectedPriceRange.max.toFixed(2)}` : `${a.price?.toFixed(2) || "N/A"}`}</span>
+                <span class="anomaly-action">${getReadableAction(a.recommendedAction)}</span>
+                <span class="anomaly-time">${formatAgo(a.detectedAt || a.time || Date.now())}</span>
             </div>
         `
         )
@@ -103,7 +294,7 @@ function showAnomalyBadge(anomaly) {
     if (latestBadgeElem) latestBadgeElem.remove();
     const badge = document.createElement("div");
     badge.className = `anomaly-badge ${anomaly.severity}`;
-    badge.innerHTML = `${getAnomalyIcon(anomaly.type)} ${capitalize(anomaly.type)} @ ${anomaly.price.toFixed(2)}`;
+    badge.innerHTML = `${getAnomalyIcon(anomaly.type)} ${getAnomalyLabel(anomaly.type)} @ ${anomaly.price?.toFixed(2) || "N/A"}`;
     document.body.appendChild(badge);
     latestBadgeElem = badge;
     if (badgeTimeout) clearTimeout(badgeTimeout);
@@ -451,30 +642,39 @@ const tradeWebsocket = new TradeWebSocket({
 
                     orderBookData = message.data;
                     if (window.orderBookChart) {
-                        orderBookChart.data.labels =
-                            orderBookData.priceLevels.map((level) =>
-                                level.price ? level.price.toFixed(2) : "0.00"
-                            );
-                        orderBookChart.data.datasets[1].data =
-                            orderBookData.priceLevels.map(
-                                (level) => level.bid || 0
-                            );
-                        orderBookChart.data.datasets[0].data =
-                            orderBookData.priceLevels.map(
-                                (level) => level.ask || 0
-                            );
-                        orderBookChart.data.datasets[1].backgroundColor =
-                            orderBookData.priceLevels.map((level) =>
-                                level.bid
-                                    ? `rgba(0, 128, 0, ${Math.min(level.bid / 2000, 1)})`
-                                    : "rgba(0, 0, 0, 0)"
-                            );
-                        orderBookChart.data.datasets[0].backgroundColor =
-                            orderBookData.priceLevels.map((level) =>
-                                level.ask
-                                    ? `rgba(255, 0, 0, ${Math.min(level.ask / 2000, 1)})`
-                                    : "rgba(0, 0, 0, 0)"
-                            );
+                        // Update chart data with new structure
+                        const labels = [];
+                        const askData = [];
+                        const bidData = [];
+
+                        orderBookData.priceLevels.forEach((level) => {
+                            const priceStr = level.price
+                                ? level.price.toFixed(2)
+                                : "0.00";
+
+                            // Add ask position
+                            labels.push(`${priceStr}_ask`);
+                            askData.push(level.ask || 0);
+                            bidData.push(null);
+
+                            // Add bid position
+                            labels.push(`${priceStr}_bid`);
+                            askData.push(null);
+                            bidData.push(level.bid || 0);
+                        });
+
+                        orderBookChart.data.labels = labels;
+                        orderBookChart.data.datasets[0].data = askData;
+                        orderBookChart.data.datasets[1].data = bidData;
+
+                        // Update colors based on current theme
+                        const currentTheme = getCurrentTheme();
+                        const actualTheme =
+                            currentTheme === "system"
+                                ? getSystemTheme()
+                                : currentTheme;
+                        updateOrderBookBarColors(actualTheme);
+
                         scheduleOrderBookUpdate();
                     } else {
                         console.warn(
@@ -675,6 +875,17 @@ function initializeDelayGauge(canvas) {
 
     if (typeof RadialGauge === "undefined") return null;
 
+    // Get current theme for initial colors
+    const currentTheme = getCurrentTheme();
+    const actualTheme =
+        currentTheme === "system" ? getSystemTheme() : currentTheme;
+
+    // Theme-aware colors
+    const plateColor = actualTheme === "dark" ? "#2d2d2d" : "#fff";
+    const textColor = actualTheme === "dark" ? "#ffffff" : "#000000";
+    const tickColor = actualTheme === "dark" ? "#e0e0e0" : "#444444";
+    const minorTickColor = actualTheme === "dark" ? "#b0b0b0" : "#666666";
+
     return new RadialGauge({
         renderTo: canvas,
         width: 200,
@@ -693,12 +904,12 @@ function initializeDelayGauge(canvas) {
             { from: 500, to: 1000, color: "rgba(255, 165, 0, 0.3)" },
             { from: 1000, to: 2000, color: "rgba(255, 0, 0, 0.3)" },
         ],
-        colorPlate: "#fff",
-        colorMajorTicks: "#444",
-        colorMinorTicks: "#666",
-        colorTitle: "#000",
-        colorUnits: "#000",
-        colorNumbers: "#444",
+        colorPlate: plateColor,
+        colorMajorTicks: tickColor,
+        colorMinorTicks: minorTickColor,
+        colorTitle: textColor,
+        colorUnits: textColor,
+        colorNumbers: tickColor,
         colorNeedleStart: "rgba(240, 128, 128, 1)",
         colorNeedleEnd: "rgba(255, 160, 122, .9)",
         value: 0,
@@ -738,36 +949,54 @@ function initializeOrderBookChart(ctx) {
         throw new Error("Chart.js is not loaded");
     }
 
+    // Create labels for both bid and ask positions for each price level
+    const labels = [];
+    const askData = [];
+    const bidData = [];
+    const askColors = [];
+    const bidColors = [];
+
+    orderBookData.priceLevels.forEach((level) => {
+        const basePrice = level.price;
+        const priceStr = basePrice.toFixed(2);
+
+        // Add ask position (upper part of price tick)
+        labels.push(`${priceStr}_ask`);
+        askData.push(level.ask);
+        bidData.push(null);
+        askColors.push("rgba(255, 0, 0, 0.5)"); // Placeholder, will be updated by theme
+        bidColors.push("rgba(0, 0, 0, 0)");
+
+        // Add bid position (lower part of price tick)
+        labels.push(`${priceStr}_bid`);
+        askData.push(null);
+        bidData.push(level.bid);
+        askColors.push("rgba(0, 0, 0, 0)");
+        bidColors.push("rgba(0, 128, 0, 0.5)"); // Placeholder, will be updated by theme
+    });
+
     return new Chart(ctx, {
         type: "bar",
         data: {
-            labels: orderBookData.priceLevels.map((level) =>
-                level.price.toFixed(2)
-            ),
+            labels: labels,
             datasets: [
                 {
                     label: "Asks",
-                    data: orderBookData.priceLevels.map((level) => level.ask),
-                    backgroundColor: orderBookData.priceLevels.map((level) =>
-                        level.ask
-                            ? `rgba(255, 0, 0, ${Math.min(level.ask / 2000, 1)})`
-                            : "rgba(0, 0, 0, 0)"
-                    ),
+                    data: askData,
+                    backgroundColor: askColors,
                     borderColor: "rgba(255, 0, 0, 0.5)",
                     borderWidth: 1,
-                    barThickness: 10,
+                    barPercentage: 0.9,
+                    categoryPercentage: 1.0,
                 },
                 {
                     label: "Bids",
-                    data: orderBookData.priceLevels.map((level) => level.bid),
-                    backgroundColor: orderBookData.priceLevels.map((level) =>
-                        level.bid
-                            ? `rgba(0, 128, 0, ${Math.min(level.bid / 2000, 1)})`
-                            : "rgba(0, 0, 0, 0)"
-                    ),
+                    data: bidData,
+                    backgroundColor: bidColors,
                     borderColor: "rgba(0, 128, 0, 0.5)",
                     borderWidth: 1,
-                    barThickness: 10,
+                    barPercentage: 0.9,
+                    categoryPercentage: 1.0,
                 },
             ],
         },
@@ -785,6 +1014,21 @@ function initializeOrderBookChart(ctx) {
                     title: { display: true, text: "Price (USDT)" },
                     offset: true,
                     reverse: true,
+                    ticks: {
+                        callback: function (value, index) {
+                            const label = this.getLabelForValue(index);
+                            if (label && label.includes("_ask")) {
+                                return label.split("_")[0]; // Only show price for ask positions
+                            }
+                            return "";
+                        },
+                    },
+                },
+            },
+            datasets: {
+                bar: {
+                    barPercentage: 0.45,
+                    categoryPercentage: 1.0,
                 },
             },
             plugins: {
@@ -802,9 +1046,30 @@ function initializeOrderBookChart(ctx) {
                 tooltip: {
                     callbacks: {
                         label: function (context) {
-                            const level =
-                                orderBookData.priceLevels[context.dataIndex];
-                            return `Price: $${level.price.toFixed(2)}, Bid: ${level.bid} LTC, Ask: ${level.ask} LTC, Direction: ${orderBookData.direction.type} (${orderBookData.direction.probability}%)`;
+                            const label = context.label;
+                            const isAsk = label.includes("_ask");
+                            const isBid = label.includes("_bid");
+                            const priceStr = label.split("_")[0];
+                            const price = parseFloat(priceStr);
+
+                            // Find the corresponding price level
+                            const level = orderBookData.priceLevels.find(
+                                (l) => Math.abs(l.price - price) < 0.001
+                            );
+
+                            if (!level) return "";
+
+                            if (isAsk && level.ask > 0) {
+                                return `Ask: ${level.ask} LTC at $${price.toFixed(2)}`;
+                            } else if (isBid && level.bid > 0) {
+                                return `Bid: ${level.bid} LTC at $${price.toFixed(2)}`;
+                            }
+                            return "";
+                        },
+                        title: function (context) {
+                            const label = context[0].label;
+                            const priceStr = label.split("_")[0];
+                            return `Price: $${priceStr}`;
                         },
                     },
                 },
@@ -832,10 +1097,647 @@ function setRange(duration) {
         updateYAxisBounds();
         tradesChart.update();
     }
+
+    // Save the new time range setting
+    saveTimeRange();
+}
+
+/**
+ * Sets up column resizing capabilities using interact.js with localStorage persistence.
+ * Elements are no longer draggable or individually resizable - only column width resizing is allowed.
+ */
+function setupColumnResizing() {
+    if (typeof interact === "undefined") {
+        console.error("Interact.js not loaded");
+        return;
+    }
+
+    // Setup column resizing functionality
+    interact(".resize-handle").draggable({
+        axis: "x",
+        listeners: {
+            move(event) {
+                const handle = event.target;
+                const handleId = handle.id;
+                const dashboard = document.querySelector(".dashboard");
+                const dashboardRect = dashboard.getBoundingClientRect();
+
+                if (handleId === "resize1") {
+                    // Resizing between column 1 and column 2
+                    const column1 = document.getElementById("column1");
+                    const column1Rect = column1.getBoundingClientRect();
+
+                    const newWidth = Math.min(
+                        Math.max(column1Rect.width + event.dx, 200),
+                        dashboardRect.width * 0.5
+                    );
+                    const newPercent = (newWidth / dashboardRect.width) * 100;
+
+                    column1.style.flex = `0 0 ${newPercent}%`;
+                } else if (handleId === "resize2") {
+                    // Resizing between column 2 and column 3
+                    const column3 = document.getElementById("column3");
+                    const column3Rect = column3.getBoundingClientRect();
+
+                    const newWidth = Math.min(
+                        Math.max(column3Rect.width - event.dx, 150),
+                        dashboardRect.width * 0.3
+                    );
+                    const newPercent = (newWidth / dashboardRect.width) * 100;
+
+                    column3.style.flex = `0 0 ${newPercent}%`;
+                }
+
+                // Debounced chart resize and save
+                clearTimeout(window.resizeTimeout);
+                window.resizeTimeout = setTimeout(() => {
+                    triggerChartResize();
+                    saveColumnWidths();
+                }, 100);
+            },
+            end(event) {
+                // Save column widths immediately when resize ends
+                saveColumnWidths();
+            },
+        },
+    });
+}
+
+/**
+ * Save current column widths to localStorage
+ */
+function saveColumnWidths() {
+    try {
+        const dashboard = document.querySelector(".dashboard");
+        const dashboardRect = dashboard.getBoundingClientRect();
+
+        const column1 = document.getElementById("column1");
+        const column3 = document.getElementById("column3");
+
+        const column1Rect = column1.getBoundingClientRect();
+        const column3Rect = column3.getBoundingClientRect();
+
+        const column1Percent = (column1Rect.width / dashboardRect.width) * 100;
+        const column3Percent = (column3Rect.width / dashboardRect.width) * 100;
+
+        const columnWidths = {
+            column1: column1Percent,
+            column3: column3Percent,
+            timestamp: Date.now(),
+        };
+
+        localStorage.setItem(
+            "dashboardColumnWidths",
+            JSON.stringify(columnWidths)
+        );
+
+        console.log("Column widths saved:", columnWidths);
+    } catch (error) {
+        console.warn("Failed to save column widths to localStorage:", error);
+    }
+}
+
+/**
+ * Save anomaly filter settings to localStorage
+ */
+function saveAnomalyFilters() {
+    try {
+        const filterSettings = {
+            filters: Array.from(anomalyFilters),
+            timestamp: Date.now(),
+        };
+
+        localStorage.setItem(
+            "dashboardAnomalyFilters",
+            JSON.stringify(filterSettings)
+        );
+        console.log("Anomaly filters saved:", filterSettings);
+    } catch (error) {
+        console.warn("Failed to save anomaly filters to localStorage:", error);
+    }
+}
+
+/**
+ * Restore anomaly filter settings from localStorage
+ */
+function restoreAnomalyFilters() {
+    try {
+        const savedFilters = localStorage.getItem("dashboardAnomalyFilters");
+
+        if (!savedFilters) {
+            console.log("No saved anomaly filters found, using defaults");
+            return;
+        }
+
+        const filterSettings = JSON.parse(savedFilters);
+
+        if (!filterSettings.filters || !Array.isArray(filterSettings.filters)) {
+            console.warn("Invalid saved anomaly filters, using defaults");
+            return;
+        }
+
+        // Update the anomaly filters set
+        anomalyFilters.clear();
+        filterSettings.filters.forEach((filter) => anomalyFilters.add(filter));
+
+        // Update the UI checkboxes
+        const filterBox = document.querySelector(".anomaly-filter");
+        if (filterBox) {
+            filterBox
+                .querySelectorAll("input[type=checkbox]")
+                .forEach((checkbox) => {
+                    checkbox.checked = anomalyFilters.has(checkbox.value);
+                });
+        }
+
+        console.log("Anomaly filters restored:", {
+            filters: filterSettings.filters,
+            savedAt: new Date(filterSettings.timestamp).toLocaleString(),
+        });
+
+        // Re-render the anomaly list with restored filters
+        renderAnomalyList();
+    } catch (error) {
+        console.warn(
+            "Failed to restore anomaly filters from localStorage:",
+            error
+        );
+    }
+}
+
+/**
+ * Save current time range setting to localStorage
+ */
+function saveTimeRange() {
+    try {
+        const rangeSettings = {
+            activeRange: activeRange,
+            timestamp: Date.now(),
+        };
+
+        localStorage.setItem(
+            "dashboardTimeRange",
+            JSON.stringify(rangeSettings)
+        );
+        console.log("Time range saved:", rangeSettings);
+    } catch (error) {
+        console.warn("Failed to save time range to localStorage:", error);
+    }
+}
+
+/**
+ * Restore time range setting from localStorage
+ */
+function restoreTimeRange() {
+    try {
+        const savedRange = localStorage.getItem("dashboardTimeRange");
+
+        if (!savedRange) {
+            console.log(
+                "No saved time range found, using default (90 minutes)"
+            );
+            return;
+        }
+
+        const rangeSettings = JSON.parse(savedRange);
+
+        if (rangeSettings.activeRange === undefined) {
+            console.warn("Invalid saved time range, using default");
+            return;
+        }
+
+        // Update active range and apply to chart
+        activeRange = rangeSettings.activeRange;
+
+        // Update the UI to show the selected range
+        const rangeSelector = document.querySelector(".rangeSelector");
+        if (rangeSelector) {
+            rangeSelector.querySelectorAll("button").forEach((button) => {
+                const buttonRange = button.getAttribute("data-range");
+                const buttonRangeValue =
+                    buttonRange === "all" ? null : parseInt(buttonRange);
+
+                if (buttonRangeValue === activeRange) {
+                    button.classList.add("active");
+                } else {
+                    button.classList.remove("active");
+                }
+            });
+        }
+
+        console.log("Time range restored:", {
+            range:
+                activeRange === null ? "all" : `${activeRange / 60000} minutes`,
+            savedAt: new Date(rangeSettings.timestamp).toLocaleString(),
+        });
+
+        // Apply the range to the chart if it exists
+        if (tradesChart) {
+            setRange(activeRange);
+        }
+    } catch (error) {
+        console.warn("Failed to restore time range from localStorage:", error);
+    }
+}
+
+/**
+ * Restore column widths from localStorage
+ */
+function restoreColumnWidths() {
+    try {
+        const savedWidths = localStorage.getItem("dashboardColumnWidths");
+
+        if (!savedWidths) {
+            console.log("No saved column widths found, using defaults");
+            return;
+        }
+
+        const columnWidths = JSON.parse(savedWidths);
+
+        // Validate saved data
+        if (!columnWidths.column1 || !columnWidths.column3) {
+            console.warn("Invalid saved column widths, using defaults");
+            return;
+        }
+
+        // Apply saved widths with validation
+        const column1 = document.getElementById("column1");
+        const column3 = document.getElementById("column3");
+
+        if (column1 && column3) {
+            // Ensure widths are within valid ranges
+            const column1Width = Math.min(
+                Math.max(columnWidths.column1, 15),
+                50
+            ); // 15-50%
+            const column3Width = Math.min(
+                Math.max(columnWidths.column3, 10),
+                30
+            ); // 10-30%
+
+            column1.style.flex = `0 0 ${column1Width}%`;
+            column3.style.flex = `0 0 ${column3Width}%`;
+
+            console.log("Column widths restored:", {
+                column1: column1Width,
+                column3: column3Width,
+                savedAt: new Date(columnWidths.timestamp).toLocaleString(),
+            });
+
+            // Trigger chart resize after restoration
+            setTimeout(() => {
+                triggerChartResize();
+            }, 100);
+        }
+    } catch (error) {
+        console.warn(
+            "Failed to restore column widths from localStorage:",
+            error
+        );
+    }
+}
+
+/**
+ * Reset column widths to default and clear localStorage
+ */
+function resetColumnWidths() {
+    try {
+        const column1 = document.getElementById("column1");
+        const column3 = document.getElementById("column3");
+
+        if (column1 && column3) {
+            column1.style.flex = "0 0 25%";
+            column3.style.flex = "0 0 15%";
+
+            localStorage.removeItem("dashboardColumnWidths");
+
+            setTimeout(() => {
+                triggerChartResize();
+            }, 100);
+
+            console.log("Column widths reset to defaults");
+        }
+    } catch (error) {
+        console.warn("Failed to reset column widths:", error);
+    }
+}
+
+/**
+ * Reset all dashboard settings to defaults
+ */
+function resetAllSettings() {
+    try {
+        // Reset column widths
+        resetColumnWidths();
+
+        // Reset anomaly filters to default (critical and high)
+        anomalyFilters.clear();
+        anomalyFilters.add("critical");
+        anomalyFilters.add("high");
+        localStorage.removeItem("dashboardAnomalyFilters");
+
+        // Update UI checkboxes
+        const filterBox = document.querySelector(".anomaly-filter");
+        if (filterBox) {
+            filterBox
+                .querySelectorAll("input[type=checkbox]")
+                .forEach((checkbox) => {
+                    checkbox.checked = anomalyFilters.has(checkbox.value);
+                });
+        }
+        renderAnomalyList();
+
+        // Reset time range to default (90 minutes)
+        activeRange = 90 * 60000;
+        localStorage.removeItem("dashboardTimeRange");
+
+        // Update UI range selector
+        const rangeSelector = document.querySelector(".rangeSelector");
+        if (rangeSelector) {
+            rangeSelector.querySelectorAll("button").forEach((button) => {
+                const buttonRange = button.getAttribute("data-range");
+                const buttonRangeValue =
+                    buttonRange === "all" ? null : parseInt(buttonRange);
+
+                if (buttonRangeValue === activeRange) {
+                    button.classList.add("active");
+                } else {
+                    button.classList.remove("active");
+                }
+            });
+        }
+
+        // Reset theme to system default
+        localStorage.removeItem("dashboardTheme");
+        applySystemTheme();
+        updateThemeToggleButton();
+
+        // Apply to chart
+        if (tradesChart) {
+            setRange(activeRange);
+        }
+
+        console.log("All dashboard settings reset to defaults");
+    } catch (error) {
+        console.warn("Failed to reset all settings:", error);
+    }
+}
+
+/**
+ * Theme management functions
+ */
+function getSystemTheme() {
+    return window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
+}
+
+function getCurrentTheme() {
+    const saved = localStorage.getItem("dashboardTheme");
+    if (saved && (saved === "light" || saved === "dark")) {
+        return saved;
+    }
+    return "system";
+}
+
+function applyTheme(theme) {
+    const body = document.body;
+
+    if (theme === "system") {
+        body.removeAttribute("data-theme");
+    } else {
+        body.setAttribute("data-theme", theme);
+    }
+
+    // Update chart colors for dark/light mode
+    updateChartTheme(theme === "system" ? getSystemTheme() : theme);
+}
+
+function applySystemTheme() {
+    applyTheme("system");
+}
+
+function saveTheme(theme) {
+    try {
+        if (theme === "system") {
+            localStorage.removeItem("dashboardTheme");
+        } else {
+            localStorage.setItem("dashboardTheme", theme);
+        }
+        console.log("Theme saved:", theme);
+    } catch (error) {
+        console.warn("Failed to save theme to localStorage:", error);
+    }
+}
+
+function restoreTheme() {
+    try {
+        const savedTheme = getCurrentTheme();
+        applyTheme(savedTheme);
+        updateThemeToggleButton();
+
+        console.log("Theme restored:", savedTheme);
+    } catch (error) {
+        console.warn("Failed to restore theme from localStorage:", error);
+    }
+}
+
+function toggleTheme() {
+    const current = getCurrentTheme();
+    let next;
+
+    switch (current) {
+        case "system":
+            next = "light";
+            break;
+        case "light":
+            next = "dark";
+            break;
+        case "dark":
+            next = "system";
+            break;
+        default:
+            next = "system";
+    }
+
+    applyTheme(next);
+    saveTheme(next);
+    updateThemeToggleButton();
+}
+
+function updateThemeToggleButton() {
+    const button = document.getElementById("themeToggle");
+    if (!button) return;
+
+    const current = getCurrentTheme();
+    const icons = {
+        system: "🔄",
+        light: "☀️",
+        dark: "🌙",
+    };
+
+    const labels = {
+        system: "System",
+        light: "Light",
+        dark: "Dark",
+    };
+
+    button.innerHTML = `${icons[current]} ${labels[current]}`;
+    button.title = `Current theme: ${labels[current]}. Click to cycle through themes.`;
+}
+
+function updateChartTheme(theme) {
+    // Update chart colors based on theme
+    if (tradesChart) {
+        const gridColor =
+            theme === "dark"
+                ? "rgba(255, 255, 255, 0.25)"
+                : "rgba(102, 102, 102, 0.1)";
+        const annotationColor =
+            theme === "dark"
+                ? "rgba(255, 255, 255, 0.6)"
+                : "rgba(102, 102, 102, 0.4)";
+        const tickColor = theme === "dark" ? "#e0e0e0" : "#666666";
+
+        // Update grid colors
+        tradesChart.options.scales.x.grid.color = gridColor;
+        tradesChart.options.scales.y.grid =
+            tradesChart.options.scales.y.grid || {};
+        tradesChart.options.scales.y.grid.color = gridColor;
+
+        // Update tick colors
+        tradesChart.options.scales.x.ticks.color = tickColor;
+        tradesChart.options.scales.y.ticks.color = tickColor;
+
+        // Update annotation colors
+        const annotations = tradesChart.options.plugins.annotation.annotations;
+        Object.keys(annotations).forEach((key) => {
+            if (key.includes("15min") || !isNaN(key)) {
+                annotations[key].borderColor = annotationColor;
+            }
+        });
+
+        tradesChart.update("none");
+    }
+
+    // Update order book chart colors
+    if (orderBookChart) {
+        const gridColor =
+            theme === "dark"
+                ? "rgba(255, 255, 255, 0.25)"
+                : "rgba(102, 102, 102, 0.1)";
+        const tickColor = theme === "dark" ? "#e0e0e0" : "#666666";
+
+        // Update grid colors
+        orderBookChart.options.scales.x.grid =
+            orderBookChart.options.scales.x.grid || {};
+        orderBookChart.options.scales.x.grid.color = gridColor;
+        orderBookChart.options.scales.y.grid =
+            orderBookChart.options.scales.y.grid || {};
+        orderBookChart.options.scales.y.grid.color = gridColor;
+
+        // Update tick colors
+        orderBookChart.options.scales.x.ticks.color = tickColor;
+        orderBookChart.options.scales.y.ticks.color = tickColor;
+
+        // Update order book bar colors with better visibility in dark mode
+        updateOrderBookBarColors(theme);
+
+        orderBookChart.update("none");
+    }
+
+    // Update gauge colors
+    if (delayGauge) {
+        const plateColor = theme === "dark" ? "#2d2d2d" : "#fff";
+        const textColor = theme === "dark" ? "#ffffff" : "#000000";
+        const tickColor = theme === "dark" ? "#e0e0e0" : "#444444";
+        const minorTickColor = theme === "dark" ? "#b0b0b0" : "#666666";
+
+        delayGauge.update({
+            colorPlate: plateColor,
+            colorTitle: textColor,
+            colorUnits: textColor,
+            colorNumbers: tickColor,
+            colorMajorTicks: tickColor,
+            colorMinorTicks: minorTickColor,
+        });
+
+        // Force redraw to apply color changes
+        delayGauge.draw();
+    }
+}
+
+function updateOrderBookBarColors(theme) {
+    if (!orderBookChart || !orderBookData) return;
+
+    const datasets = orderBookChart.data.datasets;
+    if (!datasets || datasets.length < 2) return;
+
+    // Enhanced colors for better visibility in dark mode
+    const askColors = [];
+    const bidColors = [];
+
+    orderBookData.priceLevels.forEach((level) => {
+        // Ask colors (red) - enhanced opacity for dark mode
+        const askOpacity =
+            theme === "dark"
+                ? Math.min(level.ask / 1500, 0.9) // Higher max opacity in dark mode
+                : Math.min(level.ask / 2000, 1);
+
+        const askColor = level.ask
+            ? theme === "dark"
+                ? `rgba(255, 80, 80, ${Math.max(askOpacity, 0.3)})` // Brighter red with min opacity
+                : `rgba(255, 0, 0, ${askOpacity})`
+            : "rgba(0, 0, 0, 0)";
+
+        // Bid colors (green) - enhanced opacity for dark mode
+        const bidOpacity =
+            theme === "dark"
+                ? Math.min(level.bid / 1500, 0.9) // Higher max opacity in dark mode
+                : Math.min(level.bid / 2000, 1);
+
+        const bidColor = level.bid
+            ? theme === "dark"
+                ? `rgba(80, 255, 80, ${Math.max(bidOpacity, 0.3)})` // Brighter green with min opacity
+                : `rgba(0, 128, 0, ${bidOpacity})`
+            : "rgba(0, 0, 0, 0)";
+
+        // Add ask position
+        askColors.push(askColor);
+        bidColors.push("rgba(0, 0, 0, 0)");
+
+        // Add bid position
+        askColors.push("rgba(0, 0, 0, 0)");
+        bidColors.push(bidColor);
+    });
+
+    // Update the chart datasets
+    datasets[0].backgroundColor = askColors; // Asks
+    datasets[1].backgroundColor = bidColors; // Bids
+
+    // Update border colors for better definition in dark mode
+    const borderOpacity = theme === "dark" ? 0.8 : 0.5;
+    datasets[0].borderColor =
+        theme === "dark"
+            ? `rgba(255, 120, 120, ${borderOpacity})`
+            : `rgba(255, 0, 0, ${borderOpacity})`;
+    datasets[1].borderColor =
+        theme === "dark"
+            ? `rgba(120, 255, 120, ${borderOpacity})`
+            : `rgba(0, 128, 0, ${borderOpacity})`;
+}
+
+function triggerChartResize() {
+    // Trigger chart resize after column resize
+    if (tradesChart) tradesChart.resize();
+    if (orderBookChart) orderBookChart.resize();
+    if (delayGauge) delayGauge.update();
 }
 
 /**
  * Sets up Interact.js for draggable and resizable chart containers.
+ * DEPRECATED: This function is no longer used for the new column-based layout.
  */
 function setupInteract() {
     if (typeof interact === "undefined") {
@@ -853,17 +1755,60 @@ function setupInteract() {
                 }),
             ],
             listeners: {
+                start(event) {
+                    const t = event.target;
+                    t.setAttribute(
+                        "data-prev-x",
+                        t.getAttribute("data-x") || 0
+                    );
+                    t.setAttribute(
+                        "data-prev-y",
+                        t.getAttribute("data-y") || 0
+                    );
+                },
                 move(event) {
                     const target = event.target;
-                    const x =
+                    let x =
                         (parseFloat(target.getAttribute("data-x")) || 0) +
                         event.dx;
-                    const y =
+                    let y =
                         (parseFloat(target.getAttribute("data-y")) || 0) +
                         event.dy;
+                    x = snap(x);
+                    y = snap(y);
+                    ({ x, y } = snapToOthers(
+                        x,
+                        y,
+                        target.offsetWidth,
+                        target.offsetHeight,
+                        target
+                    ));
                     target.style.transform = `translate(${x}px, ${y}px)`;
                     target.setAttribute("data-x", x);
                     target.setAttribute("data-y", y);
+                    scheduleLayoutAdjust(target);
+                },
+                end(event) {
+                    const target = event.target;
+                    if (isOverlapping(target)) {
+                        const px =
+                            parseFloat(target.getAttribute("data-prev-x")) || 0;
+                        const py =
+                            parseFloat(target.getAttribute("data-prev-y")) || 0;
+                        target.style.transform = `translate(${px}px, ${py}px)`;
+                        target.setAttribute("data-x", px);
+                        target.setAttribute("data-y", py);
+                    } else {
+                        target.setAttribute(
+                            "data-prev-x",
+                            target.getAttribute("data-x")
+                        );
+                        target.setAttribute(
+                            "data-prev-y",
+                            target.getAttribute("data-y")
+                        );
+                    }
+                    adjustLayout(target);
                 },
             },
         })
@@ -871,21 +1816,93 @@ function setupInteract() {
             edges: { left: true, right: true, bottom: true, top: true },
             modifiers: [
                 interact.modifiers.restrictSize({
-                    min: { width: 600, height: 600 },
+                    min: { width: 200, height: 200 },
                 }),
             ],
             listeners: {
+                start(event) {
+                    const t = event.target;
+                    t.setAttribute(
+                        "data-prev-w",
+                        parseFloat(t.style.width) || t.offsetWidth
+                    );
+                    t.setAttribute(
+                        "data-prev-h",
+                        parseFloat(t.style.height) || t.offsetHeight
+                    );
+                    t.setAttribute(
+                        "data-prev-x",
+                        t.getAttribute("data-x") || 0
+                    );
+                    t.setAttribute(
+                        "data-prev-y",
+                        t.getAttribute("data-y") || 0
+                    );
+                },
                 move(event) {
                     const target = event.target;
-                    target.style.width = `${event.rect.width}px`;
-                    target.style.height = `${event.rect.height}px`;
+                    let x =
+                        (parseFloat(target.getAttribute("data-x")) || 0) +
+                        event.deltaRect.left;
+                    let y =
+                        (parseFloat(target.getAttribute("data-y")) || 0) +
+                        event.deltaRect.top;
+                    let width = snap(event.rect.width);
+                    let height = snap(event.rect.height);
+                    x = snap(x);
+                    y = snap(y);
+                    ({ x, y } = snapToOthers(x, y, width, height, target));
+                    target.style.width = `${width}px`;
+                    target.style.height = `${height}px`;
+                    target.style.transform = `translate(${x}px, ${y}px)`;
+                    target.setAttribute("data-x", x);
+                    target.setAttribute("data-y", y);
                     const canvas = target.querySelector("canvas");
                     if (canvas) {
-                        canvas.width = event.rect.width;
-                        canvas.height = event.rect.height;
+                        canvas.width = width;
+                        canvas.height = height;
                         const chart = Chart.getChart(canvas.id);
                         if (chart) chart.resize();
                     }
+                    scheduleLayoutAdjust(target);
+                },
+                end(event) {
+                    const target = event.target;
+                    if (isOverlapping(target)) {
+                        const px =
+                            parseFloat(target.getAttribute("data-prev-x")) || 0;
+                        const py =
+                            parseFloat(target.getAttribute("data-prev-y")) || 0;
+                        const pw = parseFloat(
+                            target.getAttribute("data-prev-w")
+                        );
+                        const ph = parseFloat(
+                            target.getAttribute("data-prev-h")
+                        );
+                        target.style.width = `${pw}px`;
+                        target.style.height = `${ph}px`;
+                        target.style.transform = `translate(${px}px, ${py}px)`;
+                        target.setAttribute("data-x", px);
+                        target.setAttribute("data-y", py);
+                    } else {
+                        target.setAttribute(
+                            "data-prev-x",
+                            target.getAttribute("data-x")
+                        );
+                        target.setAttribute(
+                            "data-prev-y",
+                            target.getAttribute("data-y")
+                        );
+                        target.setAttribute(
+                            "data-prev-w",
+                            parseFloat(target.style.width)
+                        );
+                        target.setAttribute(
+                            "data-prev-h",
+                            parseFloat(target.style.height)
+                        );
+                    }
+                    adjustLayout(target);
                 },
             },
         });
@@ -900,17 +1917,60 @@ function setupInteract() {
                 }),
             ],
             listeners: {
+                start(event) {
+                    const t = event.target;
+                    t.setAttribute(
+                        "data-prev-x",
+                        t.getAttribute("data-x") || 0
+                    );
+                    t.setAttribute(
+                        "data-prev-y",
+                        t.getAttribute("data-y") || 0
+                    );
+                },
                 move(event) {
                     const target = event.target;
-                    const x =
+                    let x =
                         (parseFloat(target.getAttribute("data-x")) || 0) +
                         event.dx;
-                    const y =
+                    let y =
                         (parseFloat(target.getAttribute("data-y")) || 0) +
                         event.dy;
+                    x = snap(x);
+                    y = snap(y);
+                    ({ x, y } = snapToOthers(
+                        x,
+                        y,
+                        target.offsetWidth,
+                        target.offsetHeight,
+                        target
+                    ));
                     target.style.transform = `translate(${x}px, ${y}px)`;
                     target.setAttribute("data-x", x);
                     target.setAttribute("data-y", y);
+                    scheduleLayoutAdjust(target);
+                },
+                end(event) {
+                    const target = event.target;
+                    if (isOverlapping(target)) {
+                        const px =
+                            parseFloat(target.getAttribute("data-prev-x")) || 0;
+                        const py =
+                            parseFloat(target.getAttribute("data-prev-y")) || 0;
+                        target.style.transform = `translate(${px}px, ${py}px)`;
+                        target.setAttribute("data-x", px);
+                        target.setAttribute("data-y", py);
+                    } else {
+                        target.setAttribute(
+                            "data-prev-x",
+                            target.getAttribute("data-x")
+                        );
+                        target.setAttribute(
+                            "data-prev-y",
+                            target.getAttribute("data-y")
+                        );
+                    }
+                    adjustLayout(target);
                 },
             },
         })
@@ -918,52 +1978,263 @@ function setupInteract() {
             edges: { left: true, right: true, bottom: true, top: true },
             modifiers: [
                 interact.modifiers.restrictSize({
-                    min: { width: 600, height: 600 },
+                    min: { width: 200, height: 200 },
                 }),
             ],
             listeners: {
+                start(event) {
+                    const t = event.target;
+                    t.setAttribute(
+                        "data-prev-w",
+                        parseFloat(t.style.width) || t.offsetWidth
+                    );
+                    t.setAttribute(
+                        "data-prev-h",
+                        parseFloat(t.style.height) || t.offsetHeight
+                    );
+                    t.setAttribute(
+                        "data-prev-x",
+                        t.getAttribute("data-x") || 0
+                    );
+                    t.setAttribute(
+                        "data-prev-y",
+                        t.getAttribute("data-y") || 0
+                    );
+                },
                 move(event) {
                     const target = event.target;
-                    target.style.width = `${event.rect.width}px`;
-                    target.style.height = `${event.rect.height}px`;
+                    let x =
+                        (parseFloat(target.getAttribute("data-x")) || 0) +
+                        event.deltaRect.left;
+                    let y =
+                        (parseFloat(target.getAttribute("data-y")) || 0) +
+                        event.deltaRect.top;
+                    let width = snap(event.rect.width);
+                    let height = snap(event.rect.height);
+                    x = snap(x);
+                    y = snap(y);
+                    ({ x, y } = snapToOthers(x, y, width, height, target));
+                    target.style.width = `${width}px`;
+                    target.style.height = `${height}px`;
+                    target.style.transform = `translate(${x}px, ${y}px)`;
+                    target.setAttribute("data-x", x);
+                    target.setAttribute("data-y", y);
                     const canvas = target.querySelector("canvas");
                     if (canvas) {
-                        canvas.width = event.rect.width;
-                        canvas.height = event.rect.height;
+                        canvas.width = width;
+                        canvas.height = height;
                         const chart = Chart.getChart(canvas.id);
                         if (chart) chart.resize();
                     }
+                    scheduleLayoutAdjust(target);
+                },
+                end(event) {
+                    const target = event.target;
+                    if (isOverlapping(target)) {
+                        const px =
+                            parseFloat(target.getAttribute("data-prev-x")) || 0;
+                        const py =
+                            parseFloat(target.getAttribute("data-prev-y")) || 0;
+                        const pw = parseFloat(
+                            target.getAttribute("data-prev-w")
+                        );
+                        const ph = parseFloat(
+                            target.getAttribute("data-prev-h")
+                        );
+                        target.style.width = `${pw}px`;
+                        target.style.height = `${ph}px`;
+                        target.style.transform = `translate(${px}px, ${py}px)`;
+                        target.setAttribute("data-x", px);
+                        target.setAttribute("data-y", py);
+                    } else {
+                        target.setAttribute(
+                            "data-prev-x",
+                            target.getAttribute("data-x")
+                        );
+                        target.setAttribute(
+                            "data-prev-y",
+                            target.getAttribute("data-y")
+                        );
+                        target.setAttribute(
+                            "data-prev-w",
+                            parseFloat(target.style.width)
+                        );
+                        target.setAttribute(
+                            "data-prev-h",
+                            parseFloat(target.style.height)
+                        );
+                    }
+                    adjustLayout(target);
                 },
             },
         });
 
-    interact(".gauge-container").draggable({
-        inertia: true,
-        modifiers: [
-            interact.modifiers.restrictRect({
-                restriction: ".dashboard",
-                endOnly: true,
-            }),
-        ],
-        listeners: {
-            move: function (event) {
-                const target = event.target;
-                const x =
-                    (parseFloat(target.getAttribute("data-x")) || 0) + event.dx;
-                const y =
-                    (parseFloat(target.getAttribute("data-y")) || 0) + event.dy;
-                target.style.transform = `translate(${x}px, ${y}px)`;
-                target.setAttribute("data-x", x);
-                target.setAttribute("data-y", y);
+    interact(".gauge-container")
+        .draggable({
+            inertia: true,
+            modifiers: [
+                interact.modifiers.restrictRect({
+                    restriction: ".dashboard",
+                    endOnly: true,
+                }),
+            ],
+            listeners: {
+                start(event) {
+                    const t = event.target;
+                    t.setAttribute(
+                        "data-prev-x",
+                        t.getAttribute("data-x") || 0
+                    );
+                    t.setAttribute(
+                        "data-prev-y",
+                        t.getAttribute("data-y") || 0
+                    );
+                },
+                move(event) {
+                    const target = event.target;
+                    let x =
+                        (parseFloat(target.getAttribute("data-x")) || 0) +
+                        event.dx;
+                    let y =
+                        (parseFloat(target.getAttribute("data-y")) || 0) +
+                        event.dy;
+                    x = snap(x);
+                    y = snap(y);
+                    ({ x, y } = snapToOthers(
+                        x,
+                        y,
+                        target.offsetWidth,
+                        target.offsetHeight,
+                        target
+                    ));
+                    target.style.transform = `translate(${x}px, ${y}px)`;
+                    target.setAttribute("data-x", x);
+                    target.setAttribute("data-y", y);
+                    scheduleLayoutAdjust(target);
+                },
+                end(event) {
+                    const target = event.target;
+                    if (isOverlapping(target)) {
+                        const px =
+                            parseFloat(target.getAttribute("data-prev-x")) || 0;
+                        const py =
+                            parseFloat(target.getAttribute("data-prev-y")) || 0;
+                        target.style.transform = `translate(${px}px, ${py}px)`;
+                        target.setAttribute("data-x", px);
+                        target.setAttribute("data-y", py);
+                    } else {
+                        target.setAttribute(
+                            "data-prev-x",
+                            target.getAttribute("data-x")
+                        );
+                        target.setAttribute(
+                            "data-prev-y",
+                            target.getAttribute("data-y")
+                        );
+                    }
+                    adjustLayout(target);
+                },
             },
-        },
-    });
+        })
+        .resizable({
+            edges: { left: true, right: true, bottom: true, top: true },
+            modifiers: [
+                interact.modifiers.restrictSize({
+                    min: { width: 200, height: 200 },
+                }),
+            ],
+            listeners: {
+                start(event) {
+                    const t = event.target;
+                    t.setAttribute(
+                        "data-prev-w",
+                        parseFloat(t.style.width) || t.offsetWidth
+                    );
+                    t.setAttribute(
+                        "data-prev-h",
+                        parseFloat(t.style.height) || t.offsetHeight
+                    );
+                    t.setAttribute(
+                        "data-prev-x",
+                        t.getAttribute("data-x") || 0
+                    );
+                    t.setAttribute(
+                        "data-prev-y",
+                        t.getAttribute("data-y") || 0
+                    );
+                },
+                move(event) {
+                    const target = event.target;
+                    let x =
+                        (parseFloat(target.getAttribute("data-x")) || 0) +
+                        event.deltaRect.left;
+                    let y =
+                        (parseFloat(target.getAttribute("data-y")) || 0) +
+                        event.deltaRect.top;
+                    let width = snap(event.rect.width);
+                    let height = snap(event.rect.height);
+                    x = snap(x);
+                    y = snap(y);
+                    ({ x, y } = snapToOthers(x, y, width, height, target));
+                    target.style.width = `${width}px`;
+                    target.style.height = `${height}px`;
+                    target.style.transform = `translate(${x}px, ${y}px)`;
+                    target.setAttribute("data-x", x);
+                    target.setAttribute("data-y", y);
+                    scheduleLayoutAdjust(target);
+                },
+                end(event) {
+                    const target = event.target;
+                    if (isOverlapping(target)) {
+                        const px =
+                            parseFloat(target.getAttribute("data-prev-x")) || 0;
+                        const py =
+                            parseFloat(target.getAttribute("data-prev-y")) || 0;
+                        const pw = parseFloat(
+                            target.getAttribute("data-prev-w")
+                        );
+                        const ph = parseFloat(
+                            target.getAttribute("data-prev-h")
+                        );
+                        target.style.width = `${pw}px`;
+                        target.style.height = `${ph}px`;
+                        target.style.transform = `translate(${px}px, ${py}px)`;
+                        target.setAttribute("data-x", px);
+                        target.setAttribute("data-y", py);
+                    } else {
+                        target.setAttribute(
+                            "data-prev-x",
+                            target.getAttribute("data-x")
+                        );
+                        target.setAttribute(
+                            "data-prev-y",
+                            target.getAttribute("data-y")
+                        );
+                        target.setAttribute(
+                            "data-prev-w",
+                            parseFloat(target.style.width)
+                        );
+                        target.setAttribute(
+                            "data-prev-h",
+                            parseFloat(target.style.height)
+                        );
+                    }
+                    adjustLayout(target);
+                },
+            },
+        });
 }
 
 /**
  * Initializes the application on DOM content loaded.
  */
 function initialize() {
+    // Restore ALL saved settings FIRST, before any UI setup or rendering
+    restoreTheme();
+    restoreColumnWidths();
+    restoreAnomalyFilters();
+    restoreTimeRange();
+
     // Validate DOM elements
     if (!tradesCanvas) {
         console.error("Trades chart canvas not found");
@@ -996,19 +2267,58 @@ function initialize() {
     orderBookChart = initializeOrderBookChart(orderBookCtx);
     delayGauge = initializeDelayGauge(delayGaugeCanvas);
 
-    // Setup interact.js
-    setupInteract();
+    // Setup interact.js for column resizing (this includes restoreColumnWidths)
+    setupColumnResizing();
 
     // Setup range selector
     if (rangeSelector) {
         rangeSelector.addEventListener("click", (e) => {
             if (e.target.tagName === "BUTTON") {
                 const range = e.target.getAttribute("data-range");
+
+                // Update UI active state
+                rangeSelector
+                    .querySelectorAll("button")
+                    .forEach((btn) => btn.classList.remove("active"));
+                e.target.classList.add("active");
+
                 setRange(range === "all" ? null : parseInt(range));
             }
         });
     } else {
         console.warn("Range selector element not found");
+    }
+
+    // Setup reset layout button
+    const resetLayoutBtn = document.getElementById("resetLayout");
+    if (resetLayoutBtn) {
+        resetLayoutBtn.addEventListener("click", () => {
+            if (
+                confirm(
+                    "Reset all dashboard settings to default? This will clear your saved layout, filter, and time range preferences."
+                )
+            ) {
+                resetAllSettings();
+            }
+        });
+    }
+
+    // Setup theme toggle button
+    const themeToggleBtn = document.getElementById("themeToggle");
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener("click", toggleTheme);
+        updateThemeToggleButton();
+    }
+
+    // Listen for system theme changes
+    if (window.matchMedia) {
+        const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+        mediaQuery.addEventListener("change", () => {
+            const currentTheme = getCurrentTheme();
+            if (currentTheme === "system") {
+                updateChartTheme(getSystemTheme());
+            }
+        });
     }
 }
 
@@ -1052,6 +2362,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (box.checked) anomalyFilters.add(box.value);
                 else anomalyFilters.delete(box.value);
                 renderAnomalyList();
+                // Save the updated filter settings
+                saveAnomalyFilters();
             });
         });
     }

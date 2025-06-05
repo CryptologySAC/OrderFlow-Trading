@@ -3,7 +3,7 @@
    --------------------------------------------------------------------------
    • Persists: coordinator_queue, coordinator_active, signal_active_anomalies,
                signal_history.
-   • Reuses the project’s Better-SQLite3 DB (“trades.db” by default).
+   • Reuses the project’s Better-SQLite3 DB (“./storage/trades.db” by default).
    • Strict typing: no `any`; casts are explicit and safe.
    -------------------------------------------------------------------------- */
 

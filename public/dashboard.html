@@ -8,58 +8,86 @@
     </head>
     <body>
         <main class="dashboard">
-            <section class="chart-container" id="orderBookContainer">
-                <div class="chartAreaWrapper50">
-                    <canvas id="orderBookChart"></canvas>
+            <!-- Column 1: Order Book -->
+            <section class="column" id="column1">
+                <div class="chart-container" id="orderBookContainer">
+                    <div class="chartAreaWrapper50">
+                        <canvas id="orderBookChart"></canvas>
+                    </div>
                 </div>
+                <div class="resize-handle" id="resize1"></div>
             </section>
 
-            <section class="chart-container" id="tradesContainer">
-                <div class="rangeSelector">
-                    <button data-range="60000">1m</button>
-                    <button data-range="900000">15m</button>
-                    <button data-range="2700000">45m</button>
-                    <button data-range="5400000">90m</button>
-                    <button data-range="all">All</button>
+            <!-- Column 2: Trading Chart -->
+            <section class="column" id="column2">
+                <div class="chart-container" id="tradesContainer">
+                    <div class="rangeSelector">
+                        <button data-range="60000">1m</button>
+                        <button data-range="900000">15m</button>
+                        <button data-range="2700000">45m</button>
+                        <button data-range="5400000">90m</button>
+                        <button data-range="all">All</button>
+                        <button
+                            id="themeToggle"
+                            class="theme-toggle-btn"
+                            title="Toggle theme"
+                        >
+                            🔄 System
+                        </button>
+                        <button
+                            id="resetLayout"
+                            class="reset-layout-btn"
+                            title="Reset all dashboard settings to default"
+                        >
+                            Reset All
+                        </button>
+                    </div>
+                    <div class="chartAreaWrapper">
+                        <canvas id="tradesChart"></canvas>
+                    </div>
                 </div>
-                <div class="chartAreaWrapper">
-                    <canvas id="tradesChart"></canvas>
-                </div>
+                <div class="resize-handle" id="resize2"></div>
             </section>
-            <section class="gauge-container" id="delayGaugeContainer">
-                <canvas id="delayGauge"></canvas>
-            </section>
-            <!-- Anomaly List (add below the Trade Delay Gauge section) -->
-            <section class="anomaly-list-container" id="anomalyListContainer">
-                <div class="anomaly-list-header">
-                    <span>Anomalies</span>
-                    <span class="anomaly-filter">
-                        <label
-                            ><input
-                                type="checkbox"
-                                value="critical"
-                                checked
-                            />Critical</label
-                        >
-                        <label
-                            ><input
-                                type="checkbox"
-                                value="high"
-                                checked
-                            />High</label
-                        >
-                        <label
-                            ><input
-                                type="checkbox"
-                                value="medium"
-                            />Medium</label
-                        >
-                        <label
-                            ><input type="checkbox" value="info" />Info</label
-                        >
-                    </span>
+
+            <!-- Column 3: Anomalies and Gauge -->
+            <section class="column" id="column3">
+                <div class="gauge-container" id="delayGaugeContainer">
+                    <canvas id="delayGauge"></canvas>
                 </div>
-                <div class="anomaly-list" id="anomalyList"></div>
+                <div class="anomaly-list-container" id="anomalyListContainer">
+                    <div class="anomaly-list-header">
+                        <span>Anomalies</span>
+                        <span class="anomaly-filter">
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    value="critical"
+                                    checked
+                                />Critical</label
+                            >
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    value="high"
+                                    checked
+                                />High</label
+                            >
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    value="medium"
+                                />Medium</label
+                            >
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    value="info"
+                                />Info</label
+                            >
+                        </span>
+                    </div>
+                    <div class="anomaly-list" id="anomalyList"></div>
+                </div>
             </section>
         </main>
         <script

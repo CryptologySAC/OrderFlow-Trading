@@ -141,11 +141,10 @@ export class OrderBookState implements IOrderBookState {
             return;
         }
 
-        // Validate update sequence
+        // Validate update sequence - ignore outdated updates
         if (update.u && this.lastUpdateId && update.u <= this.lastUpdateId) {
-            throw new Error(
-                `Out of sequence update: ${update.u} <= ${this.lastUpdateId}`
-            );
+            // Skip duplicate/out-of-date update
+            return;
         }
         this.lastUpdateId = update.u ?? this.lastUpdateId;
 
@@ -155,11 +154,12 @@ export class OrderBookState implements IOrderBookState {
         // Track if we need to recalculate best bid/ask
         let needsBestRecalc = false;
 
-        // Process bids
-        this.processBids(bids, needsBestRecalc);
+        // Process bids and track if best bid/ask needs recalculation
+        needsBestRecalc = this.processBids(bids, needsBestRecalc);
 
-        // Process asks
-        this.processAsks(asks, needsBestRecalc);
+        // Process asks and accumulate recalculation flag
+        needsBestRecalc =
+            this.processAsks(asks, needsBestRecalc) || needsBestRecalc;
 
         // Recalculate best bid/ask if needed
         if (needsBestRecalc) {
@@ -362,9 +362,8 @@ export class OrderBookState implements IOrderBookState {
                     this.lastUpdateId &&
                     update.u <= this.lastUpdateId
                 ) {
-                    throw new Error(
-                        `Out of sequence update: ${update.u} <= ${this.lastUpdateId}`
-                    );
+                    // Skip duplicate/out-of-date update
+                    continue;
                 }
                 this.lastUpdateId = update.u ?? this.lastUpdateId;
 
@@ -374,11 +373,12 @@ export class OrderBookState implements IOrderBookState {
                 // Track if we need to recalculate best bid/ask
                 let needsBestRecalc = false;
 
-                // Process bids
-                this.processBids(bids, needsBestRecalc);
+                // Process bids and track recalculation flag
+                needsBestRecalc = this.processBids(bids, needsBestRecalc);
 
-                // Process asks
-                this.processAsks(asks, needsBestRecalc);
+                // Process asks and accumulate
+                needsBestRecalc =
+                    this.processAsks(asks, needsBestRecalc) || needsBestRecalc;
 
                 // Recalculate best bid/ask if needed
                 if (needsBestRecalc) {
@@ -532,11 +532,12 @@ export class OrderBookState implements IOrderBookState {
 
             this.lastUpdateId = snapshot.lastUpdateId ?? this.lastUpdateId;
 
-            // Process bids
-            this.processBids(bids, needsBestRecalc);
+            // Process bids and track recalculation
+            needsBestRecalc = this.processBids(bids, needsBestRecalc);
 
-            // Process asks
-            this.processAsks(asks, needsBestRecalc);
+            // Process asks and accumulate
+            needsBestRecalc =
+                this.processAsks(asks, needsBestRecalc) || needsBestRecalc;
 
             // Recalculate best bid/ask if needed
             if (needsBestRecalc) {

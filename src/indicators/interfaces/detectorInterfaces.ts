@@ -38,7 +38,6 @@ export interface Detected {
 export interface DetectorStats {
     tradesInBuffer: number;
     depthLevels: number;
-    pendingConfirmations: number;
     currentMinVolume: number;
     adaptiveZoneTicks?: number;
     rollingATR?: number;
@@ -114,7 +113,6 @@ export interface DetectorFeatures {
     adaptiveZone?: boolean;
     passiveHistory?: boolean;
     multiZone?: boolean;
-    priceResponse?: boolean;
     sideOverride?: boolean;
     autoCalibrate?: boolean;
     spreadAdjustment?: boolean;

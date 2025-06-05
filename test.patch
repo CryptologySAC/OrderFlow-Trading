@@ -1,0 +1,135 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/src/utils/binance.ts b/src/utils/binance.ts
+index 3dd7c71996f03a65cb427cf7266ff7ebd403427a..8ba3d9b801a490c69d3e1c0d8fa7cbdfb70faa40 100644
+--- a/src/utils/binance.ts
++++ b/src/utils/binance.ts
+@@ -1,43 +1,41 @@
+ import {
+     Spot,
+     SPOT_WS_STREAMS_PROD_URL,
+     SPOT_WS_API_PROD_URL,
+     SpotWebsocketStreams,
+     SpotWebsocketAPI,
+ } from "@binance/spot";
+ import {
+     ConfigurationWebsocketStreams,
+     ConfigurationWebsocketAPI,
+     WebsocketApiRateLimit,
+     WebsocketApiResponse,
+     Logger,
+     LogLevel,
+ } from "@binance/common";
+-import dotenv from "dotenv";
+-
+-dotenv.config();
++import { Config } from "../core/config.js";
+ 
+ // --- Error Types ---
+ export class BinanceApiError extends Error {
+     constructor(
+         public context: string,
+         public originalError: unknown
+     ) {
+         super(
+             `[${context}] ${originalError instanceof Error ? originalError.message : String(originalError)}`
+         );
+         this.name = "BinanceApiError";
+     }
+ }
+ 
+ export class BinanceRateLimitError extends BinanceApiError {
+     constructor(context: string, rateLimitType: string) {
+         super(context, `Rate limit exceeded for ${rateLimitType}`);
+         this.name = "BinanceRateLimitError";
+     }
+ }
+ 
+ export class BinanceConfigurationError extends Error {
+     constructor(message: string) {
+         super(message);
+         this.name = "BinanceConfigurationError";
+diff --git a/src/utils/binance.ts b/src/utils/binance.ts
+index 3dd7c71996f03a65cb427cf7266ff7ebd403427a..8ba3d9b801a490c69d3e1c0d8fa7cbdfb70faa40 100644
+--- a/src/utils/binance.ts
++++ b/src/utils/binance.ts
+@@ -96,71 +94,74 @@ export interface IBinanceDataFeed {
+     getDepthSnapshot(
+         symbol: string,
+         limit?: number
+     ): Promise<SpotWebsocketAPI.DepthResponseResult>;
+     disconnect(): Promise<void>;
+ }
+ 
+ export class BinanceDataFeed implements IBinanceDataFeed {
+     private readonly streamClient: Spot;
+     private readonly apiClient: Spot;
+     private readonly logger: Logger;
+     private apiConnection?: SpotWebsocketAPI.WebsocketAPIConnection;
+     private streamConnection?: SpotWebsocketStreams.WebsocketStreamsConnection;
+     private cache = new TimedCache<unknown>();
+     private readonly defaultCacheTtlMs = 5000; // 5s default cache for all endpoints
+ 
+     private readonly configurationWebsocketStreams: ConfigurationWebsocketStreams =
+         {
+             wsURL: SPOT_WS_STREAMS_PROD_URL,
+             compression: true,
+             mode: "pool",
+             poolSize: 2,
+         };
+ 
+     private readonly configurationWebsocketAPI: ConfigurationWebsocketAPI = {
+-        apiKey: process.env.API_KEY ?? "",
+-        apiSecret: process.env.API_SECRET ?? "",
++        apiKey: Config.API_KEY,
++        apiSecret: Config.API_SECRET,
+         wsURL: SPOT_WS_API_PROD_URL,
+     };
+ 
+     constructor() {
+         this.validateConfiguration();
+ 
+         this.logger = Logger.getInstance();
+         this.logger.setMinLogLevel(LogLevel.WARN);
+ 
+         this.streamClient = new Spot({
+             configurationWebsocketStreams: this.configurationWebsocketStreams,
+         });
+         this.apiClient = new Spot({
+             configurationWebsocketAPI: this.configurationWebsocketAPI,
+         });
+     }
+ 
+     private validateConfiguration() {
+-        const { API_KEY, API_SECRET } = process.env;
++        const { API_KEY, API_SECRET } = {
++            API_KEY: Config.API_KEY,
++            API_SECRET: Config.API_SECRET,
++        };
+         if (!API_KEY || !API_SECRET) {
+             throw new BinanceConfigurationError(
+                 "Missing required API credentials: API_KEY and API_SECRET must be set"
+             );
+         }
+         if (API_KEY.length < 10 || API_SECRET.length < 10) {
+             throw new BinanceConfigurationError(
+                 "API_KEY and API_SECRET must look valid"
+             );
+         }
+     }
+ 
+     public async connectToStreams(): Promise<SpotWebsocketStreams.WebsocketStreamsConnection> {
+         try {
+             if (this.streamConnection) return this.streamConnection;
+             this.streamConnection =
+                 await this.streamClient.websocketStreams.connect();
+             return this.streamConnection;
+         } catch (error) {
+             this.logger.error(
+                 `connectToStreams() failed: ${JSON.stringify(error)}`
+             );
+             throw new BinanceApiError("connectToStreams", error);
+         }
+     }
+ 
+EOF
+)

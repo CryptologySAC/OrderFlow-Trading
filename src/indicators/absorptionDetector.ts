@@ -511,7 +511,7 @@ export class AbsorptionDetector
             volumes.passive > 0 ? volumes.aggressive / volumes.passive : 1;
         if (absorptionRatio > this.maxAbsorptionRatio) {
             this.logger.debug(
-                `[AbsorptionDetector] Absorption ratio too high`,
+                `[AbsorptionDetector] No absorption detected: likely breakout or momentum`,
                 {
                     ratio: absorptionRatio,
                     maxAllowed: this.maxAbsorptionRatio,

@@ -43,7 +43,6 @@ export class Storage implements IStorage {
     private readonly insertAggregatedTrade: Statement;
     private readonly getAggregatedTrades: Statement;
     private readonly purgeAggregatedTrades: Statement;
-    private readonly upsertQueue: Statement;
 
     constructor(db: Database) {
         this.db = db;
@@ -76,12 +75,6 @@ export class Storage implements IStorage {
         `);
 
         // Prepare statements
-        this.upsertQueue = this.db.prepare(`
-  INSERT INTO coordinator_queue (jobId, detectorId, candidateJson, priority,
-                                 retryCount, enqueuedAt)
-  VALUES (@jobId,@detectorId,@candidateJson,@priority,@retryCount,@enqueuedAt)
-  ON CONFLICT(jobId) DO UPDATE SET retryCount = excluded.retryCount
-`);
 
         this.insertAggregatedTrade = this.db.prepare(`
             INSERT OR IGNORE INTO aggregated_trades (

@@ -73,6 +73,7 @@ export interface HistogramBucket {
     buckets: Map<number, number>; // bucket_le -> count
     timestamps: number[];
     values: number[];
+    bounds?: number[];
 }
 
 /**
@@ -610,8 +611,8 @@ export class MetricsCollector {
         histogram: HistogramBucket,
         value: number
     ): void {
-        // Standard histogram buckets
-        const buckets = [
+        // Use custom bucket bounds if provided
+        const buckets = histogram.bounds ?? [
             0.1, 0.5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000,
             10000,
         ];
@@ -688,7 +689,6 @@ export class MetricsCollector {
         labelNames: string[] = [],
         buckets: number[] = []
     ): void {
-        void buckets; //TODO
         this.registerMetric(name, "histogram", help, "ms", labelNames);
         // Initialize histogram if not exists
         if (!this.histograms.has(name)) {
@@ -698,6 +698,10 @@ export class MetricsCollector {
                 buckets: new Map(),
                 timestamps: [],
                 values: [],
+                bounds:
+                    buckets.length > 0
+                        ? [...buckets].sort((a, b) => a - b)
+                        : undefined,
             });
         }
     }

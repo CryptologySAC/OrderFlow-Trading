@@ -13,9 +13,6 @@ import {
     Logger,
     LogLevel,
 } from "@binance/common";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 // --- Error Types ---
 export class BinanceApiError extends Error {

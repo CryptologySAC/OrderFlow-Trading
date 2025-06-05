@@ -1,11 +1,8 @@
 node_modules/
 .env
-trades.db
-trades.db-journal
+storage/
 dist/
 yarn.lock
 .DS_Store
 package-lock.json
-signals.csv
-trades.db-wal
-trades.db-shm
+coverage/

@@ -55,6 +55,12 @@ interface WindowState {
     priceCount: number; // samples for price statistics
     lastCleanup: number; // timestamp of last cleanup
     volumeProfile: Map<number, number>; // price level -> cumulative volume
+
+    // CVD-weighted price levels for institutional activity tracking
+    cvdProfile: Map<number, number>; // price level -> net CVD accumulation
+    buyFlowProfile: Map<number, number>; // price level -> buy flow accumulation
+    sellFlowProfile: Map<number, number>; // price level -> sell flow accumulation
+    institutionalZones: InstitutionalZone[]; // identified institutional activity zones
 }
 
 interface ConfidenceFactors {
@@ -64,6 +70,17 @@ interface ConfidenceFactors {
     volumeConcentration: number; // 0-1, how concentrated volume is at key levels
     temporalConsistency: number; // 0-1, consistency of signal across timeframes
     divergencePenalty: number; // 0-1, penalty for price/CVD divergence
+}
+
+interface InstitutionalZone {
+    priceLevel: number; // price level where institutional activity detected
+    netCVD: number; // net CVD accumulation at this level
+    buyVolume: number; // total buy volume at this level
+    sellVolume: number; // total sell volume at this level
+    firstSeen: number; // timestamp when first detected
+    lastUpdate: number; // timestamp of last activity
+    strength: number; // 0-1, strength of institutional activity
+    isActive: boolean; // whether zone is currently active
 }
 
 interface MarketRegime {
@@ -165,6 +182,10 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 priceCount: 0,
                 lastCleanup: Date.now(),
                 volumeProfile: new Map(),
+                cvdProfile: new Map(),
+                buyFlowProfile: new Map(),
+                sellFlowProfile: new Map(),
+                institutionalZones: [],
             });
         }
 
@@ -206,6 +227,9 @@ export class DeltaCVDConfirmation extends BaseDetector {
             // Update volume profile
             this.updateVolumeProfile(state, event);
 
+            // Update CVD-weighted price level tracking
+            this.updateCVDProfile(state, event);
+
             // Update price statistics for this window
             this.updatePriceStatistics(state, event);
 
@@ -230,14 +254,9 @@ export class DeltaCVDConfirmation extends BaseDetector {
     private updateMarketRegime(event: EnrichedTradeEvent): void {
         // Track price changes for volatility calculation
         if (this.recentPriceChanges.length > 0) {
-            //todoconst lastPrice =
-            //    this.recentPriceChanges[this.recentPriceChanges.length - 1];
-            //todo const priceChange = Math.abs(event.price - lastPrice) / lastPrice;
             this.recentPriceChanges.push(event.price);
 
             // Keep only recent price changes for volatility calculation
-            //todoconst volatilityCutoff =
-            //    event.timestamp - this.volatilityLookbackSec * 1000;
             while (
                 this.recentPriceChanges.length > 2 &&
                 this.recentPriceChanges.length > this.volatilityLookbackSec / 10
@@ -305,6 +324,166 @@ export class DeltaCVDConfirmation extends BaseDetector {
             sortedEntries.forEach(([price, volume]) => {
                 state.volumeProfile.set(price, volume);
             });
+        }
+    }
+
+    private updateCVDProfile(
+        state: WindowState,
+        event: EnrichedTradeEvent
+    ): void {
+        const tickSize = this.calculateTickSize(event.price);
+        const roundedPrice = Math.round(event.price / tickSize) * tickSize;
+
+        // Calculate CVD delta for this trade
+        const cvdDelta = event.buyerIsMaker ? -event.quantity : event.quantity;
+
+        // Update CVD profile
+        const currentCVD = state.cvdProfile.get(roundedPrice) || 0;
+        state.cvdProfile.set(roundedPrice, currentCVD + cvdDelta);
+
+        // Update flow profiles by side
+        if (event.buyerIsMaker) {
+            // Sell aggression
+            const currentSellFlow =
+                state.sellFlowProfile.get(roundedPrice) || 0;
+            state.sellFlowProfile.set(
+                roundedPrice,
+                currentSellFlow + event.quantity
+            );
+        } else {
+            // Buy aggression
+            const currentBuyFlow = state.buyFlowProfile.get(roundedPrice) || 0;
+            state.buyFlowProfile.set(
+                roundedPrice,
+                currentBuyFlow + event.quantity
+            );
+        }
+
+        // Update institutional zones
+        this.updateInstitutionalZones(state, roundedPrice, cvdDelta, event);
+
+        // Cleanup old CVD profile entries periodically
+        this.cleanupCVDProfiles(state);
+    }
+
+    private updateInstitutionalZones(
+        state: WindowState,
+        priceLevel: number,
+        cvdDelta: number,
+        event: EnrichedTradeEvent
+    ): void {
+        const now = event.timestamp;
+
+        // Find existing zone at this price level
+        let zone = state.institutionalZones.find(
+            (z) =>
+                Math.abs(z.priceLevel - priceLevel) <
+                this.calculateTickSize(priceLevel)
+        );
+
+        if (!zone) {
+            // Create new institutional zone if CVD accumulation is significant
+            const netCVD = state.cvdProfile.get(priceLevel) || 0;
+            const buyVolume = state.buyFlowProfile.get(priceLevel) || 0;
+            const sellVolume = state.sellFlowProfile.get(priceLevel) || 0;
+
+            // Only create zone if there's significant activity
+            if (
+                Math.abs(netCVD) > this.minVPS * 10 ||
+                buyVolume + sellVolume > this.minVPS * 20
+            ) {
+                zone = {
+                    priceLevel,
+                    netCVD,
+                    buyVolume,
+                    sellVolume,
+                    firstSeen: now,
+                    lastUpdate: now,
+                    strength: this.calculateZoneStrength(
+                        netCVD,
+                        buyVolume + sellVolume
+                    ),
+                    isActive: true,
+                };
+                state.institutionalZones.push(zone);
+            }
+        } else {
+            // Update existing zone
+            zone.netCVD = state.cvdProfile.get(priceLevel) || 0;
+            zone.buyVolume = state.buyFlowProfile.get(priceLevel) || 0;
+            zone.sellVolume = state.sellFlowProfile.get(priceLevel) || 0;
+            zone.lastUpdate = now;
+            zone.strength = this.calculateZoneStrength(
+                zone.netCVD,
+                zone.buyVolume + zone.sellVolume
+            );
+            zone.isActive = now - zone.lastUpdate < 60000; // Active if updated within last minute
+        }
+
+        // Sort zones by strength and keep only top institutional zones
+        state.institutionalZones.sort((a, b) => b.strength - a.strength);
+        if (state.institutionalZones.length > 20) {
+            state.institutionalZones = state.institutionalZones.slice(0, 20);
+        }
+    }
+
+    private calculateZoneStrength(netCVD: number, totalVolume: number): number {
+        if (totalVolume === 0) return 0;
+
+        // Combine CVD imbalance with total volume for strength calculation
+        const cvdImbalance = Math.abs(netCVD) / totalVolume;
+        const volumeSignificance = Math.min(
+            totalVolume / (this.minVPS * 100),
+            1
+        );
+
+        return cvdImbalance * 0.7 + volumeSignificance * 0.3;
+    }
+
+    private cleanupCVDProfiles(state: WindowState): void {
+        // Cleanup if profiles get too large
+        if (state.cvdProfile.size > 1000) {
+            // Keep only top 500 levels by absolute CVD
+            const sortedCVDEntries = Array.from(state.cvdProfile.entries())
+                .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+                .slice(0, 500);
+
+            // Get price levels to keep
+            const pricesToKeep = new Set(
+                sortedCVDEntries.map(([price]) => price)
+            );
+
+            // Clean all profiles
+            state.cvdProfile.clear();
+            state.buyFlowProfile.clear();
+            state.sellFlowProfile.clear();
+
+            // Repopulate with significant levels
+            sortedCVDEntries.forEach(([price, cvd]) => {
+                state.cvdProfile.set(price, cvd);
+            });
+
+            // Clean buy/sell profiles to match
+            for (const [price, volume] of state.buyFlowProfile.entries()) {
+                if (pricesToKeep.has(price)) {
+                    state.buyFlowProfile.set(price, volume);
+                }
+            }
+
+            for (const [price, volume] of state.sellFlowProfile.entries()) {
+                if (pricesToKeep.has(price)) {
+                    state.sellFlowProfile.set(price, volume);
+                }
+            }
+
+            // Filter institutional zones to match kept price levels
+            state.institutionalZones = state.institutionalZones.filter((zone) =>
+                Array.from(pricesToKeep).some(
+                    (price) =>
+                        Math.abs(zone.priceLevel - price) <
+                        this.calculateTickSize(price)
+                )
+            );
         }
     }
 
@@ -837,6 +1016,17 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 majorVolumeLevel:
                     this.findMajorVolumeLevel(shortestWindowState),
 
+                // Institutional activity insights
+                institutionalZones: shortestWindowState.institutionalZones,
+                dominantInstitutionalSide:
+                    this.getDominantInstitutionalSide(shortestWindowState),
+                cvdWeightedPrice:
+                    this.calculateCVDWeightedPrice(shortestWindowState),
+                institutionalFlowStrength:
+                    this.calculateInstitutionalFlowStrength(
+                        shortestWindowState
+                    ),
+
                 // Statistical context
                 sampleSizes: this.windows.reduce(
                     (acc, w) => {
@@ -947,6 +1137,53 @@ export class DeltaCVDConfirmation extends BaseDetector {
         if (price < 100) return 0.01;
         if (price < 1000) return 0.1;
         return 1.0;
+    }
+
+    private getDominantInstitutionalSide(
+        state: WindowState
+    ): "buy" | "sell" | "neutral" {
+        if (state.institutionalZones.length === 0) return "neutral";
+
+        let netInstitutionalCVD = 0;
+        for (const zone of state.institutionalZones) {
+            if (zone.isActive) {
+                netInstitutionalCVD += zone.netCVD * zone.strength;
+            }
+        }
+
+        if (netInstitutionalCVD > this.minVPS * 5) return "buy";
+        if (netInstitutionalCVD < -this.minVPS * 5) return "sell";
+        return "neutral";
+    }
+
+    private calculateCVDWeightedPrice(state: WindowState): number {
+        let totalWeightedPrice = 0;
+        let totalWeight = 0;
+
+        for (const [price, cvd] of state.cvdProfile.entries()) {
+            const weight = Math.abs(cvd);
+            totalWeightedPrice += price * weight;
+            totalWeight += weight;
+        }
+
+        return totalWeight > 0 ? totalWeightedPrice / totalWeight : 0;
+    }
+
+    private calculateInstitutionalFlowStrength(state: WindowState): number {
+        if (state.institutionalZones.length === 0) return 0;
+
+        // Calculate strength as weighted average of active zones
+        let totalStrength = 0;
+        let activeZones = 0;
+
+        for (const zone of state.institutionalZones) {
+            if (zone.isActive) {
+                totalStrength += zone.strength;
+                activeZones++;
+            }
+        }
+
+        return activeZones > 0 ? totalStrength / activeZones : 0;
     }
 
     /* ------------------------------------------------------------------ */

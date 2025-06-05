@@ -1,5 +1,4 @@
 // src/orderFlowDashboard.ts
-
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
@@ -39,53 +38,26 @@ import {
 import { SignalManager } from "./trading/signalManager.js";
 import { DataStreamManager } from "./trading/dataStreamManager.js";
 import { SignalCoordinator } from "./services/signalCoordinator.js";
-import {
-    AnomalyDetector,
-    AnomalyEvent,
-    AnomalyDetectorOptions,
-} from "./services/anomalyDetector.js";
+import { AnomalyDetector, AnomalyEvent } from "./services/anomalyDetector.js";
 import { AlertManager } from "./alerts/alertManager.js";
 
 // Indicator imports
-import { AccumulationSettings } from "./indicators/interfaces/detectorInterfaces.js";
-import {
-    AbsorptionDetector,
-    type AbsorptionSettings,
-} from "./indicators/absorptionDetector.js";
-import {
-    ExhaustionDetector,
-    type ExhaustionSettings,
-} from "./indicators/exhaustionDetector.js";
+import { AbsorptionDetector } from "./indicators/absorptionDetector.js";
+import { ExhaustionDetector } from "./indicators/exhaustionDetector.js";
 import { DistributionDetector } from "./indicators/distributionDetector.js";
-import { SwingMetrics } from "./indicators/swingMetrics.js";
 import { AccumulationDetector } from "./indicators/accumulationDetector.js";
-import { MomentumDivergence } from "./indicators/momentumDivergence.js";
-import {
-    DeltaCVDConfirmation,
-    DeltaCVDConfirmationSettings,
-} from "./indicators/deltaCVDConfirmation.js";
-import {
-    SwingPredictor,
-    SwingPredictorConfig,
-    type SwingPrediction,
-} from "./indicators/swingPredictor.js";
+import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
 
 // Utils imports
-import { parseBool, TradeData } from "./utils/utils.js";
-import {
-    calculateProfitTarget,
-    calculateStopLoss,
-} from "./utils/calculations.js";
+import { TradeData } from "./utils/utils.js";
+//import {
+//    calculateProfitTarget,
+//    calculateStopLoss,
+//} from "./utils/calculations.js";
 
 // Types
 import type { Dependencies } from "./types/dependencies.js";
-import type { VolumeNodes } from "./indicators/swingMetrics.js";
-import type {
-    Signal,
-    AccumulationResult,
-    DivergenceResult,
-    SwingSignalData,
-} from "./types/signalTypes.js";
+import type { Signal, AccumulationResult } from "./types/signalTypes.js";
 import type {
     TimeContext,
     DetectorRegisteredEvent,
@@ -109,6 +81,7 @@ import {
 import { SignalLogger } from "./services/signalLogger.js";
 import type { WebSocketMessage } from "./utils/interfaces.js";
 import { SpoofingDetector } from "./services/spoofingDetector.js";
+import { StatsBroadcaster } from "./services/statsBroadcaster.js";
 
 EventEmitter.defaultMaxListeners = 20;
 
@@ -142,10 +115,7 @@ export class OrderFlowDashboard {
     private readonly accumulationDetector: AccumulationDetector;
 
     // Indicators
-    private readonly swingMetrics = new SwingMetrics();
     private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
-    private readonly swingPredictor: SwingPredictor;
-    private readonly momentumDivergence = new MomentumDivergence();
 
     // Time context
     private timeContext: TimeContext = {
@@ -159,6 +129,7 @@ export class OrderFlowDashboard {
     private isShuttingDown = false;
     private readonly purgeIntervalMs = 10 * 60 * 1000; // 10 minutes
     private purgeIntervalId?: NodeJS.Timeout;
+    private statsBroadcaster: StatsBroadcaster;
 
     public static async create(
         dependencies: Dependencies,
@@ -171,17 +142,12 @@ export class OrderFlowDashboard {
 
     private async initialize(dependencies: Dependencies): Promise<void> {
         this.orderBook = await OrderBookState.create(
-            Config.orderBookStateConfig,
+            Config.ORDERBOOK_STATE,
             dependencies.logger,
             dependencies.metricsCollector
         );
         this.preprocessor = new OrderflowPreprocessor(
-            {
-                //TODO Config
-                pricePrecision: Config.PRICE_PRECISION,
-                bandTicks: 10,
-                tickSize: Config.TICK_SIZE,
-            },
+            Config.PREPROCESSOR,
             this.orderBook,
             dependencies.logger,
             dependencies.metricsCollector
@@ -224,20 +190,26 @@ export class OrderFlowDashboard {
         this.signalManager = dependencies.signalManager;
 
         this.dataStreamManager = new DataStreamManager(
-            { symbol: Config.SYMBOL },
+            Config.DATASTREAM,
             dependencies.binanceFeed,
             dependencies.circuitBreaker,
             this.logger,
             this.metricsCollector
         );
 
+        this.statsBroadcaster = new StatsBroadcaster(
+            this.metricsCollector,
+            this.dataStreamManager,
+            this.wsManager,
+            this.logger
+        );
         DetectorFactory.initialize(dependencies);
 
         this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
             (signal) => {
                 console.log("Absorption signal:", signal);
             },
-            this.createAbsorptionSettings(),
+            Config.ABSORPTION_DETECTOR,
             dependencies,
             { id: "ltcusdt-absorption-main" }
         );
@@ -252,7 +224,7 @@ export class OrderFlowDashboard {
             (signal) => {
                 console.log("Exhaustion signal:", signal);
             },
-            this.createExhaustionSettings(),
+            Config.EXHAUSTION_DETECTOR,
             dependencies,
             { id: "ltcusdt-exhaustion-main" }
         );
@@ -267,7 +239,7 @@ export class OrderFlowDashboard {
             (signal) => {
                 console.log("Accumulation signal:", signal);
             },
-            this.createAccumulationDetectorSettings(),
+            Config.ACCUMULATION_DETECTOR,
             dependencies,
             { id: "ltcusdt-accumulation-main" }
         );
@@ -282,7 +254,7 @@ export class OrderFlowDashboard {
             (signal) => {
                 console.log("Distribution signal:", signal);
             },
-            { symbol: Config.SYMBOL },
+            Config.DISTRIBUTION_DETECTOR,
             dependencies,
             { id: "ltcusdt-distribution-main" }
         );
@@ -299,7 +271,7 @@ export class OrderFlowDashboard {
                 (signal) => {
                     console.log("Delta CVD signal:", signal);
                 },
-                this.createDeltaCVDSettings(),
+                Config.DELTACVD_DETECTOR,
                 dependencies,
                 { id: "ltcusdt-cvdConfirmation-main" }
             );
@@ -308,10 +280,6 @@ export class OrderFlowDashboard {
             ["cvd_confirmation"],
             30,
             true
-        );
-
-        this.swingPredictor = new SwingPredictor(
-            this.createSwingPredictorSettings()
         );
 
         this.signalCoordinator.start();
@@ -421,184 +389,6 @@ export class OrderFlowDashboard {
         }
     }
 
-    private createAccumulationDetectorSettings(): AccumulationSettings {
-        return {
-            symbol: Config.SYMBOL,
-            windowMs: Config.ACCUMULATION_DETECTOR.WINDOW_MS,
-            minDurationMs: Config.ACCUMULATION_DETECTOR.MIN_DURATION_MS,
-            minRatio: Config.ACCUMULATION_DETECTOR.MIN_RATIO,
-            minRecentActivityMs:
-                Config.ACCUMULATION_DETECTOR.MIN_RECENT_ACTIVITY_MS,
-            minAggVolume: Config.ACCUMULATION_DETECTOR.MIN_AGG_VOLUME,
-            pricePrecision: Config.ACCUMULATION_DETECTOR.PRICE_PRECISION,
-        };
-    }
-
-    private createDeltaCVDSettings(): DeltaCVDConfirmationSettings {
-        return {
-            windowsSec: [90, 300, 900], //TODO
-            minTradesPerSec: Config.DELTA_CVD_CONFIRMATION.MIN_WINDOW_TRADES,
-            minVolPerSec: Config.DELTA_CVD_CONFIRMATION.MIN_WINDOW_VOLUME,
-            minZ: Config.DELTA_CVD_CONFIRMATION.MIN_RATE_OF_CHANGE, // Use adaptive if 0
-            symbol: Config.SYMBOL,
-        };
-    }
-
-    private createSwingPredictorSettings(): SwingPredictorConfig {
-        return {
-            lookaheadMs: Config.SWING_PREDICTOR.LOOKAHEAD_MS,
-            retraceTicks: Config.SWING_PREDICTOR.RETRACE_TICKS,
-            pricePrecision: Config.SWING_PREDICTOR.PRICE_PRECISION,
-            signalCooldownMs: Config.SWING_PREDICTOR.SIGNAL_COOLDOWN_MS,
-            onSwingPredicted: this.handleSwingPrediction.bind(this),
-        };
-    }
-
-    /**
-     * Create absorption detector settings
-     */
-    private createAbsorptionSettings(): AbsorptionSettings {
-        console.log("Spoofing Settings:", Config.SPOOFING);
-        console.log(
-            "Creating absorption settings with config:",
-            Config.ABSORPTION
-        );
-        return {
-            minAggVolume: Config.ABSORPTION.MIN_AGG_VOLUME,
-            absorptionThreshold: Config.ABSORPTION.THRESHOLD,
-            windowMs: Config.ABSORPTION.WINDOW_MS,
-            zoneTicks: Config.ABSORPTION.ZONE_TICKS,
-            eventCooldownMs: Config.ABSORPTION.EVENT_COOLDOWN_MS,
-            minPassiveMultiplier: Config.ABSORPTION.MIN_PASSIVE_MULTIPLIER,
-            maxAbsorptionRatio: Config.ABSORPTION.MAX_ABSORPTION_RATIO,
-            pricePrecision: Config.ABSORPTION.PRICE_PRECISION,
-            minInitialMoveTicks: Config.ABSORPTION.MOVE_TICKS,
-            confirmationTimeoutMs: Config.ABSORPTION.CONFIRMATION_TIMEOUT,
-            maxRevisitTicks: Config.ABSORPTION.MAX_REVISIT_TICKS,
-            symbol: Config.SYMBOL,
-            spoofing: {
-                tickSize: Config.SPOOFING.TICK_SIZE,
-                wallTicks: Config.SPOOFING.WALL_TICKS,
-                minWallSize: Config.SPOOFING.MIN_WALL_SIZE,
-                dynamicWallWidth: Config.SPOOFING.DYNAMIC_WALL_WIDTH,
-                testLogMinSpoof: Config.SPOOFING.TEST_LOG_MIN_SPOOF,
-            },
-            features: {
-                spoofingDetection: parseBool(
-                    process.env.ABSORPTION_SPOOFING_DETECTION,
-                    true
-                ),
-                adaptiveZone: parseBool(
-                    process.env.ABSORPTION_ADAPTIVE_ZONE,
-                    true
-                ),
-                passiveHistory: parseBool(
-                    process.env.ABSORPTION_PASSIVE_HISTORY,
-                    true
-                ),
-                multiZone: parseBool(process.env.ABSORPTION_MULTI_ZONE, true),
-                priceResponse: parseBool(
-                    process.env.ABSORPTION_PRICE_RESPONSE,
-                    true
-                ),
-                sideOverride: parseBool(
-                    process.env.ABSORPTION_SIDE_OVERRIDE,
-                    false
-                ),
-                autoCalibrate: parseBool(
-                    process.env.ABSORPTION_AUTO_CALIBRATE,
-                    true
-                ),
-                icebergDetection: parseBool(
-                    process.env.ABSORPTION_ICEBERG_DETECTION,
-                    true
-                ),
-                liquidityGradient: parseBool(
-                    process.env.ABSORPTION_LIQUIDITY_GRADIENT,
-                    true
-                ),
-                spreadAdjustment: parseBool(
-                    process.env.ABSORPTION_SPREAD_AJUSTMENT,
-                    true
-                ),
-                absorptionVelocity: parseBool(
-                    process.env.ABSORPTION_VELOCITY,
-                    true
-                ),
-            },
-        };
-    }
-
-    /**
-     * Create exhaustion detector settings
-     */
-    private createExhaustionSettings(): ExhaustionSettings {
-        console.log(
-            "Creating exhaustion settings with config:",
-            Config.EXHAUSTION
-        );
-        return {
-            minAggVolume: Config.EXHAUSTION.MIN_AGG_VOLUME,
-            exhaustionThreshold: Config.EXHAUSTION.THRESHOLD,
-            windowMs: Config.EXHAUSTION.WINDOW_MS,
-            zoneTicks: Config.EXHAUSTION.ZONE_TICKS,
-            eventCooldownMs: Config.EXHAUSTION.EVENT_COOLDOWN_MS,
-            maxPassiveRatio: Config.EXHAUSTION.MAX_PASSIVE_RATIO,
-            pricePrecision: Config.EXHAUSTION.PRICE_PRECISION,
-            minInitialMoveTicks: Config.EXHAUSTION.MOVE_TICKS,
-            confirmationTimeoutMs: Config.EXHAUSTION.CONFIRMATION_TIMEOUT,
-            maxRevisitTicks: Config.EXHAUSTION.MAX_REVISIT_TICKS,
-            symbol: Config.SYMBOL,
-            spoofing: {
-                tickSize: Config.SPOOFING.TICK_SIZE,
-                wallTicks: Config.SPOOFING.WALL_TICKS,
-                minWallSize: Config.SPOOFING.MIN_WALL_SIZE,
-                dynamicWallWidth: Config.SPOOFING.DYNAMIC_WALL_WIDTH,
-                testLogMinSpoof: Config.SPOOFING.TEST_LOG_MIN_SPOOF,
-            },
-            features: {
-                priceResponse: parseBool(
-                    process.env.EXHAUSTION_PRICE_RESPONSE,
-                    true
-                ),
-                depletionTracking: parseBool(
-                    process.env.EXHAUSTION_DEPLETION_TRACKING,
-                    true
-                ),
-                spreadAdjustment: parseBool(
-                    process.env.EXHAUSTION_SPREAD_AJUSTMENT,
-                    true
-                ),
-                spoofingDetection: parseBool(
-                    process.env.EXHAUSTION_SPOOFING_DETECTION,
-                    true
-                ),
-                autoCalibrate: parseBool(
-                    process.env.EXHAUSTION_AUTO_CALIBRATE,
-                    true
-                ),
-                adaptiveZone: parseBool(
-                    process.env.EXHAUSTION_ADAPTIVE_ZONE,
-                    true
-                ),
-                multiZone: parseBool(process.env.EXHAUSTION_MULTI_ZONE, true),
-                volumeVelocity: parseBool(
-                    process.env.EXHAUSTION_VOLUME_VELOCITY,
-                    true
-                ),
-                passiveHistory: parseBool(
-                    process.env.EXHAUSTION_PASSIVE_HISTORY,
-                    true
-                ),
-
-                sideOverride: parseBool(
-                    process.env.EXHAUSTION_SIDE_OVERRIDE,
-                    false
-                ),
-            },
-        };
-    }
-
     /**
      * Setup event handlers
      */
@@ -631,16 +421,6 @@ export class OrderFlowDashboard {
                     signalId: processedSignal.id,
                     jobId: job.id,
                 });
-                // TODO
-                const signal: Signal = {
-                    time: Date.now(),
-                    type: processedSignal.type,
-                    price: processedSignal.data.price,
-                    id: processedSignal.id,
-                    side: processedSignal.data.side,
-                    confidence: processedSignal.confidence,
-                };
-                void this.broadcastSignal(signal); //TODO
             }
         );
 
@@ -689,18 +469,70 @@ export class OrderFlowDashboard {
             this.handleError(error, "data_stream");
         });
 
+        this.dataStreamManager.on("disconnected", (reason: string) => {
+            this.logger.warn("[OrderFlowDashboard] Data stream disconnected", {
+                reason,
+            });
+            // Notify components that data stream is down
+            this.dependencies.tradesProcessor.emit("stream_disconnected", {
+                reason,
+            });
+        });
+
+        this.dataStreamManager.on("connected", () => {
+            this.logger.info(
+                "[OrderFlowDashboard] Data stream reconnected successfully"
+            );
+            // Notify components that data stream is back up
+            this.dependencies.tradesProcessor.emit("stream_connected");
+            if (this.orderBook) {
+                void this.orderBook.recover().catch((error) => {
+                    this.logger.error(
+                        "[OrderFlowDashboard] OrderBook recovery failed after reconnection",
+                        { error }
+                    );
+                });
+            }
+        });
+
+        this.dataStreamManager.on(
+            "reconnecting",
+            ({ attempt, delay, maxAttempts }) => {
+                this.logger.info(
+                    "[OrderFlowDashboard] Data stream reconnecting",
+                    {
+                        attempt,
+                        delay,
+                        maxAttempts,
+                    }
+                );
+            }
+        );
+
+        this.dataStreamManager.on("unhealthy", () => {
+            this.logger.warn(
+                "[OrderFlowDashboard] Data stream health degraded"
+            );
+        });
+
+        this.dataStreamManager.on("healthy", () => {
+            this.logger.info(
+                "[OrderFlowDashboard] Data stream health restored"
+            );
+        });
+
         // Handle signal events
         // Handle data stream events
         if (!this.signalManager) {
             throw new Error("Signal Manager is not initialized");
         }
         // Listen to final trading signals
-        this.signalManager.on("signalGenerated", (tradingSignal: Signal) => {
-            this.logger.info("Ready to trade:", { tradingSignal });
-            void this.broadcastSignal(tradingSignal).catch((error) => {
-                this.handleError(error as Error, "signal_broadcast");
-            });
-        });
+        //this.signalManager.on("signalGenerated", (tradingSignal: Signal) => {
+        //    this.logger.info("Ready to trade:", { tradingSignal });
+        //    void this.broadcastSignal(tradingSignal).catch((error) => {
+        //        this.handleError(error as Error, "signal_broadcast");
+        //    });
+        //});
 
         this.signalManager.on(
             "signalRejected",
@@ -796,6 +628,7 @@ export class OrderFlowDashboard {
     /**
      * Setup HTTP server
      */
+
     private setupHttpServer(): void {
         const publicPath = path.join(__dirname, "../public");
         this.httpServer.use(express.static(publicPath));
@@ -812,14 +645,13 @@ export class OrderFlowDashboard {
                     circuitBreakerState:
                         this.dependencies.circuitBreaker.getState(),
                     metrics: {
-                        signalsGenerated: metrics.legacy.signalsGenerated, //TODO
+                        signalsGenerated: metrics.legacy.signalsGenerated,
                         averageLatency:
                             this.metricsCollector.getAverageLatency(),
-                        errorsCount: metrics.legacy.errorsCount, //TODO
+                        errorsCount: metrics.legacy.errorsCount,
                     },
                     correlationId,
                 };
-
                 res.json(health);
                 this.logger.info(
                     "Health check requested",
@@ -830,6 +662,31 @@ export class OrderFlowDashboard {
                 this.handleError(error as Error, "health_check", correlationId);
                 res.status(500).json({
                     status: "unhealthy",
+                    error: (error as Error).message,
+                    correlationId,
+                });
+            }
+        });
+
+        this.httpServer.get("/stats", (req, res) => {
+            const correlationId = randomUUID();
+            try {
+                const stats = {
+                    metrics: this.metricsCollector.getMetrics(),
+                    health: this.metricsCollector.getHealthSummary(),
+                    dataStream: this.dataStreamManager.getDetailedMetrics(),
+                    correlationId,
+                };
+                res.json(stats);
+                this.logger.info("Stats requested", stats, correlationId);
+            } catch (error) {
+                this.handleError(
+                    error as Error,
+                    "stats_endpoint",
+                    correlationId
+                );
+                res.status(500).json({
+                    status: "error",
                     error: (error as Error).message,
                     correlationId,
                 });
@@ -847,20 +704,6 @@ export class OrderFlowDashboard {
         try {
             // Update detectors
             if (this.preprocessor) this.preprocessor.handleAggTrade(data);
-
-            // Update swing predictor
-            this.swingPredictor.onPrice(
-                parseFloat(data.p ?? "0"),
-                data.T ?? Date.now()
-            );
-
-            // Process for indicators
-            const tradeData = this.normalizeTradeData(data);
-            this.analyzeSwingOpportunity(tradeData.price, tradeData);
-
-            // Process and broadcast
-            //const message = this.dependencies.tradesProcessor.addTrade(data);
-            //this.wsManager.broadcast(message);
 
             const processingTime = Date.now() - startTime;
             this.metricsCollector.updateMetric(
@@ -927,166 +770,6 @@ export class OrderFlowDashboard {
     }
 
     /**
-     * Analyze swing opportunity
-     */
-    // TODO
-    private analyzeSwingOpportunity(
-        currentPrice: number,
-        trade: TradeData
-    ): void {
-        // Update all indicators
-        this.swingMetrics.addTrade(trade);
-        this.momentumDivergence.addDataPoint(
-            trade.price,
-            trade.quantity,
-            trade.timestamp
-        );
-
-        // Check for swing signals
-        const volumeNodes: VolumeNodes =
-            this.swingMetrics.getVolumeNodes(currentPrice);
-        const accumulation: AccumulationResult = {
-            price: 0,
-            side: "buy",
-            confidence: 0,
-            isAccumulating: false,
-            strength: 0,
-            zone: 0,
-            duration: 0,
-            ratio: 0,
-        };
-        // TODO this.accumulationDetector.detectAccumulation(currentPrice);
-        const divergence: DivergenceResult =
-            this.momentumDivergence.detectDivergence();
-
-        // Signal generation logic
-        if (
-            this.shouldGenerateSwingSignal(
-                currentPrice,
-                accumulation,
-                divergence,
-                volumeNodes
-            )
-        ) {
-            void this.generateSwingSignal(
-                currentPrice,
-                accumulation,
-                divergence
-            ).catch((error) => {
-                this.handleError(
-                    error as Error,
-                    "swing_signal_generation",
-                    randomUUID()
-                );
-            });
-        }
-    }
-
-    /**
-     * Should generate swing signal
-     */
-    private shouldGenerateSwingSignal(
-        currentPrice: number,
-        accumulation: AccumulationResult,
-        divergence: DivergenceResult,
-        volumeNodes: VolumeNodes
-    ): boolean {
-        let confirmations = 0;
-
-        if (accumulation.isAccumulating && accumulation.strength > 0.5) {
-            confirmations++;
-        }
-
-        if (divergence.type === "bullish" && divergence.strength > 0.3) {
-            confirmations++;
-        }
-
-        // Check if price is near a low volume node
-        const nearLVN = volumeNodes.lvn.some(
-            (lvn) => Math.abs(lvn - currentPrice) < currentPrice * 0.001
-        );
-        if (nearLVN) {
-            confirmations++;
-        }
-
-        return confirmations >= 2;
-    }
-
-    /**
-     * Generate swing signal
-     */
-    private async generateSwingSignal(
-        currentPrice: number,
-        accumulation: AccumulationResult,
-        divergence: DivergenceResult
-    ): Promise<void> {
-        const side: "buy" | "sell" =
-            divergence.type === "bullish" || accumulation.isAccumulating
-                ? "buy"
-                : "sell";
-
-        const profitTarget = calculateProfitTarget(currentPrice, side);
-        const stopLoss = calculateStopLoss(currentPrice, side);
-
-        const signalData: SwingSignalData = {
-            accumulation,
-            divergence,
-            expectedGainPercent: profitTarget.netGain,
-            swingType: side === "buy" ? "low" : "high",
-            strength: Math.max(accumulation.strength, divergence.strength),
-            side,
-            price: currentPrice,
-            confidence: NaN,
-        };
-        const signal: Signal = {
-            id: randomUUID(),
-            side,
-            type: "flow",
-            time: Date.now(),
-            price: currentPrice,
-            takeProfit: profitTarget.price,
-            stopLoss,
-            closeReason: "swing_detection",
-            signalData,
-        };
-
-        // Send alert via AlertManager
-        await this.dependencies.alertManager.sendAlert(signal);
-
-        // Also broadcast to WebSocket clients
-        await this.broadcastSignal(signal);
-    }
-
-    /**
-     * Handle swing prediction
-     */
-    private handleSwingPrediction(prediction: SwingPrediction): void {
-        const correlationId = randomUUID();
-
-        try {
-            void this.broadcastSignal(prediction as unknown as Signal).catch(
-                () => {
-                    this.handleError(
-                        new SignalProcessingError(
-                            "Error broadcasting swing prediction",
-                            { prediction },
-                            correlationId
-                        ),
-                        "swing_prediction",
-                        correlationId
-                    );
-                }
-            );
-        } catch (error) {
-            this.handleError(
-                error as Error,
-                "swing_prediction_handler",
-                correlationId
-            );
-        }
-    }
-
-    /**
      * Broadcast signal to clients
      */
     private async broadcastSignal(signal: Signal): Promise<void> {
@@ -1096,9 +779,9 @@ export class OrderFlowDashboard {
             this.metricsCollector.incrementMetric("signalsGenerated");
 
             // Send webhook if configured
-            if (Config.WEBHOOK_URL) {
+            if (Config.ALERT_WEBHOOK_URL) {
                 await this.sendWebhookMessage(
-                    Config.WEBHOOK_URL,
+                    Config.ALERT_WEBHOOK_URL,
                     {
                         type: signal.type,
                         time: signal.time,
@@ -1229,6 +912,7 @@ export class OrderFlowDashboard {
      */
     private startPeriodicTasks(): void {
         // Update circuit breaker metrics
+        this.statsBroadcaster.start();
         setInterval(() => {
             const state = this.dependencies.circuitBreaker.getState();
             this.metricsCollector.updateMetric("circuitBreakerState", state);
@@ -1290,6 +974,7 @@ export class OrderFlowDashboard {
             await this.dataStreamManager.disconnect();
 
             // Give time for cleanup
+            this.statsBroadcaster.stop();
             setTimeout(() => {
                 this.logger.info("Graceful shutdown completed");
                 process.exit(0);
@@ -1346,16 +1031,14 @@ export class OrderFlowDashboard {
 export function createDependencies(): Dependencies {
     const logger = new Logger(process.env.NODE_ENV === "development");
     const metricsCollector = new MetricsCollector();
-    const signalLogger = new SignalLogger("signals.csv");
+    const signalLogger = new SignalLogger("./storage/signals.csv");
     const rateLimiter = new RateLimiter(60000, 100);
     const circuitBreaker = new CircuitBreaker(5, 60000, logger);
-    const db = getDB("trades.db");
+    const db = getDB("./storage/trades.db");
     runMigrations(db);
     const pipelineStore = new PipelineStorage(db, {});
     const storage = new Storage(db);
-    const spoofingDetector = new SpoofingDetector(
-        Config.spoofingDetectorConfig
-    );
+    const spoofingDetector = new SpoofingDetector(Config.SPOOFING_DETECTOR);
 
     const orderBookProcessor = new OrderBookProcessor(
         {
@@ -1380,9 +1063,8 @@ export function createDependencies(): Dependencies {
     );
 
     const anomalyDetector = new AnomalyDetector(
-        Config.anomalyDetectorConfig,
-        logger,
-        spoofingDetector
+        Config.ANOMALY_DETECTOR,
+        logger
     );
 
     const alertManager = new AlertManager(
@@ -1399,7 +1081,6 @@ export function createDependencies(): Dependencies {
         pipelineStore,
         {
             confidenceThreshold: 0.75,
-            enableAnomalyDetection: true,
             enableAlerts: true,
         }
     );

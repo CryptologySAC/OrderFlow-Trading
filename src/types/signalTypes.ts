@@ -182,8 +182,8 @@ export interface CorrelationData {
 }
 
 export interface AnomalyData {
-    detected: boolean;
-    anomaly: MarketAnomaly | null;
+    detected?: boolean;
+    anomaly?: MarketAnomaly | null;
     activeAnomalyImpact?: number;
     activeAnomaliesCount?: number;
     opposingAnomalies?: Array<{
@@ -197,6 +197,11 @@ export interface AnomalyData {
         reasoning: string;
     }>;
     confidenceAdjustment?: AnomalyImpactFactors;
+    marketHealthy?: boolean;
+    healthRecommendation?: string;
+    criticalIssues?: string[];
+    tradingAllowed?: boolean;
+    recentAnomalyTypes?: string[];
 }
 
 export interface AnomalyImpactFactors {
@@ -204,6 +209,8 @@ export interface AnomalyImpactFactors {
     adjustedConfidence: number;
     finalConfidence: number;
     anomalyType?: string;
+    correlationBoost?: number;
+    healthImpact?: string;
     impactFactors: Array<{
         anomalyType: string;
         impact: "positive" | "negative" | "neutral";

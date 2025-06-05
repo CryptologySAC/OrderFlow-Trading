@@ -19,19 +19,18 @@
 
 ## 🎚️ Feature Toggle Impact Matrix
 
-| Feature                | Detector   | Signal Volume | Signal Quality | CPU Impact | When to Enable   |
-| ---------------------- | ---------- | ------------- | -------------- | ---------- | ---------------- |
-| **priceResponse**      | Both       | **-60%** 📉   | **+40%** 📈    | Low        | **Phase 4 Only** |
-| **icebergDetection**   | Absorption | **+30%** 📈   | **+20%** 📈    | Medium     | **Phase 2+**     |
-| **liquidityGradient**  | Absorption | **+15%** 📈   | **+25%** 📈    | High       | **Phase 2+**     |
-| **depletionTracking**  | Exhaustion | **+25%** 📈   | **+15%** 📈    | Medium     | **Phase 2+**     |
-| **spreadAdjustment**   | Both       | **-15%** 📉   | **+25%** 📈    | Low        | **Phase 3+**     |
-| **spoofingDetection**  | Both       | **-10%** 📉   | **+30%** 📈    | Medium     | **Phase 3+**     |
-| **autoCalibrate**      | Both       | **±10%** ↕️   | **+10%** 📈    | Low        | **Phase 2+**     |
-| **adaptiveZone**       | Both       | **+10%** 📈   | **+5%** 📈     | Medium     | **Phase 2+**     |
-| **multiZone**          | Both       | **+20%** 📈   | **+5%** 📈     | High       | **Phase 3+**     |
-| **absorptionVelocity** | Absorption | **+5%** 📈    | **+10%** 📈    | High       | **Phase 3+**     |
-| **volumeVelocity**     | Exhaustion | **+5%** 📈    | **+10%** 📈    | High       | **Phase 3+**     |
+| Feature                | Detector   | Signal Volume | Signal Quality | CPU Impact | When to Enable |
+| ---------------------- | ---------- | ------------- | -------------- | ---------- | -------------- |
+| **icebergDetection**   | Absorption | **+30%** 📈   | **+20%** 📈    | Medium     | **Phase 2+**   |
+| **liquidityGradient**  | Absorption | **+15%** 📈   | **+25%** 📈    | High       | **Phase 2+**   |
+| **depletionTracking**  | Exhaustion | **+25%** 📈   | **+15%** 📈    | Medium     | **Phase 2+**   |
+| **spreadAdjustment**   | Both       | **-15%** 📉   | **+25%** 📈    | Low        | **Phase 3+**   |
+| **spoofingDetection**  | Both       | **-10%** 📉   | **+30%** 📈    | Medium     | **Phase 3+**   |
+| **autoCalibrate**      | Both       | **±10%** ↕️   | **+10%** 📈    | Low        | **Phase 2+**   |
+| **adaptiveZone**       | Both       | **+10%** 📈   | **+5%** 📈     | Medium     | **Phase 2+**   |
+| **multiZone**          | Both       | **+20%** 📈   | **+5%** 📈     | High       | **Phase 3+**   |
+| **absorptionVelocity** | Absorption | **+5%** 📈    | **+10%** 📈    | High       | **Phase 3+**   |
+| **volumeVelocity**     | Exhaustion | **+5%** 📈    | **+10%** 📈    | High       | **Phase 3+**   |
 
 ---
 
@@ -73,7 +72,6 @@
     threshold: 0.75,             // High confidence
     windowMs: 90000,             // Full context
     eventCooldownMs: 15000,      // Long cooldown
-    priceResponse: true,         // Confirmation required
     // All quality features enabled
 }
 ```
@@ -119,7 +117,6 @@
 1. ⬆️ Increase `minAggVolume` (+50%)
 2. ⬆️ Increase `threshold` (+0.1)
 3. ⬆️ Increase `eventCooldownMs` (+5000)
-4. ✅ Enable `priceResponse`
 
 ### 📡 **Too Few Signals?**
 
@@ -130,7 +127,6 @@
 
 ### 🎯 **Poor Signal Quality?**
 
-1. ✅ Enable `priceResponse`
 2. ✅ Enable `spoofingDetection`
 3. ✅ Enable `spreadAdjustment`
 4. ⬆️ Increase `minPassiveMultiplier` (Absorption)

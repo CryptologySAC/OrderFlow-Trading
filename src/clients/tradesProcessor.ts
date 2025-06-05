@@ -18,6 +18,8 @@ export interface ITradesProcessor {
     getHealth(): ProcessorHealth;
     getStats(): ProcessorStats;
     shutdown(): Promise<void>;
+    emit(event: string | symbol, ...args: unknown[]): boolean;
+    on(event: string | symbol, listener: (...args: unknown[]) => void): this;
 }
 
 export interface TradesProcessorOptions {
@@ -94,6 +96,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
 
     // Health monitoring
     private healthCheckTimer?: NodeJS.Timeout;
+    private isStreamConnected = true;
 
     constructor(
         options: TradesProcessorOptions,
@@ -123,6 +126,9 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         // Start background tasks
         this.startSaveQueue();
         this.startHealthCheck();
+
+        // Listen for stream connection events
+        this.setupStreamEventHandlers();
 
         this.logger.info("[TradesProcessor] Initialized", {
             symbol: this.symbol,
@@ -499,6 +505,22 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     }
 
     /**
+     * Setup stream event handlers
+     */
+    private setupStreamEventHandlers(): void {
+        this.on("stream_disconnected", (data: { reason: string }) => {
+            this.logger.warn("[TradesProcessor] Stream disconnected", data);
+            this.isStreamConnected = false;
+        });
+
+        this.on("stream_connected", () => {
+            this.logger.info("[TradesProcessor] Stream reconnected");
+            this.isStreamConnected = true;
+            this.lastTradeTime = Date.now(); // Reset trade timeout
+        });
+    }
+
+    /**
      * Get health status
      */
     public getHealth(): ProcessorHealth {
@@ -509,14 +531,18 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
 
         let status: "healthy" | "degraded" | "unhealthy" = "healthy";
 
+        // Adjust health thresholds based on stream connection status
+        const tradeTimeoutThreshold = this.isStreamConnected ? 60000 : 300000; // 5 minutes if stream is disconnected
+        const degradedThreshold = this.isStreamConnected ? 30000 : 180000; // 3 minutes if stream is disconnected
+
         if (
-            lastTradeAge > 60000 ||
+            lastTradeAge > tradeTimeoutThreshold ||
             errorRate > 10 ||
             this.saveQueue.length > this.saveQueueSize * 0.9
         ) {
             status = "unhealthy";
         } else if (
-            lastTradeAge > 30000 ||
+            lastTradeAge > degradedThreshold ||
             errorRate > 5 ||
             this.saveQueue.length > this.saveQueueSize * 0.5
         ) {
