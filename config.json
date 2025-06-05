@@ -119,15 +119,15 @@
                 "accumulationThreshold": 0.6
             },
             "distributionDetector": {
-                "minDurationMs": 300000,
+                "minDurationMs": 60000,
                 "minRatio": 1.8,
-                "minRecentActivityMs": 60000,
+                "minRecentActivityMs": 15000,
                 "threshold": 0.65,
                 "volumeConcentrationWeight": 0.2,
                 "strengthAnalysis": true,
-                "velocityAnalysis": false,
+                "velocityAnalysis": true,
                 "symbol": "LTCUSDT",
-                "minAggVolume": 8,
+                "minAggVolume": 10,
                 "pricePrecision": 2
             }
         }
