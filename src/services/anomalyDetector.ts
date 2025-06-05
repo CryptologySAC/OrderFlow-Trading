@@ -962,8 +962,8 @@ export class AnomalyDetector extends EventEmitter {
                 volatility,
                 lastUpdateAge: Math.max(
                     Date.now() -
-                        (recentSnapshots[recentSnapshots.length - 1]?.timestamp ||
-                            0),
+                        (recentSnapshots[recentSnapshots.length - 1]
+                            ?.timestamp || 0),
                     0
                 ),
             },
