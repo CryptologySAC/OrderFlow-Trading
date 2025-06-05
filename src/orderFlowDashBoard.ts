@@ -56,10 +56,6 @@ import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
 
 // Utils imports
 import { TradeData } from "./utils/utils.js";
-//import {
-//    calculateProfitTarget,
-//    calculateStopLoss,
-//} from "./utils/calculations.js";
 
 // Types
 import type { Dependencies } from "./types/dependencies.js";
@@ -80,7 +76,10 @@ import { Storage } from "./storage/storage.js";
 import { PipelineStorage } from "./storage/pipelineStorage.js";
 import { BinanceDataFeed } from "./utils/binance.js";
 import { TradesProcessor } from "./clients/tradesProcessor.js";
-import { OrderBookProcessor } from "./clients/orderBookProcessor.js";
+import {
+    OrderBookProcessor,
+    OrderBookProcessorOptions,
+} from "./clients/orderBookProcessor.js";
 import { SignalLogger } from "./services/signalLogger.js";
 import type { WebSocketMessage } from "./utils/interfaces.js";
 import { SpoofingDetector } from "./services/spoofingDetector.js";
@@ -1193,13 +1192,22 @@ export function createDependencies(): Dependencies {
     );
 
     const orderBookProcessor = new OrderBookProcessor(
-        Config.ORDERBOOK_PROCESSOR,
+        {
+            binSize: 10,
+            numLevels: 10,
+            maxBufferSize: 1000,
+            tickSize: Config.TICK_SIZE,
+            precision: Config.PRICE_PRECISION,
+        } as OrderBookProcessorOptions,
         logger,
         metricsCollector
     );
 
     const tradesProcessor = new TradesProcessor(
-        Config.TRADES_PROCESSOR,
+        {
+            symbol: Config.SYMBOL,
+            storageTime: Config.MAX_STORAGE_TIME,
+        },
         storage,
         logger,
         metricsCollector
@@ -1222,7 +1230,10 @@ export function createDependencies(): Dependencies {
         logger,
         metricsCollector,
         pipelineStore,
-        Config.SIGNAL_MANAGER
+        {
+            confidenceThreshold: 0.75,
+            enableAlerts: true,
+        }
     );
 
     /*
@@ -1235,7 +1246,9 @@ export function createDependencies(): Dependencies {
 )
 */
     const signalCoordinator = new SignalCoordinator(
-        Config.SIGNAL_COORDINATOR,
+        {
+            maxConcurrentProcessing: 10, // TODO
+        },
         logger,
         metricsCollector,
         signalLogger,
