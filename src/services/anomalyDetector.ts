@@ -960,10 +960,12 @@ export class AnomalyDetector extends EventEmitter {
                 spreadBps: currentSpreadBps,
                 flowImbalance: flowMetrics.flowImbalance,
                 volatility,
-                lastUpdateAge:
+                lastUpdateAge: Math.max(
                     Date.now() -
-                    (recentSnapshots[recentSnapshots.length - 1]?.timestamp ||
-                        0),
+                        (recentSnapshots[recentSnapshots.length - 1]?.timestamp ||
+                            0),
+                    0
+                ),
             },
         };
     }
