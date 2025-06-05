@@ -13,6 +13,8 @@ import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { RateLimiter } from "../infrastructure/rateLimiter.js";
 import { CircuitBreaker } from "../infrastructure/circuitBreaker.js";
+import type { IBinanceDataFeed } from "../utils/binance.js";
+import { Config } from "../core/config.js";
 
 export interface IndividualTradesManagerConfig {
     enabled: boolean;
@@ -61,6 +63,7 @@ export class IndividualTradesManager {
     private readonly rateLimiter: RateLimiter;
     private readonly circuitBreaker: CircuitBreaker;
     private readonly config: IndividualTradesManagerConfig;
+    private readonly binanceFeed: IBinanceDataFeed;
 
     // Caching infrastructure
     private readonly tradeCache = new Map<number, CachedTrade>();
@@ -81,11 +84,13 @@ export class IndividualTradesManager {
     constructor(
         config: IndividualTradesManagerConfig,
         logger: Logger,
-        metricsCollector: MetricsCollector
+        metricsCollector: MetricsCollector,
+        binanceFeed: IBinanceDataFeed
     ) {
         this.config = config;
         this.logger = logger;
         this.metricsCollector = metricsCollector;
+        this.binanceFeed = binanceFeed;
 
         // Initialize rate limiter (respect Binance API limits)
         this.rateLimiter = new RateLimiter(
@@ -136,7 +141,10 @@ export class IndividualTradesManager {
         }
 
         // Criterion 2: Key price levels (if enabled)
-        if (this.config.criteria.keyLevelsEnabled && this.isAtKeyLevel()) {
+        if (
+            this.config.criteria.keyLevelsEnabled &&
+            this.isAtKeyLevel(trade.price)
+        ) {
             this.lastFetchReason = "key_level";
             return true;
         }
@@ -321,44 +329,36 @@ export class IndividualTradesManager {
             throw new Error("Rate limit exceeded for individual trades API");
         }
 
-        // Simulate Binance API call (replace with actual API call)
         const response = await this.callBinanceAPI(firstTradeId, lastTradeId);
-        void response;
-        return []; //TODO
-        //return response.map((trade) => ({
-        //    id: trade.id,
-        //    price: parseFloat(trade.price),
-        //    quantity: parseFloat(trade.qty),
-        //    timestamp: trade.time,
-        //    isBuyerMaker: trade.isBuyerMaker,
-        //    quoteQuantity: parseFloat(trade.quoteQty),
-        //}));
+        return response.map((trade) => ({
+            id: trade.id,
+            price: parseFloat(trade.price),
+            quantity: parseFloat(trade.qty),
+            timestamp: trade.time,
+            isBuyerMaker: trade.isBuyerMaker,
+            quoteQuantity: parseFloat(trade.quoteQty),
+        }));
     }
 
     private async callBinanceAPI(
         firstTradeId: number,
         lastTradeId: number
     ): Promise<BinanceIndividualTradeResponse[]> {
-        // TODO: Implement actual Binance API call
-        // For now, simulate the response
-        const trades: BinanceIndividualTradeResponse[] = [];
-
-        for (let id = firstTradeId; id <= lastTradeId; id++) {
-            trades.push({
-                id,
-                price: "100.00", // Mock data
-                qty: "10.0",
-                quoteQty: "1000.0",
-                time: Date.now(),
-                isBuyerMaker: Math.random() > 0.5,
-                isBestMatch: true,
-            });
-        }
-
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 50));
-
-        return trades;
+        const limit = lastTradeId - firstTradeId + 1;
+        const trades = await this.binanceFeed.getTrades(
+            Config.SYMBOL,
+            firstTradeId,
+            limit
+        );
+        return trades.map((t) => ({
+            id: t.id ?? 0,
+            price: t.price ?? "0",
+            qty: t.qty ?? "0",
+            quoteQty: t.quoteQty ?? "0",
+            time: t.time ?? Date.now(),
+            isBuyerMaker: t.isBuyerMaker ?? false,
+            isBestMatch: t.isBestMatch ?? true,
+        }));
     }
 
     private updateTradeSizeHistory(size: number): void {
@@ -385,9 +385,14 @@ export class IndividualTradesManager {
         return trade.quantity >= threshold;
     }
 
-    private isAtKeyLevel(): boolean {
-        // TODO: Implement key level detection (support/resistance)
-        // For now, return false
+    private isAtKeyLevel(price: number): boolean {
+        const levels = [10, 50, 100, 500];
+        for (const lvl of levels) {
+            const mod = price % lvl;
+            if (mod <= Config.TICK_SIZE || mod >= lvl - Config.TICK_SIZE) {
+                return true;
+            }
+        }
         return false;
     }
 

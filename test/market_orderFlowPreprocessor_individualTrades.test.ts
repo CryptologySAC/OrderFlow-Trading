@@ -5,6 +5,7 @@ import { Logger } from "../src/infrastructure/logger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { IndividualTradesManager } from "../src/data/individualTradesManager";
 import { MicrostructureAnalyzer } from "../src/data/microstructureAnalyzer";
+import type { IBinanceDataFeed } from "../src/utils/binance";
 import type { SpotWebsocketStreams } from "@binance/spot";
 import type {
     HybridTradeEvent,
@@ -24,6 +25,14 @@ describe("market/OrderflowPreprocessor - Individual Trades Integration", () => {
     let metricsCollector: MetricsCollector;
     let individualTradesManager: IndividualTradesManager;
     let microstructureAnalyzer: MicrostructureAnalyzer;
+    const binanceFeed: IBinanceDataFeed = {
+        connectToStreams: vi.fn(),
+        tradesAggregate: vi.fn(),
+        fetchAggTradesByTime: vi.fn(),
+        getTrades: vi.fn().mockResolvedValue([]),
+        getDepthSnapshot: vi.fn(),
+        disconnect: vi.fn(),
+    };
     let emittedTrades: (EnrichedTradeEvent | HybridTradeEvent)[] = [];
 
     const mockAggTrade: SpotWebsocketStreams.AggTradeResponse = {
@@ -54,7 +63,8 @@ describe("market/OrderflowPreprocessor - Individual Trades Integration", () => {
         individualTradesManager = new IndividualTradesManager(
             {} as any,
             logger,
-            metricsCollector
+            metricsCollector,
+            binanceFeed
         );
         microstructureAnalyzer = new MicrostructureAnalyzer(
             {} as any,

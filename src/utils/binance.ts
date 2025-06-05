@@ -90,6 +90,11 @@ export interface IBinanceDataFeed {
         symbol: string,
         startTime: number
     ): Promise<SpotWebsocketAPI.TradesAggregateResponseResultInner[]>;
+    getTrades(
+        symbol: string,
+        fromId: number,
+        limit: number
+    ): Promise<SpotWebsocketAPI.TradesHistoricalResponseResultInner[]>;
     getDepthSnapshot(
         symbol: string,
         limit?: number
@@ -219,6 +224,34 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         return result;
     }
 
+    public async getTrades(
+        symbol: string,
+        fromId: number,
+        limit: number
+    ): Promise<SpotWebsocketAPI.TradesHistoricalResponseResultInner[]> {
+        const cacheKey = `getTrades-${symbol}-${fromId}-${limit}`;
+        const cached = this.cache.get(cacheKey) as
+            | SpotWebsocketAPI.TradesHistoricalResponseResultInner[]
+            | null;
+        if (cached) {
+            this.logger.info(`[getTrades] Cache hit for ${symbol}`);
+            return cached;
+        }
+
+        const config: SpotWebsocketAPI.TradesHistoricalRequest = {
+            symbol,
+            fromId,
+            limit,
+        };
+
+        const result = await this.executeWithRetry(() =>
+            this.executeWithTradesConnection(config, "getTrades")
+        );
+
+        this.cache.set(cacheKey, result, this.defaultCacheTtlMs);
+        return result;
+    }
+
     public async getDepthSnapshot(
         symbol: string,
         limit = 1000
@@ -286,6 +319,24 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         }
     }
 
+    private async executeWithTradesConnection(
+        config: SpotWebsocketAPI.TradesHistoricalRequest,
+        contextLabel: string
+    ): Promise<SpotWebsocketAPI.TradesHistoricalResponseResultInner[]> {
+        try {
+            const connection = await this.getApiConnection();
+            const response: WebsocketApiResponse<SpotWebsocketAPI.TradesHistoricalResponse> =
+                await connection.tradesHistorical(config);
+            this.handleApiRateLimit(response.rateLimits ?? [], contextLabel);
+            return this.validateHistoricalTradeData(response.data.result);
+        } catch (error) {
+            this.logger.error(
+                `[${contextLabel}] API error: ${JSON.stringify(error)}`
+            );
+            throw new BinanceApiError(contextLabel, error);
+        }
+    }
+
     private async executeWithDepthConnection(
         config: SpotWebsocketAPI.DepthRequest,
         contextLabel: string
@@ -331,6 +382,15 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         }
         // Optionally add deeper per-item validation here
         return data as SpotWebsocketAPI.TradesAggregateResponseResultInner[];
+    }
+
+    private validateHistoricalTradeData(
+        data: unknown
+    ): SpotWebsocketAPI.TradesHistoricalResponseResultInner[] {
+        if (!Array.isArray(data)) {
+            throw new Error("Invalid trade data format: expected array");
+        }
+        return data as SpotWebsocketAPI.TradesHistoricalResponseResultInner[];
     }
 
     private validateDepthSnapshot(
