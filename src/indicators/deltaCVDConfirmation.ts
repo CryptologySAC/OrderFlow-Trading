@@ -579,20 +579,20 @@ export class DeltaCVDConfirmation extends BaseDetector {
             this.updateSlopeStatistics(state, slope);
 
             // Calculate adaptive z-score threshold
-            const adaptiveMinZ = this.calculateAdaptiveThreshold();
+            //const adaptiveMinZ = this.calculateAdaptiveThreshold();
             const zScore = this.calculateZScore(state, slope);
 
             slopes[w] = slope;
             zScores[w] = zScore;
 
             // Store for later use
-            this.logger.debug(`Window ${w}s analysis`, {
-                slope,
-                zScore,
-                priceCorrelation,
-                adaptiveMinZ,
-                tradesCount: state.trades.length,
-            });
+            //this.logger.debug(`Window ${w}s analysis`, {
+            //    slope,
+            //    zScore,
+            //    priceCorrelation,
+            //    adaptiveMinZ,
+            //    tradesCount: state.trades.length,
+            //});
         }
 
         // Enhanced signal validation

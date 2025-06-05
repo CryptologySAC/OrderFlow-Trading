@@ -114,7 +114,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         this.storageTime = options.storageTime ?? 1000 * 60 * 90; // 90 minutes
         this.maxBacklogRetries = options.maxBacklogRetries ?? 3;
         this.backlogBatchSize = options.backlogBatchSize ?? 1000;
-        this.maxMemoryTrades = options.maxMemoryTrades ?? 10000;
+        this.maxMemoryTrades = options.maxMemoryTrades ?? 50000;
         this.saveQueueSize = options.saveQueueSize ?? 5000;
         this.healthCheckInterval = options.healthCheckInterval ?? 30000; // 30s
 

@@ -16,6 +16,10 @@ import type { DeltaCVDConfirmationSettings } from "../indicators/deltaCVDConfirm
 import type { SuperiorFlowSettings } from "../indicators/base/flowDetectorBase.js";
 import type { IndividualTradesManagerConfig } from "../data/individualTradesManager.js";
 import type { MicrostructureAnalyzerConfig } from "../data/microstructureAnalyzer.js";
+import type { TradesProcessorOptions } from "../clients/tradesProcessor.js";
+import type { SignalManagerConfig } from "../trading/signalManager.js";
+import type { SignalCoordinatorConfig } from "../services/signalCoordinator.js";
+import type { OrderBookProcessorOptions } from "../clients/orderBookProcessor.js";
 const rawConfig = readFileSync(resolve(process.cwd(), "config.json"), "utf-8");
 const cfg: ConfigType = JSON.parse(rawConfig) as ConfigType;
 
@@ -96,6 +100,84 @@ export class Config {
         staleThresholdMs: Number(
             cfg.symbols[cfg.symbol].orderBookState?.staleThresholdMs ?? 300_000
         ), // 15 minutes
+    };
+
+    static readonly TRADES_PROCESSOR: TradesProcessorOptions = {
+        symbol: Config.SYMBOL,
+        storageTime: Number(
+            cfg.symbols[cfg.symbol].tradesProcessor?.storageTime ??
+                Config.MAX_STORAGE_TIME
+        ),
+        maxBacklogRetries: Number(
+            cfg.symbols[cfg.symbol].tradesProcessor?.maxBacklogRetries ?? 3
+        ),
+        backlogBatchSize: Number(
+            cfg.symbols[cfg.symbol].tradesProcessor?.backlogBatchSize ?? 1000
+        ),
+        maxMemoryTrades: Number(
+            cfg.symbols[cfg.symbol].tradesProcessor?.maxMemoryTrades ?? 50000
+        ),
+        saveQueueSize: Number(
+            cfg.symbols[cfg.symbol].tradesProcessor?.saveQueueSize ?? 5000
+        ),
+        healthCheckInterval: Number(
+            cfg.symbols[cfg.symbol].tradesProcessor?.healthCheckInterval ??
+                30000
+        ),
+    };
+
+    static readonly SIGNAL_MANAGER: SignalManagerConfig = {
+        confidenceThreshold: Number(
+            cfg.symbols[cfg.symbol].signalManager?.confidenceThreshold ?? 0.75
+        ),
+        signalTimeout: Number(
+            cfg.symbols[cfg.symbol].signalManager?.signalTimeout ?? 300000
+        ),
+        enableMarketHealthCheck:
+            cfg.symbols[cfg.symbol].signalManager?.enableMarketHealthCheck ??
+            true,
+        enableAlerts:
+            cfg.symbols[cfg.symbol].signalManager?.enableAlerts ?? true,
+    };
+
+    static readonly SIGNAL_COORDINATOR: SignalCoordinatorConfig = {
+        maxConcurrentProcessing: Number(
+            cfg.symbols[cfg.symbol].signalCoordinator
+                ?.maxConcurrentProcessing ?? 5
+        ),
+        processingTimeoutMs: Number(
+            cfg.symbols[cfg.symbol].signalCoordinator?.processingTimeoutMs ??
+                30000
+        ),
+        retryAttempts: Number(
+            cfg.symbols[cfg.symbol].signalCoordinator?.retryAttempts ?? 3
+        ),
+        retryDelayMs: Number(
+            cfg.symbols[cfg.symbol].signalCoordinator?.retryDelayMs ?? 1000
+        ),
+        enableMetrics:
+            cfg.symbols[cfg.symbol].signalCoordinator?.enableMetrics ?? true,
+        logLevel: cfg.symbols[cfg.symbol].signalCoordinator?.logLevel ?? "info",
+    };
+
+    static readonly ORDERBOOK_PROCESSOR: OrderBookProcessorOptions = {
+        binSize: Number(
+            cfg.symbols[cfg.symbol].orderBookProcessor?.binSize ?? 5
+        ),
+        numLevels: Number(
+            cfg.symbols[cfg.symbol].orderBookProcessor?.numLevels ?? 100
+        ),
+        maxBufferSize: Number(
+            cfg.symbols[cfg.symbol].orderBookProcessor?.maxBufferSize ?? 1000
+        ),
+        tickSize: Number(
+            cfg.symbols[cfg.symbol].orderBookProcessor?.tickSize ??
+                Config.TICK_SIZE
+        ),
+        precision: Number(
+            cfg.symbols[cfg.symbol].orderBookProcessor?.precision ??
+                Config.PRICE_PRECISION
+        ),
     };
 
     static readonly ABSORPTION_DETECTOR: AbsorptionSettings = {
