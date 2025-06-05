@@ -18,6 +18,7 @@
     "scripts": {
         "start": "bin/app",
         "start:dev": "NODE_ENV=development bin/app",
+        "restart": "pkill -f 'bin/app' && sleep 2 && bin/app",
         "rebuild": "yarn build && yarn start:dev",
         "build:watch": "yarn clean && yarn compile -w",
         "check": "yarn lint && yarn build && yarn test",

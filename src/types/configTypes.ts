@@ -40,6 +40,12 @@ type DataStreamConfig = {
     streamHealthTimeout?: number;
     enableStreamHealthCheck?: boolean;
     reconnectOnHealthFailure?: boolean;
+    // Hard reload configuration
+    enableHardReload?: boolean;
+    hardReloadAfterAttempts?: number;
+    hardReloadCooldownMs?: number;
+    maxHardReloads?: number;
+    hardReloadRestartCommand?: string;
 };
 
 type AnomalyDetectorConfig = {

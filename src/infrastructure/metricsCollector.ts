@@ -21,6 +21,19 @@ export interface Metrics {
     tradesErrors?: number;
     tradesSaveDropped?: number;
     invalidTrades?: number;
+    hybridTradesProcessed?: number;
+    individualTradesEnhancementErrors?: number;
+
+    // Individual trades metrics
+    "individualTrades.cacheHits"?: number;
+    "individualTrades.fetchSuccess"?: number;
+    "individualTrades.lastFetchSize"?: number;
+    "individualTrades.fetchErrors"?: number;
+
+    // Microstructure analysis metrics
+    "microstructure.analysisTimeMs"?: number;
+    "microstructure.analysisCount"?: number;
+    "microstructure.analysisErrors"?: number;
 
     // Orderbook metrics
     orderbookCircuitRejected?: number;

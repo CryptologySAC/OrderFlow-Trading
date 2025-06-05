@@ -14,6 +14,8 @@ import type { DataStreamConfig } from "../trading/dataStreamManager.js";
 import type { AccumulationSettings } from "../indicators/interfaces/detectorInterfaces.js";
 import type { DeltaCVDConfirmationSettings } from "../indicators/deltaCVDConfirmation.js";
 import type { SuperiorFlowSettings } from "../indicators/base/flowDetectorBase.js";
+import type { IndividualTradesManagerConfig } from "../data/individualTradesManager.js";
+import type { MicrostructureAnalyzerConfig } from "../data/microstructureAnalyzer.js";
 const rawConfig = readFileSync(resolve(process.cwd(), "config.json"), "utf-8");
 const cfg: ConfigType = JSON.parse(rawConfig) as ConfigType;
 
@@ -68,6 +70,12 @@ export class Config {
         enableStreamHealthCheck: DATASTREAM_CFG.enableStreamHealthCheck ?? true,
         reconnectOnHealthFailure:
             DATASTREAM_CFG.reconnectOnHealthFailure ?? true,
+        enableHardReload: DATASTREAM_CFG.enableHardReload ?? false,
+        hardReloadAfterAttempts: DATASTREAM_CFG.hardReloadAfterAttempts ?? 10,
+        hardReloadCooldownMs: DATASTREAM_CFG.hardReloadCooldownMs ?? 300000,
+        maxHardReloads: DATASTREAM_CFG.maxHardReloads ?? 3,
+        hardReloadRestartCommand:
+            DATASTREAM_CFG.hardReloadRestartCommand ?? "process.exit",
     };
 
     static readonly ORDERBOOK_STATE: OrderBookStateOptions = {
@@ -261,6 +269,59 @@ export class Config {
         minAggVolume:
             cfg.symbols[cfg.symbol].distributionDetector?.minAggVolume ?? 8, // Higher volume threshold for distribution
         pricePrecision: Config.PRICE_PRECISION,
+    };
+
+    static readonly INDIVIDUAL_TRADES_MANAGER: IndividualTradesManagerConfig = {
+        enabled: process.env.INDIVIDUAL_TRADES_ENABLED === "true" || false,
+
+        criteria: {
+            minOrderSizePercentile: Number(
+                process.env.INDIVIDUAL_TRADES_SIZE_PERCENTILE ?? 95
+            ),
+            keyLevelsEnabled:
+                process.env.INDIVIDUAL_TRADES_KEY_LEVELS === "true" || false,
+            anomalyPeriodsEnabled:
+                process.env.INDIVIDUAL_TRADES_ANOMALY_PERIODS === "true" ||
+                true,
+            highVolumePeriodsEnabled:
+                process.env.INDIVIDUAL_TRADES_HIGH_VOLUME === "true" || true,
+        },
+
+        cache: {
+            maxSize: Number(process.env.INDIVIDUAL_TRADES_CACHE_SIZE ?? 10000),
+            ttlMs: Number(process.env.INDIVIDUAL_TRADES_CACHE_TTL ?? 300000), // 5 minutes
+        },
+
+        rateLimit: {
+            maxRequestsPerSecond: Number(
+                process.env.INDIVIDUAL_TRADES_RATE_LIMIT ?? 5
+            ),
+            batchSize: Number(process.env.INDIVIDUAL_TRADES_BATCH_SIZE ?? 100),
+        },
+    };
+
+    static readonly MICROSTRUCTURE_ANALYZER: MicrostructureAnalyzerConfig = {
+        burstThresholdMs: Number(
+            process.env.MICROSTRUCTURE_BURST_THRESHOLD ?? 100
+        ),
+        uniformityThreshold: Number(
+            process.env.MICROSTRUCTURE_UNIFORMITY_THRESHOLD ?? 0.2
+        ),
+        sizingConsistencyThreshold: Number(
+            process.env.MICROSTRUCTURE_SIZING_THRESHOLD ?? 0.15
+        ),
+        persistenceWindowSize: Number(
+            process.env.MICROSTRUCTURE_PERSISTENCE_WINDOW ?? 5
+        ),
+        marketMakingSpreadThreshold: Number(
+            process.env.MICROSTRUCTURE_MM_SPREAD_THRESHOLD ?? 0.01
+        ),
+        icebergSizeRatio: Number(
+            process.env.MICROSTRUCTURE_ICEBERG_RATIO ?? 0.8
+        ),
+        arbitrageTimeThreshold: Number(
+            process.env.MICROSTRUCTURE_ARBITRAGE_TIME ?? 50
+        ),
     };
 
     static readonly SPOOFING_DETECTOR: SpoofingDetectorConfig = {

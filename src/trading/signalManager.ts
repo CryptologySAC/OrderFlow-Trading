@@ -147,11 +147,12 @@ export class SignalManager extends EventEmitter {
         try {
             const health = this.anomalyDetector.getMarketHealth();
 
-            // Block trading for infrastructure issues or insufficient data
+            // Block trading only for critical issues or insufficient data
             if (
-                health.recommendation === "pause" ||
                 health.recommendation === "close_positions" ||
-                health.recommendation === "insufficient_data"
+                health.recommendation === "insufficient_data" ||
+                health.highestSeverity === "critical" ||
+                health.criticalIssues.length > 0
             ) {
                 return false;
             }

@@ -13,7 +13,11 @@ import type {
     BaseDetectorSettings,
     AbsorptionFeatures,
 } from "./interfaces/detectorInterfaces.js";
-import { EnrichedTradeEvent, AggressiveTrade } from "../types/marketEvents.js";
+import {
+    EnrichedTradeEvent,
+    HybridTradeEvent,
+    AggressiveTrade,
+} from "../types/marketEvents.js";
 import { DetectorUtils } from "./base/detectorUtils.js";
 import { AbsorptionSignalData, SignalType } from "../types/signalTypes.js";
 
@@ -129,7 +133,7 @@ export class AbsorptionDetector
         return "absorption";
     }
 
-    public onEnrichedTrade(event: EnrichedTradeEvent): void {
+    public onEnrichedTrade(event: EnrichedTradeEvent | HybridTradeEvent): void {
         const zone = this.calculateZone(event.price);
 
         // Get or create zone-specific history
@@ -158,6 +162,15 @@ export class AbsorptionDetector
         if (this.lastTradeId !== event.tradeId) {
             this.lastTradeId = event.tradeId;
             this.addTrade(event);
+        }
+
+        // Enhanced microstructure analysis for HybridTradeEvent
+        if (
+            "hasIndividualData" in event &&
+            event.hasIndividualData &&
+            event.microstructure
+        ) {
+            this.analyzeMicrostructureForAbsorption(event);
         }
     }
 
@@ -859,5 +872,160 @@ export class AbsorptionDetector
                 : 0;
 
         return { aggressive, passive, trades };
+    }
+
+    /**
+     * Analyze microstructure patterns for enhanced absorption detection
+     */
+    private analyzeMicrostructureForAbsorption(event: HybridTradeEvent): void {
+        if (!event.microstructure || !event.individualTrades) {
+            return;
+        }
+
+        const microstructure = event.microstructure;
+        const zone = this.calculateZone(event.price);
+
+        // Store microstructure insights for zone-specific analysis
+        if (!this.absorptionHistory.has(zone)) {
+            this.absorptionHistory.set(zone, []);
+        }
+
+        const zoneEvents = this.absorptionHistory.get(zone)!;
+
+        // Enhanced absorption event with microstructure data
+        const enhancedEvent: AbsorptionEvent & {
+            microstructure: {
+                fragmentationScore: number;
+                executionEfficiency: number;
+                suspectedAlgoType: string;
+                toxicityScore: number;
+                timingPattern: string;
+                coordinationIndicators: number;
+            };
+        } = {
+            timestamp: event.timestamp,
+            price: event.price,
+            side: event.buyerIsMaker ? "sell" : "buy",
+            volume: event.quantity,
+            microstructure: {
+                fragmentationScore: microstructure.fragmentationScore,
+                executionEfficiency: microstructure.executionEfficiency,
+                suspectedAlgoType: microstructure.suspectedAlgoType,
+                toxicityScore: microstructure.toxicityScore,
+                timingPattern: microstructure.timingPattern,
+                coordinationIndicators:
+                    microstructure.coordinationIndicators.length,
+            },
+        };
+
+        zoneEvents.push(enhancedEvent);
+
+        // Keep only recent events (5 minutes)
+        const cutoff = Date.now() - 300000;
+        const recentEvents = zoneEvents.filter((e) => e.timestamp > cutoff);
+        this.absorptionHistory.set(zone, recentEvents);
+
+        // Analyze patterns for enhanced signal quality
+        this.analyzeAbsorptionMicrostructurePatterns(
+            zone,
+            event,
+            microstructure
+        );
+    }
+
+    /**
+     * Analyze microstructure patterns to enhance absorption signal quality
+     */
+    private analyzeAbsorptionMicrostructurePatterns(
+        zone: number,
+        event: HybridTradeEvent,
+        microstructure: typeof event.microstructure
+    ): void {
+        if (!microstructure) return;
+
+        // Get recent absorption events in this zone
+        const zoneEvents = this.absorptionHistory.get(zone) || [];
+        if (zoneEvents.length < 2) return;
+
+        // Analyze iceberg behavior enhancement
+        if (
+            microstructure.suspectedAlgoType === "iceberg" ||
+            microstructure.fragmentationScore > 0.7
+        ) {
+            // This enhances our existing iceberg detection
+            // High fragmentation + consistent sizing = strong iceberg signal
+            if (
+                microstructure.sizingPattern === "consistent" &&
+                microstructure.executionEfficiency > 0.6
+            ) {
+                // Boost absorption signal confidence for icebergs
+                this.logger?.info(
+                    "Enhanced iceberg absorption pattern detected",
+                    {
+                        zone,
+                        price: event.price,
+                        fragmentationScore: microstructure.fragmentationScore,
+                        executionEfficiency: microstructure.executionEfficiency,
+                        tradeComplexity: event.tradeComplexity,
+                    }
+                );
+            }
+        }
+
+        // Analyze coordinated absorption (multiple parties absorbing together)
+        if (microstructure.coordinationIndicators.length > 0) {
+            const coordinationTypes = microstructure.coordinationIndicators.map(
+                (c) => c.type
+            );
+
+            if (
+                coordinationTypes.includes("time_coordination") ||
+                coordinationTypes.includes("size_coordination")
+            ) {
+                this.logger?.info("Coordinated absorption activity detected", {
+                    zone,
+                    price: event.price,
+                    coordinationIndicators:
+                        microstructure.coordinationIndicators,
+                    timingPattern: microstructure.timingPattern,
+                });
+            }
+        }
+
+        // Analyze toxic flow impact on absorption quality
+        if (microstructure.toxicityScore > 0.8) {
+            // High toxicity suggests informed flow - absorption may be temporary
+            this.logger?.warn("High toxicity flow in absorption zone", {
+                zone,
+                price: event.price,
+                toxicityScore: microstructure.toxicityScore,
+                directionalPersistence: microstructure.directionalPersistence,
+                note: "Absorption may be overwhelmed by informed flow",
+            });
+        }
+
+        // Analyze timing patterns for absorption sustainability
+        if (microstructure.timingPattern === "burst") {
+            // Burst patterns may indicate imminent absorption breakdown
+            this.logger?.info("Burst timing pattern in absorption zone", {
+                zone,
+                price: event.price,
+                timingPattern: microstructure.timingPattern,
+                avgTimeBetweenTrades: microstructure.avgTimeBetweenTrades,
+                note: "Monitor for potential absorption breakdown",
+            });
+        }
+
+        // Market making detection in absorption zones
+        if (microstructure.suspectedAlgoType === "market_making") {
+            // Market makers providing liquidity - positive for absorption sustainability
+            this.logger?.info("Market making activity in absorption zone", {
+                zone,
+                price: event.price,
+                algoType: microstructure.suspectedAlgoType,
+                executionEfficiency: microstructure.executionEfficiency,
+                note: "Enhanced absorption sustainability expected",
+            });
+        }
     }
 }

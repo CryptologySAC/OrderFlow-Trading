@@ -22,6 +22,12 @@ import { Logger } from "./infrastructure/logger.js";
 import { MetricsCollector } from "./infrastructure/metricsCollector.js";
 import { RateLimiter } from "./infrastructure/rateLimiter.js";
 import { CircuitBreaker } from "./infrastructure/circuitBreaker.js";
+import {
+    RecoveryManager,
+    type HardReloadEvent,
+} from "./infrastructure/recoveryManager.js";
+import { MicrostructureAnalyzer } from "./data/microstructureAnalyzer.js";
+import { IndividualTradesManager } from "./data/individualTradesManager.js";
 
 // Service imports
 import { DetectorFactory } from "./utils/detectorFactory.js";
@@ -94,6 +100,7 @@ export class OrderFlowDashboard {
     private readonly httpServer = express();
     private readonly logger: Logger;
     private readonly metricsCollector: MetricsCollector;
+    private readonly recoveryManager: RecoveryManager;
 
     // Managers
     private readonly wsManager: WebSocketManager;
@@ -150,7 +157,9 @@ export class OrderFlowDashboard {
             Config.PREPROCESSOR,
             this.orderBook,
             dependencies.logger,
-            dependencies.metricsCollector
+            dependencies.metricsCollector,
+            dependencies.individualTradesManager,
+            dependencies.microstructureAnalyzer
         );
         this.logger.info(
             "[OrderFlowDashboard] Orderflow preprocessor initialized"
@@ -173,6 +182,21 @@ export class OrderFlowDashboard {
         // Initialize infrastructure
         this.logger = dependencies.logger;
         this.metricsCollector = dependencies.metricsCollector;
+
+        // Initialize recovery manager
+        this.recoveryManager = new RecoveryManager(
+            {
+                enableHardReload: Config.DATASTREAM.enableHardReload ?? false,
+                hardReloadCooldownMs:
+                    Config.DATASTREAM.hardReloadCooldownMs ?? 300000,
+                maxHardReloads: Config.DATASTREAM.maxHardReloads ?? 3,
+                hardReloadRestartCommand:
+                    Config.DATASTREAM.hardReloadRestartCommand ??
+                    "process.exit",
+            },
+            this.logger,
+            this.metricsCollector
+        );
 
         // Initialize coordinators
         this.signalCoordinator = dependencies.signalCoordinator;
@@ -469,6 +493,48 @@ export class OrderFlowDashboard {
             this.handleError(error, "data_stream");
         });
 
+        // Handle hard reload requests from data stream manager
+        this.dataStreamManager.on(
+            "hardReloadRequired",
+            (event: HardReloadEvent) => {
+                this.handleHardReloadRequest(event);
+            }
+        );
+
+        // Handle recovery manager events
+        this.recoveryManager.on(
+            "hardReloadStarting",
+            (event: HardReloadEvent) => {
+                this.logger.error(
+                    "[OrderFlowDashboard] Hard reload starting, initiating graceful shutdown",
+                    {
+                        reason: event.reason,
+                        component: event.component,
+                    }
+                );
+                void this.gracefulShutdown();
+            }
+        );
+
+        this.recoveryManager.on(
+            "hardReloadLimitExceeded",
+            (event: HardReloadEvent) => {
+                this.logger.error(
+                    "[OrderFlowDashboard] Hard reload limit exceeded, system needs manual intervention",
+                    {
+                        reason: event.reason,
+                        component: event.component,
+                        hardReloadCount: (
+                            event as HardReloadEvent & {
+                                hardReloadCount: number;
+                            }
+                        ).hardReloadCount,
+                    }
+                );
+                // Could emit alert to external monitoring system here
+            }
+        );
+
         this.dataStreamManager.on("disconnected", (reason: string) => {
             this.logger.warn("[OrderFlowDashboard] Data stream disconnected", {
                 reason,
@@ -644,6 +710,9 @@ export class OrderFlowDashboard {
                     connections: this.wsManager.getConnectionCount(),
                     circuitBreakerState:
                         this.dependencies.circuitBreaker.getState(),
+                    dataStreamState:
+                        this.dataStreamManager?.getStatus()?.state ?? "unknown",
+                    recovery: this.recoveryManager.getStats(),
                     metrics: {
                         signalsGenerated: metrics.legacy.signalsGenerated,
                         averageLatency:
@@ -703,7 +772,7 @@ export class OrderFlowDashboard {
 
         try {
             // Update detectors
-            if (this.preprocessor) this.preprocessor.handleAggTrade(data);
+            if (this.preprocessor) void this.preprocessor.handleAggTrade(data);
 
             const processingTime = Date.now() - startTime;
             this.metricsCollector.updateMetric(
@@ -884,6 +953,80 @@ export class OrderFlowDashboard {
     }
 
     /**
+     * Handle hard reload requests from components
+     */
+    private handleHardReloadRequest(event: HardReloadEvent): void {
+        this.logger.error("[OrderFlowDashboard] Hard reload requested", {
+            reason: event.reason,
+            component: event.component,
+            attempts: event.attempts,
+            metadata: event.metadata,
+        });
+
+        // Forward to recovery manager
+        const success = this.recoveryManager.requestHardReload(event);
+
+        if (!success) {
+            this.logger.warn(
+                "[OrderFlowDashboard] Hard reload request rejected by recovery manager",
+                {
+                    reason: event.reason,
+                    component: event.component,
+                }
+            );
+        }
+    }
+
+    /**
+     * Graceful shutdown before hard reload
+     */
+    private async gracefulShutdown(): Promise<void> {
+        this.logger.info(
+            "[OrderFlowDashboard] Starting graceful shutdown for hard reload"
+        );
+
+        try {
+            // Stop accepting new connections
+            if (this.wsManager) {
+                this.wsManager.shutdown();
+            }
+
+            // Disconnect data streams
+            if (this.dataStreamManager) {
+                await this.dataStreamManager.disconnect();
+            }
+
+            // Stop signal processing
+            if (this.signalCoordinator) {
+                // Signal coordinator doesn't have a stop method, but we can let pending signals finish
+                this.logger.info(
+                    "[OrderFlowDashboard] Allowing signal coordinator to finish pending signals"
+                );
+            }
+
+            // Clean up storage connections
+            if (this.dependencies?.storage) {
+                // Most storage implementations don't need explicit cleanup
+                this.logger.info(
+                    "[OrderFlowDashboard] Storage cleanup completed"
+                );
+            }
+
+            this.logger.info(
+                "[OrderFlowDashboard] Graceful shutdown completed"
+            );
+        } catch (error) {
+            this.logger.error(
+                "[OrderFlowDashboard] Error during graceful shutdown",
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
+        }
+    }
+
+    /**
      * Preload historical data
      */
     private async preloadData(): Promise<void> {
@@ -1039,6 +1182,18 @@ export function createDependencies(): Dependencies {
     const pipelineStore = new PipelineStorage(db, {});
     const storage = new Storage(db);
     const spoofingDetector = new SpoofingDetector(Config.SPOOFING_DETECTOR);
+    const binanceFeed = new BinanceDataFeed();
+    const individualTradesManager = new IndividualTradesManager(
+        Config.INDIVIDUAL_TRADES_MANAGER,
+        logger,
+        metricsCollector,
+        binanceFeed
+    );
+    const microstructureAnalyzer = new MicrostructureAnalyzer(
+        Config.MICROSTRUCTURE_ANALYZER,
+        logger,
+        metricsCollector
+    );
 
     const orderBookProcessor = new OrderBookProcessor(
         {
@@ -1107,7 +1262,6 @@ export function createDependencies(): Dependencies {
 
     return {
         storage,
-        binanceFeed: new BinanceDataFeed(),
         tradesProcessor,
         orderBookProcessor,
         signalLogger,
@@ -1120,6 +1274,9 @@ export function createDependencies(): Dependencies {
         anomalyDetector,
         signalManager,
         spoofingDetector,
+        individualTradesManager,
+        microstructureAnalyzer,
+        binanceFeed,
     };
 }
 
