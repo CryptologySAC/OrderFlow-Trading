@@ -36,7 +36,7 @@
                 "staleThresholdMs": 300000
             },
             "anomalyDetector": {
-                "windowSize": 400,
+                "windowSize": 9000,
                 "anomalyCooldownMs": 300000,
                 "icebergDetectionWindow": 600000,
                 "volumeImbalanceThreshold": 0.65,
@@ -44,7 +44,15 @@
                 "normalSpreadBps": 10,
                 "minHistory": 50,
                 "orderSizeAnomalyThreshold": 3,
-                "tickSize": 0.01
+                "tickSize": 0.01,
+                "flowWindowMs": 900000,
+                "orderSizeWindowMs": 900000,
+                "volatilityThreshold": 0.005,
+                "spreadThresholdBps": 100,
+                "extremeVolatilityWindowMs": 900000,
+                "liquidityCheckWindowMs": 900000,
+                "whaleCooldownMs": 300000,
+                "marketHealthWindowMs": 900000
             },
             "spoofingDetector": {
                 "wallTicks": 15,

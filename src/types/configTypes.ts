@@ -62,6 +62,14 @@ type AnomalyDetectorConfig = {
     minHistory: number;
     orderSizeAnomalyThreshold: number;
     tickSize: number;
+    flowWindowMs?: number;
+    orderSizeWindowMs?: number;
+    volatilityThreshold?: number;
+    spreadThresholdBps?: number;
+    extremeVolatilityWindowMs?: number;
+    liquidityCheckWindowMs?: number;
+    whaleCooldownMs?: number;
+    marketHealthWindowMs?: number;
 };
 
 type SpoofingDetectorConfig = {

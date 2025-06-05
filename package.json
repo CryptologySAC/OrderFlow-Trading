@@ -1,7 +1,7 @@
 {
     "name": "orderflow-trading",
     "type": "module",
-    "version": "0.0.1",
+    "version": "0.2-beta",
     "license": "MIT",
     "author": "Cryptology",
     "description": "Cryptology OrderFlow Trading",
@@ -24,7 +24,7 @@
         "check": "yarn lint && yarn build && yarn test",
         "clean": "rm -r dist",
         "compile": "yarn format && tsc --noEmit",
-        "format": "yarn lint && yarn prettier",
+        "format": "yarn prettier && yarn lint &&  tsc -p tsconfig.build.json --noEmit",
         "format:check": "prettier --check './**/*.{ts,tsx,js,json,css,html,md}'",
         "lint": "eslint \"src/**/*.{ts,tsx}\" --fix",
         "docs": "typedoc src --out docs",
