@@ -346,9 +346,7 @@ export class BinanceDataFeed implements IBinanceDataFeed {
             const response: WebsocketApiResponse<SpotWebsocketAPI.DepthResponse> =
                 await connection.depth(config);
             this.handleApiRateLimit(response.rateLimits ?? [], contextLabel);
-            return this.validateDepthSnapshot(
-                response.data as SpotWebsocketAPI.DepthResponseResult
-            );
+            return this.validateDepthSnapshot(response.data);
         } catch (error) {
             this.logger.error(
                 `[${contextLabel}] API error: ${JSON.stringify(error)}`

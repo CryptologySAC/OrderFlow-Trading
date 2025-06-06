@@ -1,7 +1,7 @@
 {
     "name": "orderflow-trading",
     "type": "module",
-    "version": "0.2-beta",
+    "version": "0.2",
     "license": "MIT",
     "author": "Cryptology",
     "description": "Cryptology OrderFlow Trading",
@@ -18,13 +18,12 @@
     "scripts": {
         "start": "bin/app",
         "start:dev": "NODE_ENV=development bin/app",
-        "restart": "pkill -f 'bin/app' && sleep 2 && bin/app",
         "rebuild": "yarn build && yarn start:dev",
         "build:watch": "yarn clean && yarn compile -w",
         "check": "yarn lint && yarn build && yarn test",
         "clean": "rm -r dist",
         "compile": "yarn format && tsc --noEmit",
-        "format": "yarn prettier && yarn lint &&  tsc -p tsconfig.build.json --noEmit",
+        "format": "yarn prettier && yarn lint",
         "format:check": "prettier --check './**/*.{ts,tsx,js,json,css,html,md}'",
         "lint": "eslint \"src/**/*.{ts,tsx}\" --fix",
         "docs": "typedoc src --out docs",
@@ -35,7 +34,7 @@
         "updates": "npx npm-check-updates",
         "update": "npx npm-check-updates -u",
         "prepare": "husky",
-        "build": "tsc -p tsconfig.build.json",
+        "build": "yarn format && tsc -p tsconfig.build.json",
         "test": "vitest",
         "test:coverage": "vitest run --coverage",
         "dev": "ts-node --transpile-only src/index.ts"
@@ -43,7 +42,6 @@
     "devDependencies": {
         "@types/better-sqlite3": "7.6.13",
         "@types/node": "^22.15.3",
-        "@types/prettier": "^3.0.0",
         "@types/ws": "^8.18.1",
         "@typescript-eslint/eslint-plugin": "^8.32.1",
         "@typescript-eslint/parser": "^8.32.1",
@@ -87,10 +85,10 @@
         "express": "^5.1.0",
         "fastpriorityqueue": "^0.7.5",
         "lightweight-charts": "^5.0.6",
-        "openai": "5.0.0",
         "pino": "^9.6.0",
         "pino-pretty": "^13.0.0",
         "ulid": "^3.0.0",
-        "ws": "^8.18.2"
+        "ws": "^8.18.2",
+        "openai": "^5.1.1"
     }
 }

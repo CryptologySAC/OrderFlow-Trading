@@ -93,17 +93,17 @@
                 "pricePrecision": 2,
                 "moveTicks": 5,
                 "confirmationTimeout": 60000,
-                "maxRevisitTicks": 5,
+                "maxRevisitTicks": 50,
                 "features": {
-                    "spoofingDetection": true,
-                    "adaptiveZone": true,
-                    "passiveHistory": true,
-                    "multiZone": true,
+                    "spoofingDetection": false,
+                    "adaptiveZone": false,
+                    "passiveHistory": false,
+                    "multiZone": false,
                     "autoCalibrate": false,
-                    "icebergDetection": true,
-                    "liquidityGradient": true,
-                    "spreadAdjustment": true,
-                    "absorptionVelocity": true
+                    "icebergDetection": false,
+                    "liquidityGradient": false,
+                    "spreadAdjustment": false,
+                    "absorptionVelocity": false
                 }
             },
             "deltaCvdConfirmation": {
@@ -167,8 +167,8 @@
             },
             "orderBookProcessor": {
                 "binSize": 5,
-                "numLevels": 20,
-                "maxBufferSize": 1000,
+                "numLevels": 10,
+                "maxBufferSize": 3000,
                 "tickSize": 0.01,
                 "precision": 2
             }
