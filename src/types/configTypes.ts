@@ -1,5 +1,10 @@
 export type AllowedSymbols = "LTCUSDT";
 
+export interface MQTTConfig {
+    url: string;
+    statsTopic?: string;
+}
+
 export interface ConfigType {
     nodeEnv: string;
     symbol: AllowedSymbols;
@@ -8,6 +13,7 @@ export interface ConfigType {
     };
     httpPort: number;
     wsPort: number;
+    mqtt?: MQTTConfig;
     alertWebhookUrl: string;
     alertCooldownMs: number;
     maxStorageTime: number;
