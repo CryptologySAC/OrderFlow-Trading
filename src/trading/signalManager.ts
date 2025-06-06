@@ -95,6 +95,7 @@ export class SignalManager extends EventEmitter {
         setInterval(() => {
             this.cleanupOldSignals();
             this.storage.purgeSignalHistory();
+            this.storage.purgeConfirmedSignals();
         }, 60000); // Every minute
     }
 
@@ -275,6 +276,7 @@ export class SignalManager extends EventEmitter {
         };
 
         this.storage.saveSignalHistory(signal);
+        this.storage.saveConfirmedSignal(confirmedSignal);
 
         // Track signal performance if tracker is available
         if (this.signalTracker && this.marketContextCollector) {

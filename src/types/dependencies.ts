@@ -18,6 +18,7 @@ import { IndividualTradesManager } from "../data/individualTradesManager.js";
 import { MicrostructureAnalyzer } from "../data/microstructureAnalyzer.js";
 import type { SignalTracker } from "../analysis/signalTracker.js";
 import type { MarketContextCollector } from "../analysis/marketContextCollector.js";
+import type { IPipelineStorage } from "../storage/pipelineStorage.js";
 
 /**
  * Application dependencies interface
@@ -25,6 +26,7 @@ import type { MarketContextCollector } from "../analysis/marketContextCollector.
 export interface Dependencies {
     // Storage & Data
     storage: IStorage;
+    pipelineStore: IPipelineStorage;
     binanceFeed: IBinanceDataFeed;
     tradesProcessor: ITradesProcessor;
     orderBookProcessor: OrderBookProcessor;
