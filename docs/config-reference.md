@@ -8,15 +8,15 @@ This document describes every setting available in `config.json`. Each option co
 
 ## Global Settings
 
-| Key | Description |
-| --- | ----------- |
-| `nodeEnv` | Node environment used when running the app (`development` or `production`). Controls logging detail and other env-specific behaviour. |
-| `symbol` | Default trading pair when no `SYMBOL` env variable is specified. Must match one of the entries under `symbols`. |
-| `httpPort` | Port for the REST HTTP server. Must be between 1 and 65535. |
-| `wsPort` | Port for the WebSocket server used for broadcasting real-time data. |
-| `alertWebhookUrl` | Optional URL for sending alert notifications (e.g. Discord/Slack webhook). If omitted, alert sending is disabled. |
-| `alertCooldownMs` | Minimum delay in milliseconds between sending alerts. Prevents webhook spam. |
-| `maxStorageTime` | Maximum time (ms) to retain trade and depth history in memory. Older data is pruned. |
+| Key               | Description                                                                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `nodeEnv`         | Node environment used when running the app (`development` or `production`). Controls logging detail and other env-specific behaviour. |
+| `symbol`          | Default trading pair when no `SYMBOL` env variable is specified. Must match one of the entries under `symbols`.                       |
+| `httpPort`        | Port for the REST HTTP server. Must be between 1 and 65535.                                                                           |
+| `wsPort`          | Port for the WebSocket server used for broadcasting real-time data.                                                                   |
+| `alertWebhookUrl` | Optional URL for sending alert notifications (e.g. Discord/Slack webhook). If omitted, alert sending is disabled.                     |
+| `alertCooldownMs` | Minimum delay in milliseconds between sending alerts. Prevents webhook spam.                                                          |
+| `maxStorageTime`  | Maximum time (ms) to retain trade and depth history in memory. Older data is pruned.                                                  |
 
 ---
 
@@ -24,12 +24,12 @@ This document describes every setting available in `config.json`. Each option co
 
 Each entry under `symbols` contains settings specific to that trading pair. The example config provides a single symbol `LTCUSDT`. The top level of a symbol contains general behaviour used across multiple modules.
 
-| Key | Purpose |
-| --- | ------- |
-| `pricePrecision` | Number of decimal places used for prices. Determines tick size and rounding for detectors. |
-| `windowMs` | Default rolling window length (ms) for most statistical calculations. |
-| `bandTicks` | Width (in ticks) of the preprocessing band used for grouping depth levels. |
-| `emitDepthMetrics` | When `true`, extra order book metrics are exposed for monitoring/debugging. |
+| Key                | Purpose                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------ |
+| `pricePrecision`   | Number of decimal places used for prices. Determines tick size and rounding for detectors. |
+| `windowMs`         | Default rolling window length (ms) for most statistical calculations.                      |
+| `bandTicks`        | Width (in ticks) of the preprocessing band used for grouping depth levels.                 |
+| `emitDepthMetrics` | When `true`, extra order book metrics are exposed for monitoring/debugging.                |
 
 ### dataStream
 
@@ -103,7 +103,7 @@ Settings for the ExhaustionDetector (aggressive flow depletion).
 - `confirmationTimeout` – Time to wait for confirmation before discarding the signal.
 - `maxRevisitTicks` – Maximum ticks price may revisit the zone before invalidating it.
 - `features` – Feature flags enabling advanced logic:
-  - `depletionTracking`, `spreadAdjustment`, `spoofingDetection`, `autoCalibrate`, `adaptiveZone`, `multiZone`, `volumeVelocity`, `passiveHistory`.
+    - `depletionTracking`, `spreadAdjustment`, `spoofingDetection`, `autoCalibrate`, `adaptiveZone`, `multiZone`, `volumeVelocity`, `passiveHistory`.
 
 ### absorption
 
@@ -201,4 +201,3 @@ Configuration for the AbsorptionDetector.
 ## Notes on Tweaking Values
 
 Lowering thresholds (like `minAggVolume` or `threshold`) generally produces more signals but with higher noise. Increasing cooldowns and confirmation requirements results in fewer, higher‑quality alerts at the expense of responsiveness. Each trading pair may require tuning to balance sensitivity and false positives.
-
