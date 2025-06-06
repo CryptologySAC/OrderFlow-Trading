@@ -364,17 +364,19 @@ export class Config {
                 ?.priceTolerancePercent ?? 0.05
         ), // 0.05% price tolerance
         minTouchCount:
-            cfg.symbols[cfg.symbol].supportResistanceDetector?.minTouchCount ?? 3, // Minimum 3 touches to confirm level
+            cfg.symbols[cfg.symbol].supportResistanceDetector?.minTouchCount ??
+            3, // Minimum 3 touches to confirm level
         minStrength: Number(
-            cfg.symbols[cfg.symbol].supportResistanceDetector?.minStrength ?? 0.6
+            cfg.symbols[cfg.symbol].supportResistanceDetector?.minStrength ??
+                0.6
         ), // 60% minimum strength to emit
         timeWindowMs: Number(
             cfg.symbols[cfg.symbol].supportResistanceDetector?.timeWindowMs ??
                 5_400_000
         ), // 90 minutes time window
         volumeWeightFactor: Number(
-            cfg.symbols[cfg.symbol].supportResistanceDetector?.volumeWeightFactor ??
-                0.3
+            cfg.symbols[cfg.symbol].supportResistanceDetector
+                ?.volumeWeightFactor ?? 0.3
         ), // Volume impact on strength
         rejectionConfirmationTicks: Number(
             cfg.symbols[cfg.symbol].supportResistanceDetector
