@@ -9,7 +9,7 @@ import {
     ConfigurationWebsocketStreams,
     ConfigurationWebsocketAPI,
     WebsocketApiRateLimit,
-    WebsocketApiResponse,
+    //WebsocketApiResponse,
     Logger,
     LogLevel,
 } from "@binance/common";
@@ -309,7 +309,8 @@ export class BinanceDataFeed implements IBinanceDataFeed {
             const connection = await this.getApiConnection();
             const response = await connection.tradesAggregate(config);
             this.handleApiRateLimit(
-                (response.rateLimits ?? []) as unknown as WebsocketApiRateLimit[],
+                (response.rateLimits ??
+                    []) as unknown as WebsocketApiRateLimit[],
                 contextLabel
             );
             return this.validateTradeData(response.data);
@@ -329,7 +330,8 @@ export class BinanceDataFeed implements IBinanceDataFeed {
             const connection = await this.getApiConnection();
             const response = await connection.tradesHistorical(config);
             this.handleApiRateLimit(
-                (response.rateLimits ?? []) as unknown as WebsocketApiRateLimit[],
+                (response.rateLimits ??
+                    []) as unknown as WebsocketApiRateLimit[],
                 contextLabel
             );
             return this.validateHistoricalTradeData(response.data.result);
@@ -349,13 +351,13 @@ export class BinanceDataFeed implements IBinanceDataFeed {
             const connection = await this.getApiConnection();
             const response = await connection.depth(config);
             this.handleApiRateLimit(
-                (response.rateLimits ?? []) as unknown as WebsocketApiRateLimit[],
+                (response.rateLimits ??
+                    []) as unknown as WebsocketApiRateLimit[],
                 contextLabel
             );
             return this.validateDepthSnapshot(
                 response.data as SpotWebsocketAPI.DepthResponseResult
             );
-
         } catch (error) {
             this.logger.error(
                 `[${contextLabel}] API error: ${JSON.stringify(error)}`
