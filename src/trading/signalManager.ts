@@ -735,8 +735,12 @@ export class SignalManager extends EventEmitter {
         tradingSignal: Signal,
         existingKey: string
     ): boolean {
-        const [type, side, priceStr] = existingKey.split("_");
-        const existingPrice = parseInt(priceStr) / 100;
+        const parts = existingKey.split("_");
+        const priceStr = parts.pop();
+        const side = parts.pop();
+        const type = parts.join("_");
+
+        const existingPrice = priceStr ? parseInt(priceStr, 10) / 100 : NaN;
 
         // Check if same type and side
         if (tradingSignal.type !== type || tradingSignal.side !== side) {
