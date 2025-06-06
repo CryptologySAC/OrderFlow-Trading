@@ -20,6 +20,11 @@ import {
     calculateProfitTarget,
     calculateStopLoss,
 } from "../utils/calculations.js";
+import type {
+    SignalTracker,
+    PerformanceMetrics,
+} from "../analysis/signalTracker.js";
+import type { MarketContextCollector } from "../analysis/marketContextCollector.js";
 
 export interface SignalManagerConfig {
     confidenceThreshold?: number;
@@ -56,6 +61,8 @@ export class SignalManager extends EventEmitter {
         private readonly logger: Logger,
         private readonly metricsCollector: MetricsCollector,
         private readonly storage: IPipelineStorage,
+        private readonly signalTracker?: SignalTracker,
+        private readonly marketContextCollector?: MarketContextCollector,
         config: Partial<SignalManagerConfig> = {}
     ) {
         super();
@@ -263,6 +270,34 @@ export class SignalManager extends EventEmitter {
         };
 
         this.storage.saveSignalHistory(signal);
+
+        // Track signal performance if tracker is available
+        if (this.signalTracker && this.marketContextCollector) {
+            try {
+                const marketContext =
+                    this.marketContextCollector.getCurrentMarketContext(
+                        confirmedSignal.finalPrice,
+                        confirmedSignal.confirmedAt
+                    );
+                this.signalTracker.onSignalGenerated(
+                    confirmedSignal,
+                    marketContext
+                );
+
+                this.logger.debug("Signal tracking initiated", {
+                    signalId: confirmedSignal.id,
+                    price: confirmedSignal.finalPrice,
+                    confidence: confirmedSignal.confidence,
+                });
+            } catch (error) {
+                this.logger.error("Failed to initiate signal tracking", {
+                    signalId: confirmedSignal.id,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                });
+            }
+        }
+
         return confirmedSignal;
     }
 
@@ -329,6 +364,11 @@ export class SignalManager extends EventEmitter {
                     detector_id: signal.detectorId,
                 }
             );
+            // Track received signals by type for stats page
+            this.metricsCollector.incrementCounter(
+                `signal_manager_signals_received_total_${signal.type}`,
+                1
+            );
 
             // Store signal for correlation analysis
             this.storeSignal(signal);
@@ -355,6 +395,11 @@ export class SignalManager extends EventEmitter {
                     detector_id: signal.detectorId,
                     trading_side: tradingSignal.side,
                 }
+            );
+            // Track confirmed signals by type
+            this.metricsCollector.incrementCounter(
+                `signal_manager_signals_confirmed_total_${signal.type}`,
+                1
             );
 
             this.metricsCollector.recordHistogram(
@@ -741,6 +786,12 @@ export class SignalManager extends EventEmitter {
             `signal_manager_rejections_detailed_total`,
             1,
             rejectionLabels
+        );
+
+        // Per-type rejection counter for stats aggregation
+        this.metricsCollector.incrementCounter(
+            `signal_manager_rejections_detailed_total_${signal.type}`,
+            1
         );
 
         // Rejection reason distribution
@@ -1146,14 +1197,36 @@ export class SignalManager extends EventEmitter {
         historySize: number;
         marketHealth: MarketHealthContext;
         config: SignalManagerConfig;
+        performanceTracking?: {
+            activeSignalsCount: number;
+            completedSignalsCount: number;
+            isTracking: boolean;
+        };
     } {
-        return {
+        const status = {
             recentSignalsCount: this.recentSignals.size,
             correlationsCount: this.correlations.size,
             historySize: this.signalHistory.length,
             marketHealth: this.getMarketHealthContext(),
             config: this.config,
+            performanceTracking: {
+                activeSignalsCount: 0,
+                completedSignalsCount: 0,
+                isTracking: false,
+            },
         };
+
+        // Add performance tracking status if available
+        if (this.signalTracker) {
+            const trackerStatus = this.signalTracker.getStatus();
+            status.performanceTracking = {
+                activeSignalsCount: trackerStatus.activeSignals,
+                completedSignalsCount: trackerStatus.completedSignals,
+                isTracking: true,
+            };
+        }
+
+        return status;
     }
 
     /**
@@ -1161,6 +1234,33 @@ export class SignalManager extends EventEmitter {
      */
     public getLastRejectReason(): string | undefined {
         return this.lastRejectReason;
+    }
+
+    /**
+     * Get performance metrics from signal tracker if available.
+     */
+    public getPerformanceMetrics(
+        timeWindow?: number
+    ): PerformanceMetrics | null {
+        if (!this.signalTracker) {
+            this.logger.warn(
+                "Performance metrics requested but SignalTracker not available",
+                {
+                    component: "SignalManager",
+                }
+            );
+            return null;
+        }
+
+        try {
+            return this.signalTracker.getPerformanceMetrics(timeWindow);
+        } catch (error) {
+            this.logger.error("Failed to get performance metrics", {
+                component: "SignalManager",
+                error: error instanceof Error ? error.message : String(error),
+            });
+            return null;
+        }
     }
 
     /**

@@ -2,6 +2,7 @@ import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { DataStreamManager } from "../trading/dataStreamManager.js";
 import { WebSocketManager } from "../websocket/websocketManager.js";
+import type { SignalTracker } from "../analysis/signalTracker.js";
 
 /**
  * Periodically collect metrics and broadcast via WebSocket.
@@ -14,6 +15,7 @@ export class StatsBroadcaster {
         private readonly dataStream: DataStreamManager,
         private readonly wsManager: WebSocketManager,
         private readonly logger: Logger,
+        private readonly signalTracker?: SignalTracker,
         private readonly intervalMs = 5000
     ) {}
 
@@ -25,6 +27,9 @@ export class StatsBroadcaster {
                     metrics: this.metrics.getMetrics(),
                     health: this.metrics.getHealthSummary(),
                     dataStream: this.dataStream.getDetailedMetrics(),
+                    signalPerformance:
+                        this.signalTracker?.getPerformanceMetrics(86400000), // 24h window
+                    signalTrackerStatus: this.signalTracker?.getStatus(),
                 };
                 this.wsManager.broadcast({
                     type: "stats",
