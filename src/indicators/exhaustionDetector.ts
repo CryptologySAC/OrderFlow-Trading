@@ -209,8 +209,8 @@ export class ExhaustionDetector
             return;
         }
 
-        // Check cooldown to prevent spam
-        if (!this.checkCooldown(zone, side)) {
+        // Check cooldown to prevent spam (update after confirmation)
+        if (!this.checkCooldown(zone, side, false)) {
             return;
         }
 

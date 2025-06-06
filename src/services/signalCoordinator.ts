@@ -366,7 +366,38 @@ export class SignalCoordinator extends EventEmitter {
                 processingMs: Date.now() - start,
                 retry: job.retryCount,
             });
-            this.signalManager.handleProcessedSignal(processed);
+            const confirmed =
+                this.signalManager.handleProcessedSignal(processed);
+
+            if (confirmed) {
+                const data = processed.data as unknown as Record<
+                    string,
+                    unknown
+                >;
+                let zone = 0;
+                if (typeof data === "object" && data !== null) {
+                    if ("zone" in data && typeof data.zone === "number") {
+                        zone = data.zone;
+                    } else if (
+                        "price" in data &&
+                        typeof data.price === "number"
+                    ) {
+                        zone = data.price;
+                    }
+                }
+
+                let side: "buy" | "sell" = "buy";
+                if (
+                    typeof data === "object" &&
+                    data !== null &&
+                    "side" in data &&
+                    (data.side === "buy" || data.side === "sell")
+                ) {
+                    side = data.side;
+                }
+
+                detector.markSignalConfirmed(zone, side);
+            }
 
             this.metrics.incrementCounter(
                 "signal_coordinator_signals_processed_total",

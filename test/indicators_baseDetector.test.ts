@@ -107,6 +107,7 @@ describe("indicators/BaseDetector", () => {
         const now = Date.now();
         det.onEnrichedTrade(makeEvent(100, 1, now));
         det.onEnrichedTrade(makeEvent(100, 1, now + 1));
+        det.markSignalConfirmed(det.calculateZone(100), "buy");
         expect(det.signals.length).toBe(1);
         det.onEnrichedTrade(makeEvent(100, 1, now + 2));
         expect(det.signals.length).toBe(1);

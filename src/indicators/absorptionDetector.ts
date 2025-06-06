@@ -488,8 +488,8 @@ export class AbsorptionDetector
             return;
         }
 
-        // Check cooldown
-        if (!this.checkCooldown(zone, side)) {
+        // Check cooldown (only confirm updates later)
+        if (!this.checkCooldown(zone, side, false)) {
             return;
         }
 

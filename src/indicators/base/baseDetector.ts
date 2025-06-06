@@ -555,7 +555,11 @@ export abstract class BaseDetector extends Detector implements IDetector {
     /**
      * Check cooldown
      */
-    protected checkCooldown(zone: number, side: "buy" | "sell"): boolean {
+    protected checkCooldown(
+        zone: number,
+        side: "buy" | "sell",
+        update = false
+    ): boolean {
         const eventKey = `${zone}_${side}`;
         const now = Date.now();
         const lastSignalTime = this.lastSignal.get(eventKey) || 0;
@@ -564,8 +568,18 @@ export abstract class BaseDetector extends Detector implements IDetector {
             return false;
         }
 
-        this.lastSignal.set(eventKey, now);
+        if (update) {
+            this.lastSignal.set(eventKey, now);
+        }
         return true;
+    }
+
+    /**
+     * Mark a signal as confirmed to start cooldown.
+     */
+    public markSignalConfirmed(zone: number, side: "buy" | "sell"): void {
+        const eventKey = `${zone}_${side}`;
+        this.lastSignal.set(eventKey, Date.now());
     }
 
     /**
