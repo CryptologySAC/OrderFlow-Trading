@@ -3,7 +3,10 @@
 //import { SpotWebsocketStreams } from "@binance/spot";
 import { BaseDetector } from "./baseDetector.js";
 import { Logger } from "../../infrastructure/logger.js";
-import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
+import {
+    MetricsCollector,
+    type Metrics,
+} from "../../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../../services/signalLogger.js";
 import { SpoofingDetector } from "../../services/spoofingDetector.js";
 import { RollingWindow } from "../../utils/rollingWindow.js";
@@ -975,33 +978,39 @@ export abstract class FlowDetectorBase extends BaseDetector {
     }
 
     private recordDetectionAttempt(): void {
-        this.metricsCollector.incrementCounter(
-            `${this.flowDirection}.detection.attempts`
+        this.metricsCollector.incrementMetric(
+            `${this.flowDirection}DetectionAttempts`
         );
-        this.metricsCollector.recordGauge(
-            `${this.flowDirection}.zones.active`,
+        this.metricsCollector.updateMetric(
+            `${this.flowDirection}ZonesActive`,
             this.zoneData.size
         );
-        this.metricsCollector.recordGauge(
-            `${this.flowDirection}.market.volatility`,
+        this.metricsCollector.updateMetric(
+            `${this.flowDirection}MarketVolatility`,
             this.marketRegime.volatility
         );
-        this.metricsCollector.recordGauge(
-            `${this.flowDirection}.market.trend_strength`,
+        this.metricsCollector.updateMetric(
+            `${this.flowDirection}MarketTrendStrength`,
             this.marketRegime.trendStrength
         );
     }
 
     private handleFlowDetectionError(error: Error): void {
         this.handleError(error, `${this.flowDirection}Detector.checkForSignal`);
-        this.metricsCollector.incrementCounter(
-            `${this.flowDirection}.detection.errors`
+        this.metricsCollector.incrementMetric(
+            `${this.flowDirection}DetectionErrors`
         );
     }
 
     private recordRejection(reason: string): void {
-        this.metricsCollector.incrementCounter(
-            `${this.flowDirection}.rejected.${reason}`
+        // Convert snake_case to PascalCase for metric names
+        const formattedReason = reason
+            .split("_")
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+            .join("");
+
+        this.metricsCollector.incrementMetric(
+            `${this.flowDirection}Rejected${formattedReason}` as keyof Metrics
         );
         this.logger.debug(`[${this.flowDirection}Detector] Signal rejected`, {
             reason,
@@ -1012,19 +1021,19 @@ export abstract class FlowDetectorBase extends BaseDetector {
         score: number,
         conditions: SuperiorFlowConditions
     ): void {
-        this.metricsCollector.incrementCounter(
-            `${this.flowDirection}.signals.generated`
+        this.metricsCollector.incrementMetric(
+            `${this.flowDirection}SignalsGenerated`
         );
         this.metricsCollector.recordHistogram(
-            `${this.flowDirection}.confidence.scores`,
+            `${this.flowDirection}ConfidenceScores`,
             score
         );
         this.metricsCollector.recordHistogram(
-            `${this.flowDirection}.duration`,
+            `${this.flowDirection}Duration`,
             conditions.duration
         );
         this.metricsCollector.recordHistogram(
-            `${this.flowDirection}.ratio`,
+            `${this.flowDirection}Ratio`,
             conditions.ratio
         );
     }

@@ -13,6 +13,7 @@ export interface WebSocketMessage {
     type:
         | "pong"
         | "backlog"
+        | "signal_backlog"
         | "trade"
         | "orderbook"
         | "signal"
@@ -39,19 +40,6 @@ export interface Signal_old {
     isInvalidated?: boolean;
     stopLoss?: number;
     takeProfit?: number;
-    timeframe?: "Daytime" | "Nighttime";
-    closeReason?:
-        | "take_profit"
-        | "stop_loss"
-        | "opposite_signal"
-        | "end_of_data"
-        | "invalidated"
-        | "exhaustion"
-        | "absorption"
-        | "delta_divergence"
-        | "cvd_slope_reversal"
-        | "both"
-        | "swing_detection"; // Add this
     totalAggressiveVolume?: number;
     passiveVolume?: number;
     refilled?: boolean;

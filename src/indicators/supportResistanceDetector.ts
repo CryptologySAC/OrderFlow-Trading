@@ -33,6 +33,8 @@ export interface SupportResistanceLevel {
         fromType: "support" | "resistance";
         toType: "support" | "resistance";
     }>;
+    hasBeenEmitted: boolean; // track if this level has already been signaled
+    lastEmittedAt?: number; // timestamp of last emission
 }
 
 export interface SupportResistanceConfig {
@@ -51,6 +53,8 @@ export class SupportResistanceDetector extends BaseDetector {
     private readonly levels = new Map<string, SupportResistanceLevel>();
     private readonly recentTrades: EnrichedTradeEvent[] = [];
     private readonly maxTradeHistory = 1000;
+    private lastDetectionRun = 0;
+    private readonly detectionIntervalMs = 60000; // Only run detection every 1 minute
 
     constructor(
         id: string,
@@ -73,10 +77,10 @@ export class SupportResistanceDetector extends BaseDetector {
         );
 
         this.config = {
-            priceTolerancePercent: settings.priceTolerancePercent ?? 0.05, // 0.05%
-            minTouchCount: settings.minTouchCount ?? 3,
-            minStrength: settings.minStrength ?? 0.6,
-            timeWindowMs: settings.timeWindowMs ?? 5400000, // 90 minutes
+            priceTolerancePercent: settings.priceTolerancePercent ?? 0.1, // 0.1% - wider tolerance
+            minTouchCount: settings.minTouchCount ?? 5, // Require more touches
+            minStrength: settings.minStrength ?? 0.7, // Higher strength threshold
+            timeWindowMs: settings.timeWindowMs ?? 7200000, // 2 hours - longer window
             volumeWeightFactor: settings.volumeWeightFactor ?? 0.3,
             rejectionConfirmationTicks:
                 settings.rejectionConfirmationTicks ?? 5,
@@ -99,23 +103,29 @@ export class SupportResistanceDetector extends BaseDetector {
             this.recentTrades.shift();
         }
 
-        // Clean up old levels
-        this.cleanupOldLevels(event.timestamp);
-
-        // Check for new level touches
+        // Always check for level touches as this is important for updating existing levels
         this.checkLevelTouches(event);
 
-        // Detect new levels from price action
-        this.detectNewLevels(event);
+        // Only run full detection periodically to reduce noise
+        const now = Date.now();
+        if (now - this.lastDetectionRun >= this.detectionIntervalMs) {
+            this.lastDetectionRun = now;
 
-        // Update level strengths
-        this.updateLevelStrengths();
+            // Clean up old levels
+            this.cleanupOldLevels(event.timestamp);
 
-        // Check for role reversals
-        this.checkRoleReversals(event);
+            // Detect new levels from price action
+            this.detectNewLevels(event);
 
-        // Emit significant levels
-        this.emitSignificantLevels();
+            // Update level strengths
+            this.updateLevelStrengths();
+
+            // Check for role reversals
+            this.checkRoleReversals(event);
+
+            // Emit significant levels
+            this.emitSignificantLevels();
+        }
     }
 
     private checkLevelTouches(event: EnrichedTradeEvent): void {
@@ -172,6 +182,16 @@ export class SupportResistanceDetector extends BaseDetector {
         const recentTrades = this.getRecentTrades(300000); // 5 minutes
         const priceClusters = this.findPriceClusters(recentTrades);
 
+        this.logger.debug("Price clusters found for level detection", {
+            clusterCount: priceClusters.length,
+            clusters: priceClusters.map((c) => ({
+                price: c.price,
+                tradeCount: c.tradeCount,
+                totalVolume: c.totalVolume,
+                meetsMinTouchCount: c.tradeCount >= this.config.minTouchCount,
+            })),
+        });
+
         for (const cluster of priceClusters) {
             if (cluster.tradeCount >= this.config.minTouchCount) {
                 const levelId = this.generateLevelId(cluster.price);
@@ -195,6 +215,7 @@ export class SupportResistanceDetector extends BaseDetector {
                         ),
                         volumeAtLevel: cluster.totalVolume,
                         roleReversals: [],
+                        hasBeenEmitted: false,
                     };
 
                     this.levels.set(levelId, level);
@@ -205,6 +226,8 @@ export class SupportResistanceDetector extends BaseDetector {
                         type: level.type,
                         touchCount: level.touchCount,
                         volume: level.volumeAtLevel,
+                        strength: level.strength,
+                        minStrengthRequired: this.config.minStrength,
                     });
                 }
             }
@@ -257,17 +280,18 @@ export class SupportResistanceDetector extends BaseDetector {
     private updateLevelStrengths(): void {
         for (const level of this.levels.values()) {
             // Calculate strength based on touch count, volume, and rejections
-            const touchStrength = Math.min(level.touchCount / 10, 1); // Max at 10 touches
-            const volumeStrength = Math.min(level.volumeAtLevel / 1000, 1); // Adjust based on typical volumes
+            const touchStrength = Math.min(level.touchCount / 5, 1); // Max at 5 touches (more sensitive)
+            const volumeStrength = Math.min(level.volumeAtLevel / 500, 1); // Lower volume threshold
             const rejectionCount = level.touches.filter(
                 (t) => t.wasRejection
             ).length;
-            const rejectionStrength = Math.min(rejectionCount / 5, 1); // Max at 5 rejections
+            const rejectionStrength = Math.min(rejectionCount / 3, 1); // Max at 3 rejections (more sensitive)
 
+            // Give more weight to touch count and rejections for price action significance
             level.strength =
-                touchStrength * 0.4 +
+                touchStrength * 0.5 +
                 volumeStrength * this.config.volumeWeightFactor +
-                rejectionStrength * 0.3;
+                rejectionStrength * 0.4;
         }
     }
 
@@ -308,47 +332,73 @@ export class SupportResistanceDetector extends BaseDetector {
     }
 
     private emitSignificantLevels(): void {
+        const now = Date.now();
+        const reEmitCooldownMs = 300000; // 5 minutes between re-emissions
+
         for (const level of this.levels.values()) {
             if (
                 level.strength >= this.config.minStrength &&
                 level.touchCount >= this.config.minTouchCount
             ) {
-                // Create a Detected object for the callback
-                const detectedSignal = {
-                    id: level.id,
-                    side:
-                        level.type === "support"
-                            ? "buy"
-                            : ("sell" as "buy" | "sell"),
-                    price: level.price,
-                    trades: [], // Support/resistance doesn't have specific trades
-                    totalAggressiveVolume: level.volumeAtLevel,
-                    passiveVolume: 0, // Not applicable for support/resistance
-                    zone: level.price,
-                    refilled: false,
-                    detectedAt: Date.now(),
-                    detectorSource: "absorption" as const, // Closest match
-                    metadata: {
-                        level: level,
-                        levelType: level.type,
+                const shouldEmit =
+                    !level.hasBeenEmitted || // Never emitted before
+                    (level.lastEmittedAt &&
+                        now - level.lastEmittedAt > reEmitCooldownMs && // Cooldown passed
+                        level.roleReversals.some(
+                            (r) => r.timestamp > (level.lastEmittedAt || 0)
+                        )); // Role reversal since last emission
+
+                if (shouldEmit) {
+                    // Create a Detected object for the callback
+                    const detectedSignal = {
+                        id: level.id,
+                        side:
+                            level.type === "support"
+                                ? "buy"
+                                : ("sell" as "buy" | "sell"),
+                        price: level.price,
+                        trades: [], // Support/resistance doesn't have specific trades
+                        totalAggressiveVolume: level.volumeAtLevel,
+                        passiveVolume: 0, // Not applicable for support/resistance
+                        zone: level.price,
+                        refilled: false,
+                        detectedAt: now,
+                        detectorSource: "absorption" as const, // Closest match
+                        metadata: {
+                            level: level,
+                            levelType: level.type,
+                            strength: level.strength,
+                            touchCount: level.touchCount,
+                            volumeAtLevel: level.volumeAtLevel,
+                            roleReversals: level.roleReversals.length,
+                            firstDetected: level.firstDetected,
+                            lastTouched: level.lastTouched,
+                        },
+                    };
+
+                    // Use the callback to emit the signal
+                    this.callback(detectedSignal);
+
+                    // Also emit the event for WebSocket broadcasting
+                    this.emit("supportResistanceLevel", {
+                        type: "support_resistance_level",
+                        data: level,
+                        timestamp: new Date(),
+                    });
+
+                    // Mark as emitted
+                    level.hasBeenEmitted = true;
+                    level.lastEmittedAt = now;
+
+                    this.logger.info("Support/Resistance level emitted", {
+                        levelId: level.id,
+                        price: level.price,
+                        type: level.type,
                         strength: level.strength,
                         touchCount: level.touchCount,
-                        volumeAtLevel: level.volumeAtLevel,
-                        roleReversals: level.roleReversals.length,
-                        firstDetected: level.firstDetected,
-                        lastTouched: level.lastTouched,
-                    },
-                };
-
-                // Use the callback to emit the signal
-                this.callback(detectedSignal);
-
-                // Also emit the event for WebSocket broadcasting
-                this.emit("supportResistanceLevel", {
-                    type: "support_resistance_level",
-                    data: level,
-                    timestamp: new Date(),
-                });
+                        isReEmission: level.lastEmittedAt ? true : false,
+                    });
+                }
             }
         }
     }

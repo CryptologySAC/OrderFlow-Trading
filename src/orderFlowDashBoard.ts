@@ -750,6 +750,31 @@ export class OrderFlowDashboard {
                 this.wsManager.broadcast(message);
             });
         }
+
+        if (this.supportResistanceDetector) {
+            this.logger.info(
+                "[OrderFlowDashboard] Setting up support/resistance detector event handlers..."
+            );
+            this.supportResistanceDetector.on(
+                "supportResistanceLevel",
+                (event: { type: string; data: Record<string, unknown>; timestamp: Date }) => {
+                    const message: WebSocketMessage = {
+                        type: "supportResistanceLevel",
+                        data: event.data,
+                        now: Date.now(),
+                    };
+                    this.wsManager.broadcast(message);
+                    this.logger.info(
+                        "Support/Resistance level broadcasted via WebSocket",
+                        {
+                            levelId: event.data.id,
+                            price: event.data.price,
+                            type: event.data.type,
+                        }
+                    );
+                }
+            );
+        }
     }
 
     /**
@@ -918,7 +943,7 @@ export class OrderFlowDashboard {
                         price: signal.price,
                         takeProfit: signal.takeProfit,
                         stopLoss: signal.stopLoss,
-                        label: signal.closeReason,
+                        label: signal.type,
                         correlationId,
                     },
                     correlationId

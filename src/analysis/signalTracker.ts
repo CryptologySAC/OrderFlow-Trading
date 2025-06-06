@@ -388,12 +388,7 @@ export class SignalTracker extends EventEmitter {
         timeElapsed: number,
         returnPct: number
     ): "success" | "failure" | "timeout" | null {
-        // Check for timeout
-        if (timeElapsed >= this.config.signalTimeoutMs) {
-            return "timeout";
-        }
-
-        // Check for success threshold
+        // Check for success threshold first
         if (returnPct >= this.config.successThreshold) {
             return "success";
         }
@@ -401,6 +396,11 @@ export class SignalTracker extends EventEmitter {
         // Check for failure threshold
         if (returnPct <= this.config.failureThreshold) {
             return "failure";
+        }
+
+        // Check for timeout
+        if (timeElapsed >= this.config.signalTimeoutMs) {
+            return "timeout";
         }
 
         return null;

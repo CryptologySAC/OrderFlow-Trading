@@ -29,19 +29,6 @@ export type SignalType =
 
 export type SignalSide = "buy" | "sell";
 
-export type CloseReason =
-    | "take_profit"
-    | "stop_loss"
-    | "opposite_signal"
-    | "end_of_data"
-    | "invalidated"
-    | "exhaustion"
-    | "absorption"
-    | "delta_divergence"
-    | "cvd_slope_reversal"
-    | "both"
-    | "swing_detection";
-
 export interface Signal {
     id: string; // unique for each signal instance
     type: SignalType;
@@ -53,7 +40,6 @@ export interface Signal {
     stopLoss?: number;
     takeProfit?: number;
     timeframe?: "Daytime" | "Nighttime";
-    closeReason?: CloseReason;
     totalAggressiveVolume?: number;
     passiveVolume?: number;
     refilled?: boolean;

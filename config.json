@@ -104,8 +104,8 @@
             },
             "absorption": {
                 "minAggVolume": 10,
-                "threshold": 0.52,
-                "windowMs": 80000,
+                "threshold": 0.5,
+                "windowMs": 900000,
                 "zoneTicks": 2,
                 "eventCooldownMs": 6000,
                 "signalCooldownMs": 30000,
@@ -172,12 +172,12 @@
                 }
             },
             "supportResistanceDetector": {
-                "priceTolerancePercent": 0.05,
-                "minTouchCount": 3,
-                "minStrength": 0.6,
+                "priceTolerancePercent": 0.02,
+                "minTouchCount": 2,
+                "minStrength": 0.3,
                 "timeWindowMs": 5400000,
                 "volumeWeightFactor": 0.3,
-                "rejectionConfirmationTicks": 5
+                "rejectionConfirmationTicks": 3
             },
             "tradesProcessor": {
                 "storageTime": 5400000,

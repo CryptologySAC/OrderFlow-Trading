@@ -119,11 +119,11 @@ export class AccumulationDetector
             }
 
             // Record detection attempt metrics
-            this.metricsCollector.incrementCounter(
-                "accumulation.detection.attempts"
+            this.metricsCollector.incrementMetric(
+                "accumulationDetectionAttempts"
             );
-            this.metricsCollector.recordGauge(
-                "accumulation.zones.active",
+            this.metricsCollector.updateMetric(
+                "accumulationZonesActive",
                 this.zoneData.size
             );
         } catch (error) {
@@ -131,8 +131,8 @@ export class AccumulationDetector
                 error as Error,
                 "AccumulationDetector.checkForSignal"
             );
-            this.metricsCollector.incrementCounter(
-                "accumulation.detection.errors"
+            this.metricsCollector.incrementMetric(
+                "accumulationDetectionErrors"
             );
         }
     }

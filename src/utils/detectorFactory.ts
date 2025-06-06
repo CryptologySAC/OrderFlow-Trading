@@ -786,14 +786,15 @@ export class DetectorFactory {
         if (detectorType === "absorption") {
             return {
                 ...baseDefaults,
+                ...settings,
                 features: {
                     ...baseDefaults.features,
                     icebergDetection: true,
                     liquidityGradient: true,
                     absorptionVelocity: false,
                     layeredAbsorption: false,
+                    ...settings.features,
                 },
-                ...settings,
             };
         }
 

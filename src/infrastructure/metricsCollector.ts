@@ -67,9 +67,23 @@ export interface Metrics {
     detector_exhaustionPassive_volume?: number;
 
     // Detector metrics - accumulation
+    accumulationDetectionAttempts?: number;
+    accumulationZonesActive?: number;
+    accumulationDetectionErrors?: number;
+    accumulationSignalsGenerated?: number;
+    accumulationMarketVolatility?: number;
+    accumulationMarketTrendStrength?: number;
     detector_accumulationSignals?: number;
     detector_accumulationAggressive_volume?: number;
     detector_accumulationPassive_volume?: number;
+
+    // Detector metrics - distribution
+    distributionDetectionAttempts?: number;
+    distributionZonesActive?: number;
+    distributionDetectionErrors?: number;
+    distributionSignalsGenerated?: number;
+    distributionMarketVolatility?: number;
+    distributionMarketTrendStrength?: number;
 
     // Signal processing metrics
     signalCandidatesGenerated?: number;
@@ -119,6 +133,16 @@ export interface Metrics {
     accumulationDetected?: number;
     accumulationErrors?: number;
     preprocessorErrors?: number;
+
+    // Flow detector rejection metrics
+    accumulationRejectedFlowSpecificValidation?: number;
+    accumulationRejectedInsufficientStatisticalSignificance?: number;
+    accumulationRejectedInsufficientVolume?: number;
+    accumulationRejectedSpoofingDetected?: number;
+    distributionRejectedFlowSpecificValidation?: number;
+    distributionRejectedInsufficientStatisticalSignificance?: number;
+    distributionRejectedInsufficientVolume?: number;
+    distributionRejectedSpoofingDetected?: number;
 }
 
 /**

@@ -541,62 +541,9 @@ function buildSignalLabel(signal) {
     if (signal.stopLoss) label += ` | SL: ${signal.stopLoss.toFixed(2)}`;
 
     // 3. Confidence/Confirmations
-    if (signal.confidence !== undefined)
+    if (signal.confidence !== undefined) {
         label += `\nConf: ${(signal.confidence * 100).toFixed(0)}%`;
-    if (signal.confirmations?.length)
-        label += ` | Confirms: ${signal.confirmations.join(", ")}`;
-
-    // 4. Zone/Volumes/Refilled
-    if (signal.zone !== undefined) label += `\nZone: ${signal.zone}`;
-    if (signal.totalAggressiveVolume !== undefined)
-        label += ` | Agg: ${Number(signal.totalAggressiveVolume).toFixed(2)}`;
-    if (signal.passiveVolume !== undefined)
-        label += ` | Passive: ${Number(signal.passiveVolume).toFixed(2)}`;
-    if (signal.refilled !== undefined)
-        label += ` | Ref: ${signal.refilled ? "Yes" : "No"}`;
-
-    // 5. Reason/closeReason
-    if (signal.closeReason) label += `\nReason: ${signal.closeReason}`;
-
-    // 6. Anomaly
-    if (signal.anomaly && signal.anomaly.detected)
-        label += `\nAnomaly: ${signal.anomaly.type || "?"} (${signal.anomaly.severity || "?"})`;
-
-    // 7. Signal-specific details
-    if (signal.signalData) {
-        if ("absorptionType" in signal.signalData) {
-            label += `\nAbsorption: ${signal.signalData.absorptionType}`;
-            if (signal.signalData.spoofed) label += " | Spoofed!";
-            if (signal.signalData.recentAggressive !== undefined)
-                label += `\nAgg: ${Number(signal.signalData.recentAggressive).toFixed(2)}`;
-            if (signal.signalData.rollingZonePassive !== undefined)
-                label += ` | RollingPassive: ${Number(signal.signalData.rollingZonePassive).toFixed(2)}`;
-            if (signal.signalData.avgPassive !== undefined)
-                label += ` | AvgPassive: ${Number(signal.signalData.avgPassive).toFixed(2)}`;
-        }
-        if ("exhaustionType" in signal.signalData) {
-            label += `\nExhaustion: ${signal.signalData.exhaustionType}`;
-            if (signal.signalData.spoofed) label += " | Spoofed!";
-            if (signal.signalData.recentAggressive !== undefined)
-                label += `\nAgg: ${Number(signal.signalData.recentAggressive).toFixed(2)}`;
-            if (signal.signalData.oppositeQty !== undefined)
-                label += ` | OppQty: ${Number(signal.signalData.oppositeQty).toFixed(2)}`;
-            if (signal.signalData.avgLiquidity !== undefined)
-                label += ` | AvgBook: ${Number(signal.signalData.avgLiquidity).toFixed(2)}`;
-            if (signal.signalData.spread !== undefined)
-                label += ` | Spread: ${(signal.signalData.spread * 100).toFixed(3)}%`;
-        }
-        if ("swingType" in signal.signalData) {
-            label += `\nSwing: ${signal.signalData.swingType} | Str: ${signal.signalData.strength}`;
-        }
-        if ("divergence" in signal.signalData) {
-            label += `\nDiv: ${signal.signalData.divergence}`;
-        }
-        // Add more per-type details as needed.
     }
-
-    // 8. Invalidation (for signal lifecycle tracking)
-    if (signal.isInvalidated) label += "\n❌ Invalidated";
 
     // Optional: truncate if label is too long for chart
     if (label.length > 250) label = label.slice(0, 245) + "...";
@@ -738,6 +685,9 @@ const tradeWebsocket = new TradeWebSocket({
                             updateTimeAnnotations(trade.time, activeRange);
                         }
 
+                        // Check for support/resistance zone breaches
+                        checkSupportResistanceBreaches(trade.price, trade.time);
+
                         scheduleTradesChartUpdate();
                     }
                     break;
@@ -775,6 +725,72 @@ const tradeWebsocket = new TradeWebSocket({
                     };
                     tradesChart.update("none");
                     console.log("Signal label added:", label);
+                    break;
+
+                case "signal_backlog":
+                    console.log(
+                        `${message.data.length} backlog signals received.`
+                    );
+
+                    // Process backlog signals in reverse order (oldest first)
+                    const backlogSignals = [...message.data].reverse();
+
+                    for (const signal of backlogSignals) {
+                        // Normalize confirmed signal structure for display
+                        const normalizedSignal = {
+                            id: signal.id,
+                            type:
+                                signal.originalSignals?.[0]?.type ||
+                                "confirmed",
+                            side:
+                                signal.originalSignals?.[0]?.metadata?.side ||
+                                "unknown",
+                            price: signal.finalPrice || signal.price,
+                            time: signal.confirmedAt || signal.time,
+                            confidence: signal.confidence,
+                            // Include original signal data for buildSignalLabel
+                            ...signal,
+                        };
+
+                        const signalLabel = buildSignalLabel(normalizedSignal);
+                        const signalId = signal.id;
+
+                        // Add to signals list (but don't unshift since we want chronological order)
+                        signalsList.push(normalizedSignal);
+
+                        // Add to chart
+                        tradesChart.options.plugins.annotation.annotations[
+                            signalId
+                        ] = {
+                            type: "label",
+                            xValue: normalizedSignal.time,
+                            yValue: normalizedSignal.price,
+                            content: signalLabel,
+                            backgroundColor: "rgba(90, 50, 255, 0.4)", // Slightly more transparent for backlog
+                            color: "white",
+                            font: {
+                                size: 12,
+                                family: "monospace",
+                            },
+                            borderRadius: 4,
+                            padding: 8,
+                            position: {
+                                x: "center",
+                                y: "center",
+                            },
+                        };
+                    }
+
+                    // Limit total signals list length
+                    if (signalsList.length > 50) {
+                        signalsList = signalsList.slice(-50); // Keep most recent 50
+                    }
+
+                    renderSignalsList();
+                    tradesChart.update("none");
+                    console.log(
+                        `${backlogSignals.length} backlog signals added to chart and list`
+                    );
                     break;
 
                 case "supportResistanceLevel":
@@ -2459,18 +2475,33 @@ function addSupportResistanceToChart(level) {
     // Determine color based on type and strength
     const isSupport = level.type === "support";
     const baseColor = isSupport ? "34, 197, 94" : "239, 68, 68"; // Green for support, red for resistance
-    const alpha = Math.max(0.15, Math.min(0.6, level.strength)); // Opacity based on strength
+    const alpha = Math.max(0.2, Math.min(0.5, level.strength)); // Opacity based on strength
 
-    // Create price tolerance for level thickness
-    const priceRange = level.price * 0.0005; // 0.05% range for level thickness
+    // Calculate time boundaries for the zone
+    const now = Date.now();
+    const startTime = level.firstDetected;
+    // Zone is valid until crossed or for a maximum duration
+    const maxValidDuration = 4 * 60 * 60 * 1000; // 4 hours maximum
+    const endTime = Math.min(
+        now + maxValidDuration,
+        level.lastTouched + maxValidDuration
+    );
 
-    // Add the horizontal bar across the chart
+    // Create price tolerance for zone height - make it proportional to strength and touch count
+    const baseThickness = level.price * 0.0008; // 0.08% base thickness
+    const strengthMultiplier = 1 + level.strength * 2; // 1x to 3x based on strength
+    const touchMultiplier = 1 + Math.min(level.touchCount / 10, 1); // Additional thickness for more touches
+    const zoneHeight = baseThickness * strengthMultiplier * touchMultiplier;
+
+    // Add the time-bounded zone box
     annotations[levelId] = {
         type: "box",
-        yMin: level.price - priceRange,
-        yMax: level.price + priceRange,
+        xMin: startTime,
+        xMax: endTime,
+        yMin: level.price - zoneHeight / 2,
+        yMax: level.price + zoneHeight / 2,
         backgroundColor: `rgba(${baseColor}, ${alpha})`,
-        borderColor: `rgba(${baseColor}, ${Math.min(alpha * 2, 0.8)})`,
+        borderColor: `rgba(${baseColor}, ${Math.min(alpha * 1.5, 0.8)})`,
         borderWidth: 1,
         borderDash: level.roleReversals?.length > 0 ? [5, 5] : undefined, // Dashed if has role reversals
         drawTime: "beforeDatasetsDraw",
@@ -2484,27 +2515,27 @@ function addSupportResistanceToChart(level) {
         },
     };
 
-    // Add a label for the level
+    // Add a label for the level - positioned at the start of the zone
     const labelId = `sr_label_${level.id}`;
     annotations[labelId] = {
         type: "label",
-        xValue: "50%", // Position at middle of visible chart
+        xValue: startTime,
         yValue: level.price,
-        content: `${isSupport ? "S" : "R"} ${level.price.toFixed(2)} (${level.touchCount})`,
-        backgroundColor: `rgba(${baseColor}, 0.8)`,
+        content: `${isSupport ? "SUPPORT" : "RESISTANCE"} $${level.price.toFixed(2)}`,
+        backgroundColor: `rgba(${baseColor}, 0.9)`,
         color: "white",
         font: {
-            size: 10,
+            size: 9,
             weight: "bold",
             family: "monospace",
         },
-        padding: 2,
-        borderRadius: 2,
+        padding: 3,
+        borderRadius: 3,
         position: {
-            x: "end",
+            x: "start",
             y: "center",
         },
-        xAdjust: -5,
+        xAdjust: 5,
         drawTime: "afterDatasetsDraw",
         z: 5,
     };
@@ -2569,6 +2600,47 @@ function hideSupportResistanceTooltip() {
         window.activeSRTooltip.remove();
         window.activeSRTooltip = null;
     }
+}
+
+/**
+ * Check if a trade price breaches any support/resistance zones and invalidate them
+ */
+function checkSupportResistanceBreaches(tradePrice, tradeTime) {
+    if (!supportResistanceLevels.length) return;
+
+    supportResistanceLevels = supportResistanceLevels.filter((level) => {
+        // Calculate breach threshold - zone is breached if price moves significantly beyond it
+        const zoneHeight =
+            level.price *
+            0.0008 *
+            (1 + level.strength * 2) *
+            (1 + Math.min(level.touchCount / 10, 1));
+        const breachThreshold = zoneHeight * 2; // Breach if price moves 2x zone height beyond level
+
+        let isBreached = false;
+
+        if (level.type === "support") {
+            // Support is breached if price falls significantly below it
+            isBreached = tradePrice < level.price - breachThreshold;
+        } else {
+            // Resistance is breached if price rises significantly above it
+            isBreached = tradePrice > level.price + breachThreshold;
+        }
+
+        if (isBreached) {
+            console.log(`${level.type.toUpperCase()} level breached:`, {
+                levelPrice: level.price,
+                tradePrice: tradePrice,
+                threshold: breachThreshold,
+                levelId: level.id,
+            });
+
+            removeSupportResistanceLevel(level.id);
+            return false; // Remove from array
+        }
+
+        return true; // Keep in array
+    });
 }
 
 /**

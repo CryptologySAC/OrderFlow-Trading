@@ -1,10 +1,9 @@
-import { describe, it, expect, vi } from "vitest";
-import { withBusyRetries, sleepSync } from "../src/infrastructure/sqliteUtils";
+import { describe, it, expect } from "vitest";
+import { withBusyRetries } from "../src/infrastructure/sqliteUtils";
 
 describe("infrastructure/sqliteUtils", () => {
     it("retries on SQLITE_BUSY", () => {
         let attempts = 0;
-        const spy = vi.spyOn({ sleepSync }, "sleepSync");
         const result = withBusyRetries(
             () => {
                 if (attempts++ < 1) {
@@ -18,6 +17,6 @@ describe("infrastructure/sqliteUtils", () => {
             1
         );
         expect(result).toBe("ok");
-        expect(spy).toHaveBeenCalled();
+        expect(attempts).toBe(2); // Should have retried once
     });
 });

@@ -30,7 +30,7 @@ describe("services/StatsBroadcaster", () => {
             new Logger()
         );
         sb.start();
-        vi.advanceTimersByTime(10);
+        vi.advanceTimersByTime(5001); // Advance past the 5000ms interval
         expect(wsManager.broadcast).toHaveBeenCalled();
         sb.stop();
     });

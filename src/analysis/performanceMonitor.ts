@@ -151,7 +151,6 @@ export class PerformanceMonitor extends EventEmitter {
         });
 
         this.initializeMetrics();
-        this.startMonitoring();
     }
 
     /**
@@ -199,15 +198,19 @@ export class PerformanceMonitor extends EventEmitter {
 
         if (this.performanceAnalysisInterval) {
             clearInterval(this.performanceAnalysisInterval);
+            this.performanceAnalysisInterval = undefined;
         }
         if (this.quickCheckInterval) {
             clearInterval(this.quickCheckInterval);
+            this.quickCheckInterval = undefined;
         }
         if (this.healthCheckInterval) {
             clearInterval(this.healthCheckInterval);
+            this.healthCheckInterval = undefined;
         }
         if (this.reportGenerationInterval) {
             clearInterval(this.reportGenerationInterval);
+            this.reportGenerationInterval = undefined;
         }
 
         this.emit("monitoringStopped");

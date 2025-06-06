@@ -560,7 +560,6 @@ export class SignalManager extends EventEmitter {
             type: this.getSignalTypeConfirmed(originalSignal.type),
             takeProfit: profitTarget.price,
             stopLoss,
-            closeReason: "swing_detection",
             signalData,
         };
 

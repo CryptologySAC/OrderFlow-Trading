@@ -18,6 +18,7 @@ describe("analysis/SignalTracker", () => {
             {
                 successThreshold: 0.01,
                 failureThreshold: -0.01,
+                signalTimeoutMs: 500000,
             }
         );
     });

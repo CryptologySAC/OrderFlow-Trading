@@ -198,6 +198,15 @@ export class AbsorptionDetector
         const zoneTicks = this.getEffectiveZoneTicks();
 
         try {
+            // Record detection metrics once per trade
+            this.metricsCollector.incrementMetric(
+                "absorptionDetectionAttempts"
+            );
+            this.metricsCollector.updateMetric(
+                "absorptionZonesActive",
+                this.zoneAgg.size
+            );
+
             for (const [zone, bucket] of this.zoneAgg) {
                 // prune old trades
                 bucket.trades = bucket.trades.filter(
@@ -211,15 +220,6 @@ export class AbsorptionDetector
                     bucket.trades,
                     triggerTrade,
                     zoneTicks
-                );
-
-                // Record detection metrics
-                this.metricsCollector.incrementMetric(
-                    "absorptionDetectionAttempts"
-                );
-                this.metricsCollector.updateMetric(
-                    "absorptionZonesActive",
-                    this.zoneAgg.size
                 );
             }
         } catch (error) {

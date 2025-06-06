@@ -75,7 +75,10 @@ export class RecoveryManager extends EventEmitter {
         // Check cooldown period
         const now = Date.now();
         const timeSinceLastReload = now - this.lastHardReloadTime;
-        if (timeSinceLastReload < this.config.hardReloadCooldownMs) {
+        if (
+            this.lastHardReloadTime > 0 &&
+            timeSinceLastReload < this.config.hardReloadCooldownMs
+        ) {
             this.logger.warn(
                 "[RecoveryManager] Hard reload in cooldown period",
                 {
@@ -106,6 +109,7 @@ export class RecoveryManager extends EventEmitter {
             return false;
         }
 
+        this.lastHardReloadTime = Date.now();
         void this.executeHardReload(event);
         return true;
     }
@@ -116,7 +120,6 @@ export class RecoveryManager extends EventEmitter {
     private async executeHardReload(event: HardReloadEvent): Promise<void> {
         this.isHardReloadInProgress = true;
         this.hardReloadCount++;
-        this.lastHardReloadTime = Date.now();
 
         this.logger.error("[RecoveryManager] Initiating hard reload", {
             reason: event.reason,
