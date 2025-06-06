@@ -16,6 +16,8 @@ import { SignalManager } from "../trading/signalManager.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
 import { IndividualTradesManager } from "../data/individualTradesManager.js";
 import { MicrostructureAnalyzer } from "../data/microstructureAnalyzer.js";
+import type { SignalTracker } from "../analysis/signalTracker.js";
+import type { MarketContextCollector } from "../analysis/marketContextCollector.js";
 
 /**
  * Application dependencies interface
@@ -42,4 +44,8 @@ export interface Dependencies {
     spoofingDetector: SpoofingDetector;
     individualTradesManager?: IndividualTradesManager;
     microstructureAnalyzer?: MicrostructureAnalyzer;
+
+    // Performance Analysis (optional)
+    signalTracker?: SignalTracker;
+    marketContextCollector?: MarketContextCollector;
 }

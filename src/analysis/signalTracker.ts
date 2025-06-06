@@ -4,7 +4,7 @@ import { EventEmitter } from "events";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import type { IPipelineStorage } from "../storage/pipelineStorage.js";
-import type { ConfirmedSignal } from "../types/signalTypes.js";
+import type { ConfirmedSignal, SignalType } from "../types/signalTypes.js";
 
 export interface MarketContext {
     timestamp: number;
@@ -79,6 +79,7 @@ export interface SignalOutcome {
     currentPrice?: number;
     currentReturn?: number;
     lastUpdated: number;
+    isActive?: boolean;
 }
 
 export interface PerformanceMetrics {
@@ -121,6 +122,44 @@ export interface PerformanceMetrics {
             avgReturn: number;
         }
     >;
+}
+
+export interface FailedSignalAnalysis {
+    signalId: string;
+    signalType: SignalType;
+    detectorId: string;
+    failureReason: string;
+
+    // Warning signals that were present
+    warningSignals: {
+        lowVolume: boolean;
+        weakConfirmation: boolean;
+        conflictingSignals: boolean;
+        poorMarketConditions: boolean;
+        recentFailuresNearby: boolean;
+        extremeConfidence: boolean;
+        unusualSpread: boolean;
+    };
+
+    // Actual price action analysis
+    actualPriceAction: {
+        direction: "opposite" | "sideways" | "choppy";
+        magnitude: number;
+        timeToFailure: number;
+        maxDrawdown: number;
+    };
+
+    // Avoidability analysis
+    avoidability: {
+        score: number; // 0-1 scale, how avoidable this failure was
+        preventionMethod: string;
+        confidenceReduction: number;
+        filterSuggestion: string;
+    };
+
+    // Market context
+    marketContextAtEntry: MarketContext;
+    marketContextAtFailure: MarketContext;
 }
 
 export interface SignalTrackerConfig {

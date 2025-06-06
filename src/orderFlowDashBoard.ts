@@ -75,6 +75,8 @@ import { runMigrations } from "./infrastructure/migrate.js";
 import { Storage } from "./storage/storage.js";
 import { PipelineStorage } from "./storage/pipelineStorage.js";
 import { BinanceDataFeed } from "./utils/binance.js";
+import { SignalTracker } from "./analysis/signalTracker.js";
+import { MarketContextCollector } from "./analysis/marketContextCollector.js";
 import { TradesProcessor } from "./clients/tradesProcessor.js";
 import { OrderBookProcessor } from "./clients/orderBookProcessor.js";
 import { SignalLogger } from "./services/signalLogger.js";
@@ -218,7 +220,8 @@ export class OrderFlowDashboard {
             this.metricsCollector,
             this.dataStreamManager,
             this.wsManager,
-            this.logger
+            this.logger,
+            dependencies.signalTracker
         );
         DetectorFactory.initialize(dependencies);
 
@@ -233,7 +236,7 @@ export class OrderFlowDashboard {
         this.signalCoordinator.registerDetector(
             this.absorptionDetector,
             ["absorption"],
-            100,
+            70,
             true
         );
 
@@ -248,7 +251,7 @@ export class OrderFlowDashboard {
         this.signalCoordinator.registerDetector(
             this.exhaustionDetector,
             ["exhaustion"],
-            90,
+            80,
             true
         );
 
@@ -263,7 +266,7 @@ export class OrderFlowDashboard {
         this.signalCoordinator.registerDetector(
             this.accumulationDetector,
             ["accumulation"],
-            50,
+            75,
             true
         );
 
@@ -278,7 +281,7 @@ export class OrderFlowDashboard {
         this.signalCoordinator.registerDetector(
             this.distributionDetector,
             ["distribution"],
-            50,
+            75,
             true
         );
 
@@ -1211,12 +1214,26 @@ export function createDependencies(): Dependencies {
         parseInt(process.env.ALERT_COOLDOWN_MS || "300000", 10)
     );
 
+    // Create SignalTracker and MarketContextCollector for performance analysis
+    const signalTracker = new SignalTracker(
+        logger,
+        metricsCollector,
+        pipelineStore
+    );
+
+    const marketContextCollector = new MarketContextCollector(
+        logger,
+        metricsCollector
+    );
+
     const signalManager = new SignalManager(
         anomalyDetector,
         alertManager,
         logger,
         metricsCollector,
         pipelineStore,
+        signalTracker,
+        marketContextCollector,
         Config.SIGNAL_MANAGER
     );
 
@@ -1246,6 +1263,8 @@ export function createDependencies(): Dependencies {
         individualTradesManager,
         microstructureAnalyzer,
         binanceFeed,
+        signalTracker,
+        marketContextCollector,
     };
 }
 

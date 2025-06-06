@@ -280,6 +280,11 @@ export class SignalCoordinator extends EventEmitter {
                 priority: reg.priority.toString(),
             }
         );
+        // Also track per-type totals for easier stats aggregation
+        this.metrics.incrementCounter(
+            `signal_coordinator_signals_received_total_${candidate.type}`,
+            1
+        );
 
         if (!reg.signalTypes.includes(candidate.type)) {
             this.logger.warn("Unsupported signalType from detector", {
@@ -371,6 +376,11 @@ export class SignalCoordinator extends EventEmitter {
                     signal_type: candidate.type,
                     ok: "1",
                 }
+            );
+            // Per-type processed counter
+            this.metrics.incrementCounter(
+                `signal_coordinator_signals_processed_total_${candidate.type}`,
+                1
             );
             this.metrics.recordHistogram(
                 "signal_coordinator_processing_duration_seconds",
