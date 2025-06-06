@@ -33,7 +33,8 @@ export class WebSocketManager {
         private readonly logger: Logger,
         private readonly rateLimiter: RateLimiter,
         private readonly metricsCollector: MetricsCollector,
-        private readonly wsHandlers: Record<string, WSHandler>
+        private readonly wsHandlers: Record<string, WSHandler>,
+        private readonly onConnect?: (ws: ExtendedWebSocket) => void | Promise<void>
     ) {
         this.wsServer = new WebSocketServer({ port });
         this.setupWebSocketServer();
@@ -56,6 +57,12 @@ export class WebSocketManager {
                 this.activeConnections.size
             );
             this.logger.info("Client connected", { clientId }, correlationId);
+
+            if (this.onConnect) {
+                Promise.resolve(this.onConnect(ws)).catch((err) => {
+                    this.logger.error("onConnect error", { error: err });
+                });
+            }
 
             ws.on("close", () => {
                 this.activeConnections.delete(ws);

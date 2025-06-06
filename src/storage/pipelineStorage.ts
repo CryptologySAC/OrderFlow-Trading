@@ -15,6 +15,7 @@ import type { BaseDetector } from "../indicators/base/baseDetector.js";
 import type {
     SignalCandidate,
     ProcessedSignal,
+    ConfirmedSignal,
     SignalType,
 } from "../types/signalTypes.js";
 import type { ProcessingJob } from "../utils/types.js";
@@ -58,6 +59,12 @@ interface HistoryRow {
     price: number;
     timestamp: number;
 }
+interface ConfirmedRow {
+    signalId: string;
+    signalJson: string;
+    price: number;
+    timestamp: number;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Public config / interface                                         */
@@ -80,6 +87,10 @@ export interface IPipelineStorage {
     saveSignalHistory(signal: ProcessedSignal): void;
     getRecentSignals(since: number, symbol?: string): ProcessedSignal[];
     purgeSignalHistory(): void;
+
+    saveConfirmedSignal(signal: ConfirmedSignal): void;
+    getRecentConfirmedSignals(since: number): ConfirmedSignal[];
+    purgeConfirmedSignals(): void;
 
     // Signal tracking methods
     saveSignalOutcome(outcome: SignalOutcome): Promise<void>;
@@ -132,6 +143,12 @@ export class PipelineStorage implements IPipelineStorage {
     private readonly deleteHistOlder: Statement;
     private readonly countHist: Statement;
     private readonly deleteHistExcess: Statement;
+
+    private readonly insertConfirmed: Statement;
+    private readonly selectConfirmed: Statement;
+    private readonly deleteConfirmedOlder: Statement;
+    private readonly countConfirmed: Statement;
+    private readonly deleteConfirmedExcess: Statement;
 
     // Signal tracking statements
     private readonly insertSignalOutcome: Statement;
@@ -211,6 +228,16 @@ export class PipelineStorage implements IPipelineStorage {
               ON signal_history (timestamp DESC);
             CREATE INDEX IF NOT EXISTS idx_hist_sym_ts
               ON signal_history (symbol, timestamp DESC);
+
+            /* confirmed signals */
+            CREATE TABLE IF NOT EXISTS confirmed_signals (
+                signalId   TEXT PRIMARY KEY,
+                signalJson TEXT NOT NULL,
+                price      REAL NOT NULL,
+                timestamp  INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_confirmed_ts
+              ON confirmed_signals (timestamp DESC);
 
             /* signal outcomes tracking */
             CREATE TABLE IF NOT EXISTS signal_outcomes (
@@ -377,6 +404,31 @@ export class PipelineStorage implements IPipelineStorage {
             DELETE FROM signal_history
             WHERE signalId IN (
               SELECT signalId FROM signal_history
+              ORDER BY timestamp ASC
+              LIMIT @excess
+            )
+        `);
+
+        /* confirmed signals */
+        this.insertConfirmed = this.db.prepare(`
+            INSERT OR REPLACE INTO confirmed_signals
+            (signalId, signalJson, price, timestamp)
+            VALUES (@signalId,@signalJson,@price,@timestamp)
+        `);
+        this.selectConfirmed = this.db.prepare(`
+            SELECT signalJson FROM confirmed_signals
+            WHERE timestamp >= @since
+        `);
+        this.deleteConfirmedOlder = this.db.prepare(`
+            DELETE FROM confirmed_signals WHERE timestamp < @cutTs
+        `);
+        this.countConfirmed = this.db.prepare(`
+            SELECT COUNT(*) as cnt FROM confirmed_signals
+        `);
+        this.deleteConfirmedExcess = this.db.prepare(`
+            DELETE FROM confirmed_signals
+            WHERE signalId IN (
+              SELECT signalId FROM confirmed_signals
               ORDER BY timestamp ASC
               LIMIT @excess
             )
@@ -608,6 +660,34 @@ export class PipelineStorage implements IPipelineStorage {
         const total: number = (this.countHist.get() as { cnt: number }).cnt;
         if (total > this.maxRows) {
             this.deleteHistExcess.run({ excess: total - this.maxRows });
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  Confirmed Signals                                                 */
+    /* ------------------------------------------------------------------ */
+    public saveConfirmedSignal(signal: ConfirmedSignal): void {
+        const row: ConfirmedRow = {
+            signalId: signal.id,
+            signalJson: JSON.stringify(signal),
+            price: signal.finalPrice,
+            timestamp: signal.confirmedAt,
+        };
+        this.insertConfirmed.run(row);
+    }
+
+    public getRecentConfirmedSignals(since: number): ConfirmedSignal[] {
+        const rows = this.selectConfirmed.all({ since }) as { signalJson: string }[];
+        return rows.map((r) => JSON.parse(r.signalJson) as ConfirmedSignal);
+    }
+
+    public purgeConfirmedSignals(): void {
+        const cutTs = Date.now() - this.maxAgeMin * 60 * 1_000;
+        this.deleteConfirmedOlder.run({ cutTs });
+
+        const total: number = (this.countConfirmed.get() as { cnt: number }).cnt;
+        if (total > this.maxRows) {
+            this.deleteConfirmedExcess.run({ excess: total - this.maxRows });
         }
     }
 
@@ -939,6 +1019,7 @@ export class PipelineStorage implements IPipelineStorage {
                 this.deleteOldSignalOutcomes.run({ cutoffTime: olderThan });
                 this.deleteOldMarketContexts.run({ cutoffTime: olderThan });
                 this.deleteOldFailedAnalyses.run({ cutoffTime: olderThan });
+                this.deleteConfirmedOlder.run({ cutoffTime: olderThan });
             })();
             return Promise.resolve();
         } catch (error) {

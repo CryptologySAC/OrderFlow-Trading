@@ -205,7 +205,8 @@ export class OrderFlowDashboard {
             this.logger,
             dependencies.rateLimiter,
             this.metricsCollector,
-            this.createWSHandlers()
+            this.createWSHandlers(),
+            (ws) => this.onClientConnected(ws)
         );
 
         this.signalManager = dependencies.signalManager;
@@ -346,6 +347,31 @@ export class OrderFlowDashboard {
     private DeltaCVDConfirmationCallback = (event: unknown): void => {
         void event; //todo
     };
+
+    private onClientConnected(ws: ExtendedWebSocket): void {
+        try {
+            const backlogAmount = Config.TRADES_PROCESSOR.backlogBatchSize ?? 1000;
+            let backlog = this.dependencies.tradesProcessor.requestBacklog(backlogAmount);
+            backlog = backlog.reverse();
+            ws.send(
+                JSON.stringify({ type: "backlog", data: backlog, now: Date.now() })
+            );
+
+            const since = backlog.length > 0 ? backlog[0].time : Date.now();
+            const signals = this.dependencies.pipelineStore.getRecentConfirmedSignals(since);
+            if (signals.length > 0) {
+                ws.send(
+                    JSON.stringify({
+                        type: "signal_backlog",
+                        data: signals,
+                        now: Date.now(),
+                    })
+                );
+            }
+        } catch (error) {
+            this.handleError(error as Error, "on_connect_send");
+        }
+    }
 
     /**
      * Create WebSocket handlers
@@ -1270,6 +1296,7 @@ export function createDependencies(): Dependencies {
 
     return {
         storage,
+        pipelineStore,
         tradesProcessor,
         orderBookProcessor,
         signalLogger,

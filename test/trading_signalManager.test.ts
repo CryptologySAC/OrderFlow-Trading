@@ -12,6 +12,8 @@ const storage = {
     getActiveAnomalies: vi.fn().mockReturnValue([]),
     purgeSignalHistory: vi.fn(),
     saveSignalHistory: vi.fn(),
+    saveConfirmedSignal: vi.fn(),
+    purgeConfirmedSignals: vi.fn(),
 } as any;
 
 describe("trading/SignalManager", () => {
@@ -47,5 +49,6 @@ describe("trading/SignalManager", () => {
         expect(confirmed).not.toBeNull();
         expect(confirmed?.id).toContain("confirmed");
         expect(confirmed?.id).toContain("test_signal_1");
+        expect(storage.saveConfirmedSignal).toHaveBeenCalled();
     });
 });

@@ -15,8 +15,10 @@ const storage = {
     removeActiveAnomaly: vi.fn(),
     getActiveAnomalies: vi.fn().mockReturnValue([]),
     saveSignalHistory: vi.fn(),
+    saveConfirmedSignal: vi.fn(),
     getRecentSignals: vi.fn().mockReturnValue([]),
     purgeSignalHistory: vi.fn(),
+    purgeConfirmedSignals: vi.fn(),
     close: vi.fn(),
 };
 
