@@ -350,15 +350,24 @@ export class OrderFlowDashboard {
 
     private onClientConnected(ws: ExtendedWebSocket): void {
         try {
-            const backlogAmount = Config.TRADES_PROCESSOR.backlogBatchSize ?? 1000;
-            let backlog = this.dependencies.tradesProcessor.requestBacklog(backlogAmount);
+            const backlogAmount =
+                Config.TRADES_PROCESSOR.backlogBatchSize ?? 1000;
+            let backlog =
+                this.dependencies.tradesProcessor.requestBacklog(backlogAmount);
             backlog = backlog.reverse();
             ws.send(
-                JSON.stringify({ type: "backlog", data: backlog, now: Date.now() })
+                JSON.stringify({
+                    type: "backlog",
+                    data: backlog,
+                    now: Date.now(),
+                })
             );
 
             const since = backlog.length > 0 ? backlog[0].time : Date.now();
-            const signals = this.dependencies.pipelineStore.getRecentConfirmedSignals(since);
+            const signals =
+                this.dependencies.pipelineStore.getRecentConfirmedSignals(
+                    since
+                );
             if (signals.length > 0) {
                 ws.send(
                     JSON.stringify({

@@ -677,7 +677,9 @@ export class PipelineStorage implements IPipelineStorage {
     }
 
     public getRecentConfirmedSignals(since: number): ConfirmedSignal[] {
-        const rows = this.selectConfirmed.all({ since }) as { signalJson: string }[];
+        const rows = this.selectConfirmed.all({ since }) as {
+            signalJson: string;
+        }[];
         return rows.map((r) => JSON.parse(r.signalJson) as ConfirmedSignal);
     }
 
@@ -685,7 +687,8 @@ export class PipelineStorage implements IPipelineStorage {
         const cutTs = Date.now() - this.maxAgeMin * 60 * 1_000;
         this.deleteConfirmedOlder.run({ cutTs });
 
-        const total: number = (this.countConfirmed.get() as { cnt: number }).cnt;
+        const total: number = (this.countConfirmed.get() as { cnt: number })
+            .cnt;
         if (total > this.maxRows) {
             this.deleteConfirmedExcess.run({ excess: total - this.maxRows });
         }

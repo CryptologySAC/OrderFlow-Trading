@@ -34,7 +34,9 @@ export class WebSocketManager {
         private readonly rateLimiter: RateLimiter,
         private readonly metricsCollector: MetricsCollector,
         private readonly wsHandlers: Record<string, WSHandler>,
-        private readonly onConnect?: (ws: ExtendedWebSocket) => void | Promise<void>
+        private readonly onConnect?: (
+            ws: ExtendedWebSocket
+        ) => void | Promise<void>
     ) {
         this.wsServer = new WebSocketServer({ port });
         this.setupWebSocketServer();
