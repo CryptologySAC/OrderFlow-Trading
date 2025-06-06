@@ -1,6 +1,5 @@
 // src/infrastructure/sqliteUtils.ts
 /** Utility helpers for dealing with SQLite busy errors */
-
 /**
  * Sleep synchronously using Atomics.wait. This avoids blocking the event loop
  * with a busy-wait loop.
@@ -25,7 +24,7 @@ export function withBusyRetries<T>(
         try {
             return fn();
         } catch (err) {
-            if ((err as any)?.code === "SQLITE_BUSY" && i < attempts) {
+            if ((err as SqliteError)?.code === "SQLITE_BUSY" && i < attempts) {
                 sleepSync(delay);
                 delay *= 2;
                 continue;
@@ -33,4 +32,12 @@ export function withBusyRetries<T>(
             throw err;
         }
     }
+}
+
+// Doesn't import correctly from Better Sqlite3
+declare class SqliteError extends Error {
+    name: string;
+    message: string;
+    code: string;
+    constructor(message: string, code: string);
 }

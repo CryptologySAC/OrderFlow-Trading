@@ -88,6 +88,9 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 
 ## Important Development Notes
 
+### Lint Strict
+Code must pass Lint stric, that means never use <any> types and use real types where possible instead of <unknown>. 
+
 ### When Adding New Detectors
 
 1. Extend `BaseDetector` class

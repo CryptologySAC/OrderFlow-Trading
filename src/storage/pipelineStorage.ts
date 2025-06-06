@@ -560,7 +560,9 @@ export class PipelineStorage implements IPipelineStorage {
     public dequeueJobs(limit: number): ProcessingJob[] {
         const rows = this.runWithRetry(() =>
             this.db.transaction(() => {
-                const r = this.selectQueue.all({ limit }) as unknown as QueueRow[];
+                const r = this.selectQueue.all({
+                    limit,
+                }) as unknown as QueueRow[];
                 this.deleteQueueBatch.run({ limit });
                 return r;
             })()
@@ -599,7 +601,9 @@ export class PipelineStorage implements IPipelineStorage {
                 limit: 1_000_000,
             })
         ) as unknown as QueueRow[];
-        const active = this.runWithRetry(() => this.selectActive.all()) as unknown as ActiveRow[];
+        const active = this.runWithRetry(() =>
+            this.selectActive.all()
+        ) as unknown as ActiveRow[];
 
         return [...queued, ...active].map((r) => {
             const cand = JSON.parse(r.candidateJson) as SignalCandidate;
@@ -637,9 +641,9 @@ export class PipelineStorage implements IPipelineStorage {
     }
 
     public getActiveAnomalies(): AnomalyEvent[] {
-        const rows = this.runWithRetry(
-            () => this.selectAnomaly.all()
-        ) as { anomalyJson: string }[];
+        const rows = this.runWithRetry(() => this.selectAnomaly.all()) as {
+            anomalyJson: string;
+        }[];
         return rows.map((r) => JSON.parse(r.anomalyJson) as AnomalyEvent);
     }
 
@@ -728,20 +732,20 @@ export class PipelineStorage implements IPipelineStorage {
                     detectorId: outcome.detectorId,
                     entryPrice: outcome.entryPrice,
                     entryTime: outcome.entryTime,
-                originalConfidence: outcome.originalConfidence,
-                priceAfter1min: outcome.priceAfter1min || null,
-                priceAfter5min: outcome.priceAfter5min || null,
-                priceAfter15min: outcome.priceAfter15min || null,
-                priceAfter1hour: outcome.priceAfter1hour || null,
-                maxFavorableMove: outcome.maxFavorableMove,
-                maxAdverseMove: outcome.maxAdverseMove,
-                timeToMaxFavorable: outcome.timeToMaxFavorable || null,
-                timeToMaxAdverse: outcome.timeToMaxAdverse || null,
-                outcome: outcome.outcome || null,
-                finalizedAt: outcome.finalizedAt || null,
-                currentPrice: outcome.currentPrice || null,
-                lastUpdateTime: outcome.lastUpdated || null,
-                isActive: outcome.isActive ? 1 : 0,
+                    originalConfidence: outcome.originalConfidence,
+                    priceAfter1min: outcome.priceAfter1min || null,
+                    priceAfter5min: outcome.priceAfter5min || null,
+                    priceAfter15min: outcome.priceAfter15min || null,
+                    priceAfter1hour: outcome.priceAfter1hour || null,
+                    maxFavorableMove: outcome.maxFavorableMove,
+                    maxAdverseMove: outcome.maxAdverseMove,
+                    timeToMaxFavorable: outcome.timeToMaxFavorable || null,
+                    timeToMaxAdverse: outcome.timeToMaxAdverse || null,
+                    outcome: outcome.outcome || null,
+                    finalizedAt: outcome.finalizedAt || null,
+                    currentPrice: outcome.currentPrice || null,
+                    lastUpdateTime: outcome.lastUpdated || null,
+                    isActive: outcome.isActive ? 1 : 0,
                     updatedAt: Date.now(),
                 })
             );
@@ -765,14 +769,14 @@ export class PipelineStorage implements IPipelineStorage {
                     priceAfter5min: updates.priceAfter5min || null,
                     priceAfter15min: updates.priceAfter15min || null,
                     priceAfter1hour: updates.priceAfter1hour || null,
-                maxFavorableMove: updates.maxFavorableMove || null,
-                maxAdverseMove: updates.maxAdverseMove || null,
-                timeToMaxFavorable: updates.timeToMaxFavorable || null,
-                timeToMaxAdverse: updates.timeToMaxAdverse || null,
-                outcome: updates.outcome || null,
-                finalizedAt: updates.finalizedAt || null,
-                currentPrice: updates.currentPrice || null,
-                lastUpdateTime: updates.lastUpdated || null,
+                    maxFavorableMove: updates.maxFavorableMove || null,
+                    maxAdverseMove: updates.maxAdverseMove || null,
+                    timeToMaxFavorable: updates.timeToMaxFavorable || null,
+                    timeToMaxAdverse: updates.timeToMaxAdverse || null,
+                    outcome: updates.outcome || null,
+                    finalizedAt: updates.finalizedAt || null,
+                    currentPrice: updates.currentPrice || null,
+                    lastUpdateTime: updates.lastUpdated || null,
                     isActive:
                         updates.isActive !== undefined
                             ? updates.isActive
@@ -795,9 +799,7 @@ export class PipelineStorage implements IPipelineStorage {
             await Promise.resolve();
             const row = this.runWithRetry(() =>
                 this.selectSignalOutcome.get({ signalId })
-            ) as
-                | Record<string, unknown>
-                | undefined;
+            ) as Record<string, unknown> | undefined;
             if (!row) return null;
 
             return this.mapRowToSignalOutcome(row);
@@ -852,21 +854,21 @@ export class PipelineStorage implements IPipelineStorage {
                     price: context.price,
                     currentVolume: context.currentVolume,
                     avgVolume24h: context.avgVolume24h,
-                volumeRatio: context.volumeRatio,
-                recentVolatility: context.recentVolatility,
-                normalizedVolatility: context.normalizedVolatility,
-                bidAskSpread: context.bidAskSpread,
-                bidDepth: context.bidDepth,
-                askDepth: context.askDepth,
-                liquidityRatio: context.liquidityRatio,
-                trend5min: context.trend5min,
-                trend15min: context.trend15min,
-                trend1hour: context.trend1hour,
-                trendAlignment: context.trendAlignment,
-                distanceFromSupport: context.distanceFromSupport,
-                distanceFromResistance: context.distanceFromResistance,
-                nearKeyLevel: context.nearKeyLevel ? 1 : 0,
-                regime: context.regime,
+                    volumeRatio: context.volumeRatio,
+                    recentVolatility: context.recentVolatility,
+                    normalizedVolatility: context.normalizedVolatility,
+                    bidAskSpread: context.bidAskSpread,
+                    bidDepth: context.bidDepth,
+                    askDepth: context.askDepth,
+                    liquidityRatio: context.liquidityRatio,
+                    trend5min: context.trend5min,
+                    trend15min: context.trend15min,
+                    trend1hour: context.trend1hour,
+                    trendAlignment: context.trendAlignment,
+                    distanceFromSupport: context.distanceFromSupport,
+                    distanceFromResistance: context.distanceFromResistance,
+                    nearKeyLevel: context.nearKeyLevel ? 1 : 0,
+                    regime: context.regime,
                     regimeConfidence: context.regimeConfidence,
                 })
             );
@@ -884,9 +886,7 @@ export class PipelineStorage implements IPipelineStorage {
             await Promise.resolve();
             const row = this.runWithRetry(() =>
                 this.selectMarketContext.get({ signalId })
-            ) as
-                | Record<string, unknown>
-                | undefined;
+            ) as Record<string, unknown> | undefined;
             if (!row) return null;
 
             return {
@@ -937,38 +937,39 @@ export class PipelineStorage implements IPipelineStorage {
                     signalType: analysis.signalType,
                     detectorId: analysis.detectorId,
                     failureReason: analysis.failureReason,
-                warningLowVolume: analysis.warningSignals.lowVolume ? 1 : 0,
-                warningWeakConfirmation: analysis.warningSignals
-                    .weakConfirmation
-                    ? 1
-                    : 0,
-                warningConflictingSignals: analysis.warningSignals
-                    .conflictingSignals
-                    ? 1
-                    : 0,
-                warningPoorMarketConditions: analysis.warningSignals
-                    .poorMarketConditions
-                    ? 1
-                    : 0,
-                warningRecentFailures: analysis.warningSignals
-                    .recentFailuresNearby
-                    ? 1
-                    : 0,
-                warningExtremeConfidence: analysis.warningSignals
-                    .extremeConfidence
-                    ? 1
-                    : 0,
-                warningUnusualSpread: analysis.warningSignals.unusualSpread
-                    ? 1
-                    : 0,
-                actualDirection: analysis.actualPriceAction.direction,
-                actualMagnitude: analysis.actualPriceAction.magnitude,
-                timeToFailure: analysis.actualPriceAction.timeToFailure,
-                maxDrawdown: analysis.actualPriceAction.maxDrawdown,
-                avoidabilityScore: analysis.avoidability.score,
-                preventionMethod: analysis.avoidability.preventionMethod,
-                confidenceReduction: analysis.avoidability.confidenceReduction,
-                filterSuggestion: analysis.avoidability.filterSuggestion,
+                    warningLowVolume: analysis.warningSignals.lowVolume ? 1 : 0,
+                    warningWeakConfirmation: analysis.warningSignals
+                        .weakConfirmation
+                        ? 1
+                        : 0,
+                    warningConflictingSignals: analysis.warningSignals
+                        .conflictingSignals
+                        ? 1
+                        : 0,
+                    warningPoorMarketConditions: analysis.warningSignals
+                        .poorMarketConditions
+                        ? 1
+                        : 0,
+                    warningRecentFailures: analysis.warningSignals
+                        .recentFailuresNearby
+                        ? 1
+                        : 0,
+                    warningExtremeConfidence: analysis.warningSignals
+                        .extremeConfidence
+                        ? 1
+                        : 0,
+                    warningUnusualSpread: analysis.warningSignals.unusualSpread
+                        ? 1
+                        : 0,
+                    actualDirection: analysis.actualPriceAction.direction,
+                    actualMagnitude: analysis.actualPriceAction.magnitude,
+                    timeToFailure: analysis.actualPriceAction.timeToFailure,
+                    maxDrawdown: analysis.actualPriceAction.maxDrawdown,
+                    avoidabilityScore: analysis.avoidability.score,
+                    preventionMethod: analysis.avoidability.preventionMethod,
+                    confidenceReduction:
+                        analysis.avoidability.confidenceReduction,
+                    filterSuggestion: analysis.avoidability.filterSuggestion,
                     marketContextJson: JSON.stringify({
                         entry: analysis.marketContextAtEntry,
                         failure: analysis.marketContextAtFailure,
