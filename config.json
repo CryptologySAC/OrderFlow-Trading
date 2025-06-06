@@ -3,6 +3,10 @@
     "symbol": "LTCUSDT",
     "httpPort": 3000,
     "wsPort": 3001,
+    "mqtt": {
+        "url": "mqtt://localhost:1883",
+        "statsTopic": "orderflow/stats"
+    },
     "alertWebhookUrl": "https://lima.cryptology.pe/api/webhook/OcdSY61opli9-n7unmlw4CmO",
     "alertCooldownMs": 300000,
     "maxStorageTime": 5400000,

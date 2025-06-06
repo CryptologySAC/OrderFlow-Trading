@@ -20,6 +20,7 @@ import type { TradesProcessorOptions } from "../clients/tradesProcessor.js";
 import type { SignalManagerConfig } from "../trading/signalManager.js";
 import type { SignalCoordinatorConfig } from "../services/signalCoordinator.js";
 import type { OrderBookProcessorOptions } from "../clients/orderBookProcessor.js";
+import type { MQTTConfig } from "../types/configTypes.js";
 const rawConfig = readFileSync(resolve(process.cwd(), "config.json"), "utf-8");
 const cfg: ConfigType = JSON.parse(rawConfig) as ConfigType;
 
@@ -46,6 +47,7 @@ export class Config {
     // Server configuration
     static readonly HTTP_PORT = Number(cfg.httpPort ?? 3000);
     static readonly WS_PORT = Number(cfg.wsPort ?? 3001);
+    static readonly MQTT: MQTTConfig | undefined = cfg.mqtt;
     static readonly API_KEY = process.env.API_KEY;
     static readonly API_SECRET = process.env.API_SECRET;
     static readonly LLM_API_KEY = process.env.LLM_API_KEY;

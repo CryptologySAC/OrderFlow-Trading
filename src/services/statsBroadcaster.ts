@@ -2,6 +2,8 @@ import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { DataStreamManager } from "../trading/dataStreamManager.js";
 import { WebSocketManager } from "../websocket/websocketManager.js";
+import { Config } from "../core/config.js";
+import mqtt, { MqttClient } from "mqtt";
 import type { SignalTracker } from "../analysis/signalTracker.js";
 
 /**
@@ -9,6 +11,7 @@ import type { SignalTracker } from "../analysis/signalTracker.js";
  */
 export class StatsBroadcaster {
     private timer?: NodeJS.Timeout;
+    private mqttClient?: MqttClient;
 
     constructor(
         private readonly metrics: MetricsCollector,
@@ -21,6 +24,12 @@ export class StatsBroadcaster {
 
     public start(): void {
         this.stop();
+        if (Config.MQTT?.url) {
+            this.mqttClient = mqtt.connect(Config.MQTT.url);
+            this.mqttClient.on("error", (err) => {
+                this.logger.error("MQTT error", { error: err as Error });
+            });
+        }
         this.timer = setInterval(() => {
             try {
                 const stats = {
@@ -36,6 +45,12 @@ export class StatsBroadcaster {
                     data: stats,
                     now: Date.now(),
                 });
+                if (this.mqttClient && this.mqttClient.connected) {
+                    this.mqttClient.publish(
+                        Config.MQTT?.statsTopic ?? "orderflow/stats",
+                        JSON.stringify(stats)
+                    );
+                }
             } catch (err) {
                 this.logger.error("Stats broadcast error", {
                     error: err as Error,
@@ -48,6 +63,10 @@ export class StatsBroadcaster {
         if (this.timer) {
             clearInterval(this.timer);
             this.timer = undefined;
+        }
+        if (this.mqttClient) {
+            this.mqttClient.end(true);
+            this.mqttClient = undefined;
         }
     }
 }
