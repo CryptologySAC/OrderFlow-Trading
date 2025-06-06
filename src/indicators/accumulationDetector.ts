@@ -190,8 +190,8 @@ export class AccumulationDetector
         const price = triggerTrade.price;
         const side = this.getTradeSide(triggerTrade);
 
-        // Check cooldown
-        if (!this.checkCooldown(zone, side)) {
+        // Check cooldown (only confirm updates later)
+        if (!this.checkCooldown(zone, side, false)) {
             return;
         }
 

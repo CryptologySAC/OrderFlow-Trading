@@ -91,10 +91,10 @@ describe("trading/SignalManager", () => {
             data: { price: 100.01 },
         };
 
-        const c1 = manager.processSignal(s1);
+        const c1 = manager.handleProcessedSignal(s1 as any);
         expect(c1).not.toBeNull();
 
-        const c2 = manager.processSignal(s2);
+        const c2 = manager.handleProcessedSignal(s2 as any);
         expect(c2).toBeNull();
     });
 });

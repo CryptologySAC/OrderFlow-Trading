@@ -352,7 +352,10 @@ export class SignalManager extends EventEmitter {
      * Handle processed signal from SignalCoordinator.
      * This is the main entry point for signals from the coordinator.
      */
-    public handleProcessedSignal(signal: ProcessedSignal): void {
+    public handleProcessedSignal(
+        signal: ProcessedSignal
+    ): ConfirmedSignal | null {
+        let confirmedSignal: ConfirmedSignal | null = null;
         try {
             this.logger.info("Handling processed signal", {
                 component: "SignalManager",
@@ -381,14 +384,14 @@ export class SignalManager extends EventEmitter {
             this.storeSignal(signal);
 
             // Process signal through simplified pipeline
-            const confirmedSignal = this.processSignal(signal);
+            confirmedSignal = this.processSignal(signal);
 
             if (!confirmedSignal) {
                 this.emit("signalRejected", {
                     signal,
                     reason: this.lastRejectReason ?? "processing_failed",
                 });
-                return;
+                return null;
             }
 
             // Generate final trading signal
@@ -408,7 +411,7 @@ export class SignalManager extends EventEmitter {
                     "throttled_duplicate"
                 );
                 this.lastRejectReason = "throttled_duplicate";
-                return;
+                return null;
             }
 
             // Record this signal to prevent future duplicates
@@ -464,7 +467,7 @@ export class SignalManager extends EventEmitter {
                 confidence: confirmedSignal.confidence,
                 marketHealth: confirmedSignal.anomalyData.marketHealthy,
             });
-        } catch (error) {
+        } catch (error: unknown) {
             this.logger.error("Failed to handle processed signal", {
                 component: "SignalManager",
                 operation: "handleProcessedSignal",
@@ -488,6 +491,11 @@ export class SignalManager extends EventEmitter {
             this.emit("signalError", { signal, error });
             throw error;
         }
+
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const result = confirmedSignal;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+        return result;
     }
 
     /**

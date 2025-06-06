@@ -533,8 +533,8 @@ export abstract class FlowDetectorBase extends BaseDetector {
         const price = triggerTrade.price;
         const side = this.getSignalSide();
 
-        // Check cooldown (your approach)
-        if (!this.checkCooldown(zone, side)) {
+        // Check cooldown (confirm later)
+        if (!this.checkCooldown(zone, side, false)) {
             return;
         }
 
