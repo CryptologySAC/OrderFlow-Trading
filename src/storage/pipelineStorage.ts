@@ -10,6 +10,7 @@
 import { Database, Statement } from "better-sqlite3";
 import { ulid } from "ulid";
 import { EventEmitter } from "events";
+import { withBusyRetries } from "../infrastructure/sqliteUtils.js";
 
 import type { BaseDetector } from "../indicators/base/baseDetector.js";
 import type {
@@ -537,6 +538,10 @@ export class PipelineStorage implements IPipelineStorage {
         process.on("exit", () => this.close());
     }
 
+    private runWithRetry<T>(fn: () => T): T {
+        return withBusyRetries(fn, 5, 50);
+    }
+
     /* ------------------------------------------------------------------ */
     /*  Queue                                                             */
     /* ------------------------------------------------------------------ */
@@ -549,15 +554,17 @@ export class PipelineStorage implements IPipelineStorage {
             retryCount: job.retryCount,
             enqueuedAt: Date.now(),
         };
-        this.insertQueue.run(row);
+        this.runWithRetry(() => this.insertQueue.run(row));
     }
 
     public dequeueJobs(limit: number): ProcessingJob[] {
-        const rows = this.db.transaction(() => {
-            const r = this.selectQueue.all({ limit }) as unknown as QueueRow[];
-            this.deleteQueueBatch.run({ limit });
-            return r;
-        })();
+        const rows = this.runWithRetry(() =>
+            this.db.transaction(() => {
+                const r = this.selectQueue.all({ limit }) as unknown as QueueRow[];
+                this.deleteQueueBatch.run({ limit });
+                return r;
+            })()
+        );
 
         const now = Date.now();
         const jobs: ProcessingJob[] = [];
@@ -577,20 +584,22 @@ export class PipelineStorage implements IPipelineStorage {
             jobs.push(job);
 
             const activeRow: ActiveRow = { ...r, startedAt: now };
-            this.insertActive.run(activeRow);
+            this.runWithRetry(() => this.insertActive.run(activeRow));
         }
         return jobs;
     }
 
     public markJobCompleted(jobId: string): void {
-        this.deleteActive.run({ jobId });
+        this.runWithRetry(() => this.deleteActive.run({ jobId }));
     }
 
     public restoreQueuedJobs(): ProcessingJob[] {
-        const queued = this.selectQueue.all({
-            limit: 1_000_000,
-        }) as unknown as QueueRow[];
-        const active = this.selectActive.all() as unknown as ActiveRow[];
+        const queued = this.runWithRetry(() =>
+            this.selectQueue.all({
+                limit: 1_000_000,
+            })
+        ) as unknown as QueueRow[];
+        const active = this.runWithRetry(() => this.selectActive.all()) as unknown as ActiveRow[];
 
         return [...queued, ...active].map((r) => {
             const cand = JSON.parse(r.candidateJson) as SignalCandidate;
@@ -613,20 +622,24 @@ export class PipelineStorage implements IPipelineStorage {
     /*  Anomalies                                                         */
     /* ------------------------------------------------------------------ */
     public saveActiveAnomaly(anomaly: AnomalyEvent): void {
-        this.upsertAnomaly.run({
-            anomalyType: anomaly.type,
-            anomalyJson: JSON.stringify(anomaly),
-            detectedAt: anomaly.detectedAt,
-            severity: anomaly.severity,
-        });
+        this.runWithRetry(() =>
+            this.upsertAnomaly.run({
+                anomalyType: anomaly.type,
+                anomalyJson: JSON.stringify(anomaly),
+                detectedAt: anomaly.detectedAt,
+                severity: anomaly.severity,
+            })
+        );
     }
 
     public removeActiveAnomaly(type: string): void {
-        this.deleteAnomaly.run({ anomalyType: type });
+        this.runWithRetry(() => this.deleteAnomaly.run({ anomalyType: type }));
     }
 
     public getActiveAnomalies(): AnomalyEvent[] {
-        const rows = this.selectAnomaly.all() as { anomalyJson: string }[];
+        const rows = this.runWithRetry(
+            () => this.selectAnomaly.all()
+        ) as { anomalyJson: string }[];
         return rows.map((r) => JSON.parse(r.anomalyJson) as AnomalyEvent);
     }
 
@@ -642,24 +655,28 @@ export class PipelineStorage implements IPipelineStorage {
             price: typeof d.price === "number" ? d.price : 0,
             timestamp: signal.timestamp.getTime(),
         };
-        this.insertHist.run(row);
+        this.runWithRetry(() => this.insertHist.run(row));
     }
 
     public getRecentSignals(since: number, symbol?: string): ProcessedSignal[] {
-        const rows = this.selectHist.all({
-            since,
-            symbol: symbol ?? null,
-        }) as { signalJson: string }[];
+        const rows = this.runWithRetry(() =>
+            this.selectHist.all({
+                since,
+                symbol: symbol ?? null,
+            })
+        ) as { signalJson: string }[];
         return rows.map((r) => JSON.parse(r.signalJson) as ProcessedSignal);
     }
 
     public purgeSignalHistory(): void {
         const cutTs = Date.now() - this.maxAgeMin * 60 * 1_000;
-        this.deleteHistOlder.run({ cutTs });
+        this.runWithRetry(() => this.deleteHistOlder.run({ cutTs }));
 
         const total: number = (this.countHist.get() as { cnt: number }).cnt;
         if (total > this.maxRows) {
-            this.deleteHistExcess.run({ excess: total - this.maxRows });
+            this.runWithRetry(() =>
+                this.deleteHistExcess.run({ excess: total - this.maxRows })
+            );
         }
     }
 
@@ -673,11 +690,13 @@ export class PipelineStorage implements IPipelineStorage {
             price: signal.finalPrice,
             timestamp: signal.confirmedAt,
         };
-        this.insertConfirmed.run(row);
+        this.runWithRetry(() => this.insertConfirmed.run(row));
     }
 
     public getRecentConfirmedSignals(since: number): ConfirmedSignal[] {
-        const rows = this.selectConfirmed.all({ since }) as {
+        const rows = this.runWithRetry(() =>
+            this.selectConfirmed.all({ since })
+        ) as {
             signalJson: string;
         }[];
         return rows.map((r) => JSON.parse(r.signalJson) as ConfirmedSignal);
@@ -685,12 +704,14 @@ export class PipelineStorage implements IPipelineStorage {
 
     public purgeConfirmedSignals(): void {
         const cutTs = Date.now() - this.maxAgeMin * 60 * 1_000;
-        this.deleteConfirmedOlder.run({ cutTs });
+        this.runWithRetry(() => this.deleteConfirmedOlder.run({ cutTs }));
 
         const total: number = (this.countConfirmed.get() as { cnt: number })
             .cnt;
         if (total > this.maxRows) {
-            this.deleteConfirmedExcess.run({ excess: total - this.maxRows });
+            this.runWithRetry(() =>
+                this.deleteConfirmedExcess.run({ excess: total - this.maxRows })
+            );
         }
     }
 
@@ -700,12 +721,13 @@ export class PipelineStorage implements IPipelineStorage {
     public async saveSignalOutcome(outcome: SignalOutcome): Promise<void> {
         try {
             await Promise.resolve();
-            this.insertSignalOutcome.run({
-                signalId: outcome.signalId,
-                signalType: outcome.signalType,
-                detectorId: outcome.detectorId,
-                entryPrice: outcome.entryPrice,
-                entryTime: outcome.entryTime,
+            this.runWithRetry(() =>
+                this.insertSignalOutcome.run({
+                    signalId: outcome.signalId,
+                    signalType: outcome.signalType,
+                    detectorId: outcome.detectorId,
+                    entryPrice: outcome.entryPrice,
+                    entryTime: outcome.entryTime,
                 originalConfidence: outcome.originalConfidence,
                 priceAfter1min: outcome.priceAfter1min || null,
                 priceAfter5min: outcome.priceAfter5min || null,
@@ -720,8 +742,9 @@ export class PipelineStorage implements IPipelineStorage {
                 currentPrice: outcome.currentPrice || null,
                 lastUpdateTime: outcome.lastUpdated || null,
                 isActive: outcome.isActive ? 1 : 0,
-                updatedAt: Date.now(),
-            });
+                    updatedAt: Date.now(),
+                })
+            );
         } catch (error) {
             throw new Error(
                 `Failed to save signal outcome: ${error instanceof Error ? error.message : String(error)}`
@@ -735,12 +758,13 @@ export class PipelineStorage implements IPipelineStorage {
     ): Promise<void> {
         try {
             await Promise.resolve();
-            this.updateSignalOutcomeStmt.run({
-                signalId,
-                priceAfter1min: updates.priceAfter1min || null,
-                priceAfter5min: updates.priceAfter5min || null,
-                priceAfter15min: updates.priceAfter15min || null,
-                priceAfter1hour: updates.priceAfter1hour || null,
+            this.runWithRetry(() =>
+                this.updateSignalOutcomeStmt.run({
+                    signalId,
+                    priceAfter1min: updates.priceAfter1min || null,
+                    priceAfter5min: updates.priceAfter5min || null,
+                    priceAfter15min: updates.priceAfter15min || null,
+                    priceAfter1hour: updates.priceAfter1hour || null,
                 maxFavorableMove: updates.maxFavorableMove || null,
                 maxAdverseMove: updates.maxAdverseMove || null,
                 timeToMaxFavorable: updates.timeToMaxFavorable || null,
@@ -749,13 +773,14 @@ export class PipelineStorage implements IPipelineStorage {
                 finalizedAt: updates.finalizedAt || null,
                 currentPrice: updates.currentPrice || null,
                 lastUpdateTime: updates.lastUpdated || null,
-                isActive:
-                    updates.isActive !== undefined
-                        ? updates.isActive
-                            ? 1
-                            : 0
-                        : null,
-            });
+                    isActive:
+                        updates.isActive !== undefined
+                            ? updates.isActive
+                                ? 1
+                                : 0
+                            : null,
+                })
+            );
         } catch (error) {
             throw new Error(
                 `Failed to update signal outcome: ${error instanceof Error ? error.message : String(error)}`
@@ -768,7 +793,9 @@ export class PipelineStorage implements IPipelineStorage {
     ): Promise<SignalOutcome | null> {
         try {
             await Promise.resolve();
-            const row = this.selectSignalOutcome.get({ signalId }) as
+            const row = this.runWithRetry(() =>
+                this.selectSignalOutcome.get({ signalId })
+            ) as
                 | Record<string, unknown>
                 | undefined;
             if (!row) return null;
@@ -791,14 +818,15 @@ export class PipelineStorage implements IPipelineStorage {
             const startTime = currentTime - timeWindow;
 
             const rows = endTime
-                ? (this.selectSignalOutcomesTimeRange.all({
-                      startTime,
-                      endTime,
-                  }) as Record<string, unknown>[])
-                : (this.selectSignalOutcomes.all({ startTime }) as Record<
-                      string,
-                      unknown
-                  >[]);
+                ? (this.runWithRetry(() =>
+                      this.selectSignalOutcomesTimeRange.all({
+                          startTime,
+                          endTime,
+                      })
+                  ) as Record<string, unknown>[])
+                : (this.runWithRetry(() =>
+                      this.selectSignalOutcomes.all({ startTime })
+                  ) as Record<string, unknown>[]);
 
             return rows.map((row) => this.mapRowToSignalOutcome(row));
         } catch (error) {
@@ -817,12 +845,13 @@ export class PipelineStorage implements IPipelineStorage {
     ): Promise<void> {
         try {
             await Promise.resolve();
-            this.insertMarketContext.run({
-                signalId,
-                timestamp: context.timestamp,
-                price: context.price,
-                currentVolume: context.currentVolume,
-                avgVolume24h: context.avgVolume24h,
+            this.runWithRetry(() =>
+                this.insertMarketContext.run({
+                    signalId,
+                    timestamp: context.timestamp,
+                    price: context.price,
+                    currentVolume: context.currentVolume,
+                    avgVolume24h: context.avgVolume24h,
                 volumeRatio: context.volumeRatio,
                 recentVolatility: context.recentVolatility,
                 normalizedVolatility: context.normalizedVolatility,
@@ -838,8 +867,9 @@ export class PipelineStorage implements IPipelineStorage {
                 distanceFromResistance: context.distanceFromResistance,
                 nearKeyLevel: context.nearKeyLevel ? 1 : 0,
                 regime: context.regime,
-                regimeConfidence: context.regimeConfidence,
-            });
+                    regimeConfidence: context.regimeConfidence,
+                })
+            );
         } catch (error) {
             throw new Error(
                 `Failed to save market context: ${error instanceof Error ? error.message : String(error)}`
@@ -852,7 +882,9 @@ export class PipelineStorage implements IPipelineStorage {
     ): Promise<MarketContext | null> {
         try {
             await Promise.resolve();
-            const row = this.selectMarketContext.get({ signalId }) as
+            const row = this.runWithRetry(() =>
+                this.selectMarketContext.get({ signalId })
+            ) as
                 | Record<string, unknown>
                 | undefined;
             if (!row) return null;
@@ -899,11 +931,12 @@ export class PipelineStorage implements IPipelineStorage {
     ): Promise<void> {
         try {
             await Promise.resolve();
-            this.insertFailedAnalysis.run({
-                signalId: analysis.signalId,
-                signalType: analysis.signalType,
-                detectorId: analysis.detectorId,
-                failureReason: analysis.failureReason,
+            this.runWithRetry(() =>
+                this.insertFailedAnalysis.run({
+                    signalId: analysis.signalId,
+                    signalType: analysis.signalType,
+                    detectorId: analysis.detectorId,
+                    failureReason: analysis.failureReason,
                 warningLowVolume: analysis.warningSignals.lowVolume ? 1 : 0,
                 warningWeakConfirmation: analysis.warningSignals
                     .weakConfirmation
@@ -936,11 +969,12 @@ export class PipelineStorage implements IPipelineStorage {
                 preventionMethod: analysis.avoidability.preventionMethod,
                 confidenceReduction: analysis.avoidability.confidenceReduction,
                 filterSuggestion: analysis.avoidability.filterSuggestion,
-                marketContextJson: JSON.stringify({
-                    entry: analysis.marketContextAtEntry,
-                    failure: analysis.marketContextAtFailure,
-                }),
-            });
+                    marketContextJson: JSON.stringify({
+                        entry: analysis.marketContextAtEntry,
+                        failure: analysis.marketContextAtFailure,
+                    }),
+                })
+            );
         } catch (error) {
             throw new Error(
                 `Failed to save failed signal analysis: ${error instanceof Error ? error.message : String(error)}`
@@ -953,10 +987,9 @@ export class PipelineStorage implements IPipelineStorage {
     ): Promise<FailedSignalAnalysis[]> {
         try {
             const startTime = Date.now() - timeWindow;
-            const rows = this.selectFailedAnalyses.all({ startTime }) as Record<
-                string,
-                unknown
-            >[];
+            const rows = this.runWithRetry(() =>
+                this.selectFailedAnalyses.all({ startTime })
+            ) as Record<string, unknown>[];
 
             return Promise.resolve(
                 rows.map((row) => {
@@ -1018,12 +1051,14 @@ export class PipelineStorage implements IPipelineStorage {
     /* ------------------------------------------------------------------ */
     public purgeOldSignalData(olderThan: number): Promise<void> {
         try {
-            this.db.transaction(() => {
-                this.deleteOldSignalOutcomes.run({ cutoffTime: olderThan });
-                this.deleteOldMarketContexts.run({ cutoffTime: olderThan });
-                this.deleteOldFailedAnalyses.run({ cutoffTime: olderThan });
-                this.deleteConfirmedOlder.run({ cutoffTime: olderThan });
-            })();
+            this.runWithRetry(() =>
+                this.db.transaction(() => {
+                    this.deleteOldSignalOutcomes.run({ cutoffTime: olderThan });
+                    this.deleteOldMarketContexts.run({ cutoffTime: olderThan });
+                    this.deleteOldFailedAnalyses.run({ cutoffTime: olderThan });
+                    this.deleteConfirmedOlder.run({ cutoffTime: olderThan });
+                })()
+            );
             return Promise.resolve();
         } catch (error) {
             return Promise.reject(
