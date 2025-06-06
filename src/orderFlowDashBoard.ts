@@ -601,6 +601,14 @@ export class OrderFlowDashboard {
             );
             // Notify components that data stream is back up
             this.dependencies.tradesProcessor.emit("stream_connected");
+            void this.dependencies.tradesProcessor
+                .fillBacklog()
+                .catch((error) => {
+                    this.logger.error(
+                        "[OrderFlowDashboard] Failed to load missed trades",
+                        { error }
+                    );
+                });
             if (this.orderBook) {
                 void this.orderBook.recover().catch((error) => {
                     this.logger.error(

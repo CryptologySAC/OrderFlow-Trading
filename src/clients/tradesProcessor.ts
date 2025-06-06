@@ -78,6 +78,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     private backlogComplete = false;
     private isShuttingDown = false;
     private lastTradeTime = Date.now();
+    private latestTradeTimestamp = Date.now();
 
     // Memory cache for recent trades
     private recentTrades: CircularBuffer<PlotTrade>;
@@ -120,6 +121,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
 
         // Initialize state
         this.thresholdTime = Date.now() - this.storageTime;
+        this.latestTradeTimestamp = this.thresholdTime;
         this.recentTrades = new CircularBuffer<PlotTrade>(this.maxMemoryTrades);
         this.processingTimes = new CircularBuffer<number>(1000);
 
@@ -227,6 +229,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
 
                     // Update threshold
                     this.thresholdTime = maxTimestamp + 1;
+                    this.latestTradeTimestamp = maxTimestamp;
 
                     // Progress reporting
                     const progress =
@@ -273,6 +276,8 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
 
             this.backlogComplete = true;
             const duration = Date.now() - startTime;
+
+            this.latestTradeTimestamp = this.thresholdTime;
 
             this.logger.info("[TradesProcessor] Backlog fill complete", {
                 totalFetched,
@@ -355,6 +360,10 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
 
             // Queue for async save
             this.queueSave(event.originalTrade);
+
+            // Update last processed timestamp for recovery
+            this.latestTradeTimestamp = event.timestamp;
+            this.thresholdTime = event.timestamp + 1;
 
             // Update metrics
             this.lastTradeTime = Date.now();
