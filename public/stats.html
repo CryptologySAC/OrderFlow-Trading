@@ -6,47 +6,116 @@
         <title>System Stats</title>
         <link rel="stylesheet" href="styles/dashboard.css" />
         <style>
+            body {
+                margin: 0;
+                padding: 20px;
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                    sans-serif;
+                background: var(--bg-primary, #f5f5f5);
+                color: var(--text-primary, #333);
+                min-height: 100vh;
+                overflow-x: auto;
+                overflow-y: auto;
+            }
+
+            h1 {
+                margin-bottom: 20px;
+                color: var(--text-primary, #333);
+            }
+
             .stats-container {
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
                 gap: 20px;
-                margin-top: 1rem;
+                width: 100%;
+                max-width: none;
+                padding-bottom: 40px;
             }
-            .gauge-wrapper,
-            .histogram-wrapper,
-            .table-wrapper {
-                background: var(--bg-secondary);
-                padding: 10px;
-                border: 1px solid var(--border-color);
-                border-radius: 4px;
-                box-shadow: 0 1px 2px var(--shadow-color);
+
+            .metric-card {
+                background: var(--bg-secondary, #fff);
+                padding: 15px;
+                border: 1px solid var(--border-color, #ddd);
+                border-radius: 8px;
+                box-shadow: 0 2px 4px var(--shadow-color, rgba(0, 0, 0, 0.1));
+                min-height: 100px;
             }
+
+            .connections-display {
+                text-align: center;
+                padding: 20px;
+            }
+
+            .connections-number {
+                font-size: 48px;
+                font-weight: bold;
+                color: var(--primary-color, #007bff);
+                margin-bottom: 10px;
+            }
+
+            .connections-label {
+                font-size: 14px;
+                color: var(--text-secondary, #666);
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
             table {
                 width: 100%;
                 border-collapse: collapse;
+                font-size: 14px;
             }
-            th,
-            td {
-                padding: 4px 8px;
+
+            th {
+                background: var(--bg-primary, #f8f9fa);
+                color: var(--text-primary, #333);
+                padding: 8px 12px;
                 text-align: left;
-                border-bottom: 1px solid var(--border-light);
+                border-bottom: 2px solid var(--border-color, #ddd);
+                font-weight: 600;
+            }
+
+            td {
+                padding: 6px 12px;
+                text-align: left;
+                border-bottom: 1px solid var(--border-light, #eee);
+            }
+
+            .card-title {
+                margin: 0 0 15px 0;
+                font-size: 18px;
+                font-weight: 600;
+                color: var(--text-primary, #333);
+            }
+
+            @media (max-width: 768px) {
+                .stats-container {
+                    grid-template-columns: 1fr;
+                }
+
+                body {
+                    padding: 10px;
+                }
             }
         </style>
     </head>
     <body>
         <h1>System Stats</h1>
         <div class="stats-container">
-            <div class="gauge-wrapper">
-                <canvas id="connectionsGauge"></canvas>
+            <!-- Active Connections - Simple Number Display -->
+            <div class="metric-card">
+                <div class="connections-display">
+                    <div class="connections-number" id="connectionsNumber">
+                        --
+                    </div>
+                    <div class="connections-label">Active Connections</div>
+                </div>
             </div>
-            <div class="gauge-wrapper">
-                <canvas id="memoryGauge"></canvas>
-            </div>
-            <div class="histogram-wrapper">
-                <canvas id="latencyHistogram"></canvas>
-            </div>
-            <div class="table-wrapper">
-                <h2>Counters</h2>
+
+            <!-- Counters Table -->
+            <div class="metric-card">
+                <h3 class="card-title">Counters</h3>
                 <table id="countersTable">
                     <thead>
                         <tr>
@@ -57,8 +126,10 @@
                     <tbody></tbody>
                 </table>
             </div>
-            <div class="table-wrapper">
-                <h2>Gauges</h2>
+
+            <!-- Gauges Table -->
+            <div class="metric-card">
+                <h3 class="card-title">Gauges</h3>
                 <table id="gaugesTable">
                     <thead>
                         <tr>
@@ -69,8 +140,10 @@
                     <tbody></tbody>
                 </table>
             </div>
-            <div class="table-wrapper">
-                <h2>Histograms</h2>
+
+            <!-- Histograms Table -->
+            <div class="metric-card">
+                <h3 class="card-title">Histograms</h3>
                 <table id="histogramsTable">
                     <thead>
                         <tr>
@@ -84,15 +157,176 @@
                     <tbody></tbody>
                 </table>
             </div>
+
+            <!-- Signal Processing Metrics -->
+            <div class="metric-card">
+                <h3 class="card-title">Signal Processing Overview</h3>
+                <table id="signalOverviewTable">
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th>Count</th>
+                            <th>Rate/min</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Signal Candidates</td>
+                            <td id="signalCandidates">--</td>
+                            <td id="signalCandidatesRate">--</td>
+                        </tr>
+                        <tr>
+                            <td>Signals Processed</td>
+                            <td id="signalsProcessed">--</td>
+                            <td id="signalsProcessedRate">--</td>
+                        </tr>
+                        <tr>
+                            <td>Signals Confirmed</td>
+                            <td id="signalsConfirmed">--</td>
+                            <td id="signalsConfirmedRate">--</td>
+                        </tr>
+                        <tr>
+                            <td>Signals Rejected</td>
+                            <td id="signalsRejected">--</td>
+                            <td id="signalsRejectedRate">--</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Signal Types Breakdown -->
+            <div class="metric-card">
+                <h3 class="card-title">Signal Types</h3>
+                <table id="signalTypesTable">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Candidates</th>
+                            <th>Confirmed</th>
+                            <th>Rejected</th>
+                            <th>Success Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Absorption</td>
+                            <td id="absorptionCandidates">--</td>
+                            <td id="absorptionConfirmed">--</td>
+                            <td id="absorptionRejected">--</td>
+                            <td id="absorptionSuccessRate">--</td>
+                        </tr>
+                        <tr>
+                            <td>Exhaustion</td>
+                            <td id="exhaustionCandidates">--</td>
+                            <td id="exhaustionConfirmed">--</td>
+                            <td id="exhaustionRejected">--</td>
+                            <td id="exhaustionSuccessRate">--</td>
+                        </tr>
+                        <tr>
+                            <td>Accumulation</td>
+                            <td id="accumulationCandidates">--</td>
+                            <td id="accumulationConfirmed">--</td>
+                            <td id="accumulationRejected">--</td>
+                            <td id="accumulationSuccessRate">--</td>
+                        </tr>
+                        <tr>
+                            <td>Distribution</td>
+                            <td id="distributionCandidates">--</td>
+                            <td id="distributionConfirmed">--</td>
+                            <td id="distributionRejected">--</td>
+                            <td id="distributionSuccessRate">--</td>
+                        </tr>
+                        <tr>
+                            <td>CVD Confirmation</td>
+                            <td id="cvdCandidates">--</td>
+                            <td id="cvdConfirmed">--</td>
+                            <td id="cvdRejected">--</td>
+                            <td id="cvdSuccessRate">--</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Rejection Reasons -->
+            <div class="metric-card">
+                <h3 class="card-title">Rejection Reasons</h3>
+                <table id="rejectionReasonsTable">
+                    <thead>
+                        <tr>
+                            <th>Reason</th>
+                            <th>Count</th>
+                            <th>Percentage</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Low Confidence</td>
+                            <td id="rejectedLowConfidence">--</td>
+                            <td id="rejectedLowConfidencePercent">--</td>
+                        </tr>
+                        <tr>
+                            <td>Unhealthy Market</td>
+                            <td id="rejectedUnhealthyMarket">--</td>
+                            <td id="rejectedUnhealthyMarketPercent">--</td>
+                        </tr>
+                        <tr>
+                            <td>Processing Error</td>
+                            <td id="rejectedProcessingError">--</td>
+                            <td id="rejectedProcessingErrorPercent">--</td>
+                        </tr>
+                        <tr>
+                            <td>Timeout</td>
+                            <td id="rejectedTimeout">--</td>
+                            <td id="rejectedTimeoutPercent">--</td>
+                        </tr>
+                        <tr>
+                            <td>Duplicate</td>
+                            <td id="rejectedDuplicate">--</td>
+                            <td id="rejectedDuplicatePercent">--</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Signal Quality Metrics -->
+            <div class="metric-card">
+                <h3 class="card-title">Signal Quality</h3>
+                <table id="signalQualityTable">
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Average Confidence</td>
+                            <td id="avgConfidence">--</td>
+                        </tr>
+                        <tr>
+                            <td>Confidence P50</td>
+                            <td id="confidenceP50">--</td>
+                        </tr>
+                        <tr>
+                            <td>Confidence P95</td>
+                            <td id="confidenceP95">--</td>
+                        </tr>
+                        <tr>
+                            <td>Avg Correlation Strength</td>
+                            <td id="avgCorrelationStrength">--</td>
+                        </tr>
+                        <tr>
+                            <td>Avg Processing Time</td>
+                            <td id="avgProcessingTime">--</td>
+                        </tr>
+                        <tr>
+                            <td>Queue Depth</td>
+                            <td id="queueDepth">--</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
-        <script
-            defer
-            src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.min.js"
-        ></script>
-        <script
-            defer
-            src="https://cdn.jsdelivr.net/npm/canvas-gauges/gauge.min.js"
-        ></script>
         <script type="module" src="scripts/stats.js"></script>
     </body>
 </html>

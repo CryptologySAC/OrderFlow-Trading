@@ -16,7 +16,7 @@ import type {
 import { RollingWindow } from "../utils/rollingWindow.js";
 
 export interface AnomalyDetectorOptions {
-    /** Rolling trade window size for statistics (default: 1000 trades) */
+    /** Rolling trade window size for statistics (default: 9000 trades for 15min) */
     windowSize?: number;
     /** Baseline bid/ask spread in basis points (default: 10 = 0.1%) */
     normalSpreadBps?: number;
@@ -28,6 +28,22 @@ export interface AnomalyDetectorOptions {
     volumeImbalanceThreshold?: number;
     /** Price increment for tick/zone rounding (default: 0.01) */
     tickSize?: number;
+    /** Flow analysis window in ms (default: 900,000ms = 15 minutes) */
+    flowWindowMs?: number;
+    /** Order size tracking window in ms (default: 900,000ms = 15 minutes) */
+    orderSizeWindowMs?: number;
+    /** Volatility threshold for market health (default: 0.005) */
+    volatilityThreshold?: number;
+    /** Spread threshold in basis points for market health (default: 100) */
+    spreadThresholdBps?: number;
+    /** Window for extreme volatility checks in ms (default: 900,000ms) */
+    extremeVolatilityWindowMs?: number;
+    /** Window for liquidity checks in ms (default: 900,000ms) */
+    liquidityCheckWindowMs?: number;
+    /** Cooldown for whale activity detection in ms (default: 300,000ms) */
+    whaleCooldownMs?: number;
+    /** Window for market health assessment in ms (default: 900,000ms) */
+    marketHealthWindowMs?: number;
 }
 
 /**
@@ -101,6 +117,12 @@ export class AnomalyDetector extends EventEmitter {
     private readonly anomalyCooldownMs: number;
     private readonly volumeImbalanceThreshold: number;
     private readonly tickSize: number;
+    private readonly volatilityThreshold: number;
+    private readonly spreadThresholdBps: number;
+    private readonly extremeVolatilityWindowMs: number;
+    private readonly liquidityCheckWindowMs: number;
+    private readonly whaleCooldownMs: number;
+    private readonly marketHealthWindowMs: number;
 
     private readonly logger?: Logger;
     private lastTradeSymbol = "";
@@ -108,7 +130,6 @@ export class AnomalyDetector extends EventEmitter {
     // Properly track orderbook state
     private currentBestBid = 0;
     private currentBestAsk = 0;
-    private lastDepthUpdateTime: number = 0;
 
     // Flow tracking for market structure analysis
     private recentFlowWindow: RollingWindow<{
@@ -116,7 +137,7 @@ export class AnomalyDetector extends EventEmitter {
         side: "buy" | "sell";
         time: number;
     }>;
-    private flowWindowMs = 30000; // 30 seconds for flow analysis
+    private flowWindowMs: number;
 
     // Order size tracking for whale detection
     private orderSizeHistory: RollingWindow<{
@@ -124,7 +145,7 @@ export class AnomalyDetector extends EventEmitter {
         time: number;
         price: number;
     }>;
-    private orderSizeWindowMs = 300000; // 5 minutes for size statistics
+    private orderSizeWindowMs: number;
 
     // Anomaly deduplication and history
     private lastEmitted: Record<string, { severity: string; time: number }> =
@@ -138,13 +159,22 @@ export class AnomalyDetector extends EventEmitter {
      */
     constructor(options: AnomalyDetectorOptions = {}, logger: Logger) {
         super();
-        this.windowSize = options.windowSize ?? 1000;
-        this.normalSpreadBps = options.normalSpreadBps ?? 10; // 0.1% normal spread
+        this.windowSize = options.windowSize ?? 9000;
+        this.normalSpreadBps = options.normalSpreadBps ?? 10;
         this.minHistory = options.minHistory ?? 100;
         this.logger = logger;
         this.anomalyCooldownMs = options.anomalyCooldownMs ?? 10000;
         this.volumeImbalanceThreshold = options.volumeImbalanceThreshold ?? 0.7;
         this.tickSize = options.tickSize ?? 0.01;
+        this.flowWindowMs = options.flowWindowMs ?? 900000;
+        this.orderSizeWindowMs = options.orderSizeWindowMs ?? 900000;
+        this.volatilityThreshold = options.volatilityThreshold ?? 0.005;
+        this.spreadThresholdBps = options.spreadThresholdBps ?? 100;
+        this.extremeVolatilityWindowMs =
+            options.extremeVolatilityWindowMs ?? 900000;
+        this.liquidityCheckWindowMs = options.liquidityCheckWindowMs ?? 900000;
+        this.whaleCooldownMs = options.whaleCooldownMs ?? 300000;
+        this.marketHealthWindowMs = options.marketHealthWindowMs ?? 900000;
 
         this.marketHistory = new RollingWindow<MarketSnapshot>(
             this.windowSize,
@@ -155,13 +185,13 @@ export class AnomalyDetector extends EventEmitter {
             size: number;
             time: number;
             price: number;
-        }>(Math.max(2000, Math.ceil(this.orderSizeWindowMs / 100)), false);
+        }>(Math.max(9000, Math.ceil(this.orderSizeWindowMs / 100)), false);
 
         this.recentFlowWindow = new RollingWindow<{
             volume: number;
             side: "buy" | "sell";
             time: number;
-        }>(Math.max(500, Math.ceil(this.flowWindowMs / 100)), false);
+        }>(Math.max(9000, Math.ceil(this.flowWindowMs / 100)), false);
 
         this.logger?.info?.(
             "AnomalyDetector initialized for market health monitoring",
@@ -183,7 +213,6 @@ export class AnomalyDetector extends EventEmitter {
     public updateBestQuotes(bestBid: number, bestAsk: number): void {
         this.currentBestBid = bestBid;
         this.currentBestAsk = bestAsk;
-        this.lastDepthUpdateTime = Date.now();
     }
 
     /**
@@ -340,8 +369,8 @@ export class AnomalyDetector extends EventEmitter {
         // Calculate average passive liquidity over recent period
         const recent = this.marketHistory
             .toArray()
-            .filter((s) => now - s.timestamp < 120_000)
-            .slice(-20);
+            .filter((s) => now - s.timestamp < this.liquidityCheckWindowMs)
+            .slice(-100);
 
         const avgPassive =
             recent.reduce(
@@ -420,7 +449,7 @@ export class AnomalyDetector extends EventEmitter {
         const now = Date.now();
         const recentPrices = this.marketHistory
             .toArray()
-            .filter((s) => now - s.timestamp < 120_000)
+            .filter((s) => now - s.timestamp < this.extremeVolatilityWindowMs)
             .map((h) => h.price);
 
         const returns: number[] = [];
@@ -493,7 +522,9 @@ export class AnomalyDetector extends EventEmitter {
         // Check for whale clustering
         const recentLarge = this.orderSizeHistory
             .toArray()
-            .filter((o) => now - o.time < 60000 && o.size >= p99).length;
+            .filter(
+                (o) => now - o.time < this.whaleCooldownMs && o.size >= p99
+            ).length;
 
         if (recentLarge > 3) confidence += 0.1; // Boost for clustering
 
@@ -857,7 +888,7 @@ export class AnomalyDetector extends EventEmitter {
             lastUpdateAge: number;
         };
     } {
-        const recentTime = Date.now() - 300000; // 5 minutes
+        const recentTime = Date.now() - this.marketHealthWindowMs;
         const recentSnapshots = this.marketHistory
             .toArray()
             .filter((s) => s.timestamp > recentTime);
@@ -929,9 +960,11 @@ export class AnomalyDetector extends EventEmitter {
 
         const isHealthy =
             !hasInfrastructureIssues &&
-            volatility < 0.002 &&
+            volatility < this.volatilityThreshold &&
             (!highestSeverity || highestSeverity === "info") &&
-            (currentSpreadBps ? currentSpreadBps < 50 : true);
+            (currentSpreadBps
+                ? currentSpreadBps < this.spreadThresholdBps
+                : true);
 
         // Determine recommendation
         let recommendation:
@@ -943,7 +976,10 @@ export class AnomalyDetector extends EventEmitter {
             recommendation = "close_positions";
         } else if (hasInfrastructureIssues || highestSeverity === "high") {
             recommendation = "pause";
-        } else if (highestSeverity === "medium" || volatility > 0.002) {
+        } else if (
+            highestSeverity === "medium" ||
+            volatility > this.volatilityThreshold
+        ) {
             recommendation = "reduce_size";
         } else {
             recommendation = "continue";

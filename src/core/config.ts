@@ -128,7 +128,7 @@ export class Config {
 
     static readonly SIGNAL_MANAGER: SignalManagerConfig = {
         confidenceThreshold: Number(
-            cfg.symbols[cfg.symbol].signalManager?.confidenceThreshold ?? 0.75
+            cfg.symbols[cfg.symbol].signalManager?.confidenceThreshold ?? 0.65
         ),
         signalTimeout: Number(
             cfg.symbols[cfg.symbol].signalManager?.signalTimeout ?? 300000
@@ -165,7 +165,7 @@ export class Config {
             cfg.symbols[cfg.symbol].orderBookProcessor?.binSize ?? 5
         ),
         numLevels: Number(
-            cfg.symbols[cfg.symbol].orderBookProcessor?.numLevels ?? 100
+            cfg.symbols[cfg.symbol].orderBookProcessor?.numLevels ?? 20
         ),
         maxBufferSize: Number(
             cfg.symbols[cfg.symbol].orderBookProcessor?.maxBufferSize ?? 1000
@@ -297,7 +297,7 @@ export class Config {
         windowMs: this.WINDOW_MS,
         minDurationMs:
             cfg.symbols[cfg.symbol].accumulationDetector?.minDurationMs ??
-            300_000,
+            180_000,
         minRatio: cfg.symbols[cfg.symbol].accumulationDetector?.minRatio ?? 1.2,
         minRecentActivityMs:
             cfg.symbols[cfg.symbol].accumulationDetector?.minRecentActivityMs ??
@@ -306,7 +306,7 @@ export class Config {
             cfg.symbols[cfg.symbol].accumulationDetector?.minAggVolume ?? 5,
         accumulationThreshold:
             cfg.symbols[cfg.symbol].accumulationDetector
-                ?.accumulationThreshold ?? 0.6,
+                ?.accumulationThreshold ?? 0.55,
         pricePrecision: Config.PRICE_PRECISION,
     };
 
@@ -423,26 +423,52 @@ export class Config {
 
     static readonly ANOMALY_DETECTOR: AnomalyDetectorOptions = {
         windowSize: Number(
-            cfg.symbols[cfg.symbol].anomalyDetector?.windowSize ?? 400
+            cfg.symbols[cfg.symbol].anomalyDetector?.windowSize ?? 9000
         ),
         anomalyCooldownMs: Number(
             cfg.symbols[cfg.symbol].anomalyDetector?.anomalyCooldownMs ??
                 300_000
         ),
-
         volumeImbalanceThreshold: Number(
             cfg.symbols[cfg.symbol].anomalyDetector?.volumeImbalanceThreshold ??
                 0.65
         ),
-
         normalSpreadBps: Number(
             cfg.symbols[cfg.symbol].anomalyDetector?.normalSpreadBps ?? 10
         ),
         minHistory: Number(
             cfg.symbols[cfg.symbol].anomalyDetector?.minHistory ?? 50
         ),
-
         tickSize: this.TICK_SIZE,
+        flowWindowMs: Number(
+            cfg.symbols[cfg.symbol].anomalyDetector?.flowWindowMs ?? 900_000
+        ),
+        orderSizeWindowMs: Number(
+            cfg.symbols[cfg.symbol].anomalyDetector?.orderSizeWindowMs ??
+                900_000
+        ),
+        volatilityThreshold: Number(
+            cfg.symbols[cfg.symbol].anomalyDetector?.volatilityThreshold ??
+                0.005
+        ),
+        spreadThresholdBps: Number(
+            cfg.symbols[cfg.symbol].anomalyDetector?.spreadThresholdBps ?? 100
+        ),
+        extremeVolatilityWindowMs: Number(
+            cfg.symbols[cfg.symbol].anomalyDetector
+                ?.extremeVolatilityWindowMs ?? 900_000
+        ),
+        liquidityCheckWindowMs: Number(
+            cfg.symbols[cfg.symbol].anomalyDetector?.liquidityCheckWindowMs ??
+                900_000
+        ),
+        whaleCooldownMs: Number(
+            cfg.symbols[cfg.symbol].anomalyDetector?.whaleCooldownMs ?? 300_000
+        ),
+        marketHealthWindowMs: Number(
+            cfg.symbols[cfg.symbol].anomalyDetector?.marketHealthWindowMs ??
+                900_000
+        ),
     };
 
     /**

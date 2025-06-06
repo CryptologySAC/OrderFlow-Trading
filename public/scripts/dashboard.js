@@ -275,8 +275,7 @@ function getAnomalySummary(anomaly) {
     }
     if (details.absorptionRatio !== undefined) {
         const val = Number(details.absorptionRatio);
-        if (!Number.isNaN(val))
-            parts.push(`AbsRatio: ${val.toFixed(2)}`);
+        if (!Number.isNaN(val)) parts.push(`AbsRatio: ${val.toFixed(2)}`);
     }
     if (details.rationale) {
         if (typeof details.rationale === "string") {
@@ -678,7 +677,14 @@ const tradeWebsocket = new TradeWebSocket({
                         const askData = [];
                         const bidData = [];
 
-                        orderBookData.priceLevels.forEach((level) => {
+                        // Limit display to max 30 levels to prevent UI performance issues
+                        const maxLevels = 30;
+                        const levelsToShow = orderBookData.priceLevels.slice(
+                            0,
+                            maxLevels
+                        );
+
+                        levelsToShow.forEach((level) => {
                             const priceStr = level.price
                                 ? level.price.toFixed(2)
                                 : "0.00";

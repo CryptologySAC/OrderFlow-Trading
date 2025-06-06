@@ -270,6 +270,17 @@ export class SignalCoordinator extends EventEmitter {
         const reg = this.detectors.get(detector.getId());
         if (!reg || !reg.enabled) return;
 
+        // Track signal candidates received by type
+        this.metrics.incrementCounter(
+            "signal_coordinator_signals_received_total",
+            1,
+            {
+                detector_id: detector.getId(),
+                signal_type: candidate.type,
+                priority: reg.priority.toString(),
+            }
+        );
+
         if (!reg.signalTypes.includes(candidate.type)) {
             this.logger.warn("Unsupported signalType from detector", {
                 detectorId: detector.getId(),
