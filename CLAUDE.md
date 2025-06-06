@@ -117,6 +117,7 @@ Code must pass Lint stric, that means never use <any> types and use real types w
 - Update TypeScript interfaces in `src/types/configTypes.ts`
 - Validate new config options in `src/core/config.ts`
 - Document parameter ranges and effects in configuration comments
+- every class that has configurable options need to use /config.json
 
 ### WebSocket Management
 

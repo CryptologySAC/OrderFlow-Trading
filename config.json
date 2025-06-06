@@ -30,7 +30,7 @@
             "pricePrecision": 2,
             "windowMs": 60000,
             "bandTicks": 5,
-            "emitDepthMetrics": false,
+            "emitDepthMetrics": true,
             "dataStream": {
                 "reconnectDelay": 5000,
                 "maxReconnectAttempts": 10,
@@ -45,7 +45,7 @@
                 "hardReloadAfterAttempts": 10,
                 "hardReloadCooldownMs": 300000,
                 "maxHardReloads": 3,
-                "hardReloadRestartCommand": "npm run restart"
+                "hardReloadRestartCommand": "yarn start:dev"
             },
             "orderBookState": {
                 "maxLevels": 2000,
@@ -92,14 +92,14 @@
                 "confirmationTimeout": 50000,
                 "maxRevisitTicks": 12,
                 "features": {
-                    "depletionTracking": true,
-                    "spreadAdjustment": true,
-                    "spoofingDetection": true,
-                    "autoCalibrate": true,
-                    "adaptiveZone": true,
-                    "multiZone": true,
-                    "volumeVelocity": true,
-                    "passiveHistory": true
+                    "depletionTracking": false,
+                    "spreadAdjustment": false,
+                    "spoofingDetection": false,
+                    "autoCalibrate": false,
+                    "adaptiveZone": false,
+                    "multiZone": false,
+                    "volumeVelocity": false,
+                    "passiveHistory": false
                 }
             },
             "absorption": {
@@ -154,12 +154,12 @@
                 }
             },
             "distributionDetector": {
-                "minDurationMs": 100000,
+                "minDurationMs": 150000,
                 "minRatio": 1.5,
-                "minRecentActivityMs": 40000,
+                "minRecentActivityMs": 50000,
                 "threshold": 0.5,
                 "volumeConcentrationWeight": 0.25,
-                "signalCooldownMs": 40000,
+                "signalCooldownMs": 45000,
                 "strengthAnalysis": true,
                 "velocityAnalysis": true,
                 "symbol": "LTCUSDT",
