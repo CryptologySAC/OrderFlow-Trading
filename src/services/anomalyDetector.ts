@@ -504,26 +504,26 @@ export class AnomalyDetector extends EventEmitter {
         if (recentSizes.length < 100) return; // Need sufficient sample
 
         recentSizes.sort((a, b) => a - b);
-        const p99 = recentSizes[Math.floor(recentSizes.length * 0.99)];
         const p995 = recentSizes[Math.floor(recentSizes.length * 0.995)];
+        const p9995 = recentSizes[Math.floor(recentSizes.length * 0.9955)];
         const candidateSize = snapshot.aggressiveVolume;
 
         let confidence = 0;
         let whaleLevel = 0;
 
-        if (candidateSize >= p995) {
+        if (candidateSize >= p9995) {
             confidence = 0.9;
-            whaleLevel = 995;
-        } else if (candidateSize >= p99) {
+            whaleLevel = 9995;
+        } else if (candidateSize >= p995) {
             confidence = 0.7;
-            whaleLevel = 99;
+            whaleLevel = 995;
         }
 
         // Check for whale clustering
         const recentLarge = this.orderSizeHistory
             .toArray()
             .filter(
-                (o) => now - o.time < this.whaleCooldownMs && o.size >= p99
+                (o) => now - o.time < this.whaleCooldownMs && o.size >= p995
             ).length;
 
         if (recentLarge > 3) confidence += 0.1; // Boost for clustering
@@ -542,8 +542,8 @@ export class AnomalyDetector extends EventEmitter {
                     confidence,
                     whaleLevel,
                     orderSize: candidateSize,
-                    p99,
                     p995,
+                    p9995,
                     recentLargeOrders: recentLarge,
                     rationale:
                         "Large order detected affecting market structure",
