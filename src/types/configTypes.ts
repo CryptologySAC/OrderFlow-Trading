@@ -2,7 +2,13 @@ export type AllowedSymbols = "LTCUSDT";
 
 export interface MQTTConfig {
     url: string;
+    username?: string;
+    password?: string;
     statsTopic?: string;
+    clientId?: string;
+    keepalive?: number;
+    connectTimeout?: number;
+    reconnectPeriod?: number;
 }
 
 export interface ConfigType {

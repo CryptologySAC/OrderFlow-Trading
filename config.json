@@ -4,8 +4,23 @@
     "httpPort": 3000,
     "wsPort": 3001,
     "mqtt": {
-        "url": "mqtt://localhost:1883",
-        "statsTopic": "orderflow/stats"
+        "url": "ws://192.168.2.24:1884",
+        "username": "orderflow",
+        "password": "orderflow",
+        "statsTopic": "orderflow/stats",
+        "clientId": "orderflow-dashboard",
+        "keepalive": 60,
+        "connectTimeout": 4000,
+        "reconnectPeriod": 1000
+    },
+    "_mqtt_alternatives": {
+        "_comment": "Try these URLs if the main one fails:",
+        "_ws_plain": "ws://192.168.2.24:1884",
+        "_ws_secure": "wss://192.168.2.24:1884", 
+        "_mqtt_standard": "mqtt://192.168.2.24:1883",
+        "_mqtt_secure": "mqtts://192.168.2.24:8883",
+        "_mqtt_ws_standard": "ws://192.168.2.24:8083/mqtt",
+        "_mqtt_wss_standard": "wss://192.168.2.24:8084/mqtt"
     },
     "alertWebhookUrl": "https://lima.cryptology.pe/api/webhook/OcdSY61opli9-n7unmlw4CmO",
     "alertCooldownMs": 300000,
