@@ -56,55 +56,71 @@ function updateTables(metrics) {
     const histBody = document.querySelector("#histogramsTable tbody");
     if (histBody) {
         histBody.innerHTML = "";
-        
+
         // Debug: log all metrics to see structure
         console.log("All metrics data:", metrics);
-        
+
         // Try different data sources for histograms
-        const histograms = metrics.histograms || metrics.legacy?.histograms || {};
-        
+        const histograms =
+            metrics.histograms || metrics.legacy?.histograms || {};
+
         // Also check for legacy processingLatency data
-        const legacyLatency = metrics.legacy?.processingLatency || metrics.processingLatency;
-        
+        const legacyLatency =
+            metrics.legacy?.processingLatency || metrics.processingLatency;
+
         console.log("Histogram data:", histograms);
         console.log("Legacy latency data:", legacyLatency);
-        
+
         const histogramEntries = Object.entries(histograms);
         let hasData = false;
-        
+
         // Add legacy processing latency if available
-        if (legacyLatency && Array.isArray(legacyLatency) && legacyLatency.length > 0) {
+        if (
+            legacyLatency &&
+            Array.isArray(legacyLatency) &&
+            legacyLatency.length > 0
+        ) {
             hasData = true;
             const row = document.createElement("tr");
             const count = legacyLatency.length;
             const mean = legacyLatency.reduce((a, b) => a + b, 0) / count;
             const min = Math.min(...legacyLatency);
             const max = Math.max(...legacyLatency);
-            
+
             row.innerHTML = `<td>Processing Latency (Legacy)</td><td>${formatNumber(count)}</td><td>${mean.toFixed(2)} ms</td><td>${min.toFixed(2)} ms</td><td>${max.toFixed(2)} ms</td>`;
             histBody.appendChild(row);
         }
-        
+
         for (const [name, summary] of histogramEntries) {
             if (!summary) continue;
-            
+
             hasData = true;
             const row = document.createElement("tr");
             const displayName = formatMetricName(name);
             const count = formatNumber(summary.count || 0);
-            
+
             // Handle different unit types based on metric name
             let meanDisplay, minDisplay, maxDisplay;
-            if (name.includes('duration') || name.includes('latency') || name.includes('time')) {
-                meanDisplay = summary.mean ? `${summary.mean.toFixed(2)} ms` : "0.00 ms";
-                minDisplay = summary.min ? `${summary.min.toFixed(2)} ms` : "0 ms";
-                maxDisplay = summary.max ? `${summary.max.toFixed(2)} ms` : "0 ms";
+            if (
+                name.includes("duration") ||
+                name.includes("latency") ||
+                name.includes("time")
+            ) {
+                meanDisplay = summary.mean
+                    ? `${summary.mean.toFixed(2)} ms`
+                    : "0.00 ms";
+                minDisplay = summary.min
+                    ? `${summary.min.toFixed(2)} ms`
+                    : "0 ms";
+                maxDisplay = summary.max
+                    ? `${summary.max.toFixed(2)} ms`
+                    : "0 ms";
             } else {
                 meanDisplay = summary.mean ? summary.mean.toFixed(3) : "0.000";
                 minDisplay = summary.min ? summary.min.toFixed(3) : "0";
                 maxDisplay = summary.max ? summary.max.toFixed(3) : "0";
             }
-            
+
             row.innerHTML = `<td>${displayName}</td><td>${count}</td><td>${meanDisplay}</td><td>${minDisplay}</td><td>${maxDisplay}</td>`;
             histBody.appendChild(row);
         }
@@ -113,21 +129,21 @@ function updateTables(metrics) {
         if (!hasData) {
             // Show expected histogram metrics even when no data is available
             const expectedHistograms = [
-                'signal_manager_signal_confidence_distribution',
-                'signal_manager_signal_processing_duration_ms',
-                'signal_coordinator_processing_duration_seconds',
-                'signal_manager_correlation_strength_distribution'
+                "signal_manager_signal_confidence_distribution",
+                "signal_manager_signal_processing_duration_ms",
+                "signal_coordinator_processing_duration_seconds",
+                "signal_manager_correlation_strength_distribution",
             ];
-            
+
             for (const metricName of expectedHistograms) {
                 const row = document.createElement("tr");
                 const displayName = formatMetricName(metricName);
                 row.innerHTML = `<td>${displayName}</td><td>0</td><td>0.00 ms</td><td>0 ms</td><td>0 ms</td>`;
-                row.style.opacity = '0.6';
+                row.style.opacity = "0.6";
                 histBody.appendChild(row);
                 hasData = true;
             }
-            
+
             if (!hasData) {
                 const row = document.createElement("tr");
                 row.innerHTML = `<td colspan="5" style="text-align: center; color: var(--text-secondary, #666);">No histogram data available</td>`;
