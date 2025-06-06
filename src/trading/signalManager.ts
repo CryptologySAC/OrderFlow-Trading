@@ -492,9 +492,8 @@ export class SignalManager extends EventEmitter {
             throw error;
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const result = confirmedSignal;
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+
         return result;
     }
 
