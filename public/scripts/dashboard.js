@@ -260,6 +260,37 @@ function getReadableAction(action) {
                 .replace(/\b\w/g, (l) => l.toUpperCase());
     }
 }
+
+function getAnomalySummary(anomaly) {
+    if (!anomaly || typeof anomaly !== "object") return "";
+    const details = anomaly.details || {};
+    const parts = [];
+    if (details.confidence !== undefined) {
+        const pct = Number(details.confidence) * 100;
+        if (!Number.isNaN(pct)) parts.push(`Conf: ${pct.toFixed(0)}%`);
+    }
+    if (details.imbalance !== undefined) {
+        const val = Number(details.imbalance);
+        if (!Number.isNaN(val)) parts.push(`Imb: ${val.toFixed(2)}`);
+    }
+    if (details.absorptionRatio !== undefined) {
+        const val = Number(details.absorptionRatio);
+        if (!Number.isNaN(val))
+            parts.push(`AbsRatio: ${val.toFixed(2)}`);
+    }
+    if (details.rationale) {
+        if (typeof details.rationale === "string") {
+            parts.push(details.rationale);
+        } else if (typeof details.rationale === "object") {
+            const flags = Object.entries(details.rationale)
+                .filter(([_, v]) => Boolean(v))
+                .map(([k]) => k)
+                .join(", ");
+            if (flags) parts.push(`Reasons: ${flags}`);
+        }
+    }
+    return parts.join(" | ");
+}
 function capitalize(str) {
     return str[0].toUpperCase() + str.slice(1);
 }
@@ -278,7 +309,7 @@ function renderAnomalyList() {
     listElem.innerHTML = filtered
         .map(
             (a) => `
-            <div class="anomaly-row ${a.severity}">
+            <div class="anomaly-row ${a.severity}" title="${getAnomalySummary(a)}">
                 <span class="anomaly-icon">${getAnomalyIcon(a.type)}</span>
                 <span class="anomaly-label">${getAnomalyLabel(a.type)}</span>
                 <span class="anomaly-price">${a.affectedPriceRange ? `${a.affectedPriceRange.min.toFixed(2)}-${a.affectedPriceRange.max.toFixed(2)}` : `${a.price?.toFixed(2) || "N/A"}`}</span>

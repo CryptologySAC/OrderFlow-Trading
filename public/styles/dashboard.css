@@ -327,6 +327,7 @@ canvas {
     line-height: 1.2;
     width: 100%;
     box-sizing: border-box;
+    cursor: help;
     transition: border-color 0.3s ease;
 }
 .anomaly-row.critical {
