@@ -355,6 +355,7 @@ export class BinanceDataFeed implements IBinanceDataFeed {
             return this.validateDepthSnapshot(
                 response.data as SpotWebsocketAPI.DepthResponseResult
             );
+
         } catch (error) {
             this.logger.error(
                 `[${contextLabel}] API error: ${JSON.stringify(error)}`
