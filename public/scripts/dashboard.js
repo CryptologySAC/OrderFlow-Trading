@@ -43,6 +43,10 @@ let signalsList = [];
 let signalFilters = new Set(["buy", "sell"]);
 let activeSignalTooltip = null;
 
+// Support/Resistance levels management
+let supportResistanceLevels = [];
+let maxSupportResistanceLevels = 20;
+
 // Used to control badge display
 let badgeTimeout = null;
 let latestBadgeElem = null;
@@ -771,6 +775,14 @@ const tradeWebsocket = new TradeWebSocket({
                     };
                     tradesChart.update("none");
                     console.log("Signal label added:", label);
+                    break;
+
+                case "supportResistanceLevel":
+                    console.log(
+                        "Support/Resistance level received:",
+                        message.data
+                    );
+                    handleSupportResistanceLevel(message.data);
                     break;
 
                 case "orderbook":
@@ -2373,6 +2385,9 @@ function initialize() {
             }
         });
     }
+
+    // Setup periodic cleanup for support/resistance levels
+    setInterval(cleanupOldSupportResistanceLevels, 300000); // Every 5 minutes
 }
 
 function addAnomalyChartLabel(anomaly) {
@@ -2400,6 +2415,175 @@ function addAnomalyChartLabel(anomaly) {
         id: `anomaly.${now}`,
     };
     tradesChart.update("none");
+}
+
+/**
+ * Handle incoming support/resistance level data
+ */
+function handleSupportResistanceLevel(levelData) {
+    if (!tradesChart || !levelData.data) return;
+
+    const level = levelData.data;
+
+    // Add to levels array
+    supportResistanceLevels.unshift(level);
+
+    // Limit the number of levels to prevent chart clutter
+    if (supportResistanceLevels.length > maxSupportResistanceLevels) {
+        // Remove oldest level from chart
+        const oldestLevel = supportResistanceLevels.pop();
+        removeSupportResistanceLevel(oldestLevel.id);
+    }
+
+    // Add level to chart
+    addSupportResistanceToChart(level);
+
+    console.log("Support/Resistance level added to chart:", {
+        id: level.id,
+        price: level.price,
+        type: level.type,
+        strength: level.strength,
+        touchCount: level.touchCount,
+    });
+}
+
+/**
+ * Add support/resistance level as translucent bar on chart
+ */
+function addSupportResistanceToChart(level) {
+    if (!tradesChart) return;
+
+    const annotations = tradesChart.options.plugins.annotation.annotations;
+    const levelId = `sr_level_${level.id}`;
+
+    // Determine color based on type and strength
+    const isSupport = level.type === "support";
+    const baseColor = isSupport ? "34, 197, 94" : "239, 68, 68"; // Green for support, red for resistance
+    const alpha = Math.max(0.15, Math.min(0.6, level.strength)); // Opacity based on strength
+
+    // Create price tolerance for level thickness
+    const priceRange = level.price * 0.0005; // 0.05% range for level thickness
+
+    // Add the horizontal bar across the chart
+    annotations[levelId] = {
+        type: "box",
+        yMin: level.price - priceRange,
+        yMax: level.price + priceRange,
+        backgroundColor: `rgba(${baseColor}, ${alpha})`,
+        borderColor: `rgba(${baseColor}, ${Math.min(alpha * 2, 0.8)})`,
+        borderWidth: 1,
+        borderDash: level.roleReversals?.length > 0 ? [5, 5] : undefined, // Dashed if has role reversals
+        drawTime: "beforeDatasetsDraw",
+        z: 1,
+        // Add hover interaction
+        enter: function (context, event) {
+            showSupportResistanceTooltip(level, event);
+        },
+        leave: function () {
+            hideSupportResistanceTooltip();
+        },
+    };
+
+    // Add a label for the level
+    const labelId = `sr_label_${level.id}`;
+    annotations[labelId] = {
+        type: "label",
+        xValue: "50%", // Position at middle of visible chart
+        yValue: level.price,
+        content: `${isSupport ? "S" : "R"} ${level.price.toFixed(2)} (${level.touchCount})`,
+        backgroundColor: `rgba(${baseColor}, 0.8)`,
+        color: "white",
+        font: {
+            size: 10,
+            weight: "bold",
+            family: "monospace",
+        },
+        padding: 2,
+        borderRadius: 2,
+        position: {
+            x: "end",
+            y: "center",
+        },
+        xAdjust: -5,
+        drawTime: "afterDatasetsDraw",
+        z: 5,
+    };
+
+    tradesChart.update("none");
+}
+
+/**
+ * Remove support/resistance level from chart
+ */
+function removeSupportResistanceLevel(levelId) {
+    if (!tradesChart) return;
+
+    const annotations = tradesChart.options.plugins.annotation.annotations;
+    const barId = `sr_level_${levelId}`;
+    const labelId = `sr_label_${levelId}`;
+
+    delete annotations[barId];
+    delete annotations[labelId];
+
+    tradesChart.update("none");
+}
+
+/**
+ * Show tooltip for support/resistance level
+ */
+function showSupportResistanceTooltip(level, event) {
+    const tooltip = document.createElement("div");
+    tooltip.className = "sr-tooltip";
+    tooltip.innerHTML = `
+        <div><strong>${level.type.toUpperCase()}: $${level.price.toFixed(2)}</strong></div>
+        <div>Strength: ${(level.strength * 100).toFixed(1)}%</div>
+        <div>Touches: ${level.touchCount}</div>
+        <div>Volume: ${level.volumeAtLevel.toFixed(2)}</div>
+        ${level.roleReversals?.length > 0 ? `<div>Role Reversals: ${level.roleReversals.length}</div>` : ""}
+        <div>First: ${new Date(level.firstDetected).toLocaleTimeString()}</div>
+        <div>Last: ${new Date(level.lastTouched).toLocaleTimeString()}</div>
+    `;
+
+    tooltip.style.position = "absolute";
+    tooltip.style.background = "var(--bg-secondary)";
+    tooltip.style.border = "1px solid var(--border-color)";
+    tooltip.style.borderRadius = "4px";
+    tooltip.style.padding = "8px";
+    tooltip.style.fontSize = "11px";
+    tooltip.style.zIndex = "1000";
+    tooltip.style.pointerEvents = "none";
+    tooltip.style.left = `${event.clientX + 10}px`;
+    tooltip.style.top = `${event.clientY - 10}px`;
+
+    document.body.appendChild(tooltip);
+
+    // Store reference for cleanup
+    window.activeSRTooltip = tooltip;
+}
+
+/**
+ * Hide support/resistance tooltip
+ */
+function hideSupportResistanceTooltip() {
+    if (window.activeSRTooltip) {
+        window.activeSRTooltip.remove();
+        window.activeSRTooltip = null;
+    }
+}
+
+/**
+ * Clean up old support/resistance levels based on time
+ */
+function cleanupOldSupportResistanceLevels() {
+    const cutoffTime = Date.now() - 2 * 60 * 60 * 1000; // 2 hours
+
+    supportResistanceLevels = supportResistanceLevels.filter((level) => {
+        if (level.lastTouched < cutoffTime) {
+            removeSupportResistanceLevel(level.id);
+            return false;
+        }
+        return true;
+    });
 }
 
 // Start application

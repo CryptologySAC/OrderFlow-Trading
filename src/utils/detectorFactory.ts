@@ -17,6 +17,10 @@ import {
 } from "../indicators/deltaCVDConfirmation.js";
 import { DistributionDetector } from "../indicators/distributionDetector.js";
 import { SuperiorFlowSettings } from "../indicators/base/flowDetectorBase.js";
+import {
+    SupportResistanceDetector,
+    SupportResistanceConfig,
+} from "../indicators/supportResistanceDetector.js";
 
 import type {
     DetectorCallback,
@@ -229,6 +233,52 @@ export class DetectorFactory {
     }
 
     /**
+     * Create production-ready support/resistance detector
+     */
+    public static createSupportResistanceDetector(
+        callback: DetectorCallback,
+        settings: Partial<SupportResistanceConfig>,
+        dependencies: DetectorDependencies,
+        options: DetectorFactoryOptions = {}
+    ): SupportResistanceDetector {
+        const id = options.id || `support_resistance-${Date.now()}`;
+
+        this.validateCreationLimits();
+
+        const productionSettings: SupportResistanceConfig = {
+            priceTolerancePercent: 0.05,
+            minTouchCount: 3,
+            minStrength: 0.6,
+            timeWindowMs: 5400000, // 90 minutes
+            volumeWeightFactor: 0.3,
+            rejectionConfirmationTicks: 5,
+            ...settings,
+        };
+
+        const detector = new SupportResistanceDetector(
+            id,
+            this.wrapCallback(callback, id, dependencies.logger),
+            productionSettings,
+            dependencies.logger,
+            dependencies.spoofingDetector,
+            dependencies.metricsCollector,
+            dependencies.signalLogger
+        );
+
+        this.registerDetector(id, detector, dependencies, options);
+
+        dependencies.logger.info(
+            `[DetectorFactory] Created SupportResistanceDetector`,
+            {
+                id,
+                settings: productionSettings,
+            }
+        );
+
+        return detector;
+    }
+
+    /**
      * Create production-ready accumulation detector
      */
     public static createDeltaCVDConfirmationDetector(
@@ -347,6 +397,7 @@ export class DetectorFactory {
             { type: "accumulation", config: {} },
             { type: "distribution", config: {} },
             { type: "cvd_confirmation", config: {} },
+            { type: "support_resistance", config: {} },
         ];
     }
 
@@ -401,6 +452,12 @@ export class DetectorFactory {
                     baseSettings as DeltaCVDConfirmationSettings,
                     this.dependencies
                 );
+            case "support_resistance":
+                return this.createSupportResistanceDetector(
+                    callback,
+                    baseSettings as Partial<SupportResistanceConfig>,
+                    this.dependencies
+                );
             default:
                 throw new Error(`Unknown detector type: ${type}`);
         }
@@ -445,6 +502,11 @@ export class DetectorFactory {
             cvd_confirmation: {
                 supportedSignalTypes: ["cvd_confirmation"],
                 priority: 50,
+                enabled: true,
+            },
+            support_resistance: {
+                supportedSignalTypes: ["support_resistance_level"],
+                priority: 40,
                 enabled: true,
             },
         };

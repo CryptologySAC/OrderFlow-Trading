@@ -14,6 +14,7 @@ import type { DataStreamConfig } from "../trading/dataStreamManager.js";
 import type { AccumulationSettings } from "../indicators/interfaces/detectorInterfaces.js";
 import type { DeltaCVDConfirmationSettings } from "../indicators/deltaCVDConfirmation.js";
 import type { SuperiorFlowSettings } from "../indicators/base/flowDetectorBase.js";
+import type { SupportResistanceConfig } from "../indicators/supportResistanceDetector.js";
 import type { IndividualTradesManagerConfig } from "../data/individualTradesManager.js";
 import type { MicrostructureAnalyzerConfig } from "../data/microstructureAnalyzer.js";
 import type { TradesProcessorOptions } from "../clients/tradesProcessor.js";
@@ -355,6 +356,15 @@ export class Config {
         minAggVolume:
             cfg.symbols[cfg.symbol].distributionDetector?.minAggVolume ?? 8, // Higher volume threshold for distribution
         pricePrecision: Config.PRICE_PRECISION,
+    };
+
+    static readonly SUPPORT_RESISTANCE_DETECTOR: SupportResistanceConfig = {
+        priceTolerancePercent: 0.05, // 0.05% price tolerance
+        minTouchCount: 3, // Minimum 3 touches to confirm level
+        minStrength: 0.6, // 60% minimum strength to emit
+        timeWindowMs: 5_400_000, // 90 minutes time window
+        volumeWeightFactor: 0.3, // Volume impact on strength
+        rejectionConfirmationTicks: 5, // Ticks to confirm rejection
     };
 
     static readonly INDIVIDUAL_TRADES_MANAGER: IndividualTradesManagerConfig = {

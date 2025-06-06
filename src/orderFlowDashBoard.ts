@@ -53,6 +53,7 @@ import { ExhaustionDetector } from "./indicators/exhaustionDetector.js";
 import { DistributionDetector } from "./indicators/distributionDetector.js";
 import { AccumulationDetector } from "./indicators/accumulationDetector.js";
 import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
+import { SupportResistanceDetector } from "./indicators/supportResistanceDetector.js";
 
 // Utils imports
 import { TradeData } from "./utils/utils.js";
@@ -115,6 +116,7 @@ export class OrderFlowDashboard {
     private readonly exhaustionDetector: ExhaustionDetector;
     private readonly distributionDetector: DistributionDetector;
     private readonly accumulationDetector: AccumulationDetector;
+    private readonly supportResistanceDetector: SupportResistanceDetector;
 
     // Indicators
     private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
@@ -299,6 +301,23 @@ export class OrderFlowDashboard {
             this.deltaCVDConfirmation,
             ["cvd_confirmation"],
             30,
+            true
+        );
+
+        // Support/Resistance Detector
+        this.supportResistanceDetector =
+            DetectorFactory.createSupportResistanceDetector(
+                (signal) => {
+                    console.log("Support/Resistance level detected:", signal);
+                },
+                Config.SUPPORT_RESISTANCE_DETECTOR,
+                dependencies,
+                { id: "ltcusdt-support-resistance-main" }
+            );
+        this.signalCoordinator.registerDetector(
+            this.supportResistanceDetector,
+            ["support_resistance_level"],
+            40,
             true
         );
 
@@ -627,13 +646,16 @@ export class OrderFlowDashboard {
             this.preprocessor.on(
                 "enriched_trade",
                 (enrichedTrade: EnrichedTradeEvent) => {
-                    // TODO
+                    // Feed trade data to all detectors
                     this.absorptionDetector.onEnrichedTrade(enrichedTrade);
                     this.anomalyDetector.onEnrichedTrade(enrichedTrade);
                     this.accumulationDetector.onEnrichedTrade(enrichedTrade);
                     this.exhaustionDetector.onEnrichedTrade(enrichedTrade);
                     this.deltaCVDConfirmation.onEnrichedTrade(enrichedTrade);
                     this.distributionDetector.onEnrichedTrade(enrichedTrade);
+                    this.supportResistanceDetector.onEnrichedTrade(
+                        enrichedTrade
+                    );
 
                     const aggTradeMessage: WebSocketMessage =
                         this.dependencies.tradesProcessor.onEnrichedTrade(

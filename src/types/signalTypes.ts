@@ -24,6 +24,7 @@ export type SignalType =
     | "swingLow"
     | "cvd_confirmation"
     | "cvd_confirmation_confirmed"
+    | "support_resistance_level"
     | "generic";
 
 export type SignalSide = "buy" | "sell";
