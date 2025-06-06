@@ -275,8 +275,7 @@ function getAnomalySummary(anomaly) {
     }
     if (details.absorptionRatio !== undefined) {
         const val = Number(details.absorptionRatio);
-        if (!Number.isNaN(val))
-            parts.push(`AbsRatio: ${val.toFixed(2)}`);
+        if (!Number.isNaN(val)) parts.push(`AbsRatio: ${val.toFixed(2)}`);
     }
     if (details.rationale) {
         if (typeof details.rationale === "string") {

@@ -76,45 +76,45 @@ export interface Metrics {
     signalCandidatesProcessed?: number;
     signalsConfirmed?: number;
     signalsRejected?: number;
-    
+
     // Signal rejection reasons
     signalsRejectedLowConfidence?: number;
     signalsRejectedUnhealthyMarket?: number;
     signalsRejectedProcessingError?: number;
     signalsRejectedTimeout?: number;
     signalsRejectedDuplicate?: number;
-    
+
     // Signals by type - candidates
     candidatesAbsorption?: number;
     candidatesExhaustion?: number;
     candidatesAccumulation?: number;
     candidatesDistribution?: number;
     candidatesCvdConfirmation?: number;
-    
+
     // Signals by type - confirmed
     confirmedAbsorption?: number;
     confirmedExhaustion?: number;
     confirmedAccumulation?: number;
     confirmedDistribution?: number;
     confirmedCvdConfirmation?: number;
-    
+
     // Signals by type - rejected
     rejectedAbsorption?: number;
     rejectedExhaustion?: number;
     rejectedAccumulation?: number;
     rejectedDistribution?: number;
     rejectedCvdConfirmation?: number;
-    
+
     // Signal quality metrics
     averageSignalConfidence?: number;
     signalConfidenceTotal?: number;
     signalConfidenceCount?: number;
-    
+
     // Signal timing metrics
     signalProcessingTime?: number;
     signalQueueDepth?: number;
     signalCorrelationHits?: number;
-    
+
     // Legacy/cleanup metrics
     accumulationDetected?: number;
     accumulationErrors?: number;

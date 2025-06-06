@@ -12,7 +12,10 @@ import { AnomalyDetector } from "../services/anomalyDetector.js";
 import { AlertManager } from "../alerts/alertManager.js";
 import { Logger } from "../infrastructure/logger.js";
 import type { IPipelineStorage } from "../storage/pipelineStorage.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import {
+    MetricsCollector,
+    type EnhancedMetrics,
+} from "../infrastructure/metricsCollector.js";
 import {
     calculateProfitTarget,
     calculateStopLoss,
@@ -99,7 +102,11 @@ export class SignalManager extends EventEmitter {
                 });
 
                 this.recordMetric("signal_blocked_by_health", signal.type);
-                this.recordDetailedSignalMetrics(signal, 'blocked', 'unhealthy_market');
+                this.recordDetailedSignalMetrics(
+                    signal,
+                    "blocked",
+                    "unhealthy_market"
+                );
                 this.lastRejectReason = "unhealthy_market";
                 return null;
             }
@@ -122,7 +129,11 @@ export class SignalManager extends EventEmitter {
                     "signal_rejected_low_confidence",
                     signal.type
                 );
-                this.recordDetailedSignalMetrics(signal, 'rejected', 'low_confidence');
+                this.recordDetailedSignalMetrics(
+                    signal,
+                    "rejected",
+                    "low_confidence"
+                );
                 this.lastRejectReason = "low_confidence";
                 return null;
             }
@@ -138,7 +149,12 @@ export class SignalManager extends EventEmitter {
 
             // 5. Log and emit metrics
             this.logSignalProcessing(signal, confirmedSignal);
-            this.recordDetailedSignalMetrics(signal, 'confirmed', undefined, confirmedSignal);
+            this.recordDetailedSignalMetrics(
+                signal,
+                "confirmed",
+                undefined,
+                confirmedSignal
+            );
             this.lastRejectReason = undefined;
             return confirmedSignal;
         } catch (error) {
@@ -146,7 +162,11 @@ export class SignalManager extends EventEmitter {
                 signalId: signal.id,
                 error: error instanceof Error ? error.message : String(error),
             });
-            this.recordDetailedSignalMetrics(signal, 'rejected', 'processing_error');
+            this.recordDetailedSignalMetrics(
+                signal,
+                "rejected",
+                "processing_error"
+            );
             this.lastRejectReason = "processing_error";
             return null;
         }
@@ -592,14 +612,14 @@ export class SignalManager extends EventEmitter {
      */
     private recordDetailedSignalMetrics(
         signal: ProcessedSignal,
-        outcome: 'confirmed' | 'rejected' | 'blocked',
+        outcome: "confirmed" | "rejected" | "blocked",
         rejectionReason?: string,
         confirmedSignal?: ConfirmedSignal
     ): void {
         const labels = {
             signal_type: signal.type,
             detector_id: signal.detectorId,
-            outcome
+            outcome,
         };
 
         // Core signal processing metrics
@@ -616,7 +636,7 @@ export class SignalManager extends EventEmitter {
             {
                 signal_type: signal.type,
                 detector_id: signal.detectorId,
-                outcome
+                outcome,
             }
         );
 
@@ -624,12 +644,12 @@ export class SignalManager extends EventEmitter {
         this.recordSignalQualityMetrics(signal, outcome, confirmedSignal);
 
         // Rejection reason tracking
-        if (outcome === 'rejected' || outcome === 'blocked') {
-            this.recordRejectionMetrics(signal, rejectionReason ?? 'unknown');
+        if (outcome === "rejected" || outcome === "blocked") {
+            this.recordRejectionMetrics(signal, rejectionReason ?? "unknown");
         }
 
         // Confirmation metrics with enhanced details
-        if (outcome === 'confirmed' && confirmedSignal) {
+        if (outcome === "confirmed" && confirmedSignal) {
             this.recordConfirmationMetrics(signal, confirmedSignal);
         }
 
@@ -648,7 +668,7 @@ export class SignalManager extends EventEmitter {
         const qualityLabels = {
             signal_type: signal.type,
             detector_id: signal.detectorId,
-            quality_tier: this.getQualityTier(signal.confidence)
+            quality_tier: this.getQualityTier(signal.confidence),
         };
 
         // Quality tier distribution
@@ -664,7 +684,7 @@ export class SignalManager extends EventEmitter {
             signal.confidence,
             {
                 detector_id: signal.detectorId,
-                signal_type: signal.type
+                signal_type: signal.type,
             }
         );
 
@@ -679,18 +699,24 @@ export class SignalManager extends EventEmitter {
                 adjustment,
                 {
                     signal_type: signal.type,
-                    adjustment_type: adjustment > 0 ? 'boost' : adjustment < 0 ? 'reduction' : 'none'
+                    adjustment_type:
+                        adjustment > 0
+                            ? "boost"
+                            : adjustment < 0
+                              ? "reduction"
+                              : "none",
                 }
             );
 
             // Correlation strength impact
-            const correlationStrength = confirmedSignal.correlationData.correlationStrength;
+            const correlationStrength =
+                confirmedSignal.correlationData.correlationStrength;
             this.metricsCollector.recordHistogram(
                 `signal_manager_correlation_strength_distribution`,
                 correlationStrength,
                 {
                     signal_type: signal.type,
-                    has_correlation: correlationStrength > 0 ? 'yes' : 'no'
+                    has_correlation: correlationStrength > 0 ? "yes" : "no",
                 }
             );
         }
@@ -699,12 +725,15 @@ export class SignalManager extends EventEmitter {
     /**
      * Record detailed rejection metrics with categorized reasons.
      */
-    private recordRejectionMetrics(signal: ProcessedSignal, rejectionReason: string): void {
+    private recordRejectionMetrics(
+        signal: ProcessedSignal,
+        rejectionReason: string
+    ): void {
         const rejectionLabels = {
             signal_type: signal.type,
             detector_id: signal.detectorId,
             rejection_reason: rejectionReason,
-            confidence_bucket: this.getConfidenceBucket(signal.confidence)
+            confidence_bucket: this.getConfidenceBucket(signal.confidence),
         };
 
         // Detailed rejection tracking
@@ -728,7 +757,8 @@ export class SignalManager extends EventEmitter {
             {
                 signal_type: signal.type,
                 confidence_bucket: this.getConfidenceBucket(signal.confidence),
-                rejection_category: this.categorizeRejectionReason(rejectionReason)
+                rejection_category:
+                    this.categorizeRejectionReason(rejectionReason),
             }
         );
 
@@ -738,7 +768,7 @@ export class SignalManager extends EventEmitter {
             1,
             {
                 detector_id: signal.detectorId,
-                rejection_reason: rejectionReason
+                rejection_reason: rejectionReason,
             }
         );
     }
@@ -746,12 +776,20 @@ export class SignalManager extends EventEmitter {
     /**
      * Record confirmation metrics with enhanced signal correlation data.
      */
-    private recordConfirmationMetrics(signal: ProcessedSignal, confirmedSignal: ConfirmedSignal): void {
+    private recordConfirmationMetrics(
+        signal: ProcessedSignal,
+        confirmedSignal: ConfirmedSignal
+    ): void {
         const confirmationLabels = {
             signal_type: signal.type,
             detector_id: signal.detectorId,
-            market_healthy: confirmedSignal.anomalyData.marketHealthy ? 'yes' : 'no',
-            has_correlation: confirmedSignal.correlationData.correlatedSignals > 0 ? 'yes' : 'no'
+            market_healthy: confirmedSignal.anomalyData.marketHealthy
+                ? "yes"
+                : "no",
+            has_correlation:
+                confirmedSignal.correlationData.correlatedSignals > 0
+                    ? "yes"
+                    : "no",
         };
 
         // Enhanced confirmation tracking
@@ -767,8 +805,12 @@ export class SignalManager extends EventEmitter {
             1,
             {
                 signal_type: signal.type,
-                market_healthy: confirmedSignal.anomalyData.marketHealthy ? 'healthy' : 'unhealthy',
-                health_recommendation: confirmedSignal.anomalyData.healthRecommendation ?? 'unknown'
+                market_healthy: confirmedSignal.anomalyData.marketHealthy
+                    ? "healthy"
+                    : "unhealthy",
+                health_recommendation:
+                    confirmedSignal.anomalyData.healthRecommendation ??
+                    "unknown",
             }
         );
 
@@ -785,7 +827,9 @@ export class SignalManager extends EventEmitter {
                 1,
                 {
                     signal_type: signal.type,
-                    correlation_strength_tier: this.getCorrelationTier(confirmedSignal.correlationData.correlationStrength)
+                    correlation_strength_tier: this.getCorrelationTier(
+                        confirmedSignal.correlationData.correlationStrength
+                    ),
                 }
             );
         }
@@ -796,7 +840,7 @@ export class SignalManager extends EventEmitter {
             confirmedSignal.confidence,
             {
                 signal_type: signal.type,
-                detector_id: signal.detectorId
+                detector_id: signal.detectorId,
             }
         );
     }
@@ -806,13 +850,13 @@ export class SignalManager extends EventEmitter {
      */
     private recordSignalTimingMetrics(signal: ProcessedSignal): void {
         const processingTime = Date.now() - signal.timestamp.getTime();
-        
+
         this.metricsCollector.recordHistogram(
             `signal_manager_signal_processing_duration_ms`,
             processingTime,
             {
                 signal_type: signal.type,
-                detector_id: signal.detectorId
+                detector_id: signal.detectorId,
             }
         );
 
@@ -828,11 +872,11 @@ export class SignalManager extends EventEmitter {
      * Get quality tier based on confidence score.
      */
     private getQualityTier(confidence: number): string {
-        if (confidence >= 0.9) return 'high';
-        if (confidence >= 0.8) return 'medium_high';
-        if (confidence >= 0.7) return 'medium';
-        if (confidence >= 0.6) return 'medium_low';
-        return 'low';
+        if (confidence >= 0.9) return "high";
+        if (confidence >= 0.8) return "medium_high";
+        if (confidence >= 0.7) return "medium";
+        if (confidence >= 0.6) return "medium_low";
+        return "low";
     }
 
     /**
@@ -847,11 +891,11 @@ export class SignalManager extends EventEmitter {
      * Get correlation strength tier.
      */
     private getCorrelationTier(strength: number): string {
-        if (strength >= 0.8) return 'very_strong';
-        if (strength >= 0.6) return 'strong';
-        if (strength >= 0.4) return 'moderate';
-        if (strength >= 0.2) return 'weak';
-        return 'very_weak';
+        if (strength >= 0.8) return "very_strong";
+        if (strength >= 0.6) return "strong";
+        if (strength >= 0.4) return "moderate";
+        if (strength >= 0.2) return "weak";
+        return "very_weak";
     }
 
     /**
@@ -859,18 +903,18 @@ export class SignalManager extends EventEmitter {
      */
     private categorizeRejectionReason(reason: string): string {
         switch (reason) {
-            case 'low_confidence':
-                return 'quality_filter';
-            case 'unhealthy_market':
-                return 'market_condition';
-            case 'processing_error':
-                return 'technical_error';
-            case 'timeout':
-                return 'timing_issue';
-            case 'duplicate':
-                return 'duplicate_filter';
+            case "low_confidence":
+                return "quality_filter";
+            case "unhealthy_market":
+                return "market_condition";
+            case "processing_error":
+                return "technical_error";
+            case "timeout":
+                return "timing_issue";
+            case "duplicate":
+                return "duplicate_filter";
             default:
-                return 'other';
+                return "other";
         }
     }
 
@@ -1002,7 +1046,12 @@ export class SignalManager extends EventEmitter {
             this.metricsCollector.createCounter(
                 "signal_manager_rejections_detailed_total",
                 "Detailed rejection tracking",
-                ["signal_type", "detector_id", "rejection_reason", "confidence_bucket"]
+                [
+                    "signal_type",
+                    "detector_id",
+                    "rejection_reason",
+                    "confidence_bucket",
+                ]
             );
 
             this.metricsCollector.createCounter(
@@ -1027,7 +1076,12 @@ export class SignalManager extends EventEmitter {
             this.metricsCollector.createCounter(
                 "signal_manager_confirmations_enhanced_total",
                 "Enhanced confirmation tracking",
-                ["signal_type", "detector_id", "market_healthy", "has_correlation"]
+                [
+                    "signal_type",
+                    "detector_id",
+                    "market_healthy",
+                    "has_correlation",
+                ]
             );
 
             this.metricsCollector.createCounter(
@@ -1114,94 +1168,212 @@ export class SignalManager extends EventEmitter {
      */
     public getSignalStatistics(): SignalStatistics {
         const metrics = this.metricsCollector.getMetrics();
-        
+
         return {
             processing: {
-                totalProcessed: this.getCounterValue(metrics, "signal_manager_signals_processed_total"),
-                totalReceived: this.getCounterValue(metrics, "signal_manager_signals_received_total"),
-                totalConfirmed: this.getCounterValue(metrics, "signal_manager_signals_confirmed_total"),
-                processingDurationP50: this.getHistogramPercentile(metrics, "signal_manager_signal_processing_duration_ms", 50),
-                processingDurationP95: this.getHistogramPercentile(metrics, "signal_manager_signal_processing_duration_ms", 95),
+                totalProcessed: this.getCounterValue(
+                    metrics,
+                    "signal_manager_signals_processed_total"
+                ),
+                totalReceived: this.getCounterValue(
+                    metrics,
+                    "signal_manager_signals_received_total"
+                ),
+                totalConfirmed: this.getCounterValue(
+                    metrics,
+                    "signal_manager_signals_confirmed_total"
+                ),
+                processingDurationP50: this.getHistogramPercentile(
+                    metrics,
+                    "signal_manager_signal_processing_duration_ms",
+                    50
+                ),
+                processingDurationP95: this.getHistogramPercentile(
+                    metrics,
+                    "signal_manager_signal_processing_duration_ms",
+                    95
+                ),
             },
             rejections: {
-                totalRejected: this.getCounterValue(metrics, "signal_manager_rejections_detailed_total"),
+                totalRejected: this.getCounterValue(
+                    metrics,
+                    "signal_manager_rejections_detailed_total"
+                ),
                 byReason: {
-                    lowConfidence: this.getCounterValue(metrics, "signal_manager_signal_rejected_low_confidence_total"),
-                    unhealthyMarket: this.getCounterValue(metrics, "signal_manager_signal_blocked_by_health_total"),
-                    processingError: this.getCounterValueByLabel(metrics, "signal_manager_rejection_reasons_total", "reason", "processing_error"),
-                    timeout: this.getCounterValueByLabel(metrics, "signal_manager_rejection_reasons_total", "reason", "timeout"),
-                    duplicate: this.getCounterValueByLabel(metrics, "signal_manager_rejection_reasons_total", "reason", "duplicate"),
+                    lowConfidence: this.getCounterValue(
+                        metrics,
+                        "signal_manager_signal_rejected_low_confidence_total"
+                    ),
+                    unhealthyMarket: this.getCounterValue(
+                        metrics,
+                        "signal_manager_signal_blocked_by_health_total"
+                    ),
+                    processingError: this.getCounterValueByLabel(
+                        metrics,
+                        "signal_manager_rejection_reasons_total",
+                        "reason",
+                        "processing_error"
+                    ),
+                    timeout: this.getCounterValueByLabel(
+                        metrics,
+                        "signal_manager_rejection_reasons_total",
+                        "reason",
+                        "timeout"
+                    ),
+                    duplicate: this.getCounterValueByLabel(
+                        metrics,
+                        "signal_manager_rejection_reasons_total",
+                        "reason",
+                        "duplicate"
+                    ),
                 },
-                byConfidenceBucket: this.getRejectionsByConfidenceBucket(metrics),
+                byConfidenceBucket:
+                    this.getRejectionsByConfidenceBucket(metrics),
             },
             quality: {
-                averageConfidence: this.getHistogramMean(metrics, "signal_manager_signal_confidence_distribution"),
-                confidenceP50: this.getHistogramPercentile(metrics, "signal_manager_signal_confidence_distribution", 50),
-                confidenceP95: this.getHistogramPercentile(metrics, "signal_manager_signal_confidence_distribution", 95),
+                averageConfidence: this.getHistogramMean(
+                    metrics,
+                    "signal_manager_signal_confidence_distribution"
+                ),
+                confidenceP50: this.getHistogramPercentile(
+                    metrics,
+                    "signal_manager_signal_confidence_distribution",
+                    50
+                ),
+                confidenceP95: this.getHistogramPercentile(
+                    metrics,
+                    "signal_manager_signal_confidence_distribution",
+                    95
+                ),
                 qualityTiers: this.getQualityTierDistribution(metrics),
-                averageConfidenceAdjustment: this.getHistogramMean(metrics, "signal_manager_confidence_adjustment"),
+                averageConfidenceAdjustment: this.getHistogramMean(
+                    metrics,
+                    "signal_manager_confidence_adjustment"
+                ),
             },
             correlation: {
-                averageStrength: this.getHistogramMean(metrics, "signal_manager_correlation_strength_distribution"),
-                correlatedSignalsP50: this.getHistogramPercentile(metrics, "signal_manager_correlated_signals_count", 50),
-                correlatedSignalsP95: this.getHistogramPercentile(metrics, "signal_manager_correlated_signals_count", 95),
-                confirmationsWithCorrelation: this.getCounterValueByLabel(metrics, "signal_manager_confirmations_enhanced_total", "has_correlation", "yes"),
+                averageStrength: this.getHistogramMean(
+                    metrics,
+                    "signal_manager_correlation_strength_distribution"
+                ),
+                correlatedSignalsP50: this.getHistogramPercentile(
+                    metrics,
+                    "signal_manager_correlated_signals_count",
+                    50
+                ),
+                correlatedSignalsP95: this.getHistogramPercentile(
+                    metrics,
+                    "signal_manager_correlated_signals_count",
+                    95
+                ),
+                confirmationsWithCorrelation: this.getCounterValueByLabel(
+                    metrics,
+                    "signal_manager_confirmations_enhanced_total",
+                    "has_correlation",
+                    "yes"
+                ),
             },
             byDetector: this.getDetectorStatistics(metrics),
             bySignalType: this.getSignalTypeStatistics(metrics),
             marketHealth: {
-                confirmationsHealthyMarket: this.getCounterValueByLabel(metrics, "signal_manager_confirmations_by_market_health_total", "market_healthy", "healthy"),
-                confirmationsUnhealthyMarket: this.getCounterValueByLabel(metrics, "signal_manager_confirmations_by_market_health_total", "market_healthy", "unhealthy"),
-                blockedByHealth: this.getCounterValue(metrics, "signal_manager_signal_blocked_by_health_total"),
+                confirmationsHealthyMarket: this.getCounterValueByLabel(
+                    metrics,
+                    "signal_manager_confirmations_by_market_health_total",
+                    "market_healthy",
+                    "healthy"
+                ),
+                confirmationsUnhealthyMarket: this.getCounterValueByLabel(
+                    metrics,
+                    "signal_manager_confirmations_by_market_health_total",
+                    "market_healthy",
+                    "unhealthy"
+                ),
+                blockedByHealth: this.getCounterValue(
+                    metrics,
+                    "signal_manager_signal_blocked_by_health_total"
+                ),
             },
             timing: {
-                averageSignalAge: this.getHistogramMean(metrics, "signal_manager_signal_age_ms"),
-                signalAgeP95: this.getHistogramPercentile(metrics, "signal_manager_signal_age_ms", 95),
-            }
+                averageSignalAge: this.getHistogramMean(
+                    metrics,
+                    "signal_manager_signal_age_ms"
+                ),
+                signalAgeP95: this.getHistogramPercentile(
+                    metrics,
+                    "signal_manager_signal_age_ms",
+                    95
+                ),
+            },
         };
     }
 
     // Helper methods for metrics extraction
-    private getCounterValue(metrics: any, metricName: string): number {
+    private getCounterValue(
+        metrics: EnhancedMetrics,
+        metricName: string
+    ): number {
         return metrics.counters[metricName]?.value || 0;
     }
 
-    private getCounterValueByLabel(metrics: any, metricName: string, labelKey: string, labelValue: string): number {
+    private getCounterValueByLabel(
+        metrics: EnhancedMetrics,
+        metricName: string,
+        labelKey: string,
+        labelValue: string
+    ): number {
         // This is a simplified implementation - in practice, you'd need to filter by labels
         // For now, return a placeholder value
-        void metrics; void metricName; void labelKey; void labelValue;
+        void metrics;
+        void metricName;
+        void labelKey;
+        void labelValue;
         return 0; // TODO: Implement proper label filtering when MetricsCollector supports it
     }
 
-    private getHistogramPercentile(metrics: any, metricName: string, percentile: number): number {
+    private getHistogramPercentile(
+        metrics: EnhancedMetrics,
+        metricName: string,
+        percentile: number
+    ): number {
         const histogram = metrics.histograms[metricName];
         return histogram?.percentiles?.[`p${percentile}`] || 0;
     }
 
-    private getHistogramMean(metrics: any, metricName: string): number {
+    private getHistogramMean(
+        metrics: EnhancedMetrics,
+        metricName: string
+    ): number {
         const histogram = metrics.histograms[metricName];
         return histogram?.mean || 0;
     }
 
-    private getRejectionsByConfidenceBucket(metrics: any): Record<string, number> {
+    private getRejectionsByConfidenceBucket(
+        metrics: EnhancedMetrics
+    ): Record<string, number> {
         void metrics;
         // TODO: Implement when label-based filtering is available
         return {};
     }
 
-    private getQualityTierDistribution(metrics: any): Record<string, number> {
+    private getQualityTierDistribution(
+        metrics: EnhancedMetrics
+    ): Record<string, number> {
         void metrics;
         // TODO: Implement when label-based filtering is available
         return {};
     }
 
-    private getDetectorStatistics(metrics: any): Record<string, DetectorStats> {
+    private getDetectorStatistics(
+        metrics: EnhancedMetrics
+    ): Record<string, DetectorStats> {
         void metrics;
         // TODO: Implement when label-based filtering is available
         return {};
     }
 
-    private getSignalTypeStatistics(metrics: any): Record<string, SignalTypeStats> {
+    private getSignalTypeStatistics(
+        metrics: EnhancedMetrics
+    ): Record<string, SignalTypeStats> {
         void metrics;
         // TODO: Implement when label-based filtering is available
         return {};

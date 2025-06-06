@@ -63,7 +63,9 @@ function updateTables(metrics) {
             const row = document.createElement("tr");
             const displayName = formatMetricName(name);
             const count = formatNumber(summary.count || 0);
-            const mean = summary.mean ? `${summary.mean.toFixed(2)} ms` : "0.00 ms";
+            const mean = summary.mean
+                ? `${summary.mean.toFixed(2)} ms`
+                : "0.00 ms";
             const min = summary.min ? `${summary.min.toFixed(2)} ms` : "0 ms";
             const max = summary.max ? `${summary.max.toFixed(2)} ms` : "0 ms";
             row.innerHTML = `<td>${displayName}</td><td>${count}</td><td>${mean}</td><td>${min}</td><td>${max}</td>`;
@@ -89,69 +91,74 @@ function formatNumber(num) {
 function formatMetricName(name) {
     // Convert snake_case to readable names
     const nameMap = {
-        'connections_active': 'Active Connections',
-        'memory_usage': 'Memory Usage (MB)',
-        'uptime': 'System Uptime',
-        'Stream.uptime': 'Stream Uptime',
-        'processing_latency': 'Processing Latency',
-        'trades_processed': 'Trades Processed',
-        'signals_generated': 'Signals Generated',
-        'anomalies_detected': 'Anomalies Detected',
-        'orderbook_updates': 'OrderBook Updates',
-        'websocket_messages': 'WebSocket Messages',
-        'depth_snapshots': 'Depth Snapshots',
-        'trade_events': 'Trade Events',
-        'signal_coordinator_processed': 'Signals Coordinated',
-        'detector_restarts': 'Detector Restarts',
-        'error_count': 'Error Count',
-        'health_checks': 'Health Checks'
+        connections_active: "Active Connections",
+        memory_usage: "Memory Usage (MB)",
+        uptime: "System Uptime",
+        "Stream.uptime": "Stream Uptime",
+        processing_latency: "Processing Latency",
+        trades_processed: "Trades Processed",
+        signals_generated: "Signals Generated",
+        anomalies_detected: "Anomalies Detected",
+        orderbook_updates: "OrderBook Updates",
+        websocket_messages: "WebSocket Messages",
+        depth_snapshots: "Depth Snapshots",
+        trade_events: "Trade Events",
+        signal_coordinator_processed: "Signals Coordinated",
+        detector_restarts: "Detector Restarts",
+        error_count: "Error Count",
+        health_checks: "Health Checks",
     };
-    
+
     // Handle dotted names like "Stream.uptime"
     if (nameMap[name]) {
         return nameMap[name];
     }
-    
+
     // Handle general case: convert snake_case and dotted names
-    return name.split(/[._]/).map(word => 
-        word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ');
+    return name
+        .split(/[._]/)
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
 }
 
 function formatMetricValue(name, value) {
     if (typeof value !== "number") return value;
-    
+
     // Handle special cases - make uptime detection more flexible
-    if (name.toLowerCase().includes('uptime')) {
+    if (name.toLowerCase().includes("uptime")) {
         return formatUptime(value);
     }
-    
-    if (name.includes('memory') || name.includes('Memory')) {
+
+    if (name.includes("memory") || name.includes("Memory")) {
         // Convert bytes to MB if needed
         const mb = value > 1000000 ? Math.round(value / 1024 / 1024) : value;
         return `${mb.toLocaleString()} MB`;
     }
-    
-    if (name.includes('latency') || name.includes('Latency')) {
+
+    if (name.includes("latency") || name.includes("Latency")) {
         return `${value.toFixed(2)} ms`;
     }
-    
-    if (name.includes('percentage') || name.includes('ratio') || (value >= 0 && value <= 1 && value % 1 !== 0)) {
+
+    if (
+        name.includes("percentage") ||
+        name.includes("ratio") ||
+        (value >= 0 && value <= 1 && value % 1 !== 0)
+    ) {
         return `${(value * 100).toFixed(1)}%`;
     }
-    
+
     // Use the existing formatNumber for general cases
     return formatNumber(value);
 }
 
 function formatUptime(uptimeMs) {
     if (typeof uptimeMs !== "number") return uptimeMs;
-    
+
     const seconds = Math.floor(uptimeMs / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
-    
+
     if (days > 0) {
         return `${days}d ${hours % 24}h ${minutes % 60}m`;
     } else if (hours > 0) {
@@ -166,87 +173,145 @@ function formatUptime(uptimeMs) {
 function updateSignalMetrics(metrics) {
     const counters = metrics.counters || {};
     const histograms = metrics.histograms || {};
-    
+
     // Helper function to safely get counter value
     const getCounterValue = (name) => {
         const counter = counters[name];
-        return typeof counter === "object" ? (counter.value || 0) : (counter || 0);
+        return typeof counter === "object" ? counter.value || 0 : counter || 0;
     };
-    
+
     // Helper function to get rate per minute
     const getRate = (count, timeFrameMinutes = 1) => {
         if (!count || count === 0) return 0;
         // Simple rate calculation - could be enhanced with actual time tracking
         return (count / 60).toFixed(1); // per minute estimate
     };
-    
+
     // Signal Processing Overview
-    const signalCandidates = getCounterValue('signal_coordinator_signals_received_total');
-    const signalsProcessed = getCounterValue('signal_manager_signals_processed_total');
-    const signalsConfirmed = getCounterValue('signal_manager_signals_confirmed_total');
-    const signalsRejected = getCounterValue('signal_manager_rejections_detailed_total');
-    
-    updateElement('signalCandidates', formatNumber(signalCandidates));
-    updateElement('signalCandidatesRate', getRate(signalCandidates));
-    updateElement('signalsProcessed', formatNumber(signalsProcessed));
-    updateElement('signalsProcessedRate', getRate(signalsProcessed));
-    updateElement('signalsConfirmed', formatNumber(signalsConfirmed));
-    updateElement('signalsConfirmedRate', getRate(signalsConfirmed));
-    updateElement('signalsRejected', formatNumber(signalsRejected));
-    updateElement('signalsRejectedRate', getRate(signalsRejected));
-    
+    const signalCandidates = getCounterValue(
+        "signal_coordinator_signals_received_total"
+    );
+    const signalsProcessed = getCounterValue(
+        "signal_manager_signals_processed_total"
+    );
+    const signalsConfirmed = getCounterValue(
+        "signal_manager_signals_confirmed_total"
+    );
+    const signalsRejected = getCounterValue(
+        "signal_manager_rejections_detailed_total"
+    );
+
+    updateElement("signalCandidates", formatNumber(signalCandidates));
+    updateElement("signalCandidatesRate", getRate(signalCandidates));
+    updateElement("signalsProcessed", formatNumber(signalsProcessed));
+    updateElement("signalsProcessedRate", getRate(signalsProcessed));
+    updateElement("signalsConfirmed", formatNumber(signalsConfirmed));
+    updateElement("signalsConfirmedRate", getRate(signalsConfirmed));
+    updateElement("signalsRejected", formatNumber(signalsRejected));
+    updateElement("signalsRejectedRate", getRate(signalsRejected));
+
     // Signal Types Breakdown
-    const signalTypes = ['absorption', 'exhaustion', 'accumulation', 'distribution', 'cvd_confirmation'];
-    
-    signalTypes.forEach(type => {
-        const candidates = getCounterValue(`signal_coordinator_signals_received_total_${type}`) || 0;
-        const confirmed = getCounterValue(`signal_manager_signals_confirmed_total_${type}`) || 0;
-        const rejected = getCounterValue(`signal_manager_rejections_detailed_total_${type}`) || 0;
+    const signalTypes = [
+        "absorption",
+        "exhaustion",
+        "accumulation",
+        "distribution",
+        "cvd_confirmation",
+    ];
+
+    signalTypes.forEach((type) => {
+        const candidates =
+            getCounterValue(
+                `signal_coordinator_signals_received_total_${type}`
+            ) || 0;
+        const confirmed =
+            getCounterValue(`signal_manager_signals_confirmed_total_${type}`) ||
+            0;
+        const rejected =
+            getCounterValue(
+                `signal_manager_rejections_detailed_total_${type}`
+            ) || 0;
         const total = confirmed + rejected;
-        const successRate = total > 0 ? ((confirmed / total) * 100).toFixed(1) + '%' : '--';
-        
-        const typePrefix = type === 'cvd_confirmation' ? 'cvd' : type;
+        const successRate =
+            total > 0 ? ((confirmed / total) * 100).toFixed(1) + "%" : "--";
+
+        const typePrefix = type === "cvd_confirmation" ? "cvd" : type;
         updateElement(`${typePrefix}Candidates`, formatNumber(candidates));
         updateElement(`${typePrefix}Confirmed`, formatNumber(confirmed));
         updateElement(`${typePrefix}Rejected`, formatNumber(rejected));
         updateElement(`${typePrefix}SuccessRate`, successRate);
     });
-    
+
     // Rejection Reasons
     const rejectionReasons = [
-        'low_confidence',
-        'unhealthy_market', 
-        'processing_error',
-        'timeout',
-        'duplicate'
+        "low_confidence",
+        "unhealthy_market",
+        "processing_error",
+        "timeout",
+        "duplicate",
     ];
-    
+
     const totalRejections = signalsRejected;
-    
-    rejectionReasons.forEach(reason => {
-        const count = getCounterValue(`signal_manager_rejection_reasons_total_${reason}`) || 
-                     getCounterValue(`signal_manager_signal_rejected_${reason}_total`) || 0;
-        const percentage = totalRejections > 0 ? ((count / totalRejections) * 100).toFixed(1) + '%' : '--';
-        
-        const reasonCamelCase = reason.replace(/_([a-z])/g, (match, letter) => letter.toUpperCase());
-        updateElement(`rejected${reasonCamelCase.charAt(0).toUpperCase() + reasonCamelCase.slice(1)}`, formatNumber(count));
-        updateElement(`rejected${reasonCamelCase.charAt(0).toUpperCase() + reasonCamelCase.slice(1)}Percent`, percentage);
+
+    rejectionReasons.forEach((reason) => {
+        const count =
+            getCounterValue(
+                `signal_manager_rejection_reasons_total_${reason}`
+            ) ||
+            getCounterValue(`signal_manager_signal_rejected_${reason}_total`) ||
+            0;
+        const percentage =
+            totalRejections > 0
+                ? ((count / totalRejections) * 100).toFixed(1) + "%"
+                : "--";
+
+        const reasonCamelCase = reason.replace(/_([a-z])/g, (match, letter) =>
+            letter.toUpperCase()
+        );
+        updateElement(
+            `rejected${reasonCamelCase.charAt(0).toUpperCase() + reasonCamelCase.slice(1)}`,
+            formatNumber(count)
+        );
+        updateElement(
+            `rejected${reasonCamelCase.charAt(0).toUpperCase() + reasonCamelCase.slice(1)}Percent`,
+            percentage
+        );
     });
-    
+
     // Signal Quality Metrics
-    const confidenceHist = histograms['signal_manager_signal_confidence_distribution'];
-    const correlationHist = histograms['signal_manager_correlation_strength_distribution'];
-    const processingTimeHist = histograms['signal_manager_signal_processing_duration_ms'];
-    
-    updateElement('avgConfidence', confidenceHist ? (confidenceHist.mean || 0).toFixed(3) : '--');
-    updateElement('confidenceP50', confidenceHist ? getPercentile(confidenceHist, 50).toFixed(3) : '--');
-    updateElement('confidenceP95', confidenceHist ? getPercentile(confidenceHist, 95).toFixed(3) : '--');
-    updateElement('avgCorrelationStrength', correlationHist ? (correlationHist.mean || 0).toFixed(3) : '--');
-    updateElement('avgProcessingTime', processingTimeHist ? `${(processingTimeHist.mean || 0).toFixed(2)} ms` : '--');
-    
+    const confidenceHist =
+        histograms["signal_manager_signal_confidence_distribution"];
+    const correlationHist =
+        histograms["signal_manager_correlation_strength_distribution"];
+    const processingTimeHist =
+        histograms["signal_manager_signal_processing_duration_ms"];
+
+    updateElement(
+        "avgConfidence",
+        confidenceHist ? (confidenceHist.mean || 0).toFixed(3) : "--"
+    );
+    updateElement(
+        "confidenceP50",
+        confidenceHist ? getPercentile(confidenceHist, 50).toFixed(3) : "--"
+    );
+    updateElement(
+        "confidenceP95",
+        confidenceHist ? getPercentile(confidenceHist, 95).toFixed(3) : "--"
+    );
+    updateElement(
+        "avgCorrelationStrength",
+        correlationHist ? (correlationHist.mean || 0).toFixed(3) : "--"
+    );
+    updateElement(
+        "avgProcessingTime",
+        processingTimeHist
+            ? `${(processingTimeHist.mean || 0).toFixed(2)} ms`
+            : "--"
+    );
+
     // Queue depth from gauges
     const queueDepth = metrics.gauges?.signal_coordinator_queue_size || 0;
-    updateElement('queueDepth', formatNumber(queueDepth));
+    updateElement("queueDepth", formatNumber(queueDepth));
 }
 
 function updateElement(id, value) {
@@ -277,7 +342,7 @@ function updateVisuals(data) {
 
     // Update tables with all metrics data
     updateTables(metrics);
-    
+
     // Update signal metrics sections
     updateSignalMetrics(metrics);
 }
