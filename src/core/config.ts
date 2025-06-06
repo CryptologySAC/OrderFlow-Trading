@@ -359,12 +359,27 @@ export class Config {
     };
 
     static readonly SUPPORT_RESISTANCE_DETECTOR: SupportResistanceConfig = {
-        priceTolerancePercent: 0.05, // 0.05% price tolerance
-        minTouchCount: 3, // Minimum 3 touches to confirm level
-        minStrength: 0.6, // 60% minimum strength to emit
-        timeWindowMs: 5_400_000, // 90 minutes time window
-        volumeWeightFactor: 0.3, // Volume impact on strength
-        rejectionConfirmationTicks: 5, // Ticks to confirm rejection
+        priceTolerancePercent: Number(
+            cfg.symbols[cfg.symbol].supportResistanceDetector
+                ?.priceTolerancePercent ?? 0.05
+        ), // 0.05% price tolerance
+        minTouchCount:
+            cfg.symbols[cfg.symbol].supportResistanceDetector?.minTouchCount ?? 3, // Minimum 3 touches to confirm level
+        minStrength: Number(
+            cfg.symbols[cfg.symbol].supportResistanceDetector?.minStrength ?? 0.6
+        ), // 60% minimum strength to emit
+        timeWindowMs: Number(
+            cfg.symbols[cfg.symbol].supportResistanceDetector?.timeWindowMs ??
+                5_400_000
+        ), // 90 minutes time window
+        volumeWeightFactor: Number(
+            cfg.symbols[cfg.symbol].supportResistanceDetector?.volumeWeightFactor ??
+                0.3
+        ), // Volume impact on strength
+        rejectionConfirmationTicks: Number(
+            cfg.symbols[cfg.symbol].supportResistanceDetector
+                ?.rejectionConfirmationTicks ?? 5
+        ), // Ticks to confirm rejection
     };
 
     static readonly INDIVIDUAL_TRADES_MANAGER: IndividualTradesManagerConfig = {

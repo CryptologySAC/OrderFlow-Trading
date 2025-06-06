@@ -171,6 +171,14 @@
                     "adaptiveThresholds": true
                 }
             },
+            "supportResistanceDetector": {
+                "priceTolerancePercent": 0.05,
+                "minTouchCount": 3,
+                "minStrength": 0.6,
+                "timeWindowMs": 5400000,
+                "volumeWeightFactor": 0.3,
+                "rejectionConfirmationTicks": 5
+            },
             "tradesProcessor": {
                 "storageTime": 5400000,
                 "maxBacklogRetries": 3,

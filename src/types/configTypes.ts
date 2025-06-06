@@ -43,6 +43,7 @@ type SymbolConfig = {
     deltaCvdConfirmation?: DeltaCvdConfirmationConfig;
     accumulationDetector?: AccumulationDetectorConfig;
     distributionDetector?: DistributionDetectorConfig;
+    supportResistanceDetector?: SupportResistanceConfig;
 };
 
 type DataStreamConfig = {
@@ -180,6 +181,15 @@ type DistributionDetectorConfig = {
     symbol: string;
     minAggVolume: number;
     pricePrecision: number;
+};
+
+type SupportResistanceConfig = {
+    priceTolerancePercent: number;
+    minTouchCount: number;
+    minStrength: number;
+    timeWindowMs: number;
+    volumeWeightFactor: number;
+    rejectionConfirmationTicks: number;
 };
 
 type TradesProcessorConfig = {
