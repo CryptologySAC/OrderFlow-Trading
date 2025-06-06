@@ -157,3 +157,13 @@ A  Absorption          88.50            medium       ...    1m ago
 - Backwards compatible with existing anomaly data structure
 
 The anomaly list now provides a clean, professional interface that makes it easy to quickly scan and understand market anomalies at a glance! 🚀
+
+## 🆕 Tooltip Summaries
+
+Hover any anomaly row to see a tooltip with key metrics from the event's `details` field. Example tooltip text:
+
+```
+Conf: 85% | Imb: -0.45 | Reasons: highAggressive, highAbsorptionRatio
+```
+
+This provides quick insight into why the anomaly was flagged without cluttering the list.

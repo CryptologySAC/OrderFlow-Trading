@@ -679,7 +679,7 @@ export class OrderFlowDashboard {
             this.anomalyDetector.on("anomaly", (event: AnomalyEvent) => {
                 const message: WebSocketMessage = {
                     type: "anomaly",
-                    data: event,
+                    data: { ...event, details: event.details },
                     now: Date.now(),
                 };
                 this.wsManager.broadcast(message);
