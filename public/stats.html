@@ -61,22 +61,6 @@
                 letter-spacing: 1px;
             }
 
-            .gauge-wrapper {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                min-height: 200px;
-            }
-
-            .histogram-wrapper {
-                min-height: 300px;
-                position: relative;
-            }
-
-            .histogram-wrapper canvas {
-                max-width: 100% !important;
-                height: auto !important;
-            }
 
             table {
                 width: 100%;
@@ -85,7 +69,8 @@
             }
 
             th {
-                background: var(--bg-tertiary, #f8f9fa);
+                background: var(--bg-primary, #f8f9fa);
+                color: var(--text-primary, #333);
                 padding: 8px 12px;
                 text-align: left;
                 border-bottom: 2px solid var(--border-color, #ddd);
@@ -129,21 +114,6 @@
                 </div>
             </div>
 
-            <!-- Memory Usage Gauge -->
-            <div class="metric-card">
-                <h3 class="card-title">Memory Usage</h3>
-                <div class="gauge-wrapper">
-                    <canvas id="memoryGauge"></canvas>
-                </div>
-            </div>
-
-            <!-- Latency Histogram -->
-            <div class="metric-card">
-                <h3 class="card-title">Latency Distribution</h3>
-                <div class="histogram-wrapper">
-                    <canvas id="latencyHistogram"></canvas>
-                </div>
-            </div>
 
             <!-- Counters Table -->
             <div class="metric-card">
@@ -189,15 +159,176 @@
                     <tbody></tbody>
                 </table>
             </div>
+
+            <!-- Signal Processing Metrics -->
+            <div class="metric-card">
+                <h3 class="card-title">Signal Processing Overview</h3>
+                <table id="signalOverviewTable">
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th>Count</th>
+                            <th>Rate/min</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Signal Candidates</td>
+                            <td id="signalCandidates">--</td>
+                            <td id="signalCandidatesRate">--</td>
+                        </tr>
+                        <tr>
+                            <td>Signals Processed</td>
+                            <td id="signalsProcessed">--</td>
+                            <td id="signalsProcessedRate">--</td>
+                        </tr>
+                        <tr>
+                            <td>Signals Confirmed</td>
+                            <td id="signalsConfirmed">--</td>
+                            <td id="signalsConfirmedRate">--</td>
+                        </tr>
+                        <tr>
+                            <td>Signals Rejected</td>
+                            <td id="signalsRejected">--</td>
+                            <td id="signalsRejectedRate">--</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Signal Types Breakdown -->
+            <div class="metric-card">
+                <h3 class="card-title">Signal Types</h3>
+                <table id="signalTypesTable">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Candidates</th>
+                            <th>Confirmed</th>
+                            <th>Rejected</th>
+                            <th>Success Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Absorption</td>
+                            <td id="absorptionCandidates">--</td>
+                            <td id="absorptionConfirmed">--</td>
+                            <td id="absorptionRejected">--</td>
+                            <td id="absorptionSuccessRate">--</td>
+                        </tr>
+                        <tr>
+                            <td>Exhaustion</td>
+                            <td id="exhaustionCandidates">--</td>
+                            <td id="exhaustionConfirmed">--</td>
+                            <td id="exhaustionRejected">--</td>
+                            <td id="exhaustionSuccessRate">--</td>
+                        </tr>
+                        <tr>
+                            <td>Accumulation</td>
+                            <td id="accumulationCandidates">--</td>
+                            <td id="accumulationConfirmed">--</td>
+                            <td id="accumulationRejected">--</td>
+                            <td id="accumulationSuccessRate">--</td>
+                        </tr>
+                        <tr>
+                            <td>Distribution</td>
+                            <td id="distributionCandidates">--</td>
+                            <td id="distributionConfirmed">--</td>
+                            <td id="distributionRejected">--</td>
+                            <td id="distributionSuccessRate">--</td>
+                        </tr>
+                        <tr>
+                            <td>CVD Confirmation</td>
+                            <td id="cvdCandidates">--</td>
+                            <td id="cvdConfirmed">--</td>
+                            <td id="cvdRejected">--</td>
+                            <td id="cvdSuccessRate">--</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Rejection Reasons -->
+            <div class="metric-card">
+                <h3 class="card-title">Rejection Reasons</h3>
+                <table id="rejectionReasonsTable">
+                    <thead>
+                        <tr>
+                            <th>Reason</th>
+                            <th>Count</th>
+                            <th>Percentage</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Low Confidence</td>
+                            <td id="rejectedLowConfidence">--</td>
+                            <td id="rejectedLowConfidencePercent">--</td>
+                        </tr>
+                        <tr>
+                            <td>Unhealthy Market</td>
+                            <td id="rejectedUnhealthyMarket">--</td>
+                            <td id="rejectedUnhealthyMarketPercent">--</td>
+                        </tr>
+                        <tr>
+                            <td>Processing Error</td>
+                            <td id="rejectedProcessingError">--</td>
+                            <td id="rejectedProcessingErrorPercent">--</td>
+                        </tr>
+                        <tr>
+                            <td>Timeout</td>
+                            <td id="rejectedTimeout">--</td>
+                            <td id="rejectedTimeoutPercent">--</td>
+                        </tr>
+                        <tr>
+                            <td>Duplicate</td>
+                            <td id="rejectedDuplicate">--</td>
+                            <td id="rejectedDuplicatePercent">--</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Signal Quality Metrics -->
+            <div class="metric-card">
+                <h3 class="card-title">Signal Quality</h3>
+                <table id="signalQualityTable">
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Average Confidence</td>
+                            <td id="avgConfidence">--</td>
+                        </tr>
+                        <tr>
+                            <td>Confidence P50</td>
+                            <td id="confidenceP50">--</td>
+                        </tr>
+                        <tr>
+                            <td>Confidence P95</td>
+                            <td id="confidenceP95">--</td>
+                        </tr>
+                        <tr>
+                            <td>Avg Correlation Strength</td>
+                            <td id="avgCorrelationStrength">--</td>
+                        </tr>
+                        <tr>
+                            <td>Avg Processing Time</td>
+                            <td id="avgProcessingTime">--</td>
+                        </tr>
+                        <tr>
+                            <td>Queue Depth</td>
+                            <td id="queueDepth">--</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
-        <script
-            defer
-            src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.min.js"
-        ></script>
-        <script
-            defer
-            src="https://cdn.jsdelivr.net/npm/canvas-gauges/gauge.min.js"
-        ></script>
         <script type="module" src="scripts/stats.js"></script>
     </body>
 </html>

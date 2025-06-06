@@ -1,103 +1,10 @@
 const wsUrl = `wss://api.cryptology.pe/ltcusdt_trades`;
 let ws;
 let pingTimer;
-let memoryGauge;
-let latencyChart;
 
 function initVisuals() {
-    // Initialize memory gauge only
-    if (typeof RadialGauge !== "undefined") {
-        memoryGauge = new RadialGauge({
-            renderTo: "memoryGauge",
-            width: 200,
-            height: 160,
-            units: "MB",
-            title: "Memory Usage",
-            minValue: 0,
-            maxValue: 1000,
-            majorTicks: ["0", "200", "400", "600", "800", "1000"],
-            minorTicks: 4,
-            colorPlate: "#fff",
-            borderShadowWidth: 0,
-            borders: false,
-            needleType: "arrow",
-            colorNeedle: "#007bff",
-            colorNeedleEnd: "#007bff",
-            needleWidth: 2,
-            needleCircleSize: 7,
-            colorNeedleCircleOuter: "#007bff",
-            needleCircleOuter: false,
-            colorMajorTicks: "#444",
-            colorMinorTicks: "#666",
-            colorTitle: "#444",
-            colorUnits: "#444",
-            colorNumbers: "#444",
-            animationRule: "bounce",
-            animationDuration: 500,
-        }).draw();
-    }
-
-    // Initialize latency chart
-    if (typeof Chart !== "undefined") {
-        const ctx = document.getElementById("latencyHistogram");
-        if (ctx) {
-            latencyChart = new Chart(ctx.getContext("2d"), {
-                type: "bar",
-                data: {
-                    labels: ["p50", "p90", "p95", "p99"],
-                    datasets: [
-                        {
-                            label: "Latency (ms)",
-                            data: [0, 0, 0, 0],
-                            backgroundColor: [
-                                "rgba(75, 192, 192, 0.6)",
-                                "rgba(54, 162, 235, 0.6)",
-                                "rgba(255, 206, 86, 0.6)",
-                                "rgba(255, 99, 132, 0.6)",
-                            ],
-                            borderColor: [
-                                "rgba(75, 192, 192, 1)",
-                                "rgba(54, 162, 235, 1)",
-                                "rgba(255, 206, 86, 1)",
-                                "rgba(255, 99, 132, 1)",
-                            ],
-                            borderWidth: 1,
-                        },
-                    ],
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false,
-                        },
-                        title: {
-                            display: false,
-                        },
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: "Latency (ms)",
-                            },
-                        },
-                        x: {
-                            title: {
-                                display: true,
-                                text: "Percentiles",
-                            },
-                        },
-                    },
-                    layout: {
-                        padding: 10,
-                    },
-                },
-            });
-        }
-    }
+    // No visual components to initialize - all data is now in tables
+    console.log("Stats page initialized - using table-based display");
 }
 
 function updateTables(metrics) {
@@ -111,14 +18,16 @@ function updateTables(metrics) {
                     ? counter.value
                     : counter;
             const row = document.createElement("tr");
-            row.innerHTML = `<td>${name}</td><td>${formatNumber(val)}</td>`;
+            const displayName = formatMetricName(name);
+            const displayValue = formatMetricValue(name, val);
+            row.innerHTML = `<td>${displayName}</td><td>${displayValue}</td>`;
             countersBody.appendChild(row);
         }
 
         // Add a "No data" row if empty
         if (Object.keys(metrics.counters || {}).length === 0) {
             const row = document.createElement("tr");
-            row.innerHTML = `<td colspan="2" style="text-align: center; color: #666;">No counter data available</td>`;
+            row.innerHTML = `<td colspan="2" style="text-align: center; color: var(--text-secondary, #666);">No counter data available</td>`;
             countersBody.appendChild(row);
         }
     }
@@ -129,14 +38,16 @@ function updateTables(metrics) {
         gaugesBody.innerHTML = "";
         for (const [name, value] of Object.entries(metrics.gauges || {})) {
             const row = document.createElement("tr");
-            row.innerHTML = `<td>${name}</td><td>${formatNumber(value)}</td>`;
+            const displayName = formatMetricName(name);
+            const displayValue = formatMetricValue(name, value);
+            row.innerHTML = `<td>${displayName}</td><td>${displayValue}</td>`;
             gaugesBody.appendChild(row);
         }
 
         // Add a "No data" row if empty
         if (Object.keys(metrics.gauges || {}).length === 0) {
             const row = document.createElement("tr");
-            row.innerHTML = `<td colspan="2" style="text-align: center; color: #666;">No gauge data available</td>`;
+            row.innerHTML = `<td colspan="2" style="text-align: center; color: var(--text-secondary, #666);">No gauge data available</td>`;
             gaugesBody.appendChild(row);
         }
     }
@@ -150,18 +61,19 @@ function updateTables(metrics) {
         )) {
             if (!summary) continue;
             const row = document.createElement("tr");
-            const count = summary.count || 0;
-            const mean = summary.mean ? summary.mean.toFixed(2) : "0.00";
-            const min = summary.min || 0;
-            const max = summary.max || 0;
-            row.innerHTML = `<td>${name}</td><td>${count}</td><td>${mean}</td><td>${min}</td><td>${max}</td>`;
+            const displayName = formatMetricName(name);
+            const count = formatNumber(summary.count || 0);
+            const mean = summary.mean ? `${summary.mean.toFixed(2)} ms` : "0.00 ms";
+            const min = summary.min ? `${summary.min.toFixed(2)} ms` : "0 ms";
+            const max = summary.max ? `${summary.max.toFixed(2)} ms` : "0 ms";
+            row.innerHTML = `<td>${displayName}</td><td>${count}</td><td>${mean}</td><td>${min}</td><td>${max}</td>`;
             histBody.appendChild(row);
         }
 
         // Add a "No data" row if empty
         if (Object.keys(metrics.histograms || {}).length === 0) {
             const row = document.createElement("tr");
-            row.innerHTML = `<td colspan="5" style="text-align: center; color: #666;">No histogram data available</td>`;
+            row.innerHTML = `<td colspan="5" style="text-align: center; color: var(--text-secondary, #666);">No histogram data available</td>`;
             histBody.appendChild(row);
         }
     }
@@ -172,6 +84,181 @@ function formatNumber(num) {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
     if (num >= 1000) return (num / 1000).toFixed(1) + "K";
     return num.toLocaleString();
+}
+
+function formatMetricName(name) {
+    // Convert snake_case to readable names
+    const nameMap = {
+        'connections_active': 'Active Connections',
+        'memory_usage': 'Memory Usage (MB)',
+        'uptime': 'System Uptime',
+        'Stream.uptime': 'Stream Uptime',
+        'processing_latency': 'Processing Latency',
+        'trades_processed': 'Trades Processed',
+        'signals_generated': 'Signals Generated',
+        'anomalies_detected': 'Anomalies Detected',
+        'orderbook_updates': 'OrderBook Updates',
+        'websocket_messages': 'WebSocket Messages',
+        'depth_snapshots': 'Depth Snapshots',
+        'trade_events': 'Trade Events',
+        'signal_coordinator_processed': 'Signals Coordinated',
+        'detector_restarts': 'Detector Restarts',
+        'error_count': 'Error Count',
+        'health_checks': 'Health Checks'
+    };
+    
+    // Handle dotted names like "Stream.uptime"
+    if (nameMap[name]) {
+        return nameMap[name];
+    }
+    
+    // Handle general case: convert snake_case and dotted names
+    return name.split(/[._]/).map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+}
+
+function formatMetricValue(name, value) {
+    if (typeof value !== "number") return value;
+    
+    // Handle special cases - make uptime detection more flexible
+    if (name.toLowerCase().includes('uptime')) {
+        return formatUptime(value);
+    }
+    
+    if (name.includes('memory') || name.includes('Memory')) {
+        // Convert bytes to MB if needed
+        const mb = value > 1000000 ? Math.round(value / 1024 / 1024) : value;
+        return `${mb.toLocaleString()} MB`;
+    }
+    
+    if (name.includes('latency') || name.includes('Latency')) {
+        return `${value.toFixed(2)} ms`;
+    }
+    
+    if (name.includes('percentage') || name.includes('ratio') || (value >= 0 && value <= 1 && value % 1 !== 0)) {
+        return `${(value * 100).toFixed(1)}%`;
+    }
+    
+    // Use the existing formatNumber for general cases
+    return formatNumber(value);
+}
+
+function formatUptime(uptimeMs) {
+    if (typeof uptimeMs !== "number") return uptimeMs;
+    
+    const seconds = Math.floor(uptimeMs / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    if (days > 0) {
+        return `${days}d ${hours % 24}h ${minutes % 60}m`;
+    } else if (hours > 0) {
+        return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+    } else if (minutes > 0) {
+        return `${minutes}m ${seconds % 60}s`;
+    } else {
+        return `${seconds}s`;
+    }
+}
+
+function updateSignalMetrics(metrics) {
+    const counters = metrics.counters || {};
+    const histograms = metrics.histograms || {};
+    
+    // Helper function to safely get counter value
+    const getCounterValue = (name) => {
+        const counter = counters[name];
+        return typeof counter === "object" ? (counter.value || 0) : (counter || 0);
+    };
+    
+    // Helper function to get rate per minute
+    const getRate = (count, timeFrameMinutes = 1) => {
+        if (!count || count === 0) return 0;
+        // Simple rate calculation - could be enhanced with actual time tracking
+        return (count / 60).toFixed(1); // per minute estimate
+    };
+    
+    // Signal Processing Overview
+    const signalCandidates = getCounterValue('signal_coordinator_signals_received_total');
+    const signalsProcessed = getCounterValue('signal_manager_signals_processed_total');
+    const signalsConfirmed = getCounterValue('signal_manager_signals_confirmed_total');
+    const signalsRejected = getCounterValue('signal_manager_rejections_detailed_total');
+    
+    updateElement('signalCandidates', formatNumber(signalCandidates));
+    updateElement('signalCandidatesRate', getRate(signalCandidates));
+    updateElement('signalsProcessed', formatNumber(signalsProcessed));
+    updateElement('signalsProcessedRate', getRate(signalsProcessed));
+    updateElement('signalsConfirmed', formatNumber(signalsConfirmed));
+    updateElement('signalsConfirmedRate', getRate(signalsConfirmed));
+    updateElement('signalsRejected', formatNumber(signalsRejected));
+    updateElement('signalsRejectedRate', getRate(signalsRejected));
+    
+    // Signal Types Breakdown
+    const signalTypes = ['absorption', 'exhaustion', 'accumulation', 'distribution', 'cvd_confirmation'];
+    
+    signalTypes.forEach(type => {
+        const candidates = getCounterValue(`signal_coordinator_signals_received_total_${type}`) || 0;
+        const confirmed = getCounterValue(`signal_manager_signals_confirmed_total_${type}`) || 0;
+        const rejected = getCounterValue(`signal_manager_rejections_detailed_total_${type}`) || 0;
+        const total = confirmed + rejected;
+        const successRate = total > 0 ? ((confirmed / total) * 100).toFixed(1) + '%' : '--';
+        
+        const typePrefix = type === 'cvd_confirmation' ? 'cvd' : type;
+        updateElement(`${typePrefix}Candidates`, formatNumber(candidates));
+        updateElement(`${typePrefix}Confirmed`, formatNumber(confirmed));
+        updateElement(`${typePrefix}Rejected`, formatNumber(rejected));
+        updateElement(`${typePrefix}SuccessRate`, successRate);
+    });
+    
+    // Rejection Reasons
+    const rejectionReasons = [
+        'low_confidence',
+        'unhealthy_market', 
+        'processing_error',
+        'timeout',
+        'duplicate'
+    ];
+    
+    const totalRejections = signalsRejected;
+    
+    rejectionReasons.forEach(reason => {
+        const count = getCounterValue(`signal_manager_rejection_reasons_total_${reason}`) || 
+                     getCounterValue(`signal_manager_signal_rejected_${reason}_total`) || 0;
+        const percentage = totalRejections > 0 ? ((count / totalRejections) * 100).toFixed(1) + '%' : '--';
+        
+        const reasonCamelCase = reason.replace(/_([a-z])/g, (match, letter) => letter.toUpperCase());
+        updateElement(`rejected${reasonCamelCase.charAt(0).toUpperCase() + reasonCamelCase.slice(1)}`, formatNumber(count));
+        updateElement(`rejected${reasonCamelCase.charAt(0).toUpperCase() + reasonCamelCase.slice(1)}Percent`, percentage);
+    });
+    
+    // Signal Quality Metrics
+    const confidenceHist = histograms['signal_manager_signal_confidence_distribution'];
+    const correlationHist = histograms['signal_manager_correlation_strength_distribution'];
+    const processingTimeHist = histograms['signal_manager_signal_processing_duration_ms'];
+    
+    updateElement('avgConfidence', confidenceHist ? (confidenceHist.mean || 0).toFixed(3) : '--');
+    updateElement('confidenceP50', confidenceHist ? getPercentile(confidenceHist, 50).toFixed(3) : '--');
+    updateElement('confidenceP95', confidenceHist ? getPercentile(confidenceHist, 95).toFixed(3) : '--');
+    updateElement('avgCorrelationStrength', correlationHist ? (correlationHist.mean || 0).toFixed(3) : '--');
+    updateElement('avgProcessingTime', processingTimeHist ? `${(processingTimeHist.mean || 0).toFixed(2)} ms` : '--');
+    
+    // Queue depth from gauges
+    const queueDepth = metrics.gauges?.signal_coordinator_queue_size || 0;
+    updateElement('queueDepth', formatNumber(queueDepth));
+}
+
+function updateElement(id, value) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.textContent = value;
+    }
+}
+
+function getPercentile(histogram, percentile) {
+    if (!histogram || !histogram.percentiles) return 0;
+    return histogram.percentiles[`p${percentile}`] || 0;
 }
 
 function updateVisuals(data) {
@@ -188,52 +275,11 @@ function updateVisuals(data) {
         connectionsElement.textContent = connVal.toString();
     }
 
-    // Update memory gauge
-    const memVal =
-        metrics.gauges?.memory_usage ??
-        metrics.legacy?.memoryUsage ??
-        metrics.memory_usage;
-    if (memoryGauge && typeof memVal === "number") {
-        // Convert to MB if it's in bytes
-        const memoryMB =
-            memVal > 1000000 ? Math.round(memVal / 1024 / 1024) : memVal;
-        memoryGauge.value = memoryMB;
-    }
-
-    // Update latency chart
-    const latency =
-        metrics.histograms?.processing_latency ??
-        metrics.histograms?.latency ??
-        metrics.legacy?.latency;
-
-    if (latencyChart && latency) {
-        let latencyData = [0, 0, 0, 0];
-
-        if (latency.percentiles) {
-            latencyData = [
-                latency.percentiles.p50 || latency.percentiles["50"] || 0,
-                latency.percentiles.p90 || latency.percentiles["90"] || 0,
-                latency.percentiles.p95 || latency.percentiles["95"] || 0,
-                latency.percentiles.p99 || latency.percentiles["99"] || 0,
-            ];
-        } else if (Array.isArray(latency)) {
-            // Handle array format
-            latencyData = latency.slice(0, 4);
-        } else if (typeof latency === "object") {
-            // Handle direct object format
-            latencyData = [
-                latency.p50 || latency["50"] || 0,
-                latency.p90 || latency["90"] || 0,
-                latency.p95 || latency["95"] || 0,
-                latency.p99 || latency["99"] || 0,
-            ];
-        }
-
-        latencyChart.data.datasets[0].data = latencyData;
-        latencyChart.update("none");
-    }
-
+    // Update tables with all metrics data
     updateTables(metrics);
+    
+    // Update signal metrics sections
+    updateSignalMetrics(metrics);
 }
 
 function connect() {
