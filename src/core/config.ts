@@ -48,6 +48,8 @@ export class Config {
     static readonly WS_PORT = Number(cfg.wsPort ?? 3001);
     static readonly API_KEY = process.env.API_KEY;
     static readonly API_SECRET = process.env.API_SECRET;
+    static readonly LLM_API_KEY = process.env.LLM_API_KEY;
+    static readonly LLM_MODEL = process.env.LLM_MODEL ?? "gpt-3.5-turbo";
     static readonly NODE_ENV = cfg.nodeEnv ?? "production";
     static readonly ALERT_WEBHOOK_URL = cfg.alertWebhookUrl as
         | string
