@@ -236,7 +236,7 @@ export class OrderFlowDashboard {
         this.signalCoordinator.registerDetector(
             this.absorptionDetector,
             ["absorption"],
-            70,
+            60,
             true
         );
 
@@ -251,7 +251,7 @@ export class OrderFlowDashboard {
         this.signalCoordinator.registerDetector(
             this.exhaustionDetector,
             ["exhaustion"],
-            80,
+            65,
             true
         );
 
@@ -266,7 +266,7 @@ export class OrderFlowDashboard {
         this.signalCoordinator.registerDetector(
             this.accumulationDetector,
             ["accumulation"],
-            75,
+            55,
             true
         );
 
@@ -281,7 +281,7 @@ export class OrderFlowDashboard {
         this.signalCoordinator.registerDetector(
             this.distributionDetector,
             ["distribution"],
-            75,
+            60,
             true
         );
 
@@ -589,12 +589,12 @@ export class OrderFlowDashboard {
             throw new Error("Signal Manager is not initialized");
         }
         // Listen to final trading signals
-        //this.signalManager.on("signalGenerated", (tradingSignal: Signal) => {
-        //    this.logger.info("Ready to trade:", { tradingSignal });
-        //    void this.broadcastSignal(tradingSignal).catch((error) => {
-        //        this.handleError(error as Error, "signal_broadcast");
-        //    });
-        //});
+        this.signalManager.on("signalGenerated", (tradingSignal: Signal) => {
+            this.logger.info("Ready to trade:", { tradingSignal });
+            void this.broadcastSignal(tradingSignal).catch((error) => {
+                this.handleError(error as Error, "signal_broadcast");
+            });
+        });
 
         this.signalManager.on(
             "signalRejected",

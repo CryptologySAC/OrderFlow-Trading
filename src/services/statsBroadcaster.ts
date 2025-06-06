@@ -3,7 +3,7 @@ import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { DataStreamManager } from "../trading/dataStreamManager.js";
 import { WebSocketManager } from "../websocket/websocketManager.js";
 import { Config } from "../core/config.js";
-import mqtt, { MqttClient } from "mqtt";
+import mqtt, { MqttClient, ErrorWithReasonCode } from "mqtt";
 import type { SignalTracker } from "../analysis/signalTracker.js";
 
 /**
@@ -59,25 +59,29 @@ export class StatsBroadcaster {
                 });
             });
 
-            this.mqttClient.on("error", (err) => {
-                this.logger.error("MQTT connection error", { 
+            this.mqttClient.on("error", (err: ErrorWithReasonCode | Error) => {
+                this.logger.error("MQTT connection error", {
                     error: err.message,
-                    code: (err as any).code,
-                    errno: (err as any).errno,
-                    syscall: (err as any).syscall,
+                    code: (err as ErrorWithReasonCode).code,
                     url: Config.MQTT?.url ?? undefined,
                 });
-                
+
                 // If SSL error, suggest trying different protocols
-                if (err.message.includes('SSL') || err.message.includes('EPROTO')) {
-                    this.logger.warn("SSL/TLS error detected. Try these alternatives:", {
-                        suggestions: [
-                            "Use 'ws://' instead of 'wss://' for plain WebSocket",
-                            "Use 'mqtt://' for standard MQTT (port 1883)",
-                            "Use 'mqtts://' for MQTT over TLS (port 8883)",
-                            "Check if broker supports WebSocket on this port"
-                        ]
-                    });
+                if (
+                    err.message.includes("SSL") ||
+                    err.message.includes("EPROTO")
+                ) {
+                    this.logger.warn(
+                        "SSL/TLS error detected. Try these alternatives:",
+                        {
+                            suggestions: [
+                                "Use 'ws://' instead of 'wss://' for plain WebSocket",
+                                "Use 'mqtt://' for standard MQTT (port 1883)",
+                                "Use 'mqtts://' for MQTT over TLS (port 8883)",
+                                "Check if broker supports WebSocket on this port",
+                            ],
+                        }
+                    );
                 }
             });
 
