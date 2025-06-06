@@ -107,6 +107,7 @@ body {
 
 .chart-container,
 .gauge-container,
+.signals-container,
 .anomaly-list-container {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
@@ -119,10 +120,12 @@ body {
 }
 
 .chart-container,
-.gauge-container {
+.gauge-container,
+.signals-container {
     margin: 1vh 0;
 }
 
+.signals-container,
 .anomaly-list-container {
     margin: 1vh 0;
     flex: 1;
@@ -132,8 +135,202 @@ body {
     overflow: hidden;
 }
 
-/* Remove margin between gauge and anomaly list in column 3 */
-#column3 .gauge-container {
+/* Trade delay indicator styling */
+.trade-delay-indicator {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    margin-top: 10px;
+    font-size: 12px;
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 120px;
+    justify-content: space-between;
+}
+
+.delay-title {
+    font-size: 11px;
+    font-weight: normal;
+    opacity: 0.8;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+#tradeDelayValue {
+    font-family: "Courier New", monospace;
+    font-size: 12px;
+    min-width: 45px;
+    text-align: right;
+}
+
+.trade-delay-indicator.delay-green {
+    color: #4caf50;
+    border-color: rgba(76, 175, 80, 0.3);
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.trade-delay-indicator.delay-orange {
+    color: #ff9800;
+    border-color: rgba(255, 152, 0, 0.3);
+    background: rgba(255, 152, 0, 0.1);
+}
+
+.trade-delay-indicator.delay-red {
+    color: #f44336;
+    border-color: rgba(244, 67, 54, 0.3);
+    background: rgba(244, 67, 54, 0.1);
+}
+
+/* Signals container specific styling */
+.signals-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    margin-bottom: 8px;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.signals-filter label {
+    margin-right: 10px;
+    font-weight: normal;
+    font-size: 12px;
+}
+
+.signals-filter input[type="checkbox"] {
+    margin-right: 4px;
+}
+
+.signals-list {
+    overflow-y: auto;
+    flex: 1;
+    font-size: 14px;
+    min-height: 0;
+}
+
+.signal-row {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    flex-direction: column;
+    font-family: "Courier New", monospace;
+    font-size: 11px;
+    line-height: 1.3;
+    width: 100%;
+    box-sizing: border-box;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-left: 3px solid transparent;
+}
+
+.signal-row:hover {
+    background: rgba(66, 165, 245, 0.1);
+    border-left-color: #42a5f5;
+}
+
+.signal-row.signal-buy {
+    border-left-color: #4caf50;
+}
+
+.signal-row.signal-sell {
+    border-left-color: #f44336;
+}
+
+.signal-row-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+}
+
+.signal-type {
+    font-weight: bold;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    font-size: 10px;
+}
+
+.signal-side {
+    font-weight: bold;
+    font-size: 10px;
+}
+
+.signal-side.buy {
+    color: #4caf50;
+}
+
+.signal-side.sell {
+    color: #f44336;
+}
+
+.signal-time {
+    font-size: 9px;
+    opacity: 0.7;
+    text-align: right;
+}
+
+.signal-details {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+}
+
+.signal-price {
+    font-weight: bold;
+    color: var(--text-primary);
+}
+
+.signal-confidence {
+    color: var(--text-secondary);
+    opacity: 0.8;
+}
+
+.signal-targets {
+    font-size: 9px;
+    opacity: 0.6;
+    margin-top: 2px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.signal-tooltip {
+    position: absolute;
+    z-index: 1000;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 8px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    font-size: 11px;
+    max-width: 300px;
+    word-wrap: break-word;
+    pointer-events: none;
+    transform: translate(-50%, -100%);
+    margin-top: -8px;
+}
+
+.signal-tooltip::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 4px solid transparent;
+    border-top-color: var(--border-color);
+}
+
+/* Remove margin between signals and anomaly list in column 3 */
+#column3 .signals-container {
     margin-bottom: 0;
 }
 

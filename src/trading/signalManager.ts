@@ -54,11 +54,11 @@ export class SignalManager extends EventEmitter {
     // Keep track of signals for correlation analysis
     private readonly maxHistorySize = 100;
     private readonly correlationWindowMs = 60000; // 1 minute
-    
+
     // Signal throttling and deduplication
     private readonly recentTradingSignals = new Map<string, number>(); // signalKey -> timestamp
     private readonly signalThrottleMs = 30000; // 30 seconds minimum between similar signals
-    private readonly priceTolerancePercent = 0.05; // 0.05% price tolerance for duplicates
+    private readonly priceTolerancePercent = 0.02; // 0.02% price tolerance for duplicates - very tight for precise deduplication
 
     constructor(
         private readonly anomalyDetector: AnomalyDetector,
@@ -391,7 +391,7 @@ export class SignalManager extends EventEmitter {
 
             // Generate final trading signal
             const tradingSignal = this.createTradingSignal(confirmedSignal);
-            
+
             // Check for duplicate/throttled signals
             if (this.isSignalThrottled(tradingSignal)) {
                 this.logger.info("Signal throttled to prevent duplicates", {
@@ -637,69 +637,143 @@ export class SignalManager extends EventEmitter {
     private isSignalThrottled(tradingSignal: Signal): boolean {
         const signalKey = this.generateSignalKey(tradingSignal);
         const now = Date.now();
-        
+
+        this.logger.debug("Checking signal throttling", {
+            signalId: tradingSignal.id,
+            signalKey,
+            type: tradingSignal.type,
+            side: tradingSignal.side,
+            price: tradingSignal.price,
+            recentSignalsCount: this.recentTradingSignals.size,
+        });
+
         // Check if we have a recent similar signal
         const lastSignalTime = this.recentTradingSignals.get(signalKey);
-        if (lastSignalTime && (now - lastSignalTime) < this.signalThrottleMs) {
+        if (lastSignalTime && now - lastSignalTime < this.signalThrottleMs) {
+            const timeDiff = now - lastSignalTime;
+            this.logger.info("Signal throttled - exact match found", {
+                signalId: tradingSignal.id,
+                signalKey,
+                timeSinceLastMs: timeDiff,
+                throttleWindowMs: this.signalThrottleMs,
+            });
             return true; // Signal is throttled
         }
-        
+
         // Check for similar signals with price tolerance
-        for (const [existingKey, timestamp] of this.recentTradingSignals.entries()) {
-            if ((now - timestamp) < this.signalThrottleMs) {
+        for (const [
+            existingKey,
+            timestamp,
+        ] of this.recentTradingSignals.entries()) {
+            if (now - timestamp < this.signalThrottleMs) {
                 if (this.areSignalsSimilar(tradingSignal, existingKey)) {
+                    const timeDiff = now - timestamp;
+                    this.logger.info(
+                        "Signal throttled - similar signal found",
+                        {
+                            signalId: tradingSignal.id,
+                            newSignalKey: signalKey,
+                            existingKey,
+                            timeSinceLastMs: timeDiff,
+                            throttleWindowMs: this.signalThrottleMs,
+                        }
+                    );
                     return true; // Similar signal found within throttle window
                 }
             }
         }
-        
+
+        this.logger.debug("Signal not throttled - proceeding", {
+            signalId: tradingSignal.id,
+            signalKey,
+        });
         return false;
     }
-    
+
     /**
      * Record a trading signal to prevent future duplicates.
      */
     private recordTradingSignal(tradingSignal: Signal): void {
         const signalKey = this.generateSignalKey(tradingSignal);
-        this.recentTradingSignals.set(signalKey, Date.now());
-        
+        const timestamp = Date.now();
+        this.recentTradingSignals.set(signalKey, timestamp);
+
+        this.logger.debug("Recorded trading signal for throttling", {
+            signalId: tradingSignal.id,
+            signalKey,
+            timestamp,
+            totalRecordedSignals: this.recentTradingSignals.size,
+        });
+
         // Clean up old entries periodically
         this.cleanupThrottledSignals();
     }
-    
+
     /**
      * Generate a unique key for signal deduplication.
      */
     private generateSignalKey(tradingSignal: Signal): string {
-        return `${tradingSignal.type}_${tradingSignal.side}_${Math.round(tradingSignal.price * 100)}`;
+        const priceKey = Math.round(tradingSignal.price * 100);
+        const key = `${tradingSignal.type}_${tradingSignal.side}_${priceKey}`;
+
+        this.logger.debug("Generated signal key", {
+            signalId: tradingSignal.id,
+            type: tradingSignal.type,
+            side: tradingSignal.side,
+            originalPrice: tradingSignal.price,
+            priceKey,
+            generatedKey: key,
+        });
+
+        return key;
     }
-    
+
     /**
      * Check if two signals are similar enough to be considered duplicates.
      */
-    private areSignalsSimilar(tradingSignal: Signal, existingKey: string): boolean {
-        const [type, side, priceStr] = existingKey.split('_');
+    private areSignalsSimilar(
+        tradingSignal: Signal,
+        existingKey: string
+    ): boolean {
+        const [type, side, priceStr] = existingKey.split("_");
         const existingPrice = parseInt(priceStr) / 100;
-        
+
         // Check if same type and side
         if (tradingSignal.type !== type || tradingSignal.side !== side) {
+            this.logger.debug("Signals not similar - different type/side", {
+                newType: tradingSignal.type,
+                newSide: tradingSignal.side,
+                existingType: type,
+                existingSide: side,
+            });
             return false;
         }
-        
+
         // Check if prices are within tolerance
         const priceDiff = Math.abs(tradingSignal.price - existingPrice);
-        const priceToleranceAbs = existingPrice * (this.priceTolerancePercent / 100);
-        
-        return priceDiff <= priceToleranceAbs;
+        const priceToleranceAbs =
+            existingPrice * (this.priceTolerancePercent / 100);
+        const isSimilar = priceDiff <= priceToleranceAbs;
+
+        this.logger.debug("Price similarity check", {
+            newPrice: tradingSignal.price,
+            existingPrice,
+            priceDiff,
+            priceToleranceAbs,
+            priceTolerancePercent: this.priceTolerancePercent,
+            isSimilar,
+        });
+
+        return isSimilar;
     }
-    
+
     /**
      * Clean up old throttled signals.
      */
     private cleanupThrottledSignals(): void {
         const now = Date.now();
         const cutoff = now - this.signalThrottleMs * 2; // Keep for 2x throttle period
-        
+
         for (const [key, timestamp] of this.recentTradingSignals.entries()) {
             if (timestamp < cutoff) {
                 this.recentTradingSignals.delete(key);

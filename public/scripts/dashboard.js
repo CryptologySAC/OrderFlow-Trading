@@ -22,7 +22,6 @@ const ITEM_MARGIN = 20; // fixed space between dashboard items
 // DOM references
 const tradesCanvas = document.getElementById("tradesChart");
 const orderBookCanvas = document.getElementById("orderBookChart");
-const delayGaugeCanvas = document.getElementById("delayGauge");
 const rangeSelector = document.querySelector(".rangeSelector");
 const directionText = document.getElementById("directionText");
 const ratioText = document.getElementById("ratioText");
@@ -34,11 +33,15 @@ const orderBookContainer = document.getElementById("orderBookContainer");
 // Charts
 let tradesChart = null;
 let orderBookChart = null;
-let delayGauge = null;
 
 let anomalyList = [];
 const anomalySeverityOrder = ["critical", "high", "medium", "info"];
 let anomalyFilters = new Set(["critical", "high"]);
+
+// Signals management
+let signalsList = [];
+let signalFilters = new Set(["buy", "sell"]);
+let activeSignalTooltip = null;
 
 // Used to control badge display
 let badgeTimeout = null;
@@ -334,6 +337,112 @@ function showAnomalyBadge(anomaly) {
     }, 4000);
 }
 
+// Signal list rendering
+function formatSignalTime(timestamp) {
+    const s = Math.floor((Date.now() - timestamp) / 1000);
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    return `${h}h ${m % 60}m ago`;
+}
+
+function getSignalSummary(signal) {
+    const confidence = ((signal.signalData?.confidence || 0) * 100).toFixed(1);
+    const meta = signal.signalData?.meta || {};
+    const anomaly = signal.signalData?.anomalyCheck || {};
+
+    return [
+        `Signal: ${signal.type} (${signal.side})`,
+        `Price: $${signal.price.toFixed(2)}`,
+        `Confidence: ${confidence}%`,
+        `Take Profit: $${signal.takeProfit?.toFixed(2) || "N/A"}`,
+        `Stop Loss: $${signal.stopLoss?.toFixed(2) || "N/A"}`,
+        meta.volume ? `Volume: ${meta.volume.toFixed(2)}` : "",
+        meta.absorptionRatio
+            ? `Absorption: ${(meta.absorptionRatio * 100).toFixed(1)}%`
+            : "",
+        anomaly.marketHealthy !== undefined
+            ? `Market Health: ${anomaly.marketHealthy ? "Healthy" : "Unhealthy"}`
+            : "",
+        `Generated: ${new Date(signal.time).toLocaleString()}`,
+    ]
+        .filter(Boolean)
+        .join("\n");
+}
+
+function renderSignalsList() {
+    const listElem = document.getElementById("signalsList");
+    if (!listElem) return;
+
+    // Filter signals based on selected filters
+    const filtered = signalsList.filter((signal) =>
+        signalFilters.has(signal.side)
+    );
+
+    listElem.innerHTML = filtered
+        .map((signal) => {
+            const confidence = (
+                (signal.signalData?.confidence || 0) * 100
+            ).toFixed(0);
+            const timeAgo = formatSignalTime(signal.time);
+
+            return `
+                <div class="signal-row signal-${signal.side}" 
+                     data-signal-id="${signal.id}"
+                     title="${getSignalSummary(signal)}">
+                    <div class="signal-row-header">
+                        <span class="signal-type">${signal.type.replace("_confirmed", "").replace("_", " ")}</span>
+                        <span class="signal-side ${signal.side}">${signal.side.toUpperCase()}</span>
+                        <span class="signal-time">${timeAgo}</span>
+                    </div>
+                    <div class="signal-details">
+                        <span class="signal-price">$${signal.price.toFixed(2)}</span>
+                        <span class="signal-confidence">${confidence}%</span>
+                    </div>
+                    <div class="signal-targets">
+                        <span>TP: $${signal.takeProfit?.toFixed(2) || "N/A"}</span>
+                        <span>SL: $${signal.stopLoss?.toFixed(2) || "N/A"}</span>
+                    </div>
+                </div>
+            `;
+        })
+        .join("");
+}
+
+function updateTradeDelayIndicator(delay) {
+    const indicator = document.getElementById("tradeDelayIndicator");
+    const valueElement = document.getElementById("tradeDelayValue");
+
+    if (!indicator || !valueElement) return;
+
+    // Format delay with fixed width
+    let formattedDelay;
+    if (delay >= 1000) {
+        // Show as seconds with 1 decimal place
+        const seconds = (delay / 1000).toFixed(1);
+        formattedDelay = `${seconds}s`;
+    } else {
+        // Show as milliseconds, ensure consistent width
+        formattedDelay = `${delay}ms`;
+    }
+
+    // Update the displayed value
+    valueElement.textContent = formattedDelay;
+
+    // Remove previous delay classes
+    indicator.classList.remove("delay-green", "delay-orange", "delay-red");
+
+    // Add appropriate color class based on delay
+    if (delay < 100) {
+        indicator.classList.add("delay-green");
+    } else if (delay < 500) {
+        indicator.classList.add("delay-orange");
+    } else {
+        indicator.classList.add("delay-red");
+    }
+}
+
 // Improve Trade Chart update performance
 let chartUpdateScheduled = false;
 function scheduleTradesChartUpdate() {
@@ -501,10 +610,6 @@ const tradeWebsocket = new TradeWebSocket({
     pongWaitTime: PONG_WAIT_MS,
     onBacklog: (backLog) => {
         console.log(`${backLog.length} backlog trades received.`);
-        if (delayGauge) {
-            delayGauge.value = 0;
-            delayGauge.title = "Loading Backlog";
-        }
 
         trades.length = 0;
         for (const trade of backLog) {
@@ -558,18 +663,19 @@ const tradeWebsocket = new TradeWebSocket({
 
     onMessage: (message) => {
         try {
+            // Check if message is null or undefined
+            if (!message) {
+                console.warn("Received null or undefined message");
+                return;
+            }
+
             const receiveTime = Date.now();
             const messageTime = message.now ?? 0;
             const delay = receiveTime - messageTime;
-            if (delay >= 0 && delayGauge) {
-                delayGauge.value = parseInt(delay, 10);
+            if (delay >= 0) {
+                // Update the trade delay indicator (gauge was removed)
+                updateTradeDelayIndicator(delay);
             }
-
-            if (tradeTimeoutId) clearTimeout(tradeTimeoutId);
-            tradeTimeoutId = setTimeout(
-                () => setGaugeTimeout(delayGauge),
-                TRADE_TIMEOUT_MS
-            );
 
             switch (message.type) {
                 case "anomaly":
@@ -636,6 +742,15 @@ const tradeWebsocket = new TradeWebSocket({
                     const label = buildSignalLabel(message.data);
                     const id = message.data.id;
 
+                    // Add to signals list
+                    signalsList.unshift(message.data);
+                    // Limit list length
+                    if (signalsList.length > 50) {
+                        signalsList = signalsList.slice(0, 50);
+                    }
+                    renderSignalsList();
+
+                    // Add to chart
                     tradesChart.options.plugins.annotation.annotations[id] = {
                         type: "label",
                         xValue: message.data.time,
@@ -900,78 +1015,6 @@ function initializeTradesChart(ctx) {
             },
         },
     });
-}
-
-/**
- * Initializes the trade delay gauge.
- * @param {HTMLCanvasElement} canvas - The canvas element for the gauge.
- * @returns {Object|null} The Gauge instance or null if initialization fails.
- */
-function initializeDelayGauge(canvas) {
-    if (delayGauge) return delayGauge;
-
-    if (typeof RadialGauge === "undefined") return null;
-
-    // Get current theme for initial colors
-    const currentTheme = getCurrentTheme();
-    const actualTheme =
-        currentTheme === "system" ? getSystemTheme() : currentTheme;
-
-    // Theme-aware colors
-    const plateColor = actualTheme === "dark" ? "#2d2d2d" : "#fff";
-    const textColor = actualTheme === "dark" ? "#ffffff" : "#000000";
-    const tickColor = actualTheme === "dark" ? "#e0e0e0" : "#444444";
-    const minorTickColor = actualTheme === "dark" ? "#b0b0b0" : "#666666";
-
-    return new RadialGauge({
-        renderTo: canvas,
-        width: 200,
-        height: 160,
-        units: "ms",
-        title: "Trade Delay",
-        minValue: 0,
-        maxValue: 2000,
-        valueDec: 0,
-        valueInt: 4,
-        majorTicks: ["0", "500", "1000", "1500", "2000"],
-        minorTicks: 5,
-        strokeTicks: true,
-        highlights: [
-            { from: 0, to: 500, color: "rgba(0, 255, 0, 0.3)" },
-            { from: 500, to: 1000, color: "rgba(255, 165, 0, 0.3)" },
-            { from: 1000, to: 2000, color: "rgba(255, 0, 0, 0.3)" },
-        ],
-        colorPlate: plateColor,
-        colorMajorTicks: tickColor,
-        colorMinorTicks: minorTickColor,
-        colorTitle: textColor,
-        colorUnits: textColor,
-        colorNumbers: tickColor,
-        colorNeedleStart: "rgba(240, 128, 128, 1)",
-        colorNeedleEnd: "rgba(255, 160, 122, .9)",
-        value: 0,
-        valueBox: true,
-        valueTextShadow: false,
-        animationRule: "linear",
-        animationDuration: 10,
-    }).draw();
-}
-
-/**
- * Sets the trade delay gauge to timeout state.
- * @param {Object} gauge - The Gauge instance.
- */
-function setGaugeTimeout(gauge) {
-    if (gauge) {
-        gauge.value = 0;
-        gauge.title = "TIMEOUT";
-        //gauge.set({
-        //  title: 'Trade Timeout',
-        //  highlights: [{ from: 0, to: 2000, color: 'rgba(128, 128, 128, 0.3)' }], // Gray: Timeout
-        //  value: 0,
-        //});
-        //gauge.draw();
-    }
 }
 
 /**
@@ -1683,26 +1726,6 @@ function updateChartTheme(theme) {
 
         orderBookChart.update("none");
     }
-
-    // Update gauge colors
-    if (delayGauge) {
-        const plateColor = theme === "dark" ? "#2d2d2d" : "#fff";
-        const textColor = theme === "dark" ? "#ffffff" : "#000000";
-        const tickColor = theme === "dark" ? "#e0e0e0" : "#444444";
-        const minorTickColor = theme === "dark" ? "#b0b0b0" : "#666666";
-
-        delayGauge.update({
-            colorPlate: plateColor,
-            colorTitle: textColor,
-            colorUnits: textColor,
-            colorNumbers: tickColor,
-            colorMajorTicks: tickColor,
-            colorMinorTicks: minorTickColor,
-        });
-
-        // Force redraw to apply color changes
-        delayGauge.draw();
-    }
 }
 
 function updateOrderBookBarColors(theme) {
@@ -1769,7 +1792,6 @@ function triggerChartResize() {
     // Trigger chart resize after column resize
     if (tradesChart) tradesChart.resize();
     if (orderBookChart) orderBookChart.resize();
-    if (delayGauge) delayGauge.update();
 }
 
 /**
@@ -2282,11 +2304,6 @@ function initialize() {
         return;
     }
 
-    if (!delayGaugeCanvas) {
-        console.error("Delay gauge canvas not found");
-        return;
-    }
-
     const tradesCtx = tradesCanvas.getContext("2d");
     if (!tradesCtx) {
         console.error("Could not get 2D context for trades chart");
@@ -2302,7 +2319,6 @@ function initialize() {
     // Initialize charts
     tradesChart = initializeTradesChart(tradesCtx);
     orderBookChart = initializeOrderBookChart(orderBookCtx);
-    delayGauge = initializeDelayGauge(delayGaugeCanvas);
 
     // Setup interact.js for column resizing (this includes restoreColumnWidths)
     setupColumnResizing();
@@ -2401,5 +2417,88 @@ document.addEventListener("DOMContentLoaded", () => {
                 saveAnomalyFilters();
             });
         });
+    }
+
+    // Setup signal filter checkboxes
+    const signalFilterBox = document.querySelector(".signals-filter");
+    if (signalFilterBox) {
+        signalFilterBox
+            .querySelectorAll("input[type=checkbox]")
+            .forEach((box) => {
+                box.addEventListener("change", () => {
+                    if (box.checked) signalFilters.add(box.value);
+                    else signalFilters.delete(box.value);
+                    renderSignalsList();
+                });
+            });
+    }
+
+    // Setup signal hover interactions for chart transparency
+    const signalsList = document.getElementById("signalsList");
+    if (signalsList) {
+        signalsList.addEventListener(
+            "mouseenter",
+            (e) => {
+                if (e.target.closest(".signal-row")) {
+                    const signalRow = e.target.closest(".signal-row");
+                    const signalId = signalRow.dataset.signalId;
+
+                    // Make other chart annotations transparent
+                    if (
+                        tradesChart?.options?.plugins?.annotation?.annotations
+                    ) {
+                        Object.keys(
+                            tradesChart.options.plugins.annotation.annotations
+                        ).forEach((key) => {
+                            if (key !== signalId && key !== "lastPriceLine") {
+                                const annotation =
+                                    tradesChart.options.plugins.annotation
+                                        .annotations[key];
+                                if (annotation && annotation.backgroundColor) {
+                                    annotation.backgroundColor =
+                                        annotation.backgroundColor.replace(
+                                            /[\d\.]+\)$/,
+                                            "0.1)"
+                                        );
+                                }
+                            }
+                        });
+                        tradesChart.update("none");
+                    }
+                }
+            },
+            true
+        );
+
+        signalsList.addEventListener(
+            "mouseleave",
+            (e) => {
+                if (e.target.closest(".signal-row")) {
+                    // Restore normal transparency for all annotations
+                    if (
+                        tradesChart?.options?.plugins?.annotation?.annotations
+                    ) {
+                        Object.keys(
+                            tradesChart.options.plugins.annotation.annotations
+                        ).forEach((key) => {
+                            if (key !== "lastPriceLine") {
+                                const annotation =
+                                    tradesChart.options.plugins.annotation
+                                        .annotations[key];
+                                if (annotation && annotation.backgroundColor) {
+                                    annotation.backgroundColor =
+                                        annotation.backgroundColor.replace(
+                                            /[\d\.]+\)$/,
+                                            "0.5)"
+                                        );
+                                }
+                            }
+                        });
+                        tradesChart.update("none");
+                    }
+                }
+            },
+            true
+        );
     }
 });
