@@ -82,7 +82,7 @@
             "exhaustion": {
                 "minAggVolume": 10,
                 "threshold": 0.5,
-                "windowMs": 75000,
+                "windowMs": 20000,
                 "zoneTicks": 2,
                 "eventCooldownMs": 5000,
                 "signalCooldownMs": 35000,
@@ -117,7 +117,7 @@
                 "maxRevisitTicks": 5,
                 "features": {
                     "spoofingDetection": true,
-                    "adaptiveZone": false,
+                    "adaptiveZone": true,
                     "passiveHistory": false,
                     "multiZone": false,
                     "autoCalibrate": false,
@@ -172,10 +172,10 @@
                 }
             },
             "supportResistanceDetector": {
-                "priceTolerancePercent": 0.02,
-                "minTouchCount": 2,
-                "minStrength": 0.3,
-                "timeWindowMs": 5400000,
+                "priceTolerancePercent": 0.05,
+                "minTouchCount": 3,
+                "minStrength": 0.4,
+                "timeWindowMs": 3600000,
                 "volumeWeightFactor": 0.3,
                 "rejectionConfirmationTicks": 3
             },
