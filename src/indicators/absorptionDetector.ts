@@ -210,7 +210,7 @@ export class AbsorptionDetector
             for (const [zone, bucket] of this.zoneAgg) {
                 // prune old trades
                 bucket.trades = bucket.trades.filter(
-                    (t) => now - t.timestamp <= this.windowMs
+                    (t) => now - t.timestamp < this.windowMs
                 );
                 bucket.vol = bucket.trades.reduce((s, t) => s + t.quantity, 0);
 
@@ -593,14 +593,14 @@ export class AbsorptionDetector
         const aggressiveInZone = this.trades
             .filter((t) => {
                 const tradeZone = this.calculateZone(t.price);
-                return tradeZone === zone && now - t.timestamp <= windowMs;
+                return tradeZone === zone && now - t.timestamp < windowMs;
             })
             .reduce((sum, t) => sum + t.quantity, 0);
 
         // Get passive statistics
         const passiveSnapshots = zoneHistory
             .toArray()
-            .filter((s) => now - s.timestamp <= windowMs);
+            .filter((s) => now - s.timestamp < windowMs);
 
         if (passiveSnapshots.length === 0 || aggressiveInZone === 0) {
             return { absorptionRatio: 0, passiveStrength: 0, refillRate: 0 };
@@ -651,7 +651,7 @@ export class AbsorptionDetector
             const now = Date.now();
             const snapshots = zoneHistory
                 .toArray()
-                .filter((s) => now - s.timestamp <= this.windowMs);
+                .filter((s) => now - s.timestamp < this.windowMs);
 
             if (snapshots.length === 0) {
                 return this.getDefaultConditions();
@@ -856,7 +856,7 @@ export class AbsorptionDetector
         const passiveSnapshots = zoneHistory
             ? zoneHistory
                   .toArray()
-                  .filter((s) => now - s.timestamp <= this.windowMs)
+                  .filter((s) => now - s.timestamp < this.windowMs)
             : [];
 
         const passive =
