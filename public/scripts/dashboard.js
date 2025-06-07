@@ -536,15 +536,8 @@ function buildSignalLabel(signal) {
 
     // 1. Main signal summary (type/side/price/time)
     let label = `[${signal.type?.toUpperCase() ?? "?"}] ${signal.side?.toUpperCase() ?? "?"} @ ${signal.price?.toFixed(2) ?? "?"}`;
-    label += signal.time
-        ? `\n${new Date(signal.time).toLocaleTimeString()}`
-        : "";
 
-    // 2. TP/SL
-    if (signal.takeProfit) label += `\nTP: ${signal.takeProfit.toFixed(2)}`;
-    if (signal.stopLoss) label += ` | SL: ${signal.stopLoss.toFixed(2)}`;
-
-    // 3. Confidence/Confirmations
+    // 2. Confidence/Confirmations
     if (signal.confidence !== undefined) {
         label += `\nConf: ${(signal.confidence * 100).toFixed(0)}%`;
     }
