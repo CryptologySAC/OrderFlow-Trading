@@ -49,7 +49,7 @@ export type ZoneSample = {
 export abstract class BaseDetector extends Detector implements IDetector {
     // Data storage
     protected readonly depth = new TimeAwareCache<number, DepthLevel>(300000);
-    protected readonly trades = new CircularBuffer<AggressiveTrade>(10000);
+    protected readonly trades = new CircularBuffer<AggressiveTrade>(4000);
 
     // Configuration
     protected readonly windowMs: number;

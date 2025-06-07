@@ -150,11 +150,11 @@
                     "adaptiveZone": true,
                     "passiveHistory": true,
                     "multiZone": true,
-                    "autoCalibrate": false,
-                    "icebergDetection": false,
-                    "liquidityGradient": false,
-                    "spreadAdjustment": false,
-                    "absorptionVelocity": false
+                    "autoCalibrate": true,
+                    "icebergDetection": true,
+                    "liquidityGradient": true,
+                    "spreadAdjustment": true,
+                    "absorptionVelocity": true
                 }
             },
             "deltaCvdConfirmation": {
