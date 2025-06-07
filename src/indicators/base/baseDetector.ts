@@ -353,7 +353,9 @@ export abstract class BaseDetector extends Detector implements IDetector {
         trades: SpotWebsocketStreams.AggTradeResponse[];
     } {
         if (useMultiZone) {
-            return this.sumVolumesInBand(zone, Math.floor(zoneTicks / 2));
+            // Fix: Ensure minimum band size and use proper calculation
+            const bandTicks = Math.max(1, Math.floor(zoneTicks / 2));
+            return this.sumVolumesInBand(zone, bandTicks);
         }
 
         const now = Date.now();
@@ -635,17 +637,31 @@ export abstract class BaseDetector extends Detector implements IDetector {
         passive: number;
         trades: SpotWebsocketStreams.AggTradeResponse[];
     } {
-        const tick = 1 / Math.pow(10, this.pricePrecision);
+        // Fix: Use consistent tick size calculation
+        const tickSize = Math.pow(10, -this.pricePrecision);
         let aggressive = 0;
         let passive = 0;
         const trades: SpotWebsocketStreams.AggTradeResponse[] = [];
+        const now = Date.now();
+
+        // Log multizone band for debugging
+        this.logger.debug(
+            `[${this.constructor.name}] MultiZone band analysis`,
+            {
+                center,
+                bandTicks,
+                tickSize,
+                rangeMin: center - bandTicks * tickSize,
+                rangeMax: center + bandTicks * tickSize,
+            }
+        );
 
         for (let offset = -bandTicks; offset <= bandTicks; offset++) {
-            const price = +(center + offset * tick).toFixed(
+            const price = +(center + offset * tickSize).toFixed(
                 this.pricePrecision
             );
 
-            const now = Date.now();
+            // Get trades at this specific price level
             const tradesAtPrice = this.trades.filter(
                 (t) =>
                     +t.price.toFixed(this.pricePrecision) === price &&
@@ -655,11 +671,46 @@ export abstract class BaseDetector extends Detector implements IDetector {
             aggressive += tradesAtPrice.reduce((sum, t) => sum + t.quantity, 0);
             trades.push(...tradesAtPrice.map((t) => t.originalTrade));
 
+            // Get passive volume from order book
             const bookLevel = this.depth.get(price);
             if (bookLevel) {
                 passive += bookLevel.bid + bookLevel.ask;
             }
+
+            // Also check zone passive history for this price level
+            const priceZone = DetectorUtils.calculateZone(
+                price,
+                this.getEffectiveZoneTicks(),
+                this.pricePrecision
+            );
+            const zoneHistory = this.zonePassiveHistory.get(priceZone);
+            if (zoneHistory) {
+                const passiveSnapshots = zoneHistory
+                    .toArray()
+                    .filter((s) => now - s.timestamp < this.windowMs);
+
+                if (passiveSnapshots.length > 0) {
+                    const avgPassiveAtPriceZone = DetectorUtils.calculateMean(
+                        passiveSnapshots.map((s) => s.total)
+                    );
+                    // Add to passive if we don't have current book data
+                    if (
+                        !bookLevel ||
+                        (bookLevel.bid === 0 && bookLevel.ask === 0)
+                    ) {
+                        passive += avgPassiveAtPriceZone;
+                    }
+                }
+            }
         }
+
+        this.logger.debug(`[${this.constructor.name}] MultiZone results`, {
+            center,
+            bandTicks,
+            aggressive,
+            passive,
+            tradesCount: trades.length,
+        });
 
         return { aggressive, passive, trades };
     }
@@ -864,14 +915,13 @@ export abstract class BaseDetector extends Detector implements IDetector {
 
     /**
      * Calculate price zone based on zone ticks
+     * Uses standardized calculation method for consistency across all detectors
      */
     protected calculateZone(price: number): number {
         const zoneTicks = this.getEffectiveZoneTicks();
-        const tickSize = Math.pow(10, -this.pricePrecision);
-        const zoneSize = zoneTicks * tickSize;
-
-        // Round price to nearest zone
-        return +(Math.round(price / zoneSize) * zoneSize).toFixed(
+        return DetectorUtils.calculateZone(
+            price,
+            zoneTicks,
             this.pricePrecision
         );
     }

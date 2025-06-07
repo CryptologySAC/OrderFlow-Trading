@@ -13,6 +13,7 @@ import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ZoneManager } from "../trading/zoneManager.js";
+import { DetectorUtils } from "./base/detectorUtils.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
 
 interface AccumulationCandidate {
@@ -484,12 +485,13 @@ export class AccumulationZoneDetector extends EventEmitter {
 
     /**
      * Convert price to discrete level for candidate tracking
+     * Uses standardized zone calculation for consistency
      */
     private getPriceLevel(price: number): number {
-        const tickSize = Math.pow(10, -this.pricePrecision);
-        return (
-            Math.round(price / (tickSize * this.zoneTicks)) *
-            (tickSize * this.zoneTicks)
+        return DetectorUtils.calculateZone(
+            price,
+            this.zoneTicks,
+            this.pricePrecision
         );
     }
 

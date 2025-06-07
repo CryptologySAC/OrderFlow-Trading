@@ -148,7 +148,7 @@
                 "features": {
                     "spoofingDetection": true,
                     "adaptiveZone": true,
-                    "passiveHistory": false,
+                    "passiveHistory": true,
                     "multiZone": false,
                     "autoCalibrate": false,
                     "icebergDetection": false,

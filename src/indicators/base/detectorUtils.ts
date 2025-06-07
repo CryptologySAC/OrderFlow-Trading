@@ -68,6 +68,24 @@ export class DetectorUtils {
     }
 
     /**
+     * STANDARDIZED zone calculation method - used by all detectors
+     * This ensures consistent zone alignment across all detector types
+     */
+    public static calculateZone(
+        price: number,
+        zoneTicks: number,
+        pricePrecision: number
+    ): number {
+        const tickSize = Math.pow(10, -pricePrecision);
+        const zoneSize = zoneTicks * tickSize;
+
+        // Standardized: Round to zone, then fix precision to avoid floating point issues
+        return +(Math.round(price / zoneSize) * zoneSize).toFixed(
+            pricePrecision
+        );
+    }
+
+    /**
      * Check if trade data is valid
      */
     public static isValidTrade(trade: AggressiveTrade): boolean {
