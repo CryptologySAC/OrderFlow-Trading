@@ -45,6 +45,72 @@ interface SignalCorrelation {
  * Uses AnomalyDetector only for market health checks, not signal enhancement.
  */
 export class SignalManager extends EventEmitter {
+    /**
+     * Priority queue to throttle signals by confidence per symbol.
+     * Keeps the top N signals within a rolling time window.
+     */
+    private static PriorityThrottleQueue = class {
+        private readonly queue = new Map<string, ProcessedSignal[]>();
+
+        constructor(
+            private readonly capacity: number,
+            private readonly windowMs: number
+        ) {}
+
+        public tryAdd(signal: ProcessedSignal): boolean {
+            const data = signal.data as unknown as {
+                symbol?: string;
+                severity?: string;
+            };
+            const symbol = data.symbol ?? "UNKNOWN";
+            const severity = data.severity;
+            const now = Date.now();
+
+            const list = this.queue.get(symbol) ?? [];
+            const filtered = list.filter(
+                (s) => now - s.timestamp.getTime() <= this.windowMs
+            );
+
+            if (list.length !== filtered.length) {
+                this.queue.set(symbol, filtered);
+            }
+
+            if (severity === "critical") {
+                this.insert(filtered, signal);
+                this.trim(filtered);
+                this.queue.set(symbol, filtered);
+                return true;
+            }
+
+            if (filtered.length < this.capacity) {
+                this.insert(filtered, signal);
+                this.queue.set(symbol, filtered);
+                return true;
+            }
+
+            const lowest = filtered[filtered.length - 1];
+            if (signal.confidence <= lowest.confidence) {
+                return false;
+            }
+
+            this.insert(filtered, signal);
+            this.trim(filtered);
+            this.queue.set(symbol, filtered);
+            return true;
+        }
+
+        private insert(list: ProcessedSignal[], signal: ProcessedSignal): void {
+            list.push(signal);
+            list.sort((a, b) => b.confidence - a.confidence);
+        }
+
+        private trim(list: ProcessedSignal[]): void {
+            if (list.length > this.capacity) {
+                list.length = this.capacity;
+            }
+        }
+    };
+
     private readonly config: Required<SignalManagerConfig>;
     private readonly recentSignals = new Map<string, ProcessedSignal>();
     private readonly correlations = new Map<string, SignalCorrelation>();
@@ -58,7 +124,13 @@ export class SignalManager extends EventEmitter {
     // Signal throttling and deduplication
     private readonly recentTradingSignals = new Map<string, number>(); // signalKey -> timestamp
     private readonly signalThrottleMs = 30000; // 30 seconds minimum between similar signals
-    private readonly priceTolerancePercent = 0.02; // 0.02% price tolerance for duplicates - very tight for precise deduplication
+    private readonly priceTolerancePercent = 0.05; // 0.05% price tolerance for duplicates - slightly wider for deduplication
+
+    // Priority throttling for top signals per symbol
+    private readonly priorityQueue = new SignalManager.PriorityThrottleQueue(
+        3,
+        5 * 60 * 1000
+    );
 
     constructor(
         private readonly anomalyDetector: AnomalyDetector,
@@ -380,6 +452,26 @@ export class SignalManager extends EventEmitter {
                 `signal_manager_signals_received_total_${signal.type}`,
                 1
             );
+
+            // Apply priority throttling per symbol
+            if (!this.priorityQueue.tryAdd(signal)) {
+                this.logger.info("Signal discarded by priority queue", {
+                    signalId: signal.id,
+                    signalType: signal.type,
+                    confidence: signal.confidence,
+                });
+                this.recordDetailedSignalMetrics(
+                    signal,
+                    "rejected",
+                    "throttled_priority"
+                );
+                this.lastRejectReason = "throttled_priority";
+                this.emit("signalRejected", {
+                    signal,
+                    reason: this.lastRejectReason,
+                });
+                return null;
+            }
 
             // Store signal for correlation analysis
             this.storeSignal(signal);
