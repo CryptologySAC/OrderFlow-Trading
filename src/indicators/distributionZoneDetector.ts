@@ -49,12 +49,7 @@ export class DistributionZoneDetector extends EventEmitter {
     private readonly pricePrecision: number;
     private readonly zoneTicks: number;
 
-    // Detection parameters
-    private readonly minCandidateDuration = 120000; // 2 minutes (distribution is faster than accumulation)
-    private readonly minZoneVolume = 150;
-    private readonly minSellRatio = 0.68; // 68% sell volume for distribution
-    private readonly maxPriceDeviation = 0.008; // 0.8% max price movement in zone
-    private readonly minTradeCount = 8;
+    // Detection parameters are now provided via config
 
     constructor(
         symbol: string,
@@ -76,6 +71,10 @@ export class DistributionZoneDetector extends EventEmitter {
             minZoneStrength: config.minZoneStrength ?? 0.45,
             completionThreshold: config.completionThreshold ?? 0.75, // Lower threshold for distribution
             strengthChangeThreshold: config.strengthChangeThreshold ?? 0.12,
+            minCandidateDuration: config.minCandidateDuration ?? 120000,
+            maxPriceDeviation: config.maxPriceDeviation ?? 0.008,
+            minTradeCount: config.minTradeCount ?? 8,
+            minSellRatio: config.minSellRatio ?? 0.68,
         };
 
         this.zoneManager = new ZoneManager(
@@ -237,15 +236,15 @@ export class DistributionZoneDetector extends EventEmitter {
             const duration = now - candidate.startTime;
 
             // Must meet minimum duration requirement
-            if (duration < this.minCandidateDuration) continue;
+            if (duration < this.config.minCandidateDuration) continue;
 
             // Must have minimum volume and trade count
-            if (candidate.totalVolume < this.minZoneVolume) continue;
-            if (candidate.trades.length < this.minTradeCount) continue;
+            if (candidate.totalVolume < this.config.minZoneVolume) continue;
+            if (candidate.trades.length < this.config.minTradeCount) continue;
 
             // Must show distribution pattern (more selling than buying)
             const sellRatio = candidate.sellVolume / candidate.totalVolume;
-            if (sellRatio < this.minSellRatio) continue;
+            if (sellRatio < (this.config.minSellRatio ?? 0)) continue;
 
             // Must have price stability
             if (candidate.priceStability < 0.75) continue; // Slightly lower than accumulation
@@ -311,7 +310,7 @@ export class DistributionZoneDetector extends EventEmitter {
             ...prices.map((p) => Math.abs(p - avgPrice) / avgPrice)
         );
 
-        return Math.max(0, 1 - maxDeviation / this.maxPriceDeviation);
+        return Math.max(0, 1 - maxDeviation / this.config.maxPriceDeviation);
     }
 
     /**

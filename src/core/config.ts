@@ -6,7 +6,12 @@ import { resolve } from "path";
 import { AnomalyDetectorOptions } from "../services/anomalyDetector.js";
 import { SpoofingDetectorConfig } from "../services/spoofingDetector.js";
 import { OrderBookStateOptions } from "../market/orderBookState.js";
-import type { ConfigType, AllowedSymbols } from "../types/configTypes.js";
+import type {
+    ConfigType,
+    AllowedSymbols,
+    ZoneDetectorSymbolConfig,
+} from "../types/configTypes.js";
+import type { ZoneDetectorConfig } from "../types/zoneTypes.js";
 import type { ExhaustionSettings } from "../indicators/exhaustionDetector.js";
 import type { AbsorptionSettings } from "../indicators/absorptionDetector.js";
 import type { OrderflowPreprocessorOptions } from "../market/orderFlowPreprocessor.js";
@@ -33,6 +38,8 @@ let SYMBOL_CFG =
     cfg.symbols[CONFIG_SYMBOL as keyof typeof cfg.symbols] ??
     (cfg.symbols as Record<string, unknown>)[cfg.symbol];
 let DATASTREAM_CFG = SYMBOL_CFG?.dataStream ?? {};
+let ZONE_CFG: ZoneDetectorSymbolConfig =
+    cfg.zoneDetectors?.[CONFIG_SYMBOL] ?? ({} as ZoneDetectorSymbolConfig);
 
 function reloadConfig(): void {
     try {
@@ -45,6 +52,8 @@ function reloadConfig(): void {
             cfg.symbols[CONFIG_SYMBOL as keyof typeof cfg.symbols] ??
             (cfg.symbols as Record<string, unknown>)[cfg.symbol];
         DATASTREAM_CFG = SYMBOL_CFG?.dataStream ?? {};
+        ZONE_CFG = cfg.zoneDetectors?.[CONFIG_SYMBOL] ??
+            ({} as ZoneDetectorSymbolConfig);
 
         console.log("[Config] configuration reloaded");
     } catch (error) {
@@ -443,6 +452,40 @@ export class Config {
             minAggVolume:
                 cfg.symbols[cfg.symbol].distributionDetector?.minAggVolume ?? 8, // Higher volume threshold for distribution
             pricePrecision: Config.PRICE_PRECISION,
+        };
+    }
+
+    static get ACCUMULATION_ZONE_DETECTOR(): ZoneDetectorConfig {
+        const cfgObj = ZONE_CFG?.accumulation ?? {};
+        return {
+            maxActiveZones: cfgObj.maxActiveZones ?? 3,
+            zoneTimeoutMs: cfgObj.zoneTimeoutMs ?? 3_600_000,
+            minZoneVolume: cfgObj.minZoneVolume ?? 100,
+            maxZoneWidth: cfgObj.maxZoneWidth ?? 0.01,
+            minZoneStrength: cfgObj.minZoneStrength ?? 0.5,
+            completionThreshold: cfgObj.completionThreshold ?? 0.8,
+            strengthChangeThreshold: cfgObj.strengthChangeThreshold ?? 0.15,
+            minCandidateDuration: cfgObj.minCandidateDuration ?? 180_000,
+            maxPriceDeviation: cfgObj.maxPriceDeviation ?? 0.005,
+            minTradeCount: cfgObj.minTradeCount ?? 10,
+            minBuyRatio: cfgObj.minBuyRatio ?? 0.65,
+        };
+    }
+
+    static get DISTRIBUTION_ZONE_DETECTOR(): ZoneDetectorConfig {
+        const cfgObj = ZONE_CFG?.distribution ?? {};
+        return {
+            maxActiveZones: cfgObj.maxActiveZones ?? 3,
+            zoneTimeoutMs: cfgObj.zoneTimeoutMs ?? 1_800_000,
+            minZoneVolume: cfgObj.minZoneVolume ?? 150,
+            maxZoneWidth: cfgObj.maxZoneWidth ?? 0.012,
+            minZoneStrength: cfgObj.minZoneStrength ?? 0.45,
+            completionThreshold: cfgObj.completionThreshold ?? 0.75,
+            strengthChangeThreshold: cfgObj.strengthChangeThreshold ?? 0.12,
+            minCandidateDuration: cfgObj.minCandidateDuration ?? 120_000,
+            maxPriceDeviation: cfgObj.maxPriceDeviation ?? 0.008,
+            minTradeCount: cfgObj.minTradeCount ?? 8,
+            minSellRatio: cfgObj.minSellRatio ?? 0.68,
         };
     }
 

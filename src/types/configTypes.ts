@@ -1,4 +1,5 @@
 export type AllowedSymbols = "LTCUSDT";
+import type { ZoneDetectorConfig } from "./zoneTypes.js";
 
 export interface MQTTConfig {
     url: string;
@@ -23,6 +24,7 @@ export interface ConfigType {
     alertWebhookUrl: string;
     alertCooldownMs: number;
     maxStorageTime: number;
+    zoneDetectors?: Record<string, ZoneDetectorSymbolConfig>;
 }
 
 type SymbolConfig = {
@@ -223,4 +225,9 @@ type OrderBookProcessorConfig = {
     maxBufferSize?: number;
     tickSize?: number;
     precision?: number;
+};
+
+export type ZoneDetectorSymbolConfig = {
+    accumulation?: Partial<ZoneDetectorConfig>;
+    distribution?: Partial<ZoneDetectorConfig>;
 };
