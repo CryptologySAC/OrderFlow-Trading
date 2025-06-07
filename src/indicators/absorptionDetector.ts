@@ -616,7 +616,11 @@ export class AbsorptionDetector
         const absorptionRatio =
             aggressiveInZone === 0
                 ? 1 // neutral
-                : DetectorUtils.safeDivide(aggressiveInZone, avgPassiveTotal, 0);
+                : DetectorUtils.safeDivide(
+                      aggressiveInZone,
+                      avgPassiveTotal,
+                      0
+                  );
 
         // Passive strength: how well passive maintained
         const passiveStrength = DetectorUtils.safeDivide(

@@ -52,7 +52,8 @@ function reloadConfig(): void {
             cfg.symbols[CONFIG_SYMBOL as keyof typeof cfg.symbols] ??
             (cfg.symbols as Record<string, unknown>)[cfg.symbol];
         DATASTREAM_CFG = SYMBOL_CFG?.dataStream ?? {};
-        ZONE_CFG = cfg.zoneDetectors?.[CONFIG_SYMBOL] ??
+        ZONE_CFG =
+            cfg.zoneDetectors?.[CONFIG_SYMBOL] ??
             ({} as ZoneDetectorSymbolConfig);
 
         console.log("[Config] configuration reloaded");
