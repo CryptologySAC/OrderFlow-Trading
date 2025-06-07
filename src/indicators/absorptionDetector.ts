@@ -31,7 +31,23 @@ export interface AbsorptionSettings extends BaseDetectorSettings {
 }
 
 /**
- * Comprehensive absorption analysis conditions
+ * Microstructure insights for absorption scoring integration
+ */
+interface MicrostructureInsights {
+    fragmentationScore: number; // Order fragmentation level (0-1)
+    executionEfficiency: number; // Execution quality score (0-1)
+    suspectedAlgoType: string; // Detected algorithm type
+    toxicityScore: number; // Informed flow toxicity (0-1)
+    timingPattern: string; // Execution timing pattern
+    coordinationIndicators: number; // Number of coordination signals
+    sustainabilityScore: number; // Predicted absorption sustainability (0-1)
+    riskAdjustment: number; // Risk-based score adjustment (-0.3 to +0.3)
+    confidenceBoost: number; // Confidence enhancement factor (0.8 to 1.5)
+    urgencyFactor: number; // Signal urgency multiplier (0.5 to 2.0)
+}
+
+/**
+ * Comprehensive absorption analysis conditions with microstructure integration
  */
 interface AbsorptionConditions {
     absorptionRatio: number; // aggressive/passive ratio
@@ -48,16 +64,27 @@ interface AbsorptionConditions {
     imbalance: number; // bid/ask imbalance
     sampleCount: number; // number of data samples
     dominantSide: "bid" | "ask" | "neutral"; // which side dominates
+    // ✅ NEW: Integrated microstructure insights
+    microstructure?: MicrostructureInsights;
 }
 
 /**
- * Absorption event tracking
+ * Enhanced absorption event tracking with microstructure data
  */
 interface AbsorptionEvent {
     timestamp: number;
     price: number;
     side: "buy" | "sell";
     volume: number;
+    // ✅ NEW: Optional microstructure insights
+    microstructure?: {
+        fragmentationScore: number;
+        executionEfficiency: number;
+        suspectedAlgoType: string;
+        toxicityScore: number;
+        timingPattern: string;
+        coordinationIndicators: number;
+    };
 }
 
 /**
@@ -245,11 +272,15 @@ export class AbsorptionDetector
         if (!zoneHistory) return false;
 
         // Get the RELEVANT passive side
-        // CRITICAL FIX: For buy absorption, we test BID liquidity being absorbed
-        // For sell absorption, we test ASK liquidity being absorbed
-        const relevantPassive = zoneHistory
-            .toArray()
-            .map((snapshot) => (side === "buy" ? snapshot.bid : snapshot.ask));
+        // ✅ VERIFIED LOGIC: Aggressive flow hits opposite-side passive liquidity
+        // - Buy absorption (aggressive buys): Tests ASK liquidity depletion/refill
+        // - Sell absorption (aggressive sells): Tests BID liquidity depletion/refill
+        // Validated against docs/BuyerIsMaker-field.md and unit tests
+        const relevantPassive = zoneHistory.toArray().map((snapshot) => {
+            // Aggressive buys (side="buy") consume ASK liquidity
+            // Aggressive sells (side="sell") consume BID liquidity
+            return side === "buy" ? snapshot.ask : snapshot.bid;
+        });
 
         if (relevantPassive.length === 0) return false;
 
@@ -540,6 +571,21 @@ export class AbsorptionDetector
             return;
         }
 
+        // ✅ ENHANCED: Apply microstructure confidence and urgency adjustments
+        let finalConfidence = score;
+        let signalUrgency = "medium" as "low" | "medium" | "high";
+
+        if (conditions.microstructure) {
+            finalConfidence *= conditions.microstructure.confidenceBoost;
+
+            // Adjust urgency based on microstructure insights
+            if (conditions.microstructure.urgencyFactor > 1.3) {
+                signalUrgency = "high";
+            } else if (conditions.microstructure.urgencyFactor < 0.8) {
+                signalUrgency = "low";
+            }
+        }
+
         const signal: AbsorptionSignalData = {
             zone,
             price,
@@ -547,14 +593,37 @@ export class AbsorptionDetector
             aggressive: volumes.aggressive,
             passive: volumes.passive,
             refilled: conditions.hasRefill,
-            confidence: score,
+            confidence: Math.min(1, finalConfidence), // Cap at 1.0
             metrics: {
                 absorptionScore: score,
                 absorptionRatio,
                 icebergDetected: conditions.icebergSignal,
                 liquidityGradient: conditions.liquidityGradient,
                 conditions,
-                detectorVersion: "2.0",
+                detectorVersion: "3.0-microstructure", // Updated version
+                // ✅ NEW: Include microstructure insights in signal
+                microstructureInsights: conditions.microstructure
+                    ? {
+                          sustainabilityScore:
+                              conditions.microstructure.sustainabilityScore,
+                          toxicityScore:
+                              conditions.microstructure.toxicityScore,
+                          algorithmType:
+                              conditions.microstructure.suspectedAlgoType,
+                          timingPattern:
+                              conditions.microstructure.timingPattern,
+                          executionQuality:
+                              conditions.microstructure.executionEfficiency,
+                          urgency: signalUrgency,
+                          riskLevel:
+                              conditions.microstructure.riskAdjustment < -0.1
+                                  ? "high"
+                                  : conditions.microstructure.riskAdjustment >
+                                      0.05
+                                    ? "low"
+                                    : "medium",
+                      }
+                    : undefined,
             },
         };
 
@@ -713,6 +782,10 @@ export class AbsorptionDetector
             // Imbalance analysis
             const imbalance = this.checkPassiveImbalance(zone);
 
+            // ✅ INTEGRATE: Add microstructure insights to conditions
+            const microstructureInsights =
+                this.integrateMicrostructureInsights(zone);
+
             return {
                 absorptionRatio,
                 passiveStrength,
@@ -728,6 +801,7 @@ export class AbsorptionDetector
                 imbalance: Math.abs(imbalance.imbalance),
                 sampleCount: snapshots.length,
                 dominantSide: imbalance.dominantSide,
+                microstructure: microstructureInsights,
             };
         } catch (error) {
             this.handleError(
@@ -739,7 +813,7 @@ export class AbsorptionDetector
     }
 
     /**
-     * Calculate sophisticated absorption score
+     * Calculate sophisticated absorption score with integrated microstructure insights
      */
     private calculateAbsorptionScore(conditions: AbsorptionConditions): number {
         let score = 0;
@@ -794,6 +868,14 @@ export class AbsorptionDetector
         // Penalty for extreme imbalance (might indicate manipulation)
         if (conditions.imbalance > 0.9) {
             score *= 0.9;
+        }
+
+        // ✅ MICROSTRUCTURE INTEGRATION: Apply microstructure-based adjustments
+        if (conditions.microstructure) {
+            score = this.applyMicrostructureScoreAdjustments(
+                score,
+                conditions.microstructure
+            );
         }
 
         return Math.max(0, Math.min(1, score));
@@ -878,6 +960,297 @@ export class AbsorptionDetector
                 : 0;
 
         return { aggressive, passive, trades };
+    }
+
+    /**
+     * ✅ NEW: Integrate microstructure insights for enhanced scoring
+     */
+    private integrateMicrostructureInsights(
+        zone: number
+    ): MicrostructureInsights | undefined {
+        const zoneEvents = this.absorptionHistory.get(zone);
+        if (!zoneEvents || zoneEvents.length < 2) {
+            return undefined;
+        }
+
+        // Analyze recent microstructure events in this zone
+        const recentEvents = zoneEvents.filter(
+            (event) =>
+                event.microstructure && event.timestamp > Date.now() - 300000 // Last 5 minutes
+        );
+
+        if (recentEvents.length === 0) {
+            return undefined;
+        }
+
+        // Calculate aggregate microstructure metrics
+        const avgFragmentation = DetectorUtils.calculateMean(
+            recentEvents.map((e) => e.microstructure!.fragmentationScore)
+        );
+        const avgEfficiency = DetectorUtils.calculateMean(
+            recentEvents.map((e) => e.microstructure!.executionEfficiency)
+        );
+        const avgToxicity = DetectorUtils.calculateMean(
+            recentEvents.map((e) => e.microstructure!.toxicityScore)
+        );
+        const totalCoordination = recentEvents.reduce(
+            (sum, e) => sum + e.microstructure!.coordinationIndicators,
+            0
+        );
+
+        // Determine dominant algorithm type
+        const algoTypes = recentEvents.map(
+            (e) => e.microstructure!.suspectedAlgoType
+        );
+        const dominantAlgoType = this.findMostFrequent(algoTypes);
+
+        // Determine dominant timing pattern
+        const timingPatterns = recentEvents.map(
+            (e) => e.microstructure!.timingPattern
+        );
+        const dominantTimingPattern = this.findMostFrequent(timingPatterns);
+
+        // Calculate derived metrics
+        const sustainabilityScore = this.calculateSustainabilityScore(
+            dominantAlgoType,
+            avgEfficiency,
+            avgToxicity
+        );
+        const riskAdjustment = this.calculateRiskAdjustment(
+            avgToxicity,
+            dominantTimingPattern,
+            totalCoordination
+        );
+        const confidenceBoost = this.calculateConfidenceBoost(
+            avgFragmentation,
+            dominantAlgoType,
+            avgEfficiency
+        );
+        const urgencyFactor = this.calculateUrgencyFactor(
+            dominantTimingPattern,
+            avgToxicity
+        );
+
+        return {
+            fragmentationScore: avgFragmentation,
+            executionEfficiency: avgEfficiency,
+            suspectedAlgoType: dominantAlgoType,
+            toxicityScore: avgToxicity,
+            timingPattern: dominantTimingPattern,
+            coordinationIndicators: totalCoordination,
+            sustainabilityScore,
+            riskAdjustment,
+            confidenceBoost,
+            urgencyFactor,
+        };
+    }
+
+    /**
+     * ✅ NEW: Apply microstructure-based score adjustments
+     */
+    private applyMicrostructureScoreAdjustments(
+        baseScore: number,
+        microstructure: MicrostructureInsights
+    ): number {
+        let adjustedScore = baseScore;
+
+        // 1. Risk-based adjustments for toxic flow
+        adjustedScore += microstructure.riskAdjustment;
+
+        // 2. Sustainability bonuses for favorable patterns
+        if (microstructure.sustainabilityScore > 0.7) {
+            adjustedScore += 0.05; // Sustainability bonus
+        }
+
+        // 3. Algorithm type adjustments
+        switch (microstructure.suspectedAlgoType) {
+            case "market_making":
+                adjustedScore += 0.08; // Market makers enhance absorption
+                break;
+            case "iceberg":
+                adjustedScore += 0.06; // Icebergs provide deep liquidity
+                break;
+            case "arbitrage":
+                adjustedScore -= 0.03; // May indicate temporary opportunity
+                break;
+        }
+
+        // 4. Execution efficiency bonus
+        if (microstructure.executionEfficiency > 0.8) {
+            adjustedScore += 0.03; // High efficiency suggests institutional quality
+        }
+
+        // 5. Fragmentation-based adjustments
+        if (microstructure.fragmentationScore > 0.7) {
+            adjustedScore += 0.04; // High fragmentation suggests iceberg behavior
+        }
+
+        // 6. Coordination penalty (may indicate manipulation)
+        if (microstructure.coordinationIndicators > 3) {
+            adjustedScore -= 0.04; // Too much coordination is suspicious
+        }
+
+        return Math.max(0, Math.min(1, adjustedScore));
+    }
+
+    /**
+     * ✅ NEW: Calculate sustainability score based on microstructure patterns
+     */
+    private calculateSustainabilityScore(
+        algoType: string,
+        efficiency: number,
+        toxicity: number
+    ): number {
+        let sustainability = 0.5; // Base sustainability
+
+        // Algorithm type impact
+        switch (algoType) {
+            case "market_making":
+                sustainability += 0.3; // Highly sustainable
+                break;
+            case "iceberg":
+                sustainability += 0.2; // Generally sustainable
+                break;
+            case "splitting":
+                sustainability += 0.1; // Moderately sustainable
+                break;
+            case "arbitrage":
+                sustainability -= 0.2; // Temporary by nature
+                break;
+        }
+
+        // Efficiency impact
+        sustainability += (efficiency - 0.5) * 0.4;
+
+        // Toxicity impact (inverse relationship)
+        sustainability -= toxicity * 0.3;
+
+        return Math.max(0, Math.min(1, sustainability));
+    }
+
+    /**
+     * ✅ NEW: Calculate risk adjustment based on toxic flow and patterns
+     */
+    private calculateRiskAdjustment(
+        toxicity: number,
+        timingPattern: string,
+        coordination: number
+    ): number {
+        let risk = 0;
+
+        // Toxicity-based risk
+        if (toxicity > 0.8) {
+            risk -= 0.15; // High toxicity = high risk
+        } else if (toxicity > 0.6) {
+            risk -= 0.08;
+        } else if (toxicity < 0.3) {
+            risk += 0.05; // Low toxicity = low risk
+        }
+
+        // Timing pattern risk
+        switch (timingPattern) {
+            case "burst":
+                risk -= 0.08; // Burst patterns suggest instability
+                break;
+            case "uniform":
+                risk += 0.03; // Uniform patterns suggest stability
+                break;
+        }
+
+        // Coordination risk (too much coordination is suspicious)
+        if (coordination > 5) {
+            risk -= 0.05;
+        }
+
+        return Math.max(-0.3, Math.min(0.3, risk));
+    }
+
+    /**
+     * ✅ NEW: Calculate confidence boost based on execution quality
+     */
+    private calculateConfidenceBoost(
+        fragmentation: number,
+        algoType: string,
+        efficiency: number
+    ): number {
+        let boost = 1.0; // Base confidence
+
+        // High fragmentation with high efficiency suggests institutional quality
+        if (fragmentation > 0.7 && efficiency > 0.7) {
+            boost += 0.2;
+        }
+
+        // Algorithm type confidence impact
+        switch (algoType) {
+            case "market_making":
+            case "iceberg":
+                boost += 0.15; // High confidence algorithms
+                break;
+            case "splitting":
+                boost += 0.08;
+                break;
+            case "unknown":
+                boost -= 0.05; // Unknown patterns reduce confidence
+                break;
+        }
+
+        // Efficiency-based boost
+        if (efficiency > 0.8) {
+            boost += 0.1;
+        }
+
+        return Math.max(0.8, Math.min(1.5, boost));
+    }
+
+    /**
+     * ✅ NEW: Calculate urgency factor based on timing patterns
+     */
+    private calculateUrgencyFactor(
+        timingPattern: string,
+        toxicity: number
+    ): number {
+        let urgency = 1.0; // Base urgency
+
+        // Timing pattern urgency
+        switch (timingPattern) {
+            case "burst":
+                urgency += 0.5; // Burst patterns suggest immediate action needed
+                break;
+            case "coordinated":
+                urgency += 0.3; // Coordinated patterns need quick response
+                break;
+            case "uniform":
+                urgency -= 0.2; // Uniform patterns are less urgent
+                break;
+        }
+
+        // High toxicity increases urgency
+        if (toxicity > 0.8) {
+            urgency += 0.3;
+        }
+
+        return Math.max(0.5, Math.min(2.0, urgency));
+    }
+
+    /**
+     * ✅ NEW: Find most frequent item in array
+     */
+    private findMostFrequent<T>(array: T[]): T {
+        const frequency = new Map<T, number>();
+        for (const item of array) {
+            frequency.set(item, (frequency.get(item) || 0) + 1);
+        }
+
+        let maxCount = 0;
+        let mostFrequent = array[0];
+        for (const [item, count] of frequency.entries()) {
+            if (count > maxCount) {
+                maxCount = count;
+                mostFrequent = item;
+            }
+        }
+
+        return mostFrequent;
     }
 
     /**
