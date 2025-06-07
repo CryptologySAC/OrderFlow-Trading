@@ -35,6 +35,11 @@ export class ZoneManager extends EventEmitter {
             minZoneStrength: config.minZoneStrength ?? 0.4,
             completionThreshold: config.completionThreshold ?? 0.8,
             strengthChangeThreshold: config.strengthChangeThreshold ?? 0.1,
+            minCandidateDuration: config.minCandidateDuration ?? 180_000,
+            maxPriceDeviation: config.maxPriceDeviation ?? 0.005,
+            minTradeCount: config.minTradeCount ?? 10,
+            minBuyRatio: config.minBuyRatio,
+            minSellRatio: config.minSellRatio,
         };
 
         // Cleanup old zones periodically
