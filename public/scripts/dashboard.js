@@ -876,8 +876,6 @@ const tradeWebsocket = new TradeWebSocket({
     },
 });
 
-tradeWebsocket.connect();
-
 /**
  * Global timeout ID for trade delay gauge.
  * @type {number|null}
@@ -2354,6 +2352,9 @@ function initialize() {
     // Initialize charts
     tradesChart = initializeTradesChart(tradesCtx);
     orderBookChart = initializeOrderBookChart(orderBookCtx);
+
+    // Connect to the trade WebSocket after charts are ready
+    tradeWebsocket.connect();
 
     // Setup interact.js for column resizing (this includes restoreColumnWidths)
     setupColumnResizing();
