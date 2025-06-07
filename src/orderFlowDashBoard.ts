@@ -60,7 +60,12 @@ import { TradeData } from "./utils/utils.js";
 
 // Types
 import type { Dependencies } from "./types/dependencies.js";
-import type { Signal, AccumulationResult } from "./types/signalTypes.js";
+import type {
+    Signal,
+    AccumulationResult,
+    ConfirmedSignal,
+} from "./types/signalTypes.js";
+import type { ConnectivityIssue } from "./infrastructure/apiConnectivityMonitor.js";
 import type {
     TimeContext,
     DetectorRegisteredEvent,
@@ -134,6 +139,7 @@ export class OrderFlowDashboard {
     private readonly purgeIntervalMs = 10 * 60 * 1000; // 10 minutes
     private purgeIntervalId?: NodeJS.Timeout;
     private statsBroadcaster: StatsBroadcaster;
+    private lastTradePrice = 0; // Track last trade price for anomaly context
 
     public static async create(
         dependencies: Dependencies,
@@ -363,16 +369,35 @@ export class OrderFlowDashboard {
                 })
             );
 
-            const since = backlog.length > 0 ? backlog[0].time : Date.now();
+            // Limit signal backlog to prevent overwhelming client
+            const maxSignalBacklogAge = 10 * 60 * 1000; // 10 minutes
+            const since = Math.max(
+                backlog.length > 0 ? backlog[0].time : Date.now(),
+                Date.now() - maxSignalBacklogAge
+            );
+
+            // Get limited signals and deduplicate
             const signals =
                 this.dependencies.pipelineStore.getRecentConfirmedSignals(
-                    since
+                    since,
+                    30
                 );
-            if (signals.length > 0) {
+            const deduplicatedSignals = this.deduplicateSignals(signals);
+
+            if (deduplicatedSignals.length > 0) {
+                this.logger.info(
+                    `Sending ${deduplicatedSignals.length} signals in backlog to client`,
+                    {
+                        clientId: ws.clientId,
+                        originalCount: signals.length,
+                        deduplicatedCount: deduplicatedSignals.length,
+                    }
+                );
+
                 ws.send(
                     JSON.stringify({
                         type: "signal_backlog",
-                        data: signals,
+                        data: deduplicatedSignals,
                         now: Date.now(),
                     })
                 );
@@ -645,6 +670,31 @@ export class OrderFlowDashboard {
             );
         });
 
+        // Handle API connectivity issues
+        this.dataStreamManager.on(
+            "connectivityIssue",
+            (issue: ConnectivityIssue) => {
+                // Get current price for anomaly context - use last trade price or skip if no trades yet
+                if (this.lastTradePrice === 0) {
+                    this.logger.debug(
+                        "Skipping connectivity anomaly - no trades received yet"
+                    );
+                    return;
+                }
+                const currentPrice = this.lastTradePrice;
+
+                this.logger.warn("API connectivity issue detected", {
+                    type: issue.type,
+                    severity: issue.severity,
+                    description: issue.description,
+                    suggestedAction: issue.suggestedAction,
+                });
+
+                // Report to anomaly detector
+                this.anomalyDetector.onConnectivityIssue(issue, currentPrice);
+            }
+        );
+
         // Handle signal events
         // Handle data stream events
         if (!this.signalManager) {
@@ -689,6 +739,9 @@ export class OrderFlowDashboard {
             this.preprocessor.on(
                 "enriched_trade",
                 (enrichedTrade: EnrichedTradeEvent) => {
+                    // Store last trade price for anomaly context
+                    this.lastTradePrice = enrichedTrade.price;
+
                     // Feed trade data to all detectors
                     this.absorptionDetector.onEnrichedTrade(enrichedTrade);
                     this.anomalyDetector.onEnrichedTrade(enrichedTrade);
@@ -757,7 +810,11 @@ export class OrderFlowDashboard {
             );
             this.supportResistanceDetector.on(
                 "supportResistanceLevel",
-                (event: { type: string; data: Record<string, unknown>; timestamp: Date }) => {
+                (event: {
+                    type: string;
+                    data: Record<string, unknown>;
+                    timestamp: Date;
+                }) => {
                     const message: WebSocketMessage = {
                         type: "supportResistanceLevel",
                         data: event.data,
@@ -1251,6 +1308,67 @@ export class OrderFlowDashboard {
             );
             throw error;
         }
+    }
+
+    /**
+     * Deduplicate confirmed signals based on price tolerance and time proximity
+     */
+    private deduplicateSignals(signals: ConfirmedSignal[]): ConfirmedSignal[] {
+        if (signals.length === 0) return signals;
+
+        const deduplicationConfig = {
+            priceTolerancePercent: 0.02, // 0.02% price tolerance
+            timeWindowMs: 30000, // 30 second time window
+        };
+
+        const deduplicated: ConfirmedSignal[] = [];
+
+        // Sort by time (newest first)
+        signals.sort((a, b) => b.confirmedAt - a.confirmedAt);
+
+        for (const signal of signals) {
+            let isDuplicate = false;
+
+            // Check against already added signals
+            for (const existingSignal of deduplicated) {
+                const timeDiff = Math.abs(
+                    signal.confirmedAt - existingSignal.confirmedAt
+                );
+                const priceDiff = Math.abs(
+                    signal.finalPrice - existingSignal.finalPrice
+                );
+                const priceThreshold =
+                    signal.finalPrice *
+                    (deduplicationConfig.priceTolerancePercent / 100);
+
+                // Also check if they have overlapping signal types
+                const signalTypes = new Set(
+                    signal.originalSignals.map((s) => s.type)
+                );
+                const existingTypes = new Set(
+                    existingSignal.originalSignals.map((s) => s.type)
+                );
+                const hasOverlappingTypes = [...signalTypes].some((type) =>
+                    existingTypes.has(type)
+                );
+
+                if (
+                    timeDiff <= deduplicationConfig.timeWindowMs &&
+                    priceDiff <= priceThreshold &&
+                    hasOverlappingTypes
+                ) {
+                    isDuplicate = true;
+                    break;
+                }
+            }
+
+            if (!isDuplicate) {
+                deduplicated.push(signal);
+            }
+        }
+
+        // Sort final result by time (newest first)
+        return deduplicated.sort((a, b) => b.confirmedAt - a.confirmedAt);
     }
 }
 

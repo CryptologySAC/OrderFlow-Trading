@@ -275,6 +275,7 @@ export class SignalManager extends EventEmitter {
             },
         };
 
+        // Ensure signals are persisted before emitting to prevent backlog issues
         this.storage.saveSignalHistory(signal);
         this.storage.saveConfirmedSignal(confirmedSignal);
 
@@ -531,16 +532,48 @@ export class SignalManager extends EventEmitter {
             throw new Error("No original signal found");
         }
 
-        // Determine trading direction based on signal type
-        const side: "buy" | "sell" = this.getSignalDirection(
-            originalSignal.type
-        );
+        // Determine trading direction from signal data if available, otherwise use signal type
+        const side: "buy" | "sell" =
+            this.getSignalDirectionFromData(originalSignal);
 
-        const profitTarget = calculateProfitTarget(
+        // Validate finalPrice before calculating TP/SL
+        if (
+            !confirmedSignal.finalPrice ||
+            isNaN(confirmedSignal.finalPrice) ||
+            confirmedSignal.finalPrice <= 0
+        ) {
+            this.logger.error("Invalid finalPrice for signal calculations", {
+                signalId: confirmedSignal.id,
+                finalPrice: confirmedSignal.finalPrice,
+                side,
+            });
+            throw new Error(
+                `Invalid finalPrice: ${confirmedSignal.finalPrice}`
+            );
+        }
+
+        const profitTargetData = calculateProfitTarget(
             confirmedSignal.finalPrice,
             side
         );
         const stopLoss = calculateStopLoss(confirmedSignal.finalPrice, side);
+
+        // Extract price from profit target calculation result
+        const profitTarget = profitTargetData.price;
+
+        // Validate calculated values
+        if (isNaN(profitTarget) || isNaN(stopLoss)) {
+            this.logger.error("Invalid TP/SL calculations", {
+                signalId: confirmedSignal.id,
+                finalPrice: confirmedSignal.finalPrice,
+                side,
+                profitTarget,
+                stopLoss,
+            });
+            throw new Error(
+                `Invalid TP/SL calculations: TP=${profitTarget}, SL=${stopLoss}`
+            );
+        }
 
         const signalData: TradingSignalData = {
             confidence: confirmedSignal.confidence,
@@ -558,7 +591,7 @@ export class SignalManager extends EventEmitter {
             time: confirmedSignal.confirmedAt,
             price: confirmedSignal.finalPrice,
             type: this.getSignalTypeConfirmed(originalSignal.type),
-            takeProfit: profitTarget.price,
+            takeProfit: profitTarget,
             stopLoss,
             signalData,
         };
@@ -567,7 +600,28 @@ export class SignalManager extends EventEmitter {
     }
 
     /**
-     * Get trading direction based on signal type.
+     * Get trading direction from signal data or fallback to signal type.
+     */
+    private getSignalDirectionFromData(
+        signal: ConfirmedSignal["originalSignals"][0]
+    ): "buy" | "sell" {
+        // Try to extract side from signal metadata first (metadata = signal.data from detector)
+        if (signal.metadata && typeof signal.metadata === "object") {
+            const metadata = signal.metadata as unknown as Record<
+                string,
+                unknown
+            >;
+            if (metadata.side === "buy" || metadata.side === "sell") {
+                return metadata.side;
+            }
+        }
+
+        // Fallback to signal type-based direction
+        return this.getSignalDirection(signal.type);
+    }
+
+    /**
+     * Get trading direction based on signal type (fallback method).
      */
     private getSignalDirection(signalType: SignalType): "buy" | "sell" {
         switch (signalType) {

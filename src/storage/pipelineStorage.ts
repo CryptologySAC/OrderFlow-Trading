@@ -90,7 +90,7 @@ export interface IPipelineStorage {
     purgeSignalHistory(): void;
 
     saveConfirmedSignal(signal: ConfirmedSignal): void;
-    getRecentConfirmedSignals(since: number): ConfirmedSignal[];
+    getRecentConfirmedSignals(since: number, limit?: number): ConfirmedSignal[];
     purgeConfirmedSignals(): void;
 
     // Signal tracking methods
@@ -697,13 +697,23 @@ export class PipelineStorage implements IPipelineStorage {
         this.runWithRetry(() => this.insertConfirmed.run(row));
     }
 
-    public getRecentConfirmedSignals(since: number): ConfirmedSignal[] {
+    public getRecentConfirmedSignals(
+        since: number,
+        limit = 50
+    ): ConfirmedSignal[] {
         const rows = this.runWithRetry(() =>
             this.selectConfirmed.all({ since })
         ) as {
             signalJson: string;
         }[];
-        return rows.map((r) => JSON.parse(r.signalJson) as ConfirmedSignal);
+
+        // Apply limit and return most recent signals first
+        const signals = rows
+            .map((r) => JSON.parse(r.signalJson) as ConfirmedSignal)
+            .sort((a, b) => b.confirmedAt - a.confirmedAt) // Most recent first
+            .slice(0, limit); // Apply limit
+
+        return signals;
     }
 
     public purgeConfirmedSignals(): void {

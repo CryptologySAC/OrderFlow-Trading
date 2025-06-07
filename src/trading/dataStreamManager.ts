@@ -10,6 +10,12 @@ import {
     BinanceAggTradeStream,
     BinanceDiffBookDepthStream,
 } from "../types/binanceTypes.js";
+import {
+    ApiConnectivityMonitor,
+    type ApiConnectivityConfig,
+    type ConnectivityStatus,
+    type ConnectivityIssue,
+} from "../infrastructure/apiConnectivityMonitor.js";
 
 /**
  * Enhanced connection states for better state management
@@ -96,6 +102,9 @@ export class DataStreamManager extends EventEmitter {
         isHealthy: false,
     };
 
+    // API Connectivity Monitor
+    private connectivityMonitor: ApiConnectivityMonitor;
+
     constructor(
         private readonly config: DataStreamConfig,
         private readonly binanceFeed: IBinanceDataFeed,
@@ -113,6 +122,52 @@ export class DataStreamManager extends EventEmitter {
         this.streamHealthTimeout = config.streamHealthTimeout || 60000; // 1 minute
         this.enableStreamHealthCheck = config.enableStreamHealthCheck ?? true;
         this.reconnectOnHealthFailure = config.reconnectOnHealthFailure ?? true;
+
+        // Initialize API connectivity monitor
+        const connectivityConfig: ApiConnectivityConfig = {
+            tradeStaleThresholdMs: 30000, // 30 seconds - trades can be sparse
+            depthStaleThresholdMs: 10000, // 10 seconds - depth should be frequent
+            asymmetricDetectionMs: 20000, // 20 seconds to detect asymmetric issues
+            maxAllowedLagMs: 5000, // 5 seconds max lag between streams
+            syncCheckIntervalMs: 10000, // Check sync every 10 seconds
+            healthCheckIntervalMs: 15000, // Overall health check every 15 seconds
+            minHealthyScore: 0.7, // 70% minimum score for healthy
+            issueThrottleMs: 60000, // Don't repeat same issue within 1 minute
+        };
+
+        this.connectivityMonitor = new ApiConnectivityMonitor(
+            connectivityConfig,
+            logger,
+            metricsCollector
+        );
+
+        // Set up connectivity monitor event handlers
+        this.connectivityMonitor.on(
+            "connectivityIssue",
+            (issue: ConnectivityIssue) => {
+                this.handleConnectivityIssue(issue);
+            }
+        );
+
+        this.connectivityMonitor.on("healthy", (status: ConnectivityStatus) => {
+            this.logger.info("API connectivity restored", {
+                score: status.connectivityScore,
+            });
+            this.emit("healthy");
+        });
+
+        this.connectivityMonitor.on(
+            "unhealthy",
+            (status: ConnectivityStatus) => {
+                this.logger.warn("API connectivity degraded", {
+                    score: status.connectivityScore,
+                    tradeStale: status.tradeStreamHealth.isStale,
+                    depthStale: status.depthStreamHealth.isStale,
+                    lastIssue: status.lastIssueDetected?.type,
+                });
+                this.emit("unhealthy");
+            }
+        );
     }
 
     public async connect(): Promise<void> {
@@ -214,6 +269,10 @@ export class DataStreamManager extends EventEmitter {
             symbol: this.config.symbol,
         });
 
+        // Report WebSocket state to connectivity monitor
+        const isConnected = newState === ConnectionState.CONNECTED;
+        this.connectivityMonitor.onWebSocketStateChange(isConnected);
+
         this.metricsCollector.recordGauge(
             "stream.connection.state",
             this.getStateNumeric(newState)
@@ -305,10 +364,15 @@ export class DataStreamManager extends EventEmitter {
     ): void {
         if (!data || data.s !== this.config.symbol) return;
 
+        const timestamp = Date.now();
+
         // Update stream health
-        this.streamHealth.lastTradeMessage = Date.now();
+        this.streamHealth.lastTradeMessage = timestamp;
         this.streamHealth.tradeMessageCount++;
         this.updateStreamHealthStatus();
+
+        // Report to connectivity monitor
+        this.connectivityMonitor.onTradeMessage(timestamp);
 
         this.emit("trade", data);
         this.metricsCollector.incrementCounter("stream.trade.messages");
@@ -319,10 +383,15 @@ export class DataStreamManager extends EventEmitter {
     ): void {
         if (!data || data.s !== this.config.symbol) return;
 
+        const timestamp = Date.now();
+
         // Update stream health
-        this.streamHealth.lastDepthMessage = Date.now();
+        this.streamHealth.lastDepthMessage = timestamp;
         this.streamHealth.depthMessageCount++;
         this.updateStreamHealthStatus();
+
+        // Report to connectivity monitor
+        this.connectivityMonitor.onDepthMessage(timestamp);
 
         this.emit("depth", data);
         this.metricsCollector.incrementCounter("stream.depth.messages");
@@ -754,6 +823,57 @@ export class DataStreamManager extends EventEmitter {
             this.handleConnectionClose();
         } else {
             await this.connect();
+        }
+    }
+
+    /**
+     * Handle connectivity issues from the monitor
+     */
+    private handleConnectivityIssue(issue: ConnectivityIssue): void {
+        this.logger.warn("API connectivity issue detected", {
+            type: issue.type,
+            severity: issue.severity,
+            description: issue.description,
+            affectedStreams: issue.affectedStreams,
+            suggestedAction: issue.suggestedAction,
+        });
+
+        // Emit specific connectivity issue event
+        this.emit("connectivityIssue", issue);
+
+        // Take action based on issue severity
+        if (
+            issue.severity === "critical" &&
+            issue.type === "both_streams_stale"
+        ) {
+            this.logger.error(
+                "Critical connectivity issue: both streams stale, attempting reconnection"
+            );
+            // Trigger reconnection for critical connectivity issues
+            void this.handleConnectionClose();
+        } else if (
+            issue.severity === "high" &&
+            issue.type === "asymmetric_streaming"
+        ) {
+            this.logger.warn(
+                "Asymmetric streaming detected, monitoring for escalation"
+            );
+        }
+    }
+
+    /**
+     * Get current API connectivity status
+     */
+    public getConnectivityStatus(): ConnectivityStatus {
+        return this.connectivityMonitor.getStatus();
+    }
+
+    /**
+     * Stop connectivity monitoring
+     */
+    public stopConnectivityMonitoring(): void {
+        if (this.connectivityMonitor) {
+            this.connectivityMonitor.stop();
         }
     }
 }

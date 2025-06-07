@@ -18,6 +18,7 @@ export interface WebSocketMessage {
         | "orderbook"
         | "signal"
         | "anomaly"
+        | "supportResistanceLevel"
         | "error"
         | "test"
         | "stats";

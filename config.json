@@ -103,28 +103,28 @@
                 }
             },
             "absorption": {
-                "minAggVolume": 10,
+                "minAggVolume": 50,
                 "threshold": 0.5,
-                "windowMs": 900000,
-                "zoneTicks": 2,
+                "windowMs": 20000,
+                "zoneTicks": 1,
                 "eventCooldownMs": 6000,
                 "signalCooldownMs": 30000,
                 "minPassiveMultiplier": 1.3,
                 "maxAbsorptionRatio": 0.75,
                 "pricePrecision": 2,
-                "moveTicks": 4,
+                "moveTicks": 1,
                 "confirmationTimeout": 55000,
-                "maxRevisitTicks": 20,
+                "maxRevisitTicks": 5,
                 "features": {
                     "spoofingDetection": true,
-                    "adaptiveZone": true,
-                    "passiveHistory": true,
-                    "multiZone": true,
-                    "autoCalibrate": true,
-                    "icebergDetection": true,
-                    "liquidityGradient": true,
-                    "spreadAdjustment": true,
-                    "absorptionVelocity": true
+                    "adaptiveZone": false,
+                    "passiveHistory": false,
+                    "multiZone": false,
+                    "autoCalibrate": false,
+                    "icebergDetection": false,
+                    "liquidityGradient": false,
+                    "spreadAdjustment": false,
+                    "absorptionVelocity": false
                 }
             },
             "deltaCvdConfirmation": {
@@ -134,7 +134,7 @@
                 "minZ": 2.5,
                 "pricePrecision": 2,
                 "dynamicThresholds": true,
-                "logDebug": true
+                "logDebug": false
             },
             "accumulationDetector": {
                 "minDurationMs": 150000,

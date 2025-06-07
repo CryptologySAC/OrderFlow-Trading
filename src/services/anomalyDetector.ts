@@ -13,6 +13,10 @@ import type {
     EnrichedTradeEvent,
     HybridTradeEvent,
 } from "../types/marketEvents.js";
+import type {
+    ConnectivityIssue,
+    ConnectivityStatus,
+} from "../infrastructure/apiConnectivityMonitor.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
 
 export interface AnomalyDetectorOptions {
@@ -53,6 +57,7 @@ export type AnomalyType =
     | "flash_crash" // Infrastructure: Extreme price deviation
     | "liquidity_void" // Infrastructure: Orderbook liquidity crisis
     | "api_gap" // Infrastructure: Data feed interruption
+    | "api_connectivity" // Infrastructure: API connectivity issues
     | "extreme_volatility" // Market Health: Sudden volatility spike
     | "orderbook_imbalance" // Market Structure: Passive volume asymmetry
     | "flow_imbalance" // Market Structure: Aggressive flow asymmetry
@@ -66,7 +71,7 @@ export type AnomalyType =
  */
 export interface AnomalyEvent extends MarketAnomaly {
     type: AnomalyType;
-    severity: "critical" | "high" | "medium" | "info";
+    severity: "critical" | "high" | "medium" | "low" | "info";
     details: Record<string, unknown>;
 }
 
@@ -308,7 +313,7 @@ export class AnomalyDetector extends EventEmitter {
         // Infrastructure issues (most critical)
         this.checkFlashCrash(snapshot);
         this.checkLiquidityVoid(snapshot, spreadBps);
-        this.checkApiGap(snapshot);
+        // API connectivity issues are now handled separately via onConnectivityIssue()
 
         // Market health issues
         this.checkExtremeVolatility(snapshot);
@@ -412,32 +417,102 @@ export class AnomalyDetector extends EventEmitter {
      * Detects API/data feed gaps by trade timestamp jump.
      * Infrastructure issue affecting data reliability.
      */
-    private checkApiGap(snapshot: MarketSnapshot): void {
-        const arr = this.marketHistory.toArray();
-        const len = arr.length;
-        if (len < 2) return;
+    /**
+     * Handle API connectivity issues from DataStreamManager
+     * This replaces the old trade-gap-based API detection with proper connectivity monitoring
+     */
+    public onConnectivityIssue(
+        issue: ConnectivityIssue,
+        currentPrice: number
+    ): void {
+        const severity = this.mapConnectivitySeverity(issue.severity);
+        const recommendedAction = this.getConnectivityRecommendedAction(issue);
 
-        const timeGap = snapshot.timestamp - arr[len - 2].timestamp;
-        const confidence = Math.min(1, timeGap / 30000);
+        this.emitAnomaly({
+            type: "api_connectivity",
+            detectedAt: issue.detectedAt,
+            severity,
+            affectedPriceRange: {
+                min: currentPrice * 0.99,
+                max: currentPrice * 1.01,
+            },
+            recommendedAction,
+            details: {
+                confidence: severity === "high" ? 0.9 : 0.7,
+                connectivityIssueType: issue.type,
+                affectedStreams: issue.affectedStreams,
+                description: issue.description,
+                suggestedAction: issue.suggestedAction,
+                rationale: `API connectivity issue: ${issue.description}`,
+            },
+        });
+    }
 
-        if (timeGap > 5000) {
-            // 5 second gap
+    /**
+     * Handle connectivity status updates
+     */
+    public onConnectivityStatusChange(
+        status: ConnectivityStatus,
+        currentPrice: number
+    ): void {
+        // Only emit anomaly if connectivity is unhealthy
+        if (!status.isHealthy && status.connectivityScore < 0.5) {
             this.emitAnomaly({
-                type: "api_gap",
-                detectedAt: snapshot.timestamp,
-                severity: timeGap > 30000 ? "high" : "medium",
+                type: "api_connectivity",
+                detectedAt: Date.now(),
+                severity: status.connectivityScore < 0.3 ? "high" : "medium",
                 affectedPriceRange: {
-                    min: snapshot.price * 0.99,
-                    max: snapshot.price * 1.01,
+                    min: currentPrice * 0.99,
+                    max: currentPrice * 1.01,
                 },
-                recommendedAction: timeGap > 30000 ? "pause" : "continue",
+                recommendedAction:
+                    status.connectivityScore < 0.3 ? "pause" : "monitor",
                 details: {
-                    confidence,
-                    timeGapMs: timeGap,
-                    timeGapSeconds: timeGap / 1000,
-                    rationale: "Data feed interruption detected",
+                    confidence: 1 - status.connectivityScore,
+                    connectivityScore: status.connectivityScore,
+                    tradeStreamStale: status.tradeStreamHealth.isStale,
+                    depthStreamStale: status.depthStreamHealth.isStale,
+                    asymmetricDetected: status.apiSyncHealth.asymmetricDetected,
+                    syncLag: status.apiSyncHealth.tradeLag,
+                    rationale: "Overall API connectivity degraded",
                 },
             });
+        }
+    }
+
+    private mapConnectivitySeverity(
+        severity: ConnectivityIssue["severity"]
+    ): MarketAnomaly["severity"] {
+        switch (severity) {
+            case "critical":
+                return "high";
+            case "high":
+                return "high";
+            case "medium":
+                return "medium";
+            case "low":
+                return "low";
+            default:
+                return "medium";
+        }
+    }
+
+    private getConnectivityRecommendedAction(
+        issue: ConnectivityIssue
+    ): MarketAnomaly["recommendedAction"] {
+        switch (issue.type) {
+            case "websocket_disconnected":
+            case "both_streams_stale":
+                return "pause";
+            case "asymmetric_streaming":
+            case "trades_stream_stale":
+            case "depth_stream_stale":
+                return "monitor";
+            case "sync_drift":
+            case "api_rate_limited":
+                return "continue";
+            default:
+                return "monitor";
         }
     }
 
@@ -872,7 +947,7 @@ export class AnomalyDetector extends EventEmitter {
     public getMarketHealth(): {
         isHealthy: boolean;
         recentAnomalies: number;
-        highestSeverity: "critical" | "high" | "medium" | "info" | null;
+        highestSeverity: "critical" | "high" | "medium" | "low" | "info" | null;
         recommendation:
             | "pause"
             | "reduce_size"
@@ -933,7 +1008,13 @@ export class AnomalyDetector extends EventEmitter {
         const recentAnoms = this.recentAnomalies.filter(
             (a) => a.detectedAt > recentTime
         );
-        const severityOrder = ["critical", "high", "medium", "info"] as const;
+        const severityOrder = [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info",
+        ] as const;
         let highestSeverity: (typeof severityOrder)[number] | null = null;
 
         for (const sev of severityOrder) {
@@ -953,15 +1034,24 @@ export class AnomalyDetector extends EventEmitter {
             }
         });
 
-        // Determine overall health
-        const hasInfrastructureIssues = recentAnomalyTypes.some((type) =>
-            ["flash_crash", "liquidity_void", "api_gap"].includes(type)
+        // Determine overall health - only mark unhealthy for critical infrastructure issues
+        const hasCriticalInfrastructureIssues = recentAnomalyTypes.some(
+            (type) =>
+                ["flash_crash", "liquidity_void", "api_connectivity"].includes(
+                    type
+                ) &&
+                recentAnoms.some(
+                    (a) =>
+                        a.type === type &&
+                        (a.severity === "critical" || a.severity === "high")
+                )
         );
 
         const isHealthy =
-            !hasInfrastructureIssues &&
+            !hasCriticalInfrastructureIssues &&
             volatility < this.volatilityThreshold &&
-            (!highestSeverity || highestSeverity === "info") &&
+            (!highestSeverity ||
+                ["info", "low", "medium"].includes(highestSeverity)) &&
             (currentSpreadBps
                 ? currentSpreadBps < this.spreadThresholdBps
                 : true);
@@ -974,13 +1064,18 @@ export class AnomalyDetector extends EventEmitter {
             | "continue";
         if (criticalIssues.length > 0 || highestSeverity === "critical") {
             recommendation = "close_positions";
-        } else if (hasInfrastructureIssues || highestSeverity === "high") {
+        } else if (
+            hasCriticalInfrastructureIssues ||
+            highestSeverity === "high"
+        ) {
             recommendation = "pause";
         } else if (
             highestSeverity === "medium" ||
             volatility > this.volatilityThreshold
         ) {
             recommendation = "reduce_size";
+        } else if (highestSeverity === "low") {
+            recommendation = "continue"; // Low severity anomalies don't require action changes
         } else {
             recommendation = "continue";
         }

@@ -153,6 +153,7 @@ export interface MarketAnomaly {
     type:
         | "flash_crash"
         | "api_gap"
+        | "api_connectivity"
         | "liquidity_void"
         | "extreme_volatility"
         | "spoofing"
@@ -170,6 +171,7 @@ export interface MarketAnomaly {
         | "toxic_flow"
         | "realtime_flash_crash"
         | "realtime_api_gap"
+        | "realtime_api_connectivity"
         | "realtime_liquidity_void"
         | "realtime_extreme_volatility"
         | "realtime_spoofing"
