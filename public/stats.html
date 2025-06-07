@@ -223,18 +223,40 @@
                             <td id="exhaustionSuccessRate">--</td>
                         </tr>
                         <tr>
-                            <td>Accumulation</td>
+                            <td>Accumulation (Legacy)</td>
                             <td id="accumulationCandidates">--</td>
                             <td id="accumulationConfirmed">--</td>
                             <td id="accumulationRejected">--</td>
                             <td id="accumulationSuccessRate">--</td>
                         </tr>
                         <tr>
-                            <td>Distribution</td>
+                            <td>Distribution (Legacy)</td>
                             <td id="distributionCandidates">--</td>
                             <td id="distributionConfirmed">--</td>
                             <td id="distributionRejected">--</td>
                             <td id="distributionSuccessRate">--</td>
+                        </tr>
+                        <tr
+                            style="
+                                background-color: var(--highlight-bg, #f0f9ff);
+                            "
+                        >
+                            <td><strong>Accumulation Zones</strong></td>
+                            <td id="accumulationZoneCandidates">--</td>
+                            <td id="accumulationZoneConfirmed">--</td>
+                            <td id="accumulationZoneRejected">--</td>
+                            <td id="accumulationZoneSuccessRate">--</td>
+                        </tr>
+                        <tr
+                            style="
+                                background-color: var(--highlight-bg, #f0f9ff);
+                            "
+                        >
+                            <td><strong>Distribution Zones</strong></td>
+                            <td id="distributionZoneCandidates">--</td>
+                            <td id="distributionZoneConfirmed">--</td>
+                            <td id="distributionZoneRejected">--</td>
+                            <td id="distributionZoneSuccessRate">--</td>
                         </tr>
                         <tr>
                             <td>CVD Confirmation</td>
@@ -283,6 +305,47 @@
                             <td>Duplicate</td>
                             <td id="rejectedDuplicate">--</td>
                             <td id="rejectedDuplicatePercent">--</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Zone Statistics -->
+            <div class="metric-card">
+                <h3 class="card-title">Zone Analytics</h3>
+                <table id="zoneStatsTable">
+                    <thead>
+                        <tr>
+                            <th>Zone Metric</th>
+                            <th>Accumulation</th>
+                            <th>Distribution</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Active Zones</td>
+                            <td id="activeAccumulationZones">--</td>
+                            <td id="activeDistributionZones">--</td>
+                        </tr>
+                        <tr>
+                            <td>Completed (24h)</td>
+                            <td id="completedAccumulationZones">--</td>
+                            <td id="completedDistributionZones">--</td>
+                        </tr>
+                        <tr>
+                            <td>Avg Strength</td>
+                            <td id="avgAccumulationStrength">--</td>
+                            <td id="avgDistributionStrength">--</td>
+                        </tr>
+                        <tr>
+                            <td>Avg Duration</td>
+                            <td id="avgAccumulationDuration">--</td>
+                            <td id="avgDistributionDuration">--</td>
+                        </tr>
+                        <tr>
+                            <td>Success Rate</td>
+                            <td id="accumulationZoneSuccessRate2">--</td>
+                            <td id="distributionZoneSuccessRate2">--</td>
                         </tr>
                     </tbody>
                 </table>

@@ -47,6 +47,10 @@ let activeSignalTooltip = null;
 let supportResistanceLevels = [];
 let maxSupportResistanceLevels = 20;
 
+// Zone management
+let activeZones = new Map();
+let maxActiveZones = 10;
+
 // Used to control badge display
 let badgeTimeout = null;
 let latestBadgeElem = null;
@@ -799,6 +803,16 @@ const tradeWebsocket = new TradeWebSocket({
                         message.data
                     );
                     handleSupportResistanceLevel(message.data);
+                    break;
+
+                case "zoneUpdate":
+                    console.log("Zone update received:", message.data);
+                    handleZoneUpdate(message.data);
+                    break;
+
+                case "zoneSignal":
+                    console.log("Zone signal received:", message.data);
+                    handleZoneSignal(message.data);
                     break;
 
                 case "orderbook":
@@ -2404,6 +2418,7 @@ function initialize() {
 
     // Setup periodic cleanup for support/resistance levels
     setInterval(cleanupOldSupportResistanceLevels, 300000); // Every 5 minutes
+    setInterval(cleanupOldZones, 300000); // Every 5 minutes
 }
 
 function addAnomalyChartLabel(anomaly) {
@@ -2656,6 +2671,340 @@ function cleanupOldSupportResistanceLevels() {
         }
         return true;
     });
+}
+
+/**
+ * Zone Management Functions
+ * Handle accumulation/distribution zones as visual boxes on the chart
+ */
+
+/**
+ * Handle zone update messages from WebSocket
+ */
+function handleZoneUpdate(updateData) {
+    const { updateType, zone, significance } = updateData;
+
+    switch (updateType) {
+        case "zone_created":
+            createZoneBox(zone);
+            break;
+        case "zone_updated":
+        case "zone_strengthened":
+        case "zone_weakened":
+            updateZoneBox(zone);
+            break;
+        case "zone_completed":
+            completeZoneBox(zone);
+            break;
+        case "zone_invalidated":
+            removeZoneBox(zone.id);
+            break;
+    }
+}
+
+/**
+ * Handle zone signal messages - add to signals list
+ */
+function handleZoneSignal(signalData) {
+    const {
+        signalType,
+        zone,
+        actionType,
+        confidence,
+        urgency,
+        expectedDirection,
+    } = signalData;
+
+    // Create a normalized signal for the signals list
+    const normalizedSignal = {
+        id: `zone_${zone.id}_${Date.now()}`,
+        type: `${zone.type}_zone_${signalType}`,
+        price: zone.priceRange.center,
+        time: Date.now(),
+        side:
+            expectedDirection === "up"
+                ? "buy"
+                : expectedDirection === "down"
+                  ? "sell"
+                  : "neutral",
+        confidence: confidence,
+        urgency: urgency,
+        zone: zone,
+        stopLoss: signalData.stopLossLevel,
+        takeProfit: signalData.takeProfitLevel,
+        positionSizing: signalData.positionSizing,
+    };
+
+    // Add to signals list
+    signalsList.unshift(normalizedSignal);
+    if (signalsList.length > 50) {
+        signalsList = signalsList.slice(0, 50);
+    }
+    renderSignalsList();
+}
+
+/**
+ * Create a zone box on the chart
+ */
+function createZoneBox(zone) {
+    // Store zone data
+    activeZones.set(zone.id, zone);
+
+    // Limit number of active zones
+    if (activeZones.size > maxActiveZones) {
+        const oldestZoneId = activeZones.keys().next().value;
+        removeZoneBox(oldestZoneId);
+    }
+
+    // Add zone box to chart
+    addZoneToChart(zone);
+}
+
+/**
+ * Update an existing zone box
+ */
+function updateZoneBox(zone) {
+    activeZones.set(zone.id, zone);
+
+    // Update the chart annotation
+    if (tradesChart?.options?.plugins?.annotation?.annotations) {
+        const annotation =
+            tradesChart.options.plugins.annotation.annotations[
+                `zone_${zone.id}`
+            ];
+        if (annotation) {
+            // Update zone properties
+            annotation.yMin = zone.priceRange.min;
+            annotation.yMax = zone.priceRange.max;
+            annotation.backgroundColor = getZoneColor(zone);
+            annotation.borderColor = getZoneBorderColor(zone);
+            annotation.label.content = getZoneLabel(zone);
+
+            tradesChart.update("none");
+        }
+    }
+}
+
+/**
+ * Mark zone as completed (change visual style)
+ */
+function completeZoneBox(zone) {
+    activeZones.set(zone.id, zone);
+
+    if (tradesChart?.options?.plugins?.annotation?.annotations) {
+        const annotation =
+            tradesChart.options.plugins.annotation.annotations[
+                `zone_${zone.id}`
+            ];
+        if (annotation) {
+            // Change to completed zone style
+            annotation.backgroundColor = getCompletedZoneColor(zone);
+            annotation.borderColor = getCompletedZoneBorderColor(zone);
+            annotation.borderWidth = 2;
+            annotation.borderDash = [5, 5]; // Dashed border for completed zones
+            annotation.label.content = getZoneLabel(zone) + " ✓";
+
+            tradesChart.update("none");
+
+            // Auto-remove completed zones after 30 minutes
+            setTimeout(
+                () => {
+                    removeZoneBox(zone.id);
+                },
+                30 * 60 * 1000
+            );
+        }
+    }
+}
+
+/**
+ * Remove zone box from chart
+ */
+function removeZoneBox(zoneId) {
+    activeZones.delete(zoneId);
+
+    if (tradesChart?.options?.plugins?.annotation?.annotations) {
+        delete tradesChart.options.plugins.annotation.annotations[
+            `zone_${zoneId}`
+        ];
+        tradesChart.update("none");
+    }
+}
+
+/**
+ * Add zone as chart annotation
+ */
+function addZoneToChart(zone) {
+    if (!tradesChart?.options?.plugins?.annotation?.annotations) return;
+
+    const zoneAnnotation = {
+        type: "box",
+        xMin: zone.startTime,
+        xMax: Date.now() + 5 * 60 * 1000, // Extend 5 minutes into future
+        yMin: zone.priceRange.min,
+        yMax: zone.priceRange.max,
+        backgroundColor: getZoneColor(zone),
+        borderColor: getZoneBorderColor(zone),
+        borderWidth: 1,
+        label: {
+            display: true,
+            content: getZoneLabel(zone),
+            position: "start",
+            font: {
+                size: 10,
+                weight: "bold",
+            },
+            color: getZoneTextColor(zone),
+            backgroundColor: "rgba(255, 255, 255, 0.8)",
+            padding: 4,
+            borderRadius: 3,
+        },
+        enter: (ctx, event) => {
+            showZoneTooltip(zone, event);
+        },
+        leave: () => {
+            hideZoneTooltip();
+        },
+    };
+
+    tradesChart.options.plugins.annotation.annotations[`zone_${zone.id}`] =
+        zoneAnnotation;
+    tradesChart.update("none");
+}
+
+/**
+ * Get zone background color based on type and strength
+ */
+function getZoneColor(zone) {
+    const alpha = Math.max(0.15, zone.strength * 0.4); // Min 15%, max 40% opacity
+
+    if (zone.type === "accumulation") {
+        return `rgba(34, 197, 94, ${alpha})`; // Green
+    } else {
+        return `rgba(239, 68, 68, ${alpha})`; // Red
+    }
+}
+
+/**
+ * Get zone border color
+ */
+function getZoneBorderColor(zone) {
+    if (zone.type === "accumulation") {
+        return "rgba(34, 197, 94, 0.8)"; // Green
+    } else {
+        return "rgba(239, 68, 68, 0.8)"; // Red
+    }
+}
+
+/**
+ * Get completed zone colors (more muted)
+ */
+function getCompletedZoneColor(zone) {
+    if (zone.type === "accumulation") {
+        return "rgba(34, 197, 94, 0.2)"; // Lighter green
+    } else {
+        return "rgba(239, 68, 68, 0.2)"; // Lighter red
+    }
+}
+
+function getCompletedZoneBorderColor(zone) {
+    if (zone.type === "accumulation") {
+        return "rgba(34, 197, 94, 0.5)"; // Muted green
+    } else {
+        return "rgba(239, 68, 68, 0.5)"; // Muted red
+    }
+}
+
+/**
+ * Get zone text color
+ */
+function getZoneTextColor(zone) {
+    if (zone.type === "accumulation") {
+        return "rgba(21, 128, 61, 1)"; // Dark green
+    } else {
+        return "rgba(153, 27, 27, 1)"; // Dark red
+    }
+}
+
+/**
+ * Generate zone label text
+ */
+function getZoneLabel(zone) {
+    const typeLabel = zone.type === "accumulation" ? "ACC" : "DIST";
+    const strengthPercent = Math.round(zone.strength * 100);
+    const completionPercent = Math.round(zone.completion * 100);
+
+    return `${typeLabel} ${strengthPercent}% (${completionPercent}%)`;
+}
+
+/**
+ * Show zone tooltip on hover
+ */
+function showZoneTooltip(zone, event) {
+    const tooltip = document.createElement("div");
+    tooltip.id = "zoneTooltip";
+    tooltip.style.cssText = `
+        position: fixed;
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
+        padding: 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-family: monospace;
+        pointer-events: none;
+        z-index: 10000;
+        max-width: 300px;
+        line-height: 1.4;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    `;
+
+    const duration = Math.round((Date.now() - zone.startTime) / 60000);
+    const volumeFormatted = zone.totalVolume.toLocaleString();
+
+    tooltip.innerHTML = `
+        <div style="font-weight: bold; margin-bottom: 6px; color: ${zone.type === "accumulation" ? "#22c55e" : "#ef4444"}">
+            ${zone.type.toUpperCase()} ZONE
+        </div>
+        <div>Price Range: $${zone.priceRange.min.toFixed(4)} - $${zone.priceRange.max.toFixed(4)}</div>
+        <div>Center: $${zone.priceRange.center.toFixed(4)}</div>
+        <div>Strength: ${(zone.strength * 100).toFixed(1)}%</div>
+        <div>Completion: ${(zone.completion * 100).toFixed(1)}%</div>
+        <div>Confidence: ${(zone.confidence * 100).toFixed(1)}%</div>
+        <div>Duration: ${duration}m</div>
+        <div>Volume: ${volumeFormatted}</div>
+        <div>Trades: ${zone.tradeCount}</div>
+        <div style="margin-top: 6px; font-size: 10px; opacity: 0.8">
+            ID: ${zone.id}
+        </div>
+    `;
+
+    tooltip.style.left = `${event.clientX + 10}px`;
+    tooltip.style.top = `${event.clientY - 10}px`;
+
+    document.body.appendChild(tooltip);
+}
+
+/**
+ * Hide zone tooltip
+ */
+function hideZoneTooltip() {
+    const tooltip = document.getElementById("zoneTooltip");
+    if (tooltip) {
+        tooltip.remove();
+    }
+}
+
+/**
+ * Cleanup old completed zones
+ */
+function cleanupOldZones() {
+    const cutoffTime = Date.now() - 60 * 60 * 1000; // 1 hour
+
+    for (const [zoneId, zone] of activeZones) {
+        if (!zone.isActive && zone.endTime && zone.endTime < cutoffTime) {
+            removeZoneBox(zoneId);
+        }
+    }
 }
 
 // Start application

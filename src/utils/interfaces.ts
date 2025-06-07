@@ -19,6 +19,8 @@ export interface WebSocketMessage {
         | "signal"
         | "anomaly"
         | "supportResistanceLevel"
+        | "zoneUpdate"
+        | "zoneSignal"
         | "error"
         | "test"
         | "stats";
