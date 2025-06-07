@@ -154,7 +154,7 @@ export class ExhaustionDetector
         try {
             // Get recent trades within window
             const recentTrades = this.trades.filter(
-                (t) => now - t.timestamp <= this.windowMs
+                (t) => now - t.timestamp < this.windowMs
             );
 
             if (recentTrades.length === 0) {
@@ -316,7 +316,7 @@ export class ExhaustionDetector
             const samples = zoneHistory
                 ? zoneHistory
                       .toArray()
-                      .filter((s) => now - s.timestamp <= this.windowMs)
+                      .filter((s) => now - s.timestamp < this.windowMs)
                 : [];
 
             const currentPassive =
@@ -418,7 +418,7 @@ export class ExhaustionDetector
         const samples = zoneHist
             ? zoneHist
                   .toArray()
-                  .filter((s) => now - s.timestamp <= this.windowMs)
+                  .filter((s) => now - s.timestamp < this.windowMs)
             : [];
         const rollingPassive = DetectorUtils.calculateMean(
             samples.map((s) => s.total)

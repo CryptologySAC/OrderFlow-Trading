@@ -365,7 +365,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
         const passiveSnapshots = zoneHistory
             ? zoneHistory
                   .toArray()
-                  .filter((s) => now - s.timestamp <= this.windowMs)
+                  .filter((s) => now - s.timestamp < this.windowMs)
             : [];
 
         const passive =
@@ -646,7 +646,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
             const tradesAtPrice = this.trades.filter(
                 (t) =>
                     +t.price.toFixed(this.pricePrecision) === price &&
-                    now - t.timestamp <= this.windowMs
+                    now - t.timestamp < this.windowMs
             );
 
             aggressive += tradesAtPrice.reduce((sum, t) => sum + t.quantity, 0);
@@ -774,7 +774,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
         const precision = Math.pow(10, -this.pricePrecision) / 2;
         const filtered = this.trades.filter(
             (t) =>
-                now - t.timestamp <= windowMs &&
+                now - t.timestamp < windowMs &&
                 Math.abs(t.price - price) < precision
         );
 
