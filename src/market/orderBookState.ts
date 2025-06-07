@@ -51,7 +51,9 @@ export class OrderBookState implements IOrderBookState {
     private isInitialized = false;
     private readonly binanceFeed = new BinanceDataFeed();
     private snapshotBuffer: SpotWebsocketStreams.DiffBookDepthResponse[] = [];
-    private expectedUpdateId?: number;
+    private diffBuffer: SpotWebsocketStreams.DiffBookDepthResponse[] = [];
+    private refreshing = false;
+    private gapBackoffSec = 1;
 
     private pruneIntervalMs = 30000; // 30 seconds
     private pruneTimer?: NodeJS.Timeout;
@@ -59,7 +61,7 @@ export class OrderBookState implements IOrderBookState {
     private lastUpdateTime = Date.now();
 
     private maxLevels: number = 1000;
-    private maxPriceDistance: number = 0.1; // 10% max price distance for levels
+    private maxPriceDistance: number = 0.03; // 3% max price distance for levels
 
     private book: SnapShot = new Map();
     private readonly pricePrecision: number;
@@ -125,46 +127,28 @@ export class OrderBookState implements IOrderBookState {
             return; // Reject updates while circuit is open
         }
 
-        if (this.expectedUpdateId && update.U) {
-            const gap = update.U - this.expectedUpdateId;
-            if (gap > 1) {
-                throw new Error(
-                    `Sequence gap detected: expected ${this.expectedUpdateId}, got ${update.U}`
-                );
-            }
-        }
-        this.expectedUpdateId = update.u ? update.u + 1 : undefined;
-
         if (!this.isInitialized) {
             // Buffer updates until initialized
             this.snapshotBuffer.push(update);
             return;
         }
 
-        // Validate update sequence - ignore outdated updates
-        if (update.u && this.lastUpdateId && update.u <= this.lastUpdateId) {
-            // Skip duplicate/out-of-date update
+        if (this.refreshing) {
+            this.diffBuffer.push(update);
             return;
         }
-        this.lastUpdateId = update.u ?? this.lastUpdateId;
 
-        const bids = (update.b as [string, string][]) || [];
-        const asks = (update.a as [string, string][]) || [];
-
-        // Track if we need to recalculate best bid/ask
-        let needsBestRecalc = false;
-
-        // Process bids and track if best bid/ask needs recalculation
-        needsBestRecalc = this.processBids(bids, needsBestRecalc);
-
-        // Process asks and accumulate recalculation flag
-        needsBestRecalc =
-            this.processAsks(asks, needsBestRecalc) || needsBestRecalc;
-
-        // Recalculate best bid/ask if needed
-        if (needsBestRecalc) {
-            this.recalculateBestQuotes();
+        if (this.lastUpdateId && update.u && update.u - this.lastUpdateId > 1) {
+            this.handleDiffGap(update);
+            return;
         }
+
+        // Validate update sequence - ignore outdated updates
+        if (update.u && this.lastUpdateId && update.u <= this.lastUpdateId) {
+            return;
+        }
+
+        this.applyDiff(update);
 
         this.lastUpdateTime = Date.now();
     }
@@ -357,33 +341,7 @@ export class OrderBookState implements IOrderBookState {
 
         for (const update of this.snapshotBuffer) {
             try {
-                if (
-                    update.u &&
-                    this.lastUpdateId &&
-                    update.u <= this.lastUpdateId
-                ) {
-                    // Skip duplicate/out-of-date update
-                    continue;
-                }
-                this.lastUpdateId = update.u ?? this.lastUpdateId;
-
-                const bids = (update.b as [string, string][]) || [];
-                const asks = (update.a as [string, string][]) || [];
-
-                // Track if we need to recalculate best bid/ask
-                let needsBestRecalc = false;
-
-                // Process bids and track recalculation flag
-                needsBestRecalc = this.processBids(bids, needsBestRecalc);
-
-                // Process asks and accumulate
-                needsBestRecalc =
-                    this.processAsks(asks, needsBestRecalc) || needsBestRecalc;
-
-                // Recalculate best bid/ask if needed
-                if (needsBestRecalc) {
-                    this.recalculateBestQuotes();
-                }
+                this.applyDiff(update);
             } catch (error) {
                 this.handleError(
                     error as Error,
@@ -391,7 +349,27 @@ export class OrderBookState implements IOrderBookState {
                 );
             }
         }
-        this.snapshotBuffer = []; // Clear buffer after processing
+        this.snapshotBuffer = [];
+    }
+
+    private applyDiff(
+        update: SpotWebsocketStreams.DiffBookDepthResponse
+    ): void {
+        if (update.u && this.lastUpdateId && update.u <= this.lastUpdateId) {
+            return;
+        }
+        this.lastUpdateId = update.u ?? this.lastUpdateId;
+
+        const bids = (update.b as [string, string][]) || [];
+        const asks = (update.a as [string, string][]) || [];
+
+        let needsBestRecalc = false;
+        needsBestRecalc = this.processBids(bids, needsBestRecalc);
+        needsBestRecalc =
+            this.processAsks(asks, needsBestRecalc) || needsBestRecalc;
+        if (needsBestRecalc) {
+            this.recalculateBestQuotes();
+        }
     }
 
     private processBids(
@@ -476,7 +454,8 @@ export class OrderBookState implements IOrderBookState {
     }
 
     private normalizePrice(price: number): number {
-        return parseFloat(price.toFixed(this.pricePrecision));
+        const normalized = Math.floor(price / this.tickSize) * this.tickSize;
+        return parseFloat(normalized.toFixed(this.pricePrecision));
     }
 
     private recalculateBestQuotes(): void {
@@ -500,10 +479,9 @@ export class OrderBookState implements IOrderBookState {
         const minPrice = mid * (1 - this.maxPriceDistance);
         const maxPrice = mid * (1 + this.maxPriceDistance);
 
-        for (const [price, level] of this.book) {
-            void level; // Ensure level is defined
-            if (price < minPrice || price > maxPrice) {
-                this.book.delete(price);
+        for (const level of Array.from(this.book.values())) {
+            if (level.price < minPrice || level.price > maxPrice) {
+                this.book.delete(level.price);
             }
         }
     }
@@ -549,6 +527,43 @@ export class OrderBookState implements IOrderBookState {
             );
         } catch (error) {
             this.handleError(error as Error, "OrderBookState");
+        }
+    }
+
+    private handleDiffGap(
+        update: SpotWebsocketStreams.DiffBookDepthResponse
+    ): void {
+        this.logger.warn(
+            `[OrderBookState] Diff gap detected from ${this.lastUpdateId} to ${update.u}`
+        );
+        this.diffBuffer.push(update);
+        if (!this.refreshing) {
+            this.refreshing = true;
+            const wait = Math.min(this.gapBackoffSec, 64) * 1000;
+            setTimeout(() => {
+                this.refreshOrderBook().catch((err) =>
+                    this.handleError(
+                        err as Error,
+                        "OrderBookState.refreshOrderBook"
+                    )
+                );
+            }, wait);
+            this.gapBackoffSec = Math.min(this.gapBackoffSec * 2, 64);
+        }
+    }
+
+    private async refreshOrderBook(): Promise<void> {
+        try {
+            await this.fetchInitialOrderBook();
+            this.isInitialized = true;
+            this.snapshotBuffer = this.diffBuffer;
+            this.diffBuffer = [];
+            this.processBufferedUpdates();
+            this.gapBackoffSec = 1;
+        } catch (error) {
+            this.handleError(error as Error, "OrderBookState.refreshOrderBook");
+        } finally {
+            this.refreshing = false;
         }
     }
 
