@@ -48,12 +48,7 @@ export class AccumulationZoneDetector extends EventEmitter {
     private readonly pricePrecision: number;
     private readonly zoneTicks: number;
 
-    // Detection parameters
-    private readonly minCandidateDuration = 180000; // 3 minutes to form candidate
-    private readonly minZoneVolume = 100;
-    private readonly minBuyRatio = 0.65; // 65% buy volume for accumulation
-    private readonly maxPriceDeviation = 0.005; // 0.5% max price movement in zone
-    private readonly minTradeCount = 10;
+    // Detection parameters are now provided via config
 
     constructor(
         symbol: string,
@@ -75,6 +70,10 @@ export class AccumulationZoneDetector extends EventEmitter {
             minZoneStrength: config.minZoneStrength ?? 0.5,
             completionThreshold: config.completionThreshold ?? 0.8,
             strengthChangeThreshold: config.strengthChangeThreshold ?? 0.15,
+            minCandidateDuration: config.minCandidateDuration ?? 180000,
+            maxPriceDeviation: config.maxPriceDeviation ?? 0.005,
+            minTradeCount: config.minTradeCount ?? 10,
+            minBuyRatio: config.minBuyRatio ?? 0.65,
         };
 
         this.zoneManager = new ZoneManager(
@@ -231,15 +230,15 @@ export class AccumulationZoneDetector extends EventEmitter {
             const duration = now - candidate.startTime;
 
             // Must meet minimum duration requirement
-            if (duration < this.minCandidateDuration) continue;
+            if (duration < this.config.minCandidateDuration) continue;
 
             // Must have minimum volume and trade count
-            if (candidate.totalVolume < this.minZoneVolume) continue;
-            if (candidate.trades.length < this.minTradeCount) continue;
+            if (candidate.totalVolume < this.config.minZoneVolume) continue;
+            if (candidate.trades.length < this.config.minTradeCount) continue;
 
             // Must show accumulation pattern (more buying than selling)
             const buyRatio = candidate.buyVolume / candidate.totalVolume;
-            if (buyRatio < this.minBuyRatio) continue;
+            if (buyRatio < (this.config.minBuyRatio ?? 0)) continue;
 
             // Must have price stability
             if (candidate.priceStability < 0.8) continue;
@@ -304,7 +303,7 @@ export class AccumulationZoneDetector extends EventEmitter {
             ...prices.map((p) => Math.abs(p - avgPrice) / avgPrice)
         );
 
-        return Math.max(0, 1 - maxDeviation / this.maxPriceDeviation);
+        return Math.max(0, 1 - maxDeviation / this.config.maxPriceDeviation);
     }
 
     /**

@@ -25,6 +25,36 @@
     "alertWebhookUrl": "https://lima.cryptology.pe/api/webhook/OcdSY61opli9-n7unmlw4CmO",
     "alertCooldownMs": 300000,
     "maxStorageTime": 5400000,
+    "zoneDetectors": {
+        "LTCUSDT": {
+            "accumulation": {
+                "maxActiveZones": 3,
+                "zoneTimeoutMs": 3600000,
+                "minZoneVolume": 100,
+                "maxZoneWidth": 0.01,
+                "minZoneStrength": 0.5,
+                "completionThreshold": 0.8,
+                "strengthChangeThreshold": 0.15,
+                "minCandidateDuration": 180000,
+                "minBuyRatio": 0.65,
+                "maxPriceDeviation": 0.005,
+                "minTradeCount": 10
+            },
+            "distribution": {
+                "maxActiveZones": 3,
+                "zoneTimeoutMs": 1800000,
+                "minZoneVolume": 150,
+                "maxZoneWidth": 0.012,
+                "minZoneStrength": 0.45,
+                "completionThreshold": 0.75,
+                "strengthChangeThreshold": 0.12,
+                "minCandidateDuration": 120000,
+                "minSellRatio": 0.68,
+                "maxPriceDeviation": 0.008,
+                "minTradeCount": 8
+            }
+        }
+    },
     "symbols": {
         "LTCUSDT": {
             "pricePrecision": 2,

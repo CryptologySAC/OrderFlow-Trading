@@ -128,6 +128,11 @@ export interface ZoneDetectorConfig {
     minZoneStrength: number; // Minimum strength to emit signals
     completionThreshold: number; // Completion level for zone completion signals
     strengthChangeThreshold: number; // Minimum strength change for signals
+    minCandidateDuration: number; // Minimum time to form candidate
+    maxPriceDeviation: number; // Maximum price deviation within zone
+    minTradeCount: number; // Minimum trades before forming zone
+    minBuyRatio?: number; // Minimum buy ratio for accumulation
+    minSellRatio?: number; // Minimum sell ratio for distribution
 }
 
 export interface ZoneQueryOptions {

@@ -313,30 +313,14 @@ export class OrderFlowDashboard {
         // Initialize Zone-based Detectors
         this.accumulationZoneDetector = new AccumulationZoneDetector(
             Config.SYMBOL,
-            {
-                maxActiveZones: 3,
-                zoneTimeoutMs: 3600000, // 1 hour
-                minZoneVolume: Config.ACCUMULATION_DETECTOR.minAggVolume || 100,
-                maxZoneWidth: 0.01, // 1%
-                minZoneStrength: 0.5,
-                completionThreshold: 0.8,
-                strengthChangeThreshold: 0.15,
-            },
+            Config.ACCUMULATION_ZONE_DETECTOR,
             dependencies.logger,
             dependencies.metricsCollector
         );
 
         this.distributionZoneDetector = new DistributionZoneDetector(
             Config.SYMBOL,
-            {
-                maxActiveZones: 3,
-                zoneTimeoutMs: 1800000, // 30 minutes
-                minZoneVolume: Config.DISTRIBUTION_DETECTOR.minAggVolume || 150,
-                maxZoneWidth: 0.012, // 1.2%
-                minZoneStrength: 0.45,
-                completionThreshold: 0.75,
-                strengthChangeThreshold: 0.12,
-            },
+            Config.DISTRIBUTION_ZONE_DETECTOR,
             dependencies.logger,
             dependencies.metricsCollector
         );
