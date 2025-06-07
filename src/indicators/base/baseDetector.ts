@@ -423,6 +423,9 @@ export abstract class BaseDetector extends Detector implements IDetector {
         this.zonePassiveHistory.clear();
         this.zoneAgg.clear();
 
+        // Remove all event listeners to avoid leaks when detector is reused
+        this.removeAllListeners();
+
         this.logger.info(`[${this.constructor.name}] Cleanup completed`);
     }
 
