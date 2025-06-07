@@ -49,7 +49,9 @@ export class SignalManager extends EventEmitter {
      * Priority queue to throttle signals by confidence per symbol.
      * Keeps the top N signals within a rolling time window.
      */
+
     private static PriorityThrottleQueue = class {
+
         private readonly queue = new Map<string, ProcessedSignal[]>();
 
         constructor(
@@ -127,6 +129,7 @@ export class SignalManager extends EventEmitter {
     private readonly priceTolerancePercent = 0.05; // 0.05% price tolerance for duplicates - slightly wider for deduplication
 
     // Priority throttling for top signals per symbol
+
     private readonly priorityQueue = new SignalManager.PriorityThrottleQueue(
         3,
         5 * 60 * 1000
