@@ -2,22 +2,22 @@
 /**
  * 🔒 PRODUCTION-READY - DO NOT MODIFY
  * ===================================
- * 
+ *
  * STATUS: PRODUCTION-READY ✅
  * LAST_AUDIT: 2025-06-07
  * PERFORMANCE_OPTIMIZED: YES ✅
  * TRADING_LOGIC_VERIFIED: YES ✅
  * ERROR_HANDLING_COMPLETE: YES ✅
- * 
+ *
  * WARNING: This file has undergone comprehensive production readiness review.
  * Any modifications require explicit approval and full regression testing.
- * 
+ *
  * PROTECTION_LEVEL: CRITICAL
  * CLAUDE_CODE_INSTRUCTION: DO NOT MODIFY - CONTACT HUMAN FOR ANY CHANGES
- * 
+ *
  * Key optimizations implemented:
  * - CircularBuffer for O(1) performance
- * - Comprehensive input validation  
+ * - Comprehensive input validation
  * - Centralized configuration
  * - Proper error handling
  * - Memory management optimizations
@@ -428,10 +428,10 @@ export class EnhancedZoneFormation {
     ): ScoreResult;
 
     /**
- * ⚠️ ALGORITHMIC INTEGRITY PROTECTED
- * This scoring algorithm has been validated for institutional trading patterns.
- * Modifications may break trading logic - human approval required.
- */
+     * ⚠️ ALGORITHMIC INTEGRITY PROTECTED
+     * This scoring algorithm has been validated for institutional trading patterns.
+     * Modifications may break trading logic - human approval required.
+     */
     public calculateDistributionScore(
         aggressiveSellingRatioOrParams: number | DistributionScoreParams,
         supportBuyingRatio?: number,
@@ -983,10 +983,10 @@ export class EnhancedZoneFormation {
     ): ScoreResult;
 
     /**
- * ⚠️ ALGORITHMIC INTEGRITY PROTECTED
- * This scoring algorithm has been validated for institutional trading patterns.
- * Modifications may break trading logic - human approval required.
- */
+     * ⚠️ ALGORITHMIC INTEGRITY PROTECTED
+     * This scoring algorithm has been validated for institutional trading patterns.
+     * Modifications may break trading logic - human approval required.
+     */
     public calculateAccumulationScore(
         absorptionRatioOrParams: number | AccumulationScoreParams,
         aggressiveRatio?: number,

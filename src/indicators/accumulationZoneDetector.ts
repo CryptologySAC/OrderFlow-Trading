@@ -2,22 +2,22 @@
 /**
  * 🔒 PRODUCTION-READY - DO NOT MODIFY
  * ===================================
- * 
+ *
  * STATUS: PRODUCTION-READY ✅
  * LAST_AUDIT: 2025-06-07
  * PERFORMANCE_OPTIMIZED: YES ✅
  * TRADING_LOGIC_VERIFIED: YES ✅
  * ERROR_HANDLING_COMPLETE: YES ✅
- * 
+ *
  * WARNING: This file has undergone comprehensive production readiness review.
  * Any modifications require explicit approval and full regression testing.
- * 
+ *
  * PROTECTION_LEVEL: CRITICAL
  * CLAUDE_CODE_INSTRUCTION: DO NOT MODIFY - CONTACT HUMAN FOR ANY CHANGES
- * 
+ *
  * Key optimizations implemented:
  * - CircularBuffer for O(1) performance
- * - Comprehensive input validation  
+ * - Comprehensive input validation
  * - Centralized configuration
  * - Proper error handling
  * - Memory management optimizations
@@ -275,10 +275,10 @@ export class AccumulationZoneDetector extends EventEmitter {
     }
 
     /**
- * 🔒 PRODUCTION METHOD - PERFORMANCE CRITICAL
- * This method has been optimized for production use.
- * Any changes require performance impact analysis.
- */
+     * 🔒 PRODUCTION METHOD - PERFORMANCE CRITICAL
+     * This method has been optimized for production use.
+     * Any changes require performance impact analysis.
+     */
     private updateCandidates(trade: EnrichedTradeEvent): void {
         try {
             // Validate input
