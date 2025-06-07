@@ -15,6 +15,7 @@ import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ZoneManager } from "../trading/zoneManager.js";
 import { DetectorUtils } from "./base/detectorUtils.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
+import { ObjectPool, SharedPools } from "../utils/objectPool.js";
 
 interface DistributionCandidate {
     priceLevel: number;
@@ -43,6 +44,36 @@ export class DistributionZoneDetector extends EventEmitter {
     private readonly recentTrades = new RollingWindow<EnrichedTradeEvent>(
         200,
         false
+    );
+
+    // Object pool for candidates to reduce GC pressure
+    private readonly candidatePool = new ObjectPool<DistributionCandidate>(
+        () => ({
+            priceLevel: 0,
+            startTime: 0,
+            trades: [],
+            buyVolume: 0,
+            sellVolume: 0,
+            totalVolume: 0,
+            averageOrderSize: 0,
+            lastUpdate: 0,
+            consecutiveSellTrades: 0,
+            priceStability: 1.0,
+            volumeDistribution: 0,
+        }),
+        (candidate) => {
+            candidate.priceLevel = 0;
+            candidate.startTime = 0;
+            candidate.trades.length = 0;
+            candidate.buyVolume = 0;
+            candidate.sellVolume = 0;
+            candidate.totalVolume = 0;
+            candidate.averageOrderSize = 0;
+            candidate.lastUpdate = 0;
+            candidate.consecutiveSellTrades = 0;
+            candidate.priceStability = 1.0;
+            candidate.volumeDistribution = 0;
+        }
     );
 
     // Configuration
@@ -172,19 +203,11 @@ export class DistributionZoneDetector extends EventEmitter {
 
         // Get or create candidate for this price level
         if (!this.candidates.has(priceLevel)) {
-            this.candidates.set(priceLevel, {
-                priceLevel,
-                startTime: trade.timestamp,
-                trades: [],
-                buyVolume: 0,
-                sellVolume: 0,
-                totalVolume: 0,
-                averageOrderSize: 0,
-                lastUpdate: trade.timestamp,
-                consecutiveSellTrades: 0,
-                priceStability: 1.0,
-                volumeDistribution: 0,
-            });
+            const candidate = this.candidatePool.acquire();
+            candidate.priceLevel = priceLevel;
+            candidate.startTime = trade.timestamp;
+            candidate.lastUpdate = trade.timestamp;
+            this.candidates.set(priceLevel, candidate);
         }
 
         const candidate = this.candidates.get(priceLevel)!;
@@ -273,6 +296,7 @@ export class DistributionZoneDetector extends EventEmitter {
 
         // Remove candidate as it's now a zone
         this.candidates.delete(bestCandidate.priceLevel);
+        this.candidatePool.release(bestCandidate);
 
         return zone;
     }
@@ -305,12 +329,31 @@ export class DistributionZoneDetector extends EventEmitter {
     private calculatePriceStability(candidate: DistributionCandidate): number {
         if (candidate.trades.length < 2) return 1.0;
 
-        const prices = candidate.trades.map((t) => t.price);
-        const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
-        if (avgPrice === 0) return 0;
-        const maxDeviation = Math.max(
-            ...prices.map((p) => Math.abs(p - avgPrice) / avgPrice)
-        );
+        // Use array pool to reduce allocations
+        const arrayPool = SharedPools.getInstance().arrays;
+        const prices = arrayPool.acquire(candidate.trades.length) as number[];
+
+        let priceSum = 0;
+        for (let i = 0; i < candidate.trades.length; i++) {
+            prices[i] = candidate.trades[i].price;
+            priceSum += candidate.trades[i].price;
+        }
+
+        const avgPrice = priceSum / prices.length;
+        if (avgPrice === 0) {
+            arrayPool.release(prices);
+            return 0;
+        }
+
+        let maxDeviation = 0;
+        for (let i = 0; i < prices.length; i++) {
+            const deviation = Math.abs(prices[i] - avgPrice) / avgPrice;
+            if (deviation > maxDeviation) {
+                maxDeviation = deviation;
+            }
+        }
+
+        arrayPool.release(prices);
 
         return Math.max(0, 1 - maxDeviation / this.config.maxPriceDeviation);
     }
@@ -366,9 +409,19 @@ export class DistributionZoneDetector extends EventEmitter {
     private createZoneDetectionData(
         candidate: DistributionCandidate
     ): ZoneDetectionData {
-        const prices = candidate.trades.map((t) => t.price);
+        // Use array pool to reduce allocations
+        const arrayPool = SharedPools.getInstance().arrays;
+        const prices = arrayPool.acquire(candidate.trades.length) as number[];
+
+        for (let i = 0; i < candidate.trades.length; i++) {
+            prices[i] = candidate.trades[i].price;
+        }
+
         const minPrice = Math.min(...prices);
         const maxPrice = Math.max(...prices);
+
+        // Return array to pool
+        arrayPool.release(prices);
         const centerPrice = (minPrice + maxPrice) / 2;
 
         const sellRatio = candidate.sellVolume / candidate.totalVolume;
@@ -558,6 +611,7 @@ export class DistributionZoneDetector extends EventEmitter {
         for (const [priceLevel, candidate] of this.candidates) {
             if (now - candidate.startTime > maxAge) {
                 this.candidates.delete(priceLevel);
+                this.candidatePool.release(candidate);
             }
         }
     }

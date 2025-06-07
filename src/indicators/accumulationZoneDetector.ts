@@ -15,6 +15,12 @@ import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ZoneManager } from "../trading/zoneManager.js";
 import { DetectorUtils } from "./base/detectorUtils.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
+import { ObjectPool, SharedPools } from "../utils/objectPool.js";
+import {
+    EnhancedZoneFormation,
+    type InstitutionalSignals,
+    type MarketRegime,
+} from "./enhancedZoneFormation.js";
 
 interface AccumulationCandidate {
     priceLevel: number;
@@ -44,10 +50,41 @@ export class AccumulationZoneDetector extends EventEmitter {
         false
     );
 
+    // Object pool for candidates to reduce GC pressure
+    private readonly candidatePool = new ObjectPool<AccumulationCandidate>(
+        () => ({
+            priceLevel: 0,
+            startTime: 0,
+            trades: [],
+            buyVolume: 0,
+            sellVolume: 0,
+            totalVolume: 0,
+            averageOrderSize: 0,
+            lastUpdate: 0,
+            consecutiveBuyTrades: 0,
+            priceStability: 1.0,
+        }),
+        (candidate) => {
+            candidate.priceLevel = 0;
+            candidate.startTime = 0;
+            candidate.trades.length = 0;
+            candidate.buyVolume = 0;
+            candidate.sellVolume = 0;
+            candidate.totalVolume = 0;
+            candidate.averageOrderSize = 0;
+            candidate.lastUpdate = 0;
+            candidate.consecutiveBuyTrades = 0;
+            candidate.priceStability = 1.0;
+        }
+    );
+
     // Configuration
     private readonly symbol: string;
     private readonly pricePrecision: number;
     private readonly zoneTicks: number;
+
+    // Enhanced zone formation analyzer
+    private readonly enhancedZoneFormation: EnhancedZoneFormation;
 
     // Detection parameters are now provided via config
 
@@ -63,24 +100,32 @@ export class AccumulationZoneDetector extends EventEmitter {
         this.pricePrecision = 2; // Should come from config
         this.zoneTicks = 2; // Price levels that define a zone
 
+        // Enhanced institutional-grade thresholds (75-85% buy dominance)
         this.config = {
             maxActiveZones: config.maxActiveZones ?? 3,
             zoneTimeoutMs: config.zoneTimeoutMs ?? 3600000, // 1 hour
-            minZoneVolume: config.minZoneVolume ?? 100,
-            maxZoneWidth: config.maxZoneWidth ?? 0.01, // 1%
-            minZoneStrength: config.minZoneStrength ?? 0.5,
-            completionThreshold: config.completionThreshold ?? 0.8,
-            strengthChangeThreshold: config.strengthChangeThreshold ?? 0.15,
-            minCandidateDuration: config.minCandidateDuration ?? 180000,
-            maxPriceDeviation: config.maxPriceDeviation ?? 0.005,
-            minTradeCount: config.minTradeCount ?? 10,
-            minBuyRatio: config.minBuyRatio ?? 0.65,
+            minZoneVolume: config.minZoneVolume ?? 200, // Increased from 100
+            maxZoneWidth: config.maxZoneWidth ?? 0.008, // Tighter from 1%
+            minZoneStrength: config.minZoneStrength ?? 0.7, // Increased from 0.5
+            completionThreshold: config.completionThreshold ?? 0.85, // Increased from 0.8
+            strengthChangeThreshold: config.strengthChangeThreshold ?? 0.12, // More sensitive
+            minCandidateDuration: config.minCandidateDuration ?? 300000, // 5 minutes minimum
+            maxPriceDeviation: config.maxPriceDeviation ?? 0.003, // Tighter price stability
+            minTradeCount: config.minTradeCount ?? 15, // More trades required
+            minBuyRatio: config.minBuyRatio ?? 0.75, // Institutional threshold: 75% minimum
         };
 
         this.zoneManager = new ZoneManager(
             this.config,
             logger,
             metricsCollector
+        );
+
+        // Initialize enhanced zone formation analyzer
+        this.enhancedZoneFormation = new EnhancedZoneFormation(
+            50, // Institutional size threshold
+            15, // Iceberg detection window
+            0.4 // Min institutional ratio
         );
 
         // Forward zone manager events
@@ -169,18 +214,11 @@ export class AccumulationZoneDetector extends EventEmitter {
 
         // Get or create candidate for this price level
         if (!this.candidates.has(priceLevel)) {
-            this.candidates.set(priceLevel, {
-                priceLevel,
-                startTime: trade.timestamp,
-                trades: [],
-                buyVolume: 0,
-                sellVolume: 0,
-                totalVolume: 0,
-                averageOrderSize: 0,
-                lastUpdate: trade.timestamp,
-                consecutiveBuyTrades: 0,
-                priceStability: 1.0,
-            });
+            const candidate = this.candidatePool.acquire();
+            candidate.priceLevel = priceLevel;
+            candidate.startTime = trade.timestamp;
+            candidate.lastUpdate = trade.timestamp;
+            this.candidates.set(priceLevel, candidate);
         }
 
         const candidate = this.candidates.get(priceLevel)!;
@@ -237,18 +275,32 @@ export class AccumulationZoneDetector extends EventEmitter {
             if (candidate.totalVolume < this.config.minZoneVolume) continue;
             if (candidate.trades.length < this.config.minTradeCount) continue;
 
-            // Must show accumulation pattern (more buying than selling)
+            // Must show strong institutional accumulation pattern (75%+ buying)
             const buyRatio = candidate.buyVolume / candidate.totalVolume;
             if (buyRatio < (this.config.minBuyRatio ?? 0)) continue;
 
-            // Must have price stability
-            if (candidate.priceStability < 0.8) continue;
+            // Must have institutional-grade price stability
+            if (candidate.priceStability < 0.85) continue;
 
-            // Calculate candidate score
-            const score = this.scoreCandidateForZone(candidate);
+            // Analyze institutional signals for enhanced validation
+            const institutionalSignals =
+                this.enhancedZoneFormation.analyzeInstitutionalSignals(
+                    candidate.trades
+                );
 
-            if (score > bestScore && score > 0.6) {
-                // Minimum score threshold
+            // Require minimum institutional activity
+            const institutionalScore =
+                this.calculateInstitutionalScore(institutionalSignals);
+            if (institutionalScore < 0.4) continue; // Institutional threshold
+
+            // Calculate enhanced candidate score with institutional factors
+            const score = this.scoreEnhancedCandidateForZone(
+                candidate,
+                institutionalSignals
+            );
+
+            if (score > bestScore && score > 0.75) {
+                // Enhanced institutional threshold
                 bestScore = score;
                 bestCandidate = candidate;
             }
@@ -267,28 +319,82 @@ export class AccumulationZoneDetector extends EventEmitter {
 
         // Remove candidate as it's now a zone
         this.candidates.delete(bestCandidate.priceLevel);
+        this.candidatePool.release(bestCandidate);
 
         return zone;
     }
 
     /**
-     * Score candidate for zone formation potential
+     * Enhanced scoring with institutional factors
      */
-    private scoreCandidateForZone(candidate: AccumulationCandidate): number {
+    private scoreEnhancedCandidateForZone(
+        candidate: AccumulationCandidate,
+        institutionalSignals: InstitutionalSignals
+    ): number {
         const buyRatio = candidate.buyVolume / candidate.totalVolume;
         const duration = Date.now() - candidate.startTime;
-        const volumeScore = Math.min(candidate.totalVolume / 500, 1.0); // Normalize to 500
-        const durationScore = Math.min(duration / 600000, 1.0); // Normalize to 10 minutes
-        const orderSizeScore = Math.min(candidate.averageOrderSize / 50, 1.0); // Normalize to 50
 
-        // Weighted score
-        return (
-            buyRatio * 0.35 + // 35% weight on buy dominance
-            candidate.priceStability * 0.25 + // 25% weight on price stability
-            volumeScore * 0.2 + // 20% weight on volume
-            durationScore * 0.15 + // 15% weight on duration
-            orderSizeScore * 0.05 // 5% weight on order size
+        // Determine market regime for adaptive scoring
+        const marketRegime = this.analyzeMarketRegime(candidate.trades);
+
+        // Use enhanced zone formation scoring
+        const enhancedResult =
+            this.enhancedZoneFormation.calculateEnhancedScore(
+                buyRatio,
+                1 - buyRatio, // sellRatio
+                candidate.priceStability,
+                candidate.totalVolume,
+                duration,
+                candidate.averageOrderSize,
+                institutionalSignals,
+                marketRegime
+            );
+
+        return enhancedResult.score;
+    }
+
+    /**
+     * Legacy scoring for backwards compatibility (now enhanced)
+     */
+    private scoreCandidateForZone(candidate: AccumulationCandidate): number {
+        const institutionalSignals =
+            this.enhancedZoneFormation.analyzeInstitutionalSignals(
+                candidate.trades
+            );
+        return this.scoreEnhancedCandidateForZone(
+            candidate,
+            institutionalSignals
         );
+    }
+
+    /**
+     * Calculate institutional activity score
+     */
+    private calculateInstitutionalScore(signals: InstitutionalSignals): number {
+        return (
+            signals.largeBlockRatio * 0.3 +
+            signals.icebergDetection * 0.25 +
+            signals.volumeConsistency * 0.2 +
+            signals.priceEfficiency * 0.15 +
+            signals.orderSizeDistribution * 0.1
+        );
+    }
+
+    /**
+     * Analyze market regime from candidate trades
+     */
+    private analyzeMarketRegime(trades: EnrichedTradeEvent[]): MarketRegime {
+        if (trades.length < 5) {
+            return {
+                volatilityLevel: "medium",
+                volumeLevel: "medium",
+                trendStrength: 0.5,
+                marketPhase: "accumulation",
+            };
+        }
+
+        const prices = trades.map((t) => t.price);
+        return this.enhancedZoneFormation.analyzeMarketRegime(trades, prices);
     }
 
     /**
@@ -313,9 +419,21 @@ export class AccumulationZoneDetector extends EventEmitter {
     private createZoneDetectionData(
         candidate: AccumulationCandidate
     ): ZoneDetectionData {
-        const prices = candidate.trades.map((t) => t.price);
+        // Use array pool to reduce allocations
+        const arrayPool = SharedPools.getInstance().arrays;
+        const prices: number[] = arrayPool.acquire(
+            candidate.trades.length
+        ) as number[];
+
+        for (let i = 0; i < candidate.trades.length; i++) {
+            prices[i] = candidate.trades[i].price;
+        }
+
         const minPrice = Math.min(...prices);
         const maxPrice = Math.max(...prices);
+
+        // Return array to pool
+        arrayPool.release(prices);
         const centerPrice = (minPrice + maxPrice) / 2;
 
         const buyRatio = candidate.buyVolume / candidate.totalVolume;
@@ -505,6 +623,7 @@ export class AccumulationZoneDetector extends EventEmitter {
         for (const [priceLevel, candidate] of this.candidates) {
             if (now - candidate.startTime > maxAge) {
                 this.candidates.delete(priceLevel);
+                this.candidatePool.release(candidate);
             }
         }
     }

@@ -7,6 +7,7 @@ import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../../services/signalLogger.js";
 import { RollingWindow } from "../../utils/rollingWindow.js";
 import { DetectorUtils } from "./detectorUtils.js";
+import { SharedPools } from "../../utils/objectPool.js";
 import {
     SignalType,
     SignalCandidate,
@@ -160,6 +161,13 @@ export abstract class BaseDetector extends Detector implements IDetector {
         for (const [zone, window] of this.zonePassiveHistory) {
             const lastTimestamp = window.toArray().at(-1)?.timestamp ?? 0;
             if (lastTimestamp < cutoff) {
+                // Return zone sample objects to pool before deletion
+                const samples = window.toArray();
+                const sharedPools = SharedPools.getInstance();
+                for (const sample of samples) {
+                    sharedPools.zoneSamples.release(sample);
+                }
+
                 this.zonePassiveHistory.delete(zone);
                 cleanedCount++;
             }
@@ -281,12 +289,14 @@ export abstract class BaseDetector extends Detector implements IDetector {
 
         const lastSnapshot =
             zoneHistory.count() > 0 ? zoneHistory.toArray().at(-1)! : null;
-        const newSnapshot: ZoneSample = {
-            bid: event.zonePassiveBidVolume,
-            ask: event.zonePassiveAskVolume,
-            total: event.zonePassiveBidVolume + event.zonePassiveAskVolume,
-            timestamp: event.timestamp,
-        };
+
+        // Use object pool to reduce GC pressure
+        const newSnapshot = SharedPools.getInstance().zoneSamples.acquire();
+        newSnapshot.bid = event.zonePassiveBidVolume;
+        newSnapshot.ask = event.zonePassiveAskVolume;
+        newSnapshot.total =
+            event.zonePassiveBidVolume + event.zonePassiveAskVolume;
+        newSnapshot.timestamp = event.timestamp;
 
         // Only add if values changed (avoid duplicate snapshots)
         if (
@@ -420,6 +430,15 @@ export abstract class BaseDetector extends Detector implements IDetector {
         // Force cleanup of caches
         this.depth.forceCleanup();
         this.lastSignal.forceCleanup();
+
+        // Return zone sample objects to pool before clearing
+        const sharedPools = SharedPools.getInstance();
+        for (const [, window] of this.zonePassiveHistory) {
+            const samples = window.toArray();
+            for (const sample of samples) {
+                sharedPools.zoneSamples.release(sample);
+            }
+        }
 
         // Clear zone data
         this.zonePassiveHistory.clear();

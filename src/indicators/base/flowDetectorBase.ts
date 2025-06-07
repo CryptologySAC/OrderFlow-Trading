@@ -2,6 +2,7 @@
 
 //import { SpotWebsocketStreams } from "@binance/spot";
 import { BaseDetector } from "./baseDetector.js";
+import { DetectorUtils } from "./detectorUtils.js";
 import { Logger } from "../../infrastructure/logger.js";
 import {
     MetricsCollector,
@@ -1282,8 +1283,11 @@ export class AccumulationDetectorV2 extends FlowDetectorBase {
         // For accumulation: price should show strength (hold up during buying pressure)
         if (zoneData.priceCount < 2) return 0;
 
-        const priceVariance =
-            zoneData.priceRollingVar / (zoneData.priceCount - 1);
+        const priceVariance = DetectorUtils.safeDivide(
+            zoneData.priceRollingVar,
+            zoneData.priceCount - 1,
+            0
+        );
         const priceStd = Math.sqrt(priceVariance);
 
         // Lower variance during accumulation = price strength
@@ -1377,8 +1381,11 @@ export class DistributionDetectorV2 extends FlowDetectorBase {
             avgPriceChange <= 0 ? Math.abs(avgPriceChange) * 100 : 0;
 
         // High variance during distribution can also indicate weakness/uncertainty
-        const priceVariance =
-            zoneData.priceRollingVar / (zoneData.priceCount - 1);
+        const priceVariance = DetectorUtils.safeDivide(
+            zoneData.priceRollingVar,
+            zoneData.priceCount - 1,
+            0
+        );
         const instabilityScore = Math.min(1, Math.sqrt(priceVariance) * 10);
 
         return Math.min(1, weaknessFromTrend * 0.7 + instabilityScore * 0.3);

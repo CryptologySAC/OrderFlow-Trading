@@ -4,6 +4,7 @@ import {
     SuperiorFlowConditions,
     SignalCreationParams,
 } from "./base/flowDetectorBase.js";
+import { DetectorUtils } from "./base/detectorUtils.js";
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import type { DistributionResult } from "../types/signalTypes.js";
 
@@ -48,8 +49,11 @@ export class DistributionDetector extends FlowDetectorBase {
             avgPriceChange <= 0 ? Math.abs(avgPriceChange) * 100 : 0;
 
         // High variance during distribution can also indicate weakness/uncertainty
-        const priceVariance =
-            zoneData.priceRollingVar / (zoneData.priceCount - 1);
+        const priceVariance = DetectorUtils.safeDivide(
+            zoneData.priceRollingVar,
+            zoneData.priceCount - 1,
+            0
+        );
         const instabilityScore = Math.min(1, Math.sqrt(priceVariance) * 10);
 
         return Math.min(1, weaknessFromTrend * 0.7 + instabilityScore * 0.3);

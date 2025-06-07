@@ -347,7 +347,7 @@ export class AbsorptionDetector
         if (events.length < 2) return 0;
 
         const recentEvents = events.filter(
-            (e) => Date.now() - e.timestamp <= 30000 && e.side === side
+            (e) => Date.now() - e.timestamp < 30000 && e.side === side
         );
 
         return Math.min(1, recentEvents.length / 10); // Normalize to 0-1

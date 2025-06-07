@@ -59,12 +59,15 @@ export class DetectorUtils {
      */
     public static calculateStdDev(values: number[]): number {
         if (values.length === 0) return 0;
-
-        const mean = this.calculateMean(values);
-        const squaredDiffs = values.map((val) => Math.pow(val - mean, 2));
-        const variance = this.calculateMean(squaredDiffs);
-
-        return Math.sqrt(variance);
+        let sum = 0,
+            sumSquares = 0;
+        for (const val of values) {
+            sum += val;
+            sumSquares += val * val;
+        }
+        const mean = sum / values.length;
+        const variance = sumSquares / values.length - mean * mean;
+        return Math.sqrt(Math.max(0, variance)); // Prevent negative due to floating point
     }
 
     /**

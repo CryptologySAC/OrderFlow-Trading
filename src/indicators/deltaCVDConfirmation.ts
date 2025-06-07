@@ -11,6 +11,7 @@
    -------------------------------------------------------------------------- */
 
 import { BaseDetector } from "./base/baseDetector.js";
+import { DetectorUtils } from "./base/detectorUtils.js";
 import type {
     DeltaCVDConfirmationResult,
     SignalType,
@@ -268,18 +269,25 @@ export class DeltaCVDConfirmation extends BaseDetector {
             if (this.recentPriceChanges.length > 10) {
                 const returns = [];
                 for (let i = 1; i < this.recentPriceChanges.length; i++) {
-                    returns.push(
-                        (this.recentPriceChanges[i] -
-                            this.recentPriceChanges[i - 1]) /
-                            this.recentPriceChanges[i - 1]
+                    const priceReturn = DetectorUtils.safeDivide(
+                        this.recentPriceChanges[i] -
+                            this.recentPriceChanges[i - 1],
+                        this.recentPriceChanges[i - 1],
+                        0
                     );
+                    returns.push(priceReturn);
                 }
 
-                const mean =
-                    returns.reduce((sum, r) => sum + r, 0) / returns.length;
-                const variance =
-                    returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) /
-                    returns.length;
+                const mean = DetectorUtils.safeDivide(
+                    returns.reduce((sum, r) => sum + r, 0),
+                    returns.length,
+                    0
+                );
+                const variance = DetectorUtils.safeDivide(
+                    returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0),
+                    returns.length,
+                    0
+                );
                 this.marketRegime.volatility = Math.sqrt(variance);
 
                 // Update baseline volatility (slower moving average)
@@ -750,7 +758,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
     private updateSlopeStatistics(state: WindowState, slope: number): void {
         const delta = slope - state.rollingMean;
         state.count += 1;
-        state.rollingMean += delta / state.count;
+        state.rollingMean += DetectorUtils.safeDivide(delta, state.count, 0);
         state.rollingVar += delta * (slope - state.rollingMean);
     }
 
@@ -776,9 +784,13 @@ export class DeltaCVDConfirmation extends BaseDetector {
     private calculateZScore(state: WindowState, slope: number): number {
         if (state.count < 2) return 0;
 
-        const variance = state.rollingVar / (state.count - 1);
+        const variance = DetectorUtils.safeDivide(
+            state.rollingVar,
+            state.count - 1,
+            0
+        );
         const std = Math.sqrt(variance) || 1e-9;
-        return (slope - state.rollingMean) / std;
+        return DetectorUtils.safeDivide(slope - state.rollingMean, std, 0);
     }
 
     private validateSignalConditions(
