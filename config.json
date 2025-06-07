@@ -55,6 +55,75 @@
             }
         }
     },
+    "enhancedZoneFormation": {
+        "icebergDetection": {
+            "minSize": 10,
+            "maxSize": 200,
+            "priceStabilityTolerance": 0.02,
+            "sizeConsistencyThreshold": 0.6,
+            "sideDominanceThreshold": 0.7
+        },
+        "priceEfficiency": {
+            "baseImpactRate": 0.0002,
+            "maxVolumeMultiplier": 5,
+            "minEfficiencyThreshold": 0.0
+        },
+        "institutional": {
+            "minRatio": 0.3,
+            "sizeThreshold": 50,
+            "detectionWindow": 15
+        },
+        "detectorThresholds": {
+            "accumulation": {
+                "minScore": 0.75,
+                "minAbsorptionRatio": 0.75,
+                "maxAggressiveRatio": 0.35,
+                "minPriceStability": 0.85,
+                "minInstitutionalScore": 0.4
+            },
+            "distribution": {
+                "minScore": 0.55,
+                "minSellingRatio": 0.65,
+                "maxSupportRatio": 0.35,
+                "minPriceStability": 0.75,
+                "minInstitutionalScore": 0.3
+            }
+        },
+        "adaptiveThresholds": {
+            "volatility": {
+                "high": {
+                    "accumulation": {
+                        "minAbsorptionRatio": 0.8,
+                        "maxAggressiveRatio": 0.25
+                    },
+                    "distribution": {
+                        "minSellingRatio": 0.7,
+                        "maxSupportRatio": 0.3
+                    }
+                },
+                "medium": {
+                    "accumulation": {
+                        "minAbsorptionRatio": 0.75,
+                        "maxAggressiveRatio": 0.35
+                    },
+                    "distribution": {
+                        "minSellingRatio": 0.65,
+                        "maxSupportRatio": 0.35
+                    }
+                },
+                "low": {
+                    "accumulation": {
+                        "minAbsorptionRatio": 0.7,
+                        "maxAggressiveRatio": 0.4
+                    },
+                    "distribution": {
+                        "minSellingRatio": 0.6,
+                        "maxSupportRatio": 0.4
+                    }
+                }
+            }
+        }
+    },
     "symbols": {
         "LTCUSDT": {
             "pricePrecision": 2,
@@ -133,8 +202,8 @@
                 }
             },
             "absorption": {
-                "minAggVolume": 50,
-                "threshold": 0.5,
+                "minAggVolume": 80,
+                "threshold": 0.7,
                 "windowMs": 20000,
                 "zoneTicks": 1,
                 "eventCooldownMs": 6000,

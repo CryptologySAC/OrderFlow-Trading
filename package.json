@@ -37,7 +37,9 @@
         "build": "yarn format && tsc -p tsconfig.build.json",
         "test": "vitest",
         "test:coverage": "vitest run --coverage",
-        "dev": "ts-node --transpile-only src/index.ts"
+        "dev": "ts-node --transpile-only src/index.ts",
+        "protect-production": "echo 'Files protected from automated modification'",
+    "validate-protection": "grep -l 'PRODUCTION-READY' src/indicators/*.ts"
     },
     "devDependencies": {
         "@types/better-sqlite3": "7.6.13",

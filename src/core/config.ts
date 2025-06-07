@@ -10,6 +10,7 @@ import type {
     ConfigType,
     AllowedSymbols,
     ZoneDetectorSymbolConfig,
+    EnhancedZoneFormationConfig,
 } from "../types/configTypes.js";
 import type { ZoneDetectorConfig } from "../types/zoneTypes.js";
 import type { ExhaustionSettings } from "../indicators/exhaustionDetector.js";
@@ -40,6 +41,8 @@ let SYMBOL_CFG =
 let DATASTREAM_CFG = SYMBOL_CFG?.dataStream ?? {};
 let ZONE_CFG: ZoneDetectorSymbolConfig =
     cfg.zoneDetectors?.[CONFIG_SYMBOL] ?? ({} as ZoneDetectorSymbolConfig);
+let ENHANCED_ZONE_CFG: EnhancedZoneFormationConfig =
+    cfg.enhancedZoneFormation ?? getDefaultEnhancedZoneFormationConfig();
 
 function reloadConfig(): void {
     try {
@@ -55,6 +58,9 @@ function reloadConfig(): void {
         ZONE_CFG =
             cfg.zoneDetectors?.[CONFIG_SYMBOL] ??
             ({} as ZoneDetectorSymbolConfig);
+        ENHANCED_ZONE_CFG =
+            cfg.enhancedZoneFormation ??
+            getDefaultEnhancedZoneFormationConfig();
 
         console.log("[Config] configuration reloaded");
     } catch (error) {
@@ -65,6 +71,81 @@ function reloadConfig(): void {
 watchFile(resolve(process.cwd(), "config.json"), { interval: 1000 }, () => {
     reloadConfig();
 });
+
+/**
+ * Default enhanced zone formation configuration
+ */
+function getDefaultEnhancedZoneFormationConfig(): EnhancedZoneFormationConfig {
+    return {
+        icebergDetection: {
+            minSize: 10,
+            maxSize: 200,
+            priceStabilityTolerance: 0.02,
+            sizeConsistencyThreshold: 0.6,
+            sideDominanceThreshold: 0.7,
+        },
+        priceEfficiency: {
+            baseImpactRate: 0.0002,
+            maxVolumeMultiplier: 5,
+            minEfficiencyThreshold: 0.0,
+        },
+        institutional: {
+            minRatio: 0.3,
+            sizeThreshold: 50,
+            detectionWindow: 15,
+        },
+        detectorThresholds: {
+            accumulation: {
+                minScore: 0.75,
+                minAbsorptionRatio: 0.75,
+                maxAggressiveRatio: 0.35,
+                minPriceStability: 0.85,
+                minInstitutionalScore: 0.4,
+            },
+            distribution: {
+                minScore: 0.55,
+                minSellingRatio: 0.65,
+                maxSupportRatio: 0.35,
+                minPriceStability: 0.75,
+                minInstitutionalScore: 0.3,
+            },
+        },
+        adaptiveThresholds: {
+            volatility: {
+                high: {
+                    accumulation: {
+                        minAbsorptionRatio: 0.8,
+                        maxAggressiveRatio: 0.25,
+                    },
+                    distribution: {
+                        minSellingRatio: 0.7,
+                        maxSupportRatio: 0.3,
+                    },
+                },
+                medium: {
+                    accumulation: {
+                        minAbsorptionRatio: 0.75,
+                        maxAggressiveRatio: 0.35,
+                    },
+                    distribution: {
+                        minSellingRatio: 0.65,
+                        maxSupportRatio: 0.35,
+                    },
+                },
+                low: {
+                    accumulation: {
+                        minAbsorptionRatio: 0.7,
+                        maxAggressiveRatio: 0.4,
+                    },
+                    distribution: {
+                        minSellingRatio: 0.6,
+                        maxSupportRatio: 0.4,
+                    },
+                },
+            },
+        },
+    };
+}
 
 /**
  * Centralized configuration management
@@ -653,6 +734,11 @@ export class Config {
                     900_000
             ),
         };
+    }
+
+    // ✅ Enhanced zone formation configuration (replaces magic numbers)
+    static get ENHANCED_ZONE_FORMATION(): EnhancedZoneFormationConfig {
+        return ENHANCED_ZONE_CFG;
     }
 
     /**

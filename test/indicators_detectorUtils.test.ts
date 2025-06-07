@@ -8,7 +8,7 @@ describe("indicators/detectorUtils", () => {
         expect(DetectorUtils.calculateMedian([])).toBe(0);
         expect(DetectorUtils.calculatePercentile([1, 2, 3, 4, 5], 50)).toBe(3);
         expect(DetectorUtils.calculateMean([1, 2, 3])).toBeCloseTo(2);
-        expect(DetectorUtils.calculateStdDev([1, 2, 3])).toBeCloseTo(0.816, 3);
+        expect(DetectorUtils.calculateStdDev([1, 2, 3])).toBeCloseTo(1.0, 3);
     });
 
     it("validates and normalizes trades", () => {

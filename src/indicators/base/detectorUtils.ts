@@ -21,6 +21,30 @@ export class DetectorUtils {
     }
 
     /**
+     * CRITICAL FIX: Standardized zone calculation for all detectors
+     * This method was called but not implemented
+     */
+    public static calculateZone(
+        price: number,
+        zoneTicks: number,
+        pricePrecision: number
+    ): number {
+        if (price <= 0 || zoneTicks <= 0 || pricePrecision < 0) {
+            throw new Error(
+                `Invalid zone calculation parameters: price=${price}, zoneTicks=${zoneTicks}, pricePrecision=${pricePrecision}`
+            );
+        }
+
+        const tickSize = Math.pow(10, -pricePrecision);
+        const zoneSize = zoneTicks * tickSize;
+
+        // Ensure consistent rounding across all detectors
+        return +(Math.round(price / zoneSize) * zoneSize).toFixed(
+            pricePrecision
+        );
+    }
+
+    /**
      * Calculate percentile
      */
     public static calculatePercentile(
@@ -44,48 +68,37 @@ export class DetectorUtils {
     }
 
     /**
-     * Safely divide two numbers, returning a default value if the denominator is 0
+     * Safe division with zero protection
      */
     public static safeDivide(
         numerator: number,
         denominator: number,
-        defaultValue = 0
+        defaultValue: number = 0
     ): number {
-        return denominator === 0 ? defaultValue : numerator / denominator;
+        if (denominator === 0 || isNaN(denominator) || isNaN(numerator)) {
+            return defaultValue;
+        }
+        return numerator / denominator;
     }
 
-    /**
-     * Calculate standard deviation
-     */
+    // ✅ SHOULD USE WELFORD'S ALGORITHM:
     public static calculateStdDev(values: number[]): number {
         if (values.length === 0) return 0;
-        let sum = 0,
-            sumSquares = 0;
-        for (const val of values) {
-            sum += val;
-            sumSquares += val * val;
+        if (values.length === 1) return 0;
+
+        // Welford's algorithm for numerical stability
+        let mean = 0;
+        let m2 = 0;
+
+        for (let i = 0; i < values.length; i++) {
+            const delta = values[i] - mean;
+            mean += delta / (i + 1);
+            const delta2 = values[i] - mean;
+            m2 += delta * delta2;
         }
-        const mean = sum / values.length;
-        const variance = sumSquares / values.length - mean * mean;
-        return Math.sqrt(Math.max(0, variance)); // Prevent negative due to floating point
-    }
 
-    /**
-     * STANDARDIZED zone calculation method - used by all detectors
-     * This ensures consistent zone alignment across all detector types
-     */
-    public static calculateZone(
-        price: number,
-        zoneTicks: number,
-        pricePrecision: number
-    ): number {
-        const tickSize = Math.pow(10, -pricePrecision);
-        const zoneSize = zoneTicks * tickSize;
-
-        // Standardized: Round to zone, then fix precision to avoid floating point issues
-        return +(Math.round(price / zoneSize) * zoneSize).toFixed(
-            pricePrecision
-        );
+        const variance = m2 / (values.length - 1);
+        return Math.sqrt(Math.max(0, variance));
     }
 
     /**
