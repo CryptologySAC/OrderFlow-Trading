@@ -119,7 +119,7 @@
                     "spoofingDetection": true,
                     "adaptiveZone": true,
                     "passiveHistory": false,
-                    "multiZone": false,
+                    "multiZone": true,
                     "autoCalibrate": false,
                     "icebergDetection": false,
                     "liquidityGradient": false,
