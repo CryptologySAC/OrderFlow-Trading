@@ -979,7 +979,9 @@ export class DeltaCVDConfirmation extends BaseDetector {
         finalConfidence: number,
         timestamp: number
     ): DeltaCVDConfirmationResult {
-        const side = Math.sign(zScores[this.windows[0]]) > 0 ? "buy" : "sell";
+        // CRITICAL FIX: Direction should be based on actual CVD slope, not z-score sign
+        // Z-score tells us if momentum is unusual, slope tells us the direction
+        const side = Math.sign(slopes[this.windows[0]]) > 0 ? "buy" : "sell";
         const shortestWindowState = this.states.get(this.windows[0])!;
         const lastTrade =
             shortestWindowState.trades[shortestWindowState.trades.length - 1];

@@ -11,8 +11,20 @@ function updateTables(metrics) {
     // Update counters table
     const countersBody = document.querySelector("#countersTable tbody");
     if (countersBody) {
+        // Preserve the Active Connections row
+        const activeConnectionsRow =
+            countersBody.querySelector("tr:first-child");
         countersBody.innerHTML = "";
+
+        // Re-add the Active Connections row at the top
+        if (activeConnectionsRow) {
+            countersBody.appendChild(activeConnectionsRow);
+        }
+
         for (const [name, counter] of Object.entries(metrics.counters || {})) {
+            // Skip connections_active since we handle it separately
+            if (name === "connections_active") continue;
+
             const val =
                 typeof counter === "object" && counter.value !== undefined
                     ? counter.value
@@ -24,8 +36,12 @@ function updateTables(metrics) {
             countersBody.appendChild(row);
         }
 
-        // Add a "No data" row if empty
-        if (Object.keys(metrics.counters || {}).length === 0) {
+        // Add a "No data" row if empty (excluding Active Connections)
+        if (
+            Object.keys(metrics.counters || {}).length === 0 ||
+            (Object.keys(metrics.counters || {}).length === 1 &&
+                metrics.counters.connections_active !== undefined)
+        ) {
             const row = document.createElement("tr");
             row.innerHTML = `<td colspan="2" style="text-align: center; color: var(--text-secondary, #666);">No counter data available</td>`;
             countersBody.appendChild(row);
@@ -179,6 +195,15 @@ function formatMetricName(name) {
         detector_restarts: "Detector Restarts",
         error_count: "Error Count",
         health_checks: "Health Checks",
+        // API connectivity metrics
+        api_connectivity_issue_websocket_disconnected:
+            "WebSocket Disconnections",
+        api_connectivity_issue_asymmetric_streaming:
+            "Asymmetric Streaming Issues",
+        stream_connections_successful: "Successful Stream Connections",
+        // Generic patterns
+        api_connectivity_issue: "API Connectivity Issues",
+        stream_connections: "Stream Connections",
     };
 
     // Handle dotted names like "Stream.uptime"

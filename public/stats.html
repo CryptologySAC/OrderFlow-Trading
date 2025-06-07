@@ -42,29 +42,11 @@
                 min-height: 100px;
             }
 
-            .connections-display {
-                text-align: center;
-                padding: 20px;
-            }
-
-            .connections-number {
-                font-size: 48px;
-                font-weight: bold;
-                color: var(--primary-color, #007bff);
-                margin-bottom: 10px;
-            }
-
-            .connections-label {
-                font-size: 14px;
-                color: var(--text-secondary, #666);
-                text-transform: uppercase;
-                letter-spacing: 1px;
-            }
-
             table {
                 width: 100%;
                 border-collapse: collapse;
                 font-size: 14px;
+                table-layout: fixed;
             }
 
             th {
@@ -74,12 +56,18 @@
                 text-align: left;
                 border-bottom: 2px solid var(--border-color, #ddd);
                 font-weight: 600;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
             }
 
             td {
                 padding: 6px 12px;
                 text-align: left;
                 border-bottom: 1px solid var(--border-light, #eee);
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
             }
 
             .card-title {
@@ -108,16 +96,6 @@
     <body>
         <h1>System Stats</h1>
         <div class="stats-container">
-            <!-- Active Connections - Simple Number Display -->
-            <div class="metric-card">
-                <div class="connections-display">
-                    <div class="connections-number" id="connectionsNumber">
-                        --
-                    </div>
-                    <div class="connections-label">Active Connections</div>
-                </div>
-            </div>
-
             <!-- Counters Table -->
             <div class="metric-card">
                 <h3 class="card-title">Counters</h3>
@@ -128,7 +106,31 @@
                             <th>Value</th>
                         </tr>
                     </thead>
-                    <tbody></tbody>
+                    <tbody>
+                        <tr
+                            style="
+                                background-color: var(--bg-primary, #f8f9fa);
+                                font-weight: bold;
+                                color: var(--primary-color, #007bff);
+                                border-bottom: 2px solid
+                                    var(--primary-color, #007bff);
+                            "
+                        >
+                            <td style="font-size: 16px; padding: 12px">
+                                🔗 Active Connections
+                            </td>
+                            <td
+                                id="connectionsNumber"
+                                style="
+                                    font-size: 18px;
+                                    font-weight: bold;
+                                    padding: 12px;
+                                "
+                            >
+                                --
+                            </td>
+                        </tr>
+                    </tbody>
                 </table>
             </div>
 

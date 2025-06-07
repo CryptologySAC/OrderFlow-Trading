@@ -245,9 +245,11 @@ export class AbsorptionDetector
         if (!zoneHistory) return false;
 
         // Get the RELEVANT passive side
+        // CRITICAL FIX: For buy absorption, we test BID liquidity being absorbed
+        // For sell absorption, we test ASK liquidity being absorbed
         const relevantPassive = zoneHistory
             .toArray()
-            .map((snapshot) => (side === "buy" ? snapshot.ask : snapshot.bid));
+            .map((snapshot) => (side === "buy" ? snapshot.bid : snapshot.ask));
 
         if (relevantPassive.length === 0) return false;
 
