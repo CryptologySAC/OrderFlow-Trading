@@ -160,3 +160,11 @@ Code must pass Lint stric, that means never use <any> types and use real types w
 - When stream disconnects: health timeouts are extended to avoid false unhealthy states
 - When stream reconnects: OrderBookState automatically triggers recovery to rebuild order book
 - All components properly handle reconnection events to maintain system consistency
+
+### When these protection markers are in place, Agents should:
+
+- NEVER modify files marked with 🔒 PRODUCTION-READY
+- ALWAYS ask human approval before touching protected files
+- SUGGEST alternative approaches instead of direct modifications
+- RESPECT the .claude-protection configuration file
+- PRESERVE algorithmic integrity of trading logic
