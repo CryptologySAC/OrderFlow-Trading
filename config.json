@@ -122,7 +122,7 @@
                     "multiZone": false,
                     "autoCalibrate": false,
                     "icebergDetection": false,
-                    "liquidityGradient": true,
+                    "liquidityGradient": false,
                     "spreadAdjustment": false,
                     "absorptionVelocity": false
                 }
