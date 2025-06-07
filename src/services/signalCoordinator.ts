@@ -115,6 +115,9 @@ export class SignalCoordinator extends EventEmitter {
     private isRunning = false;
     private processingTick: NodeJS.Timeout | null = null;
     private readonly shutdownPromises: Promise<void>[] = [];
+    private readonly processListeners = new Map<string, () => void>();
+    private readonly errorHandler = (err: Error) =>
+        this.logger.error("SignalCoordinator error", { err });
 
     constructor(
         partialCfg: Partial<SignalCoordinatorConfig>,
@@ -551,16 +554,16 @@ export class SignalCoordinator extends EventEmitter {
     }
 
     private setupEventHandlers(): void {
-        this.on("error", (err: Error) =>
-            this.logger.error("SignalCoordinator error", { err })
-        );
+        this.on("error", this.errorHandler);
 
-        ["SIGTERM", "SIGINT"].forEach((sig) =>
-            process.on(sig, () => {
+        ["SIGTERM", "SIGINT"].forEach((sig) => {
+            const handler = () => {
                 this.logger.info(`${sig} received – shutting down…`);
                 void this.stop();
-            })
-        );
+            };
+            this.processListeners.set(sig, handler);
+            process.on(sig, handler);
+        });
     }
 
     private initializeMetrics(): void {
@@ -642,5 +645,27 @@ export class SignalCoordinator extends EventEmitter {
             queueSize: this.queue.size,
             activeJobs: this.active.size,
         };
+    }
+
+    /**
+     * Cleanup event listeners and internal state
+     */
+    public async cleanup(): Promise<void> {
+        await this.stop();
+
+        for (const reg of this.detectors.values()) {
+            reg.detector.removeAllListeners();
+        }
+        this.detectors.clear();
+
+        for (const [sig, handler] of this.processListeners) {
+            process.off(sig, handler);
+        }
+        this.processListeners.clear();
+
+        this.off("error", this.errorHandler);
+        this.removeAllListeners();
+
+        this.logger.info("SignalCoordinator cleanup completed");
     }
 }
