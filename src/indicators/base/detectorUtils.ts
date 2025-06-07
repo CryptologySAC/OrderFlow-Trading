@@ -44,6 +44,17 @@ export class DetectorUtils {
     }
 
     /**
+     * Safely divide two numbers, returning a default value if the denominator is 0
+     */
+    public static safeDivide(
+        numerator: number,
+        denominator: number,
+        defaultValue = 0
+    ): number {
+        return denominator === 0 ? defaultValue : numerator / denominator;
+    }
+
+    /**
      * Calculate standard deviation
      */
     public static calculateStdDev(values: number[]): number {

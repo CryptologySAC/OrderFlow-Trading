@@ -306,7 +306,8 @@ export class DistributionZoneDetector extends EventEmitter {
         if (candidate.trades.length < 2) return 1.0;
 
         const prices = candidate.trades.map((t) => t.price);
-        const avgPrice = prices.reduce((a, b) => a + b) / prices.length;
+        const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
+        if (avgPrice === 0) return 0;
         const maxDeviation = Math.max(
             ...prices.map((p) => Math.abs(p - avgPrice) / avgPrice)
         );

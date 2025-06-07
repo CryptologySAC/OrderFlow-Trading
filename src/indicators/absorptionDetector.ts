@@ -616,10 +616,14 @@ export class AbsorptionDetector
         const absorptionRatio =
             aggressiveInZone === 0
                 ? 1 // neutral
-                : aggressiveInZone / avgPassiveTotal;
+                : DetectorUtils.safeDivide(aggressiveInZone, avgPassiveTotal, 0);
 
         // Passive strength: how well passive maintained
-        const passiveStrength = currentPassive / avgPassiveTotal;
+        const passiveStrength = DetectorUtils.safeDivide(
+            currentPassive,
+            avgPassiveTotal,
+            0
+        );
 
         // Refill rate: how often passive increases
         let increases = 0;
@@ -628,7 +632,10 @@ export class AbsorptionDetector
                 increases++;
             }
         }
-        const refillRate = increases / (passiveSnapshots.length - 1);
+        const refillRate =
+            passiveSnapshots.length > 1
+                ? increases / (passiveSnapshots.length - 1)
+                : 0;
 
         return { absorptionRatio, passiveStrength, refillRate };
     }
