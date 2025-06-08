@@ -12,6 +12,7 @@ import type {
     DetectorCallback,
     BaseDetectorSettings,
     AbsorptionFeatures,
+    MicrostructureInsights,
 } from "./interfaces/detectorInterfaces.js";
 import {
     EnrichedTradeEvent,
@@ -28,22 +29,6 @@ export interface AbsorptionSettings extends BaseDetectorSettings {
     minPassiveMultiplier?: number; // Min passive/aggressive ratio for absorption
     icebergDetectionSensitivity?: number; // Sensitivity for iceberg detection (0-1)
     maxAbsorptionRatio?: number; // Max aggressive/passive ratio for absorption
-}
-
-/**
- * Microstructure insights for absorption scoring integration
- */
-interface MicrostructureInsights {
-    fragmentationScore: number; // Order fragmentation level (0-1)
-    executionEfficiency: number; // Execution quality score (0-1)
-    suspectedAlgoType: string; // Detected algorithm type
-    toxicityScore: number; // Informed flow toxicity (0-1)
-    timingPattern: string; // Execution timing pattern
-    coordinationIndicators: number; // Number of coordination signals
-    sustainabilityScore: number; // Predicted absorption sustainability (0-1)
-    riskAdjustment: number; // Risk-based score adjustment (-0.3 to +0.3)
-    confidenceBoost: number; // Confidence enhancement factor (0.8 to 1.5)
-    urgencyFactor: number; // Signal urgency multiplier (0.5 to 2.0)
 }
 
 /**
@@ -260,6 +245,10 @@ export class AbsorptionDetector
 
     /**
      * Check absorption conditions with improved logic
+     *
+     * 🔒 PRODUCTION METHOD - PERFORMANCE CRITICAL
+     * This method has been optimized for production use.
+     * Any changes require performance impact analysis.
      */
     private checkAbsorptionConditions(
         price: number,

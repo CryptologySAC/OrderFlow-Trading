@@ -34,6 +34,8 @@ import type {
     BaseDetectorSettings,
     DetectorFeatures,
     DetectorCallback,
+    ImbalanceResult,
+    VolumeCalculationResult,
 } from "../interfaces/detectorInterfaces.js";
 
 export type ZoneSample = {
@@ -214,10 +216,15 @@ export abstract class BaseDetector extends Detector implements IDetector {
         try {
             this.trades.add(tradeData);
             const zone = this.calculateZone(tradeData.price);
-            const bucket = this.zoneAgg.get(zone) ?? { trades: [], vol: 0 };
-            bucket.trades.push(tradeData);
-            bucket.vol += tradeData.quantity;
-            this.zoneAgg.set(zone, bucket);
+
+            // Copy-on-write: create new bucket instead of mutating
+            const currentBucket = this.zoneAgg.get(zone);
+            const newBucket = this.createUpdatedBucket(
+                currentBucket,
+                tradeData
+            );
+
+            this.zoneAgg.set(zone, newBucket);
 
             if (this.features.adaptiveZone) {
                 this.adaptiveZoneCalculator.updatePrice(tradeData.price);
@@ -234,6 +241,19 @@ export abstract class BaseDetector extends Detector implements IDetector {
                 `${this.constructor.name}.addTrade`
             );
         }
+    }
+
+    private createUpdatedBucket(
+        currentBucket: { trades: AggressiveTrade[]; vol: number } | undefined,
+        newTrade: AggressiveTrade
+    ): { trades: AggressiveTrade[]; vol: number } {
+        const base = currentBucket ?? { trades: [], vol: 0 };
+
+        // Return new object - never mutate the original
+        return {
+            trades: [...base.trades, newTrade],
+            vol: base.vol + newTrade.quantity,
+        };
     }
 
     protected checkForSignal(triggerTrade: AggressiveTrade): void {
@@ -351,17 +371,14 @@ export abstract class BaseDetector extends Detector implements IDetector {
 
     /**
      * Calculate zone volumes with common logic
+     * Uses object pooling for optimal performance
      */
     protected calculateZoneVolumes(
         zone: number,
         tradesAtZone: AggressiveTrade[],
         zoneTicks: number,
         useMultiZone: boolean = this.features.multiZone ?? false
-    ): {
-        aggressive: number;
-        passive: number;
-        trades: SpotWebsocketStreams.AggTradeResponse[];
-    } {
+    ): VolumeCalculationResult {
         if (useMultiZone) {
             // Fix: Ensure minimum band size and use proper calculation
             const bandTicks = Math.max(1, Math.floor(zoneTicks / 2));
@@ -369,25 +386,44 @@ export abstract class BaseDetector extends Detector implements IDetector {
         }
 
         const now = Date.now();
-        const aggressive = tradesAtZone.reduce((sum, t) => sum + t.quantity, 0);
-        const trades = tradesAtZone.map((t) => t.originalTrade);
+        const sharedPools = SharedPools.getInstance();
+        const result = sharedPools.volumeResults.acquire();
 
-        // Get passive volume from zone history
+        // Calculate aggressive volume
+        result.aggressive = tradesAtZone.reduce(
+            (sum, t) => sum + t.quantity,
+            0
+        );
+
+        // Populate trades array (reusing pooled array for efficiency)
+        for (const trade of tradesAtZone) {
+            result.trades.push(trade.originalTrade);
+        }
+
+        // Get passive volume from zone history using pooled array
         const zoneHistory = this.zonePassiveHistory.get(zone);
-        const passiveSnapshots = zoneHistory
-            ? zoneHistory
-                  .toArray()
-                  .filter((s) => now - s.timestamp < this.windowMs)
-            : [];
+        if (zoneHistory) {
+            const passiveValues = sharedPools.numberArrays.acquire();
+            try {
+                const snapshots = zoneHistory.toArray();
+                for (const snapshot of snapshots) {
+                    if (now - snapshot.timestamp < this.windowMs) {
+                        passiveValues.push(snapshot.total);
+                    }
+                }
 
-        const passive =
-            passiveSnapshots.length > 0
-                ? DetectorUtils.calculateMean(
-                      passiveSnapshots.map((s) => s.total)
-                  )
-                : 0;
+                result.passive =
+                    passiveValues.length > 0
+                        ? DetectorUtils.calculateMean(passiveValues)
+                        : 0;
+            } finally {
+                sharedPools.numberArrays.release(passiveValues);
+            }
+        } else {
+            result.passive = 0;
+        }
 
-        return { aggressive, passive, trades };
+        return result;
     }
 
     /**
@@ -516,27 +552,51 @@ export abstract class BaseDetector extends Detector implements IDetector {
         }
     }
 
-    protected checkPassiveImbalance(zone: number): {
-        imbalance: number;
-        dominantSide: "bid" | "ask" | "neutral";
-    } {
+    protected checkPassiveImbalance(zone: number): ImbalanceResult {
         const zoneHistory = this.zonePassiveHistory.get(zone);
         if (!zoneHistory || zoneHistory.count() === 0) {
-            return { imbalance: 0, dominantSide: "neutral" };
+            const result = SharedPools.getInstance().imbalanceResults.acquire();
+            result.imbalance = 0;
+            result.dominantSide = "neutral";
+            return result;
         }
 
         const recent = zoneHistory.toArray().slice(-10);
-        const avgBid = DetectorUtils.calculateMean(recent.map((s) => s.bid));
-        const avgAsk = DetectorUtils.calculateMean(recent.map((s) => s.ask));
+        const sharedPools = SharedPools.getInstance();
 
-        const total = avgBid + avgAsk;
-        if (total === 0) return { imbalance: 0, dominantSide: "neutral" };
+        // Use pooled arrays for calculations
+        const bidValues = sharedPools.numberArrays.acquire();
+        const askValues = sharedPools.numberArrays.acquire();
 
-        const imbalance = (avgBid - avgAsk) / total;
-        const dominantSide =
-            imbalance > 0.2 ? "bid" : imbalance < -0.2 ? "ask" : "neutral";
+        try {
+            for (const sample of recent) {
+                bidValues.push(sample.bid);
+                askValues.push(sample.ask);
+            }
 
-        return { imbalance, dominantSide };
+            const avgBid = DetectorUtils.calculateMean(bidValues);
+            const avgAsk = DetectorUtils.calculateMean(askValues);
+
+            const total = avgBid + avgAsk;
+            const result = sharedPools.imbalanceResults.acquire();
+
+            if (total === 0) {
+                result.imbalance = 0;
+                result.dominantSide = "neutral";
+                return result;
+            }
+
+            const imbalance = (avgBid - avgAsk) / total;
+            result.imbalance = imbalance;
+            result.dominantSide =
+                imbalance > 0.2 ? "bid" : imbalance < -0.2 ? "ask" : "neutral";
+
+            return result;
+        } finally {
+            // Always release pooled arrays
+            sharedPools.numberArrays.release(bidValues);
+            sharedPools.numberArrays.release(askValues);
+        }
     }
 
     /**

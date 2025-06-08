@@ -156,3 +156,79 @@ export interface PendingDetection {
     confirmed: boolean;
     metadata?: Record<string, unknown>; // ADD THIS
 }
+
+/**
+ * Hot path object interfaces for object pooling
+ */
+export interface AbsorptionConditions {
+    absorptionRatio: number;
+    passiveStrength: number;
+    hasRefill: boolean;
+    icebergSignal: number;
+    liquidityGradient: number;
+    absorptionVelocity: number;
+    currentPassive: number;
+    avgPassive: number;
+    maxPassive: number;
+    minPassive: number;
+    aggressiveVolume: number;
+    imbalance: number;
+    sampleCount: number;
+    dominantSide: "bid" | "ask" | "neutral";
+    microstructure?: MicrostructureInsights;
+}
+
+export interface MicrostructureInsights {
+    fragmentationScore: number; // Order fragmentation level (0-1)
+    executionEfficiency: number; // Execution quality score (0-1)
+    suspectedAlgoType: string; // Detected algorithm type
+    toxicityScore: number; // Informed flow toxicity (0-1)
+    timingPattern: string; // Execution timing pattern
+    coordinationIndicators: number; // Number of coordination signals
+    sustainabilityScore: number; // Predicted absorption sustainability (0-1)
+    riskAdjustment: number; // Risk-based score adjustment (-0.3 to +0.3)
+    confidenceBoost: number; // Confidence enhancement factor (0.8 to 1.5)
+    urgencyFactor: number; // Signal urgency multiplier (0.5 to 2.0)
+}
+
+export interface ExhaustionConditions {
+    aggressiveVolume: number;
+    currentPassive: number;
+    avgPassive: number;
+    minPassive: number;
+    avgLiquidity: number;
+    passiveRatio: number;
+    depletionRatio: number;
+    refillGap: number;
+    imbalance: number;
+    spread: number;
+    passiveVelocity: number;
+    sampleCount: number;
+}
+
+export interface AccumulationConditions {
+    ratio: number;
+    duration: number;
+    aggressiveVolume: number;
+    relevantPassive: number;
+    totalPassive: number;
+    strength: number;
+    velocity: number;
+    dominantSide: "buy" | "sell";
+    recentActivity: number;
+    tradeCount: number;
+    meetsMinDuration: boolean;
+    meetsMinRatio: boolean;
+    isRecentlyActive: boolean;
+}
+
+export interface VolumeCalculationResult {
+    aggressive: number;
+    passive: number;
+    trades: SpotWebsocketStreams.AggTradeResponse[];
+}
+
+export interface ImbalanceResult {
+    imbalance: number;
+    dominantSide: "bid" | "ask" | "neutral";
+}

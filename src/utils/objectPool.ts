@@ -1,5 +1,15 @@
 // src/utils/objectPool.ts
 
+// Import interfaces from proper location
+import type {
+    AbsorptionConditions,
+    ExhaustionConditions,
+    AccumulationConditions,
+    VolumeCalculationResult,
+    ImbalanceResult,
+} from "../indicators/interfaces/detectorInterfaces.js";
+import { AggressiveTrade } from "../types/marketEvents.js";
+
 /**
  * Generic object pool for reducing garbage collection pressure
  * in high-frequency trading scenarios
@@ -64,7 +74,8 @@ export class ObjectPool<T> {
 }
 
 /**
- * Array pool for reusing arrays in mathematical calculations
+ * High-performance array pool for reusing arrays in mathematical calculations
+ * Optimized for hot path performance with size-based pooling
  */
 export class ArrayPool<T> {
     private readonly pools = new Map<number, T[][]>();
@@ -79,18 +90,23 @@ export class ArrayPool<T> {
 
     /**
      * Get an array of specified size from the pool
+     * Optimized for hot path performance
      */
     public acquire(size: number): T[] {
         if (size > this.maxArraySize) {
             return new Array<T>(size);
         }
 
-        const pool = this.pools.get(size);
+        // Round up to nearest power of 2 for better pooling efficiency
+        const poolSize =
+            size <= 16 ? size : Math.pow(2, Math.ceil(Math.log2(size)));
+
+        const pool = this.pools.get(poolSize);
         if (pool && pool.length > 0) {
             const array = pool.pop()!;
             this.releasedArrays.delete(array); // Remove from released tracking
             array.length = size; // Reset to requested size
-            array.fill(undefined as T); // Clear contents
+            // Don't fill with undefined for performance - caller should handle initialization
             return array;
         }
 
@@ -99,6 +115,7 @@ export class ArrayPool<T> {
 
     /**
      * Return an array to the pool
+     * Optimized for hot path performance
      */
     public release(array: T[]): void {
         const size = array.length;
@@ -111,11 +128,15 @@ export class ArrayPool<T> {
             return;
         }
 
-        if (!this.pools.has(size)) {
-            this.pools.set(size, []);
+        // Round up to nearest power of 2 for consistency with acquire
+        const poolSize =
+            size <= 16 ? size : Math.pow(2, Math.ceil(Math.log2(size)));
+
+        if (!this.pools.has(poolSize)) {
+            this.pools.set(poolSize, []);
         }
 
-        const pool = this.pools.get(size)!;
+        const pool = this.pools.get(poolSize)!;
         if (pool.length < this.maxPoolSize) {
             array.length = 0; // Clear the array
             this.releasedArrays.add(array); // Track as released
@@ -146,7 +167,7 @@ export class ArrayPool<T> {
 }
 
 /**
- * Shared object pools for common types
+ * Enhanced shared object pools for hot path performance optimization
  */
 export class SharedPools {
     private static instance: SharedPools;
@@ -159,6 +180,15 @@ export class SharedPools {
         timestamp: number;
     }>;
 
+    // Enhanced pools for hot path objects
+    public readonly absorptionConditions: ObjectPool<AbsorptionConditions>;
+    public readonly exhaustionConditions: ObjectPool<ExhaustionConditions>;
+    public readonly accumulationConditions: ObjectPool<AccumulationConditions>;
+    public readonly volumeResults: ObjectPool<VolumeCalculationResult>;
+    public readonly imbalanceResults: ObjectPool<ImbalanceResult>;
+    public readonly numberArrays: ObjectPool<number[]>;
+    public readonly tradeArrays: ObjectPool<AggressiveTrade[]>;
+
     private constructor() {
         this.zoneSamples = new ObjectPool(
             () => ({ bid: 0, ask: 0, total: 0, timestamp: 0 }),
@@ -170,11 +200,154 @@ export class SharedPools {
             }
         );
 
+        this.absorptionConditions = new ObjectPool<AbsorptionConditions>(
+            () => ({
+                absorptionRatio: 0,
+                passiveStrength: 0,
+                hasRefill: false,
+                icebergSignal: 0,
+                liquidityGradient: 0,
+                absorptionVelocity: 0,
+                currentPassive: 0,
+                avgPassive: 0,
+                maxPassive: 0,
+                minPassive: 0,
+                aggressiveVolume: 0,
+                imbalance: 0,
+                sampleCount: 0,
+                dominantSide: "neutral",
+                microstructure: undefined,
+            }),
+            (obj) => {
+                obj.absorptionRatio = 0;
+                obj.passiveStrength = 0;
+                obj.hasRefill = false;
+                obj.icebergSignal = 0;
+                obj.liquidityGradient = 0;
+                obj.absorptionVelocity = 0;
+                obj.currentPassive = 0;
+                obj.avgPassive = 0;
+                obj.maxPassive = 0;
+                obj.minPassive = 0;
+                obj.aggressiveVolume = 0;
+                obj.imbalance = 0;
+                obj.sampleCount = 0;
+                obj.dominantSide = "neutral";
+                obj.microstructure = undefined;
+            },
+            500
+        );
+
+        this.exhaustionConditions = new ObjectPool<ExhaustionConditions>(
+            () => ({
+                aggressiveVolume: 0,
+                currentPassive: 0,
+                avgPassive: 0,
+                minPassive: 0,
+                avgLiquidity: 0,
+                passiveRatio: 0,
+                depletionRatio: 0,
+                refillGap: 0,
+                imbalance: 0,
+                spread: 0,
+                passiveVelocity: 0,
+                sampleCount: 0,
+            }),
+            (obj) => {
+                obj.aggressiveVolume = 0;
+                obj.currentPassive = 0;
+                obj.avgPassive = 0;
+                obj.minPassive = 0;
+                obj.avgLiquidity = 0;
+                obj.passiveRatio = 0;
+                obj.depletionRatio = 0;
+                obj.refillGap = 0;
+                obj.imbalance = 0;
+                obj.spread = 0;
+                obj.passiveVelocity = 0;
+                obj.sampleCount = 0;
+            },
+            300
+        );
+
+        this.accumulationConditions = new ObjectPool<AccumulationConditions>(
+            () => ({
+                ratio: 0,
+                duration: 0,
+                aggressiveVolume: 0,
+                relevantPassive: 0,
+                totalPassive: 0,
+                strength: 0,
+                velocity: 0,
+                dominantSide: "buy",
+                recentActivity: 0,
+                tradeCount: 0,
+                meetsMinDuration: false,
+                meetsMinRatio: false,
+                isRecentlyActive: false,
+            }),
+            (obj) => {
+                obj.ratio = 0;
+                obj.duration = 0;
+                obj.aggressiveVolume = 0;
+                obj.relevantPassive = 0;
+                obj.totalPassive = 0;
+                obj.strength = 0;
+                obj.velocity = 0;
+                obj.dominantSide = "buy";
+                obj.recentActivity = 0;
+                obj.tradeCount = 0;
+                obj.meetsMinDuration = false;
+                obj.meetsMinRatio = false;
+                obj.isRecentlyActive = false;
+            },
+            300
+        );
+
+        this.volumeResults = new ObjectPool<VolumeCalculationResult>(
+            () => ({ aggressive: 0, passive: 0, trades: [] }),
+            (obj) => {
+                obj.aggressive = 0;
+                obj.passive = 0;
+                obj.trades.length = 0;
+            },
+            200
+        );
+
+        this.imbalanceResults = new ObjectPool<ImbalanceResult>(
+            () => ({ imbalance: 0, dominantSide: "neutral" }),
+            (obj) => {
+                obj.imbalance = 0;
+                obj.dominantSide = "neutral";
+            },
+            200
+        );
+
+        this.numberArrays = new ObjectPool<number[]>(
+            () => [],
+            (arr) => {
+                arr.length = 0;
+            },
+            100
+        );
+
+        this.tradeArrays = new ObjectPool<AggressiveTrade[]>(
+            () => [],
+            (arr) => {
+                arr.length = 0;
+            },
+            100
+        );
+
         // Pre-warm the most commonly used pools
         this.zoneSamples.prewarm(50);
-        this.arrays.acquire(100); // Pre-create some common array sizes
-        this.arrays.acquire(200);
-        this.arrays.acquire(500);
+        this.absorptionConditions.prewarm(30);
+        this.exhaustionConditions.prewarm(20);
+        this.accumulationConditions.prewarm(20);
+        this.volumeResults.prewarm(25);
+        this.imbalanceResults.prewarm(25);
+        this.numberArrays.prewarm(20);
+        this.tradeArrays.prewarm(20);
     }
 
     public static getInstance(): SharedPools {
@@ -191,6 +364,42 @@ export class SharedPools {
         return {
             zoneSamples: this.zoneSamples.size(),
             arrays: this.arrays.getStats(),
+            absorptionConditions: this.absorptionConditions.size(),
+            exhaustionConditions: this.exhaustionConditions.size(),
+            accumulationConditions: this.accumulationConditions.size(),
+            volumeResults: this.volumeResults.size(),
+            imbalanceResults: this.imbalanceResults.size(),
+            numberArrays: this.numberArrays.size(),
+            tradeArrays: this.tradeArrays.size(),
         };
+    }
+
+    /**
+     * Clear all pools and release memory
+     */
+    public clearAll(): void {
+        this.zoneSamples.clear();
+        this.arrays.clear();
+        this.absorptionConditions.clear();
+        this.exhaustionConditions.clear();
+        this.accumulationConditions.clear();
+        this.volumeResults.clear();
+        this.imbalanceResults.clear();
+        this.numberArrays.clear();
+        this.tradeArrays.clear();
+    }
+
+    /**
+     * Pre-warm all pools for optimal performance
+     */
+    public prewarmAll(): void {
+        this.zoneSamples.prewarm(50);
+        this.absorptionConditions.prewarm(30);
+        this.exhaustionConditions.prewarm(20);
+        this.accumulationConditions.prewarm(20);
+        this.volumeResults.prewarm(25);
+        this.imbalanceResults.prewarm(25);
+        this.numberArrays.prewarm(20);
+        this.tradeArrays.prewarm(20);
     }
 }
