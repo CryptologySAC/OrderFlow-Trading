@@ -144,7 +144,8 @@ export class ExhaustionDetector
             lastSnap.bid !== snap.bid ||
             lastSnap.ask !== snap.ask
         ) {
-            zoneHistory.push(snap);
+            // Use pool-aware push to handle evicted objects
+            this.pushToZoneHistoryWithPoolCleanup(zoneHistory, snap);
         } else {
             // Release snapshot back to pool if not used
             SharedPools.getInstance().zoneSamples.release(snap);

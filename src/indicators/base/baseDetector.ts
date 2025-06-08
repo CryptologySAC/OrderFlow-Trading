@@ -155,29 +155,53 @@ export abstract class BaseDetector extends Detector implements IDetector {
 
     /**
      * Clean up old zone data beyond retention window
+     * Enhanced to handle pool cleanup within rolling windows
      */
     protected cleanupOldZoneData(): void {
         const cutoff = Date.now() - this.windowMs * 2;
         let cleanedCount = 0;
+        let cleanedSamples = 0;
+        const sharedPools = SharedPools.getInstance();
 
         for (const [zone, window] of this.zonePassiveHistory) {
-            const lastTimestamp = window.toArray().at(-1)?.timestamp ?? 0;
+            const samples = window.toArray();
+            const lastTimestamp = samples.at(-1)?.timestamp ?? 0;
+
             if (lastTimestamp < cutoff) {
-                // Return zone sample objects to pool before deletion
-                const samples = window.toArray();
-                const sharedPools = SharedPools.getInstance();
+                // Return all zone sample objects to pool before deletion
                 for (const sample of samples) {
                     sharedPools.zoneSamples.release(sample);
+                    cleanedSamples++;
                 }
 
                 this.zonePassiveHistory.delete(zone);
                 cleanedCount++;
+            } else {
+                // Clean up individual old samples within the window
+                const validSamples: ZoneSample[] = [];
+                for (const sample of samples) {
+                    if (sample.timestamp >= cutoff) {
+                        validSamples.push(sample);
+                    } else {
+                        // Release old sample back to pool
+                        sharedPools.zoneSamples.release(sample);
+                        cleanedSamples++;
+                    }
+                }
+
+                // Rebuild the window with only valid samples if needed
+                if (validSamples.length !== samples.length) {
+                    window.clear();
+                    for (const sample of validSamples) {
+                        window.push(sample);
+                    }
+                }
             }
         }
 
-        if (cleanedCount > 0) {
+        if (cleanedCount > 0 || cleanedSamples > 0) {
             this.logger.debug(
-                `[${this.constructor.name}] Cleaned ${cleanedCount} old zones`
+                `[${this.constructor.name}] Cleaned ${cleanedCount} old zones, ${cleanedSamples} old samples`
             );
         }
     }
@@ -324,8 +348,35 @@ export abstract class BaseDetector extends Detector implements IDetector {
             lastSnapshot.bid !== newSnapshot.bid ||
             lastSnapshot.ask !== newSnapshot.ask
         ) {
-            zoneHistory.push(newSnapshot);
+            // Use pool-aware push to handle evicted objects
+            this.pushToZoneHistoryWithPoolCleanup(zoneHistory, newSnapshot);
+        } else {
+            // Release snapshot back to pool if not used
+            SharedPools.getInstance().zoneSamples.release(newSnapshot);
         }
+    }
+
+    /**
+     * Pool-aware push to zone history that properly releases evicted objects
+     */
+    protected pushToZoneHistoryWithPoolCleanup(
+        zoneHistory: RollingWindow<ZoneSample>,
+        newSample: ZoneSample
+    ): void {
+        const sharedPools = SharedPools.getInstance();
+
+        // Check if the window is full and will evict an object
+        if (zoneHistory.count() >= zoneHistory.size) {
+            // Get the sample that will be evicted (oldest one)
+            const samples = zoneHistory.toArray();
+            if (samples.length > 0) {
+                const evictedSample = samples[0]; // Oldest sample
+                sharedPools.zoneSamples.release(evictedSample);
+            }
+        }
+
+        // Now safely push the new sample
+        zoneHistory.push(newSample);
     }
 
     /**

@@ -160,15 +160,20 @@ export class AbsorptionDetector
         // Track zone passive volumes
         const zoneHistory = this.zonePassiveHistory.get(zone)!;
         const last = zoneHistory.count() ? zoneHistory.toArray().at(-1)! : null;
-        const snap = {
-            bid: event.zonePassiveBidVolume,
-            ask: event.zonePassiveAskVolume,
-            total: event.zonePassiveBidVolume + event.zonePassiveAskVolume,
-            timestamp: event.timestamp,
-        };
+
+        // Use object pool to reduce GC pressure
+        const snap = SharedPools.getInstance().zoneSamples.acquire();
+        snap.bid = event.zonePassiveBidVolume;
+        snap.ask = event.zonePassiveAskVolume;
+        snap.total = event.zonePassiveBidVolume + event.zonePassiveAskVolume;
+        snap.timestamp = event.timestamp;
 
         if (!last || last.bid !== snap.bid || last.ask !== snap.ask) {
-            zoneHistory.push(snap); // passive actually moved
+            // Use pool-aware push to handle evicted objects
+            this.pushToZoneHistoryWithPoolCleanup(zoneHistory, snap);
+        } else {
+            // Release snapshot back to pool if not used
+            SharedPools.getInstance().zoneSamples.release(snap);
         }
 
         // Track agressive trades
