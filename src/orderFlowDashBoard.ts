@@ -420,6 +420,49 @@ export class OrderFlowDashboard {
                 );
             }
 
+            // Send current active zones to new client
+            const accumulationZones =
+                this.accumulationZoneDetector.getActiveZones();
+            const distributionZones =
+                this.distributionZoneDetector.getActiveZones();
+            const allActiveZones = [...accumulationZones, ...distributionZones];
+
+            if (allActiveZones.length > 0) {
+                this.logger.info(
+                    `Sending ${allActiveZones.length} active zones to client`,
+                    {
+                        clientId: ws.clientId,
+                        accumulation: accumulationZones.length,
+                        distribution: distributionZones.length,
+                    }
+                );
+
+                for (const zone of allActiveZones) {
+                    ws.send(
+                        JSON.stringify({
+                            type: "zoneUpdate",
+                            data: {
+                                updateType: "zone_created",
+                                zone: {
+                                    id: zone.id,
+                                    type: zone.type,
+                                    priceRange: zone.priceRange,
+                                    strength: zone.strength,
+                                    completion: zone.completion,
+                                    confidence: zone.confidence,
+                                    significance: zone.significance,
+                                    totalVolume: zone.totalVolume,
+                                    timeInZone: zone.timeInZone,
+                                },
+                                significance: zone.significance,
+                                timestamp: Date.now(),
+                            },
+                            now: Date.now(),
+                        })
+                    );
+                }
+            }
+
             // Send current support/resistance levels to new client
             const currentLevels = this.supportResistanceDetector.getLevels();
             if (currentLevels.length > 0) {

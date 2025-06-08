@@ -2502,7 +2502,7 @@ function initialize() {
     // Setup periodic cleanup for support/resistance levels
     setInterval(cleanupOldSupportResistanceLevels, 300000); // Every 5 minutes
     setInterval(cleanupOldZones, 300000); // Every 5 minutes
-    
+
     // Setup periodic update for signal times display
     setInterval(renderSignalsList, 60000); // Update every minute
 }
