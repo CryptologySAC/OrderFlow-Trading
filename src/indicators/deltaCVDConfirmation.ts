@@ -29,6 +29,12 @@ import { EnrichedTradeEvent } from "../types/marketEvents.js";
 /* ------------------------------------------------------------------ */
 /*  Enhanced Config & Types                                           */
 /* ------------------------------------------------------------------ */
+
+interface CVDCalculationResult {
+    cvdSeries: number[];
+    slope: number;
+}
+
 export interface DeltaCVDConfirmationSettings extends BaseDetectorSettings {
     windowsSec?: [60, 300, 900] | number[]; // analysed windows
     minZ?: number; // base min |zScore| on shortest window
@@ -131,6 +137,8 @@ export class DeltaCVDConfirmation extends BaseDetector {
     // Historical data for baseline calculations
     private volatilityHistory: number[] = [];
     private recentPriceChanges: number[] = [];
+
+    private readonly cvdResultPool = new CVDResultPool();
 
     constructor(
         id: string,
@@ -253,61 +261,85 @@ export class DeltaCVDConfirmation extends BaseDetector {
     /* ------------------------------------------------------------------ */
 
     private updateMarketRegime(event: EnrichedTradeEvent): void {
-        // Track price changes for volatility calculation
-        if (this.recentPriceChanges.length > 0) {
-            this.recentPriceChanges.push(event.price);
+        try {
+            if (this.recentPriceChanges.length > 0) {
+                this.recentPriceChanges.push(event.price);
 
-            // Keep only recent price changes for volatility calculation
-            while (
-                this.recentPriceChanges.length > 2 &&
-                this.recentPriceChanges.length > this.volatilityLookbackSec / 10
-            ) {
-                this.recentPriceChanges.shift();
-            }
-
-            // Calculate current volatility
-            if (this.recentPriceChanges.length > 10) {
-                const returns = [];
-                for (let i = 1; i < this.recentPriceChanges.length; i++) {
-                    const priceReturn = DetectorUtils.safeDivide(
-                        this.recentPriceChanges[i] -
-                            this.recentPriceChanges[i - 1],
-                        this.recentPriceChanges[i - 1],
-                        0
-                    );
-                    returns.push(priceReturn);
+                // FIX: Add bounds checking
+                const maxLength = Math.max(
+                    100,
+                    this.volatilityLookbackSec / 10
+                );
+                while (this.recentPriceChanges.length > maxLength) {
+                    this.recentPriceChanges.shift();
                 }
 
-                const mean = DetectorUtils.safeDivide(
-                    returns.reduce((sum, r) => sum + r, 0),
-                    returns.length,
-                    0
-                );
-                const variance = DetectorUtils.safeDivide(
-                    returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0),
-                    returns.length,
-                    0
-                );
-                this.marketRegime.volatility = Math.sqrt(variance);
+                // FIX: Ensure minimum data before calculations
+                if (this.recentPriceChanges.length > 20) {
+                    // Increased from 10
+                    const returns = [];
+                    for (let i = 1; i < this.recentPriceChanges.length; i++) {
+                        // FIX: Validate prices before calculation
+                        const currentPrice = this.recentPriceChanges[i];
+                        const prevPrice = this.recentPriceChanges[i - 1];
 
-                // Update baseline volatility (slower moving average)
-                if (this.marketRegime.baselineVolatility === 0) {
-                    this.marketRegime.baselineVolatility =
-                        this.marketRegime.volatility;
-                } else {
-                    this.marketRegime.baselineVolatility =
-                        this.marketRegime.baselineVolatility * 0.99 +
-                        this.marketRegime.volatility * 0.01;
+                        if (
+                            !isFinite(currentPrice) ||
+                            !isFinite(prevPrice) ||
+                            prevPrice === 0
+                        ) {
+                            continue;
+                        }
+
+                        const priceReturn =
+                            (currentPrice - prevPrice) / prevPrice;
+                        if (isFinite(priceReturn)) {
+                            returns.push(priceReturn);
+                        }
+                    }
+
+                    if (returns.length > 10) {
+                        const mean =
+                            returns.reduce((sum, r) => sum + r, 0) /
+                            returns.length;
+                        const variance =
+                            returns.reduce(
+                                (sum, r) => sum + Math.pow(r - mean, 2),
+                                0
+                            ) / returns.length;
+
+                        if (isFinite(variance) && variance > 0) {
+                            this.marketRegime.volatility = Math.sqrt(variance);
+
+                            // Update baseline volatility with bounds checking
+                            if (this.marketRegime.baselineVolatility === 0) {
+                                this.marketRegime.baselineVolatility =
+                                    this.marketRegime.volatility;
+                            } else {
+                                this.marketRegime.baselineVolatility =
+                                    this.marketRegime.baselineVolatility *
+                                        0.99 +
+                                    this.marketRegime.volatility * 0.01;
+                            }
+
+                            // Update metrics with validation
+                            if (isFinite(this.marketRegime.volatility)) {
+                                this.metricsCollector.setGauge(
+                                    "cvd_market_volatility",
+                                    this.marketRegime.volatility
+                                );
+                            }
+                        }
+                    }
                 }
-
-                // Update metrics
-                this.metricsCollector.setGauge(
-                    "cvd_market_volatility",
-                    this.marketRegime.volatility
-                );
+            } else {
+                this.recentPriceChanges.push(event.price);
             }
-        } else {
-            this.recentPriceChanges.push(event.price);
+        } catch (error) {
+            this.logger.error("Market regime update failed", {
+                error,
+                eventPrice: event.price,
+            });
         }
     }
 
@@ -449,49 +481,63 @@ export class DeltaCVDConfirmation extends BaseDetector {
     }
 
     private cleanupCVDProfiles(state: WindowState): void {
-        // Cleanup if profiles get too large
-        if (state.cvdProfile.size > 1000) {
-            // Keep only top 500 levels by absolute CVD
-            const sortedCVDEntries = Array.from(state.cvdProfile.entries())
-                .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
-                .slice(0, 500);
+        try {
+            // FIX: Add memory usage tracking
+            const totalProfileSize =
+                state.cvdProfile.size +
+                state.buyFlowProfile.size +
+                state.sellFlowProfile.size;
 
-            // Get price levels to keep
-            const pricesToKeep = new Set(
-                sortedCVDEntries.map(([price]) => price)
-            );
+            if (totalProfileSize > 3000) {
+                // More aggressive cleanup threshold
+                // Keep only top 300 levels by absolute CVD (reduced from 500)
+                const sortedCVDEntries = Array.from(state.cvdProfile.entries())
+                    .filter(([price, cvd]) => isFinite(price) && isFinite(cvd)) // Validate data
+                    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+                    .slice(0, 300);
 
-            // Clean all profiles
+                const pricesToKeep = new Set(
+                    sortedCVDEntries.map(([price]) => price)
+                );
+
+                // Clear all profiles
+                state.cvdProfile.clear();
+                state.buyFlowProfile.clear();
+                state.sellFlowProfile.clear();
+
+                // Repopulate with significant levels only
+                sortedCVDEntries.forEach(([price, cvd]) => {
+                    state.cvdProfile.set(price, cvd);
+                });
+
+                // Clean institutional zones more aggressively
+                state.institutionalZones = state.institutionalZones
+                    .filter(
+                        (zone) =>
+                            isFinite(zone.priceLevel) &&
+                            isFinite(zone.netCVD) &&
+                            zone.isActive &&
+                            Array.from(pricesToKeep).some(
+                                (price) =>
+                                    Math.abs(zone.priceLevel - price) <
+                                    this.calculateTickSize(price)
+                            )
+                    )
+                    .slice(0, 10); // Limit to 10 most significant zones
+
+                this.logger.debug("Aggressive CVD profile cleanup completed", {
+                    originalSize: totalProfileSize,
+                    newSize: state.cvdProfile.size,
+                    zonesKept: state.institutionalZones.length,
+                });
+            }
+        } catch (error) {
+            this.logger.error("CVD profile cleanup failed", { error: error });
+            // Emergency cleanup on error
             state.cvdProfile.clear();
             state.buyFlowProfile.clear();
             state.sellFlowProfile.clear();
-
-            // Repopulate with significant levels
-            sortedCVDEntries.forEach(([price, cvd]) => {
-                state.cvdProfile.set(price, cvd);
-            });
-
-            // Clean buy/sell profiles to match
-            for (const [price, volume] of state.buyFlowProfile.entries()) {
-                if (pricesToKeep.has(price)) {
-                    state.buyFlowProfile.set(price, volume);
-                }
-            }
-
-            for (const [price, volume] of state.sellFlowProfile.entries()) {
-                if (pricesToKeep.has(price)) {
-                    state.sellFlowProfile.set(price, volume);
-                }
-            }
-
-            // Filter institutional zones to match kept price levels
-            state.institutionalZones = state.institutionalZones.filter((zone) =>
-                Array.from(pricesToKeep).some(
-                    (price) =>
-                        Math.abs(zone.priceLevel - price) <
-                        this.calculateTickSize(price)
-                )
-            );
+            state.institutionalZones = [];
         }
     }
 
@@ -689,70 +735,114 @@ export class DeltaCVDConfirmation extends BaseDetector {
         return { valid: true, reason: "" };
     }
 
-    private computeCVDSlope(state: WindowState): {
-        cvdSeries: number[];
-        slope: number;
-    } {
-        let cvd = 0;
-        const cvdSeries: number[] = [];
+    private computeCVDSlope(state: WindowState): CVDCalculationResult {
+        const result = this.cvdResultPool.acquire();
 
-        for (const tr of state.trades) {
-            // buyerIsMaker = true means sell aggression (negative CVD)
-            const delta = tr.buyerIsMaker ? -tr.quantity : tr.quantity;
-            cvd += delta;
-            cvdSeries.push(cvd);
+        try {
+            let cvd = 0;
+
+            for (const tr of state.trades) {
+                // Validate trade data
+                if (!isFinite(tr.quantity) || tr.quantity <= 0) {
+                    continue;
+                }
+
+                const delta = tr.buyerIsMaker ? -tr.quantity : tr.quantity;
+                cvd += delta;
+                result.cvdSeries.push(cvd);
+            }
+
+            // Calculate slope with validation
+            const n = result.cvdSeries.length;
+            if (n < 2) {
+                result.slope = 0;
+                return result;
+            }
+
+            // Linear regression with overflow protection
+            const sumX = (n * (n - 1)) / 2;
+            const sumX2 = ((n - 1) * n * (2 * n - 1)) / 6;
+            const sumY = result.cvdSeries.reduce((sum, v) => sum + v, 0);
+            const sumXY = result.cvdSeries.reduce(
+                (sum, v, i) => sum + v * i,
+                0
+            );
+            const denom = n * sumX2 - sumX * sumX;
+
+            if (denom === 0 || !isFinite(denom)) {
+                result.slope = 0;
+                return result;
+            }
+
+            const slope = (n * sumXY - sumX * sumY) / denom;
+            result.slope = isFinite(slope) ? slope : 0;
+
+            return result;
+        } catch (error) {
+            this.logger.error("CVD slope calculation failed", { error: error });
+            result.slope = 0;
+            return result;
         }
-
-        // Linear regression for slope calculation
-        const n = cvdSeries.length;
-        const sumX = (n * (n - 1)) / 2;
-        const sumX2 = ((n - 1) * n * (2 * n - 1)) / 6;
-        const sumY = cvdSeries.reduce((sum, v) => sum + v, 0);
-        const sumXY = cvdSeries.reduce((sum, v, i) => sum + v * i, 0);
-        const denom = n * sumX2 - sumX * sumX;
-
-        if (denom === 0) {
-            return { cvdSeries, slope: 0 };
-        }
-
-        const slopeQty = (n * sumXY - sumX * sumY) / denom;
-        const slope = slopeQty; // Keep as qty per index, will normalize later
-
-        return { cvdSeries, slope };
+        // Note: Don't release here - caller should release
     }
 
     private calculatePriceCorrelation(
         state: WindowState,
         cvdSeries: number[]
     ): number {
-        if (state.trades.length < 5) return 0;
+        try {
+            if (state.trades.length < 10) return 0; // Increased minimum
 
-        const prices = state.trades.map((tr) => tr.price);
-        const n = Math.min(prices.length, cvdSeries.length);
+            const prices = state.trades.map((tr) => tr.price);
+            const n = Math.min(prices.length, cvdSeries.length);
 
-        if (n < 5) return 0;
+            if (n < 10) return 0;
 
-        // Calculate Pearson correlation coefficient
-        const priceSlice = prices.slice(-n);
-        const cvdSlice = cvdSeries.slice(-n);
+            const priceSlice = prices.slice(-n);
+            const cvdSlice = cvdSeries.slice(-n);
 
-        const priceMean = priceSlice.reduce((sum, p) => sum + p, 0) / n;
-        const cvdMean = cvdSlice.reduce((sum, c) => sum + c, 0) / n;
+            // VALIDATE DATA
+            if (
+                priceSlice.some((p) => !isFinite(p)) ||
+                cvdSlice.some((c) => !isFinite(c))
+            ) {
+                return 0;
+            }
 
-        let numerator = 0;
-        let priceSSQ = 0;
-        let cvdSSQ = 0;
+            const priceMean = priceSlice.reduce((sum, p) => sum + p, 0) / n;
+            const cvdMean = cvdSlice.reduce((sum, c) => sum + c, 0) / n;
 
-        for (let i = 0; i < n; i++) {
-            const priceDiff = priceSlice[i] - priceMean;
-            const cvdDiff = cvdSlice[i] - cvdMean;
-            numerator += priceDiff * cvdDiff;
-            priceSSQ += priceDiff * priceDiff;
-            cvdSSQ += cvdDiff * cvdDiff;
+            let numerator = 0;
+            let priceSSQ = 0;
+            let cvdSSQ = 0;
+
+            for (let i = 0; i < n; i++) {
+                const priceDiff = priceSlice[i] - priceMean;
+                const cvdDiff = cvdSlice[i] - cvdMean;
+                numerator += priceDiff * cvdDiff;
+                priceSSQ += priceDiff * priceDiff;
+                cvdSSQ += cvdDiff * cvdDiff;
+            }
+
+            const denominator = Math.sqrt(priceSSQ * cvdSSQ);
+
+            // FIX: Prevent division by zero
+            if (denominator === 0 || !isFinite(denominator)) {
+                return 0;
+            }
+
+            const correlation = numerator / denominator;
+
+            // FIX: Validate result
+            return isFinite(correlation)
+                ? Math.max(-1, Math.min(1, correlation))
+                : 0;
+        } catch (error) {
+            this.logger.error("Price correlation calculation failed", {
+                error: error,
+            });
+            return 0;
         }
-
-        const denominator = Math.sqrt(priceSSQ * cvdSSQ);
-        return denominator === 0 ? 0 : numerator / denominator;
     }
 
     private updateSlopeStatistics(state: WindowState, slope: number): void {
@@ -797,29 +887,65 @@ export class DeltaCVDConfirmation extends BaseDetector {
         zScores: Record<number, number>,
         priceCorrelations: Record<number, number>
     ): { valid: boolean; reason: string } {
-        // Check sign alignment
-        const signs = this.windows.map((w) => Math.sign(zScores[w]));
-        if (!signs.every((s) => s === signs[0] && s !== 0)) {
-            return { valid: false, reason: "no_sign_alignment" };
-        }
+        try {
+            // FIX: Validate input data
+            for (const window of this.windows) {
+                if (!isFinite(zScores[window])) {
+                    return { valid: false, reason: "invalid_zscore_data" };
+                }
+                if (!isFinite(priceCorrelations[window])) {
+                    return { valid: false, reason: "invalid_correlation_data" };
+                }
+            }
 
-        // Check adaptive z-score threshold
-        const adaptiveMinZ = this.calculateAdaptiveThreshold();
-        if (Math.abs(zScores[this.windows[0]]) < adaptiveMinZ) {
-            return { valid: false, reason: "below_adaptive_threshold" };
-        }
+            // Check sign alignment with validation
+            const signs = this.windows.map((w) => {
+                const zScore = zScores[w];
+                return isFinite(zScore) ? Math.sign(zScore) : 0;
+            });
 
-        // Check for excessive price/CVD divergence
-        const avgPriceCorrelation =
-            this.windows
+            if (
+                signs.some((s) => s === 0) ||
+                !signs.every((s) => s === signs[0])
+            ) {
+                return { valid: false, reason: "no_sign_alignment" };
+            }
+
+            // Check adaptive z-score threshold with bounds
+            const adaptiveMinZ = this.calculateAdaptiveThreshold();
+            if (!isFinite(adaptiveMinZ) || adaptiveMinZ <= 0) {
+                return { valid: false, reason: "invalid_adaptive_threshold" };
+            }
+
+            const shortestWindowZ = Math.abs(zScores[this.windows[0]]);
+            if (shortestWindowZ < adaptiveMinZ) {
+                return { valid: false, reason: "below_adaptive_threshold" };
+            }
+
+            // Check for excessive price/CVD divergence with validation
+            const correlations = this.windows
                 .map((w) => priceCorrelations[w])
-                .reduce((sum, corr) => sum + corr, 0) / this.windows.length;
+                .filter((c) => isFinite(c));
+            if (correlations.length === 0) {
+                return { valid: false, reason: "no_valid_correlations" };
+            }
 
-        if (Math.abs(avgPriceCorrelation) < 1 - this.maxDivergenceAllowed) {
-            return { valid: false, reason: "excessive_price_cvd_divergence" };
+            const avgPriceCorrelation =
+                correlations.reduce((sum, corr) => sum + corr, 0) /
+                correlations.length;
+
+            if (Math.abs(avgPriceCorrelation) < 1 - this.maxDivergenceAllowed) {
+                return {
+                    valid: false,
+                    reason: "excessive_price_cvd_divergence",
+                };
+            }
+
+            return { valid: true, reason: "" };
+        } catch (error) {
+            this.logger.error("Signal validation failed", { error: error });
+            return { valid: false, reason: "validation_error" };
         }
-
-        return { valid: true, reason: "" };
     }
 
     /* ------------------------------------------------------------------ */
@@ -1350,5 +1476,26 @@ export class DeltaCVDConfirmation extends BaseDetector {
         };
 
         return { factors, finalConfidence, breakdown };
+    }
+}
+
+class CVDResultPool {
+    private pool: CVDCalculationResult[] = [];
+    private readonly maxSize = 100;
+
+    acquire(): CVDCalculationResult {
+        const result = this.pool.pop();
+        if (result) {
+            result.cvdSeries.length = 0; // Clear array
+            result.slope = 0;
+            return result;
+        }
+        return { cvdSeries: [], slope: 0 };
+    }
+
+    release(result: CVDCalculationResult): void {
+        if (this.pool.length < this.maxSize) {
+            this.pool.push(result);
+        }
     }
 }

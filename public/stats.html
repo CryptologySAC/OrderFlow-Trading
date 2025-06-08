@@ -117,7 +117,7 @@
             th {
                 position: relative;
             }
-            
+
             th .resize-handle {
                 position: absolute;
                 top: 0;
@@ -128,50 +128,100 @@
                 cursor: col-resize;
                 z-index: 1000;
             }
-            
+
             th .resize-handle:hover {
                 background: var(--resize-handle-hover, #007bff);
                 opacity: 0.7;
             }
-            
+
             th .resize-handle.resizing {
                 background: var(--resize-handle-active, #0056b3);
                 opacity: 1;
             }
 
             /* Specific table column widths */
-            #countersTable th:nth-child(1) { width: 60%; }
-            #countersTable th:nth-child(2) { width: 40%; }
-            
-            #gaugesTable th:nth-child(1) { width: 60%; }
-            #gaugesTable th:nth-child(2) { width: 40%; }
-            
-            #histogramsTable th:nth-child(1) { width: 30%; }
-            #histogramsTable th:nth-child(2) { width: 20%; }
-            #histogramsTable th:nth-child(3) { width: 20%; }
-            #histogramsTable th:nth-child(4) { width: 15%; }
-            #histogramsTable th:nth-child(5) { width: 15%; }
-            
-            #signalOverviewTable th:nth-child(1) { width: 50%; }
-            #signalOverviewTable th:nth-child(2) { width: 25%; }
-            #signalOverviewTable th:nth-child(3) { width: 25%; }
-            
-            #signalTypesTable th:nth-child(1) { width: 30%; }
-            #signalTypesTable th:nth-child(2) { width: 20%; }
-            #signalTypesTable th:nth-child(3) { width: 20%; }
-            #signalTypesTable th:nth-child(4) { width: 15%; }
-            #signalTypesTable th:nth-child(5) { width: 15%; }
-            
-            #rejectionReasonsTable th:nth-child(1) { width: 50%; }
-            #rejectionReasonsTable th:nth-child(2) { width: 25%; }
-            #rejectionReasonsTable th:nth-child(3) { width: 25%; }
-            
-            #zoneStatsTable th:nth-child(1) { width: 40%; }
-            #zoneStatsTable th:nth-child(2) { width: 30%; }
-            #zoneStatsTable th:nth-child(3) { width: 30%; }
-            
-            #signalQualityTable th:nth-child(1) { width: 60%; }
-            #signalQualityTable th:nth-child(2) { width: 40%; }
+            #countersTable th:nth-child(1) {
+                width: 60%;
+            }
+            #countersTable th:nth-child(2) {
+                width: 40%;
+            }
+
+            #gaugesTable th:nth-child(1) {
+                width: 60%;
+            }
+            #gaugesTable th:nth-child(2) {
+                width: 40%;
+            }
+
+            #histogramsTable th:nth-child(1) {
+                width: 30%;
+            }
+            #histogramsTable th:nth-child(2) {
+                width: 20%;
+            }
+            #histogramsTable th:nth-child(3) {
+                width: 20%;
+            }
+            #histogramsTable th:nth-child(4) {
+                width: 15%;
+            }
+            #histogramsTable th:nth-child(5) {
+                width: 15%;
+            }
+
+            #signalOverviewTable th:nth-child(1) {
+                width: 50%;
+            }
+            #signalOverviewTable th:nth-child(2) {
+                width: 25%;
+            }
+            #signalOverviewTable th:nth-child(3) {
+                width: 25%;
+            }
+
+            #signalTypesTable th:nth-child(1) {
+                width: 30%;
+            }
+            #signalTypesTable th:nth-child(2) {
+                width: 20%;
+            }
+            #signalTypesTable th:nth-child(3) {
+                width: 20%;
+            }
+            #signalTypesTable th:nth-child(4) {
+                width: 15%;
+            }
+            #signalTypesTable th:nth-child(5) {
+                width: 15%;
+            }
+
+            #rejectionReasonsTable th:nth-child(1) {
+                width: 50%;
+            }
+            #rejectionReasonsTable th:nth-child(2) {
+                width: 25%;
+            }
+            #rejectionReasonsTable th:nth-child(3) {
+                width: 25%;
+            }
+
+            #zoneStatsTable th:nth-child(1) {
+                width: 40%;
+            }
+            #zoneStatsTable th:nth-child(2) {
+                width: 30%;
+            }
+            #zoneStatsTable th:nth-child(3) {
+                width: 30%;
+            }
+
+            #signalQualityTable th:nth-child(1) {
+                width: 60%;
+            }
+            #signalQualityTable th:nth-child(2) {
+                width: 40%;
+            }
 
             td {
                 padding: 6px 8px;
@@ -268,47 +318,53 @@
             <section class="column" id="column1">
                 <!-- Counters Table -->
                 <div class="metric-card">
-                <button
-                    class="reset-columns-btn"
-                    onclick="resetTableColumns('countersTable')"
-                    title="Reset column widths"
-                >
-                    Reset
-                </button>
-                <h3 class="card-title">Counters</h3>
-                <table id="countersTable">
-                    <thead>
-                        <tr>
-                            <th>Metric<div class="resize-handle"></div></th>
-                            <th>Value</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr
-                            style="
-                                background-color: var(--bg-primary, #f8f9fa);
-                                font-weight: bold;
-                                color: var(--primary-color, #007bff);
-                                border-bottom: 2px solid
-                                    var(--primary-color, #007bff);
-                            "
-                        >
-                            <td style="font-size: 16px; padding: 12px">
-                                🔗 Active Connections
-                            </td>
-                            <td
-                                id="connectionsNumber"
+                    <button
+                        class="reset-columns-btn"
+                        onclick="resetTableColumns('countersTable')"
+                        title="Reset column widths"
+                    >
+                        Reset
+                    </button>
+                    <h3 class="card-title">Counters</h3>
+                    <table id="countersTable">
+                        <thead>
+                            <tr>
+                                <th>
+                                    Metric
+                                    <div class="resize-handle"></div>
+                                </th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr
                                 style="
-                                    font-size: 18px;
+                                    background-color: var(
+                                        --bg-primary,
+                                        #f8f9fa
+                                    );
                                     font-weight: bold;
-                                    padding: 12px;
+                                    color: var(--primary-color, #007bff);
+                                    border-bottom: 2px solid
+                                        var(--primary-color, #007bff);
                                 "
                             >
-                                --
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                                <td style="font-size: 16px; padding: 12px">
+                                    🔗 Active Connections
+                                </td>
+                                <td
+                                    id="connectionsNumber"
+                                    style="
+                                        font-size: 18px;
+                                        font-weight: bold;
+                                        padding: 12px;
+                                    "
+                                >
+                                    --
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
                 <div class="resize-handle" id="resize1"></div>
             </section>
@@ -328,7 +384,10 @@
                     <table id="gaugesTable">
                         <thead>
                             <tr>
-                                <th>Metric<div class="resize-handle"></div></th>
+                                <th>
+                                    Metric
+                                    <div class="resize-handle"></div>
+                                </th>
                                 <th>Value</th>
                             </tr>
                         </thead>
@@ -338,137 +397,191 @@
 
                 <!-- Histograms Table -->
                 <div class="metric-card">
-                <button
-                    class="reset-columns-btn"
-                    onclick="resetTableColumns('histogramsTable')"
-                    title="Reset column widths"
-                >
-                    Reset
-                </button>
-                <h3 class="card-title">Histograms</h3>
-                <table id="histogramsTable">
-                    <thead>
-                        <tr>
-                            <th>Metric<div class="resize-handle"></div></th>
-                            <th>Count<div class="resize-handle"></div></th>
-                            <th>Mean<div class="resize-handle"></div></th>
-                            <th>Min<div class="resize-handle"></div></th>
-                            <th>Max</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
-            </div>
+                    <button
+                        class="reset-columns-btn"
+                        onclick="resetTableColumns('histogramsTable')"
+                        title="Reset column widths"
+                    >
+                        Reset
+                    </button>
+                    <h3 class="card-title">Histograms</h3>
+                    <table id="histogramsTable">
+                        <thead>
+                            <tr>
+                                <th>
+                                    Metric
+                                    <div class="resize-handle"></div>
+                                </th>
+                                <th>
+                                    Count
+                                    <div class="resize-handle"></div>
+                                </th>
+                                <th>
+                                    Mean
+                                    <div class="resize-handle"></div>
+                                </th>
+                                <th>
+                                    Min
+                                    <div class="resize-handle"></div>
+                                </th>
+                                <th>Max</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
 
-            <!-- Combined Signal Processing -->
-            <div class="metric-card">
-                <button
-                    class="reset-columns-btn"
-                    onclick="resetTableColumns('combinedSignalTable')"
-                    title="Reset column widths"
-                >
-                    Reset
-                </button>
-                <h3 class="card-title">Signal Processing & Types</h3>
-                
-                <!-- Signal Processing Overview Section -->
-                <h4 style="margin: 20px 0 10px 0; color: var(--text-primary); font-size: 16px; font-weight: bold; border-bottom: 2px solid var(--primary-color, #007bff); padding-bottom: 5px;">Signal Processing Overview</h4>
-                <table id="signalOverviewTable" style="margin-bottom: 20px;">
-                    <thead>
-                        <tr>
-                            <th>Metric<div class="resize-handle"></div></th>
-                            <th>Count<div class="resize-handle"></div></th>
-                            <th>Rate/min</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Signal Candidates</td>
-                            <td id="signalCandidates">--</td>
-                            <td id="signalCandidatesRate">--</td>
-                        </tr>
-                        <tr>
-                            <td>Signals Processed</td>
-                            <td id="signalsProcessed">--</td>
-                            <td id="signalsProcessedRate">--</td>
-                        </tr>
-                        <tr>
-                            <td>Signals Confirmed</td>
-                            <td id="signalsConfirmed">--</td>
-                            <td id="signalsConfirmedRate">--</td>
-                        </tr>
-                        <tr>
-                            <td>Signals Rejected</td>
-                            <td id="signalsRejected">--</td>
-                            <td id="signalsRejectedRate">--</td>
-                        </tr>
-                    </tbody>
-                </table>
+                <!-- Combined Signal Processing -->
+                <div class="metric-card">
+                    <button
+                        class="reset-columns-btn"
+                        onclick="resetTableColumns('combinedSignalTable')"
+                        title="Reset column widths"
+                    >
+                        Reset
+                    </button>
+                    <h3 class="card-title">Signal Processing & Types</h3>
 
-                <!-- Signal Types Section -->
-                <h4 style="margin: 20px 0 10px 0; color: var(--text-primary); font-size: 16px; font-weight: bold; border-bottom: 2px solid var(--primary-color, #007bff); padding-bottom: 5px;">Signal Types Breakdown</h4>
-                <table id="signalTypesTable">
-                    <thead>
-                        <tr>
-                            <th>Type<div class="resize-handle"></div></th>
-                            <th>Candidates<div class="resize-handle"></div></th>
-                            <th>Confirmed<div class="resize-handle"></div></th>
-                            <th>Rejected<div class="resize-handle"></div></th>
-                            <th>Success Rate</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Absorption</td>
-                            <td id="absorptionCandidates">--</td>
-                            <td id="absorptionConfirmed">--</td>
-                            <td id="absorptionRejected">--</td>
-                            <td id="absorptionSuccessRate">--</td>
-                        </tr>
-                        <tr>
-                            <td>Exhaustion</td>
-                            <td id="exhaustionCandidates">--</td>
-                            <td id="exhaustionConfirmed">--</td>
-                            <td id="exhaustionRejected">--</td>
-                            <td id="exhaustionSuccessRate">--</td>
-                        </tr>
-                        <tr>
-                            <td>Accumulation (Legacy)</td>
-                            <td id="accumulationCandidates">--</td>
-                            <td id="accumulationConfirmed">--</td>
-                            <td id="accumulationRejected">--</td>
-                            <td id="accumulationSuccessRate">--</td>
-                        </tr>
-                        <tr>
-                            <td>Distribution (Legacy)</td>
-                            <td id="distributionCandidates">--</td>
-                            <td id="distributionConfirmed">--</td>
-                            <td id="distributionRejected">--</td>
-                            <td id="distributionSuccessRate">--</td>
-                        </tr>
-                        <tr class="zone-highlight">
-                            <td><strong>Accumulation Zones</strong></td>
-                            <td id="accumulationZoneCandidates">--</td>
-                            <td id="accumulationZoneConfirmed">--</td>
-                            <td id="accumulationZoneRejected">--</td>
-                            <td id="accumulationZoneSuccessRate">--</td>
-                        </tr>
-                        <tr class="zone-highlight">
-                            <td><strong>Distribution Zones</strong></td>
-                            <td id="distributionZoneCandidates">--</td>
-                            <td id="distributionZoneConfirmed">--</td>
-                            <td id="distributionZoneRejected">--</td>
-                            <td id="distributionZoneSuccessRate">--</td>
-                        </tr>
-                        <tr>
-                            <td>CVD Confirmation</td>
-                            <td id="cvdCandidates">--</td>
-                            <td id="cvdConfirmed">--</td>
-                            <td id="cvdRejected">--</td>
-                            <td id="cvdSuccessRate">--</td>
-                        </tr>
-                    </tbody>
-                </table>
+                    <!-- Signal Processing Overview Section -->
+                    <h4
+                        style="
+                            margin: 20px 0 10px 0;
+                            color: var(--text-primary);
+                            font-size: 16px;
+                            font-weight: bold;
+                            border-bottom: 2px solid
+                                var(--primary-color, #007bff);
+                            padding-bottom: 5px;
+                        "
+                    >
+                        Signal Processing Overview
+                    </h4>
+                    <table id="signalOverviewTable" style="margin-bottom: 20px">
+                        <thead>
+                            <tr>
+                                <th>
+                                    Metric
+                                    <div class="resize-handle"></div>
+                                </th>
+                                <th>
+                                    Count
+                                    <div class="resize-handle"></div>
+                                </th>
+                                <th>Rate/min</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Signal Candidates</td>
+                                <td id="signalCandidates">--</td>
+                                <td id="signalCandidatesRate">--</td>
+                            </tr>
+                            <tr>
+                                <td>Signals Processed</td>
+                                <td id="signalsProcessed">--</td>
+                                <td id="signalsProcessedRate">--</td>
+                            </tr>
+                            <tr>
+                                <td>Signals Confirmed</td>
+                                <td id="signalsConfirmed">--</td>
+                                <td id="signalsConfirmedRate">--</td>
+                            </tr>
+                            <tr>
+                                <td>Signals Rejected</td>
+                                <td id="signalsRejected">--</td>
+                                <td id="signalsRejectedRate">--</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Signal Types Section -->
+                    <h4
+                        style="
+                            margin: 20px 0 10px 0;
+                            color: var(--text-primary);
+                            font-size: 16px;
+                            font-weight: bold;
+                            border-bottom: 2px solid
+                                var(--primary-color, #007bff);
+                            padding-bottom: 5px;
+                        "
+                    >
+                        Signal Types Breakdown
+                    </h4>
+                    <table id="signalTypesTable">
+                        <thead>
+                            <tr>
+                                <th>
+                                    Type
+                                    <div class="resize-handle"></div>
+                                </th>
+                                <th>
+                                    Candidates
+                                    <div class="resize-handle"></div>
+                                </th>
+                                <th>
+                                    Confirmed
+                                    <div class="resize-handle"></div>
+                                </th>
+                                <th>
+                                    Rejected
+                                    <div class="resize-handle"></div>
+                                </th>
+                                <th>Success Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Absorption</td>
+                                <td id="absorptionCandidates">--</td>
+                                <td id="absorptionConfirmed">--</td>
+                                <td id="absorptionRejected">--</td>
+                                <td id="absorptionSuccessRate">--</td>
+                            </tr>
+                            <tr>
+                                <td>Exhaustion</td>
+                                <td id="exhaustionCandidates">--</td>
+                                <td id="exhaustionConfirmed">--</td>
+                                <td id="exhaustionRejected">--</td>
+                                <td id="exhaustionSuccessRate">--</td>
+                            </tr>
+                            <tr>
+                                <td>Accumulation (Legacy)</td>
+                                <td id="accumulationCandidates">--</td>
+                                <td id="accumulationConfirmed">--</td>
+                                <td id="accumulationRejected">--</td>
+                                <td id="accumulationSuccessRate">--</td>
+                            </tr>
+                            <tr>
+                                <td>Distribution (Legacy)</td>
+                                <td id="distributionCandidates">--</td>
+                                <td id="distributionConfirmed">--</td>
+                                <td id="distributionRejected">--</td>
+                                <td id="distributionSuccessRate">--</td>
+                            </tr>
+                            <tr class="zone-highlight">
+                                <td><strong>Accumulation Zones</strong></td>
+                                <td id="accumulationZoneCandidates">--</td>
+                                <td id="accumulationZoneConfirmed">--</td>
+                                <td id="accumulationZoneRejected">--</td>
+                                <td id="accumulationZoneSuccessRate">--</td>
+                            </tr>
+                            <tr class="zone-highlight">
+                                <td><strong>Distribution Zones</strong></td>
+                                <td id="distributionZoneCandidates">--</td>
+                                <td id="distributionZoneConfirmed">--</td>
+                                <td id="distributionZoneRejected">--</td>
+                                <td id="distributionZoneSuccessRate">--</td>
+                            </tr>
+                            <tr>
+                                <td>CVD Confirmation</td>
+                                <td id="cvdCandidates">--</td>
+                                <td id="cvdConfirmed">--</td>
+                                <td id="cvdRejected">--</td>
+                                <td id="cvdSuccessRate">--</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
                 <div class="resize-handle" id="resize2"></div>
             </section>
@@ -477,138 +590,179 @@
             <section class="column" id="column3">
                 <!-- Zone Statistics -->
                 <div class="metric-card">
-                <button
-                    class="reset-columns-btn"
-                    onclick="resetTableColumns('zoneStatsTable')"
-                    title="Reset column widths"
-                >
-                    Reset
-                </button>
-                <h3 class="card-title">Zone Analytics</h3>
-                <table id="zoneStatsTable">
-                    <thead>
-                        <tr>
-                            <th>Zone Metric<div class="resize-handle"></div></th>
-                            <th>Accumulation<div class="resize-handle"></div></th>
-                            <th>Distribution</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Active Zones</td>
-                            <td id="activeAccumulationZones">--</td>
-                            <td id="activeDistributionZones">--</td>
-                        </tr>
-                        <tr>
-                            <td>Completed (24h)</td>
-                            <td id="completedAccumulationZones">--</td>
-                            <td id="completedDistributionZones">--</td>
-                        </tr>
-                        <tr>
-                            <td>Avg Strength</td>
-                            <td id="avgAccumulationStrength">--</td>
-                            <td id="avgDistributionStrength">--</td>
-                        </tr>
-                        <tr>
-                            <td>Avg Duration</td>
-                            <td id="avgAccumulationDuration">--</td>
-                            <td id="avgDistributionDuration">--</td>
-                        </tr>
-                        <tr>
-                            <td>Success Rate</td>
-                            <td id="accumulationZoneSuccessRate2">--</td>
-                            <td id="distributionZoneSuccessRate2">--</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+                    <button
+                        class="reset-columns-btn"
+                        onclick="resetTableColumns('zoneStatsTable')"
+                        title="Reset column widths"
+                    >
+                        Reset
+                    </button>
+                    <h3 class="card-title">Zone Analytics</h3>
+                    <table id="zoneStatsTable">
+                        <thead>
+                            <tr>
+                                <th>
+                                    Zone Metric
+                                    <div class="resize-handle"></div>
+                                </th>
+                                <th>
+                                    Accumulation
+                                    <div class="resize-handle"></div>
+                                </th>
+                                <th>Distribution</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Active Zones</td>
+                                <td id="activeAccumulationZones">--</td>
+                                <td id="activeDistributionZones">--</td>
+                            </tr>
+                            <tr>
+                                <td>Completed (24h)</td>
+                                <td id="completedAccumulationZones">--</td>
+                                <td id="completedDistributionZones">--</td>
+                            </tr>
+                            <tr>
+                                <td>Avg Strength</td>
+                                <td id="avgAccumulationStrength">--</td>
+                                <td id="avgDistributionStrength">--</td>
+                            </tr>
+                            <tr>
+                                <td>Avg Duration</td>
+                                <td id="avgAccumulationDuration">--</td>
+                                <td id="avgDistributionDuration">--</td>
+                            </tr>
+                            <tr>
+                                <td>Success Rate</td>
+                                <td id="accumulationZoneSuccessRate2">--</td>
+                                <td id="distributionZoneSuccessRate2">--</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
 
-            <!-- Combined Signal Quality & Rejection Reasons -->
-            <div class="metric-card">
-                <button
-                    class="reset-columns-btn"
-                    onclick="resetTableColumns('combinedQualityTable')"
-                    title="Reset column widths"
-                >
-                    Reset
-                </button>
-                <h3 class="card-title">Signal Quality & Rejection Analysis</h3>
-                
-                <!-- Signal Quality Section -->
-                <h4 style="margin: 20px 0 10px 0; color: var(--text-primary); font-size: 16px; font-weight: bold; border-bottom: 2px solid var(--primary-color, #007bff); padding-bottom: 5px;">Signal Quality Metrics</h4>
-                <table id="signalQualityTable" style="margin-bottom: 20px;">
-                    <thead>
-                        <tr>
-                            <th>Metric<div class="resize-handle"></div></th>
-                            <th>Value</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Average Confidence</td>
-                            <td id="avgConfidence">--</td>
-                        </tr>
-                        <tr>
-                            <td>Confidence P50</td>
-                            <td id="confidenceP50">--</td>
-                        </tr>
-                        <tr>
-                            <td>Confidence P95</td>
-                            <td id="confidenceP95">--</td>
-                        </tr>
-                        <tr>
-                            <td>Avg Correlation Strength</td>
-                            <td id="avgCorrelationStrength">--</td>
-                        </tr>
-                        <tr>
-                            <td>Avg Processing Time</td>
-                            <td id="avgProcessingTime">--</td>
-                        </tr>
-                        <tr>
-                            <td>Queue Depth</td>
-                            <td id="queueDepth">--</td>
-                        </tr>
-                    </tbody>
-                </table>
+                <!-- Combined Signal Quality & Rejection Reasons -->
+                <div class="metric-card">
+                    <button
+                        class="reset-columns-btn"
+                        onclick="resetTableColumns('combinedQualityTable')"
+                        title="Reset column widths"
+                    >
+                        Reset
+                    </button>
+                    <h3 class="card-title">
+                        Signal Quality & Rejection Analysis
+                    </h3>
 
-                <!-- Rejection Reasons Section -->
-                <h4 style="margin: 20px 0 10px 0; color: var(--text-primary); font-size: 16px; font-weight: bold; border-bottom: 2px solid var(--primary-color, #007bff); padding-bottom: 5px;">Rejection Reasons Analysis</h4>
-                <table id="rejectionReasonsTable">
-                    <thead>
-                        <tr>
-                            <th>Reason<div class="resize-handle"></div></th>
-                            <th>Count<div class="resize-handle"></div></th>
-                            <th>Percentage</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Low Confidence</td>
-                            <td id="rejectedLowConfidence">--</td>
-                            <td id="rejectedLowConfidencePercent">--</td>
-                        </tr>
-                        <tr>
-                            <td>Unhealthy Market</td>
-                            <td id="rejectedUnhealthyMarket">--</td>
-                            <td id="rejectedUnhealthyMarketPercent">--</td>
-                        </tr>
-                        <tr>
-                            <td>Processing Error</td>
-                            <td id="rejectedProcessingError">--</td>
-                            <td id="rejectedProcessingErrorPercent">--</td>
-                        </tr>
-                        <tr>
-                            <td>Timeout</td>
-                            <td id="rejectedTimeout">--</td>
-                            <td id="rejectedTimeoutPercent">--</td>
-                        </tr>
-                        <tr>
-                            <td>Duplicate</td>
-                            <td id="rejectedDuplicate">--</td>
-                            <td id="rejectedDuplicatePercent">--</td>
-                        </tr>
-                    </tbody>
-                </table>
+                    <!-- Signal Quality Section -->
+                    <h4
+                        style="
+                            margin: 20px 0 10px 0;
+                            color: var(--text-primary);
+                            font-size: 16px;
+                            font-weight: bold;
+                            border-bottom: 2px solid
+                                var(--primary-color, #007bff);
+                            padding-bottom: 5px;
+                        "
+                    >
+                        Signal Quality Metrics
+                    </h4>
+                    <table id="signalQualityTable" style="margin-bottom: 20px">
+                        <thead>
+                            <tr>
+                                <th>
+                                    Metric
+                                    <div class="resize-handle"></div>
+                                </th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Average Confidence</td>
+                                <td id="avgConfidence">--</td>
+                            </tr>
+                            <tr>
+                                <td>Confidence P50</td>
+                                <td id="confidenceP50">--</td>
+                            </tr>
+                            <tr>
+                                <td>Confidence P95</td>
+                                <td id="confidenceP95">--</td>
+                            </tr>
+                            <tr>
+                                <td>Avg Correlation Strength</td>
+                                <td id="avgCorrelationStrength">--</td>
+                            </tr>
+                            <tr>
+                                <td>Avg Processing Time</td>
+                                <td id="avgProcessingTime">--</td>
+                            </tr>
+                            <tr>
+                                <td>Queue Depth</td>
+                                <td id="queueDepth">--</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Rejection Reasons Section -->
+                    <h4
+                        style="
+                            margin: 20px 0 10px 0;
+                            color: var(--text-primary);
+                            font-size: 16px;
+                            font-weight: bold;
+                            border-bottom: 2px solid
+                                var(--primary-color, #007bff);
+                            padding-bottom: 5px;
+                        "
+                    >
+                        Rejection Reasons Analysis
+                    </h4>
+                    <table id="rejectionReasonsTable">
+                        <thead>
+                            <tr>
+                                <th>
+                                    Reason
+                                    <div class="resize-handle"></div>
+                                </th>
+                                <th>
+                                    Count
+                                    <div class="resize-handle"></div>
+                                </th>
+                                <th>Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Low Confidence</td>
+                                <td id="rejectedLowConfidence">--</td>
+                                <td id="rejectedLowConfidencePercent">--</td>
+                            </tr>
+                            <tr>
+                                <td>Unhealthy Market</td>
+                                <td id="rejectedUnhealthyMarket">--</td>
+                                <td id="rejectedUnhealthyMarketPercent">--</td>
+                            </tr>
+                            <tr>
+                                <td>Processing Error</td>
+                                <td id="rejectedProcessingError">--</td>
+                                <td id="rejectedProcessingErrorPercent">--</td>
+                            </tr>
+                            <tr>
+                                <td>Timeout</td>
+                                <td id="rejectedTimeout">--</td>
+                                <td id="rejectedTimeoutPercent">--</td>
+                            </tr>
+                            <tr>
+                                <td>Duplicate</td>
+                                <td id="rejectedDuplicate">--</td>
+                                <td id="rejectedDuplicatePercent">--</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </section>
         </main>

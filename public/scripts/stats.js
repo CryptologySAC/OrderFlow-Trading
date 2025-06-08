@@ -12,9 +12,7 @@ function updateTables(metrics) {
     console.log("metrics.counters:", metrics.counters);
     console.log("metrics.gauges:", metrics.gauges);
     console.log("metrics.histograms:", metrics.histograms);
-    
-    // Debug logging removed
-    
+
     // Update counters table
     const countersBody = document.querySelector("#countersTable tbody");
     if (countersBody) {
@@ -501,44 +499,38 @@ function setupColumnResizing() {
     }
     console.log("Interact.js is available, setting up resizing...");
 
-    // Setup column resizing functionality exactly like dashboard.html
-    interact(".resize-handle").draggable({
+    // Setup column resizing for all resizable table headers
+    interact(".resizable").draggable({
         axis: "x",
         listeners: {
+            start(event) {
+                event.target.classList.add("resizing");
+            },
             move(event) {
-                const handle = event.target;
-                const handleId = handle.id;
-                const dashboard = document.querySelector(".dashboard");
-                const dashboardRect = dashboard.getBoundingClientRect();
+                const th = event.target;
+                const table = th.closest("table");
+                const columnIndex = Array.from(th.parentNode.children).indexOf(
+                    th
+                );
 
-                if (handleId === "resize1") {
-                    // Resizing between column 1 and column 2
-                    const column1 = document.getElementById("column1");
-                    const column1Rect = column1.getBoundingClientRect();
+                // Get all cells in this column
+                const cells = table.querySelectorAll(
+                    `tr > *:nth-child(${columnIndex + 1})`
+                );
 
-                    const newWidth = Math.min(
-                        Math.max(column1Rect.width + event.dx, 200),
-                        dashboardRect.width * 0.5
-                    );
-                    const newPercent = (newWidth / dashboardRect.width) * 100;
+                // Calculate new width
+                const currentWidth = th.offsetWidth;
+                const newWidth = Math.max(80, currentWidth + event.dx);
 
-                    column1.style.flex = `0 0 ${newPercent}%`;
-                } else if (handleId === "resize2") {
-                    // Resizing between column 2 and column 3
-                    const column3 = document.getElementById("column3");
-                    const column3Rect = column3.getBoundingClientRect();
-
-                    const newWidth = Math.min(
-                        Math.max(column3Rect.width - event.dx, 150),
-                        dashboardRect.width * 0.3
-                    );
-                    const newPercent = (newWidth / dashboardRect.width) * 100;
-
-                    column3.style.flex = `0 0 ${newPercent}%`;
-                }
-
-                // Save column widths
-                saveColumnWidths();
+                // Apply new width to all cells in the column
+                cells.forEach((cell) => {
+                    cell.style.width = `${newWidth}px`;
+                    cell.style.minWidth = `${newWidth}px`;
+                    cell.style.maxWidth = `${newWidth}px`;
+                });
+            },
+            end(event) {
+                event.target.classList.remove("resizing");
             },
         },
     });
@@ -546,16 +538,16 @@ function setupColumnResizing() {
 
 // Save and restore column widths
 function saveColumnWidths() {
-    const column1 = document.getElementById("column1");
-    const column3 = document.getElementById("column3");
-    
-    if (column1 && column3) {
-        const widths = {
-            column1: column1.style.flex || "25%",
-            column3: column3.style.flex || "30%"
-        };
-        localStorage.setItem("statsColumnWidths", JSON.stringify(widths));
-    }
+    const tables = document.querySelectorAll("table[id]");
+    const widths = {};
+
+    tables.forEach((table) => {
+        const tableId = table.id;
+        const headers = table.querySelectorAll("th.resizable");
+        widths[tableId] = Array.from(headers).map((th) => th.offsetWidth);
+    });
+
+    localStorage.setItem("statsColumnWidths", JSON.stringify(widths));
 }
 
 function restoreColumnWidths() {
@@ -563,17 +555,30 @@ function restoreColumnWidths() {
         const savedWidths = JSON.parse(
             localStorage.getItem("statsColumnWidths") || "{}"
         );
-        
-        const column1 = document.getElementById("column1");
-        const column3 = document.getElementById("column3");
-        
-        if (savedWidths.column1 && column1) {
-            column1.style.flex = savedWidths.column1;
-        }
-        
-        if (savedWidths.column3 && column3) {
-            column3.style.flex = savedWidths.column3;
-        }
+
+        Object.entries(savedWidths).forEach(([tableId, widths]) => {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+
+            const headers = table.querySelectorAll("th.resizable");
+            widths.forEach((width, index) => {
+                const th = headers[index];
+                if (th && width) {
+                    const columnIndex = Array.from(
+                        th.parentNode.children
+                    ).indexOf(th);
+                    const cells = table.querySelectorAll(
+                        `tr > *:nth-child(${columnIndex + 1})`
+                    );
+
+                    cells.forEach((cell) => {
+                        cell.style.width = `${width}px`;
+                        cell.style.minWidth = `${width}px`;
+                        cell.style.maxWidth = `${width}px`;
+                    });
+                }
+            });
+        });
     } catch (error) {
         console.error("Failed to restore column widths:", error);
     }
@@ -620,16 +625,16 @@ document.addEventListener("DOMContentLoaded", () => {
     initVisuals();
     connect();
 
-    // Setup column resizing after DOM is loaded
-    setTimeout(() => {
-        try {
-            console.log("Setting up column resizing...");
-            restoreColumnWidths();
-            setupColumnResizing();
-            setupAutoSave();
-            console.log("Column resizing setup complete");
-        } catch (error) {
-            console.error("Error setting up column resizing:", error);
-        }
-    }, 100);
+    // Setup column resizing after DOM is loaded - TEMPORARILY DISABLED FOR DEBUGGING
+    // setTimeout(() => {
+    //     try {
+    //         console.log("Setting up column resizing...");
+    //         restoreColumnWidths();
+    //         setupColumnResizing();
+    //         setupAutoSave();
+    //         console.log("Column resizing setup complete");
+    //     } catch (error) {
+    //         console.error("Error setting up column resizing:", error);
+    //     }
+    // }, 100);
 });
