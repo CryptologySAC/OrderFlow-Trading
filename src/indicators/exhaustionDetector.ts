@@ -45,6 +45,7 @@ interface ExhaustionConditions {
     currentPassive: number;
     avgPassive: number;
     minPassive: number;
+    maxPassive: number;
     avgLiquidity: number;
     passiveRatio: number; // current/avg passive
     depletionRatio: number; // aggressive/avg passive
@@ -56,6 +57,15 @@ interface ExhaustionConditions {
     isValid: boolean;
     confidence: number; // 0-1 confidence in the data
     dataQuality: "high" | "medium" | "low" | "insufficient";
+    // Additional fields for consistency with absorption detector
+    absorptionRatio: number; // alias for depletionRatio for compatibility
+    passiveStrength: number; // alias for passiveRatio for compatibility
+    consistency: number; // how consistently passive is maintained
+    velocityIncrease: number; // velocity change over time
+    dominantSide: "buy" | "sell" | "neutral"; // which side is dominant
+    hasRefill: boolean; // whether passive refill was detected
+    icebergSignal: number; // iceberg detection score (0-1)
+    liquidityGradient: number; // liquidity gradient around zone
 }
 
 /**
@@ -285,7 +295,7 @@ export class ExhaustionDetector
 
         // Log significant threshold changes
         if (this.hasSignificantChange(oldThresholds, this.currentThresholds)) {
-            this.logger.info("[ExhaustionDetector] Thresholds adapted", {
+            this.logger?.info("[ExhaustionDetector] Thresholds adapted", {
                 old: oldThresholds,
                 new: this.currentThresholds,
                 timestamp: new Date().toISOString(),
@@ -914,110 +924,9 @@ export class ExhaustionDetector
         }, 5000); // 5 second pause
     }
 
-    private checkExhaustionConditions(
-        price: number,
-        side: "buy" | "sell"
-    ): {
-        ratio: number;
-        passiveStrength: number;
-        refillGap: number;
-        imbalance: number;
-        spread: number;
-        recentAgg: number;
-    } {
-        const avgLiquidity = this.passiveVolumeTracker.getAveragePassiveBySide(
-            price,
-            side === "buy" ? "sell" : "buy",
-            300000
-        );
-
-        const spreadInfo = this.getCurrentSpread();
-
-        const recentAggressive = this.getAggressiveVolumeAtPrice(price, 5000);
-
-        const zoneHist = this.zonePassiveHistory.get(this.calculateZone(price));
-        const now = Date.now();
-        const samples = zoneHist
-            ? zoneHist
-                  .toArray()
-                  .filter((s) => now - s.timestamp < this.windowMs)
-            : [];
-        const rollingPassive = DetectorUtils.calculateMean(
-            samples.map((s) => s.total)
-        );
-
-        /* imbalance  (|bid-ask| / total) */
-        const imbalance = this.checkPassiveImbalance(
-            this.calculateZone(price)
-        ).imbalance;
-
-        return {
-            ratio: rollingPassive > 0 ? recentAggressive / rollingPassive : 1,
-            passiveStrength:
-                rollingPassive > 0 && avgLiquidity > 0
-                    ? rollingPassive / avgLiquidity
-                    : 0,
-            refillGap: samples.length
-                ? samples.at(-1)!.total - samples[0].total
-                : 0,
-            imbalance,
-            spread: spreadInfo ? spreadInfo.spread : NaN,
-            recentAgg: recentAggressive,
-        };
-    }
-
     /* ------------------------------------------------------------------ */
     /*  Confidence score (0-1)                                            */
     /* ------------------------------------------------------------------ */
-    /**
-     * Calculate exhaustion confidence score (0-1)
-     */
-    private calculateExhaustionScore_old(
-        conditions: ExhaustionConditions
-    ): number {
-        let score = 0;
-
-        // Factor 1: Depletion ratio (aggressive vs passive)
-        if (conditions.depletionRatio > 20)
-            score += 0.35; // Very high depletion
-        else if (conditions.depletionRatio > 10)
-            score += 0.25; // High depletion
-        else if (conditions.depletionRatio > 5) score += 0.15; // Moderate depletion
-
-        // Factor 2: Passive strength relative to average
-        if (conditions.passiveRatio < 0.2)
-            score += 0.25; // Severely depleted
-        else if (conditions.passiveRatio < 0.4)
-            score += 0.15; // Moderately depleted
-        else if (conditions.passiveRatio < 0.6) score += 0.1; // Somewhat depleted
-
-        // Factor 3: Continuous depletion (negative refill gap)
-        if (conditions.refillGap < -conditions.avgPassive * 0.5) score += 0.15;
-        else if (conditions.refillGap < 0) score += 0.1;
-
-        // Factor 4: Passive imbalance (one-sided depletion)
-        if (conditions.imbalance > 0.8) score += 0.1;
-        else if (conditions.imbalance > 0.6) score += 0.05;
-
-        // Factor 5: Spread widening (sign of liquidity stress)
-        if (this.features.spreadAdjustment) {
-            if (conditions.spread > 0.005)
-                score += 0.05; // 0.5%+ spread
-            else if (conditions.spread > 0.002) score += 0.03; // 0.2%+ spread
-        }
-
-        // Factor 6: Passive velocity (accelerating depletion)
-        if (this.features.volumeVelocity && conditions.passiveVelocity < -100) {
-            score += 0.05; // Rapid depletion
-        }
-
-        // Penalty for insufficient data
-        if (conditions.sampleCount < 5) {
-            score *= 0.7; // Reduce confidence with limited data
-        }
-
-        return Math.max(0, Math.min(1, score));
-    }
 
     /**
      * Safe analysis that returns Result type instead of dangerous defaults
@@ -1112,11 +1021,47 @@ export class ExhaustionDetector
                 avgLiquidity
             );
 
+            // Calculate additional fields for compatibility
+            const maxPassive =
+                samples.length > 0
+                    ? Math.max(...samples.map((s) => s.total))
+                    : 0;
+
+            // Calculate consistency (how consistently passive is maintained)
+            const consistency = this.calculateConsistency(
+                samples.map((s) => s.total)
+            );
+
+            // Calculate velocity increase
+            const velocityIncrease = this.calculateVelocityIncrease(samples);
+
+            // Determine dominant side based on imbalance
+            const dominantSide = imbalanceResult.success
+                ? imbalanceResult.data.imbalance > 0.1
+                    ? "sell"
+                    : imbalanceResult.data.imbalance < -0.1
+                      ? "buy"
+                      : "neutral"
+                : ("neutral" as const);
+
+            // Calculate refill detection
+            const hasRefill = this.detectPassiveRefill(samples);
+
+            // Calculate iceberg signal (simplified for exhaustion)
+            const icebergSignal = this.calculateIcebergSignal(samples);
+
+            // Calculate liquidity gradient (simplified for exhaustion)
+            const liquidityGradient = this.calculateLiquidityGradient(
+                samples,
+                avgLiquidity
+            );
+
             const conditions: ExhaustionConditions = {
                 aggressiveVolume: recentAggressive,
                 currentPassive,
                 avgPassive,
                 minPassive,
+                maxPassive,
                 avgLiquidity,
                 passiveRatio,
                 depletionRatio,
@@ -1131,6 +1076,15 @@ export class ExhaustionDetector
                 isValid: true,
                 confidence,
                 dataQuality: quality,
+                // Additional fields for compatibility
+                absorptionRatio: depletionRatio, // alias for compatibility
+                passiveStrength: passiveRatio, // alias for compatibility
+                consistency,
+                velocityIncrease,
+                dominantSide,
+                hasRefill,
+                icebergSignal,
+                liquidityGradient,
             };
 
             return { success: true, data: conditions };
@@ -1141,6 +1095,210 @@ export class ExhaustionDetector
                 error: error as Error,
                 fallbackSafe: false,
             };
+        }
+    }
+
+    /**
+     * Calculate consistency (how consistently passive is maintained)
+     */
+    private calculateConsistency(passiveValues: number[]): number {
+        if (passiveValues.length < 3) {
+            return 0.7; // Default reasonable consistency for small samples
+        }
+
+        try {
+            const avgPassive = DetectorUtils.calculateMean(passiveValues);
+            if (avgPassive === 0) return 0.5; // Neutral consistency if no passive volume
+
+            let consistentPeriods = 0;
+            for (const value of passiveValues) {
+                // Count periods where passive stays above 70% of average
+                if (value >= avgPassive * 0.7) {
+                    consistentPeriods++;
+                }
+            }
+
+            const consistency = consistentPeriods / passiveValues.length;
+
+            // Safety checks
+            if (!isFinite(consistency)) return 0.5;
+            return Math.max(0, Math.min(1, consistency));
+        } catch (error) {
+            this.logger?.warn(
+                `[ExhaustionDetector] Error calculating consistency: ${(error as Error).message}`
+            );
+            return 0.5; // Safe default
+        }
+    }
+
+    /**
+     * Calculate velocity increase over time
+     */
+    private calculateVelocityIncrease(samples: ZoneSample[]): number {
+        if (samples.length < 5) {
+            return 1.0; // Neutral velocity for insufficient data
+        }
+
+        try {
+            // Calculate velocity change over time
+            const recent = samples.slice(-3); // Last 3 snapshots
+            const earlier = samples.slice(-6, -3); // Previous 3 snapshots
+
+            if (recent.length < 2 || earlier.length < 2) {
+                return 1.0; // Neutral velocity
+            }
+
+            // Calculate velocity for recent period
+            const recentVelocity = this.calculatePeriodVelocity(recent);
+            const earlierVelocity = this.calculatePeriodVelocity(earlier);
+
+            // Return velocity increase ratio with safety checks
+            if (earlierVelocity <= 0) return 1.0; // Avoid division by zero
+
+            const velocityRatio = recentVelocity / earlierVelocity;
+
+            // Safety checks and bounds
+            if (!isFinite(velocityRatio)) return 1.0;
+            return Math.max(0.1, Math.min(10, velocityRatio)); // Reasonable bounds
+        } catch (error) {
+            this.logger?.warn(
+                `[ExhaustionDetector] Error calculating velocity increase: ${(error as Error).message}`
+            );
+            return 1.0; // Safe default
+        }
+    }
+
+    /**
+     * Calculate period velocity
+     */
+    private calculatePeriodVelocity(samples: ZoneSample[]): number {
+        if (samples.length < 2) return 0;
+
+        try {
+            let totalVelocity = 0;
+            let validPeriods = 0;
+
+            for (let i = 1; i < samples.length; i++) {
+                const current = samples[i];
+                const previous = samples[i - 1];
+                const timeDelta = current.timestamp - previous.timestamp;
+
+                if (timeDelta > 0) {
+                    const volumeChange = Math.abs(
+                        current.total - previous.total
+                    );
+                    const velocity = volumeChange / (timeDelta / 1000); // per second
+
+                    if (isFinite(velocity)) {
+                        totalVelocity += velocity;
+                        validPeriods++;
+                    }
+                }
+            }
+
+            const avgVelocity =
+                validPeriods > 0 ? totalVelocity / validPeriods : 0;
+            return isFinite(avgVelocity) ? avgVelocity : 0;
+        } catch (error) {
+            this.logger?.warn(
+                `[ExhaustionDetector] Error calculating period velocity: ${(error as Error).message}`
+            );
+            return 0;
+        }
+    }
+
+    /**
+     * Detect passive refill patterns
+     */
+    private detectPassiveRefill(samples: ZoneSample[]): boolean {
+        if (samples.length < 5) return false;
+
+        try {
+            const recent = samples.slice(-5);
+            let refillEvents = 0;
+
+            for (let i = 1; i < recent.length; i++) {
+                const current = recent[i].total;
+                const previous = recent[i - 1].total;
+
+                if (current > previous * 1.1) {
+                    // 10% increase
+                    refillEvents++;
+                }
+            }
+
+            return refillEvents >= 2;
+        } catch (error) {
+            this.logger?.warn(
+                `[ExhaustionDetector] Error detecting refill: ${(error as Error).message}`
+            );
+            return false;
+        }
+    }
+
+    /**
+     * Calculate iceberg signal (simplified for exhaustion)
+     */
+    private calculateIcebergSignal(samples: ZoneSample[]): number {
+        if (samples.length < 10) return 0;
+
+        try {
+            let refillCount = 0;
+            let significantRefills = 0;
+            let previousLevel = samples[0].total;
+
+            for (let i = 1; i < samples.length; i++) {
+                const currentLevel = samples[i].total;
+                const prevLevel = samples[i - 1].total;
+
+                // Detect refill after depletion
+                if (
+                    prevLevel < previousLevel * 0.7 && // Depleted
+                    currentLevel > previousLevel * 0.9 // Refilled
+                ) {
+                    refillCount++;
+
+                    if (currentLevel > previousLevel) {
+                        significantRefills++; // Even stronger than before
+                    }
+                }
+
+                previousLevel = Math.max(previousLevel, currentLevel);
+            }
+
+            // Calculate iceberg confidence
+            const refillRate = refillCount / (samples.length / 10);
+            const strengthRate = significantRefills / Math.max(1, refillCount);
+
+            return Math.min(1, refillRate * 0.7 + strengthRate * 0.3);
+        } catch (error) {
+            this.logger?.warn(
+                `[ExhaustionDetector] Error calculating iceberg signal: ${(error as Error).message}`
+            );
+            return 0;
+        }
+    }
+
+    /**
+     * Calculate liquidity gradient (simplified for exhaustion)
+     */
+    private calculateLiquidityGradient(
+        samples: ZoneSample[],
+        avgLiquidity: number
+    ): number {
+        if (samples.length < 3 || avgLiquidity === 0) return 0;
+
+        try {
+            // Calculate gradient strength (higher = more liquidity depth)
+            const currentLiquidity = samples[samples.length - 1]?.total || 0;
+            const gradientStrength = currentLiquidity / avgLiquidity;
+
+            return Math.min(1, Math.max(0, gradientStrength));
+        } catch (error) {
+            this.logger?.warn(
+                `[ExhaustionDetector] Error calculating liquidity gradient: ${(error as Error).message}`
+            );
+            return 0;
         }
     }
 }
