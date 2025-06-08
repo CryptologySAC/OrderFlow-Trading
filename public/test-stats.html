@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stats Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Stats Connection Test</h1>
+    <div id="status">Connecting...</div>
+    <div id="data">No data received yet</div>
+    
+    <table id="testTable">
+        <thead>
+            <tr>
+                <th>Metric</th>
+                <th>Value</th>
+            </tr>
+        </thead>
+        <tbody id="testBody">
+        </tbody>
+    </table>
+
+    <script>
+        const wsUrl = `wss://api.cryptology.pe/ltcusdt_trades`;
+        let ws;
+        
+        function connect() {
+            document.getElementById('status').textContent = 'Connecting to ' + wsUrl;
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                document.getElementById('status').textContent = 'Connected! Waiting for data...';
+                console.log("WebSocket connected");
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    document.getElementById('status').textContent = 'Receiving data - Type: ' + msg.type;
+                    document.getElementById('data').textContent = JSON.stringify(msg, null, 2);
+                    console.log("Received message:", msg.type, msg);
+                    
+                    if (msg.type === "stats" || msg.type === "metrics") {
+                        updateTestTable(msg.data || msg);
+                    }
+                } catch (err) {
+                    console.error("Parse error", err);
+                    document.getElementById('status').textContent = 'Parse error: ' + err.message;
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error("WebSocket error:", error);
+                document.getElementById('status').textContent = 'WebSocket error';
+            };
+            
+            ws.onclose = () => {
+                document.getElementById('status').textContent = 'Connection closed, retrying...';
+                setTimeout(connect, 1000);
+            };
+        }
+        
+        function updateTestTable(data) {
+            const tbody = document.getElementById('testBody');
+            tbody.innerHTML = '';
+            
+            if (data.counters) {
+                Object.entries(data.counters).forEach(([name, value]) => {
+                    const row = tbody.insertRow();
+                    row.insertCell(0).textContent = name;
+                    row.insertCell(1).textContent = typeof value === 'object' ? value.value || JSON.stringify(value) : value;
+                });
+            }
+            
+            if (data.gauges) {
+                Object.entries(data.gauges).forEach(([name, value]) => {
+                    const row = tbody.insertRow();
+                    row.insertCell(0).textContent = name + ' (gauge)';
+                    row.insertCell(1).textContent = value;
+                });
+            }
+        }
+        
+        connect();
+    </script>
+</body>
+</html>

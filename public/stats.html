@@ -24,50 +24,39 @@
                 color: var(--text-primary, #333);
             }
 
-            .stats-container {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-                gap: 20px;
-                width: 100%;
-                max-width: none;
-                padding-bottom: 40px;
+            .dashboard {
+                display: flex;
+                height: calc(100vh - 80px);
+                gap: 0;
             }
 
-            .metric-card {
-                background: var(--bg-secondary, #fff);
-                padding: 15px;
-                border: 1px solid var(--border-color, #ddd);
-                border-radius: 8px;
-                box-shadow: 0 2px 4px var(--shadow-color, rgba(0, 0, 0, 0.1));
-                min-height: 100px;
-                overflow-x: auto;
+            .column {
                 position: relative;
+                display: flex;
+                flex-direction: column;
+                height: 100%;
+                overflow-y: auto;
+                padding: 10px;
             }
 
-            table {
-                width: 100%;
-                border-collapse: collapse;
-                font-size: 14px;
-                table-layout: auto;
-                min-width: 100%;
+            #column1 {
+                flex: 0 0 25%;
+                min-width: 200px;
+                max-width: 50%;
             }
 
-            th {
-                background: var(--bg-primary, #f8f9fa);
-                color: var(--text-primary, #333);
-                padding: 8px 12px;
-                text-align: left;
-                border-bottom: 2px solid var(--border-color, #ddd);
-                font-weight: 600;
-                white-space: nowrap;
-                position: relative;
-                min-width: 80px;
-                cursor: col-resize;
-                user-select: none;
+            #column2 {
+                flex: 1;
+                min-width: 300px;
             }
 
-            th.resizable::after {
-                content: '';
+            #column3 {
+                flex: 0 0 30%;
+                min-width: 250px;
+                max-width: 50%;
+            }
+
+            .resize-handle {
                 position: absolute;
                 top: 0;
                 right: 0;
@@ -75,26 +64,124 @@
                 height: 100%;
                 background: transparent;
                 cursor: col-resize;
-                border-right: 2px solid transparent;
-                transition: border-color 0.2s;
+                z-index: 1000;
+                transition: background-color 0.2s;
             }
 
-            th.resizable:hover::after {
-                border-right-color: var(--resize-handle-hover, #007bff);
+            .resize-handle:hover {
+                background-color: var(--resize-handle-hover, #007bff);
             }
 
-            th.resizing::after {
-                border-right-color: var(--resize-handle-active, #0056b3);
+            .resize-handle:active {
+                background-color: var(--resize-handle-active, #0056b3);
             }
+
+            .metric-card {
+                background: var(--bg-secondary, #fff);
+                padding: 15px;
+                border: 1px solid var(--border-color, #ddd);
+                border-radius: 0;
+                box-shadow: none;
+                min-height: auto;
+                overflow-x: auto;
+                position: relative;
+                margin-bottom: 15px;
+                flex-shrink: 0;
+            }
+
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 14px;
+                table-layout: fixed;
+                min-width: 100%;
+            }
+
+            th {
+                background: var(--bg-primary, #f8f9fa);
+                color: var(--text-primary, #333);
+                padding: 8px;
+                text-align: left;
+                border-bottom: 2px solid var(--border-color, #ddd);
+                font-weight: 600;
+                white-space: nowrap;
+                position: relative;
+                user-select: none;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                border-right: none;
+                margin: 0;
+            }
+
+            /* Table column resizing like dashboard.html */
+            th {
+                position: relative;
+            }
+            
+            th .resize-handle {
+                position: absolute;
+                top: 0;
+                right: 0;
+                width: 4px;
+                height: 100%;
+                background: transparent;
+                cursor: col-resize;
+                z-index: 1000;
+            }
+            
+            th .resize-handle:hover {
+                background: var(--resize-handle-hover, #007bff);
+                opacity: 0.7;
+            }
+            
+            th .resize-handle.resizing {
+                background: var(--resize-handle-active, #0056b3);
+                opacity: 1;
+            }
+
+            /* Specific table column widths */
+            #countersTable th:nth-child(1) { width: 60%; }
+            #countersTable th:nth-child(2) { width: 40%; }
+            
+            #gaugesTable th:nth-child(1) { width: 60%; }
+            #gaugesTable th:nth-child(2) { width: 40%; }
+            
+            #histogramsTable th:nth-child(1) { width: 30%; }
+            #histogramsTable th:nth-child(2) { width: 20%; }
+            #histogramsTable th:nth-child(3) { width: 20%; }
+            #histogramsTable th:nth-child(4) { width: 15%; }
+            #histogramsTable th:nth-child(5) { width: 15%; }
+            
+            #signalOverviewTable th:nth-child(1) { width: 50%; }
+            #signalOverviewTable th:nth-child(2) { width: 25%; }
+            #signalOverviewTable th:nth-child(3) { width: 25%; }
+            
+            #signalTypesTable th:nth-child(1) { width: 30%; }
+            #signalTypesTable th:nth-child(2) { width: 20%; }
+            #signalTypesTable th:nth-child(3) { width: 20%; }
+            #signalTypesTable th:nth-child(4) { width: 15%; }
+            #signalTypesTable th:nth-child(5) { width: 15%; }
+            
+            #rejectionReasonsTable th:nth-child(1) { width: 50%; }
+            #rejectionReasonsTable th:nth-child(2) { width: 25%; }
+            #rejectionReasonsTable th:nth-child(3) { width: 25%; }
+            
+            #zoneStatsTable th:nth-child(1) { width: 40%; }
+            #zoneStatsTable th:nth-child(2) { width: 30%; }
+            #zoneStatsTable th:nth-child(3) { width: 30%; }
+            
+            #signalQualityTable th:nth-child(1) { width: 60%; }
+            #signalQualityTable th:nth-child(2) { width: 40%; }
 
             td {
-                padding: 6px 12px;
+                padding: 6px 8px;
                 text-align: left;
                 border-bottom: 1px solid var(--border-light, #eee);
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
-                min-width: 80px;
+                border-right: none;
+                margin: 0;
             }
 
             .card-title {
@@ -166,7 +253,8 @@
                     padding: 10px;
                 }
 
-                th, td {
+                th,
+                td {
                     padding: 4px 8px;
                     font-size: 12px;
                 }
@@ -175,16 +263,24 @@
     </head>
     <body>
         <h1>System Stats</h1>
-        <div class="stats-container">
-            <!-- Counters Table -->
-            <div class="metric-card">
-                <button class="reset-columns-btn" onclick="resetTableColumns('countersTable')" title="Reset column widths">Reset</button>
+        <main class="dashboard">
+            <!-- Column 1: Counters -->
+            <section class="column" id="column1">
+                <!-- Counters Table -->
+                <div class="metric-card">
+                <button
+                    class="reset-columns-btn"
+                    onclick="resetTableColumns('countersTable')"
+                    title="Reset column widths"
+                >
+                    Reset
+                </button>
                 <h3 class="card-title">Counters</h3>
                 <table id="countersTable">
                     <thead>
                         <tr>
-                            <th class="resizable">Metric</th>
-                            <th class="resizable">Value</th>
+                            <th>Metric<div class="resize-handle"></div></th>
+                            <th>Value</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -213,51 +309,76 @@
                         </tr>
                     </tbody>
                 </table>
-            </div>
+                </div>
+                <div class="resize-handle" id="resize1"></div>
+            </section>
 
-            <!-- Gauges Table -->
-            <div class="metric-card">
-                <button class="reset-columns-btn" onclick="resetTableColumns('gaugesTable')" title="Reset column widths">Reset</button>
-                <h3 class="card-title">Gauges</h3>
-                <table id="gaugesTable">
-                    <thead>
-                        <tr>
-                            <th class="resizable">Metric</th>
-                            <th class="resizable">Value</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
-            </div>
+            <!-- Column 2: Gauges & Histograms -->
+            <section class="column" id="column2">
+                <!-- Gauges Table -->
+                <div class="metric-card">
+                    <button
+                        class="reset-columns-btn"
+                        onclick="resetTableColumns('gaugesTable')"
+                        title="Reset column widths"
+                    >
+                        Reset
+                    </button>
+                    <h3 class="card-title">Gauges</h3>
+                    <table id="gaugesTable">
+                        <thead>
+                            <tr>
+                                <th>Metric<div class="resize-handle"></div></th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
 
-            <!-- Histograms Table -->
-            <div class="metric-card">
-                <button class="reset-columns-btn" onclick="resetTableColumns('histogramsTable')" title="Reset column widths">Reset</button>
+                <!-- Histograms Table -->
+                <div class="metric-card">
+                <button
+                    class="reset-columns-btn"
+                    onclick="resetTableColumns('histogramsTable')"
+                    title="Reset column widths"
+                >
+                    Reset
+                </button>
                 <h3 class="card-title">Histograms</h3>
                 <table id="histogramsTable">
                     <thead>
                         <tr>
-                            <th class="resizable">Metric</th>
-                            <th class="resizable">Count</th>
-                            <th class="resizable">Mean</th>
-                            <th class="resizable">Min</th>
-                            <th class="resizable">Max</th>
+                            <th>Metric<div class="resize-handle"></div></th>
+                            <th>Count<div class="resize-handle"></div></th>
+                            <th>Mean<div class="resize-handle"></div></th>
+                            <th>Min<div class="resize-handle"></div></th>
+                            <th>Max</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
                 </table>
             </div>
 
-            <!-- Signal Processing Metrics -->
+            <!-- Combined Signal Processing -->
             <div class="metric-card">
-                <button class="reset-columns-btn" onclick="resetTableColumns('signalOverviewTable')" title="Reset column widths">Reset</button>
-                <h3 class="card-title">Signal Processing Overview</h3>
-                <table id="signalOverviewTable">
+                <button
+                    class="reset-columns-btn"
+                    onclick="resetTableColumns('combinedSignalTable')"
+                    title="Reset column widths"
+                >
+                    Reset
+                </button>
+                <h3 class="card-title">Signal Processing & Types</h3>
+                
+                <!-- Signal Processing Overview Section -->
+                <h4 style="margin: 20px 0 10px 0; color: var(--text-primary); font-size: 16px; font-weight: bold; border-bottom: 2px solid var(--primary-color, #007bff); padding-bottom: 5px;">Signal Processing Overview</h4>
+                <table id="signalOverviewTable" style="margin-bottom: 20px;">
                     <thead>
                         <tr>
-                            <th class="resizable">Metric</th>
-                            <th class="resizable">Count</th>
-                            <th class="resizable">Rate/min</th>
+                            <th>Metric<div class="resize-handle"></div></th>
+                            <th>Count<div class="resize-handle"></div></th>
+                            <th>Rate/min</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -283,20 +404,17 @@
                         </tr>
                     </tbody>
                 </table>
-            </div>
 
-            <!-- Signal Types Breakdown -->
-            <div class="metric-card">
-                <button class="reset-columns-btn" onclick="resetTableColumns('signalTypesTable')" title="Reset column widths">Reset</button>
-                <h3 class="card-title">Signal Types</h3>
+                <!-- Signal Types Section -->
+                <h4 style="margin: 20px 0 10px 0; color: var(--text-primary); font-size: 16px; font-weight: bold; border-bottom: 2px solid var(--primary-color, #007bff); padding-bottom: 5px;">Signal Types Breakdown</h4>
                 <table id="signalTypesTable">
                     <thead>
                         <tr>
-                            <th class="resizable">Type</th>
-                            <th class="resizable">Candidates</th>
-                            <th class="resizable">Confirmed</th>
-                            <th class="resizable">Rejected</th>
-                            <th class="resizable">Success Rate</th>
+                            <th>Type<div class="resize-handle"></div></th>
+                            <th>Candidates<div class="resize-handle"></div></th>
+                            <th>Confirmed<div class="resize-handle"></div></th>
+                            <th>Rejected<div class="resize-handle"></div></th>
+                            <th>Success Rate</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -351,60 +469,28 @@
                         </tr>
                     </tbody>
                 </table>
-            </div>
+                </div>
+                <div class="resize-handle" id="resize2"></div>
+            </section>
 
-            <!-- Rejection Reasons -->
-            <div class="metric-card">
-                <button class="reset-columns-btn" onclick="resetTableColumns('rejectionReasonsTable')" title="Reset column widths">Reset</button>
-                <h3 class="card-title">Rejection Reasons</h3>
-                <table id="rejectionReasonsTable">
-                    <thead>
-                        <tr>
-                            <th class="resizable">Reason</th>
-                            <th class="resizable">Count</th>
-                            <th class="resizable">Percentage</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Low Confidence</td>
-                            <td id="rejectedLowConfidence">--</td>
-                            <td id="rejectedLowConfidencePercent">--</td>
-                        </tr>
-                        <tr>
-                            <td>Unhealthy Market</td>
-                            <td id="rejectedUnhealthyMarket">--</td>
-                            <td id="rejectedUnhealthyMarketPercent">--</td>
-                        </tr>
-                        <tr>
-                            <td>Processing Error</td>
-                            <td id="rejectedProcessingError">--</td>
-                            <td id="rejectedProcessingErrorPercent">--</td>
-                        </tr>
-                        <tr>
-                            <td>Timeout</td>
-                            <td id="rejectedTimeout">--</td>
-                            <td id="rejectedTimeoutPercent">--</td>
-                        </tr>
-                        <tr>
-                            <td>Duplicate</td>
-                            <td id="rejectedDuplicate">--</td>
-                            <td id="rejectedDuplicatePercent">--</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Zone Statistics -->
-            <div class="metric-card">
-                <button class="reset-columns-btn" onclick="resetTableColumns('zoneStatsTable')" title="Reset column widths">Reset</button>
+            <!-- Column 3: Zone Analytics & Signal Quality -->
+            <section class="column" id="column3">
+                <!-- Zone Statistics -->
+                <div class="metric-card">
+                <button
+                    class="reset-columns-btn"
+                    onclick="resetTableColumns('zoneStatsTable')"
+                    title="Reset column widths"
+                >
+                    Reset
+                </button>
                 <h3 class="card-title">Zone Analytics</h3>
                 <table id="zoneStatsTable">
                     <thead>
                         <tr>
-                            <th class="resizable">Zone Metric</th>
-                            <th class="resizable">Accumulation</th>
-                            <th class="resizable">Distribution</th>
+                            <th>Zone Metric<div class="resize-handle"></div></th>
+                            <th>Accumulation<div class="resize-handle"></div></th>
+                            <th>Distribution</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -437,15 +523,24 @@
                 </table>
             </div>
 
-            <!-- Signal Quality Metrics -->
+            <!-- Combined Signal Quality & Rejection Reasons -->
             <div class="metric-card">
-                <button class="reset-columns-btn" onclick="resetTableColumns('signalQualityTable')" title="Reset column widths">Reset</button>
-                <h3 class="card-title">Signal Quality</h3>
-                <table id="signalQualityTable">
+                <button
+                    class="reset-columns-btn"
+                    onclick="resetTableColumns('combinedQualityTable')"
+                    title="Reset column widths"
+                >
+                    Reset
+                </button>
+                <h3 class="card-title">Signal Quality & Rejection Analysis</h3>
+                
+                <!-- Signal Quality Section -->
+                <h4 style="margin: 20px 0 10px 0; color: var(--text-primary); font-size: 16px; font-weight: bold; border-bottom: 2px solid var(--primary-color, #007bff); padding-bottom: 5px;">Signal Quality Metrics</h4>
+                <table id="signalQualityTable" style="margin-bottom: 20px;">
                     <thead>
                         <tr>
-                            <th class="resizable">Metric</th>
-                            <th class="resizable">Value</th>
+                            <th>Metric<div class="resize-handle"></div></th>
+                            <th>Value</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -475,8 +570,48 @@
                         </tr>
                     </tbody>
                 </table>
-            </div>
-        </div>
+
+                <!-- Rejection Reasons Section -->
+                <h4 style="margin: 20px 0 10px 0; color: var(--text-primary); font-size: 16px; font-weight: bold; border-bottom: 2px solid var(--primary-color, #007bff); padding-bottom: 5px;">Rejection Reasons Analysis</h4>
+                <table id="rejectionReasonsTable">
+                    <thead>
+                        <tr>
+                            <th>Reason<div class="resize-handle"></div></th>
+                            <th>Count<div class="resize-handle"></div></th>
+                            <th>Percentage</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Low Confidence</td>
+                            <td id="rejectedLowConfidence">--</td>
+                            <td id="rejectedLowConfidencePercent">--</td>
+                        </tr>
+                        <tr>
+                            <td>Unhealthy Market</td>
+                            <td id="rejectedUnhealthyMarket">--</td>
+                            <td id="rejectedUnhealthyMarketPercent">--</td>
+                        </tr>
+                        <tr>
+                            <td>Processing Error</td>
+                            <td id="rejectedProcessingError">--</td>
+                            <td id="rejectedProcessingErrorPercent">--</td>
+                        </tr>
+                        <tr>
+                            <td>Timeout</td>
+                            <td id="rejectedTimeout">--</td>
+                            <td id="rejectedTimeoutPercent">--</td>
+                        </tr>
+                        <tr>
+                            <td>Duplicate</td>
+                            <td id="rejectedDuplicate">--</td>
+                            <td id="rejectedDuplicatePercent">--</td>
+                        </tr>
+                    </tbody>
+                </table>
+                </div>
+            </section>
+        </main>
         <script
             defer
             src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"
