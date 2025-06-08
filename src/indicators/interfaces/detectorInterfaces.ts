@@ -2,6 +2,8 @@
 
 import { SpotWebsocketStreams } from "@binance/spot";
 import type { SpoofingDetectorConfig } from "../../services/spoofingDetector.js";
+import { CircularBuffer } from "../../utils/utils.js";
+import { EnrichedTradeEvent } from "../../types/marketEvents.js";
 
 /**
  * Base detector interface
@@ -231,4 +233,25 @@ export interface VolumeCalculationResult {
 export interface ImbalanceResult {
     imbalance: number;
     dominantSide: "bid" | "ask" | "neutral";
+}
+
+interface ZoneCandidate {
+    priceLevel: number;
+    startTime: number;
+    trades: CircularBuffer<EnrichedTradeEvent>;
+    buyVolume: number;
+    sellVolume: number;
+    totalVolume: number;
+    averageOrderSize: number;
+    lastUpdate: number;
+    consecutiveTrades: number;
+    priceStability: number;
+    tradeCount: number;
+}
+export interface DistributionCandidate extends ZoneCandidate {
+    volumeDistribution: number; // How distributed the selling is
+}
+
+export interface AccumulationCandidate extends ZoneCandidate {
+    absorptionQuality?: number; // Quality of sell absorption patterns
 }

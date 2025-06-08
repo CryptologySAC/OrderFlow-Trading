@@ -6,6 +6,7 @@ import { ISignalLogger } from "../services/signalLogger.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
 import { DetectorUtils } from "./base/detectorUtils.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
+import { SharedPools } from "../utils/objectPool.js";
 
 import type {
     EnrichedTradeEvent,
@@ -130,18 +131,23 @@ export class ExhaustionDetector
         // duplicate-snapshot guard
         const lastSnap =
             zoneHistory.count() > 0 ? zoneHistory.toArray().at(-1)! : null;
-        const snap: ZoneSample = {
-            bid: event.zonePassiveBidVolume,
-            ask: event.zonePassiveAskVolume,
-            total: event.zonePassiveBidVolume + event.zonePassiveAskVolume,
-            timestamp: event.timestamp,
-        };
+
+        // Use object pool to reduce GC pressure
+        const snap = SharedPools.getInstance().zoneSamples.acquire();
+        snap.bid = event.zonePassiveBidVolume;
+        snap.ask = event.zonePassiveAskVolume;
+        snap.total = event.zonePassiveBidVolume + event.zonePassiveAskVolume;
+        snap.timestamp = event.timestamp;
+
         if (
             !lastSnap ||
             lastSnap.bid !== snap.bid ||
             lastSnap.ask !== snap.ask
         ) {
             zoneHistory.push(snap);
+        } else {
+            // Release snapshot back to pool if not used
+            SharedPools.getInstance().zoneSamples.release(snap);
         }
 
         // add trade exactly once

@@ -311,18 +311,37 @@ export class OrderFlowDashboard {
         );
 
         // Initialize Zone-based Detectors
-        this.accumulationZoneDetector = new AccumulationZoneDetector(
-            Config.SYMBOL,
-            Config.ACCUMULATION_ZONE_DETECTOR,
-            dependencies.logger,
-            dependencies.metricsCollector
+        this.accumulationZoneDetector =
+            DetectorFactory.createAccumulationDetector(
+                (signal) => {
+                    console.log("Accumulation zone detected:", signal);
+                },
+                Config.ACCUMULATION_ZONE_DETECTOR,
+                dependencies,
+                { id: "ltcusdt-accumulation-zone-main" }
+            );
+        this.signalCoordinator.registerDetector(
+            this.supportResistanceDetector,
+            ["accumulation"],
+            40,
+            true
         );
 
-        this.distributionZoneDetector = new DistributionZoneDetector(
-            Config.SYMBOL,
-            Config.DISTRIBUTION_ZONE_DETECTOR,
-            dependencies.logger,
-            dependencies.metricsCollector
+        // Initialize Zone-based Detectors
+        this.distributionZoneDetector =
+            DetectorFactory.createDistributionDetector(
+                (signal) => {
+                    console.log("Distribution zone detected:", signal);
+                },
+                Config.DISTRIBUTION_ZONE_DETECTOR,
+                dependencies,
+                { id: "ltcusdt-distribution-zone-main" }
+            );
+        this.signalCoordinator.registerDetector(
+            this.supportResistanceDetector,
+            ["distribution"],
+            40,
+            true
         );
 
         this.signalCoordinator.start();

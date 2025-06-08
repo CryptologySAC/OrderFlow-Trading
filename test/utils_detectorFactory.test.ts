@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { DetectorFactory } from "../src/utils/detectorFactory";
 
+// TODO
+
 describe("utils/DetectorFactory", () => {
     it("applies production defaults", () => {
         const result = (DetectorFactory as any).applyProductionDefaults(

@@ -56,8 +56,6 @@
  *
  * DO NOT INVERT THIS LOGIC - it is correct as implemented.
  */
-
-import { EventEmitter } from "events";
 import {
     AccumulationZone,
     ZoneUpdate,
@@ -69,7 +67,6 @@ import {
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
-import { ZoneManager } from "../trading/zoneManager.js";
 import { DetectorUtils } from "./base/detectorUtils.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
 import { ObjectPool } from "../utils/objectPool.js";
@@ -80,32 +77,14 @@ import {
     type MarketRegime,
 } from "./enhancedZoneFormation.js";
 import { Config } from "../core/config.js";
-
-interface DistributionCandidate {
-    priceLevel: number;
-    startTime: number;
-    // ✅ PERFORMANCE FIX: Use CircularBuffer instead of Array for O(1) operations
-    trades: CircularBuffer<EnrichedTradeEvent>;
-    buyVolume: number;
-    sellVolume: number;
-    totalVolume: number;
-    averageOrderSize: number;
-    lastUpdate: number;
-    consecutiveSellTrades: number;
-    priceStability: number;
-    volumeDistribution: number; // How distributed the selling is
-    // PERFORMANCE: Track trade count for incremental updates
-    tradeCount: number;
-}
+import { ZoneDetector } from "./base/zoneDetector.js";
+import type { DistributionCandidate } from "./interfaces/detectorInterfaces.js";
 
 /**
  * Zone-based DistributionDetector - detects distribution zones rather than point events
  * Tracks evolving distribution zones over time and emits zone-based signals
  */
-export class DistributionZoneDetector extends EventEmitter {
-    private readonly config: ZoneDetectorConfig;
-    private readonly zoneManager: ZoneManager;
-
+export class DistributionZoneDetector extends ZoneDetector {
     // Candidate tracking for zone formation
     private candidates = new Map<number, DistributionCandidate>();
     private readonly recentTrades = new RollingWindow<EnrichedTradeEvent>(
@@ -129,7 +108,7 @@ export class DistributionZoneDetector extends EventEmitter {
             totalVolume: 0,
             averageOrderSize: 0,
             lastUpdate: 0,
-            consecutiveSellTrades: 0,
+            consecutiveTrades: 0,
             priceStability: 1.0,
             volumeDistribution: 0,
             tradeCount: 0,
@@ -144,7 +123,7 @@ export class DistributionZoneDetector extends EventEmitter {
             candidate.totalVolume = 0;
             candidate.averageOrderSize = 0;
             candidate.lastUpdate = 0;
-            candidate.consecutiveSellTrades = 0;
+            candidate.consecutiveTrades = 0;
             candidate.priceStability = 1.0;
             candidate.volumeDistribution = 0;
             candidate.tradeCount = 0;
@@ -162,39 +141,17 @@ export class DistributionZoneDetector extends EventEmitter {
     // Detection parameters are now provided via config
 
     constructor(
+        id: string,
         symbol: string,
         config: Partial<ZoneDetectorConfig>,
         logger: Logger,
         metricsCollector: MetricsCollector
     ) {
-        super();
+        super(id, config, "distribution", logger, metricsCollector);
 
         this.symbol = symbol;
         this.pricePrecision = 2; // Should come from config
         this.zoneTicks = 2; // Price levels that define a zone
-
-        this.config = {
-            maxActiveZones: config.maxActiveZones ?? 3,
-            zoneTimeoutMs: config.zoneTimeoutMs ?? 1800000, // 30 minutes (shorter than accumulation)
-            minZoneVolume: config.minZoneVolume ?? 150,
-            maxZoneWidth: config.maxZoneWidth ?? 0.012, // 1.2% (slightly wider than accumulation)
-            minZoneStrength: config.minZoneStrength ?? 0.45,
-            completionThreshold: config.completionThreshold ?? 0.75, // Lower threshold for distribution
-            strengthChangeThreshold: config.strengthChangeThreshold ?? 0.12,
-            minCandidateDuration: config.minCandidateDuration ?? 120000,
-            maxPriceDeviation: config.maxPriceDeviation ?? 0.008,
-            minTradeCount: config.minTradeCount ?? 8,
-            minSellRatio:
-                config.minSellRatio ??
-                Config.ENHANCED_ZONE_FORMATION.detectorThresholds.distribution
-                    .minSellingRatio,
-        };
-
-        this.zoneManager = new ZoneManager(
-            this.config,
-            logger,
-            metricsCollector
-        );
 
         // Initialize enhanced zone formation analyzer
         this.enhancedZoneFormation = new EnhancedZoneFormation(
@@ -217,7 +174,7 @@ export class DistributionZoneDetector extends EventEmitter {
             this.emit("zoneInvalidated", update)
         );
 
-        logger.info("DistributionZoneDetector initialized", {
+        this.logger.info("DistributionZoneDetector initialized", {
             component: "DistributionZoneDetector",
             symbol,
             config: this.config,
@@ -327,11 +284,11 @@ export class DistributionZoneDetector extends EventEmitter {
             if (isSellTrade) {
                 // ✅ CORRECT: Aggressive selling - institutional distribution
                 candidate.sellVolume += trade.quantity;
-                candidate.consecutiveSellTrades++;
+                candidate.consecutiveTrades++;
             } else {
                 // ✅ CORRECT: Aggressive buying - retail support
                 candidate.buyVolume += trade.quantity;
-                candidate.consecutiveSellTrades = 0; // Reset consecutive sell counter
+                candidate.consecutiveTrades = 0; // Reset consecutive sell counter
             }
 
             // Update price stability and volume distribution

@@ -21,6 +21,7 @@ import {
 } from "../types/marketEvents.js";
 import { DetectorUtils } from "./base/detectorUtils.js";
 import { AbsorptionSignalData, SignalType } from "../types/signalTypes.js";
+import { SharedPools } from "../utils/objectPool.js";
 
 export interface AbsorptionSettings extends BaseDetectorSettings {
     features?: AbsorptionFeatures;
@@ -515,7 +516,7 @@ export class AbsorptionDetector
             return;
         }
 
-        // Analyze absorption conditions
+        // Analyze absorption conditions using object pooling
         const conditions = this.analyzeAbsorptionConditions(
             price,
             side,
@@ -524,8 +525,15 @@ export class AbsorptionDetector
         );
         const score = this.calculateAbsorptionScore(conditions);
 
+        // Store conditions reference for later cleanup
+        const conditionsToRelease = conditions;
+
         // Check score threshold
         if (score < this.absorptionThreshold) {
+            // Release pooled conditions object before early return
+            SharedPools.getInstance().absorptionConditions.release(
+                conditionsToRelease
+            );
             return;
         }
 
@@ -538,6 +546,10 @@ export class AbsorptionDetector
 
         // Volume threshold check
         if (volumes.aggressive < this.minAggVolume) {
+            // Release pooled conditions object before early return
+            SharedPools.getInstance().absorptionConditions.release(
+                conditionsToRelease
+            );
             return;
         }
 
@@ -545,6 +557,10 @@ export class AbsorptionDetector
         const absorptionRatio =
             volumes.passive > 0 ? volumes.aggressive / volumes.passive : 1;
         if (absorptionRatio > this.maxAbsorptionRatio) {
+            // Release pooled conditions object before early return
+            SharedPools.getInstance().absorptionConditions.release(
+                conditionsToRelease
+            );
             return;
         }
 
@@ -561,6 +577,10 @@ export class AbsorptionDetector
                 `[AbsorptionDetector] Signal rejected - absorption spoofing detected`
             );
             this.metricsCollector.incrementMetric("absorptionSpoofingRejected");
+            // Release pooled conditions object before early return
+            SharedPools.getInstance().absorptionConditions.release(
+                conditionsToRelease
+            );
             return;
         }
 
@@ -574,6 +594,10 @@ export class AbsorptionDetector
                 `[AbsorptionDetector] Signal rejected - spoofing detected`
             );
             this.metricsCollector.incrementMetric("absorptionSpoofingRejected");
+            // Release pooled conditions object before early return
+            SharedPools.getInstance().absorptionConditions.release(
+                conditionsToRelease
+            );
             return;
         }
 
@@ -649,6 +673,11 @@ export class AbsorptionDetector
             "absorption.ratio",
             absorptionRatio
         );
+
+        // Release pooled conditions object back to pool
+        SharedPools.getInstance().absorptionConditions.release(
+            conditionsToRelease
+        );
     }
 
     private calculateAbsorptionMetrics(zone: number): {
@@ -721,6 +750,7 @@ export class AbsorptionDetector
 
     /**
      * Comprehensive absorption condition analysis
+     * Uses object pooling for optimal performance in hot path
      */
     private analyzeAbsorptionConditions(
         price: number,
@@ -728,10 +758,16 @@ export class AbsorptionDetector
         zone: number,
         tradesAtZone: AggressiveTrade[]
     ): AbsorptionConditions {
+        const sharedPools = SharedPools.getInstance();
+        const conditions = sharedPools.absorptionConditions.acquire();
+
         try {
             const zoneHistory = this.zonePassiveHistory.get(zone);
             if (!zoneHistory || zoneHistory.count() === 0) {
-                return this.getDefaultConditions();
+                // Copy default values to pooled object
+                const defaultConditions = this.getDefaultConditions();
+                Object.assign(conditions, defaultConditions);
+                return conditions;
             }
 
             const now = Date.now();
@@ -740,81 +776,103 @@ export class AbsorptionDetector
                 .filter((s) => now - s.timestamp < this.windowMs);
 
             if (snapshots.length === 0) {
-                return this.getDefaultConditions();
+                // Copy default values to pooled object
+                const defaultConditions = this.getDefaultConditions();
+                Object.assign(conditions, defaultConditions);
+                return conditions;
             }
 
-            // Basic metrics
-            const relevantPassive = snapshots.map((s) =>
-                side === "buy" ? s.ask : s.bid
-            );
-            const currentPassive =
-                relevantPassive[relevantPassive.length - 1] || 0;
-            const avgPassive = DetectorUtils.calculateMean(relevantPassive);
-            const maxPassive = Math.max(...relevantPassive);
-            const minPassive = Math.min(...relevantPassive);
+            // Use pooled array for relevant passive values calculation
+            const relevantPassiveValues = sharedPools.numberArrays.acquire();
+            try {
+                for (const snapshot of snapshots) {
+                    relevantPassiveValues.push(
+                        side === "buy" ? snapshot.ask : snapshot.bid
+                    );
+                }
 
-            const aggressiveVolume = tradesAtZone.reduce(
-                (sum, t) => sum + t.quantity,
-                0
-            );
-            const absorptionRatio =
-                avgPassive > 0 ? aggressiveVolume / avgPassive : 1;
-
-            // Advanced analysis
-            const passiveStrength =
-                avgPassive > 0 ? currentPassive / avgPassive : 0;
-            const hasRefill = this.detectPassiveRefill(
-                price,
-                side,
-                zone,
-                snapshots
-            );
-            const icebergSignal = this.features.icebergDetection
-                ? this.detectIcebergPattern(zone, snapshots, side)
-                : 0;
-            const liquidityGradient = this.features.liquidityGradient
-                ? this.calculateLiquidityGradient(zone, price, side)
-                : 0;
-
-            // Velocity analysis
-            let absorptionVelocity = 0;
-            if (this.features.absorptionVelocity) {
-                absorptionVelocity = this.calculateAbsorptionVelocity(
-                    zone,
-                    side
+                const currentPassive =
+                    relevantPassiveValues[relevantPassiveValues.length - 1] ||
+                    0;
+                const avgPassive = DetectorUtils.calculateMean(
+                    relevantPassiveValues
                 );
+                const maxPassive = Math.max(...relevantPassiveValues);
+                const minPassive = Math.min(...relevantPassiveValues);
+
+                const aggressiveVolume = tradesAtZone.reduce(
+                    (sum, t) => sum + t.quantity,
+                    0
+                );
+                const absorptionRatio =
+                    avgPassive > 0 ? aggressiveVolume / avgPassive : 1;
+
+                // Advanced analysis
+                const passiveStrength =
+                    avgPassive > 0 ? currentPassive / avgPassive : 0;
+                const hasRefill = this.detectPassiveRefill(
+                    price,
+                    side,
+                    zone,
+                    snapshots
+                );
+                const icebergSignal = this.features.icebergDetection
+                    ? this.detectIcebergPattern(zone, snapshots, side)
+                    : 0;
+                const liquidityGradient = this.features.liquidityGradient
+                    ? this.calculateLiquidityGradient(zone, price, side)
+                    : 0;
+
+                // Velocity analysis
+                let absorptionVelocity = 0;
+                if (this.features.absorptionVelocity) {
+                    absorptionVelocity = this.calculateAbsorptionVelocity(
+                        zone,
+                        side
+                    );
+                }
+
+                // Imbalance analysis
+                const imbalanceResult = this.checkPassiveImbalance(zone);
+
+                // ✅ INTEGRATE: Add microstructure insights to conditions
+                const microstructureInsights =
+                    this.integrateMicrostructureInsights(zone);
+
+                // Populate pooled conditions object
+                conditions.absorptionRatio = absorptionRatio;
+                conditions.passiveStrength = passiveStrength;
+                conditions.hasRefill = hasRefill;
+                conditions.icebergSignal = icebergSignal;
+                conditions.liquidityGradient = liquidityGradient;
+                conditions.absorptionVelocity = absorptionVelocity;
+                conditions.currentPassive = currentPassive;
+                conditions.avgPassive = avgPassive;
+                conditions.maxPassive = maxPassive;
+                conditions.minPassive = minPassive;
+                conditions.aggressiveVolume = aggressiveVolume;
+                conditions.imbalance = Math.abs(imbalanceResult.imbalance);
+                conditions.sampleCount = snapshots.length;
+                conditions.dominantSide = imbalanceResult.dominantSide;
+                conditions.microstructure = microstructureInsights;
+
+                // Release imbalance result back to pool
+                sharedPools.imbalanceResults.release(imbalanceResult);
+
+                return conditions;
+            } finally {
+                // Always release pooled array
+                sharedPools.numberArrays.release(relevantPassiveValues);
             }
-
-            // Imbalance analysis
-            const imbalance = this.checkPassiveImbalance(zone);
-
-            // ✅ INTEGRATE: Add microstructure insights to conditions
-            const microstructureInsights =
-                this.integrateMicrostructureInsights(zone);
-
-            return {
-                absorptionRatio,
-                passiveStrength,
-                hasRefill,
-                icebergSignal,
-                liquidityGradient,
-                absorptionVelocity,
-                currentPassive,
-                avgPassive,
-                maxPassive,
-                minPassive,
-                aggressiveVolume,
-                imbalance: Math.abs(imbalance.imbalance),
-                sampleCount: snapshots.length,
-                dominantSide: imbalance.dominantSide,
-                microstructure: microstructureInsights,
-            };
         } catch (error) {
             this.handleError(
                 error as Error,
                 "AbsorptionDetector.analyzeAbsorptionConditions"
             );
-            return this.getDefaultConditions();
+            // Copy default values to pooled object on error
+            const defaultConditions = this.getDefaultConditions();
+            Object.assign(conditions, defaultConditions);
+            return conditions;
         }
     }
 

@@ -57,7 +57,6 @@
  * DO NOT INVERT THIS LOGIC - it is correct as implemented.
  */
 
-import { EventEmitter } from "events";
 import {
     AccumulationZone,
     ZoneUpdate,
@@ -69,7 +68,6 @@ import {
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
-import { ZoneManager } from "../trading/zoneManager.js";
 import { DetectorUtils } from "./base/detectorUtils.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
 import { ObjectPool } from "../utils/objectPool.js";
@@ -80,33 +78,14 @@ import {
     type MarketRegime,
 } from "./enhancedZoneFormation.js";
 import { Config } from "../core/config.js";
-
-interface AccumulationCandidate {
-    priceLevel: number;
-    startTime: number;
-    // ✅ PERFORMANCE FIX: Use CircularBuffer instead of Array for O(1) operations
-    trades: CircularBuffer<EnrichedTradeEvent>;
-    buyVolume: number;
-    sellVolume: number;
-    totalVolume: number;
-    averageOrderSize: number;
-    lastUpdate: number;
-    consecutiveBuyTrades: number;
-    priceStability: number;
-    // NEW FIELD: Track absorption quality
-    absorptionQuality?: number; // Quality of sell absorption patterns
-    // PERFORMANCE: Track trade count for incremental updates
-    tradeCount: number;
-}
+import { ZoneDetector } from "./base/zoneDetector.js";
+import type { AccumulationCandidate } from "./interfaces/detectorInterfaces.js";
 
 /**
  * Zone-based AccumulationDetector - detects accumulation zones rather than point events
  * Tracks evolving accumulation zones over time and emits zone-based signals
  */
-export class AccumulationZoneDetector extends EventEmitter {
-    private readonly config: ZoneDetectorConfig;
-    private readonly zoneManager: ZoneManager;
-
+export class AccumulationZoneDetector extends ZoneDetector {
     // Candidate tracking for zone formation
     private candidates = new Map<number, AccumulationCandidate>();
     private readonly recentTrades = new RollingWindow<EnrichedTradeEvent>(
@@ -130,7 +109,7 @@ export class AccumulationZoneDetector extends EventEmitter {
             totalVolume: 0,
             averageOrderSize: 0,
             lastUpdate: 0,
-            consecutiveBuyTrades: 0,
+            consecutiveTrades: 0,
             priceStability: 1.0,
             tradeCount: 0,
         }),
@@ -143,7 +122,7 @@ export class AccumulationZoneDetector extends EventEmitter {
             candidate.totalVolume = 0;
             candidate.averageOrderSize = 0;
             candidate.lastUpdate = 0;
-            candidate.consecutiveBuyTrades = 0;
+            candidate.consecutiveTrades = 0;
             candidate.priceStability = 1.0;
             candidate.tradeCount = 0;
         }
@@ -160,40 +139,17 @@ export class AccumulationZoneDetector extends EventEmitter {
     // Detection parameters are now provided via config
 
     constructor(
+        id: string,
         symbol: string,
         config: Partial<ZoneDetectorConfig>,
         logger: Logger,
         metricsCollector: MetricsCollector
     ) {
-        super();
+        super(id, config, "accumulation", logger, metricsCollector);
 
         this.symbol = symbol;
         this.pricePrecision = 2; // Should come from config
         this.zoneTicks = 2; // Price levels that define a zone
-
-        // Enhanced institutional-grade thresholds (75-85% buy dominance)
-        this.config = {
-            maxActiveZones: config.maxActiveZones ?? 3,
-            zoneTimeoutMs: config.zoneTimeoutMs ?? 3600000, // 1 hour
-            minZoneVolume: config.minZoneVolume ?? 200, // Increased from 100
-            maxZoneWidth: config.maxZoneWidth ?? 0.008, // Tighter from 1%
-            minZoneStrength: config.minZoneStrength ?? 0.7, // Increased from 0.5
-            completionThreshold: config.completionThreshold ?? 0.85, // Increased from 0.8
-            strengthChangeThreshold: config.strengthChangeThreshold ?? 0.12, // More sensitive
-            minCandidateDuration: config.minCandidateDuration ?? 300000, // 5 minutes minimum
-            maxPriceDeviation: config.maxPriceDeviation ?? 0.003, // Tighter price stability
-            minTradeCount: config.minTradeCount ?? 15, // More trades required
-            minBuyRatio:
-                config.minBuyRatio ??
-                Config.ENHANCED_ZONE_FORMATION.detectorThresholds.accumulation
-                    .minAbsorptionRatio, // Use centralized threshold
-        };
-
-        this.zoneManager = new ZoneManager(
-            this.config,
-            logger,
-            metricsCollector
-        );
 
         // Initialize enhanced zone formation analyzer
         this.enhancedZoneFormation = new EnhancedZoneFormation(
@@ -216,7 +172,7 @@ export class AccumulationZoneDetector extends EventEmitter {
             this.emit("zoneInvalidated", update)
         );
 
-        logger.info("AccumulationZoneDetector initialized", {
+        this.logger.info("AccumulationZoneDetector initialized", {
             component: "AccumulationZoneDetector",
             symbol,
             config: this.config,
@@ -320,7 +276,7 @@ export class AccumulationZoneDetector extends EventEmitter {
                 // ✅ CORRECT: Seller was aggressive - selling pressure being absorbed
                 // This is POSITIVE for accumulation (institutions absorbing retail sells)
                 candidate.sellVolume += trade.quantity;
-                candidate.consecutiveBuyTrades = 0; // Reset buy counter
+                candidate.consecutiveTrades = 0; // Reset buy counter
 
                 // Track absorption pattern (sells hitting strong bids)
                 this.trackAbsorptionPattern(candidate, trade);
@@ -328,7 +284,7 @@ export class AccumulationZoneDetector extends EventEmitter {
                 // ✅ CORRECT: Buyer was aggressive - retail chasing/FOMO
                 // This is NEGATIVE for accumulation (not institutional behavior)
                 candidate.buyVolume += trade.quantity;
-                candidate.consecutiveBuyTrades++;
+                candidate.consecutiveTrades++;
             }
 
             // Update price stability and absorption efficiency

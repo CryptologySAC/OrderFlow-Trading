@@ -15,8 +15,6 @@ import {
     DeltaCVDConfirmation,
     DeltaCVDConfirmationSettings,
 } from "../indicators/deltaCVDConfirmation.js";
-import { DistributionDetector } from "../indicators/distributionDetector.js";
-import { SuperiorFlowSettings } from "../indicators/base/flowDetectorBase.js";
 import {
     SupportResistanceDetector,
     SupportResistanceConfig,
@@ -26,18 +24,23 @@ import type {
     DetectorCallback,
     BaseDetectorSettings,
     DetectorStats,
-    AccumulationSettings,
 } from "../indicators/interfaces/detectorInterfaces.js";
-import { AccumulationDetector } from "../indicators/accumulationDetector.js";
 import { SignalType } from "../types/signalTypes.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
 import { Config } from "../core/config.js";
+
+import { AccumulationZoneDetector } from "../indicators/accumulationZoneDetector.js";
+import { DistributionZoneDetector } from "../indicators/distributionZoneDetector.js";
+import { ZoneDetectorConfig } from "../types/zoneTypes.js";
 
 /**
  * Production detector factory with monitoring, validation, and lifecycle management
  */
 export class DetectorFactory {
-    private static readonly instances = new Map<string, BaseDetector>();
+    private static readonly instances = new Map<
+        string,
+        BaseDetector | AccumulationZoneDetector | DistributionZoneDetector
+    >();
     private static readonly healthChecks = new Map<string, HealthChecker>();
     private static globalConfig: ProductionConfig = {
         maxDetectors: 10,
@@ -77,7 +80,7 @@ export class DetectorFactory {
         const productionSettings = this.applyProductionDefaults(
             settings,
             "absorption"
-        );
+        ) as BaseDetectorSettings;
 
         const detector = new AbsorptionDetector(
             id,
@@ -120,7 +123,7 @@ export class DetectorFactory {
         const productionSettings = this.applyProductionDefaults(
             settings,
             "exhaustion"
-        );
+        ) as BaseDetectorSettings;
 
         const detector = new ExhaustionDetector(
             id,
@@ -151,10 +154,10 @@ export class DetectorFactory {
      */
     public static createAccumulationDetector(
         callback: DetectorCallback,
-        settings: AccumulationSettings,
+        settings: ZoneDetectorConfig,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
-    ): AccumulationDetector {
+    ): AccumulationZoneDetector {
         const id = options.id || `accumulation-${Date.now()}`;
 
         this.validateCreationLimits();
@@ -163,16 +166,14 @@ export class DetectorFactory {
         const productionSettings = this.applyProductionDefaults(
             settings,
             "accumulation"
-        );
+        ) as ZoneDetectorConfig;
 
-        const detector = new AccumulationDetector(
+        const detector = new AccumulationZoneDetector(
             id,
-            this.wrapCallback(callback, id, dependencies.logger),
-            productionSettings,
+            Config.SYMBOL,
+            Config.ACCUMULATION_ZONE_DETECTOR,
             dependencies.logger,
-            dependencies.spoofingDetector,
-            dependencies.metricsCollector,
-            dependencies.signalLogger
+            dependencies.metricsCollector
         );
 
         this.registerDetector(id, detector, dependencies, options);
@@ -182,7 +183,6 @@ export class DetectorFactory {
             {
                 id,
                 settings: productionSettings,
-                features: productionSettings.features,
             }
         );
 
@@ -194,10 +194,10 @@ export class DetectorFactory {
      */
     public static createDistributionDetector(
         callback: DetectorCallback,
-        settings: SuperiorFlowSettings,
+        settings: ZoneDetectorConfig,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
-    ): DistributionDetector {
+    ): DistributionZoneDetector {
         const id = options.id || `distribution-${Date.now()}`;
 
         this.validateCreationLimits();
@@ -206,16 +206,14 @@ export class DetectorFactory {
         const productionSettings = this.applyProductionDefaults(
             settings,
             "distribution"
-        );
+        ) as ZoneDetectorConfig;
 
-        const detector = new DistributionDetector(
+        const detector = new DistributionZoneDetector(
             id,
-            this.wrapCallback(callback, id, dependencies.logger),
-            productionSettings,
+            Config.SYMBOL,
+            Config.DISTRIBUTION_ZONE_DETECTOR,
             dependencies.logger,
-            dependencies.spoofingDetector,
-            dependencies.metricsCollector,
-            dependencies.signalLogger
+            dependencies.metricsCollector
         );
 
         this.registerDetector(id, detector, dependencies, options);
@@ -225,7 +223,6 @@ export class DetectorFactory {
             {
                 id,
                 settings: productionSettings,
-                features: productionSettings.features,
             }
         );
 
@@ -295,7 +292,7 @@ export class DetectorFactory {
         const productionSettings = this.applyProductionDefaults(
             settings,
             "cvd_confirmation"
-        );
+        ) as BaseDetectorSettings;
 
         const detector = new DeltaCVDConfirmation(
             id,
@@ -322,69 +319,6 @@ export class DetectorFactory {
     }
 
     /**
-     * Create all three detectors as a suite
-     */
-    public static createDetectorSuite(
-        callback: DetectorCallback,
-        baseSettings: BaseDetectorSettings,
-        dependencies: DetectorDependencies,
-        options: {
-            absorption?: Partial<AbsorptionSettings>;
-            exhaustion?: Partial<ExhaustionSettings>;
-            accumulation?: Partial<AccumulationSettings>;
-            cvd_confirmation?: Partial<DeltaCVDConfirmationSettings>;
-            idPrefix?: string;
-        } = {}
-    ): DetectorSuite {
-        const prefix = options.idPrefix || baseSettings.symbol || "suite";
-
-        const absorptionDetector = this.createAbsorptionDetector(
-            callback,
-            { ...baseSettings, ...options.absorption },
-            dependencies,
-            { id: `${prefix}-absorption` }
-        );
-
-        const exhaustionDetector = this.createExhaustionDetector(
-            callback,
-            { ...baseSettings, ...options.exhaustion },
-            dependencies,
-            { id: `${prefix}-exhaustion` }
-        );
-
-        const accumulationDetector = this.createAccumulationDetector(
-            callback,
-            { ...baseSettings, ...options.accumulation },
-            dependencies,
-            { id: `${prefix}-accumulation` }
-        );
-
-        const deltaCVDDetector = this.createDeltaCVDConfirmationDetector(
-            callback,
-            { ...baseSettings, ...options.accumulation },
-            dependencies,
-            { id: `${prefix}-cvd_confirmation` }
-        );
-
-        dependencies.logger.info(`[DetectorFactory] Created detector suite`, {
-            prefix,
-            detectors: [
-                "absorption",
-                "exhaustion",
-                "accumulation",
-                "cvd_confirmation",
-            ],
-        });
-
-        return {
-            absorption: absorptionDetector,
-            exhaustion: exhaustionDetector,
-            accumulation: accumulationDetector,
-            cvd_confirmation: deltaCVDDetector,
-        };
-    }
-
-    /**
      * Get all available detector types and their configurations
      */
     public static getAvailableDetectors(): Array<{
@@ -407,7 +341,7 @@ export class DetectorFactory {
     public static create(
         type: string,
         config: Record<string, unknown>
-    ): BaseDetector {
+    ): BaseDetector | AccumulationZoneDetector | DistributionZoneDetector {
         if (!this.dependencies) {
             throw new Error(
                 "DetectorFactory not initialized. Call DetectorFactory.initialize() first."
@@ -437,13 +371,13 @@ export class DetectorFactory {
             case "accumulation":
                 return this.createAccumulationDetector(
                     callback,
-                    baseSettings as AccumulationSettings,
+                    baseSettings as ZoneDetectorConfig,
                     this.dependencies
                 );
             case "distribution":
                 return this.createDistributionDetector(
                     callback,
-                    baseSettings as SuperiorFlowSettings,
+                    baseSettings as ZoneDetectorConfig,
                     this.dependencies
                 );
             case "cvd_confirmation":
@@ -523,10 +457,15 @@ export class DetectorFactory {
     /**
      * Create generic detector with type safety
      */
-    public static createDetector<T extends BaseDetector>(
+    public static createDetector<
+        T extends
+            | BaseDetector
+            | AccumulationZoneDetector
+            | DistributionZoneDetector,
+    >(
         DetectorClass: DetectorConstructor<T>,
         callback: DetectorCallback,
-        settings: BaseDetectorSettings,
+        settings: BaseDetectorSettings | ZoneDetectorConfig,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
     ): T {
@@ -565,14 +504,23 @@ export class DetectorFactory {
     /**
      * Get detector by ID
      */
-    public static getDetector(id: string): BaseDetector | undefined {
+    public static getDetector(
+        id: string
+    ):
+        | BaseDetector
+        | AccumulationZoneDetector
+        | DistributionZoneDetector
+        | undefined {
         return this.instances.get(id);
     }
 
     /**
      * Get all active detectors
      */
-    public static getAllDetectors(): Map<string, BaseDetector> {
+    public static getAllDetectors(): Map<
+        string,
+        BaseDetector | AccumulationZoneDetector | DistributionZoneDetector
+    > {
         return new Map(this.instances);
     }
 
@@ -595,7 +543,12 @@ export class DetectorFactory {
             }
 
             // Cleanup detector
-            detector.cleanup();
+            if (
+                "cleanup" in detector &&
+                typeof detector.cleanup === "function"
+            ) {
+                detector.cleanup();
+            }
             this.instances.delete(id);
 
             detector.logger?.info(`[DetectorFactory] Destroyed detector ${id}`);
@@ -627,7 +580,12 @@ export class DetectorFactory {
         const healthStats = new Map<string, HealthStatus>();
 
         for (const [id, detector] of this.instances) {
-            detectorStats.set(id, detector.getStats());
+            if (
+                "getStats" in detector &&
+                typeof detector.getStats === "function"
+            ) {
+                detectorStats.set(id, detector.getStats());
+            }
         }
 
         for (const [id, healthChecker] of this.healthChecks) {
@@ -673,7 +631,12 @@ export class DetectorFactory {
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 // Stop current instance
-                detector.cleanup();
+                if (
+                    "cleanup" in detector &&
+                    typeof detector.cleanup === "function"
+                ) {
+                    detector.cleanup();
+                }
 
                 // Wait a bit before restart
                 await new Promise((resolve) =>
@@ -716,15 +679,16 @@ export class DetectorFactory {
     }
 
     private static validateProductionConfig(
-        settings: BaseDetectorSettings
+        settings: BaseDetectorSettings | ZoneDetectorConfig
     ): void {
         const errors: string[] = [];
 
-        if (!settings.symbol) {
+        if ("symbol" in settings && !settings.symbol) {
             errors.push("symbol is required in production");
         }
 
         if (
+            "windowMs" in settings &&
             settings.windowMs &&
             settings.windowMs < 5000 &&
             Config.NODE_ENV === "production"
@@ -733,6 +697,7 @@ export class DetectorFactory {
         }
 
         if (
+            "minAggVolume" in settings &&
             settings.minAggVolume &&
             settings.minAggVolume < 50 &&
             Config.NODE_ENV === "production"
@@ -741,6 +706,7 @@ export class DetectorFactory {
         }
 
         if (
+            "eventCooldownMs" in settings &&
             settings.eventCooldownMs &&
             settings.eventCooldownMs < 1000 &&
             Config.NODE_ENV === "production"
@@ -758,86 +724,82 @@ export class DetectorFactory {
     }
 
     private static applyProductionDefaults(
-        settings: BaseDetectorSettings,
+        settings: BaseDetectorSettings | ZoneDetectorConfig,
         detectorType: SignalType
-    ): BaseDetectorSettings {
-        const baseDefaults: BaseDetectorSettings = {
-            windowMs: 90000,
-            minAggVolume: 500,
-            pricePrecision: 2,
-            zoneTicks: 3,
-            eventCooldownMs: 15000,
-            minInitialMoveTicks: 10,
-            confirmationTimeoutMs: 60000,
-            maxRevisitTicks: 5,
+    ): BaseDetectorSettings | ZoneDetectorConfig {
+        //TODO
+        if (
+            detectorType === "absorption" ||
+            detectorType === "exhaustion" ||
+            detectorType === "cvd_confirmation"
+        ) {
+            const detectorSettings = settings as BaseDetectorSettings;
+            const baseDefaults: BaseDetectorSettings = {
+                windowMs: 90000,
+                minAggVolume: 500,
+                pricePrecision: 2,
+                zoneTicks: 3,
+                eventCooldownMs: 15000,
+                minInitialMoveTicks: 10,
+                confirmationTimeoutMs: 60000,
+                maxRevisitTicks: 5,
 
-            // Production-specific defaults
-            features: {
-                spoofingDetection: true,
-                adaptiveZone: true,
-                passiveHistory: true,
-                multiZone: true,
-                autoCalibrate: true,
-                ...settings.features,
-            },
-        };
-
-        // Type-specific defaults
-        if (detectorType === "absorption") {
-            return {
-                ...baseDefaults,
-                ...settings,
+                // Production-specific defaults
                 features: {
-                    ...baseDefaults.features,
-                    icebergDetection: true,
-                    liquidityGradient: true,
-                    absorptionVelocity: false,
-                    layeredAbsorption: false,
-                    ...settings.features,
+                    spoofingDetection: true,
+                    adaptiveZone: true,
+                    passiveHistory: true,
+                    multiZone: true,
+                    autoCalibrate: true,
+                    ...detectorSettings.features,
                 },
             };
-        }
 
-        if (detectorType === "exhaustion") {
+            // Type-specific defaults
+            if (detectorType === "absorption") {
+                return {
+                    ...baseDefaults,
+                    ...settings,
+                    features: {
+                        ...baseDefaults.features,
+                        icebergDetection: true,
+                        liquidityGradient: true,
+                        absorptionVelocity: false,
+                        layeredAbsorption: false,
+                        ...detectorSettings.features,
+                    },
+                };
+            }
+
+            if (detectorType === "exhaustion") {
+                return {
+                    ...baseDefaults,
+                    features: {
+                        ...baseDefaults.features,
+                        depletionTracking: true,
+                        spreadAdjustment: true,
+                        volumeVelocity: false,
+                    },
+                    ...detectorSettings,
+                };
+            }
+
+            if (detectorType === "cvd_confirmation") {
+                return {
+                    ...baseDefaults,
+                    ...detectorSettings,
+                };
+            }
+            return { ...baseDefaults, ...detectorSettings };
+        } else {
+            //TODO if (detectorType === "accumulation") {
+
+            //}
+
             return {
-                ...baseDefaults,
-                features: {
-                    ...baseDefaults.features,
-                    depletionTracking: true,
-                    spreadAdjustment: true,
-                    volumeVelocity: false,
-                },
                 ...settings,
-            };
+            } as ZoneDetectorConfig;
         }
-
-        if (detectorType === "cvd_confirmation") {
-            return {
-                ...baseDefaults,
-                ...settings,
-            };
-        }
-
-        if (detectorType === "accumulation") {
-            return {
-                ...baseDefaults,
-                // Accumulation-specific defaults
-                minDurationMs: 300000, // 5 minutes
-                minRatio: 1.5,
-                minRecentActivityMs: 60000,
-                accumulationThreshold: 0.6,
-                features: {
-                    ...baseDefaults.features,
-                    sideTracking: true,
-                    durationWeighting: true,
-                    volumeVelocity: false,
-                    strengthAnalysis: true,
-                },
-                ...settings,
-            } as AccumulationSettings;
-        }
-
-        return { ...baseDefaults, ...settings };
     }
 
     private static wrapCallback(
@@ -877,7 +839,10 @@ export class DetectorFactory {
 
     private static registerDetector(
         id: string,
-        detector: BaseDetector,
+        detector:
+            | BaseDetector
+            | AccumulationZoneDetector
+            | DistributionZoneDetector,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions
     ): void {
@@ -927,7 +892,10 @@ class HealthChecker {
 
     constructor(
         private readonly detectorId: string,
-        private readonly detector: BaseDetector,
+        private readonly detector:
+            | BaseDetector
+            | AccumulationZoneDetector
+            | DistributionZoneDetector,
         private readonly dependencies: DetectorDependencies,
         private readonly config: HealthCheckConfig
     ) {}
@@ -984,36 +952,42 @@ class HealthChecker {
         this.lastHealthCheck = Date.now();
 
         try {
-            const stats = this.detector.getStats();
-            const memoryUsage = DetectorFactory["getMemoryUsage"]();
+            //TODO implement getStats and cleanup in zne detectors
+            if (
+                "getStats" in this.detector &&
+                typeof this.detector.getStats === "function"
+            ) {
+                const stats = this.detector.getStats();
+                const memoryUsage = DetectorFactory["getMemoryUsage"]();
 
-            // Check memory usage
-            if (memoryUsage > this.config.memoryThresholdMB) {
-                this.dependencies.logger.warn(
-                    `[HealthChecker] High memory usage for ${this.detectorId}`,
-                    {
-                        memoryUsageMB: memoryUsage,
-                        threshold: this.config.memoryThresholdMB,
-                    }
+                // Check memory usage
+                if (memoryUsage > this.config.memoryThresholdMB) {
+                    this.dependencies.logger.warn(
+                        `[HealthChecker] High memory usage for ${this.detectorId}`,
+                        {
+                            memoryUsageMB: memoryUsage,
+                            threshold: this.config.memoryThresholdMB,
+                        }
+                    );
+                }
+
+                // Report metrics
+                this.dependencies.metricsCollector.recordGauge(
+                    `detector.${this.detectorId}.trades_buffer`,
+                    stats.tradesInBuffer
                 );
+                this.dependencies.metricsCollector.recordGauge(
+                    `detector.${this.detectorId}.depth_levels`,
+                    stats.depthLevels
+                );
+                this.dependencies.metricsCollector.recordGauge(
+                    `detector.${this.detectorId}.memory_usage`,
+                    memoryUsage
+                );
+
+                // Reset error count on successful check
+                this.errorCount = 0;
             }
-
-            // Report metrics
-            this.dependencies.metricsCollector.recordGauge(
-                `detector.${this.detectorId}.trades_buffer`,
-                stats.tradesInBuffer
-            );
-            this.dependencies.metricsCollector.recordGauge(
-                `detector.${this.detectorId}.depth_levels`,
-                stats.depthLevels
-            );
-            this.dependencies.metricsCollector.recordGauge(
-                `detector.${this.detectorId}.memory_usage`,
-                memoryUsage
-            );
-
-            // Reset error count on successful check
-            this.errorCount = 0;
         } catch (error) {
             this.errorCount++;
             this.dependencies.logger.error(
@@ -1035,7 +1009,8 @@ class HealthChecker {
 export interface DetectorSuite {
     absorption: AbsorptionDetector;
     exhaustion: ExhaustionDetector;
-    accumulation: AccumulationDetector;
+    accumulation: AccumulationZoneDetector;
+    distribution: DistributionZoneDetector;
     cvd_confirmation: DeltaCVDConfirmation;
 }
 
@@ -1049,7 +1024,10 @@ export interface DetectorDependencies {
 export interface DetectorFactoryOptions {
     id?: string;
     customMonitoring?: (
-        detector: BaseDetector,
+        detector:
+            | BaseDetector
+            | AccumulationZoneDetector
+            | DistributionZoneDetector,
         metrics: MetricsCollector
     ) => void;
 }
@@ -1088,9 +1066,14 @@ export interface FactoryStats {
     uptime: number;
 }
 
-type DetectorConstructor<T extends BaseDetector> = new (
+type DetectorConstructor<
+    T extends
+        | BaseDetector
+        | AccumulationZoneDetector
+        | DistributionZoneDetector,
+> = new (
     callback: DetectorCallback,
-    settings: BaseDetectorSettings,
+    settings: BaseDetectorSettings | ZoneDetectorConfig,
     logger: Logger,
     metricsCollector: MetricsCollector,
     signalLogger?: ISignalLogger
