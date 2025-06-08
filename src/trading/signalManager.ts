@@ -1654,7 +1654,7 @@ export class SignalManager extends EventEmitter {
         metrics: EnhancedMetrics,
         metricName: string
     ): number {
-        return metrics.counters[metricName]?.value || 0;
+        return Number(metrics.counters[metricName]?.value) || 0;
     }
 
     private getCounterValueByLabel(

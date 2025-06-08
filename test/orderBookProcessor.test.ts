@@ -64,7 +64,7 @@ describe("OrderBookProcessor", () => {
 
         const stats = processor.getStats();
         expect(stats.processedUpdates).toBe(1);
-        expect(stats.errorCount).toBe(1);
+        expect(stats.errorCount).toBe("1"); // BigInt converted to string
         expect(stats.lastError).toBeDefined();
     });
 

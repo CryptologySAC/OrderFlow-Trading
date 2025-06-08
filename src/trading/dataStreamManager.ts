@@ -73,7 +73,7 @@ export class DataStreamManager extends EventEmitter {
 
     // Enhanced state management
     private connectionState = ConnectionState.DISCONNECTED;
-    private reconnectAttempts = 0;
+    private reconnectAttempts = 0n;
     private connectedAt?: number;
     private lastReconnectAttempt = 0;
 
@@ -194,7 +194,7 @@ export class DataStreamManager extends EventEmitter {
                 "Connecting to Binance streams",
                 {
                     symbol: this.config.symbol,
-                    attempt: this.reconnectAttempts + 1,
+                    attempt: Number(this.reconnectAttempts + 1n),
                     state: this.connectionState,
                 },
                 correlationId
@@ -210,7 +210,7 @@ export class DataStreamManager extends EventEmitter {
             this.setupDataStreams();
 
             this.setConnectionState(ConnectionState.CONNECTED);
-            this.reconnectAttempts = 0;
+            this.reconnectAttempts = 0n;
             this.connectedAt = Date.now();
             this.resetStreamHealth();
 
@@ -226,7 +226,7 @@ export class DataStreamManager extends EventEmitter {
                 "Successfully connected to Binance streams",
                 {
                     symbol: this.config.symbol,
-                    reconnectAttempts: this.reconnectAttempts,
+                    reconnectAttempts: Number(this.reconnectAttempts),
                 },
                 correlationId
             );
@@ -239,14 +239,14 @@ export class DataStreamManager extends EventEmitter {
                 {
                     error,
                     symbol: this.config.symbol,
-                    attempt: this.reconnectAttempts + 1,
+                    attempt: Number(this.reconnectAttempts + 1n),
                     state: this.connectionState,
                 },
                 correlationId
             );
 
             // Don't throw on reconnection attempts, schedule next attempt instead
-            if (this.reconnectAttempts > 0) {
+            if (this.reconnectAttempts > 0n) {
                 this.scheduleReconnect();
                 return;
             }
@@ -479,7 +479,7 @@ export class DataStreamManager extends EventEmitter {
         }
 
         // Check if we've exceeded max attempts
-        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+        if (this.reconnectAttempts >= BigInt(this.maxReconnectAttempts)) {
             this.setConnectionState(ConnectionState.FAILED);
             const error = new ConnectionError(
                 `Max reconnection attempts (${this.maxReconnectAttempts}) exceeded`,
@@ -492,13 +492,13 @@ export class DataStreamManager extends EventEmitter {
                 this.maxReconnectAttempts;
             if (
                 this.config.enableHardReload &&
-                this.reconnectAttempts >= hardReloadAfterAttempts
+                this.reconnectAttempts >= BigInt(hardReloadAfterAttempts)
             ) {
                 this.logger.error(
                     "[DataStreamManager] Requesting hard reload after exhausted reconnection attempts",
                     {
                         symbol: this.config.symbol,
-                        reconnectAttempts: this.reconnectAttempts,
+                        reconnectAttempts: Number(this.reconnectAttempts),
                         maxReconnectAttempts: this.maxReconnectAttempts,
                     }
                 );
@@ -506,7 +506,7 @@ export class DataStreamManager extends EventEmitter {
                 this.emit("hardReloadRequired", {
                     reason: "max_reconnect_attempts_exceeded",
                     component: "DataStreamManager",
-                    attempts: this.reconnectAttempts,
+                    attempts: Number(this.reconnectAttempts),
                     timestamp: Date.now(),
                     metadata: {
                         symbol: this.config.symbol,
@@ -537,12 +537,18 @@ export class DataStreamManager extends EventEmitter {
         }
 
         this.reconnectAttempts++;
+
+        // Reset if approaching safe limits for serialization
+        if (this.reconnectAttempts > 9007199254740991n) {
+            this.reconnectAttempts = 0n;
+        }
         this.lastReconnectAttempt = now;
         this.setConnectionState(ConnectionState.RECONNECTING);
 
         // Enhanced exponential backoff with jitter
         const baseDelay =
-            this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+            this.reconnectDelay *
+            Math.pow(2, Number(this.reconnectAttempts - 1n));
         const cappedDelay = Math.min(baseDelay, this.maxBackoffDelay);
         const jitter = Math.random() * Math.min(cappedDelay * 0.1, 5000); // Up to 10% jitter, max 5s
         const delay = cappedDelay + jitter;
@@ -734,7 +740,7 @@ export class DataStreamManager extends EventEmitter {
 
         this.setConnectionState(ConnectionState.SHUTTING_DOWN);
         await this.cleanup();
-        this.reconnectAttempts = 0; // Reset for future connections
+        this.reconnectAttempts = 0n; // Reset for future connections
         this.emit("disconnected", "manual_disconnect");
     }
 
@@ -757,7 +763,7 @@ export class DataStreamManager extends EventEmitter {
         return {
             state: this.connectionState,
             isConnected: this.connectionState === ConnectionState.CONNECTED,
-            reconnectAttempts: this.reconnectAttempts,
+            reconnectAttempts: Number(this.reconnectAttempts),
             symbol: this.config.symbol,
             uptime: this.getUptime(),
             streamHealth: { ...this.streamHealth },
@@ -790,7 +796,7 @@ export class DataStreamManager extends EventEmitter {
             connection: {
                 state: this.connectionState,
                 uptime,
-                reconnectAttempts: this.reconnectAttempts,
+                reconnectAttempts: Number(this.reconnectAttempts),
                 lastReconnectAttempt: this.lastReconnectAttempt,
             },
             streams: {

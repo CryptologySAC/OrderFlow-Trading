@@ -11,8 +11,8 @@ export enum CircuitState {
  * Circuit breaker for error handling
  */
 export class CircuitBreaker {
-    private errorCount = 0;
-    private successCount = 0;
+    private errorCount = 0n;
+    private successCount = 0n;
     private lastErrorTime = 0;
     private isOpen = false;
     private lastTripTime = 0;
@@ -30,13 +30,13 @@ export class CircuitBreaker {
         // Reset error count if enough time has passed
         if (now - this.lastErrorTime > 60000) {
             // 1 minute window
-            this.errorCount = 0;
+            this.errorCount = 0n;
         }
 
         // Check if circuit breaker should be reset
         if (this.isOpen && now - this.lastTripTime > this.timeoutMs) {
             this.isOpen = false;
-            this.errorCount = 0;
+            this.errorCount = 0n;
             this.logger.info("[CircuitBreaker] Circuit breaker reset");
         }
 
@@ -48,7 +48,12 @@ export class CircuitBreaker {
         this.errorCount++;
         this.lastErrorTime = now;
 
-        if (this.errorCount >= this.threshold && !this.isOpen) {
+        // Reset if approaching safe limits for serialization
+        if (this.errorCount > 9007199254740991n) {
+            this.errorCount = 0n;
+        }
+
+        if (this.errorCount >= BigInt(this.threshold) && !this.isOpen) {
             this.isOpen = true;
             this.lastTripTime = now;
             this.logger.error(
@@ -67,7 +72,7 @@ export class CircuitBreaker {
         lastTripTime: number;
     } {
         return {
-            errorCount: this.errorCount,
+            errorCount: Number(this.errorCount),
             isOpen: this.isOpen,
             lastTripTime: this.lastTripTime,
         };
@@ -78,10 +83,16 @@ export class CircuitBreaker {
     }
 
     private onSuccess(): void {
-        this.errorCount = 0;
+        this.errorCount = 0n;
         if (this.state === CircuitState.HALF_OPEN) {
             this.successCount++;
-            if (this.successCount >= 3) {
+
+            // Reset if approaching safe limits for serialization
+            if (this.successCount > 9007199254740991n) {
+                this.successCount = 0n;
+            }
+
+            if (this.successCount >= 3n) {
                 this.state = CircuitState.CLOSED;
             }
         }
@@ -90,7 +101,13 @@ export class CircuitBreaker {
     private onFailure(): void {
         this.errorCount++;
         this.lastErrorTime = Date.now();
-        if (this.errorCount >= this.threshold) {
+
+        // Reset if approaching safe limits for serialization
+        if (this.errorCount > 9007199254740991n) {
+            this.errorCount = 0n;
+        }
+
+        if (this.errorCount >= BigInt(this.threshold)) {
             this.state = CircuitState.OPEN;
         }
     }
@@ -102,7 +119,7 @@ export class CircuitBreaker {
         if (this.state === CircuitState.OPEN) {
             if (Date.now() - this.lastErrorTime > this.timeoutMs) {
                 this.state = CircuitState.HALF_OPEN;
-                this.successCount = 0;
+                this.successCount = 0n;
             } else {
                 throw new Error(
                     `Circuit breaker is OPEN. Correlation ID: ${correlationId}`

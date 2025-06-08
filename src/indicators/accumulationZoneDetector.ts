@@ -119,7 +119,12 @@ export class AccumulationZoneDetector extends EventEmitter {
         () => ({
             priceLevel: 0,
             startTime: 0,
-            trades: new CircularBuffer<EnrichedTradeEvent>(100), // ✅ PERFORMANCE: Circular buffer
+            trades: new CircularBuffer<EnrichedTradeEvent>(100, (trade) => {
+                // Clean up any Map references in depthSnapshot to help GC
+                if (trade.depthSnapshot) {
+                    trade.depthSnapshot.clear();
+                }
+            }), // ✅ PERFORMANCE: Circular buffer with cleanup
             buyVolume: 0,
             sellVolume: 0,
             totalVolume: 0,

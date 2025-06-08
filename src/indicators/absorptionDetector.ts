@@ -559,7 +559,23 @@ export class AbsorptionDetector
             return;
         }
 
-        // Spoofing check
+        // Enhanced absorption spoofing detection
+        if (
+            this.detectAbsorptionSpoofing(
+                price,
+                side,
+                volumes.aggressive,
+                triggerTrade.timestamp
+            )
+        ) {
+            this.logger.debug(
+                `[AbsorptionDetector] Signal rejected - absorption spoofing detected`
+            );
+            this.metricsCollector.incrementMetric("absorptionSpoofingRejected");
+            return;
+        }
+
+        // General spoofing check
         if (
             this.features.spoofingDetection &&
             this.isSpoofed(price, side, triggerTrade.timestamp)
@@ -921,6 +937,71 @@ export class AbsorptionDetector
         const strengthRate = significantRefills / Math.max(1, refillCount);
 
         return Math.min(1, refillRate * 0.7 + strengthRate * 0.3);
+    }
+
+    /**
+     * Detect potential absorption spoofing patterns
+     */
+    private detectAbsorptionSpoofing(
+        price: number,
+        side: "buy" | "sell",
+        aggressiveVolume: number,
+        timestamp: number
+    ): boolean {
+        const windowMs = 30000; // 30 second window
+
+        // Get recent trades at this price level
+        const recentTrades = this.trades.filter(
+            (t) =>
+                Math.abs(t.price - price) <
+                    Math.pow(10, -this.pricePrecision) / 2 &&
+                timestamp - t.timestamp < windowMs
+        );
+
+        if (recentTrades.length < 3) return false;
+
+        // Check for rapid order placement/cancellation patterns
+        const timeBetweenTrades = [];
+        for (let i = 1; i < recentTrades.length; i++) {
+            timeBetweenTrades.push(
+                recentTrades[i].timestamp - recentTrades[i - 1].timestamp
+            );
+        }
+
+        // Detect suspiciously uniform timing (sub-second intervals)
+        const avgInterval =
+            timeBetweenTrades.reduce((a, b) => a + b, 0) /
+            timeBetweenTrades.length;
+        const uniformTiming = timeBetweenTrades.every(
+            (interval) => Math.abs(interval - avgInterval) < 100 // Within 100ms
+        );
+
+        // Check for volume patterns that suggest spoofing
+        const volumes = recentTrades.map((t) => t.quantity);
+        const avgVolume = volumes.reduce((a, b) => a + b, 0) / volumes.length;
+        const uniformVolumes = volumes.every(
+            (vol) => Math.abs(vol - avgVolume) < avgVolume * 0.1 // Within 10%
+        );
+
+        // Red flags for spoofing
+        const isSpoofing =
+            uniformTiming &&
+            uniformVolumes &&
+            avgInterval < 1000 && // Faster than 1 second intervals
+            aggressiveVolume > avgVolume * 10; // Suddenly large volume
+
+        if (isSpoofing) {
+            this.logger.warn("Potential absorption spoofing detected", {
+                price,
+                side,
+                aggressiveVolume,
+                avgInterval,
+                uniformTiming,
+            });
+            this.metricsCollector.incrementMetric("absorptionSpoofingDetected");
+        }
+
+        return isSpoofing;
     }
 
     /**

@@ -50,7 +50,7 @@ export interface ProcessorStats {
     processedUpdates: number;
     avgProcessingTimeMs: number;
     p99ProcessingTimeMs: number;
-    errorCount: number;
+    errorCount: string; // BigInt converted to string for JSON serialization
     lastError?: string;
 }
 
@@ -76,8 +76,8 @@ export class OrderBookProcessor implements IOrderBookProcessor {
     // State management
     private readonly recentSnapshots: CircularBuffer<OrderBookSnapshot>;
     private lastProcessedTime = Date.now();
-    private processedCount = 0;
-    private errorCount = 0;
+    private processedCount = 0n;
+    private errorCount = 0n;
     private lastError?: string;
 
     // Performance tracking
@@ -104,7 +104,13 @@ export class OrderBookProcessor implements IOrderBookProcessor {
         this.metricsCollector = metricsCollector;
 
         this.recentSnapshots = new CircularBuffer<OrderBookSnapshot>(
-            this.maxBufferSize
+            this.maxBufferSize,
+            (snapshot) => {
+                // Clean up Map to help GC with complex objects
+                if (snapshot.depthSnapshot) {
+                    snapshot.depthSnapshot.clear();
+                }
+            }
         );
         this.processingTimes = new CircularBuffer<number>(1000);
 
@@ -138,6 +144,10 @@ export class OrderBookProcessor implements IOrderBookProcessor {
             this.processingTimes.add(processingTime);
             this.lastProcessedTime = Date.now();
             this.processedCount++;
+            // Reset if approaching safe limits for serialization
+            if (this.processedCount > 9007199254740991n) {
+                this.processedCount = 0n;
+            }
 
             this.metricsCollector.updateMetric(
                 "orderbookProcessingTime",
@@ -325,6 +335,10 @@ export class OrderBookProcessor implements IOrderBookProcessor {
         snapshot?: Partial<OrderBookSnapshot>
     ): void {
         this.errorCount++;
+        // Reset if approaching safe limits for serialization
+        if (this.errorCount > 9007199254740991n) {
+            this.errorCount = 0n;
+        }
         this.lastError = error.message;
         this.errorWindow.push(Date.now());
 
@@ -342,7 +356,7 @@ export class OrderBookProcessor implements IOrderBookProcessor {
                 snapshot?.depthSnapshot instanceof Map
                     ? snapshot.depthSnapshot.size
                     : undefined,
-            errorCount: this.errorCount,
+            errorCount: this.errorCount.toString(),
         });
 
         this.metricsCollector.incrementMetric("orderbookProcessingErrors");
@@ -392,10 +406,10 @@ export class OrderBookProcessor implements IOrderBookProcessor {
                 : 0;
 
         return {
-            processedUpdates: this.processedCount,
+            processedUpdates: Number(this.processedCount), // Convert BigInt to number for compatibility
             avgProcessingTimeMs: avgTime,
             p99ProcessingTimeMs: p99Time,
-            errorCount: this.errorCount,
+            errorCount: this.errorCount.toString(), // Convert BigInt to string for JSON serialization
             lastError: this.lastError,
         };
     }

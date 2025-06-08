@@ -54,14 +54,35 @@ export interface DepthLevel {
 export class CircularBuffer<T> implements Iterable<T> {
     private buffer: T[] = [];
     private head = 0;
+    private tail = 0;
     private size = 0;
+    private sequence = 0n;
+    private readonly cleanupCallback?: (item: T) => void;
 
-    constructor(private capacity: number) {}
+    constructor(
+        private capacity: number,
+        cleanupCallback?: (item: T) => void
+    ) {
+        this.buffer = new Array(capacity) as T[];
+        this.capacity = capacity;
+        this.cleanupCallback = cleanupCallback;
+    }
 
     add(item: T): void {
-        this.buffer[this.head] = item;
-        this.head = (this.head + 1) % this.capacity;
-        if (this.size < this.capacity) this.size++;
+        const oldItem = this.buffer[this.tail];
+        if (this.size === this.capacity && oldItem !== undefined) {
+            this.cleanupCallback?.(oldItem);
+        }
+
+        this.buffer[this.tail] = item;
+        this.tail = (this.tail + 1) % this.capacity;
+        this.sequence++; // Track operations for overflow protection
+
+        if (this.size < this.capacity) {
+            this.size++;
+        } else {
+            this.head = (this.head + 1) % this.capacity;
+        }
     }
 
     getAll(): T[] {
@@ -75,7 +96,14 @@ export class CircularBuffer<T> implements Iterable<T> {
     }
 
     filter(predicate: (item: T) => boolean): T[] {
-        return this.getAll().filter(predicate);
+        const result: T[] = [];
+        for (let i = 0; i < this.size; i++) {
+            const item = this.get(i);
+            if (item !== undefined && predicate(item)) {
+                result.push(item);
+            }
+        }
+        return result;
     }
 
     clear(): void {
@@ -101,6 +129,37 @@ export class CircularBuffer<T> implements Iterable<T> {
         if (index < 0 || index >= this.size) return undefined;
         let start = this.size < this.capacity ? 0 : this.head;
         return this.buffer[(start + index) % this.capacity];
+    }
+
+    get(index: number): T | undefined {
+        if (index < 0 || index >= this.size) {
+            return undefined;
+        }
+        const realIndex = (this.head + index) % this.capacity;
+        return this.buffer[realIndex];
+    }
+
+    private checkOverflow(): void {
+        if (this.sequence > Number.MAX_SAFE_INTEGER) {
+            console.warn(
+                "CircularBuffer: Sequence approaching overflow, consider system restart"
+            );
+        }
+    }
+
+    cleanup(): void {
+        if (this.cleanupCallback) {
+            for (let i = 0; i < this.size; i++) {
+                const item = this.get(i);
+                if (item !== undefined) {
+                    this.cleanupCallback(item);
+                }
+            }
+        }
+        this.buffer.splice(0, this.buffer.length);
+        this.size = 0;
+        this.head = 0;
+        this.tail = 0;
     }
 }
 
