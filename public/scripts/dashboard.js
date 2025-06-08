@@ -791,8 +791,8 @@ const tradeWebsocket = new TradeWebSocket({
                         const signalLabel = buildSignalLabel(normalizedSignal);
                         const signalId = signal.id;
 
-                        // Add to signals list (but don't unshift since we want chronological order)
-                        signalsList.push(normalizedSignal);
+                        // Add to signals list - use unshift to maintain newest-first order
+                        signalsList.unshift(normalizedSignal);
 
                         // Add to chart
                         tradesChart.options.plugins.annotation.annotations[
@@ -2502,6 +2502,9 @@ function initialize() {
     // Setup periodic cleanup for support/resistance levels
     setInterval(cleanupOldSupportResistanceLevels, 300000); // Every 5 minutes
     setInterval(cleanupOldZones, 300000); // Every 5 minutes
+    
+    // Setup periodic update for signal times display
+    setInterval(renderSignalsList, 60000); // Update every minute
 }
 
 function addAnomalyChartLabel(anomaly) {
