@@ -239,10 +239,11 @@ export class ExhaustionDetector
             return;
         }
 
-        // Check for spoofing if enabled
+        // Check for spoofing if enabled (includes layering detection)
         if (
             this.features.spoofingDetection &&
-            this.isSpoofed(price, side, triggerTrade.timestamp)
+            (this.isSpoofed(price, side, triggerTrade.timestamp) ||
+                this.detectLayeringAttack(price, side, triggerTrade.timestamp))
         ) {
             this.logger.debug(
                 `[ExhaustionDetector] Signal rejected - spoofing detected`

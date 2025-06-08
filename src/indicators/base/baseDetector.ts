@@ -628,6 +628,66 @@ export abstract class BaseDetector extends Detector implements IDetector {
     }
 
     /**
+     * Detect layering attack patterns in order flow
+     */
+    protected detectLayeringAttack(
+        price: number,
+        side: "buy" | "sell",
+        timestamp: number
+    ): boolean {
+        const windowMs = 10000; // 10 second window
+        const tickSize = Math.pow(10, -this.pricePrecision);
+
+        // Check for layering patterns in nearby price levels
+        const layerCount = 5; // Check 5 levels each side
+        let suspiciousLayers = 0;
+
+        for (let i = 1; i <= layerCount; i++) {
+            const layerPrice =
+                side === "buy"
+                    ? +(price - i * tickSize).toFixed(this.pricePrecision)
+                    : +(price + i * tickSize).toFixed(this.pricePrecision);
+
+            // Get recent aggressive volume at this layer
+            const recentAggressive = this.getAggressiveVolumeAtPrice(
+                layerPrice,
+                windowMs
+            );
+
+            // Get current passive volume at this layer
+            const currentLevel = this.depth.get(layerPrice);
+            const currentPassive = currentLevel
+                ? side === "buy"
+                    ? currentLevel.bid
+                    : currentLevel.ask
+                : 0;
+
+            // Check for layering pattern: high recent aggressive but little remaining passive
+            if (
+                recentAggressive > 0 &&
+                currentPassive < recentAggressive * 0.1
+            ) {
+                suspiciousLayers++;
+            }
+        }
+
+        // Layering detected if multiple layers show this pattern
+        const isLayering = suspiciousLayers >= 3;
+
+        if (isLayering) {
+            this.logger.warn("Potential layering attack detected", {
+                price,
+                side,
+                suspiciousLayers,
+                timestamp,
+            });
+            this.metricsCollector.incrementMetric("layeringAttackDetected");
+        }
+
+        return isLayering;
+    }
+
+    /**
      * Check for passive refill
      */
     protected checkRefill(

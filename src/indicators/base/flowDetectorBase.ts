@@ -571,10 +571,11 @@ export abstract class FlowDetectorBase extends BaseDetector {
             return;
         }
 
-        // Spoofing detection
+        // Spoofing detection (includes layering detection)
         if (
             this.isSpoofed &&
-            this.isSpoofed(price, side, triggerTrade.timestamp)
+            (this.isSpoofed(price, side, triggerTrade.timestamp) ||
+                this.detectLayeringAttack(price, side, triggerTrade.timestamp))
         ) {
             this.recordRejection("spoofing_detected");
             return;

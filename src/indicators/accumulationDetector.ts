@@ -216,10 +216,11 @@ export class AccumulationDetector
             return;
         }
 
-        // Spoofing check
+        // Spoofing check (includes layering detection)
         if (
             this.features.spoofingDetection &&
-            this.isSpoofed(price, side, triggerTrade.timestamp)
+            (this.isSpoofed(price, side, triggerTrade.timestamp) ||
+                this.detectLayeringAttack(price, side, triggerTrade.timestamp))
         ) {
             this.logger.debug(
                 `[AccumulationDetector] Signal rejected - spoofing detected`

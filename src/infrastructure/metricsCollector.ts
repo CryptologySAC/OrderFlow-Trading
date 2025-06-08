@@ -53,6 +53,7 @@ export interface Metrics {
     absorptionSignalsGenerated?: number;
     absorptionSpoofingRejected?: number; // Fixed typo from "absorptionPpoofingRejected"
     absorptionSpoofingDetected?: number; // Enhanced absorption spoofing detection
+    layeringAttackDetected?: number; // Layering attack detection
     detector_absorptionSignals?: number;
     detector_absorptionAggressive_volume?: number;
     detector_absorptionPassive_volume?: number;

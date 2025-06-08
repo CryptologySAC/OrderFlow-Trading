@@ -575,10 +575,11 @@ export class AbsorptionDetector
             return;
         }
 
-        // General spoofing check
+        // General spoofing check (includes layering detection)
         if (
             this.features.spoofingDetection &&
-            this.isSpoofed(price, side, triggerTrade.timestamp)
+            (this.isSpoofed(price, side, triggerTrade.timestamp) ||
+                this.detectLayeringAttack(price, side, triggerTrade.timestamp))
         ) {
             this.logger.debug(
                 `[AbsorptionDetector] Signal rejected - spoofing detected`
