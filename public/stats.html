@@ -40,13 +40,16 @@
                 border-radius: 8px;
                 box-shadow: 0 2px 4px var(--shadow-color, rgba(0, 0, 0, 0.1));
                 min-height: 100px;
+                overflow-x: auto;
+                position: relative;
             }
 
             table {
                 width: 100%;
                 border-collapse: collapse;
                 font-size: 14px;
-                table-layout: fixed;
+                table-layout: auto;
+                min-width: 100%;
             }
 
             th {
@@ -56,18 +59,42 @@
                 text-align: left;
                 border-bottom: 2px solid var(--border-color, #ddd);
                 font-weight: 600;
-                overflow: hidden;
-                text-overflow: ellipsis;
                 white-space: nowrap;
+                position: relative;
+                min-width: 80px;
+                cursor: col-resize;
+                user-select: none;
+            }
+
+            th.resizable::after {
+                content: '';
+                position: absolute;
+                top: 0;
+                right: 0;
+                width: 4px;
+                height: 100%;
+                background: transparent;
+                cursor: col-resize;
+                border-right: 2px solid transparent;
+                transition: border-color 0.2s;
+            }
+
+            th.resizable:hover::after {
+                border-right-color: var(--resize-handle-hover, #007bff);
+            }
+
+            th.resizing::after {
+                border-right-color: var(--resize-handle-active, #0056b3);
             }
 
             td {
                 padding: 6px 12px;
                 text-align: left;
                 border-bottom: 1px solid var(--border-light, #eee);
+                white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
-                white-space: nowrap;
+                min-width: 80px;
             }
 
             .card-title {
@@ -82,6 +109,54 @@
                 border-left: 3px solid var(--primary-color, #007bff);
             }
 
+            /* Tooltip for truncated text */
+            .tooltip {
+                position: relative;
+                cursor: help;
+            }
+
+            .tooltip::after {
+                content: attr(data-tooltip);
+                position: absolute;
+                bottom: 125%;
+                left: 50%;
+                transform: translateX(-50%);
+                background: var(--bg-secondary, #333);
+                color: var(--text-primary, #fff);
+                padding: 8px 12px;
+                border-radius: 4px;
+                font-size: 12px;
+                white-space: nowrap;
+                z-index: 1000;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.3s;
+                box-shadow: 0 2px 8px var(--shadow-color, rgba(0, 0, 0, 0.2));
+            }
+
+            .tooltip:hover::after {
+                opacity: 1;
+            }
+
+            /* Reset button for column widths */
+            .reset-columns-btn {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background: var(--button-bg, #fff);
+                border: 1px solid var(--button-border, #ccc);
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 12px;
+                cursor: pointer;
+                color: var(--text-secondary, #666);
+                transition: background-color 0.2s;
+            }
+
+            .reset-columns-btn:hover {
+                background: var(--button-hover, #f0f0f0);
+            }
+
             @media (max-width: 768px) {
                 .stats-container {
                     grid-template-columns: 1fr;
@@ -89,6 +164,11 @@
 
                 body {
                     padding: 10px;
+                }
+
+                th, td {
+                    padding: 4px 8px;
+                    font-size: 12px;
                 }
             }
         </style>
@@ -98,12 +178,13 @@
         <div class="stats-container">
             <!-- Counters Table -->
             <div class="metric-card">
+                <button class="reset-columns-btn" onclick="resetTableColumns('countersTable')" title="Reset column widths">Reset</button>
                 <h3 class="card-title">Counters</h3>
                 <table id="countersTable">
                     <thead>
                         <tr>
-                            <th>Metric</th>
-                            <th>Value</th>
+                            <th class="resizable">Metric</th>
+                            <th class="resizable">Value</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -136,12 +217,13 @@
 
             <!-- Gauges Table -->
             <div class="metric-card">
+                <button class="reset-columns-btn" onclick="resetTableColumns('gaugesTable')" title="Reset column widths">Reset</button>
                 <h3 class="card-title">Gauges</h3>
                 <table id="gaugesTable">
                     <thead>
                         <tr>
-                            <th>Metric</th>
-                            <th>Value</th>
+                            <th class="resizable">Metric</th>
+                            <th class="resizable">Value</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -150,15 +232,16 @@
 
             <!-- Histograms Table -->
             <div class="metric-card">
+                <button class="reset-columns-btn" onclick="resetTableColumns('histogramsTable')" title="Reset column widths">Reset</button>
                 <h3 class="card-title">Histograms</h3>
                 <table id="histogramsTable">
                     <thead>
                         <tr>
-                            <th>Metric</th>
-                            <th>Count</th>
-                            <th>Mean</th>
-                            <th>Min</th>
-                            <th>Max</th>
+                            <th class="resizable">Metric</th>
+                            <th class="resizable">Count</th>
+                            <th class="resizable">Mean</th>
+                            <th class="resizable">Min</th>
+                            <th class="resizable">Max</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -167,13 +250,14 @@
 
             <!-- Signal Processing Metrics -->
             <div class="metric-card">
+                <button class="reset-columns-btn" onclick="resetTableColumns('signalOverviewTable')" title="Reset column widths">Reset</button>
                 <h3 class="card-title">Signal Processing Overview</h3>
                 <table id="signalOverviewTable">
                     <thead>
                         <tr>
-                            <th>Metric</th>
-                            <th>Count</th>
-                            <th>Rate/min</th>
+                            <th class="resizable">Metric</th>
+                            <th class="resizable">Count</th>
+                            <th class="resizable">Rate/min</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -203,15 +287,16 @@
 
             <!-- Signal Types Breakdown -->
             <div class="metric-card">
+                <button class="reset-columns-btn" onclick="resetTableColumns('signalTypesTable')" title="Reset column widths">Reset</button>
                 <h3 class="card-title">Signal Types</h3>
                 <table id="signalTypesTable">
                     <thead>
                         <tr>
-                            <th>Type</th>
-                            <th>Candidates</th>
-                            <th>Confirmed</th>
-                            <th>Rejected</th>
-                            <th>Success Rate</th>
+                            <th class="resizable">Type</th>
+                            <th class="resizable">Candidates</th>
+                            <th class="resizable">Confirmed</th>
+                            <th class="resizable">Rejected</th>
+                            <th class="resizable">Success Rate</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -270,13 +355,14 @@
 
             <!-- Rejection Reasons -->
             <div class="metric-card">
+                <button class="reset-columns-btn" onclick="resetTableColumns('rejectionReasonsTable')" title="Reset column widths">Reset</button>
                 <h3 class="card-title">Rejection Reasons</h3>
                 <table id="rejectionReasonsTable">
                     <thead>
                         <tr>
-                            <th>Reason</th>
-                            <th>Count</th>
-                            <th>Percentage</th>
+                            <th class="resizable">Reason</th>
+                            <th class="resizable">Count</th>
+                            <th class="resizable">Percentage</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -311,13 +397,14 @@
 
             <!-- Zone Statistics -->
             <div class="metric-card">
+                <button class="reset-columns-btn" onclick="resetTableColumns('zoneStatsTable')" title="Reset column widths">Reset</button>
                 <h3 class="card-title">Zone Analytics</h3>
                 <table id="zoneStatsTable">
                     <thead>
                         <tr>
-                            <th>Zone Metric</th>
-                            <th>Accumulation</th>
-                            <th>Distribution</th>
+                            <th class="resizable">Zone Metric</th>
+                            <th class="resizable">Accumulation</th>
+                            <th class="resizable">Distribution</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -352,12 +439,13 @@
 
             <!-- Signal Quality Metrics -->
             <div class="metric-card">
+                <button class="reset-columns-btn" onclick="resetTableColumns('signalQualityTable')" title="Reset column widths">Reset</button>
                 <h3 class="card-title">Signal Quality</h3>
                 <table id="signalQualityTable">
                     <thead>
                         <tr>
-                            <th>Metric</th>
-                            <th>Value</th>
+                            <th class="resizable">Metric</th>
+                            <th class="resizable">Value</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -389,6 +477,10 @@
                 </table>
             </div>
         </div>
+        <script
+            defer
+            src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"
+        ></script>
         <script type="module" src="scripts/stats.js"></script>
     </body>
 </html>

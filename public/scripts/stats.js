@@ -486,7 +486,129 @@ function connect() {
     };
 }
 
+function setupColumnResizing() {
+    if (typeof interact === "undefined") {
+        console.error("Interact.js not loaded");
+        return;
+    }
+
+    // Setup column resizing for all resizable table headers
+    interact('.resizable').draggable({
+        axis: 'x',
+        listeners: {
+            start(event) {
+                event.target.classList.add('resizing');
+            },
+            move(event) {
+                const th = event.target;
+                const table = th.closest('table');
+                const columnIndex = Array.from(th.parentNode.children).indexOf(th);
+                
+                // Get all cells in this column
+                const cells = table.querySelectorAll(`tr > *:nth-child(${columnIndex + 1})`);
+                
+                // Calculate new width
+                const currentWidth = th.offsetWidth;
+                const newWidth = Math.max(80, currentWidth + event.dx);
+                
+                // Apply new width to all cells in the column
+                cells.forEach(cell => {
+                    cell.style.width = `${newWidth}px`;
+                    cell.style.minWidth = `${newWidth}px`;
+                    cell.style.maxWidth = `${newWidth}px`;
+                });
+            },
+            end(event) {
+                event.target.classList.remove('resizing');
+            }
+        }
+    });
+}
+
+// Save and restore column widths
+function saveColumnWidths() {
+    const tables = document.querySelectorAll('table[id]');
+    const widths = {};
+    
+    tables.forEach(table => {
+        const tableId = table.id;
+        const headers = table.querySelectorAll('th.resizable');
+        widths[tableId] = Array.from(headers).map(th => th.offsetWidth);
+    });
+    
+    localStorage.setItem('statsColumnWidths', JSON.stringify(widths));
+}
+
+function restoreColumnWidths() {
+    try {
+        const savedWidths = JSON.parse(localStorage.getItem('statsColumnWidths') || '{}');
+        
+        Object.entries(savedWidths).forEach(([tableId, widths]) => {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            
+            const headers = table.querySelectorAll('th.resizable');
+            widths.forEach((width, index) => {
+                const th = headers[index];
+                if (th && width) {
+                    const columnIndex = Array.from(th.parentNode.children).indexOf(th);
+                    const cells = table.querySelectorAll(`tr > *:nth-child(${columnIndex + 1})`);
+                    
+                    cells.forEach(cell => {
+                        cell.style.width = `${width}px`;
+                        cell.style.minWidth = `${width}px`;
+                        cell.style.maxWidth = `${width}px`;
+                    });
+                }
+            });
+        });
+    } catch (error) {
+        console.error('Failed to restore column widths:', error);
+    }
+}
+
+// Auto-save column widths when they change
+function setupAutoSave() {
+    let saveTimeout;
+    document.addEventListener('mouseup', () => {
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(saveColumnWidths, 500);
+    });
+}
+
+// Reset column widths for a specific table
+function resetTableColumns(tableId) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    
+    const cells = table.querySelectorAll('th, td');
+    cells.forEach(cell => {
+        cell.style.width = '';
+        cell.style.minWidth = '';
+        cell.style.maxWidth = '';
+    });
+    
+    // Remove from saved widths
+    try {
+        const savedWidths = JSON.parse(localStorage.getItem('statsColumnWidths') || '{}');
+        delete savedWidths[tableId];
+        localStorage.setItem('statsColumnWidths', JSON.stringify(savedWidths));
+    } catch (error) {
+        console.error('Failed to reset column widths:', error);
+    }
+}
+
+// Make resetTableColumns globally available
+window.resetTableColumns = resetTableColumns;
+
 document.addEventListener("DOMContentLoaded", () => {
     initVisuals();
     connect();
+    
+    // Setup column resizing after DOM is loaded
+    setTimeout(() => {
+        restoreColumnWidths();
+        setupColumnResizing();
+        setupAutoSave();
+    }, 100);
 });
