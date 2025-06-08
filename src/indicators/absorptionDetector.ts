@@ -6,13 +6,18 @@ import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
-
+import {
+    AdaptiveThresholdCalculator,
+    AdaptiveThresholds,
+    MarketRegime,
+} from "./marketRegimeDetector.js";
 import type {
     IAbsorptionDetector,
     DetectorCallback,
     BaseDetectorSettings,
     AbsorptionFeatures,
     MicrostructureInsights,
+    AbsorptionConditions,
 } from "./interfaces/detectorInterfaces.js";
 import {
     EnrichedTradeEvent,
@@ -35,24 +40,6 @@ export interface AbsorptionSettings extends BaseDetectorSettings {
 /**
  * Comprehensive absorption analysis conditions with microstructure integration
  */
-interface AbsorptionConditions {
-    absorptionRatio: number; // aggressive/passive ratio
-    passiveStrength: number; // current/avg passive strength
-    hasRefill: boolean; // detected passive refills
-    icebergSignal: number; // iceberg pattern strength (0-1)
-    liquidityGradient: number; // depth gradient around zone (0-1)
-    absorptionVelocity: number; // rate of absorption events (0-1)
-    currentPassive: number; // current passive volume
-    avgPassive: number; // average passive volume
-    maxPassive: number; // maximum observed passive
-    minPassive: number; // minimum observed passive
-    aggressiveVolume: number; // total aggressive volume
-    imbalance: number; // bid/ask imbalance
-    sampleCount: number; // number of data samples
-    dominantSide: "bid" | "ask" | "neutral"; // which side dominates
-    // ✅ NEW: Integrated microstructure insights
-    microstructure?: MicrostructureInsights;
-}
 
 /**
  * Enhanced absorption event tracking with microstructure data
@@ -99,6 +86,13 @@ export class AbsorptionDetector
     private readonly icebergDetectionSensitivity: number;
     private readonly maxAbsorptionRatio: number;
 
+    private readonly thresholdCalculator = new AdaptiveThresholdCalculator();
+    private currentThresholds: AdaptiveThresholds;
+    private readonly performanceHistory = new Map<string, number>();
+    private recentSignalCount = 0;
+    private lastThresholdUpdate = 0;
+    private readonly updateIntervalMs = 300000;
+
     // Advanced tracking
     private readonly absorptionHistory = new Map<number, AbsorptionEvent[]>();
     private readonly liquidityLayers = new Map<number, LiquidityLayer[]>();
@@ -137,6 +131,15 @@ export class AbsorptionDetector
             layeredAbsorption: false,
             ...settings.features,
         };
+
+        this.currentThresholds =
+            this.thresholdCalculator.calculateAdaptiveThresholds(
+                this.performanceHistory,
+                this.recentSignalCount
+            );
+
+        // NEW: Set up periodic threshold updates
+        setInterval(() => this.updateThresholds(), this.updateIntervalMs);
 
         // Setup periodic cleanup for absorption tracking
         setInterval(() => this.cleanupAbsorptionHistory(), this.windowMs);
@@ -190,6 +193,185 @@ export class AbsorptionDetector
         ) {
             this.analyzeMicrostructureForAbsorption(event);
         }
+
+        const spread = this.getCurrentSpread()?.spread ?? 0;
+        this.thresholdCalculator.updateMarketData(
+            event.price,
+            event.quantity,
+            spread
+        );
+
+        if (this.lastTradeId !== event.tradeId) {
+            this.lastTradeId = event.tradeId;
+            this.addTrade(event);
+        }
+    }
+
+    private calculateAbsorptionScore(conditions: AbsorptionConditions): number {
+        // NEW: Update thresholds if needed
+        this.maybeUpdateThresholds();
+
+        let score = 0;
+        const thresholds = this.currentThresholds; // NEW: Use adaptive thresholds
+
+        // Factor 1: Adaptive absorption ratio (CHANGED from hardcoded)
+        if (conditions.absorptionRatio >= thresholds.absorptionLevels.strong) {
+            score += thresholds.absorptionScores.strong;
+        } else if (
+            conditions.absorptionRatio >= thresholds.absorptionLevels.moderate
+        ) {
+            score += thresholds.absorptionScores.moderate;
+        } else if (
+            conditions.absorptionRatio >= thresholds.absorptionLevels.weak
+        ) {
+            score += thresholds.absorptionScores.weak;
+        }
+
+        // Factor 2: Adaptive volume strength (CHANGED from hardcoded)
+        const volumeRatio = conditions.aggressiveVolume / conditions.avgPassive;
+        if (volumeRatio >= thresholds.volumeThresholds.highVolume) {
+            score += 0.2; // High volume boost
+        } else if (volumeRatio >= thresholds.volumeThresholds.mediumVolume) {
+            score += 0.1; // Medium volume boost
+        }
+
+        // Factor 3: Adaptive consistency requirements (CHANGED from hardcoded)
+        if (conditions.consistency >= thresholds.consistencyRequirement) {
+            score += 0.15; // Consistency bonus
+        } else if (
+            conditions.consistency >=
+            thresholds.consistencyRequirement * 0.8
+        ) {
+            score += 0.08; // Partial consistency bonus
+        }
+
+        // Factor 4-6: Keep existing logic for spread, velocity, etc. (UNCHANGED)
+        if (this.features.spreadImpact && conditions.spread > 0.003) {
+            score += 0.05;
+        }
+
+        if (conditions.velocityIncrease > 1.5) {
+            score += 0.1;
+        }
+
+        // Penalty for insufficient data (UNCHANGED)
+        if (conditions.sampleCount < 5) {
+            score *= 0.8;
+        }
+
+        // NEW: Apply minimum confidence threshold
+        const finalScore = Math.max(0, Math.min(1, score));
+        return finalScore >= thresholds.minimumConfidence ? finalScore : 0;
+    }
+
+    // NEW: Add threshold management methods (same as exhaustion detector)
+    private maybeUpdateThresholds(): void {
+        const now = Date.now();
+        if (now - this.lastThresholdUpdate > this.updateIntervalMs) {
+            this.updateThresholds();
+        }
+    }
+
+    private updateThresholds(): void {
+        const oldThresholds = { ...this.currentThresholds };
+
+        this.currentThresholds =
+            this.thresholdCalculator.calculateAdaptiveThresholds(
+                this.performanceHistory,
+                this.recentSignalCount
+            );
+
+        this.lastThresholdUpdate = Date.now();
+        this.recentSignalCount = 0;
+
+        if (this.hasSignificantChange(oldThresholds, this.currentThresholds)) {
+            this.logger.info("[AbsorptionDetector] Thresholds adapted", {
+                old: oldThresholds,
+                new: this.currentThresholds,
+                timestamp: new Date().toISOString(),
+            });
+        }
+    }
+
+    private hasSignificantChange(
+        old: AdaptiveThresholds,
+        current: AdaptiveThresholds
+    ): boolean {
+        const threshold = 0.1;
+
+        return (
+            Math.abs(
+                old.absorptionLevels.strong - current.absorptionLevels.strong
+            ) /
+                old.absorptionLevels.strong >
+                threshold ||
+            Math.abs(
+                old.absorptionScores.strong - current.absorptionScores.strong
+            ) /
+                old.absorptionScores.strong >
+                threshold ||
+            Math.abs(old.minimumConfidence - current.minimumConfidence) /
+                old.minimumConfidence >
+                threshold
+        );
+    }
+
+    // NEW: Update handleDetection to track signals
+    protected handleDetection(signal: AbsorptionSignalData): void {
+        this.recentSignalCount++;
+
+        signal.meta = {
+            ...signal.meta,
+            adaptiveThresholds: this.currentThresholds,
+            thresholdVersion: "adaptive-v1.0",
+        };
+
+        this.metricsCollector.updateMetric(
+            `detector_${this.detectorType}Aggressive_volume`,
+            signal.aggressive
+        );
+        this.metricsCollector.incrementMetric("absorptionSignalsGenerated");
+        this.metricsCollector.recordHistogram(
+            "absorption.score",
+            signal.confidence
+        );
+
+        super.handleDetection(signal);
+    }
+
+    // NEW: Add monitoring methods (same as exhaustion detector)
+    public recordSignalResult(
+        signalId: string,
+        profitable: boolean,
+        regime?: string
+    ): void {
+        if (regime) {
+            this.thresholdCalculator.recordSignalPerformance(
+                regime,
+                profitable
+            );
+            const currentPerf = this.performanceHistory.get(regime) ?? 0.5;
+            const newPerf = currentPerf * 0.9 + (profitable ? 1 : 0) * 0.1;
+            this.performanceHistory.set(regime, newPerf);
+        }
+    }
+
+    public getThresholdStatus(): {
+        current: AdaptiveThresholds;
+        recentSignals: number;
+        lastUpdated: Date;
+        performanceByRegime: Map<string, number>;
+    } {
+        return {
+            current: { ...this.currentThresholds },
+            recentSignals: this.recentSignalCount,
+            lastUpdated: new Date(this.lastThresholdUpdate),
+            performanceByRegime: new Map(this.performanceHistory),
+        };
+    }
+
+    public getCurrentMarketRegime(): MarketRegime {
+        return this.thresholdCalculator.detectCurrentRegime();
     }
 
     /**
@@ -484,6 +666,11 @@ export class AbsorptionDetector
             imbalance: 0,
             sampleCount: 0,
             dominantSide: "neutral",
+            consistency: 0,
+            velocityIncrease: 0,
+            spread: 0,
+
+            microstructure: undefined,
         };
     }
 
@@ -837,6 +1024,19 @@ export class AbsorptionDetector
                     );
                 }
 
+                const consistency = this.calculateAbsorptionConsistency(
+                    relevantPassiveValues
+                );
+
+                const velocityIncrease = this.calculateVelocityIncrease(
+                    zone,
+                    side,
+                    snapshots
+                );
+
+                const spreadInfo = this.getCurrentSpread();
+                const spread = spreadInfo?.spread ?? 0;
+
                 // Imbalance analysis
                 const imbalanceResult = this.checkPassiveImbalance(zone);
 
@@ -861,6 +1061,10 @@ export class AbsorptionDetector
                 conditions.dominantSide = imbalanceResult.dominantSide;
                 conditions.microstructure = microstructureInsights;
 
+                conditions.consistency = consistency;
+                conditions.velocityIncrease = velocityIncrease;
+                conditions.spread = spread;
+
                 // Release imbalance result back to pool
                 sharedPools.imbalanceResults.release(imbalanceResult);
 
@@ -882,9 +1086,90 @@ export class AbsorptionDetector
     }
 
     /**
+     * Calculate consistency of absorption pattern
+     */
+    private calculateAbsorptionConsistency(passiveValues: number[]): number {
+        if (passiveValues.length < 3) return 0;
+
+        // Check how consistently passive liquidity is maintained
+        const avgPassive = DetectorUtils.calculateMean(passiveValues);
+        let consistentPeriods = 0;
+
+        for (const value of passiveValues) {
+            // Count periods where passive stays above 70% of average
+            if (value >= avgPassive * 0.7) {
+                consistentPeriods++;
+            }
+        }
+
+        return consistentPeriods / passiveValues.length;
+    }
+
+    /**
+     * Calculate velocity increase in absorption activity
+     */
+    private calculateVelocityIncrease(
+        zone: number,
+        side: "buy" | "sell",
+        snapshots: ZoneSample[]
+    ): number {
+        if (snapshots.length < 5) return 0;
+
+        try {
+            // Calculate velocity change over time
+            const recent = snapshots.slice(-3); // Last 3 snapshots
+            const earlier = snapshots.slice(-6, -3); // Previous 3 snapshots
+
+            if (recent.length < 2 || earlier.length < 2) return 0;
+
+            // Calculate velocity for recent period
+            const recentVelocity = this.calculatePeriodVelocity(recent, side);
+            const earlierVelocity = this.calculatePeriodVelocity(earlier, side);
+
+            // Return velocity increase ratio
+            return earlierVelocity > 0 ? recentVelocity / earlierVelocity : 1;
+        } catch {
+            return 0;
+        }
+    }
+
+    /**
+     * Calculate velocity for a period of snapshots
+     */
+    private calculatePeriodVelocity(
+        snapshots: ZoneSample[],
+        side: "buy" | "sell"
+    ): number {
+        if (snapshots.length < 2) return 0;
+
+        const relevantSide = side === "buy" ? "ask" : "bid";
+        let totalVelocity = 0;
+        let validPeriods = 0;
+
+        for (let i = 1; i < snapshots.length; i++) {
+            const current = snapshots[i];
+            const previous = snapshots[i - 1];
+            const timeDelta = current.timestamp - previous.timestamp;
+
+            if (timeDelta > 0) {
+                const volumeChange = Math.abs(
+                    current[relevantSide] - previous[relevantSide]
+                );
+                const velocity = volumeChange / (timeDelta / 1000); // per second
+                totalVelocity += velocity;
+                validPeriods++;
+            }
+        }
+
+        return validPeriods > 0 ? totalVelocity / validPeriods : 0;
+    }
+
+    /**
      * Calculate sophisticated absorption score with integrated microstructure insights
      */
-    private calculateAbsorptionScore(conditions: AbsorptionConditions): number {
+    private calculateAbsorptionScoreOld(
+        conditions: AbsorptionConditions
+    ): number {
         let score = 0;
 
         // Factor 1: Absorption ratio (lower = better absorption)

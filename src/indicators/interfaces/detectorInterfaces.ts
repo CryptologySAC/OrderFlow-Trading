@@ -90,6 +90,7 @@ export interface AbsorptionFeatures extends DetectorFeatures {
     liquidityGradient?: boolean; // Analyze liquidity depth gradient
     absorptionVelocity?: boolean; // Track rate of absorption
     layeredAbsorption?: boolean; // Detect multi-level absorption
+    spreadImpact?: boolean; // Detect Spread Impact
 }
 
 export interface ExhaustionFeatures extends DetectorFeatures {
@@ -163,20 +164,23 @@ export interface PendingDetection {
  * Hot path object interfaces for object pooling
  */
 export interface AbsorptionConditions {
-    absorptionRatio: number;
-    passiveStrength: number;
-    hasRefill: boolean;
-    icebergSignal: number;
-    liquidityGradient: number;
-    absorptionVelocity: number;
-    currentPassive: number;
-    avgPassive: number;
-    maxPassive: number;
-    minPassive: number;
-    aggressiveVolume: number;
-    imbalance: number;
-    sampleCount: number;
-    dominantSide: "bid" | "ask" | "neutral";
+    absorptionRatio: number; // aggressive/passive ratio
+    passiveStrength: number; // current/avg passive strength
+    hasRefill: boolean; // detected passive refills
+    icebergSignal: number; // iceberg pattern strength (0-1)
+    liquidityGradient: number; // depth gradient around zone (0-1)
+    absorptionVelocity: number; // rate of absorption events (0-1)
+    currentPassive: number; // current passive volume
+    avgPassive: number; // average passive volume
+    maxPassive: number; // maximum observed passive
+    minPassive: number; // minimum observed passive
+    aggressiveVolume: number; // total aggressive volume
+    imbalance: number; // bid/ask imbalance
+    sampleCount: number; // number of data samples
+    dominantSide: "bid" | "ask" | "neutral"; // which side dominates
+    consistency: number;
+    velocityIncrease: number;
+    spread: number;
     microstructure?: MicrostructureInsights;
 }
 

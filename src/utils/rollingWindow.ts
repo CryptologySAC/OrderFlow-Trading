@@ -35,6 +35,13 @@ export class RollingWindow<T = number> implements Iterable<T> {
         return count === 0 ? 0 : this._sum / count;
     }
 
+    /**
+     * Calculate the average of values in the window (alias for mean())
+     */
+    public average(): number {
+        return this.mean();
+    }
+
     public sum(): number {
         if (!this.isNumeric) throw new Error("sum() only for numeric buffers");
         return this._sum;

@@ -7,6 +7,11 @@ import { RollingWindow } from "../utils/rollingWindow.js";
 import { DetectorUtils } from "./base/detectorUtils.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
 import { SharedPools } from "../utils/objectPool.js";
+import {
+    AdaptiveThresholdCalculator,
+    AdaptiveThresholds,
+    MarketRegime,
+} from "./marketRegimeDetector.js";
 
 import type {
     EnrichedTradeEvent,
@@ -76,6 +81,14 @@ export class ExhaustionDetector
     private readonly maxPassiveRatio: number;
     private readonly minDepletionFactor: number;
 
+    // NEW: Add adaptive threshold system
+    private readonly thresholdCalculator = new AdaptiveThresholdCalculator();
+    private currentThresholds: AdaptiveThresholds;
+    private readonly performanceHistory = new Map<string, number>();
+    private recentSignalCount = 0;
+    private lastThresholdUpdate = 0;
+    private readonly updateIntervalMs = 300000; // Update every 5 minutes
+
     constructor(
         id: string,
         callback: DetectorCallback,
@@ -107,6 +120,16 @@ export class ExhaustionDetector
             volumeVelocity: false,
             ...settings.features,
         };
+
+        // NEW: Initialize adaptive thresholds
+        this.currentThresholds =
+            this.thresholdCalculator.calculateAdaptiveThresholds(
+                this.performanceHistory,
+                this.recentSignalCount
+            );
+
+        // NEW: Set up periodic threshold updates
+        setInterval(() => this.updateThresholds(), this.updateIntervalMs);
     }
 
     protected getSignalType(): SignalType {
@@ -139,6 +162,13 @@ export class ExhaustionDetector
         snap.total = event.zonePassiveBidVolume + event.zonePassiveAskVolume;
         snap.timestamp = event.timestamp;
 
+        const spread = this.getCurrentSpread()?.spread ?? 0;
+        this.thresholdCalculator.updateMarketData(
+            event.price,
+            event.quantity,
+            spread
+        );
+
         if (
             !lastSnap ||
             lastSnap.bid !== snap.bid ||
@@ -156,6 +186,135 @@ export class ExhaustionDetector
             this.lastTradeId = event.tradeId;
             this.addTrade(event); // EnrichedTradeEvent extends AggressiveTrade
         }
+    }
+
+    private calculateExhaustionScore(conditions: ExhaustionConditions): number {
+        // NEW: Update thresholds if needed
+        this.maybeUpdateThresholds();
+
+        let score = 0;
+        const thresholds = this.currentThresholds; // NEW: Use adaptive thresholds
+
+        // Factor 1: Adaptive depletion ratio (CHANGED from hardcoded values)
+        if (conditions.depletionRatio > thresholds.depletionLevels.extreme) {
+            score += thresholds.scores.extreme;
+        } else if (
+            conditions.depletionRatio > thresholds.depletionLevels.high
+        ) {
+            score += thresholds.scores.high;
+        } else if (
+            conditions.depletionRatio > thresholds.depletionLevels.moderate
+        ) {
+            score += thresholds.scores.moderate;
+        }
+
+        // Factor 2: Adaptive passive strength (CHANGED from hardcoded values)
+        if (
+            conditions.passiveRatio <
+            thresholds.passiveRatioLevels.severeDepletion
+        ) {
+            score += 0.25; // Severely depleted
+        } else if (
+            conditions.passiveRatio <
+            thresholds.passiveRatioLevels.moderateDepletion
+        ) {
+            score += 0.15; // Moderately depleted
+        } else if (
+            conditions.passiveRatio <
+            thresholds.passiveRatioLevels.someDepletion
+        ) {
+            score += 0.1; // Somewhat depleted
+        }
+
+        // Factor 3: Continuous depletion (adaptive to volatility) - CHANGED
+        const depletionThreshold =
+            thresholds.depletionLevels.moderate * conditions.avgPassive * 0.5;
+        if (conditions.refillGap < -depletionThreshold) {
+            score += 0.15;
+        } else if (conditions.refillGap < 0) {
+            score += 0.1;
+        }
+
+        // Factor 4-6: Keep existing logic for imbalance, spread, velocity (UNCHANGED)
+        if (conditions.imbalance > 0.8) score += 0.1;
+        else if (conditions.imbalance > 0.6) score += 0.05;
+
+        if (this.features.spreadAdjustment) {
+            if (conditions.spread > 0.005) score += 0.05;
+            else if (conditions.spread > 0.002) score += 0.03;
+        }
+
+        if (this.features.volumeVelocity && conditions.passiveVelocity < -100) {
+            score += 0.05;
+        }
+
+        // Penalty for insufficient data (UNCHANGED)
+        if (conditions.sampleCount < 5) {
+            score *= 0.7;
+        }
+
+        // NEW: Apply minimum confidence threshold
+        const finalScore = Math.max(0, Math.min(1, score));
+        return finalScore >= thresholds.minimumConfidence ? finalScore : 0;
+    }
+
+    /**
+     * Maybe update thresholds based on time or performance
+     */
+    private maybeUpdateThresholds(): void {
+        const now = Date.now();
+        if (now - this.lastThresholdUpdate > this.updateIntervalMs) {
+            this.updateThresholds();
+        }
+    }
+
+    /**
+     * Update adaptive thresholds
+     */
+    private updateThresholds(): void {
+        const oldThresholds = { ...this.currentThresholds };
+
+        this.currentThresholds =
+            this.thresholdCalculator.calculateAdaptiveThresholds(
+                this.performanceHistory,
+                this.recentSignalCount
+            );
+
+        this.lastThresholdUpdate = Date.now();
+        this.recentSignalCount = 0; // Reset for next period
+
+        // Log significant threshold changes
+        if (this.hasSignificantChange(oldThresholds, this.currentThresholds)) {
+            this.logger.info("[ExhaustionDetector] Thresholds adapted", {
+                old: oldThresholds,
+                new: this.currentThresholds,
+                timestamp: new Date().toISOString(),
+            });
+        }
+    }
+
+    /**
+     * Check if threshold changes are significant
+     */
+    private hasSignificantChange(
+        old: AdaptiveThresholds,
+        current: AdaptiveThresholds
+    ): boolean {
+        const threshold = 0.1; // 10% change threshold
+
+        return (
+            Math.abs(
+                old.depletionLevels.extreme - current.depletionLevels.extreme
+            ) /
+                old.depletionLevels.extreme >
+                threshold ||
+            Math.abs(old.scores.extreme - current.scores.extreme) /
+                old.scores.extreme >
+                threshold ||
+            Math.abs(old.minimumConfidence - current.minimumConfidence) /
+                old.minimumConfidence >
+                threshold
+        );
     }
 
     /**
@@ -363,6 +522,82 @@ export class ExhaustionDetector
             "exhaustion.score",
             adjustedScore
         );
+    }
+
+    protected handleDetection(signal: ExhaustionSignalData): void {
+        this.recentSignalCount++; // NEW: Track signal count
+
+        // NEW: Add adaptive threshold info to signal metadata
+        signal.meta = {
+            ...signal.meta,
+            adaptiveThresholds: this.currentThresholds,
+            thresholdVersion: "adaptive-v1.0",
+        };
+
+        this.metricsCollector.updateMetric(
+            `detector_${this.detectorType}Aggressive_volume`,
+            signal.aggressive
+        );
+        this.metricsCollector.incrementMetric("exhaustionSignalsGenerated");
+        this.metricsCollector.recordHistogram(
+            "exhaustion.score",
+            signal.confidence
+        );
+
+        // Call parent handleDetection
+        super.handleDetection(signal);
+    }
+
+    /**
+     * Record signal performance for learning
+     */
+    public recordSignalResult(
+        signalId: string,
+        profitable: boolean,
+        regime?: string
+    ): void {
+        if (regime) {
+            this.thresholdCalculator.recordSignalPerformance(
+                regime,
+                profitable
+            );
+
+            // Update performance history
+            const currentPerf = this.performanceHistory.get(regime) ?? 0.5;
+            const newPerf = currentPerf * 0.9 + (profitable ? 1 : 0) * 0.1; // Exponential moving average
+            this.performanceHistory.set(regime, newPerf);
+        }
+    }
+
+    /**
+     * Get current threshold information for monitoring
+     */
+    public getThresholdStatus(): {
+        current: AdaptiveThresholds;
+        recentSignals: number;
+        lastUpdated: Date;
+        performanceByRegime: Map<string, number>;
+    } {
+        return {
+            current: { ...this.currentThresholds },
+            recentSignals: this.recentSignalCount,
+            lastUpdated: new Date(this.lastThresholdUpdate),
+            performanceByRegime: new Map(this.performanceHistory),
+        };
+    }
+
+    /**
+     * Manually trigger threshold update (for testing or immediate adaptation)
+     */
+    public forceThresholdUpdate(): void {
+        this.updateThresholds();
+    }
+
+    /**
+     * Get current market regime (for debugging/monitoring)
+     */
+    public getCurrentMarketRegime(): MarketRegime {
+        return this.thresholdCalculator.detectCurrentRegime();
     }
 
     /**
@@ -740,7 +975,9 @@ export class ExhaustionDetector
     /**
      * Calculate exhaustion confidence score (0-1)
      */
-    private calculateExhaustionScore(conditions: ExhaustionConditions): number {
+    private calculateExhaustionScore_old(
+        conditions: ExhaustionConditions
+    ): number {
         let score = 0;
 
         // Factor 1: Depletion ratio (aggressive vs passive)

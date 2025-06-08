@@ -60,6 +60,7 @@ export interface AbsorptionSignalData {
     refilled: boolean;
     confidence: number;
     metrics: Record<string, unknown>;
+    meta?: Record<string, unknown>;
 }
 
 export interface ExhaustionSignalData {
