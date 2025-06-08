@@ -57,7 +57,10 @@ let latestBadgeElem = null;
 
 // Runtime configuration
 let dedupTolerance = 0.01;
-if (window.runtimeConfig && typeof window.runtimeConfig.dedupTolerance === "number") {
+if (
+    window.runtimeConfig &&
+    typeof window.runtimeConfig.dedupTolerance === "number"
+) {
     dedupTolerance = window.runtimeConfig.dedupTolerance;
 }
 
@@ -870,9 +873,7 @@ const tradeWebsocket = new TradeWebSocket({
                             ...(window.runtimeConfig || {}),
                             ...message.data,
                         };
-                        if (
-                            typeof message.data.dedupTolerance === "number"
-                        ) {
+                        if (typeof message.data.dedupTolerance === "number") {
                             dedupTolerance = message.data.dedupTolerance;
                         }
                     }
