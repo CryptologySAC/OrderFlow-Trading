@@ -55,6 +55,12 @@ let maxActiveZones = 10;
 let badgeTimeout = null;
 let latestBadgeElem = null;
 
+// Runtime configuration
+let dedupTolerance = 0.01;
+if (window.runtimeConfig && typeof window.runtimeConfig.dedupTolerance === "number") {
+    dedupTolerance = window.runtimeConfig.dedupTolerance;
+}
+
 function snap(value) {
     return Math.round(value / GRID_SIZE) * GRID_SIZE;
 }
@@ -345,6 +351,31 @@ function showAnomalyBadge(anomaly) {
     }, 4000);
 }
 
+function showSignalBundleBadge(signals) {
+    if (!Array.isArray(signals) || signals.length === 0) return;
+    const top = signals[0];
+    if (latestBadgeElem) latestBadgeElem.remove();
+    const badge = document.createElement("div");
+    badge.className = "anomaly-badge";
+    let color = "#757575"; // grey
+    if (top.confidence > 0.9) {
+        color = "#2e7d32"; // green
+    } else if (top.confidence >= 0.75) {
+        color = "#fb8c00"; // orange
+    }
+    badge.style.background = color;
+    badge.innerHTML = `${top.side.toUpperCase()} @ ${top.price.toFixed(2)} (${(
+        top.confidence * 100
+    ).toFixed(0)}%)`;
+    document.body.appendChild(badge);
+    latestBadgeElem = badge;
+    if (badgeTimeout) clearTimeout(badgeTimeout);
+    badgeTimeout = setTimeout(() => {
+        badge.remove();
+        latestBadgeElem = null;
+    }, 4000);
+}
+
 // Signal list rendering
 function formatSignalTime(timestamp) {
     const s = Math.floor((Date.now() - timestamp) / 1000);
@@ -465,11 +496,16 @@ function scheduleTradesChartUpdate() {
 
 // Improve Orderbook Chart performance
 let orderBookUpdateTimeout = null;
+let lastOrderBookDraw = 0;
 function scheduleOrderBookUpdate() {
+    if (!orderBookChart) return;
+    const now = Date.now();
+    const delay = Math.max(0, 500 - (now - lastOrderBookDraw));
     if (orderBookUpdateTimeout) clearTimeout(orderBookUpdateTimeout);
     orderBookUpdateTimeout = setTimeout(() => {
         orderBookChart.update();
-    }, 100); // Update 10 times/second max
+        lastOrderBookDraw = Date.now();
+    }, delay);
 }
 
 /**
@@ -788,6 +824,58 @@ const tradeWebsocket = new TradeWebSocket({
                     console.log(
                         `${backlogSignals.length} backlog signals added to chart and list`
                     );
+                    break;
+
+                case "signal_bundle":
+                    if (Array.isArray(message.data) && message.data.length) {
+                        const filtered = message.data.filter((s) => {
+                            const last = signalsList[0];
+                            if (!last) return true;
+                            const diff = Math.abs(s.price - last.price);
+                            return diff > last.price * dedupTolerance;
+                        });
+
+                        filtered.forEach((signal) => {
+                            signalsList.unshift(signal);
+                            if (signalsList.length > 50) {
+                                signalsList = signalsList.slice(0, 50);
+                            }
+
+                            const label = buildSignalLabel(signal);
+                            tradesChart.options.plugins.annotation.annotations[
+                                signal.id
+                            ] = {
+                                type: "label",
+                                xValue: signal.time,
+                                yValue: signal.price,
+                                content: label,
+                                backgroundColor: "rgba(90, 50, 255, 0.5)",
+                                color: "white",
+                                font: { size: 12, family: "monospace" },
+                                borderRadius: 4,
+                                padding: 8,
+                                position: { x: "center", y: "center" },
+                            };
+                        });
+
+                        renderSignalsList();
+                        tradesChart.update("none");
+                        showSignalBundleBadge(filtered);
+                    }
+                    break;
+
+                case "runtimeConfig":
+                    if (message.data && typeof message.data === "object") {
+                        window.runtimeConfig = {
+                            ...(window.runtimeConfig || {}),
+                            ...message.data,
+                        };
+                        if (
+                            typeof message.data.dedupTolerance === "number"
+                        ) {
+                            dedupTolerance = message.data.dedupTolerance;
+                        }
+                    }
                     break;
 
                 case "supportResistanceLevel":
@@ -1757,7 +1845,7 @@ function updateChartTheme(theme) {
         // Update order book bar colors with better visibility in dark mode
         updateOrderBookBarColors(theme);
 
-        orderBookChart.update("none");
+        scheduleOrderBookUpdate();
     }
 }
 
