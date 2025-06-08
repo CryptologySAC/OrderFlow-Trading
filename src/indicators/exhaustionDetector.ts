@@ -386,9 +386,6 @@ export class ExhaustionDetector
         // Get current book level
         const bookLevel = this.depth.get(price);
         if (!bookLevel) {
-            this.logger.debug(
-                `[ExhaustionDetector] No book data for price ${price}`
-            );
             return;
         }
 

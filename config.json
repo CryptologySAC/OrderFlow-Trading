@@ -179,17 +179,17 @@
                 "testLogMinSpoof": 100
             },
             "exhaustion": {
-                "minAggVolume": 10,
-                "threshold": 0.5,
+                "minAggVolume": 1,
+                "threshold": 0.1,
                 "windowMs": 20000,
-                "zoneTicks": 2,
+                "zoneTicks": 1,
                 "eventCooldownMs": 5000,
                 "signalCooldownMs": 35000,
-                "maxPassiveRatio": 0.65,
+                "maxPassiveRatio": 1,
                 "pricePrecision": 2,
-                "moveTicks": 4,
+                "moveTicks": 1,
                 "confirmationTimeout": 50000,
-                "maxRevisitTicks": 12,
+                "maxRevisitTicks": 0,
                 "features": {
                     "depletionTracking": false,
                     "spreadAdjustment": false,
@@ -202,18 +202,18 @@
                 }
             },
             "absorption": {
-                "minAggVolume": 80,
-                "threshold": 0.7,
+                "minAggVolume": 1,
+                "threshold": 0.1,
                 "windowMs": 20000,
                 "zoneTicks": 1,
                 "eventCooldownMs": 6000,
                 "signalCooldownMs": 30000,
-                "minPassiveMultiplier": 1.3,
+                "minPassiveMultiplier": 1,
                 "maxAbsorptionRatio": 0.75,
                 "pricePrecision": 2,
                 "moveTicks": 1,
                 "confirmationTimeout": 55000,
-                "maxRevisitTicks": 5,
+                "maxRevisitTicks": 0,
                 "features": {
                     "spoofingDetection": true,
                     "adaptiveZone": true,
@@ -228,12 +228,12 @@
             },
             "deltaCvdConfirmation": {
                 "windowSec": [60, 300, 900],
-                "minTradesPerSec": 0.3,
+                "minTradesPerSec": 0.1,
                 "minVolPerSec": 0.8,
                 "minZ": 2.5,
                 "pricePrecision": 2,
                 "dynamicThresholds": true,
-                "logDebug": false
+                "logDebug": true
             },
             "accumulationDetector": {
                 "minDurationMs": 150000,

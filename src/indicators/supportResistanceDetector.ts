@@ -149,14 +149,6 @@ export class SupportResistanceDetector extends BaseDetector {
                 level.touchCount++;
                 level.lastTouched = event.timestamp;
                 level.volumeAtLevel += event.quantity;
-
-                this.logger.debug("Level touched", {
-                    levelId: level.id,
-                    levelPrice: level.price,
-                    tradePrice: event.price,
-                    touchCount: level.touchCount,
-                    wasRejection,
-                });
             }
         }
     }

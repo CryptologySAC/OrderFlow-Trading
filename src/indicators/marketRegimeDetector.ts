@@ -177,9 +177,9 @@ export class AdaptiveThresholdCalculator {
         lastUpdated: Date.now(),
 
         absorptionLevels: {
-            strong: 3.0, // Aggressive vol is 3x passive vol
-            moderate: 2.0, // Aggressive vol is 2x passive vol
-            weak: 1.5, // Aggressive vol is 1.5x passive vol
+            strong: 0.1, // Aggressive is 0.1x passive = STRONG absorption
+            moderate: 0.3, // Aggressive is 0.3x passive = MODERATE absorption
+            weak: 0.5, // Aggressive is 0.5x passive = WEAK absorption
         },
         absorptionScores: {
             strong: 0.4, // High confidence score

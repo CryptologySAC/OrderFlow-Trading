@@ -241,6 +241,15 @@ export abstract class BaseDetector extends Detector implements IDetector {
             this.trades.add(tradeData);
             const zone = this.calculateZone(tradeData.price);
 
+            this.logger.info(`[${this.constructor.name}] Trade added`, {
+                price: tradeData.price,
+                quantity: tradeData.quantity,
+                side: this.getTradeSide(tradeData),
+                zone,
+                totalTradesInBuffer: this.trades.length,
+                timestamp: new Date(tradeData.timestamp).toISOString(),
+            });
+
             // Copy-on-write: create new bucket instead of mutating
             const currentBucket = this.zoneAgg.get(zone);
             const newBucket = this.createUpdatedBucket(
@@ -249,6 +258,13 @@ export abstract class BaseDetector extends Detector implements IDetector {
             );
 
             this.zoneAgg.set(zone, newBucket);
+
+            this.logger.info(`[${this.constructor.name}] Zone updated`, {
+                zone,
+                tradesInZone: newBucket.trades.length,
+                volumeInZone: newBucket.vol,
+                activeZones: this.zoneAgg.size,
+            });
 
             if (this.features.adaptiveZone) {
                 this.adaptiveZoneCalculator.updatePrice(tradeData.price);
