@@ -28,6 +28,9 @@ import {
 } from "./infrastructure/recoveryManager.js";
 import { MicrostructureAnalyzer } from "./data/microstructureAnalyzer.js";
 import { IndividualTradesManager } from "./data/individualTradesManager.js";
+import { ThreadManager } from "./multithreading/threadManager.js";
+import { WorkerLogger } from "./multithreading/workerLogger.js";
+import { WorkerSignalLogger } from "./multithreading/workerSignalLogger.js";
 
 // Service imports
 import { DetectorFactory } from "./utils/detectorFactory.js";
@@ -109,7 +112,8 @@ export class OrderFlowDashboard {
     private readonly recoveryManager: RecoveryManager;
 
     // Managers
-    private readonly wsManager: WebSocketManager;
+    private readonly wsManager?: WebSocketManager;
+    private readonly threadManager?: ThreadManager;
     private readonly signalManager: SignalManager;
     private readonly dataStreamManager: DataStreamManager;
 
@@ -147,7 +151,8 @@ export class OrderFlowDashboard {
     private isShuttingDown = false;
     private readonly purgeIntervalMs = 10 * 60 * 1000; // 10 minutes
     private purgeIntervalId?: NodeJS.Timeout;
-    private statsBroadcaster: StatsBroadcaster;
+    private statsBroadcaster?: StatsBroadcaster;
+    private broadcastMessage: (msg: WebSocketMessage) => void = () => {};
     private lastTradePrice = 0; // Track last trade price for anomaly context
 
     public static async create(
@@ -194,6 +199,7 @@ export class OrderFlowDashboard {
         // Initialize infrastructure
         this.logger = dependencies.logger;
         this.metricsCollector = dependencies.metricsCollector;
+        this.threadManager = dependencies.threadManager;
 
         // Initialize recovery manager
         this.recoveryManager = new RecoveryManager(
@@ -215,14 +221,23 @@ export class OrderFlowDashboard {
         this.anomalyDetector = dependencies.anomalyDetector;
 
         // Initialize managers
-        this.wsManager = new WebSocketManager(
-            Config.WS_PORT,
-            this.logger,
-            dependencies.rateLimiter,
-            this.metricsCollector,
-            this.createWSHandlers(),
-            (ws) => this.onClientConnected(ws)
-        );
+        if (this.threadManager) {
+            this.broadcastMessage = (msg: WebSocketMessage): void => {
+                this.threadManager!.broadcast(msg);
+            };
+        } else {
+            this.wsManager = new WebSocketManager(
+                Config.WS_PORT,
+                this.logger,
+                dependencies.rateLimiter,
+                this.metricsCollector,
+                this.createWSHandlers(),
+                (ws) => this.onClientConnected(ws)
+            );
+            this.broadcastMessage = (msg: WebSocketMessage): void => {
+                this.wsManager!.broadcast(msg);
+            };
+        }
 
         this.signalManager = dependencies.signalManager;
 
@@ -234,13 +249,15 @@ export class OrderFlowDashboard {
             this.metricsCollector
         );
 
-        this.statsBroadcaster = new StatsBroadcaster(
-            this.metricsCollector,
-            this.dataStreamManager,
-            this.wsManager,
-            this.logger,
-            dependencies.signalTracker
-        );
+        if (!this.threadManager) {
+            this.statsBroadcaster = new StatsBroadcaster(
+                this.metricsCollector,
+                this.dataStreamManager,
+                this.wsManager!,
+                this.logger,
+                dependencies.signalTracker
+            );
+        }
         DetectorFactory.initialize(dependencies);
 
         this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
@@ -856,7 +873,7 @@ export class OrderFlowDashboard {
                             enrichedTrade
                         );
                     if (aggTradeMessage) {
-                        this.wsManager.broadcast(aggTradeMessage);
+                        this.broadcastMessage(aggTradeMessage);
                     }
                 }
             );
@@ -867,8 +884,9 @@ export class OrderFlowDashboard {
                         this.dependencies.orderBookProcessor.onOrderBookUpdate(
                             orderBookUpdate
                         );
-                    if (orderBookMessage)
-                        this.wsManager.broadcast(orderBookMessage);
+                    if (orderBookMessage) {
+                        this.broadcastMessage(orderBookMessage);
+                    }
                 }
             );
         }
@@ -885,7 +903,7 @@ export class OrderFlowDashboard {
                     data: { ...event, details: event.details },
                     now: Date.now(),
                 };
-                this.wsManager.broadcast(message);
+                this.broadcastMessage(message);
             });
         }
 
@@ -905,7 +923,7 @@ export class OrderFlowDashboard {
                         data: event.data,
                         now: Date.now(),
                     };
-                    this.wsManager.broadcast(message);
+                    this.broadcastMessage(message);
                     this.logger.info(
                         "Support/Resistance level broadcasted via WebSocket",
                         {
@@ -984,7 +1002,7 @@ export class OrderFlowDashboard {
             now: Date.now(),
         };
 
-        this.wsManager.broadcast(message);
+        this.broadcastMessage(message);
     }
 
     /**
@@ -1031,7 +1049,7 @@ export class OrderFlowDashboard {
             now: Date.now(),
         };
 
-        this.wsManager.broadcast(message);
+        this.broadcastMessage(message);
     }
 
     /**
@@ -1105,7 +1123,7 @@ export class OrderFlowDashboard {
                     status: "healthy",
                     timestamp: new Date().toISOString(),
                     uptime: process.uptime(),
-                    connections: this.wsManager.getConnectionCount(),
+                    connections: this.wsManager?.getConnectionCount() ?? 0,
                     circuitBreakerState:
                         this.dependencies.circuitBreaker.getState(),
                     dataStreamState:
@@ -1263,7 +1281,7 @@ export class OrderFlowDashboard {
             }
 
             // Broadcast to WebSocket clients
-            this.wsManager.broadcast({
+            this.broadcastMessage({
                 type: "signal",
                 data: signal,
                 now: Date.now(),
@@ -1453,7 +1471,9 @@ export class OrderFlowDashboard {
      */
     private startPeriodicTasks(): void {
         // Update circuit breaker metrics
-        this.statsBroadcaster.start();
+        if (this.statsBroadcaster) {
+            this.statsBroadcaster.start();
+        }
         setInterval(() => {
             const state = this.dependencies.circuitBreaker.getState();
             this.metricsCollector.updateMetric("circuitBreakerState", state);
@@ -1511,11 +1531,15 @@ export class OrderFlowDashboard {
             }
 
             // Shutdown components
-            this.wsManager.shutdown();
+            if (this.wsManager) {
+                this.wsManager.shutdown();
+            }
             await this.dataStreamManager.disconnect();
 
             // Give time for cleanup
-            this.statsBroadcaster.stop();
+            if (this.statsBroadcaster) {
+                this.statsBroadcaster.stop();
+            }
             setTimeout(() => {
                 this.logger.info("Graceful shutdown completed");
                 process.exit(0);
@@ -1630,10 +1654,20 @@ export class OrderFlowDashboard {
 /**
  * Factory function to create dependencies
  */
-export function createDependencies(): Dependencies {
-    const logger = new Logger(process.env.NODE_ENV === "development");
+
+export function createDependencies(
+    threadManager?: ThreadManager
+): Dependencies {
+    const logger = threadManager
+        ? new WorkerLogger(
+              threadManager,
+              process.env.NODE_ENV === "development"
+          )
+        : new Logger(process.env.NODE_ENV === "development");
     const metricsCollector = new MetricsCollector();
-    const signalLogger = new SignalLogger("./storage/signals.csv");
+    const signalLogger = threadManager
+        ? new WorkerSignalLogger(threadManager)
+        : new SignalLogger("./storage/signals.csv");
     const rateLimiter = new RateLimiter(60000, 100);
     const circuitBreaker = new CircuitBreaker(5, 60000, logger);
     const db = getDB("./storage/trades.db");
@@ -1729,6 +1763,7 @@ export function createDependencies(): Dependencies {
         binanceFeed,
         signalTracker,
         marketContextCollector,
+        threadManager,
     };
 }
 
