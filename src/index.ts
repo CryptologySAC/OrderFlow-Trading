@@ -23,10 +23,12 @@ export async function main(): Promise<void> {
         // Start the application
         await dashboard.startDashboard();
 
-        console.log("Order Flow Trading system started successfully");
+        console.log(
+            "Order Flow Trading system (Multithreaded) started successfully"
+        );
 
         const shutdown = (): void => {
-            threadManager.shutdown();
+            void threadManager.shutdown();
         };
         process.on("SIGINT", shutdown);
         process.on("SIGTERM", shutdown);

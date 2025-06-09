@@ -18,20 +18,35 @@ const manager = new DataStreamManager(
     metricsCollector
 );
 
+// Store interval reference for proper cleanup
+let metricsInterval: NodeJS.Timeout | null = null;
+
 parentPort?.on("message", (msg: { type: string }) => {
     if (msg.type === "start") {
         void manager.connect();
+        // Start metrics reporting when worker starts
+        if (!metricsInterval) {
+            metricsInterval = setInterval(() => {
+                parentPort?.postMessage({
+                    type: "metrics",
+                    data: manager.getDetailedMetrics(),
+                });
+            }, 1000);
+        }
     } else if (msg.type === "stop") {
         void manager.disconnect();
+        // Clear metrics interval when stopped
+        if (metricsInterval) {
+            clearInterval(metricsInterval);
+            metricsInterval = null;
+        }
     } else if (msg.type === "shutdown") {
+        // Clean up resources before shutdown
+        if (metricsInterval) {
+            clearInterval(metricsInterval);
+            metricsInterval = null;
+        }
         void manager.disconnect();
         process.exit(0);
     }
 });
-
-setInterval(() => {
-    parentPort?.postMessage({
-        type: "metrics",
-        data: manager.getDetailedMetrics(),
-    });
-}, 1000);

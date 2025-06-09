@@ -20,6 +20,7 @@ export class ThreadManager {
     private readonly loggerWorker: Worker;
     private readonly binanceWorker: Worker;
     private readonly commWorker: Worker;
+    private isShuttingDown = false;
 
     constructor() {
         this.loggerWorker = new Worker(
@@ -38,6 +39,9 @@ export class ThreadManager {
                 this.commWorker.postMessage(msg);
             }
         });
+
+        // Set up error handlers for graceful degradation
+        this.setupWorkerErrorHandlers();
     }
 
     public startBinance(): void {
@@ -67,9 +71,97 @@ export class ThreadManager {
         this.commWorker.postMessage({ type: "broadcast", data: message });
     }
 
-    public shutdown(): void {
-        this.loggerWorker.postMessage({ type: "shutdown" });
-        this.binanceWorker.postMessage({ type: "shutdown" });
-        this.commWorker.postMessage({ type: "shutdown" });
+    public async shutdown(): Promise<void> {
+        if (this.isShuttingDown) return;
+        this.isShuttingDown = true;
+
+        try {
+            // Send shutdown messages to all workers
+            this.loggerWorker.postMessage({ type: "shutdown" });
+            this.binanceWorker.postMessage({ type: "shutdown" });
+            this.commWorker.postMessage({ type: "shutdown" });
+
+            // Wait for workers to gracefully shut down
+            const shutdownPromises = [
+                this.terminateWorkerGracefully(this.loggerWorker, "logger"),
+                this.terminateWorkerGracefully(this.binanceWorker, "binance"),
+                this.terminateWorkerGracefully(
+                    this.commWorker,
+                    "communication"
+                ),
+            ];
+
+            // Wait up to 5 seconds for graceful shutdown
+            await Promise.allSettled(shutdownPromises);
+        } catch (error) {
+            console.error("Error during ThreadManager shutdown:", error);
+        }
+    }
+
+    private setupWorkerErrorHandlers(): void {
+        this.loggerWorker.on("error", (error) => {
+            console.error("Logger worker error:", error);
+        });
+
+        this.binanceWorker.on("error", (error) => {
+            console.error("Binance worker error:", error);
+        });
+
+        this.commWorker.on("error", (error) => {
+            console.error("Communication worker error:", error);
+        });
+
+        // Handle worker exits
+        this.loggerWorker.on("exit", (code) => {
+            if (!this.isShuttingDown && code !== 0) {
+                console.error(`Logger worker exited with code ${code}`);
+            }
+        });
+
+        this.binanceWorker.on("exit", (code) => {
+            if (!this.isShuttingDown && code !== 0) {
+                console.error(`Binance worker exited with code ${code}`);
+            }
+        });
+
+        this.commWorker.on("exit", (code) => {
+            if (!this.isShuttingDown && code !== 0) {
+                console.error(`Communication worker exited with code ${code}`);
+            }
+        });
+    }
+
+    private async terminateWorkerGracefully(
+        worker: Worker,
+        name: string,
+        timeoutMs = 5000
+    ): Promise<void> {
+        return new Promise<void>((resolve) => {
+            const timeout = setTimeout(() => {
+                console.warn(
+                    `${name} worker did not exit gracefully, terminating...`
+                );
+                try {
+                    const terminatePromise = worker.terminate();
+                    // Handle terminate result which may or may not be a Promise
+                    void Promise.resolve(terminatePromise)
+                        .catch((err) => {
+                            console.error(
+                                `Error terminating ${name} worker:`,
+                                err
+                            );
+                        })
+                        .finally(() => resolve());
+                } catch (err) {
+                    console.error(`Error terminating ${name} worker:`, err);
+                    resolve();
+                }
+            }, timeoutMs);
+
+            worker.on("exit", () => {
+                clearTimeout(timeout);
+                resolve();
+            });
+        });
     }
 }
