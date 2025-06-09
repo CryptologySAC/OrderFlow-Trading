@@ -73,17 +73,22 @@ export class SpoofingDetector {
         let spoofDetected = false;
         let maxSpoofEvent: SpoofingEvent | null = null;
 
-        // Check all bands centered at price ± wallBand ticks
+        // Performance optimization: Pre-calculate all band prices to avoid repeated floating-point operations in hot path
+        const scaledPrice = Math.round(price * 100000000); // 8 decimal places
+        const scaledTickSize = Math.round(tickSize * 100000000);
+        const bandPrices: number[] = [];
         for (
             let offset = -Math.floor(wallBand / 2);
             offset <= Math.floor(wallBand / 2);
             offset++
         ) {
-            // Fix: Use integer arithmetic for financial calculations to avoid floating-point precision errors
-            const scaledPrice = Math.round(price * 100000000); // 8 decimal places
-            const scaledTickSize = Math.round(tickSize * 100000000);
             const bandPrice =
                 (scaledPrice + offset * scaledTickSize) / 100000000;
+            bandPrices.push(bandPrice);
+        }
+
+        // Check all pre-calculated band prices
+        for (const bandPrice of bandPrices) {
             const hist = this.passiveChangeHistory.get(bandPrice);
             if (!hist || hist.length < 2) continue;
 
