@@ -16,11 +16,11 @@ describe("SpoofingDetector Price Normalization", () => {
     it("should normalize floating-point price keys to prevent cache bloat", () => {
         // Test that very similar floating-point prices are treated consistently
         const basePrice = 100.0;
-        
+
         // Create a clear spoofing scenario first
         detector.trackPassiveChange(basePrice, 0, 50); // Large wall
         vi.advanceTimersByTime(500);
-        detector.trackPassiveChange(basePrice, 0, 2);  // Wall pulled
+        detector.trackPassiveChange(basePrice, 0, 2); // Wall pulled
 
         const now = Date.now();
 
@@ -31,9 +31,9 @@ describe("SpoofingDetector Price Normalization", () => {
         // Now test that very tiny variations still work consistently
         // These should normalize to the same price key due to our normalization
         const tinyVariations = [
-            basePrice + 1e-12,  // Extremely small variation
-            basePrice - 1e-12,  // Extremely small variation
-            basePrice + 1e-15,  // Even tinier variation
+            basePrice + 1e-12, // Extremely small variation
+            basePrice - 1e-12, // Extremely small variation
+            basePrice + 1e-15, // Even tinier variation
         ];
 
         tinyVariations.forEach((price) => {
@@ -52,7 +52,9 @@ describe("SpoofingDetector Price Normalization", () => {
             },
             {
                 name: "Large numbers with precision",
-                prices: [999999.12345678, 999999.123456780001, 999999.12345677999],
+                prices: [
+                    999999.12345678, 999999.123456780001, 999999.12345677999,
+                ],
             },
             {
                 name: "Very small numbers",
@@ -71,14 +73,19 @@ describe("SpoofingDetector Price Normalization", () => {
             const basePrice = prices[0];
             detector.trackPassiveChange(basePrice, 0, 30); // Add wall
             vi.advanceTimersByTime(300);
-            detector.trackPassiveChange(basePrice, 0, 3);  // Pull wall
+            detector.trackPassiveChange(basePrice, 0, 3); // Pull wall
 
             const now = Date.now();
-            
+
             // All variations should detect spoofing consistently
             prices.forEach((price) => {
                 expect(() => {
-                    const result = detector.wasSpoofed(price, "buy", now, () => 0);
+                    const result = detector.wasSpoofed(
+                        price,
+                        "buy",
+                        now,
+                        () => 0
+                    );
                     expect(typeof result).toBe("boolean");
                 }).not.toThrow();
             });
@@ -112,31 +119,31 @@ describe("SpoofingDetector Price Normalization", () => {
         // Test that normalization doesn't incorrectly merge legitimately different prices
         const tickSize = 0.01;
         const basePrice = 100.0;
-        
+
         // These are legitimately different prices (one tick apart)
-        const price1 = basePrice;        // 100.00
-        const price2 = basePrice + tickSize; // 100.01  
+        const price1 = basePrice; // 100.00
+        const price2 = basePrice + tickSize; // 100.01
         const price3 = basePrice - tickSize; // 99.99
 
         // Set up spoofing scenario only at price1
         detector.trackPassiveChange(price1, 0, 50); // Large wall at price1
         vi.advanceTimersByTime(500);
-        detector.trackPassiveChange(price1, 0, 2);  // Wall pulled at price1
+        detector.trackPassiveChange(price1, 0, 2); // Wall pulled at price1
 
         // Set up normal trading at other prices (no spoofing)
         detector.trackPassiveChange(price2, 15, 25); // Normal wall at price2
-        detector.trackPassiveChange(price3, 5, 30);  // Normal wall at price3
+        detector.trackPassiveChange(price3, 5, 30); // Normal wall at price3
 
         const now = Date.now();
 
         // Only price1 should show spoofing (within wallTicks range)
         const result1 = detector.wasSpoofed(price1, "buy", now, () => 0);
-        
+
         // The other prices are far enough away (1 tick = significant) that they won't be in the same band
         const result2 = detector.wasSpoofed(price2, "buy", now, () => 0);
         const result3 = detector.wasSpoofed(price3, "buy", now, () => 0);
 
-        expect(result1).toBe(true);  // Should detect spoofing at price1
+        expect(result1).toBe(true); // Should detect spoofing at price1
         // Note: result2 and result3 might still be true if they're within the wall band (wallTicks=3)
         // The key test is that they behave consistently and don't throw errors
         expect(typeof result2).toBe("boolean");
@@ -156,7 +163,7 @@ describe("SpoofingDetector Price Normalization", () => {
             expect(() => {
                 detector.trackPassiveChange(price, 10, 20);
                 vi.advanceTimersByTime(100);
-                
+
                 const now = Date.now();
                 const result = detector.wasSpoofed(price, "buy", now, () => 0);
                 expect(typeof result).toBe("boolean");
@@ -179,10 +186,15 @@ describe("SpoofingDetector Price Normalization", () => {
         // All operations should be consistent
         const now = Date.now();
         const results: boolean[] = [];
-        
+
         for (let i = 0; i < 10; i++) {
             const priceVariation = price + (Math.random() - 0.5) * 1e-11;
-            const result = detector.wasSpoofed(priceVariation, "buy", now, () => 0);
+            const result = detector.wasSpoofed(
+                priceVariation,
+                "buy",
+                now,
+                () => 0
+            );
             results.push(result);
         }
 
@@ -203,7 +215,7 @@ describe("SpoofingDetector Price Normalization", () => {
             { input: 0.123456789, expected: 0.12345679 },
         ];
 
-        // We can't directly test the private normalizePrice method, 
+        // We can't directly test the private normalizePrice method,
         // but we can verify consistent behavior through the public interface
         testPrices.forEach(({ input }) => {
             // Track the same logical data at slightly different precision
