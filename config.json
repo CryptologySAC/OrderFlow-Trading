@@ -4,7 +4,7 @@
     "httpPort": 3000,
     "wsPort": 3001,
     "mqtt": {
-        "url": "ws://192.168.2.24:1884",
+        "url": "wss://mqtt.cryptology.pe",
         "username": "orderflow",
         "password": "orderflow",
         "statsTopic": "orderflow/stats",
