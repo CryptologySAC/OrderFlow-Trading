@@ -94,8 +94,8 @@ export class IndividualTradesManager {
 
         // Initialize rate limiter (respect Binance API limits)
         this.rateLimiter = new RateLimiter(
-            1000, // windowMs
-            config.rateLimit.maxRequestsPerSecond // maxRequests
+            config.rateLimit.maxRequestsPerSecond, // capacity
+            config.rateLimit.maxRequestsPerSecond // refillPerSec
         );
 
         // Initialize circuit breaker for API failures

@@ -9,8 +9,8 @@ describe("infrastructure/rateLimiter", () => {
         vi.useRealTimers();
     });
 
-    it("limits requests per window", () => {
-        const rl = new RateLimiter(1000, 2);
+    it("limits requests per rate", () => {
+        const rl = new RateLimiter(2, 1);
         expect(rl.isAllowed("a")).toBe(true);
         expect(rl.isAllowed("a")).toBe(true);
         expect(rl.isAllowed("a")).toBe(false);
@@ -19,7 +19,7 @@ describe("infrastructure/rateLimiter", () => {
     });
 
     it("tracks counts and can be cleared", () => {
-        const rl = new RateLimiter(1000, 2);
+        const rl = new RateLimiter(2, 1);
         rl.isAllowed("b");
         rl.isAllowed("b");
         expect(rl.getRequestCount("b")).toBe(2);
@@ -28,7 +28,7 @@ describe("infrastructure/rateLimiter", () => {
     });
 
     it("destroy clears data", () => {
-        const rl = new RateLimiter(1000, 2);
+        const rl = new RateLimiter(2, 1);
         rl.isAllowed("c");
         rl.destroy();
         expect(rl.getRequestCount("c")).toBe(0);

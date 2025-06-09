@@ -4,79 +4,99 @@
  * Rate limiter for API protection
  */
 export class RateLimiter {
-    private requests = new Map<string, number[]>();
-    private cleanupInterval: NodeJS.Timeout;
+    private readonly buckets = new Map<
+        string,
+        { tokens: number; last: number }
+    >();
+    private readonly cleanupInterval: NodeJS.Timeout;
 
     constructor(
-        private readonly windowMs: number = 60000,
-        private readonly maxRequests: number = 100
+        private readonly capacity: number = 100,
+        private readonly refillPerSec: number = 50
     ) {
-        // Cleanup old entries every minute
-        this.cleanupInterval = setInterval(() => this.cleanup(), this.windowMs);
+        // Periodically cleanup idle buckets
+        this.cleanupInterval = setInterval(() => this.cleanup(), 60_000);
     }
 
     /**
-     * Check if a client is allowed to make a request
+     * Check if a client is allowed to make a request using the token bucket
+     * algorithm.
      */
     public isAllowed(clientId: string): boolean {
         const now = Date.now();
-        const clientRequests = this.requests.get(clientId) || [];
-
-        // Remove old requests outside the window
-        const validRequests = clientRequests.filter(
-            (time) => now - time < this.windowMs
-        );
-
-        if (validRequests.length >= this.maxRequests) {
+        const bucket = this.getBucket(clientId, now);
+        this.refill(bucket, now);
+        if (bucket.tokens < 1) {
             return false;
         }
-
-        validRequests.push(now);
-        this.requests.set(clientId, validRequests);
+        bucket.tokens -= 1;
         return true;
     }
 
     /**
-     * Cleanup old request records
-     */
-    private cleanup(): void {
-        const now = Date.now();
-        for (const [clientId, requests] of this.requests.entries()) {
-            const validRequests = requests.filter(
-                (time) => now - time < this.windowMs
-            );
-            if (validRequests.length === 0) {
-                this.requests.delete(clientId);
-            } else {
-                this.requests.set(clientId, validRequests);
-            }
-        }
-    }
-
-    /**
-     * Get current request count for a client
+     * Get current request count for a client within the active bucket.
      */
     public getRequestCount(clientId: string): number {
         const now = Date.now();
-        const clientRequests = this.requests.get(clientId) || [];
-        return clientRequests.filter((time) => now - time < this.windowMs)
-            .length;
-    }
-
-    /**
-     * Clear rate limiter data
-     */
-    public clear(): void {
-        this.requests.clear();
-    }
-
-    /**
-     * Destroy the rate limiter
-     */
-    public destroy(): void {
-        if (this.cleanupInterval) {
-            clearInterval(this.cleanupInterval);
+        const bucket = this.buckets.get(clientId);
+        if (!bucket) {
+            return 0;
         }
+        this.refill(bucket, now);
+        return Math.floor(this.capacity - bucket.tokens);
+    }
+
+    /** Clear all rate limiting data */
+    public clear(): void {
+        this.buckets.clear();
+    }
+
+    /** Stop timers and clear all state */
+    public destroy(): void {
+        clearInterval(this.cleanupInterval);
         this.clear();
+    }
+
+    /** Retrieve an existing bucket or create a new one */
+    private getBucket(
+        clientId: string,
+        now: number
+    ): {
+        tokens: number;
+        last: number;
+    } {
+        const existing = this.buckets.get(clientId);
+        if (existing) {
+            return existing;
+        }
+        const bucket = { tokens: this.capacity, last: now };
+        this.buckets.set(clientId, bucket);
+        return bucket;
+    }
+
+    /** Refill tokens in a bucket based on elapsed time */
+    private refill(
+        bucket: { tokens: number; last: number },
+        now: number
+    ): void {
+        const elapsedSec = (now - bucket.last) / 1000;
+        if (elapsedSec > 0) {
+            bucket.tokens = Math.min(
+                this.capacity,
+                bucket.tokens + elapsedSec * this.refillPerSec
+            );
+            bucket.last = now;
+        }
+    }
+
+    /** Remove buckets that have been idle long enough */
+    private cleanup(): void {
+        const now = Date.now();
+        for (const [clientId, bucket] of this.buckets) {
+            this.refill(bucket, now);
+            if (bucket.tokens >= this.capacity) {
+                this.buckets.delete(clientId);
+            }
+        }
     }
 }
