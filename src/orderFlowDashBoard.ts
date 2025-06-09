@@ -586,15 +586,15 @@ export class OrderFlowDashboard {
                 );
             },
             backlog: (ws, data, correlationId) => {
-                this.handleBacklogRequest(ws, data, correlationId);
+                this.handleWebSocketBacklogRequest(ws, data, correlationId);
             },
         };
     }
 
     /**
-     * Handle backlog request
+     * Handle backlog request from WebSocket client
      */
-    private handleBacklogRequest(
+    private handleWebSocketBacklogRequest(
         ws: ExtendedWebSocket,
         data: unknown,
         correlationId?: string

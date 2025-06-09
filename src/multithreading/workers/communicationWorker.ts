@@ -30,16 +30,18 @@ const wsHandlers = {
     ping: (ws: ExtendedWebSocket, _: unknown, correlationId?: string) => {
         // Respond to ping with pong (exact same format as original)
         try {
-            ws.send(JSON.stringify({
-                type: "pong",
-                now: Date.now(),
-                correlationId,
-            }));
+            ws.send(
+                JSON.stringify({
+                    type: "pong",
+                    now: Date.now(),
+                    correlationId,
+                })
+            );
         } catch (error) {
             logger.error("Error sending pong response", {
                 error: error instanceof Error ? error.message : String(error),
                 clientId: ws.clientId,
-                correlationId
+                correlationId,
             });
         }
     },
@@ -47,7 +49,7 @@ const wsHandlers = {
         const startTime = Date.now();
         try {
             let amount = 1000;
-            
+
             // Validate and parse amount (same validation as original)
             if (data && typeof data === "object" && "amount" in data) {
                 const rawAmount = (data as { amount?: string | number }).amount;
@@ -64,49 +66,56 @@ const wsHandlers = {
             logger.info("Backlog request received from client", {
                 amount,
                 clientId: ws.clientId,
-                correlationId
+                correlationId,
             });
 
             // Store client reference for direct response
             if (!global.pendingBacklogRequests) {
                 global.pendingBacklogRequests = new Map();
             }
-            global.pendingBacklogRequests.set(ws.clientId || 'unknown', { ws, correlationId });
+            global.pendingBacklogRequests.set(ws.clientId || "unknown", {
+                ws,
+                correlationId,
+            });
 
             // Request backlog from main thread via parent port
             parentPort?.postMessage({
                 type: "request_backlog",
                 data: {
-                    clientId: ws.clientId || 'unknown',
+                    clientId: ws.clientId || "unknown",
                     amount,
                     correlationId,
-                    directResponse: true
+                    directResponse: true,
                 },
             });
 
             // Track processing time
             const processingTime = Date.now() - startTime;
             metrics.updateMetric("processingLatency", processingTime);
-            
         } catch (error) {
             metrics.incrementMetric("errorsCount");
             logger.error("Error handling backlog request", {
                 error: error instanceof Error ? error.message : String(error),
                 clientId: ws.clientId,
-                correlationId
+                correlationId,
             });
-            
+
             // Send error response to client (same format as original)
             try {
-                ws.send(JSON.stringify({
-                    type: "error",
-                    message: (error as Error).message,
-                    correlationId,
-                }));
+                ws.send(
+                    JSON.stringify({
+                        type: "error",
+                        message: (error as Error).message,
+                        correlationId,
+                    })
+                );
             } catch (sendError) {
                 logger.error("Error sending error response", {
-                    error: sendError instanceof Error ? sendError.message : String(sendError),
-                    clientId: ws.clientId
+                    error:
+                        sendError instanceof Error
+                            ? sendError.message
+                            : String(sendError),
+                    clientId: ws.clientId,
                 });
             }
         }
@@ -116,7 +125,9 @@ const wsHandlers = {
 // Store connected clients and pending requests globally
 declare global {
     var connectedClients: Set<ExtendedWebSocket> | undefined;
-    var pendingBacklogRequests: Map<string, { ws: ExtendedWebSocket; correlationId?: string }> | undefined;
+    var pendingBacklogRequests:
+        | Map<string, { ws: ExtendedWebSocket; correlationId?: string }>
+        | undefined;
 }
 
 // Client connection handler
@@ -320,48 +331,61 @@ parentPort?.on(
 
                     // Check for pending direct responses
                     if (global.pendingBacklogRequests) {
-                        global.pendingBacklogRequests.forEach(({ ws, correlationId }, clientId) => {
-                            try {
-                                // Send direct backlog response
-                                ws.send(
-                                    JSON.stringify({
-                                        type: "backlog",
-                                        data: msg.data.backlog,
-                                        now: Date.now(),
-                                        correlationId,
-                                    })
-                                );
-
-                                // Send direct signal backlog response
-                                if (
-                                    msg.data.signals &&
-                                    msg.data.signals.length > 0
-                                ) {
+                        global.pendingBacklogRequests.forEach(
+                            ({ ws, correlationId }, clientId) => {
+                                try {
+                                    // Send direct backlog response
                                     ws.send(
                                         JSON.stringify({
-                                            type: "signal_backlog",
-                                            data: msg.data.signals,
+                                            type: "backlog",
+                                            data: msg.data.backlog,
                                             now: Date.now(),
                                             correlationId,
                                         })
                                     );
-                                }
 
-                                logger.info("Direct backlog response sent", {
-                                    clientId,
-                                    backlogCount: msg.data.backlog?.length || 0,
-                                    signalsCount: msg.data.signals?.length || 0,
-                                    correlationId
-                                });
-                            } catch (error) {
-                                logger.error("Error sending direct backlog response", {
-                                    error: error instanceof Error ? error.message : String(error),
-                                    clientId,
-                                    correlationId
-                                });
+                                    // Send direct signal backlog response
+                                    if (
+                                        msg.data.signals &&
+                                        msg.data.signals.length > 0
+                                    ) {
+                                        ws.send(
+                                            JSON.stringify({
+                                                type: "signal_backlog",
+                                                data: msg.data.signals,
+                                                now: Date.now(),
+                                                correlationId,
+                                            })
+                                        );
+                                    }
+
+                                    logger.info(
+                                        "Direct backlog response sent",
+                                        {
+                                            clientId,
+                                            backlogCount:
+                                                msg.data.backlog?.length || 0,
+                                            signalsCount:
+                                                msg.data.signals?.length || 0,
+                                            correlationId,
+                                        }
+                                    );
+                                } catch (error) {
+                                    logger.error(
+                                        "Error sending direct backlog response",
+                                        {
+                                            error:
+                                                error instanceof Error
+                                                    ? error.message
+                                                    : String(error),
+                                            clientId,
+                                            correlationId,
+                                        }
+                                    );
+                                }
                             }
-                        });
-                        
+                        );
+
                         // Clear pending requests after sending
                         global.pendingBacklogRequests.clear();
                     }

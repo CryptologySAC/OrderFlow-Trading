@@ -104,6 +104,7 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 ### 🚨 CRITICAL: WebSocket URL Protection
 
 **NEVER modify the WebSocket URL in `/public/scripts/dashboard.js`:**
+
 - The URL `const TRADE_WEBSOCKET_URL = "wss://api.cryptology.pe/ltcusdt_trades";` is PRODUCTION-CRITICAL
 - Changing this URL is a BREAKING ERROR that will disconnect the dashboard from live data
 - This external WebSocket provides real-time market data that the system depends on
@@ -172,6 +173,7 @@ Code must pass Lint stric, that means never use <any> types and use real types w
 ### 🚨 CRITICAL: Development Guidelines
 
 **NEVER ask Codex to make code changes:**
+
 - Codex changes often break the carefully balanced trading algorithms
 - Always use Claude Code for modifications instead
 - Preserve the existing architecture and patterns
@@ -186,7 +188,8 @@ Code must pass Lint stric, that means never use <any> types and use real types w
 - PRESERVE algorithmic integrity of trading logic
 
 # important-instruction-reminders
+
 Do what has been asked; nothing more, nothing less.
 NEVER create files unless they're absolutely necessary for achieving your goal.
 ALWAYS prefer editing an existing file to creating a new one.
-NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
+NEVER proactively create documentation files (\*.md) or README files. Only create documentation files if explicitly requested by the User.

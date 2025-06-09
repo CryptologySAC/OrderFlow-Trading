@@ -71,13 +71,13 @@ describe("Communication Worker Threaded WebSocket", () => {
     describe("Ping/Pong Functionality", () => {
         it("should respond to ping with pong", () => {
             const correlationId = "test-correlation-123";
-            
+
             // Simulate ping handler being called
             const pingData = { type: "ping" };
-            
+
             // The worker should send a pong response
             expect(mockWs.send).not.toHaveBeenCalled();
-            
+
             // Simulate calling the ping handler
             const expectedPongResponse = JSON.stringify({
                 type: "pong",
@@ -93,7 +93,7 @@ describe("Communication Worker Threaded WebSocket", () => {
 
         it("should handle ping without correlation ID", () => {
             const pingData = { type: "ping" };
-            
+
             const expectedPongResponse = JSON.stringify({
                 type: "pong",
                 now: expect.any(Number),
@@ -129,12 +129,13 @@ describe("Communication Worker Threaded WebSocket", () => {
 
         it("should reject invalid backlog amounts", () => {
             const invalidAmounts = [-1, 0, 100001, "invalid", null];
-            
-            invalidAmounts.forEach(amount => {
-                const isValid = typeof amount === "number" && 
-                              Number.isInteger(amount) && 
-                              amount > 0 && 
-                              amount <= 100000;
+
+            invalidAmounts.forEach((amount) => {
+                const isValid =
+                    typeof amount === "number" &&
+                    Number.isInteger(amount) &&
+                    amount > 0 &&
+                    amount <= 100000;
                 expect(isValid).toBe(false);
             });
         });
@@ -142,14 +143,16 @@ describe("Communication Worker Threaded WebSocket", () => {
         it("should store pending backlog requests", () => {
             const clientId = "test-client-1";
             const correlationId = "test-correlation-789";
-            
-            global.pendingBacklogRequests!.set(clientId, { 
-                ws: mockWs, 
-                correlationId 
+
+            global.pendingBacklogRequests!.set(clientId, {
+                ws: mockWs,
+                correlationId,
             });
 
             expect(global.pendingBacklogRequests!.has(clientId)).toBe(true);
-            expect(global.pendingBacklogRequests!.get(clientId)?.correlationId).toBe(correlationId);
+            expect(
+                global.pendingBacklogRequests!.get(clientId)?.correlationId
+            ).toBe(correlationId);
         });
     });
 
@@ -196,7 +199,7 @@ describe("Communication Worker Threaded WebSocket", () => {
                     data: backlogData,
                     now: Date.now(),
                 });
-                
+
                 const signalsMessage = JSON.stringify({
                     type: "signal_backlog",
                     data: signalsData,
@@ -213,10 +216,10 @@ describe("Communication Worker Threaded WebSocket", () => {
         it("should send direct responses to pending requests", () => {
             const clientId = "test-client-1";
             const correlationId = "test-correlation-direct";
-            
-            global.pendingBacklogRequests!.set(clientId, { 
-                ws: mockWs, 
-                correlationId 
+
+            global.pendingBacklogRequests!.set(clientId, {
+                ws: mockWs,
+                correlationId,
             });
 
             const backlogData = [{ price: 100, quantity: 10 }];
@@ -330,8 +333,8 @@ describe("Communication Worker Threaded WebSocket", () => {
 
         it("should handle connection lifecycle", () => {
             const connectionEvents = ["open", "message", "close", "error"];
-            
-            connectionEvents.forEach(event => {
+
+            connectionEvents.forEach((event) => {
                 expect(typeof event).toBe("string");
                 expect(event.length).toBeGreaterThan(0);
             });
@@ -375,13 +378,13 @@ describe("Communication Worker Threaded WebSocket", () => {
         it("should handle parent port communication", () => {
             const messageTypes = [
                 "metrics",
-                "broadcast", 
+                "broadcast",
                 "send_backlog",
                 "shutdown",
                 "request_backlog",
             ];
 
-            messageTypes.forEach(type => {
+            messageTypes.forEach((type) => {
                 const message = { type, data: {} };
                 expect(message.type).toBe(type);
             });
