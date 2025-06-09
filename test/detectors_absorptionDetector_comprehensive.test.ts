@@ -71,7 +71,7 @@ describe("AbsorptionDetector - Simple Test", () => {
 
     it("should accept trades without crashing", () => {
         const trade = createEnrichedTrade(BTCUSDT_PRICE, 10, false, Date.now());
-        
+
         expect(() => {
             detector.onEnrichedTrade(trade);
         }).not.toThrow();
@@ -90,11 +90,11 @@ describe("AbsorptionDetector - Simple Test", () => {
             quantity,
             timestamp,
             buyerIsMaker,
-            
+
             // Enriched fields with realistic values
             zonePassiveBidVolume: buyerIsMaker ? quantity * 2 : 100,
             zonePassiveAskVolume: !buyerIsMaker ? quantity * 2 : 100,
-            
+
             // Additional required fields
             isBuyerMaker: buyerIsMaker,
             firstTradeId: `first-${timestamp}`,

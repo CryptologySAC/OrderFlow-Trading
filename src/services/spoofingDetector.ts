@@ -77,7 +77,11 @@ export class SpoofingDetector {
             offset <= Math.floor(wallBand / 2);
             offset++
         ) {
-            const bandPrice = +(price + offset * tickSize).toFixed(8);
+            // Fix: Use integer arithmetic for financial calculations to avoid floating-point precision errors
+            const scaledPrice = Math.round(price * 100000000); // 8 decimal places
+            const scaledTickSize = Math.round(tickSize * 100000000);
+            const bandPrice =
+                (scaledPrice + offset * scaledTickSize) / 100000000;
             const hist = this.passiveChangeHistory.get(bandPrice);
             if (!hist || hist.length < 2) continue;
 
