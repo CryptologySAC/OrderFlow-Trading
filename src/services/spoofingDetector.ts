@@ -36,16 +36,25 @@ export class SpoofingDetector {
     }
 
     /**
+     * Normalize price keys to prevent excessive cache entries due to floating-point precision variations.
+     * This ensures consistent price keys and prevents memory bloat from slight precision differences.
+     */
+    private normalizePrice(price: number): number {
+        return Number(price.toFixed(8));
+    }
+
+    /**
      * Track changes in passive (limit) orderbook at price level.
      */
     public trackPassiveChange(price: number, bid: number, ask: number): void {
         const now = Date.now();
-        let history = this.passiveChangeHistory.get(price) || [];
+        const normalizedPrice = this.normalizePrice(price);
+        let history = this.passiveChangeHistory.get(normalizedPrice) || [];
         history.push({ time: now, bid, ask });
         if (history.length > 10) {
             history.shift(); // Remove oldest item instead of creating new array
         }
-        this.passiveChangeHistory.set(price, history);
+        this.passiveChangeHistory.set(normalizedPrice, history);
     }
 
     /**
@@ -84,10 +93,10 @@ export class SpoofingDetector {
         ) {
             const bandPrice =
                 (scaledPrice + offset * scaledTickSize) / 100000000;
-            bandPrices.push(bandPrice);
+            bandPrices.push(this.normalizePrice(bandPrice));
         }
 
-        // Check all pre-calculated band prices
+        // Check all pre-calculated normalized band prices
         for (const bandPrice of bandPrices) {
             const hist = this.passiveChangeHistory.get(bandPrice);
             if (!hist || hist.length < 2) continue;
