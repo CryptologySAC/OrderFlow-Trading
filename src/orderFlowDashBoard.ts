@@ -232,6 +232,20 @@ export class OrderFlowDashboard {
                     this.handleBacklogRequest(clientId, amount);
                 }
             );
+
+            // Set up stream event handler for multithreaded mode
+            this.threadManager.setStreamEventHandler(
+                (eventType: string, data: unknown) => {
+                    this.handleWorkerStreamEvent(eventType, data);
+                }
+            );
+
+            // Set up stream data handler for multithreaded mode
+            this.threadManager.setStreamDataHandler(
+                (dataType: string, data: unknown) => {
+                    this.handleWorkerStreamData(dataType, data);
+                }
+            );
         } else {
             this.wsManager = new WebSocketManager(
                 Config.WS_PORT,
@@ -440,6 +454,113 @@ export class OrderFlowDashboard {
                         error instanceof Error ? error.message : String(error),
                 }
             );
+        }
+    }
+
+    /**
+     * Handle stream events from worker thread
+     */
+    private handleWorkerStreamEvent(eventType: string, data: unknown): void {
+        try {
+            switch (eventType) {
+                case "connected":
+                    this.logger.info(
+                        "[OrderFlowDashboard] Data stream connected via worker"
+                    );
+                    this.dependencies.tradesProcessor.emit("stream_connected");
+                    break;
+                case "disconnected":
+                    const disconnectData = data as { reason: string };
+                    this.logger.warn(
+                        "[OrderFlowDashboard] Data stream disconnected via worker",
+                        {
+                            reason: disconnectData.reason,
+                        }
+                    );
+                    this.dependencies.tradesProcessor.emit(
+                        "stream_disconnected",
+                        disconnectData
+                    );
+                    break;
+                case "error":
+                    const errorData = data as {
+                        message: string;
+                        stack?: string;
+                    };
+                    this.handleError(
+                        new Error(errorData.message),
+                        "worker_stream_error"
+                    );
+                    break;
+                case "healthy":
+                    this.logger.info(
+                        "[OrderFlowDashboard] Data stream health restored via worker"
+                    );
+                    break;
+                case "unhealthy":
+                    this.logger.warn(
+                        "[OrderFlowDashboard] Data stream health degraded via worker"
+                    );
+                    break;
+                case "reconnecting":
+                    const reconnectData = data as {
+                        attempt: number;
+                        delay: number;
+                        maxAttempts: number;
+                    };
+                    this.logger.info(
+                        "[OrderFlowDashboard] Data stream reconnecting via worker",
+                        reconnectData
+                    );
+                    break;
+                case "hardReloadRequired":
+                    this.logger.error(
+                        "[OrderFlowDashboard] Hard reload required via worker",
+                        { data }
+                    );
+                    break;
+                case "connectivityIssue":
+                    if (this.lastTradePrice > 0) {
+                        const issueData = data as { issue: ConnectivityIssue };
+                        this.anomalyDetector.onConnectivityIssue(
+                            issueData.issue,
+                            this.lastTradePrice
+                        );
+                    }
+                    break;
+                default:
+                    this.logger.warn(
+                        `[OrderFlowDashboard] Unknown stream event type: ${eventType}`
+                    );
+            }
+        } catch (error) {
+            this.handleError(error as Error, "worker_stream_event_handler");
+        }
+    }
+
+    /**
+     * Handle stream data from worker thread
+     */
+    private handleWorkerStreamData(dataType: string, data: unknown): void {
+        try {
+            switch (dataType) {
+                case "trade":
+                    this.processTrade(
+                        data as SpotWebsocketStreams.AggTradeResponse
+                    );
+                    break;
+                case "depth":
+                    this.processDepth(
+                        data as SpotWebsocketStreams.DiffBookDepthResponse
+                    );
+                    break;
+                default:
+                    this.logger.warn(
+                        `[OrderFlowDashboard] Unknown stream data type: ${dataType}`
+                    );
+            }
+        } catch (error) {
+            this.handleError(error as Error, "worker_stream_data_handler");
         }
     }
 

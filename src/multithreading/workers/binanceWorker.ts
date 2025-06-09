@@ -21,6 +21,95 @@ const manager = new DataStreamManager(
 // Store interval reference for proper cleanup
 let metricsInterval: NodeJS.Timeout | null = null;
 
+// Setup DataStreamManager event handlers to forward to parent thread
+manager.on("connected", () => {
+    parentPort?.postMessage({
+        type: "stream_event",
+        eventType: "connected",
+        data: { timestamp: Date.now() },
+    });
+});
+
+manager.on("disconnected", (reason: string) => {
+    parentPort?.postMessage({
+        type: "stream_event",
+        eventType: "disconnected",
+        data: { reason, timestamp: Date.now() },
+    });
+});
+
+manager.on("error", (error: Error) => {
+    parentPort?.postMessage({
+        type: "stream_event",
+        eventType: "error",
+        data: {
+            message: error.message,
+            stack: error.stack,
+            timestamp: Date.now(),
+        },
+    });
+});
+
+manager.on("healthy", () => {
+    parentPort?.postMessage({
+        type: "stream_event",
+        eventType: "healthy",
+        data: { timestamp: Date.now() },
+    });
+});
+
+manager.on("unhealthy", () => {
+    parentPort?.postMessage({
+        type: "stream_event",
+        eventType: "unhealthy",
+        data: { timestamp: Date.now() },
+    });
+});
+
+manager.on(
+    "reconnecting",
+    (data: { attempt: number; delay: number; maxAttempts: number }) => {
+        parentPort?.postMessage({
+            type: "stream_event",
+            eventType: "reconnecting",
+            data: { ...data, timestamp: Date.now() },
+        });
+    }
+);
+
+manager.on("hardReloadRequired", (event: unknown) => {
+    parentPort?.postMessage({
+        type: "stream_event",
+        eventType: "hardReloadRequired",
+        data: { event, timestamp: Date.now() },
+    });
+});
+
+manager.on("connectivityIssue", (issue: unknown) => {
+    parentPort?.postMessage({
+        type: "stream_event",
+        eventType: "connectivityIssue",
+        data: { issue, timestamp: Date.now() },
+    });
+});
+
+// Forward trade and depth data to parent for processing
+manager.on("trade", (data: unknown) => {
+    parentPort?.postMessage({
+        type: "stream_data",
+        dataType: "trade",
+        data,
+    });
+});
+
+manager.on("depth", (data: unknown) => {
+    parentPort?.postMessage({
+        type: "stream_data",
+        dataType: "depth",
+        data,
+    });
+});
+
 // Add global error handlers
 process.on("uncaughtException", (error: Error) => {
     logger.error("Uncaught exception in binance worker", {

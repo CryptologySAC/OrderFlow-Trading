@@ -29,6 +29,26 @@ interface BacklogRequestMessage {
     };
 }
 
+interface StreamEventMessage {
+    type: "stream_event";
+    eventType:
+        | "connected"
+        | "disconnected"
+        | "error"
+        | "healthy"
+        | "unhealthy"
+        | "reconnecting"
+        | "hardReloadRequired"
+        | "connectivityIssue";
+    data: unknown;
+}
+
+interface StreamDataMessage {
+    type: "stream_data";
+    dataType: "trade" | "depth";
+    data: unknown;
+}
+
 function isErrorMessage(msg: unknown): msg is ErrorMessage {
     return (
         typeof msg === "object" &&
@@ -45,12 +65,30 @@ function isBacklogRequestMessage(msg: unknown): msg is BacklogRequestMessage {
     );
 }
 
+function isStreamEventMessage(msg: unknown): msg is StreamEventMessage {
+    return (
+        typeof msg === "object" &&
+        msg !== null &&
+        (msg as { type?: unknown }).type === "stream_event"
+    );
+}
+
+function isStreamDataMessage(msg: unknown): msg is StreamDataMessage {
+    return (
+        typeof msg === "object" &&
+        msg !== null &&
+        (msg as { type?: unknown }).type === "stream_data"
+    );
+}
+
 export class ThreadManager {
     private readonly loggerWorker: Worker;
     private readonly binanceWorker: Worker;
     private readonly commWorker: Worker;
     private isShuttingDown = false;
     private backlogRequestHandler?: (clientId: string, amount: number) => void;
+    private streamEventHandler?: (eventType: string, data: unknown) => void;
+    private streamDataHandler?: (dataType: string, data: unknown) => void;
 
     constructor() {
         this.loggerWorker = new Worker(
@@ -69,6 +107,12 @@ export class ThreadManager {
                 this.commWorker.postMessage(msg);
             } else if (isErrorMessage(msg)) {
                 console.error("Binance worker error:", msg.message);
+            } else if (isStreamEventMessage(msg)) {
+                // Forward stream events to parent application
+                this.handleStreamEvent(msg.eventType, msg.data);
+            } else if (isStreamDataMessage(msg)) {
+                // Forward stream data to parent application
+                this.handleStreamData(msg.dataType, msg.data);
             }
         });
 
@@ -132,6 +176,18 @@ export class ThreadManager {
         this.backlogRequestHandler = handler;
     }
 
+    public setStreamEventHandler(
+        handler: (eventType: string, data: unknown) => void
+    ): void {
+        this.streamEventHandler = handler;
+    }
+
+    public setStreamDataHandler(
+        handler: (dataType: string, data: unknown) => void
+    ): void {
+        this.streamDataHandler = handler;
+    }
+
     private handleBacklogRequest(data: {
         clientId: string;
         amount: number;
@@ -140,6 +196,26 @@ export class ThreadManager {
             this.backlogRequestHandler(data.clientId, data.amount);
         } else {
             console.warn("Backlog request received but no handler registered");
+        }
+    }
+
+    private handleStreamEvent(eventType: string, data: unknown): void {
+        if (this.streamEventHandler) {
+            this.streamEventHandler(eventType, data);
+        } else {
+            console.warn(
+                `Stream event '${eventType}' received but no handler registered`
+            );
+        }
+    }
+
+    private handleStreamData(dataType: string, data: unknown): void {
+        if (this.streamDataHandler) {
+            this.streamDataHandler(dataType, data);
+        } else {
+            console.warn(
+                `Stream data '${dataType}' received but no handler registered`
+            );
         }
     }
 
