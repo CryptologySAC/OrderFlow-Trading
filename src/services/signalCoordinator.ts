@@ -7,7 +7,7 @@ import {
     SignalType,
 } from "../types/signalTypes.js";
 import { BaseDetector } from "../indicators/base/baseDetector.js";
-import { SignalLogger } from "./signalLogger.js";
+import type { ISignalLogger } from "./signalLogger.js";
 import { SignalManager } from "../trading/signalManager.js";
 import { Logger } from "../infrastructure/logger.js";
 import { IPipelineStorage } from "../storage/pipelineStorage.js";
@@ -96,7 +96,7 @@ interface DetectorRegistration {
  */
 export class SignalCoordinator extends EventEmitter {
     private readonly logger: Logger;
-    private readonly signalLogger: SignalLogger;
+    private readonly signalLogger: ISignalLogger;
     private readonly signalManager: SignalManager;
     private readonly storage: IPipelineStorage;
     private readonly metrics: MetricsCollector;
@@ -123,7 +123,7 @@ export class SignalCoordinator extends EventEmitter {
         partialCfg: Partial<SignalCoordinatorConfig>,
         logger: Logger,
         metricsCollector: MetricsCollector,
-        signalLogger: SignalLogger,
+        signalLogger: ISignalLogger,
         signalManager: SignalManager,
         storage: IPipelineStorage
     ) {

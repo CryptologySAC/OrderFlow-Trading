@@ -28,6 +28,9 @@ import {
 } from "./infrastructure/recoveryManager.js";
 import { MicrostructureAnalyzer } from "./data/microstructureAnalyzer.js";
 import { IndividualTradesManager } from "./data/individualTradesManager.js";
+import { ThreadManager } from "./multithreading/threadManager.js";
+import { WorkerLogger } from "./multithreading/workerLogger.js";
+import { WorkerSignalLogger } from "./multithreading/workerSignalLogger.js";
 
 // Service imports
 import { DetectorFactory } from "./utils/detectorFactory.js";
@@ -1630,10 +1633,20 @@ export class OrderFlowDashboard {
 /**
  * Factory function to create dependencies
  */
-export function createDependencies(): Dependencies {
-    const logger = new Logger(process.env.NODE_ENV === "development");
+
+export function createDependencies(
+    threadManager?: ThreadManager
+): Dependencies {
+    const logger = threadManager
+        ? new WorkerLogger(
+              threadManager,
+              process.env.NODE_ENV === "development"
+          )
+        : new Logger(process.env.NODE_ENV === "development");
     const metricsCollector = new MetricsCollector();
-    const signalLogger = new SignalLogger("./storage/signals.csv");
+    const signalLogger = threadManager
+        ? new WorkerSignalLogger(threadManager)
+        : new SignalLogger("./storage/signals.csv");
     const rateLimiter = new RateLimiter(60000, 100);
     const circuitBreaker = new CircuitBreaker(5, 60000, logger);
     const db = getDB("./storage/trades.db");

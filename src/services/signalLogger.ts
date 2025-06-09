@@ -32,6 +32,15 @@ export interface SignalEvent {
 
 export interface ISignalLogger {
     logEvent(event: SignalEvent): void;
+    logProcessedSignal?(
+        signal: ProcessedSignal,
+        metadata: Record<string, unknown>
+    ): void;
+    logProcessingError?(
+        candidate: SignalCandidate,
+        error: Error,
+        metadata: Record<string, unknown>
+    ): void;
 }
 
 export class SignalLogger implements ISignalLogger {
