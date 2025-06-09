@@ -269,7 +269,7 @@ export class OrderFlowDashboard {
         this.signalCoordinator.registerDetector(
             this.exhaustionDetector,
             ["exhaustion"],
-            65,
+            100,
             true
         );
 
@@ -306,7 +306,7 @@ export class OrderFlowDashboard {
         this.signalCoordinator.registerDetector(
             this.supportResistanceDetector,
             ["support_resistance_level"],
-            40,
+            10,
             true
         );
 
