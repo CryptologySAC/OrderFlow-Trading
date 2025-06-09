@@ -435,15 +435,107 @@ export class ExhaustionDetector
             errorCount: this.errorCount,
         });
 
+        // 🔍 DEBUG: Check depth map status
+        const depthKeys = Array.from(this.depth.keys()).slice(0, 10); // First 10 keys
+        const depthHasPrice = this.depth.has(price);
+        const depthMapSize: number = this.depth.size();
+        this.logger.info(`[ExhaustionDetector] 🗃️ DEPTH MAP STATUS`, {
+            zone,
+            price,
+            side,
+            depthSize: depthMapSize,
+            depthHasPrice,
+            searchedPrice: price,
+            pricePrecision: this.pricePrecision,
+            sampleDepthKeys: depthKeys,
+            latestTradeOriginalPrice: latestTrade.price,
+        });
+
         // Get current book level
-        const bookLevel = this.depth.get(price);
+        let bookLevel = this.depth.get(price);
         if (!bookLevel) {
-            this.logger.info(`[ExhaustionDetector] No book level found`, {
-                zone,
-                price,
-                side,
-            });
-            return;
+            // 🔍 TRY ALTERNATIVE PRICE FORMATS
+            const altPrice1 = parseFloat(price.toFixed(2)); // 2 decimal places
+            const altPrice2 = parseFloat(price.toFixed(4)); // 4 decimal places
+            const altPrice3 = Math.round(price * 100) / 100; // Round to cent
+            const originalPrice = latestTrade.price;
+
+            bookLevel =
+                this.depth.get(altPrice1) ||
+                this.depth.get(altPrice2) ||
+                this.depth.get(altPrice3) ||
+                this.depth.get(originalPrice);
+
+            this.logger.info(
+                `[ExhaustionDetector] 🔍 ALTERNATIVE PRICE SEARCH`,
+                {
+                    zone,
+                    price,
+                    side,
+                    originalPrice,
+                    altPrice1,
+                    altPrice2,
+                    altPrice3,
+                    foundWithAlt1: !!this.depth.get(altPrice1),
+                    foundWithAlt2: !!this.depth.get(altPrice2),
+                    foundWithAlt3: !!this.depth.get(altPrice3),
+                    foundWithOriginal: !!this.depth.get(originalPrice),
+                    finalBookLevel: !!bookLevel,
+                }
+            );
+        }
+
+        if (!bookLevel) {
+            // 🔍 FIND NEAREST PRICE LEVELS
+            const nearestPrices = this.findNearestPriceLevels(price, 5);
+
+            this.logger.info(
+                `[ExhaustionDetector] ❌ STILL NO BOOK LEVEL FOUND`,
+                {
+                    zone,
+                    price,
+                    side,
+                    searchedPrice: price,
+                    nearestAvailablePrices: nearestPrices,
+                    suggestion:
+                        "Check if depth map is being populated correctly",
+                }
+            );
+
+            // 🔧 FIX: Try to use nearest price level as fallback
+            if (nearestPrices.length > 0) {
+                const nearestPrice = nearestPrices[0];
+                bookLevel = this.depth.get(nearestPrice);
+
+                if (bookLevel) {
+                    this.logger.info(
+                        `[ExhaustionDetector] ✅ USING NEAREST PRICE LEVEL`,
+                        {
+                            zone,
+                            side,
+                            originalPrice: price,
+                            nearestPrice,
+                            priceDistance: Math.abs(price - nearestPrice),
+                        }
+                    );
+                }
+            }
+
+            // 🔧 FIX: If still no book level, continue with analysis anyway using estimated data
+            if (!bookLevel) {
+                this.logger.info(
+                    `[ExhaustionDetector] ⚠️ PROCEEDING WITHOUT BOOK LEVEL`,
+                    {
+                        zone,
+                        price,
+                        side,
+                        reason: "Will use trade data and skip book-dependent checks",
+                    }
+                );
+
+                // Create a minimal fake book level to continue analysis
+                bookLevel = { bid: 0, ask: 0 };
+            }
         }
 
         // Check cooldown to prevent spam (update after confirmation)
@@ -715,6 +807,19 @@ export class ExhaustionDetector
             "exhaustion.score",
             adjustedScore
         );
+    }
+
+    private findNearestPriceLevels(
+        targetPrice: number,
+        maxResults: number = 5
+    ): number[] {
+        const allPrices = Array.from(this.depth.keys())
+            .filter((p) => typeof p === "number" && isFinite(p))
+            .sort(
+                (a, b) => Math.abs(a - targetPrice) - Math.abs(b - targetPrice)
+            );
+
+        return allPrices.slice(0, maxResults);
     }
 
     protected handleDetection(signal: ExhaustionSignalData): void {
