@@ -44,7 +44,9 @@ describe("SpoofingDetector Hot Path Optimization", () => {
         expect(duration).toBeLessThan(100); // Should complete in under 100ms
 
         // Log performance for visibility
-        console.log(`Hot path performance: ${iterations} calls in ${duration.toFixed(2)}ms`);
+        console.log(
+            `Hot path performance: ${iterations} calls in ${duration.toFixed(2)}ms`
+        );
     });
 
     it("should demonstrate the optimization benefit with different wall sizes", () => {
@@ -70,7 +72,12 @@ describe("SpoofingDetector Hot Path Optimization", () => {
 
             // Test the optimized path
             expect(() => {
-                const result = testDetector.wasSpoofed(basePrice, "buy", now, () => 0);
+                const result = testDetector.wasSpoofed(
+                    basePrice,
+                    "buy",
+                    now,
+                    () => 0
+                );
                 expect(typeof result).toBe("boolean");
             }).not.toThrow();
         });
@@ -83,16 +90,16 @@ describe("SpoofingDetector Hot Path Optimization", () => {
 
         // Set up data that should trigger spoofing detection
         const targetPrice = basePrice + tickSize; // One tick above base price
-        
+
         detector.trackPassiveChange(targetPrice, 0, 25); // Large wall
         vi.advanceTimersByTime(500);
-        detector.trackPassiveChange(targetPrice, 0, 2);  // Wall pulled
+        detector.trackPassiveChange(targetPrice, 0, 2); // Wall pulled
 
         const now = Date.now();
 
         // The optimized version should still detect spoofing correctly
         const result = detector.wasSpoofed(basePrice, "buy", now, () => 0);
-        
+
         // Should detect spoofing due to the wall pull
         expect(result).toBe(true);
     });
@@ -122,7 +129,12 @@ describe("SpoofingDetector Hot Path Optimization", () => {
 
             // Should handle edge cases without errors or performance issues
             expect(() => {
-                const result = edgeDetector.wasSpoofed(price, "buy", now, () => 0);
+                const result = edgeDetector.wasSpoofed(
+                    price,
+                    "buy",
+                    now,
+                    () => 0
+                );
                 expect(typeof result).toBe("boolean");
             }).not.toThrow();
         });
@@ -131,10 +143,10 @@ describe("SpoofingDetector Hot Path Optimization", () => {
     it("should verify the optimization maintains identical behavior", () => {
         // This test conceptually verifies that the optimization produces identical results
         // to the old approach (though we can't directly test the old approach)
-        
+
         const basePrice = 100.0;
         const wallTicks = 3;
-        
+
         // Set up identical scenarios
         const scenarios = [
             { price: 100.0, side: "buy" as const },
