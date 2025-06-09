@@ -23,16 +23,13 @@ export class ThreadManager {
 
     constructor() {
         this.loggerWorker = new Worker(
-            new URL("./workers/loggerWorker.js", import.meta.url),
-            { type: "module" }
+            new URL("./workers/loggerWorker.js", import.meta.url)
         );
         this.binanceWorker = new Worker(
-            new URL("./workers/binanceWorker.js", import.meta.url),
-            { type: "module" }
+            new URL("./workers/binanceWorker.js", import.meta.url)
         );
         this.commWorker = new Worker(
-            new URL("./workers/communicationWorker.js", import.meta.url),
-            { type: "module" }
+            new URL("./workers/communicationWorker.js", import.meta.url)
         );
 
         // Forward metrics from binance worker to communication worker

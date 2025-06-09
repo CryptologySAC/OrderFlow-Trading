@@ -363,12 +363,14 @@ export class SignalCoordinator extends EventEmitter {
                 timeout,
             ]);
 
-            this.signalLogger.logProcessedSignal(processed, {
-                detectorId,
-                jobId: job.id,
-                processingMs: Date.now() - start,
-                retry: job.retryCount,
-            });
+            if (this.signalLogger.logProcessedSignal) {
+                this.signalLogger.logProcessedSignal(processed, {
+                    detectorId,
+                    jobId: job.id,
+                    processingMs: Date.now() - start,
+                    retry: job.retryCount,
+                });
+            }
             const confirmed =
                 this.signalManager.handleProcessedSignal(processed);
 
@@ -471,11 +473,13 @@ export class SignalCoordinator extends EventEmitter {
         const { detector, candidate } = job;
         const detectorId = detector.getId();
 
-        this.signalLogger.logProcessingError(candidate, err, {
-            detectorId,
-            jobId: job.id,
-            retry: job.retryCount,
-        });
+        if (this.signalLogger.logProcessingError) {
+            this.signalLogger.logProcessingError(candidate, err, {
+                detectorId,
+                jobId: job.id,
+                retry: job.retryCount,
+            });
+        }
 
         const metricsLabels = {
             detector_id: detectorId,
