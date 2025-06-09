@@ -191,14 +191,14 @@
                 "confirmationTimeout": 50000,
                 "maxRevisitTicks": 0,
                 "features": {
-                    "depletionTracking": false,
-                    "spreadAdjustment": false,
+                    "depletionTracking": true,
+                    "spreadAdjustment": true,
                     "spoofingDetection": false,
                     "autoCalibrate": false,
                     "adaptiveZone": false,
                     "multiZone": false,
                     "volumeVelocity": false,
-                    "passiveHistory": false
+                    "passiveHistory": true
                 }
             },
             "absorption": {

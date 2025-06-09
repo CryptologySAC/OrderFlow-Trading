@@ -150,6 +150,18 @@ export class ExhaustionDetector
     /*  Incoming enriched trade                                           */
     /* ------------------------------------------------------------------ */
     public onEnrichedTrade(event: EnrichedTradeEvent): void {
+        // Debug: Log every trade to verify detector is receiving data
+        if (Math.random() < 0.01) {
+            // Log 1% of trades to avoid spam
+            this.logger?.info(`[ExhaustionDetector] 🔍 RECEIVING TRADE`, {
+                price: event.price,
+                quantity: event.quantity,
+                side: event.buyerIsMaker ? "sell" : "buy",
+                timestamp: new Date(event.timestamp).toISOString(),
+                totalTradesReceived: this.trades.length + 1,
+            });
+        }
+
         const zone = this.calculateZone(event.price);
 
         // create window if absent
@@ -338,6 +350,15 @@ export class ExhaustionDetector
      * Main detection loop for exhaustion patterns
      */
     protected checkForSignal(triggerTrade: AggressiveTrade): void {
+        // Debug: Log every signal check to verify method is being called
+        this.logger?.info(`[ExhaustionDetector] 🔍 SIGNAL CHECK TRIGGERED`, {
+            triggerPrice: triggerTrade.price,
+            triggerSide: this.getTradeSide(triggerTrade),
+            tradesInBuffer: this.trades.length,
+            zoneAggregations: this.zoneAgg.size,
+            timestamp: new Date(triggerTrade.timestamp).toISOString(),
+        });
+
         const now = Date.now();
         const zoneTicks = this.getEffectiveZoneTicks();
 
@@ -451,6 +472,26 @@ export class ExhaustionDetector
         const baseScore = this.calculateExhaustionScore(conditions);
         const adjustedScore = baseScore * conditions.confidence;
 
+        this.logger.info(`[ExhaustionDetector] Conditions analyzed`, {
+            zone,
+            price,
+            side,
+            baseScore,
+            adjustedScore,
+            threshold: this.exhaustionThreshold,
+            conditions: {
+                depletionRatio: conditions.depletionRatio,
+                passiveRatio: conditions.passiveRatio,
+                aggressiveVolume: conditions.aggressiveVolume,
+                avgPassive: conditions.avgPassive,
+                consistency: conditions.consistency,
+                velocityIncrease: conditions.velocityIncrease,
+                sampleCount: conditions.sampleCount,
+                confidence: conditions.confidence,
+                dataQuality: conditions.dataQuality,
+            },
+        });
+
         // Apply stricter threshold for low-quality data
         const effectiveThreshold =
             conditions.dataQuality === "low"
@@ -458,6 +499,20 @@ export class ExhaustionDetector
                 : this.exhaustionThreshold;
 
         if (adjustedScore < effectiveThreshold) {
+            this.logger.info(
+                `[ExhaustionDetector] Signal rejected - score below threshold`,
+                {
+                    zone,
+                    price,
+                    side,
+                    adjustedScore,
+                    effectiveThreshold,
+                    baseScore,
+                    confidence: conditions.confidence,
+                    dataQuality: conditions.dataQuality,
+                    deficit: effectiveThreshold - adjustedScore,
+                }
+            );
             return;
         }
 
@@ -468,12 +523,29 @@ export class ExhaustionDetector
             zoneTicks
         );
 
+        this.logger.info(`[ExhaustionDetector] Volume analysis`, {
+            zone,
+            price,
+            side,
+            aggressive: volumes.aggressive,
+            passive: volumes.passive,
+            minRequired: this.minAggVolume,
+            passesVolumeCheck: volumes.aggressive >= this.minAggVolume,
+        });
+
         // Skip if insufficient volume
         if (volumes.aggressive < this.minAggVolume) {
-            this.logger.debug(`[ExhaustionDetector] Insufficient volume`, {
-                aggressive: volumes.aggressive,
-                required: this.minAggVolume,
-            });
+            this.logger.info(
+                `[ExhaustionDetector] Signal rejected - insufficient volume`,
+                {
+                    zone,
+                    price,
+                    side,
+                    aggressive: volumes.aggressive,
+                    required: this.minAggVolume,
+                    deficit: this.minAggVolume - volumes.aggressive,
+                }
+            );
             return;
         }
 
@@ -483,8 +555,13 @@ export class ExhaustionDetector
             (this.isSpoofed(price, side, triggerTrade.timestamp) ||
                 this.detectLayeringAttack(price, side, triggerTrade.timestamp))
         ) {
-            this.logger.debug(
-                `[ExhaustionDetector] Signal rejected - spoofing detected`
+            this.logger.info(
+                `[ExhaustionDetector] Signal rejected - spoofing detected`,
+                {
+                    zone,
+                    price,
+                    side,
+                }
             );
             this.metricsCollector.incrementMetric("exhaustionSpoofingRejected");
             return;
@@ -495,12 +572,38 @@ export class ExhaustionDetector
         const refilled = this.checkRefill(price, side, oppositeQty);
 
         if (refilled) {
-            this.logger.debug(
-                `[ExhaustionDetector] Signal rejected - refill detected`
+            this.logger.info(
+                `[ExhaustionDetector] Signal rejected - refill detected`,
+                {
+                    zone,
+                    price,
+                    side,
+                    oppositeQty,
+                }
             );
             this.metricsCollector.incrementMetric("exhaustionRefillRejected");
             return;
         }
+
+        this.logger.info(`[ExhaustionDetector] 🎯 SIGNAL GENERATED!`, {
+            zone,
+            price,
+            side,
+            aggressive: volumes.aggressive,
+            passive: volumes.passive,
+            oppositeQty,
+            baseScore,
+            adjustedScore,
+            confidence: conditions.confidence,
+            conditions: {
+                depletionRatio: conditions.depletionRatio,
+                passiveRatio: conditions.passiveRatio,
+                consistency: conditions.consistency,
+                velocityIncrease: conditions.velocityIncrease,
+                hasRefill: conditions.hasRefill,
+                icebergSignal: conditions.icebergSignal,
+            },
+        });
 
         const signal: ExhaustionSignalData = {
             price,
