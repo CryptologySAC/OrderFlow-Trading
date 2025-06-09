@@ -19,6 +19,7 @@ import { MicrostructureAnalyzer } from "../data/microstructureAnalyzer.js";
 import type { SignalTracker } from "../analysis/signalTracker.js";
 import type { MarketContextCollector } from "../analysis/marketContextCollector.js";
 import type { IPipelineStorage } from "../storage/pipelineStorage.js";
+import type { ThreadManager } from "../multithreading/threadManager.js";
 
 /**
  * Application dependencies interface
@@ -50,4 +51,7 @@ export interface Dependencies {
     // Performance Analysis (optional)
     signalTracker?: SignalTracker;
     marketContextCollector?: MarketContextCollector;
+
+    /** Optional thread manager for worker offloading */
+    threadManager?: ThreadManager;
 }
