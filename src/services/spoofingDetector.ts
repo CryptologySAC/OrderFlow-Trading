@@ -126,7 +126,12 @@ export class SpoofingDetector {
                     }
 
                     // Only count as spoof if most was canceled, not executed
-                    if (canceled / delta > 0.7 && canceled >= minWallSize) {
+                    // Fix: Add zero check to prevent division by zero
+                    if (
+                        delta > 0 &&
+                        canceled / delta > 0.7 &&
+                        canceled >= minWallSize
+                    ) {
                         spoofDetected = true;
                         // For multi-band, track the largest event
                         if (

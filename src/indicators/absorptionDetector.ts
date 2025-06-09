@@ -777,9 +777,11 @@ export class AbsorptionDetector
         const nearbyLevels = [];
 
         for (let offset = -5; offset <= 5; offset++) {
-            const testPrice = +(price + offset * tickSize).toFixed(
-                this.pricePrecision
-            );
+            // Use integer arithmetic for financial precision
+            const scale = Math.pow(10, this.pricePrecision);
+            const scaledPrice = Math.round(price * scale);
+            const scaledTickSize = Math.round(tickSize * scale);
+            const testPrice = (scaledPrice + offset * scaledTickSize) / scale;
             const level = this.depth.get(testPrice);
             if (level) {
                 const relevantVolume = side === "buy" ? level.ask : level.bid;

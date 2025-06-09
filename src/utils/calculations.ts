@@ -10,15 +10,22 @@ export function calculateProfitTarget(
     targetPercent = 0.015,
     commissionRate = 0.001
 ): ProfitTarget {
-    const grossTarget = targetPercent + commissionRate * 2;
+    // Use integer arithmetic for financial precision (8 decimal places)
+    const scale = 100000000;
+    const scaledEntryPrice = Math.round(entryPrice * scale);
+    const scaledTargetPercent = Math.round(targetPercent * scale);
+    const scaledCommissionRate = Math.round(commissionRate * scale);
 
-    const price =
+    const grossTarget = scaledTargetPercent + scaledCommissionRate * 2;
+
+    const scaledPrice =
         side === "buy"
-            ? entryPrice * (1 + grossTarget)
-            : entryPrice * (1 - grossTarget);
+            ? Math.round((scaledEntryPrice * (scale + grossTarget)) / scale)
+            : Math.round((scaledEntryPrice * (scale - grossTarget)) / scale);
 
+    const price = scaledPrice / scale;
     const percentGain = targetPercent;
-    const netGain = targetPercent - commissionRate * 2;
+    const netGain = (scaledTargetPercent - scaledCommissionRate * 2) / scale;
 
     return { price, percentGain, netGain };
 }
@@ -28,11 +35,20 @@ export function calculateBreakeven(
     side: "buy" | "sell",
     commissionRate = 0.001
 ): number {
-    const totalCommission = commissionRate * 2;
+    // Use integer arithmetic for financial precision (8 decimal places)
+    const scale = 100000000;
+    const scaledEntryPrice = Math.round(entryPrice * scale);
+    const scaledCommissionRate = Math.round(commissionRate * scale);
+    const totalCommission = scaledCommissionRate * 2;
 
-    return side === "buy"
-        ? entryPrice * (1 + totalCommission)
-        : entryPrice * (1 - totalCommission);
+    const scaledResult =
+        side === "buy"
+            ? Math.round((scaledEntryPrice * (scale + totalCommission)) / scale)
+            : Math.round(
+                  (scaledEntryPrice * (scale - totalCommission)) / scale
+              );
+
+    return scaledResult / scale;
 }
 
 export function calculatePositionSize(
@@ -40,9 +56,19 @@ export function calculatePositionSize(
     signalStrength: number, // 0-1
     maxRiskPercent = 0.02
 ): number {
+    // Use integer arithmetic for financial precision (8 decimal places)
+    const scale = 100000000;
+    const scaledCapital = Math.round(capital * scale);
+    const scaledMaxRiskPercent = Math.round(maxRiskPercent * scale);
+    const scaledSignalStrength = Math.round(signalStrength * scale);
+
     // Scale position size based on signal strength
-    const riskAdjusted = maxRiskPercent * signalStrength;
-    return capital * riskAdjusted;
+    const riskAdjusted = Math.round(
+        (scaledMaxRiskPercent * scaledSignalStrength) / scale
+    );
+    const scaledResult = Math.round((scaledCapital * riskAdjusted) / scale);
+
+    return scaledResult / scale;
 }
 
 export function calculateStopLoss(
@@ -50,7 +76,19 @@ export function calculateStopLoss(
     side: "buy" | "sell",
     stopPercent = 0.02
 ): number {
-    return side === "buy"
-        ? entryPrice * (1 - stopPercent)
-        : entryPrice * (1 + stopPercent);
+    // Use integer arithmetic for financial precision (8 decimal places)
+    const scale = 100000000;
+    const scaledEntryPrice = Math.round(entryPrice * scale);
+    const scaledStopPercent = Math.round(stopPercent * scale);
+
+    const scaledResult =
+        side === "buy"
+            ? Math.round(
+                  (scaledEntryPrice * (scale - scaledStopPercent)) / scale
+              )
+            : Math.round(
+                  (scaledEntryPrice * (scale + scaledStopPercent)) / scale
+              );
+
+    return scaledResult / scale;
 }

@@ -188,9 +188,10 @@ export class OrderBookState implements IOrderBookState {
 
     public getMidPrice(): number {
         if (this._bestBid === 0 || this._bestAsk === Infinity) return 0;
-        return Number(
-            ((this._bestBid + this._bestAsk) / 2).toFixed(this.pricePrecision)
-        );
+        // Use integer arithmetic for financial precision
+        const scale = Math.pow(10, this.pricePrecision);
+        const midPrice = (this._bestBid + this._bestAsk) / 2;
+        return Math.round(midPrice * scale) / scale;
     }
 
     public sumBand(
@@ -202,8 +203,14 @@ export class OrderBookState implements IOrderBookState {
         let sumAsk = 0;
         let levels = 0;
 
-        const min = center - bandTicks * tickSize;
-        const max = center + bandTicks * tickSize;
+        // Use integer arithmetic for financial precision
+        const scale = Math.pow(10, this.pricePrecision || 8);
+        const scaledCenter = Math.round(center * scale);
+        const scaledTickSize = Math.round(tickSize * scale);
+        const scaledBandSize = bandTicks * scaledTickSize;
+
+        const min = (scaledCenter - scaledBandSize) / scale;
+        const max = (scaledCenter + scaledBandSize) / scale;
 
         for (const [price, lvl] of this.book) {
             if (price >= min && price <= max) {
@@ -476,7 +483,9 @@ export class OrderBookState implements IOrderBookState {
     }
 
     private normalizePrice(price: number): number {
-        return parseFloat(price.toFixed(this.pricePrecision));
+        // Use integer arithmetic for financial precision
+        const scale = Math.pow(10, this.pricePrecision);
+        return Math.round(price * scale) / scale;
     }
 
     private recalculateBestQuotes(): void {
@@ -497,8 +506,15 @@ export class OrderBookState implements IOrderBookState {
         const mid = this.getMidPrice();
         if (!mid) return;
 
-        const minPrice = mid * (1 - this.maxPriceDistance);
-        const maxPrice = mid * (1 + this.maxPriceDistance);
+        // Use integer arithmetic for financial precision
+        const scale = Math.pow(10, this.pricePrecision);
+        const scaledMid = Math.round(mid * scale);
+        const scaledDistance = Math.round(this.maxPriceDistance * scale);
+
+        const minPrice =
+            (scaledMid * (scale - scaledDistance)) / (scale * scale);
+        const maxPrice =
+            (scaledMid * (scale + scaledDistance)) / (scale * scale);
 
         for (const [price, level] of this.book) {
             void level; // Ensure level is defined

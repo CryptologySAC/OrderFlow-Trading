@@ -35,13 +35,18 @@ export class DetectorUtils {
             );
         }
 
-        const tickSize = Math.pow(10, -pricePrecision);
-        const zoneSize = zoneTicks * tickSize;
+        // Use integer arithmetic for financial precision
+        const scale = Math.pow(10, pricePrecision);
+        const scaledPrice = Math.round(price * scale);
+        const scaledTickSize = Math.round(
+            Math.pow(10, -pricePrecision) * scale
+        );
+        const scaledZoneSize = zoneTicks * scaledTickSize;
 
         // Ensure consistent rounding across all detectors
-        return +(Math.round(price / zoneSize) * zoneSize).toFixed(
-            pricePrecision
-        );
+        const scaledResult =
+            Math.round(scaledPrice / scaledZoneSize) * scaledZoneSize;
+        return scaledResult / scale;
     }
 
     /**

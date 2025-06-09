@@ -144,7 +144,8 @@ export class ZoneManager extends EventEmitter {
         zone.timeInZone = trade.timestamp - zone.startTime;
         zone.intensity =
             zone.totalVolume / Math.max(zone.timeInZone / 60000, 1); // volume per minute
-        zone.averageOrderSize = zone.totalVolume / zone.tradeCount;
+        zone.averageOrderSize =
+            zone.tradeCount > 0 ? zone.totalVolume / zone.tradeCount : 0;
         zone.lastUpdate = trade.timestamp;
 
         // Recalculate zone metrics
@@ -270,10 +271,13 @@ export class ZoneManager extends EventEmitter {
             timeStrength: Math.min(zone.timeInZone / 3600000, 1.0), // Normalize to 1 hour
 
             // Price stability within zone (less volatility = stronger)
-            stabilityStrength: Math.max(
-                0,
-                1 - zone.priceRange.width / zone.priceRange.center
-            ),
+            stabilityStrength:
+                zone.priceRange.center > 0
+                    ? Math.max(
+                          0,
+                          1 - zone.priceRange.width / zone.priceRange.center
+                      )
+                    : 0,
 
             // Order flow consistency
             flowStrength: zone.supportingFactors.flowConsistency,
@@ -314,10 +318,10 @@ export class ZoneManager extends EventEmitter {
         const expectedVolume = this.getExpectedZoneVolume(zone);
         const expectedTime = this.getExpectedZoneTime(zone);
 
-        const volumeCompletion = Math.min(
-            zone.totalVolume / expectedVolume,
-            1.0
-        );
+        const volumeCompletion =
+            expectedVolume > 0
+                ? Math.min(zone.totalVolume / expectedVolume, 1.0)
+                : 0;
         const timeCompletion = Math.min(zone.timeInZone / expectedTime, 1.0);
 
         // Use the higher of the two (some zones complete faster with high volume)
@@ -364,7 +368,9 @@ export class ZoneManager extends EventEmitter {
         const priceFromCenter = Math.abs(trade.price - zone.priceRange.center);
         const priceStability = Math.max(
             0,
-            1 - priceFromCenter / (zone.priceRange.width / 2)
+            zone.priceRange.width > 0
+                ? 1 - priceFromCenter / (zone.priceRange.width / 2)
+                : 1
         );
 
         // Flow consistency (accumulation should be mostly buy-side, distribution sell-side)
@@ -522,7 +528,9 @@ export class ZoneManager extends EventEmitter {
     ): AccumulationZone[] {
         return this.getActiveZones(symbol).filter((zone) => {
             const priceDistance =
-                Math.abs(price - zone.priceRange.center) / price;
+                price > 0
+                    ? Math.abs(price - zone.priceRange.center) / price
+                    : 0;
             return priceDistance <= tolerance;
         });
     }
@@ -559,7 +567,9 @@ export class ZoneManager extends EventEmitter {
             const { price, tolerance } = options.nearPrice;
             zones = zones.filter((zone) => {
                 const priceDistance =
-                    Math.abs(price - zone.priceRange.center) / price;
+                    price > 0
+                        ? Math.abs(price - zone.priceRange.center) / price
+                        : 0;
                 return priceDistance <= tolerance;
             });
         }

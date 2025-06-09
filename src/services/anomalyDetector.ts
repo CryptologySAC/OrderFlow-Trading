@@ -245,7 +245,7 @@ export class AnomalyDetector extends EventEmitter {
 
             // Compute spread if we have valid quotes
             let spreadBps: number | undefined;
-            if (this.currentBestBid && this.currentBestAsk) {
+            if (this.currentBestBid && this.currentBestAsk && trade.price > 0) {
                 const spread = this.currentBestAsk - this.currentBestBid;
                 spreadBps = (spread / trade.price) * 10000;
             }
@@ -349,7 +349,8 @@ export class AnomalyDetector extends EventEmitter {
                     mean,
                     stdDev,
                     zScore,
-                    percentMove: ((snapshot.price - mean) / mean) * 100,
+                    percentMove:
+                        mean > 0 ? ((snapshot.price - mean) / mean) * 100 : 0,
                     rationale:
                         "Extreme price deviation from rolling mean detected",
                 },
@@ -529,9 +530,12 @@ export class AnomalyDetector extends EventEmitter {
 
         const returns: number[] = [];
         for (let i = 1; i < recentPrices.length; i++) {
-            returns.push(
-                (recentPrices[i] - recentPrices[i - 1]) / recentPrices[i - 1]
-            );
+            if (recentPrices[i - 1] > 0) {
+                returns.push(
+                    (recentPrices[i] - recentPrices[i - 1]) /
+                        recentPrices[i - 1]
+                );
+            }
         }
 
         const recentReturns = returns.slice(-20);

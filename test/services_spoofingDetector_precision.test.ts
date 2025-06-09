@@ -105,4 +105,71 @@ describe("services/SpoofingDetector - Floating Point Precision Fix", () => {
             }).not.toThrow();
         });
     });
+
+    it("should handle division by zero edge case when delta equals zero", () => {
+        const now = Date.now();
+        const price = 100.0;
+
+        // Create a scenario where delta could be zero
+        // (prevQty equals currQty, so delta = prevQty - currQty = 0)
+        detector.trackPassiveChange(price, 0, 15); // Initial state
+        vi.setSystemTime(now + 100);
+        detector.trackPassiveChange(price, 0, 15); // Same quantities -> delta = 0
+
+        // This should not throw a division by zero error
+        expect(() => {
+            const result = detector.wasSpoofed(
+                price,
+                "buy",
+                now + 200,
+                () => 0
+            );
+            expect(typeof result).toBe("boolean");
+            expect(result).toBe(false); // Should return false when delta is 0
+        }).not.toThrow();
+    });
+
+    it("should handle very small deltas that could cause precision issues", () => {
+        const now = Date.now();
+        const price = 100.0;
+
+        // Create a scenario with very small delta
+        detector.trackPassiveChange(price, 0, 20.0000001); // Initial state
+        vi.setSystemTime(now + 100);
+        detector.trackPassiveChange(price, 0, 20.0); // Tiny difference
+
+        // This should handle the tiny delta without precision errors
+        expect(() => {
+            const result = detector.wasSpoofed(
+                price,
+                "buy",
+                now + 200,
+                () => 0
+            );
+            expect(typeof result).toBe("boolean");
+        }).not.toThrow();
+    });
+
+    it("should handle negative deltas gracefully", () => {
+        const now = Date.now();
+        const price = 100.0;
+
+        // Create a scenario where delta could be negative
+        // (currQty > prevQty, so delta = prevQty - currQty < 0)
+        detector.trackPassiveChange(price, 0, 15); // Initial smaller amount
+        vi.setSystemTime(now + 100);
+        detector.trackPassiveChange(price, 0, 25); // Larger amount -> negative delta
+
+        // This should handle negative delta without issues
+        expect(() => {
+            const result = detector.wasSpoofed(
+                price,
+                "buy",
+                now + 200,
+                () => 0
+            );
+            expect(typeof result).toBe("boolean");
+            expect(result).toBe(false); // Should return false when delta <= 0
+        }).not.toThrow();
+    });
 });
