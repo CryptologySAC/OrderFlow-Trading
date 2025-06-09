@@ -225,6 +225,13 @@ export class OrderFlowDashboard {
             this.broadcastMessage = (msg: WebSocketMessage): void => {
                 this.threadManager!.broadcast(msg);
             };
+
+            // Set up backlog request handler for multithreaded mode
+            this.threadManager.setBacklogRequestHandler(
+                (clientId: string, amount: number) => {
+                    this.handleBacklogRequest(clientId, amount);
+                }
+            );
         } else {
             this.wsManager = new WebSocketManager(
                 Config.WS_PORT,
@@ -386,6 +393,55 @@ export class OrderFlowDashboard {
     private DeltaCVDConfirmationCallback = (event: unknown): void => {
         void event; //todo
     };
+
+    private handleBacklogRequest(clientId: string, amount: number): void {
+        try {
+            this.logger.info(
+                `Handling backlog request for client ${clientId}`,
+                { amount }
+            );
+
+            // Get backlog data
+            let backlog =
+                this.dependencies.tradesProcessor.requestBacklog(amount);
+            backlog = backlog.reverse();
+
+            // Get signal backlog
+            const maxSignalBacklogAge = 90 * 60 * 1000; // 90 minutes
+            const since = Math.max(
+                backlog.length > 0 ? backlog[0].time : Date.now(),
+                Date.now() - maxSignalBacklogAge
+            );
+
+            const signals =
+                this.dependencies.pipelineStore.getRecentConfirmedSignals(
+                    since,
+                    100
+                );
+            const deduplicatedSignals = this.deduplicateSignals(signals);
+
+            this.logger.info(`Sending backlog to client ${clientId}`, {
+                backlogCount: backlog.length,
+                signalsCount: deduplicatedSignals.length,
+            });
+
+            // Send backlog to communication worker
+            if (this.threadManager) {
+                this.threadManager.sendBacklogToClients(
+                    backlog,
+                    deduplicatedSignals
+                );
+            }
+        } catch (error) {
+            this.logger.error(
+                `Error handling backlog request for client ${clientId}`,
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
+        }
+    }
 
     private onClientConnected(ws: ExtendedWebSocket): void {
         try {

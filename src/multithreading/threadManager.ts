@@ -21,6 +21,14 @@ interface ErrorMessage {
     message: string;
 }
 
+interface BacklogRequestMessage {
+    type: "request_backlog";
+    data: {
+        clientId: string;
+        amount: number;
+    };
+}
+
 function isErrorMessage(msg: unknown): msg is ErrorMessage {
     return (
         typeof msg === "object" &&
@@ -29,11 +37,20 @@ function isErrorMessage(msg: unknown): msg is ErrorMessage {
     );
 }
 
+function isBacklogRequestMessage(msg: unknown): msg is BacklogRequestMessage {
+    return (
+        typeof msg === "object" &&
+        msg !== null &&
+        (msg as { type?: unknown }).type === "request_backlog"
+    );
+}
+
 export class ThreadManager {
     private readonly loggerWorker: Worker;
     private readonly binanceWorker: Worker;
     private readonly commWorker: Worker;
     private isShuttingDown = false;
+    private backlogRequestHandler?: (clientId: string, amount: number) => void;
 
     constructor() {
         this.loggerWorker = new Worker(
@@ -65,6 +82,9 @@ export class ThreadManager {
         this.commWorker.on("message", (msg: unknown) => {
             if (isErrorMessage(msg)) {
                 console.error("Communication worker error:", msg.message);
+            } else if (isBacklogRequestMessage(msg)) {
+                // Forward backlog request to the main thread
+                this.handleBacklogRequest(msg.data);
             }
         });
 
@@ -97,6 +117,30 @@ export class ThreadManager {
 
     public broadcast(message: WebSocketMessage): void {
         this.commWorker.postMessage({ type: "broadcast", data: message });
+    }
+
+    public sendBacklogToClients(backlog: unknown[], signals: unknown[]): void {
+        this.commWorker.postMessage({
+            type: "send_backlog",
+            data: { backlog, signals },
+        });
+    }
+
+    public setBacklogRequestHandler(
+        handler: (clientId: string, amount: number) => void
+    ): void {
+        this.backlogRequestHandler = handler;
+    }
+
+    private handleBacklogRequest(data: {
+        clientId: string;
+        amount: number;
+    }): void {
+        if (this.backlogRequestHandler) {
+            this.backlogRequestHandler(data.clientId, data.amount);
+        } else {
+            console.warn("Backlog request received but no handler registered");
+        }
     }
 
     public async shutdown(): Promise<void> {

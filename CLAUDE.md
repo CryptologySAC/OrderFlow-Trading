@@ -101,6 +101,14 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 
 ## Important Development Notes
 
+### 🚨 CRITICAL: WebSocket URL Protection
+
+**NEVER modify the WebSocket URL in `/public/scripts/dashboard.js`:**
+- The URL `const TRADE_WEBSOCKET_URL = "wss://api.cryptology.pe/ltcusdt_trades";` is PRODUCTION-CRITICAL
+- Changing this URL is a BREAKING ERROR that will disconnect the dashboard from live data
+- This external WebSocket provides real-time market data that the system depends on
+- Any modification to this URL must be explicitly approved by the user
+
 ### Lint Strict
 
 Code must pass Lint stric, that means never use <any> types and use real types where possible instead of <unknown>.
@@ -161,6 +169,14 @@ Code must pass Lint stric, that means never use <any> types and use real types w
 - When stream reconnects: OrderBookState automatically triggers recovery to rebuild order book
 - All components properly handle reconnection events to maintain system consistency
 
+### 🚨 CRITICAL: Development Guidelines
+
+**NEVER ask Codex to make code changes:**
+- Codex changes often break the carefully balanced trading algorithms
+- Always use Claude Code for modifications instead
+- Preserve the existing architecture and patterns
+- Maintain strict TypeScript typing and error handling
+
 ### When these protection markers are in place, Claude Code should:
 
 - NEVER modify files marked with 🔒 PRODUCTION-READY
@@ -168,3 +184,9 @@ Code must pass Lint stric, that means never use <any> types and use real types w
 - SUGGEST alternative approaches instead of direct modifications
 - RESPECT the .claude-protection configuration file
 - PRESERVE algorithmic integrity of trading logic
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.

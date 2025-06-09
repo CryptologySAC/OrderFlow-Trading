@@ -2,7 +2,10 @@ import { parentPort } from "worker_threads";
 import { Logger } from "../../infrastructure/logger.js";
 import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
 import { RateLimiter } from "../../infrastructure/rateLimiter.js";
-import { WebSocketManager } from "../../websocket/websocketManager.js";
+import {
+    WebSocketManager,
+    type ExtendedWebSocket,
+} from "../../websocket/websocketManager.js";
 import { StatsBroadcaster } from "../../services/statsBroadcaster.js";
 import { Config } from "../../core/config.js";
 import type { WebSocketMessage } from "../../utils/interfaces.js";
@@ -22,12 +25,133 @@ const logger = new Logger();
 const metrics = new MetricsCollector();
 const rateLimiter = new RateLimiter(60000, 100);
 const dataStream = new DataStreamProxy();
+// WebSocket handlers for client connections
+const wsHandlers = {
+    ping: (ws: ExtendedWebSocket, _: unknown, correlationId?: string) => {
+        // Respond to ping with pong (exact same format as original)
+        try {
+            ws.send(JSON.stringify({
+                type: "pong",
+                now: Date.now(),
+                correlationId,
+            }));
+        } catch (error) {
+            logger.error("Error sending pong response", {
+                error: error instanceof Error ? error.message : String(error),
+                clientId: ws.clientId,
+                correlationId
+            });
+        }
+    },
+    backlog: (ws: ExtendedWebSocket, data: unknown, correlationId?: string) => {
+        const startTime = Date.now();
+        try {
+            let amount = 1000;
+            
+            // Validate and parse amount (same validation as original)
+            if (data && typeof data === "object" && "amount" in data) {
+                const rawAmount = (data as { amount?: string | number }).amount;
+                amount = parseInt(rawAmount as string, 10);
+                if (
+                    !Number.isInteger(amount) ||
+                    amount <= 0 ||
+                    amount > 100000
+                ) {
+                    throw new Error("Invalid backlog amount");
+                }
+            }
+
+            logger.info("Backlog request received from client", {
+                amount,
+                clientId: ws.clientId,
+                correlationId
+            });
+
+            // Store client reference for direct response
+            if (!global.pendingBacklogRequests) {
+                global.pendingBacklogRequests = new Map();
+            }
+            global.pendingBacklogRequests.set(ws.clientId || 'unknown', { ws, correlationId });
+
+            // Request backlog from main thread via parent port
+            parentPort?.postMessage({
+                type: "request_backlog",
+                data: {
+                    clientId: ws.clientId || 'unknown',
+                    amount,
+                    correlationId,
+                    directResponse: true
+                },
+            });
+
+            // Track processing time
+            const processingTime = Date.now() - startTime;
+            metrics.updateMetric("processingLatency", processingTime);
+            
+        } catch (error) {
+            metrics.incrementMetric("errorsCount");
+            logger.error("Error handling backlog request", {
+                error: error instanceof Error ? error.message : String(error),
+                clientId: ws.clientId,
+                correlationId
+            });
+            
+            // Send error response to client (same format as original)
+            try {
+                ws.send(JSON.stringify({
+                    type: "error",
+                    message: (error as Error).message,
+                    correlationId,
+                }));
+            } catch (sendError) {
+                logger.error("Error sending error response", {
+                    error: sendError instanceof Error ? sendError.message : String(sendError),
+                    clientId: ws.clientId
+                });
+            }
+        }
+    },
+};
+
+// Store connected clients and pending requests globally
+declare global {
+    var connectedClients: Set<ExtendedWebSocket> | undefined;
+    var pendingBacklogRequests: Map<string, { ws: ExtendedWebSocket; correlationId?: string }> | undefined;
+}
+
+// Client connection handler
+const onClientConnect = (ws: ExtendedWebSocket) => {
+    logger.info("Client connected to WebSocket");
+
+    // Store reference for later backlog/signal sending
+    if (!global.connectedClients) {
+        global.connectedClients = new Set<ExtendedWebSocket>();
+    }
+    global.connectedClients.add(ws);
+
+    // Request backlog and signals from main thread for this new client
+    parentPort?.postMessage({
+        type: "request_backlog",
+        data: {
+            clientId: ws.clientId || "unknown",
+            amount: 1000,
+        },
+    });
+
+    ws.on("close", () => {
+        if (global.connectedClients) {
+            global.connectedClients.delete(ws);
+        }
+    });
+};
+
 const wsManager = new WebSocketManager(
     Config.WS_PORT,
     logger,
     rateLimiter,
     metrics,
-    {}
+    wsHandlers,
+    onClientConnect
 );
 const statsBroadcaster = new StatsBroadcaster(
     metrics,
@@ -45,6 +169,14 @@ interface MetricsMessage {
 interface BroadcastMessage {
     type: "broadcast";
     data: WebSocketMessage;
+}
+
+interface BacklogMessage {
+    type: "send_backlog";
+    data: {
+        backlog: unknown[];
+        signals: unknown[];
+    };
 }
 
 // Add global error handlers
@@ -103,7 +235,13 @@ async function gracefulShutdown(exitCode: number = 0): Promise<void> {
 
 parentPort?.on(
     "message",
-    (msg: MetricsMessage | BroadcastMessage | { type: "shutdown" }) => {
+    (
+        msg:
+            | MetricsMessage
+            | BroadcastMessage
+            | BacklogMessage
+            | { type: "shutdown" }
+    ) => {
         try {
             if (msg.type === "metrics") {
                 try {
@@ -134,6 +272,105 @@ parentPort?.on(
                     parentPort?.postMessage({
                         type: "error",
                         message: `Failed to broadcast: ${error instanceof Error ? error.message : String(error)}`,
+                    });
+                }
+            } else if (msg.type === "send_backlog") {
+                try {
+                    // Send backlog and signals to all connected clients
+                    if (global.connectedClients) {
+                        global.connectedClients.forEach(
+                            (ws: ExtendedWebSocket) => {
+                                try {
+                                    // Send backlog
+                                    ws.send(
+                                        JSON.stringify({
+                                            type: "backlog",
+                                            data: msg.data.backlog,
+                                            now: Date.now(),
+                                        })
+                                    );
+
+                                    // Send signal backlog
+                                    if (
+                                        msg.data.signals &&
+                                        msg.data.signals.length > 0
+                                    ) {
+                                        ws.send(
+                                            JSON.stringify({
+                                                type: "signal_backlog",
+                                                data: msg.data.signals,
+                                                now: Date.now(),
+                                            })
+                                        );
+                                    }
+                                } catch (error) {
+                                    logger.error(
+                                        "Error sending backlog to client",
+                                        {
+                                            error:
+                                                error instanceof Error
+                                                    ? error.message
+                                                    : String(error),
+                                        }
+                                    );
+                                }
+                            }
+                        );
+                    }
+
+                    // Check for pending direct responses
+                    if (global.pendingBacklogRequests) {
+                        global.pendingBacklogRequests.forEach(({ ws, correlationId }, clientId) => {
+                            try {
+                                // Send direct backlog response
+                                ws.send(
+                                    JSON.stringify({
+                                        type: "backlog",
+                                        data: msg.data.backlog,
+                                        now: Date.now(),
+                                        correlationId,
+                                    })
+                                );
+
+                                // Send direct signal backlog response
+                                if (
+                                    msg.data.signals &&
+                                    msg.data.signals.length > 0
+                                ) {
+                                    ws.send(
+                                        JSON.stringify({
+                                            type: "signal_backlog",
+                                            data: msg.data.signals,
+                                            now: Date.now(),
+                                            correlationId,
+                                        })
+                                    );
+                                }
+
+                                logger.info("Direct backlog response sent", {
+                                    clientId,
+                                    backlogCount: msg.data.backlog?.length || 0,
+                                    signalsCount: msg.data.signals?.length || 0,
+                                    correlationId
+                                });
+                            } catch (error) {
+                                logger.error("Error sending direct backlog response", {
+                                    error: error instanceof Error ? error.message : String(error),
+                                    clientId,
+                                    correlationId
+                                });
+                            }
+                        });
+                        
+                        // Clear pending requests after sending
+                        global.pendingBacklogRequests.clear();
+                    }
+                } catch (error) {
+                    logger.error("Error handling backlog message", {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
                     });
                 }
             } else if (msg.type === "shutdown") {
