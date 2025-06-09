@@ -9,11 +9,18 @@
 import { EventEmitter } from "events";
 import type { MarketAnomaly } from "../utils/types.js";
 import { Logger } from "../infrastructure/logger.js";
-import type { EnrichedTradeEvent } from "../types/marketEvents.js";
+import type {
+    EnrichedTradeEvent,
+    HybridTradeEvent,
+} from "../types/marketEvents.js";
+import type {
+    ConnectivityIssue,
+    ConnectivityStatus,
+} from "../infrastructure/apiConnectivityMonitor.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
 
 export interface AnomalyDetectorOptions {
-    /** Rolling trade window size for statistics (default: 1000 trades) */
+    /** Rolling trade window size for statistics (default: 9000 trades for 15min) */
     windowSize?: number;
     /** Baseline bid/ask spread in basis points (default: 10 = 0.1%) */
     normalSpreadBps?: number;
@@ -25,6 +32,22 @@ export interface AnomalyDetectorOptions {
     volumeImbalanceThreshold?: number;
     /** Price increment for tick/zone rounding (default: 0.01) */
     tickSize?: number;
+    /** Flow analysis window in ms (default: 900,000ms = 15 minutes) */
+    flowWindowMs?: number;
+    /** Order size tracking window in ms (default: 900,000ms = 15 minutes) */
+    orderSizeWindowMs?: number;
+    /** Volatility threshold for market health (default: 0.005) */
+    volatilityThreshold?: number;
+    /** Spread threshold in basis points for market health (default: 100) */
+    spreadThresholdBps?: number;
+    /** Window for extreme volatility checks in ms (default: 900,000ms) */
+    extremeVolatilityWindowMs?: number;
+    /** Window for liquidity checks in ms (default: 900,000ms) */
+    liquidityCheckWindowMs?: number;
+    /** Cooldown for whale activity detection in ms (default: 300,000ms) */
+    whaleCooldownMs?: number;
+    /** Window for market health assessment in ms (default: 900,000ms) */
+    marketHealthWindowMs?: number;
 }
 
 /**
@@ -34,17 +57,21 @@ export type AnomalyType =
     | "flash_crash" // Infrastructure: Extreme price deviation
     | "liquidity_void" // Infrastructure: Orderbook liquidity crisis
     | "api_gap" // Infrastructure: Data feed interruption
+    | "api_connectivity" // Infrastructure: API connectivity issues
     | "extreme_volatility" // Market Health: Sudden volatility spike
     | "orderbook_imbalance" // Market Structure: Passive volume asymmetry
     | "flow_imbalance" // Market Structure: Aggressive flow asymmetry
-    | "whale_activity"; // Market Structure: Large order impact
+    | "whale_activity" // Market Structure: Large order impact
+    | "coordinated_activity" // Microstructure: Coordinated execution patterns
+    | "algorithmic_activity" // Microstructure: Detected algorithmic trading
+    | "toxic_flow"; // Microstructure: High toxicity/informed flow
 
 /**
  * Structure of an emitted anomaly event.
  */
 export interface AnomalyEvent extends MarketAnomaly {
     type: AnomalyType;
-    severity: "critical" | "high" | "medium" | "info";
+    severity: "critical" | "high" | "medium" | "low" | "info";
     details: Record<string, unknown>;
 }
 
@@ -95,6 +122,12 @@ export class AnomalyDetector extends EventEmitter {
     private readonly anomalyCooldownMs: number;
     private readonly volumeImbalanceThreshold: number;
     private readonly tickSize: number;
+    private readonly volatilityThreshold: number;
+    private readonly spreadThresholdBps: number;
+    private readonly extremeVolatilityWindowMs: number;
+    private readonly liquidityCheckWindowMs: number;
+    private readonly whaleCooldownMs: number;
+    private readonly marketHealthWindowMs: number;
 
     private readonly logger?: Logger;
     private lastTradeSymbol = "";
@@ -102,7 +135,6 @@ export class AnomalyDetector extends EventEmitter {
     // Properly track orderbook state
     private currentBestBid = 0;
     private currentBestAsk = 0;
-    private lastDepthUpdateTime: number = 0;
 
     // Flow tracking for market structure analysis
     private recentFlowWindow: RollingWindow<{
@@ -110,7 +142,7 @@ export class AnomalyDetector extends EventEmitter {
         side: "buy" | "sell";
         time: number;
     }>;
-    private flowWindowMs = 30000; // 30 seconds for flow analysis
+    private flowWindowMs: number;
 
     // Order size tracking for whale detection
     private orderSizeHistory: RollingWindow<{
@@ -118,7 +150,7 @@ export class AnomalyDetector extends EventEmitter {
         time: number;
         price: number;
     }>;
-    private orderSizeWindowMs = 300000; // 5 minutes for size statistics
+    private orderSizeWindowMs: number;
 
     // Anomaly deduplication and history
     private lastEmitted: Record<string, { severity: string; time: number }> =
@@ -132,13 +164,22 @@ export class AnomalyDetector extends EventEmitter {
      */
     constructor(options: AnomalyDetectorOptions = {}, logger: Logger) {
         super();
-        this.windowSize = options.windowSize ?? 1000;
-        this.normalSpreadBps = options.normalSpreadBps ?? 10; // 0.1% normal spread
+        this.windowSize = options.windowSize ?? 9000;
+        this.normalSpreadBps = options.normalSpreadBps ?? 10;
         this.minHistory = options.minHistory ?? 100;
         this.logger = logger;
         this.anomalyCooldownMs = options.anomalyCooldownMs ?? 10000;
         this.volumeImbalanceThreshold = options.volumeImbalanceThreshold ?? 0.7;
         this.tickSize = options.tickSize ?? 0.01;
+        this.flowWindowMs = options.flowWindowMs ?? 900000;
+        this.orderSizeWindowMs = options.orderSizeWindowMs ?? 900000;
+        this.volatilityThreshold = options.volatilityThreshold ?? 0.005;
+        this.spreadThresholdBps = options.spreadThresholdBps ?? 100;
+        this.extremeVolatilityWindowMs =
+            options.extremeVolatilityWindowMs ?? 900000;
+        this.liquidityCheckWindowMs = options.liquidityCheckWindowMs ?? 900000;
+        this.whaleCooldownMs = options.whaleCooldownMs ?? 300000;
+        this.marketHealthWindowMs = options.marketHealthWindowMs ?? 900000;
 
         this.marketHistory = new RollingWindow<MarketSnapshot>(
             this.windowSize,
@@ -149,13 +190,13 @@ export class AnomalyDetector extends EventEmitter {
             size: number;
             time: number;
             price: number;
-        }>(Math.max(2000, Math.ceil(this.orderSizeWindowMs / 100)), false);
+        }>(Math.max(9000, Math.ceil(this.orderSizeWindowMs / 100)), false);
 
         this.recentFlowWindow = new RollingWindow<{
             volume: number;
             side: "buy" | "sell";
             time: number;
-        }>(Math.max(500, Math.ceil(this.flowWindowMs / 100)), false);
+        }>(Math.max(9000, Math.ceil(this.flowWindowMs / 100)), false);
 
         this.logger?.info?.(
             "AnomalyDetector initialized for market health monitoring",
@@ -177,15 +218,14 @@ export class AnomalyDetector extends EventEmitter {
     public updateBestQuotes(bestBid: number, bestAsk: number): void {
         this.currentBestBid = bestBid;
         this.currentBestAsk = bestAsk;
-        this.lastDepthUpdateTime = Date.now();
     }
 
     /**
-     * Main entry point: process a new EnrichedTradeEvent.
+     * Main entry point: process a new trade event (enriched or hybrid).
      * Updates rolling windows and runs market health checks.
-     * @param trade Enriched trade event (with aggressive and passive context)
+     * @param trade Enriched or hybrid trade event (with aggressive and passive context)
      */
-    public onEnrichedTrade(trade: EnrichedTradeEvent): void {
+    public onEnrichedTrade(trade: EnrichedTradeEvent | HybridTradeEvent): void {
         try {
             // Capture symbol for scoped emits
             this.lastTradeSymbol = trade.originalTrade.s ?? "";
@@ -205,7 +245,7 @@ export class AnomalyDetector extends EventEmitter {
 
             // Compute spread if we have valid quotes
             let spreadBps: number | undefined;
-            if (this.currentBestBid && this.currentBestAsk) {
+            if (this.currentBestBid && this.currentBestAsk && trade.price > 0) {
                 const spread = this.currentBestAsk - this.currentBestBid;
                 spreadBps = (spread / trade.price) * 10000;
             }
@@ -237,6 +277,15 @@ export class AnomalyDetector extends EventEmitter {
             if (this.marketHistory.count() >= this.minHistory) {
                 this.runMarketHealthChecks(snapshot, spreadBps);
             }
+
+            // Additional microstructure analysis if this is a HybridTradeEvent
+            if (
+                "hasIndividualData" in trade &&
+                trade.hasIndividualData &&
+                trade.microstructure
+            ) {
+                this.checkMicrostructureAnomalies(trade);
+            }
         } catch (err) {
             this.logger?.error?.("AnomalyDetector.onEnrichedTrade error", {
                 component: "AnomalyDetector",
@@ -264,7 +313,7 @@ export class AnomalyDetector extends EventEmitter {
         // Infrastructure issues (most critical)
         this.checkFlashCrash(snapshot);
         this.checkLiquidityVoid(snapshot, spreadBps);
-        this.checkApiGap(snapshot);
+        // API connectivity issues are now handled separately via onConnectivityIssue()
 
         // Market health issues
         this.checkExtremeVolatility(snapshot);
@@ -300,7 +349,8 @@ export class AnomalyDetector extends EventEmitter {
                     mean,
                     stdDev,
                     zScore,
-                    percentMove: ((snapshot.price - mean) / mean) * 100,
+                    percentMove:
+                        mean > 0 ? ((snapshot.price - mean) / mean) * 100 : 0,
                     rationale:
                         "Extreme price deviation from rolling mean detected",
                 },
@@ -325,8 +375,8 @@ export class AnomalyDetector extends EventEmitter {
         // Calculate average passive liquidity over recent period
         const recent = this.marketHistory
             .toArray()
-            .filter((s) => now - s.timestamp < 120_000)
-            .slice(-20);
+            .filter((s) => now - s.timestamp < this.liquidityCheckWindowMs)
+            .slice(-100);
 
         const avgPassive =
             recent.reduce(
@@ -368,32 +418,102 @@ export class AnomalyDetector extends EventEmitter {
      * Detects API/data feed gaps by trade timestamp jump.
      * Infrastructure issue affecting data reliability.
      */
-    private checkApiGap(snapshot: MarketSnapshot): void {
-        const arr = this.marketHistory.toArray();
-        const len = arr.length;
-        if (len < 2) return;
+    /**
+     * Handle API connectivity issues from DataStreamManager
+     * This replaces the old trade-gap-based API detection with proper connectivity monitoring
+     */
+    public onConnectivityIssue(
+        issue: ConnectivityIssue,
+        currentPrice: number
+    ): void {
+        const severity = this.mapConnectivitySeverity(issue.severity);
+        const recommendedAction = this.getConnectivityRecommendedAction(issue);
 
-        const timeGap = snapshot.timestamp - arr[len - 2].timestamp;
-        const confidence = Math.min(1, timeGap / 30000);
+        this.emitAnomaly({
+            type: "api_connectivity",
+            detectedAt: issue.detectedAt,
+            severity,
+            affectedPriceRange: {
+                min: currentPrice * 0.99,
+                max: currentPrice * 1.01,
+            },
+            recommendedAction,
+            details: {
+                confidence: severity === "high" ? 0.9 : 0.7,
+                connectivityIssueType: issue.type,
+                affectedStreams: issue.affectedStreams,
+                description: issue.description,
+                suggestedAction: issue.suggestedAction,
+                rationale: `API connectivity issue: ${issue.description}`,
+            },
+        });
+    }
 
-        if (timeGap > 5000) {
-            // 5 second gap
+    /**
+     * Handle connectivity status updates
+     */
+    public onConnectivityStatusChange(
+        status: ConnectivityStatus,
+        currentPrice: number
+    ): void {
+        // Only emit anomaly if connectivity is unhealthy
+        if (!status.isHealthy && status.connectivityScore < 0.5) {
             this.emitAnomaly({
-                type: "api_gap",
-                detectedAt: snapshot.timestamp,
-                severity: timeGap > 30000 ? "high" : "medium",
+                type: "api_connectivity",
+                detectedAt: Date.now(),
+                severity: status.connectivityScore < 0.3 ? "high" : "medium",
                 affectedPriceRange: {
-                    min: snapshot.price * 0.99,
-                    max: snapshot.price * 1.01,
+                    min: currentPrice * 0.99,
+                    max: currentPrice * 1.01,
                 },
-                recommendedAction: timeGap > 30000 ? "pause" : "continue",
+                recommendedAction:
+                    status.connectivityScore < 0.3 ? "pause" : "monitor",
                 details: {
-                    confidence,
-                    timeGapMs: timeGap,
-                    timeGapSeconds: timeGap / 1000,
-                    rationale: "Data feed interruption detected",
+                    confidence: 1 - status.connectivityScore,
+                    connectivityScore: status.connectivityScore,
+                    tradeStreamStale: status.tradeStreamHealth.isStale,
+                    depthStreamStale: status.depthStreamHealth.isStale,
+                    asymmetricDetected: status.apiSyncHealth.asymmetricDetected,
+                    syncLag: status.apiSyncHealth.tradeLag,
+                    rationale: "Overall API connectivity degraded",
                 },
             });
+        }
+    }
+
+    private mapConnectivitySeverity(
+        severity: ConnectivityIssue["severity"]
+    ): MarketAnomaly["severity"] {
+        switch (severity) {
+            case "critical":
+                return "high";
+            case "high":
+                return "high";
+            case "medium":
+                return "medium";
+            case "low":
+                return "low";
+            default:
+                return "medium";
+        }
+    }
+
+    private getConnectivityRecommendedAction(
+        issue: ConnectivityIssue
+    ): MarketAnomaly["recommendedAction"] {
+        switch (issue.type) {
+            case "websocket_disconnected":
+            case "both_streams_stale":
+                return "pause";
+            case "asymmetric_streaming":
+            case "trades_stream_stale":
+            case "depth_stream_stale":
+                return "monitor";
+            case "sync_drift":
+            case "api_rate_limited":
+                return "continue";
+            default:
+                return "monitor";
         }
     }
 
@@ -405,14 +525,17 @@ export class AnomalyDetector extends EventEmitter {
         const now = Date.now();
         const recentPrices = this.marketHistory
             .toArray()
-            .filter((s) => now - s.timestamp < 120_000)
+            .filter((s) => now - s.timestamp < this.extremeVolatilityWindowMs)
             .map((h) => h.price);
 
         const returns: number[] = [];
         for (let i = 1; i < recentPrices.length; i++) {
-            returns.push(
-                (recentPrices[i] - recentPrices[i - 1]) / recentPrices[i - 1]
-            );
+            if (recentPrices[i - 1] > 0) {
+                returns.push(
+                    (recentPrices[i] - recentPrices[i - 1]) /
+                        recentPrices[i - 1]
+                );
+            }
         }
 
         const recentReturns = returns.slice(-20);
@@ -460,25 +583,27 @@ export class AnomalyDetector extends EventEmitter {
         if (recentSizes.length < 100) return; // Need sufficient sample
 
         recentSizes.sort((a, b) => a - b);
-        const p99 = recentSizes[Math.floor(recentSizes.length * 0.99)];
         const p995 = recentSizes[Math.floor(recentSizes.length * 0.995)];
+        const p9995 = recentSizes[Math.floor(recentSizes.length * 0.9955)];
         const candidateSize = snapshot.aggressiveVolume;
 
         let confidence = 0;
         let whaleLevel = 0;
 
-        if (candidateSize >= p995) {
+        if (candidateSize >= p9995) {
             confidence = 0.9;
-            whaleLevel = 995;
-        } else if (candidateSize >= p99) {
+            whaleLevel = 9995;
+        } else if (candidateSize >= p995) {
             confidence = 0.7;
-            whaleLevel = 99;
+            whaleLevel = 995;
         }
 
         // Check for whale clustering
         const recentLarge = this.orderSizeHistory
             .toArray()
-            .filter((o) => now - o.time < 60000 && o.size >= p99).length;
+            .filter(
+                (o) => now - o.time < this.whaleCooldownMs && o.size >= p995
+            ).length;
 
         if (recentLarge > 3) confidence += 0.1; // Boost for clustering
 
@@ -496,8 +621,8 @@ export class AnomalyDetector extends EventEmitter {
                     confidence,
                     whaleLevel,
                     orderSize: candidateSize,
-                    p99,
                     p995,
+                    p9995,
                     recentLargeOrders: recentLarge,
                     rationale:
                         "Large order detected affecting market structure",
@@ -613,7 +738,17 @@ export class AnomalyDetector extends EventEmitter {
      */
     private emitAnomaly(anomaly: AnomalyEvent): void {
         const now = Date.now();
-        const last = this.lastEmitted[anomaly.type];
+
+        // Create a more specific key for algorithmic activity to allow different algo types
+        const cooldownKey =
+            anomaly.type === "algorithmic_activity" &&
+            typeof anomaly.details === "object" &&
+            anomaly.details !== null &&
+            "algoType" in anomaly.details
+                ? `${anomaly.type}_${(anomaly.details as { algoType: string }).algoType}`
+                : anomaly.type;
+
+        const last = this.lastEmitted[cooldownKey];
 
         // Allow critical anomalies through immediately, others respect cooldown
         const shouldEmit =
@@ -623,7 +758,7 @@ export class AnomalyDetector extends EventEmitter {
 
         if (!shouldEmit) return;
 
-        this.lastEmitted[anomaly.type] = {
+        this.lastEmitted[cooldownKey] = {
             severity: anomaly.severity,
             time: now,
         };
@@ -671,13 +806,152 @@ export class AnomalyDetector extends EventEmitter {
     }
 
     /**
+     * Check for microstructure anomalies in HybridTradeEvent with individual trades data.
+     * Analyzes coordination, algorithmic patterns, and flow toxicity.
+     */
+    private checkMicrostructureAnomalies(trade: HybridTradeEvent): void {
+        if (!trade.microstructure) {
+            return;
+        }
+
+        const microstructure = trade.microstructure;
+
+        // Check for coordinated activity (potential wash trading or coordination)
+        if (
+            microstructure.timingPattern === "coordinated" ||
+            microstructure.coordinationIndicators.length > 0
+        ) {
+            const coordinationStrength =
+                microstructure.coordinationIndicators.length > 0
+                    ? Math.max(
+                          ...microstructure.coordinationIndicators.map(
+                              (c) => c.strength
+                          )
+                      )
+                    : 0.5;
+
+            this.emitAnomaly({
+                type: "coordinated_activity",
+                severity: coordinationStrength > 0.8 ? "high" : "medium",
+                details: {
+                    coordinationScore:
+                        microstructure.coordinationIndicators.length,
+                    timingPattern: microstructure.timingPattern,
+                    coordinationIndicators:
+                        microstructure.coordinationIndicators,
+                    fragmentationScore: microstructure.fragmentationScore,
+                    tradeCount: trade.individualTrades?.length || 0,
+                    fetchReason: trade.fetchReason,
+                    price: trade.price,
+                    quantity: trade.quantity,
+                },
+                detectedAt: trade.timestamp,
+                affectedPriceRange: { min: trade.price, max: trade.price },
+                recommendedAction:
+                    coordinationStrength > 0.8
+                        ? "close_positions"
+                        : "reduce_size",
+            });
+        }
+
+        // Check for algorithmic activity detection
+        if (microstructure.suspectedAlgoType !== "unknown") {
+            const isHighRiskAlgo =
+                microstructure.suspectedAlgoType === "arbitrage" ||
+                microstructure.suspectedAlgoType === "splitting";
+
+            this.emitAnomaly({
+                type: "algorithmic_activity",
+                severity: isHighRiskAlgo ? "medium" : "info",
+                details: {
+                    algoType: microstructure.suspectedAlgoType,
+                    confidence: microstructure.fragmentationScore,
+                    executionEfficiency: microstructure.executionEfficiency,
+                    sizingPattern: microstructure.sizingPattern,
+                    timingPattern: microstructure.timingPattern,
+                    tradeCount: trade.individualTrades?.length || 0,
+                    fetchReason: trade.fetchReason,
+                    price: trade.price,
+                    quantity: trade.quantity,
+                },
+                detectedAt: trade.timestamp,
+                affectedPriceRange: { min: trade.price, max: trade.price },
+                recommendedAction: isHighRiskAlgo ? "reduce_size" : "continue",
+            });
+        }
+
+        // Check for toxic flow (highly informed trading)
+        if (microstructure.toxicityScore > 0.8) {
+            const severity =
+                microstructure.toxicityScore > 0.95
+                    ? "high"
+                    : microstructure.toxicityScore > 0.85
+                      ? "medium"
+                      : "info";
+
+            this.emitAnomaly({
+                type: "toxic_flow",
+                severity,
+                details: {
+                    toxicityScore: microstructure.toxicityScore,
+                    directionalPersistence:
+                        microstructure.directionalPersistence,
+                    executionEfficiency: microstructure.executionEfficiency,
+                    fragmentationScore: microstructure.fragmentationScore,
+                    avgTradeSize: microstructure.avgTradeSize,
+                    tradeComplexity: trade.tradeComplexity,
+                    fetchReason: trade.fetchReason,
+                    suspectedAlgoType: microstructure.suspectedAlgoType,
+                    price: trade.price,
+                    quantity: trade.quantity,
+                },
+                detectedAt: trade.timestamp,
+                affectedPriceRange: { min: trade.price, max: trade.price },
+                recommendedAction:
+                    severity === "high"
+                        ? "close_positions"
+                        : severity === "medium"
+                          ? "reduce_size"
+                          : "continue",
+            });
+        }
+
+        // Check for highly fragmented orders (potential order splitting to avoid detection)
+        if (
+            microstructure.fragmentationScore > 0.8 &&
+            trade.tradeComplexity === "highly_fragmented" &&
+            microstructure.executionEfficiency < 0.3
+        ) {
+            this.emitAnomaly({
+                type: "algorithmic_activity",
+                severity: "medium",
+                details: {
+                    algoType: "order_fragmentation",
+                    fragmentationScore: microstructure.fragmentationScore,
+                    executionEfficiency: microstructure.executionEfficiency,
+                    tradeCount: trade.individualTrades?.length || 0,
+                    avgTradeSize: microstructure.avgTradeSize,
+                    tradeSizeVariance: microstructure.tradeSizeVariance,
+                    sizingPattern: microstructure.sizingPattern,
+                    fetchReason: trade.fetchReason,
+                    price: trade.price,
+                    quantity: trade.quantity,
+                },
+                detectedAt: trade.timestamp,
+                affectedPriceRange: { min: trade.price, max: trade.price },
+                recommendedAction: "reduce_size",
+            });
+        }
+    }
+
+    /**
      * Returns comprehensive market health assessment.
      * Use this for trading system safety and risk management decisions.
      */
     public getMarketHealth(): {
         isHealthy: boolean;
         recentAnomalies: number;
-        highestSeverity: "critical" | "high" | "medium" | "info" | null;
+        highestSeverity: "critical" | "high" | "medium" | "low" | "info" | null;
         recommendation:
             | "pause"
             | "reduce_size"
@@ -693,7 +967,7 @@ export class AnomalyDetector extends EventEmitter {
             lastUpdateAge: number;
         };
     } {
-        const recentTime = Date.now() - 300000; // 5 minutes
+        const recentTime = Date.now() - this.marketHealthWindowMs;
         const recentSnapshots = this.marketHistory
             .toArray()
             .filter((s) => s.timestamp > recentTime);
@@ -738,7 +1012,13 @@ export class AnomalyDetector extends EventEmitter {
         const recentAnoms = this.recentAnomalies.filter(
             (a) => a.detectedAt > recentTime
         );
-        const severityOrder = ["critical", "high", "medium", "info"] as const;
+        const severityOrder = [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info",
+        ] as const;
         let highestSeverity: (typeof severityOrder)[number] | null = null;
 
         for (const sev of severityOrder) {
@@ -758,16 +1038,27 @@ export class AnomalyDetector extends EventEmitter {
             }
         });
 
-        // Determine overall health
-        const hasInfrastructureIssues = recentAnomalyTypes.some((type) =>
-            ["flash_crash", "liquidity_void", "api_gap"].includes(type)
+        // Determine overall health - only mark unhealthy for critical infrastructure issues
+        const hasCriticalInfrastructureIssues = recentAnomalyTypes.some(
+            (type) =>
+                ["flash_crash", "liquidity_void", "api_connectivity"].includes(
+                    type
+                ) &&
+                recentAnoms.some(
+                    (a) =>
+                        a.type === type &&
+                        (a.severity === "critical" || a.severity === "high")
+                )
         );
 
         const isHealthy =
-            !hasInfrastructureIssues &&
-            volatility < 0.002 &&
-            (!highestSeverity || highestSeverity === "info") &&
-            (currentSpreadBps ? currentSpreadBps < 50 : true);
+            !hasCriticalInfrastructureIssues &&
+            volatility < this.volatilityThreshold &&
+            (!highestSeverity ||
+                ["info", "low", "medium"].includes(highestSeverity)) &&
+            (currentSpreadBps
+                ? currentSpreadBps < this.spreadThresholdBps
+                : true);
 
         // Determine recommendation
         let recommendation:
@@ -777,10 +1068,18 @@ export class AnomalyDetector extends EventEmitter {
             | "continue";
         if (criticalIssues.length > 0 || highestSeverity === "critical") {
             recommendation = "close_positions";
-        } else if (hasInfrastructureIssues || highestSeverity === "high") {
+        } else if (
+            hasCriticalInfrastructureIssues ||
+            highestSeverity === "high"
+        ) {
             recommendation = "pause";
-        } else if (highestSeverity === "medium" || volatility > 0.002) {
+        } else if (
+            highestSeverity === "medium" ||
+            volatility > this.volatilityThreshold
+        ) {
             recommendation = "reduce_size";
+        } else if (highestSeverity === "low") {
+            recommendation = "continue"; // Low severity anomalies don't require action changes
         } else {
             recommendation = "continue";
         }
@@ -796,10 +1095,12 @@ export class AnomalyDetector extends EventEmitter {
                 spreadBps: currentSpreadBps,
                 flowImbalance: flowMetrics.flowImbalance,
                 volatility,
-                lastUpdateAge:
+                lastUpdateAge: Math.max(
                     Date.now() -
-                    (recentSnapshots[recentSnapshots.length - 1]?.timestamp ||
-                        0),
+                        (recentSnapshots[recentSnapshots.length - 1]
+                            ?.timestamp || 0),
+                    0
+                ),
             },
         };
     }

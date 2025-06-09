@@ -36,14 +36,25 @@ export class SpoofingDetector {
     }
 
     /**
+     * Normalize price keys to prevent excessive cache entries due to floating-point precision variations.
+     * This ensures consistent price keys and prevents memory bloat from slight precision differences.
+     */
+    private normalizePrice(price: number): number {
+        return Number(price.toFixed(8));
+    }
+
+    /**
      * Track changes in passive (limit) orderbook at price level.
      */
     public trackPassiveChange(price: number, bid: number, ask: number): void {
         const now = Date.now();
-        let history = this.passiveChangeHistory.get(price) || [];
+        const normalizedPrice = this.normalizePrice(price);
+        let history = this.passiveChangeHistory.get(normalizedPrice) || [];
         history.push({ time: now, bid, ask });
-        if (history.length > 10) history = history.slice(-10);
-        this.passiveChangeHistory.set(price, history);
+        if (history.length > 10) {
+            history.shift(); // Remove oldest item instead of creating new array
+        }
+        this.passiveChangeHistory.set(normalizedPrice, history);
     }
 
     /**
@@ -71,13 +82,22 @@ export class SpoofingDetector {
         let spoofDetected = false;
         let maxSpoofEvent: SpoofingEvent | null = null;
 
-        // Check all bands centered at price ± wallBand ticks
+        // Performance optimization: Pre-calculate all band prices to avoid repeated floating-point operations in hot path
+        const scaledPrice = Math.round(price * 100000000); // 8 decimal places
+        const scaledTickSize = Math.round(tickSize * 100000000);
+        const bandPrices: number[] = [];
         for (
             let offset = -Math.floor(wallBand / 2);
             offset <= Math.floor(wallBand / 2);
             offset++
         ) {
-            const bandPrice = +(price + offset * tickSize).toFixed(8);
+            const bandPrice =
+                (scaledPrice + offset * scaledTickSize) / 100000000;
+            bandPrices.push(this.normalizePrice(bandPrice));
+        }
+
+        // Check all pre-calculated normalized band prices
+        for (const bandPrice of bandPrices) {
             const hist = this.passiveChangeHistory.get(bandPrice);
             if (!hist || hist.length < 2) continue;
 
@@ -122,7 +142,12 @@ export class SpoofingDetector {
                     }
 
                     // Only count as spoof if most was canceled, not executed
-                    if (canceled / delta > 0.7 && canceled >= minWallSize) {
+                    // Fix: Add zero check to prevent division by zero
+                    if (
+                        delta > 0 &&
+                        canceled / delta > 0.7 &&
+                        canceled >= minWallSize
+                    ) {
                         spoofDetected = true;
                         // For multi-band, track the largest event
                         if (

@@ -41,6 +41,13 @@
                         >
                             Reset All
                         </button>
+                        <div
+                            class="trade-delay-indicator"
+                            id="tradeDelayIndicator"
+                        >
+                            <span class="delay-title">Server Delay:</span>
+                            <span id="tradeDelayValue">0ms</span>
+                        </div>
                     </div>
                     <div class="chartAreaWrapper">
                         <canvas id="tradesChart"></canvas>
@@ -49,14 +56,33 @@
                 <div class="resize-handle" id="resize2"></div>
             </section>
 
-            <!-- Column 3: Anomalies and Gauge -->
+            <!-- Column 3: Signals and Anomalies -->
             <section class="column" id="column3">
-                <div class="gauge-container" id="delayGaugeContainer">
-                    <canvas id="delayGauge"></canvas>
+                <div class="signals-container" id="signalsContainer">
+                    <div class="signals-header">
+                        <span>Trading Signals</span>
+                        <span class="signals-filter">
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    value="buy"
+                                    checked
+                                />Buy</label
+                            >
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    value="sell"
+                                    checked
+                                />Sell</label
+                            >
+                        </span>
+                    </div>
+                    <div class="signals-list" id="signalsList"></div>
                 </div>
                 <div class="anomaly-list-container" id="anomalyListContainer">
                     <div class="anomaly-list-header">
-                        <span>Anomalies</span>
+                        <span>Market Health</span>
                         <span class="anomaly-filter">
                             <label
                                 ><input

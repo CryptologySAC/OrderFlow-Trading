@@ -8,7 +8,7 @@ describe("indicators/detectorUtils", () => {
         expect(DetectorUtils.calculateMedian([])).toBe(0);
         expect(DetectorUtils.calculatePercentile([1, 2, 3, 4, 5], 50)).toBe(3);
         expect(DetectorUtils.calculateMean([1, 2, 3])).toBeCloseTo(2);
-        expect(DetectorUtils.calculateStdDev([1, 2, 3])).toBeCloseTo(0.816, 3);
+        expect(DetectorUtils.calculateStdDev([1, 2, 3])).toBeCloseTo(1.0, 3);
     });
 
     it("validates and normalizes trades", () => {
@@ -30,5 +30,35 @@ describe("indicators/detectorUtils", () => {
                 quantity: 0,
             } as AggressiveTrade)
         ).toBe(false);
+    });
+
+    it("calculates standardized zones correctly", () => {
+        // Test with LTCUSDT precision (2 decimals) and 1 tick zones
+        expect(DetectorUtils.calculateZone(89.45, 1, 2)).toBe(89.45);
+        expect(DetectorUtils.calculateZone(89.456, 1, 2)).toBe(89.46);
+        expect(DetectorUtils.calculateZone(89.454, 1, 2)).toBe(89.45);
+
+        // Test with 2-tick zones (zoneSize = 2 * 0.01 = 0.02)
+        // 89.45 / 0.02 = 4472.5, Math.round = 4472, 4472 * 0.02 = 89.44... but 89.46 is closer
+        expect(DetectorUtils.calculateZone(89.45, 2, 2)).toBe(89.46);
+        expect(DetectorUtils.calculateZone(89.43, 2, 2)).toBe(89.44);
+        expect(DetectorUtils.calculateZone(89.47, 2, 2)).toBe(89.48);
+
+        // Test floating point precision consistency
+        const price = 89.456789;
+        const zone1 = DetectorUtils.calculateZone(price, 1, 2);
+        const zone2 = DetectorUtils.calculateZone(price, 1, 2);
+        expect(zone1).toBe(zone2); // Should be exactly equal
+        expect(typeof zone1).toBe("number");
+        expect(zone1.toString()).not.toContain("e"); // No scientific notation
+
+        // Test zone boundary consistency - ensure same zones regardless of calculation method
+        const testPrices = [89.44, 89.45, 89.46, 89.47, 89.48];
+        testPrices.forEach((price) => {
+            const zone = DetectorUtils.calculateZone(price, 2, 2);
+            expect(typeof zone).toBe("number");
+            // Zone should be aligned to 0.02 boundaries
+            expect((zone * 100) % 2).toBe(0);
+        });
     });
 });

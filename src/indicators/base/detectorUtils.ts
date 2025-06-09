@@ -21,6 +21,35 @@ export class DetectorUtils {
     }
 
     /**
+     * CRITICAL FIX: Standardized zone calculation for all detectors
+     * This method was called but not implemented
+     */
+    public static calculateZone(
+        price: number,
+        zoneTicks: number,
+        pricePrecision: number
+    ): number {
+        if (price <= 0 || zoneTicks <= 0 || pricePrecision < 0) {
+            throw new Error(
+                `Invalid zone calculation parameters: price=${price}, zoneTicks=${zoneTicks}, pricePrecision=${pricePrecision}`
+            );
+        }
+
+        // Use integer arithmetic for financial precision
+        const scale = Math.pow(10, pricePrecision);
+        const scaledPrice = Math.round(price * scale);
+        const scaledTickSize = Math.round(
+            Math.pow(10, -pricePrecision) * scale
+        );
+        const scaledZoneSize = zoneTicks * scaledTickSize;
+
+        // Ensure consistent rounding across all detectors
+        const scaledResult =
+            Math.round(scaledPrice / scaledZoneSize) * scaledZoneSize;
+        return scaledResult / scale;
+    }
+
+    /**
      * Calculate percentile
      */
     public static calculatePercentile(
@@ -44,16 +73,37 @@ export class DetectorUtils {
     }
 
     /**
-     * Calculate standard deviation
+     * Safe division with zero protection
      */
+    public static safeDivide(
+        numerator: number,
+        denominator: number,
+        defaultValue: number = 0
+    ): number {
+        if (denominator === 0 || isNaN(denominator) || isNaN(numerator)) {
+            return defaultValue;
+        }
+        return numerator / denominator;
+    }
+
+    // ✅ SHOULD USE WELFORD'S ALGORITHM:
     public static calculateStdDev(values: number[]): number {
         if (values.length === 0) return 0;
+        if (values.length === 1) return 0;
 
-        const mean = this.calculateMean(values);
-        const squaredDiffs = values.map((val) => Math.pow(val - mean, 2));
-        const variance = this.calculateMean(squaredDiffs);
+        // Welford's algorithm for numerical stability
+        let mean = 0;
+        let m2 = 0;
 
-        return Math.sqrt(variance);
+        for (let i = 0; i < values.length; i++) {
+            const delta = values[i] - mean;
+            mean += delta / (i + 1);
+            const delta2 = values[i] - mean;
+            m2 += delta * delta2;
+        }
+
+        const variance = m2 / (values.length - 1);
+        return Math.sqrt(Math.max(0, variance));
     }
 
     /**

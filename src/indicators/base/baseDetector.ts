@@ -7,6 +7,7 @@ import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../../services/signalLogger.js";
 import { RollingWindow } from "../../utils/rollingWindow.js";
 import { DetectorUtils } from "./detectorUtils.js";
+import { SharedPools } from "../../utils/objectPool.js";
 import {
     SignalType,
     SignalCandidate,
@@ -33,6 +34,8 @@ import type {
     BaseDetectorSettings,
     DetectorFeatures,
     DetectorCallback,
+    ImbalanceResult,
+    VolumeCalculationResult,
 } from "../interfaces/detectorInterfaces.js";
 
 export type ZoneSample = {
@@ -48,7 +51,7 @@ export type ZoneSample = {
 export abstract class BaseDetector extends Detector implements IDetector {
     // Data storage
     protected readonly depth = new TimeAwareCache<number, DepthLevel>(300000);
-    protected readonly trades = new CircularBuffer<AggressiveTrade>(10000);
+    protected readonly trades = new CircularBuffer<AggressiveTrade>(4000);
 
     // Configuration
     protected readonly windowMs: number;
@@ -152,22 +155,53 @@ export abstract class BaseDetector extends Detector implements IDetector {
 
     /**
      * Clean up old zone data beyond retention window
+     * Enhanced to handle pool cleanup within rolling windows
      */
     protected cleanupOldZoneData(): void {
         const cutoff = Date.now() - this.windowMs * 2;
         let cleanedCount = 0;
+        let cleanedSamples = 0;
+        const sharedPools = SharedPools.getInstance();
 
         for (const [zone, window] of this.zonePassiveHistory) {
-            const lastTimestamp = window.toArray().at(-1)?.timestamp ?? 0;
+            const samples = window.toArray();
+            const lastTimestamp = samples.at(-1)?.timestamp ?? 0;
+
             if (lastTimestamp < cutoff) {
+                // Return all zone sample objects to pool before deletion
+                for (const sample of samples) {
+                    sharedPools.zoneSamples.release(sample);
+                    cleanedSamples++;
+                }
+
                 this.zonePassiveHistory.delete(zone);
                 cleanedCount++;
+            } else {
+                // Clean up individual old samples within the window
+                const validSamples: ZoneSample[] = [];
+                for (const sample of samples) {
+                    if (sample.timestamp >= cutoff) {
+                        validSamples.push(sample);
+                    } else {
+                        // Release old sample back to pool
+                        sharedPools.zoneSamples.release(sample);
+                        cleanedSamples++;
+                    }
+                }
+
+                // Rebuild the window with only valid samples if needed
+                if (validSamples.length !== samples.length) {
+                    window.clear();
+                    for (const sample of validSamples) {
+                        window.push(sample);
+                    }
+                }
             }
         }
 
-        if (cleanedCount > 0) {
+        if (cleanedCount > 0 || cleanedSamples > 0) {
             this.logger.debug(
-                `[${this.constructor.name}] Cleaned ${cleanedCount} old zones`
+                `[${this.constructor.name}] Cleaned ${cleanedCount} old zones, ${cleanedSamples} old samples`
             );
         }
     }
@@ -206,10 +240,31 @@ export abstract class BaseDetector extends Detector implements IDetector {
         try {
             this.trades.add(tradeData);
             const zone = this.calculateZone(tradeData.price);
-            const bucket = this.zoneAgg.get(zone) ?? { trades: [], vol: 0 };
-            bucket.trades.push(tradeData);
-            bucket.vol += tradeData.quantity;
-            this.zoneAgg.set(zone, bucket);
+
+            this.logger.info(`[${this.constructor.name}] Trade added`, {
+                price: tradeData.price,
+                quantity: tradeData.quantity,
+                side: this.getTradeSide(tradeData),
+                zone,
+                totalTradesInBuffer: this.trades.length,
+                timestamp: new Date(tradeData.timestamp).toISOString(),
+            });
+
+            // Copy-on-write: create new bucket instead of mutating
+            const currentBucket = this.zoneAgg.get(zone);
+            const newBucket = this.createUpdatedBucket(
+                currentBucket,
+                tradeData
+            );
+
+            this.zoneAgg.set(zone, newBucket);
+
+            this.logger.info(`[${this.constructor.name}] Zone updated`, {
+                zone,
+                tradesInZone: newBucket.trades.length,
+                volumeInZone: newBucket.vol,
+                activeZones: this.zoneAgg.size,
+            });
 
             if (this.features.adaptiveZone) {
                 this.adaptiveZoneCalculator.updatePrice(tradeData.price);
@@ -226,6 +281,19 @@ export abstract class BaseDetector extends Detector implements IDetector {
                 `${this.constructor.name}.addTrade`
             );
         }
+    }
+
+    private createUpdatedBucket(
+        currentBucket: { trades: AggressiveTrade[]; vol: number } | undefined,
+        newTrade: AggressiveTrade
+    ): { trades: AggressiveTrade[]; vol: number } {
+        const base = currentBucket ?? { trades: [], vol: 0 };
+
+        // Return new object - never mutate the original
+        return {
+            trades: [...base.trades, newTrade],
+            vol: base.vol + newTrade.quantity,
+        };
     }
 
     protected checkForSignal(triggerTrade: AggressiveTrade): void {
@@ -281,12 +349,14 @@ export abstract class BaseDetector extends Detector implements IDetector {
 
         const lastSnapshot =
             zoneHistory.count() > 0 ? zoneHistory.toArray().at(-1)! : null;
-        const newSnapshot: ZoneSample = {
-            bid: event.zonePassiveBidVolume,
-            ask: event.zonePassiveAskVolume,
-            total: event.zonePassiveBidVolume + event.zonePassiveAskVolume,
-            timestamp: event.timestamp,
-        };
+
+        // Use object pool to reduce GC pressure
+        const newSnapshot = SharedPools.getInstance().zoneSamples.acquire();
+        newSnapshot.bid = event.zonePassiveBidVolume;
+        newSnapshot.ask = event.zonePassiveAskVolume;
+        newSnapshot.total =
+            event.zonePassiveBidVolume + event.zonePassiveAskVolume;
+        newSnapshot.timestamp = event.timestamp;
 
         // Only add if values changed (avoid duplicate snapshots)
         if (
@@ -294,8 +364,35 @@ export abstract class BaseDetector extends Detector implements IDetector {
             lastSnapshot.bid !== newSnapshot.bid ||
             lastSnapshot.ask !== newSnapshot.ask
         ) {
-            zoneHistory.push(newSnapshot);
+            // Use pool-aware push to handle evicted objects
+            this.pushToZoneHistoryWithPoolCleanup(zoneHistory, newSnapshot);
+        } else {
+            // Release snapshot back to pool if not used
+            SharedPools.getInstance().zoneSamples.release(newSnapshot);
         }
+    }
+
+    /**
+     * Pool-aware push to zone history that properly releases evicted objects
+     */
+    protected pushToZoneHistoryWithPoolCleanup(
+        zoneHistory: RollingWindow<ZoneSample>,
+        newSample: ZoneSample
+    ): void {
+        const sharedPools = SharedPools.getInstance();
+
+        // Check if the window is full and will evict an object
+        if (zoneHistory.count() >= zoneHistory.size) {
+            // Get the sample that will be evicted (oldest one)
+            const samples = zoneHistory.toArray();
+            if (samples.length > 0) {
+                const evictedSample = samples[0]; // Oldest sample
+                sharedPools.zoneSamples.release(evictedSample);
+            }
+        }
+
+        // Now safely push the new sample
+        zoneHistory.push(newSample);
     }
 
     /**
@@ -341,41 +438,59 @@ export abstract class BaseDetector extends Detector implements IDetector {
 
     /**
      * Calculate zone volumes with common logic
+     * Uses object pooling for optimal performance
      */
     protected calculateZoneVolumes(
         zone: number,
         tradesAtZone: AggressiveTrade[],
         zoneTicks: number,
         useMultiZone: boolean = this.features.multiZone ?? false
-    ): {
-        aggressive: number;
-        passive: number;
-        trades: SpotWebsocketStreams.AggTradeResponse[];
-    } {
+    ): VolumeCalculationResult {
         if (useMultiZone) {
-            return this.sumVolumesInBand(zone, Math.floor(zoneTicks / 2));
+            // Fix: Ensure minimum band size and use proper calculation
+            const bandTicks = Math.max(1, Math.floor(zoneTicks / 2));
+            return this.sumVolumesInBand(zone, bandTicks);
         }
 
         const now = Date.now();
-        const aggressive = tradesAtZone.reduce((sum, t) => sum + t.quantity, 0);
-        const trades = tradesAtZone.map((t) => t.originalTrade);
+        const sharedPools = SharedPools.getInstance();
+        const result = sharedPools.volumeResults.acquire();
 
-        // Get passive volume from zone history
+        // Calculate aggressive volume
+        result.aggressive = tradesAtZone.reduce(
+            (sum, t) => sum + t.quantity,
+            0
+        );
+
+        // Populate trades array (reusing pooled array for efficiency)
+        for (const trade of tradesAtZone) {
+            result.trades.push(trade.originalTrade);
+        }
+
+        // Get passive volume from zone history using pooled array
         const zoneHistory = this.zonePassiveHistory.get(zone);
-        const passiveSnapshots = zoneHistory
-            ? zoneHistory
-                  .toArray()
-                  .filter((s) => now - s.timestamp <= this.windowMs)
-            : [];
+        if (zoneHistory) {
+            const passiveValues = sharedPools.numberArrays.acquire();
+            try {
+                const snapshots = zoneHistory.toArray();
+                for (const snapshot of snapshots) {
+                    if (now - snapshot.timestamp < this.windowMs) {
+                        passiveValues.push(snapshot.total);
+                    }
+                }
 
-        const passive =
-            passiveSnapshots.length > 0
-                ? DetectorUtils.calculateMean(
-                      passiveSnapshots.map((s) => s.total)
-                  )
-                : 0;
+                result.passive =
+                    passiveValues.length > 0
+                        ? DetectorUtils.calculateMean(passiveValues)
+                        : 0;
+            } finally {
+                sharedPools.numberArrays.release(passiveValues);
+            }
+        } else {
+            result.passive = 0;
+        }
 
-        return { aggressive, passive, trades };
+        return result;
     }
 
     /**
@@ -419,9 +534,21 @@ export abstract class BaseDetector extends Detector implements IDetector {
         this.depth.forceCleanup();
         this.lastSignal.forceCleanup();
 
+        // Return zone sample objects to pool before clearing
+        const sharedPools = SharedPools.getInstance();
+        for (const [, window] of this.zonePassiveHistory) {
+            const samples = window.toArray();
+            for (const sample of samples) {
+                sharedPools.zoneSamples.release(sample);
+            }
+        }
+
         // Clear zone data
         this.zonePassiveHistory.clear();
         this.zoneAgg.clear();
+
+        // Remove all event listeners to avoid leaks when detector is reused
+        this.removeAllListeners();
 
         this.logger.info(`[${this.constructor.name}] Cleanup completed`);
     }
@@ -492,27 +619,51 @@ export abstract class BaseDetector extends Detector implements IDetector {
         }
     }
 
-    protected checkPassiveImbalance(zone: number): {
-        imbalance: number;
-        dominantSide: "bid" | "ask" | "neutral";
-    } {
+    protected checkPassiveImbalance(zone: number): ImbalanceResult {
         const zoneHistory = this.zonePassiveHistory.get(zone);
         if (!zoneHistory || zoneHistory.count() === 0) {
-            return { imbalance: 0, dominantSide: "neutral" };
+            const result = SharedPools.getInstance().imbalanceResults.acquire();
+            result.imbalance = 0;
+            result.dominantSide = "neutral";
+            return result;
         }
 
         const recent = zoneHistory.toArray().slice(-10);
-        const avgBid = DetectorUtils.calculateMean(recent.map((s) => s.bid));
-        const avgAsk = DetectorUtils.calculateMean(recent.map((s) => s.ask));
+        const sharedPools = SharedPools.getInstance();
 
-        const total = avgBid + avgAsk;
-        if (total === 0) return { imbalance: 0, dominantSide: "neutral" };
+        // Use pooled arrays for calculations
+        const bidValues = sharedPools.numberArrays.acquire();
+        const askValues = sharedPools.numberArrays.acquire();
 
-        const imbalance = (avgBid - avgAsk) / total;
-        const dominantSide =
-            imbalance > 0.2 ? "bid" : imbalance < -0.2 ? "ask" : "neutral";
+        try {
+            for (const sample of recent) {
+                bidValues.push(sample.bid);
+                askValues.push(sample.ask);
+            }
 
-        return { imbalance, dominantSide };
+            const avgBid = DetectorUtils.calculateMean(bidValues);
+            const avgAsk = DetectorUtils.calculateMean(askValues);
+
+            const total = avgBid + avgAsk;
+            const result = sharedPools.imbalanceResults.acquire();
+
+            if (total === 0) {
+                result.imbalance = 0;
+                result.dominantSide = "neutral";
+                return result;
+            }
+
+            const imbalance = (avgBid - avgAsk) / total;
+            result.imbalance = imbalance;
+            result.dominantSide =
+                imbalance > 0.2 ? "bid" : imbalance < -0.2 ? "ask" : "neutral";
+
+            return result;
+        } finally {
+            // Always release pooled arrays
+            sharedPools.numberArrays.release(bidValues);
+            sharedPools.numberArrays.release(askValues);
+        }
     }
 
     /**
@@ -555,7 +706,11 @@ export abstract class BaseDetector extends Detector implements IDetector {
     /**
      * Check cooldown
      */
-    protected checkCooldown(zone: number, side: "buy" | "sell"): boolean {
+    protected checkCooldown(
+        zone: number,
+        side: "buy" | "sell",
+        update = false
+    ): boolean {
         const eventKey = `${zone}_${side}`;
         const now = Date.now();
         const lastSignalTime = this.lastSignal.get(eventKey) || 0;
@@ -564,8 +719,18 @@ export abstract class BaseDetector extends Detector implements IDetector {
             return false;
         }
 
-        this.lastSignal.set(eventKey, now);
+        if (update) {
+            this.lastSignal.set(eventKey, now);
+        }
         return true;
+    }
+
+    /**
+     * Mark a signal as confirmed to start cooldown.
+     */
+    public markSignalConfirmed(zone: number, side: "buy" | "sell"): void {
+        const eventKey = `${zone}_${side}`;
+        this.lastSignal.set(eventKey, Date.now());
     }
 
     /**
@@ -587,6 +752,66 @@ export abstract class BaseDetector extends Detector implements IDetector {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Detect layering attack patterns in order flow
+     */
+    protected detectLayeringAttack(
+        price: number,
+        side: "buy" | "sell",
+        timestamp: number
+    ): boolean {
+        const windowMs = 10000; // 10 second window
+        const tickSize = Math.pow(10, -this.pricePrecision);
+
+        // Check for layering patterns in nearby price levels
+        const layerCount = 5; // Check 5 levels each side
+        let suspiciousLayers = 0;
+
+        for (let i = 1; i <= layerCount; i++) {
+            const layerPrice =
+                side === "buy"
+                    ? +(price - i * tickSize).toFixed(this.pricePrecision)
+                    : +(price + i * tickSize).toFixed(this.pricePrecision);
+
+            // Get recent aggressive volume at this layer
+            const recentAggressive = this.getAggressiveVolumeAtPrice(
+                layerPrice,
+                windowMs
+            );
+
+            // Get current passive volume at this layer
+            const currentLevel = this.depth.get(layerPrice);
+            const currentPassive = currentLevel
+                ? side === "buy"
+                    ? currentLevel.bid
+                    : currentLevel.ask
+                : 0;
+
+            // Check for layering pattern: high recent aggressive but little remaining passive
+            if (
+                recentAggressive > 0 &&
+                currentPassive < recentAggressive * 0.1
+            ) {
+                suspiciousLayers++;
+            }
+        }
+
+        // Layering detected if multiple layers show this pattern
+        const isLayering = suspiciousLayers >= 3;
+
+        if (isLayering) {
+            this.logger.warn("Potential layering attack detected", {
+                price,
+                side,
+                suspiciousLayers,
+                timestamp,
+            });
+            this.metricsCollector.incrementMetric("layeringAttackDetected");
+        }
+
+        return isLayering;
     }
 
     /**
@@ -618,41 +843,114 @@ export abstract class BaseDetector extends Detector implements IDetector {
         passive: number;
         trades: SpotWebsocketStreams.AggTradeResponse[];
     } {
-        const tick = 1 / Math.pow(10, this.pricePrecision);
+        // Fix: Use consistent tick size calculation
+        const tickSize = Math.pow(10, -this.pricePrecision);
         let aggressive = 0;
         let passive = 0;
         const trades: SpotWebsocketStreams.AggTradeResponse[] = [];
+        const now = Date.now();
+
+        // Log multizone band for debugging
+        this.logger.debug(
+            `[${this.constructor.name}] MultiZone band analysis`,
+            {
+                center,
+                bandTicks,
+                tickSize,
+                rangeMin: center - bandTicks * tickSize,
+                rangeMax: center + bandTicks * tickSize,
+            }
+        );
 
         for (let offset = -bandTicks; offset <= bandTicks; offset++) {
-            const price = +(center + offset * tick).toFixed(
+            const price = +(center + offset * tickSize).toFixed(
                 this.pricePrecision
             );
 
-            const now = Date.now();
+            // Get trades at this specific price level
             const tradesAtPrice = this.trades.filter(
                 (t) =>
                     +t.price.toFixed(this.pricePrecision) === price &&
-                    now - t.timestamp <= this.windowMs
+                    now - t.timestamp < this.windowMs
             );
 
             aggressive += tradesAtPrice.reduce((sum, t) => sum + t.quantity, 0);
             trades.push(...tradesAtPrice.map((t) => t.originalTrade));
 
+            // Get passive volume from order book
             const bookLevel = this.depth.get(price);
             if (bookLevel) {
                 passive += bookLevel.bid + bookLevel.ask;
             }
+
+            // Also check zone passive history for this price level
+            const priceZone = DetectorUtils.calculateZone(
+                price,
+                this.getEffectiveZoneTicks(),
+                this.pricePrecision
+            );
+            const zoneHistory = this.zonePassiveHistory.get(priceZone);
+            if (zoneHistory) {
+                const passiveSnapshots = zoneHistory
+                    .toArray()
+                    .filter((s) => now - s.timestamp < this.windowMs);
+
+                if (passiveSnapshots.length > 0) {
+                    const avgPassiveAtPriceZone = DetectorUtils.calculateMean(
+                        passiveSnapshots.map((s) => s.total)
+                    );
+                    // Add to passive if we don't have current book data
+                    if (
+                        !bookLevel ||
+                        (bookLevel.bid === 0 && bookLevel.ask === 0)
+                    ) {
+                        passive += avgPassiveAtPriceZone;
+                    }
+                }
+            }
         }
+
+        this.logger.debug(`[${this.constructor.name}] MultiZone results`, {
+            center,
+            bandTicks,
+            aggressive,
+            passive,
+            tradesCount: trades.length,
+        });
 
         return { aggressive, passive, trades };
     }
 
     /**
-     * Get detector status (alias for existing getStats)
+     * Get detector status - returns detailed operational information
      */
     public getStatus(): string {
         const stats = this.getStats();
-        return stats.status || "unknown";
+        const isHealthy = this.isDetectorHealthy();
+
+        if (!isHealthy) {
+            return `${this.detectorType} detector: UNHEALTHY`;
+        }
+
+        // Return detailed status for healthy detectors
+        const statusInfo: {
+            trades: number;
+            zones: number;
+            minVol: number;
+            health: string;
+            zoneTicks?: number;
+        } = {
+            trades: stats.tradesInBuffer,
+            zones: Math.min(this.zonePassiveHistory.size, 99),
+            minVol: stats.currentMinVolume,
+            health: "OK",
+        };
+
+        if (this.features.adaptiveZone && stats.adaptiveZoneTicks) {
+            statusInfo.zoneTicks = stats.adaptiveZoneTicks;
+        }
+
+        return `${this.detectorType} detector: ${JSON.stringify(statusInfo)}`;
     }
 
     /**
@@ -670,7 +968,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
             tradesInBuffer: this.trades.length,
             depthLevels: totalDepthSamples, // ← ONLY CHANGE: Use actual zone data instead of empty cache
             currentMinVolume: this.minAggVolume,
-            status: "unknown", //TODO
+            status: this.isDetectorHealthy() ? "healthy" : "unknown",
         };
 
         // Keep all your existing adaptive zone logic unchanged
@@ -686,6 +984,46 @@ export abstract class BaseDetector extends Detector implements IDetector {
     }
 
     /**
+     * Check if detector is healthy based on data flow and operational state
+     */
+    protected isDetectorHealthy(): boolean {
+        const now = Date.now();
+
+        // Check if we have recent trades (within last 2 minutes)
+        const recentTrades = this.trades.filter(
+            (t) => now - t.timestamp < 120000
+        );
+        if (recentTrades.length === 0) {
+            return false; // No recent data
+        }
+
+        // Check if we have some depth data
+        if (this.zonePassiveHistory.size === 0) {
+            return false; // No market depth data
+        }
+
+        // Check if we have recent depth updates
+        let hasRecentDepth = false;
+        for (const [_, window] of this.zonePassiveHistory) {
+            void _;
+            const recent = window
+                .toArray()
+                .filter((sample) => now - sample.timestamp < 300000);
+            if (recent.length > 0) {
+                hasRecentDepth = true;
+                break;
+            }
+        }
+
+        if (!hasRecentDepth) {
+            return false; // Stale depth data
+        }
+
+        // All checks passed
+        return true;
+    }
+
+    /**
      * Get aggressive volume at a specific price within a time window
      */
     protected getAggressiveVolumeAtPrice(
@@ -696,7 +1034,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
         const precision = Math.pow(10, -this.pricePrecision) / 2;
         const filtered = this.trades.filter(
             (t) =>
-                now - t.timestamp <= windowMs &&
+                now - t.timestamp < windowMs &&
                 Math.abs(t.price - price) < precision
         );
 
@@ -783,14 +1121,13 @@ export abstract class BaseDetector extends Detector implements IDetector {
 
     /**
      * Calculate price zone based on zone ticks
+     * Uses standardized calculation method for consistency across all detectors
      */
     protected calculateZone(price: number): number {
         const zoneTicks = this.getEffectiveZoneTicks();
-        const tickSize = Math.pow(10, -this.pricePrecision);
-        const zoneSize = zoneTicks * tickSize;
-
-        // Round price to nearest zone
-        return +(Math.round(price / zoneSize) * zoneSize).toFixed(
+        return DetectorUtils.calculateZone(
+            price,
+            zoneTicks,
             this.pricePrecision
         );
     }

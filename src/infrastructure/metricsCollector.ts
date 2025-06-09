@@ -21,6 +21,19 @@ export interface Metrics {
     tradesErrors?: number;
     tradesSaveDropped?: number;
     invalidTrades?: number;
+    hybridTradesProcessed?: number;
+    individualTradesEnhancementErrors?: number;
+
+    // Individual trades metrics
+    "individualTrades.cacheHits"?: number;
+    "individualTrades.fetchSuccess"?: number;
+    "individualTrades.lastFetchSize"?: number;
+    "individualTrades.fetchErrors"?: number;
+
+    // Microstructure analysis metrics
+    "microstructure.analysisTimeMs"?: number;
+    "microstructure.analysisCount"?: number;
+    "microstructure.analysisErrors"?: number;
 
     // Orderbook metrics
     orderbookCircuitRejected?: number;
@@ -39,6 +52,8 @@ export interface Metrics {
     absorptionDetectionErrors?: number;
     absorptionSignalsGenerated?: number;
     absorptionSpoofingRejected?: number; // Fixed typo from "absorptionPpoofingRejected"
+    absorptionSpoofingDetected?: number; // Enhanced absorption spoofing detection
+    layeringAttackDetected?: number; // Layering attack detection
     detector_absorptionSignals?: number;
     detector_absorptionAggressive_volume?: number;
     detector_absorptionPassive_volume?: number;
@@ -54,23 +69,91 @@ export interface Metrics {
     detector_exhaustionPassive_volume?: number;
 
     // Detector metrics - accumulation
+    accumulationDetectionAttempts?: number;
+    accumulationZonesActive?: number;
+    accumulationDetectionErrors?: number;
+    accumulationSignalsGenerated?: number;
+    accumulationMarketVolatility?: number;
+    accumulationMarketTrendStrength?: number;
     detector_accumulationSignals?: number;
     detector_accumulationAggressive_volume?: number;
     detector_accumulationPassive_volume?: number;
+
+    // Detector metrics - distribution
+    distributionDetectionAttempts?: number;
+    distributionZonesActive?: number;
+    distributionDetectionErrors?: number;
+    distributionSignalsGenerated?: number;
+    distributionMarketVolatility?: number;
+    distributionMarketTrendStrength?: number;
+
+    // Signal processing metrics
+    signalCandidatesGenerated?: number;
+    signalCandidatesProcessed?: number;
+    signalsConfirmed?: number;
+    signalsRejected?: number;
+
+    // Signal rejection reasons
+    signalsRejectedLowConfidence?: number;
+    signalsRejectedUnhealthyMarket?: number;
+    signalsRejectedProcessingError?: number;
+    signalsRejectedTimeout?: number;
+    signalsRejectedDuplicate?: number;
+
+    // Signals by type - candidates
+    candidatesAbsorption?: number;
+    candidatesExhaustion?: number;
+    candidatesAccumulation?: number;
+    candidatesDistribution?: number;
+    candidatesCvdConfirmation?: number;
+
+    // Signals by type - confirmed
+    confirmedAbsorption?: number;
+    confirmedExhaustion?: number;
+    confirmedAccumulation?: number;
+    confirmedDistribution?: number;
+    confirmedCvdConfirmation?: number;
+
+    // Signals by type - rejected
+    rejectedAbsorption?: number;
+    rejectedExhaustion?: number;
+    rejectedAccumulation?: number;
+    rejectedDistribution?: number;
+    rejectedCvdConfirmation?: number;
+
+    // Signal quality metrics
+    averageSignalConfidence?: number;
+    signalConfidenceTotal?: number;
+    signalConfidenceCount?: number;
+
+    // Signal timing metrics
+    signalProcessingTime?: number;
+    signalQueueDepth?: number;
+    signalCorrelationHits?: number;
 
     // Legacy/cleanup metrics
     accumulationDetected?: number;
     accumulationErrors?: number;
     preprocessorErrors?: number;
+
+    // Flow detector rejection metrics
+    accumulationRejectedFlowSpecificValidation?: number;
+    accumulationRejectedInsufficientStatisticalSignificance?: number;
+    accumulationRejectedInsufficientVolume?: number;
+    accumulationRejectedSpoofingDetected?: number;
+    distributionRejectedFlowSpecificValidation?: number;
+    distributionRejectedInsufficientStatisticalSignificance?: number;
+    distributionRejectedInsufficientVolume?: number;
+    distributionRejectedSpoofingDetected?: number;
 }
 
 /**
  * Histogram bucket for time-series data
  */
 export interface HistogramBucket {
-    count: number;
+    count: bigint;
     sum: number;
-    buckets: Map<number, number>; // bucket_le -> count
+    buckets: Map<number, bigint>; // bucket_le -> count
     timestamps: number[];
     values: number[];
     bounds?: number[];
@@ -89,7 +172,7 @@ export interface GaugeMetric {
  * Counter metric for incrementing values
  */
 export interface CounterMetric {
-    value: number;
+    value: bigint;
     rate?: number; // per second
     lastIncrement: number;
 }
@@ -103,6 +186,45 @@ export interface MetricMetadata {
     description: string;
     unit?: string;
     labels?: string[];
+}
+
+/**
+ * Histogram summary for aggregated statistics
+ */
+export interface HistogramSummary {
+    count: number;
+    sum: number;
+    mean: number;
+    min: number;
+    max: number;
+    stdDev: number;
+    percentiles: Record<string, number>;
+}
+
+/**
+ * Enhanced metrics structure for export
+ */
+export interface EnhancedMetrics {
+    legacy: Metrics & { uptime: number };
+    counters: Record<
+        string,
+        { value: string; rate?: number; lastIncrement: number }
+    >;
+    gauges: Record<string, number>;
+    histograms: Record<string, HistogramSummary | null>;
+    metadata: Record<string, MetricMetadata>;
+}
+
+/**
+ * Health summary interface
+ */
+export interface HealthSummary {
+    healthy: boolean;
+    uptime: number;
+    errorRate: number;
+    avgLatency: number;
+    activeConnections: number;
+    timestamp: number;
 }
 
 /**
@@ -231,7 +353,7 @@ export class MetricsCollector {
 
         if (!this.histograms.has(name)) {
             this.histograms.set(name, {
-                count: 0,
+                count: 0n,
                 sum: 0,
                 buckets: new Map(),
                 timestamps: [],
@@ -241,6 +363,10 @@ export class MetricsCollector {
 
         const histogram = this.histograms.get(name)!;
         histogram.count++;
+        // Reset if approaching safe limits for serialization
+        if (histogram.count > 9007199254740991n) {
+            histogram.count = 0n;
+        }
         histogram.sum += value;
         histogram.timestamps.push(Date.now());
         histogram.values.push(value);
@@ -296,15 +422,20 @@ export class MetricsCollector {
 
         if (!this.counters.has(name)) {
             this.counters.set(name, {
-                value: 0,
+                value: 0n,
                 rate: 0,
                 lastIncrement: Date.now(),
             });
         }
 
         const counter = this.counters.get(name)!;
-        counter.value += increment;
+        counter.value += BigInt(increment);
         counter.lastIncrement = Date.now();
+
+        // Reset if approaching safe limits for serialization
+        if (counter.value > 9007199254740991n) {
+            counter.value = 0n;
+        }
 
         // Handle legacy increments
         this.handleLegacyCounterUpdate(name, increment);
@@ -375,7 +506,7 @@ export class MetricsCollector {
         }
 
         const percentiles = this.getHistogramPercentiles(name);
-        const mean = histogram.sum / histogram.count;
+        const mean = histogram.sum / Number(histogram.count);
         const values = histogram.values;
         const variance =
             values.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) /
@@ -383,7 +514,7 @@ export class MetricsCollector {
         const stdDev = Math.sqrt(variance);
 
         return {
-            count: histogram.count,
+            count: Number(histogram.count), // Convert BigInt to number for JSON serialization
             sum: histogram.sum,
             mean,
             min: Math.min(...values),
@@ -450,7 +581,15 @@ export class MetricsCollector {
             },
 
             // Enhanced metrics
-            counters: Object.fromEntries(this.counters),
+            counters: Object.fromEntries(
+                Array.from(this.counters.entries()).map(([name, counter]) => [
+                    name,
+                    {
+                        ...counter,
+                        value: counter.value.toString(), // Convert BigInt to string for JSON serialization
+                    },
+                ])
+            ),
             gauges: Object.fromEntries(
                 Array.from(this.gauges.entries()).map(([name, gauge]) => [
                     name,
@@ -503,7 +642,7 @@ export class MetricsCollector {
                 lines.push(`# HELP ${name} ${metadata.description}`);
                 lines.push(`# TYPE ${name} counter`);
             }
-            lines.push(`${name} ${counter.value}`);
+            lines.push(`${name} ${counter.value.toString()}`);
         }
 
         // Export gauges
@@ -526,7 +665,7 @@ export class MetricsCollector {
 
             // Histogram buckets and summary
             const percentiles = this.getHistogramPercentiles(name);
-            lines.push(`${name}_count ${histogram.count}`);
+            lines.push(`${name}_count ${histogram.count.toString()}`);
             lines.push(`${name}_sum ${histogram.sum}`);
 
             for (const [percentile, value] of Object.entries(percentiles)) {
@@ -597,7 +736,7 @@ export class MetricsCollector {
                     (i) => histogram.timestamps[i]
                 );
                 histogram.values = validIndices.map((i) => histogram.values[i]);
-                histogram.count = histogram.values.length;
+                histogram.count = BigInt(histogram.values.length);
                 histogram.sum = histogram.values.reduce((a, b) => a + b, 0);
             }
         }
@@ -621,7 +760,7 @@ export class MetricsCollector {
             if (value <= bucket) {
                 histogram.buckets.set(
                     bucket,
-                    (histogram.buckets.get(bucket) || 0) + 1
+                    (histogram.buckets.get(bucket) || 0n) + 1n
                 );
             }
         }
@@ -662,7 +801,7 @@ export class MetricsCollector {
 
             // Simple rate calculation - could be more sophisticated
             if (windowMs > 0) {
-                counter.rate = (counter.value * 1000) / windowMs; // per second
+                counter.rate = (Number(counter.value) * 1000) / windowMs; // per second
             }
         }
 
@@ -693,7 +832,7 @@ export class MetricsCollector {
         // Initialize histogram if not exists
         if (!this.histograms.has(name)) {
             this.histograms.set(name, {
-                count: 0,
+                count: 0n,
                 sum: 0,
                 buckets: new Map(),
                 timestamps: [],
@@ -744,8 +883,11 @@ export interface HistogramSummary {
 }
 
 export interface EnhancedMetrics {
-    legacy: Metrics;
-    counters: Record<string, CounterMetric>;
+    legacy: Metrics & { uptime: number };
+    counters: Record<
+        string,
+        { value: string; rate?: number; lastIncrement: number }
+    >;
     gauges: Record<string, number>;
     histograms: Record<string, HistogramSummary | null>;
     metadata: Record<string, MetricMetadata>;

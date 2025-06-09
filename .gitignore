@@ -6,3 +6,6 @@ yarn.lock
 .DS_Store
 package-lock.json
 coverage/
+.pnp.*
+.yarn/
+test.patch

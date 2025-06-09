@@ -2,8 +2,12 @@
 
 //import { SpotWebsocketStreams } from "@binance/spot";
 import { BaseDetector } from "./baseDetector.js";
+import { DetectorUtils } from "./detectorUtils.js";
 import { Logger } from "../../infrastructure/logger.js";
-import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
+import {
+    MetricsCollector,
+    type Metrics,
+} from "../../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../../services/signalLogger.js";
 import { SpoofingDetector } from "../../services/spoofingDetector.js";
 import { RollingWindow } from "../../utils/rollingWindow.js";
@@ -533,8 +537,8 @@ export abstract class FlowDetectorBase extends BaseDetector {
         const price = triggerTrade.price;
         const side = this.getSignalSide();
 
-        // Check cooldown (your approach)
-        if (!this.checkCooldown(zone, side)) {
+        // Check cooldown (confirm later)
+        if (!this.checkCooldown(zone, side, false)) {
             return;
         }
 
@@ -567,10 +571,11 @@ export abstract class FlowDetectorBase extends BaseDetector {
             return;
         }
 
-        // Spoofing detection
+        // Spoofing detection (includes layering detection)
         if (
             this.isSpoofed &&
-            this.isSpoofed(price, side, triggerTrade.timestamp)
+            (this.isSpoofed(price, side, triggerTrade.timestamp) ||
+                this.detectLayeringAttack(price, side, triggerTrade.timestamp))
         ) {
             this.recordRejection("spoofing_detected");
             return;
@@ -975,33 +980,39 @@ export abstract class FlowDetectorBase extends BaseDetector {
     }
 
     private recordDetectionAttempt(): void {
-        this.metricsCollector.incrementCounter(
-            `${this.flowDirection}.detection.attempts`
+        this.metricsCollector.incrementMetric(
+            `${this.flowDirection}DetectionAttempts`
         );
-        this.metricsCollector.recordGauge(
-            `${this.flowDirection}.zones.active`,
+        this.metricsCollector.updateMetric(
+            `${this.flowDirection}ZonesActive`,
             this.zoneData.size
         );
-        this.metricsCollector.recordGauge(
-            `${this.flowDirection}.market.volatility`,
+        this.metricsCollector.updateMetric(
+            `${this.flowDirection}MarketVolatility`,
             this.marketRegime.volatility
         );
-        this.metricsCollector.recordGauge(
-            `${this.flowDirection}.market.trend_strength`,
+        this.metricsCollector.updateMetric(
+            `${this.flowDirection}MarketTrendStrength`,
             this.marketRegime.trendStrength
         );
     }
 
     private handleFlowDetectionError(error: Error): void {
         this.handleError(error, `${this.flowDirection}Detector.checkForSignal`);
-        this.metricsCollector.incrementCounter(
-            `${this.flowDirection}.detection.errors`
+        this.metricsCollector.incrementMetric(
+            `${this.flowDirection}DetectionErrors`
         );
     }
 
     private recordRejection(reason: string): void {
-        this.metricsCollector.incrementCounter(
-            `${this.flowDirection}.rejected.${reason}`
+        // Convert snake_case to PascalCase for metric names
+        const formattedReason = reason
+            .split("_")
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+            .join("");
+
+        this.metricsCollector.incrementMetric(
+            `${this.flowDirection}Rejected${formattedReason}` as keyof Metrics
         );
         this.logger.debug(`[${this.flowDirection}Detector] Signal rejected`, {
             reason,
@@ -1012,19 +1023,19 @@ export abstract class FlowDetectorBase extends BaseDetector {
         score: number,
         conditions: SuperiorFlowConditions
     ): void {
-        this.metricsCollector.incrementCounter(
-            `${this.flowDirection}.signals.generated`
+        this.metricsCollector.incrementMetric(
+            `${this.flowDirection}SignalsGenerated`
         );
         this.metricsCollector.recordHistogram(
-            `${this.flowDirection}.confidence.scores`,
+            `${this.flowDirection}ConfidenceScores`,
             score
         );
         this.metricsCollector.recordHistogram(
-            `${this.flowDirection}.duration`,
+            `${this.flowDirection}Duration`,
             conditions.duration
         );
         this.metricsCollector.recordHistogram(
-            `${this.flowDirection}.ratio`,
+            `${this.flowDirection}Ratio`,
             conditions.ratio
         );
     }
@@ -1273,8 +1284,11 @@ export class AccumulationDetectorV2 extends FlowDetectorBase {
         // For accumulation: price should show strength (hold up during buying pressure)
         if (zoneData.priceCount < 2) return 0;
 
-        const priceVariance =
-            zoneData.priceRollingVar / (zoneData.priceCount - 1);
+        const priceVariance = DetectorUtils.safeDivide(
+            zoneData.priceRollingVar,
+            zoneData.priceCount - 1,
+            0
+        );
         const priceStd = Math.sqrt(priceVariance);
 
         // Lower variance during accumulation = price strength
@@ -1368,8 +1382,11 @@ export class DistributionDetectorV2 extends FlowDetectorBase {
             avgPriceChange <= 0 ? Math.abs(avgPriceChange) * 100 : 0;
 
         // High variance during distribution can also indicate weakness/uncertainty
-        const priceVariance =
-            zoneData.priceRollingVar / (zoneData.priceCount - 1);
+        const priceVariance = DetectorUtils.safeDivide(
+            zoneData.priceRollingVar,
+            zoneData.priceCount - 1,
+            0
+        );
         const instabilityScore = Math.min(1, Math.sqrt(priceVariance) * 10);
 
         return Math.min(1, weaknessFromTrend * 0.7 + instabilityScore * 0.3);

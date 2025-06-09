@@ -46,13 +46,26 @@ Binance WebSocket → OrderFlowPreprocessor → Pattern Detectors → SignalCoor
 
 ### Pattern Detection System
 
-The system uses a factory pattern for detectors (`src/utils/detectorFactory.ts`) that creates instances of:
+The system uses both event-based and zone-based detection architectures:
+
+#### Event-Based Detectors (Traditional)
 
 - AbsorptionDetector - Large order absorption at key levels
 - ExhaustionDetector - Liquidity exhaustion patterns
-- AccumulationDetector - Smart money accumulation zones
-- DistributionDetector - Distribution patterns
 - DeltaCVDConfirmation - Volume delta confirmation
+- SupportResistanceDetector - Key price levels
+
+#### Zone-Based Detectors (Advanced)
+
+- **AccumulationZoneDetector** - Evolving accumulation zones over time and price ranges
+- **DistributionZoneDetector** - Evolving distribution zones over time and price ranges
+
+**Key Differences:**
+
+- Event-based: Point-in-time signals at specific prices
+- Zone-based: Evolving processes tracked across price ranges and time periods
+
+See [Zone-Based Architecture Documentation](docs/Zone-Based-Architecture.md) for comprehensive details.
 
 All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 
@@ -88,13 +101,28 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 
 ## Important Development Notes
 
+### Lint Strict
+
+Code must pass Lint stric, that means never use <any> types and use real types where possible instead of <unknown>.
+
 ### When Adding New Detectors
+
+#### Event-Based Detectors (Traditional)
 
 1. Extend `BaseDetector` class
 2. Implement the `detect(trade: EnrichedTradeEvent)` method
 3. Register in `DetectorFactory`
 4. Add configuration options to symbol config
 5. Include comprehensive tests
+
+#### Zone-Based Detectors (Advanced)
+
+1. Extend `EventEmitter` for zone event handling
+2. Implement `analyze(trade: EnrichedTradeEvent): ZoneAnalysisResult` method
+3. Use `ZoneManager` for lifecycle management
+4. Handle zone candidates and zone formation logic
+5. Emit zone updates and signals via WebSocket broadcasting
+6. See [Zone-Based Architecture Documentation](docs/Zone-Based-Architecture.md) for implementation details
 
 ### When Modifying Signal Processing
 
@@ -113,6 +141,7 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 - Update TypeScript interfaces in `src/types/configTypes.ts`
 - Validate new config options in `src/core/config.ts`
 - Document parameter ranges and effects in configuration comments
+- every class that has configurable options need to use /config.json
 
 ### WebSocket Management
 
@@ -131,3 +160,11 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 - When stream disconnects: health timeouts are extended to avoid false unhealthy states
 - When stream reconnects: OrderBookState automatically triggers recovery to rebuild order book
 - All components properly handle reconnection events to maintain system consistency
+
+### When these protection markers are in place, Claude Code should:
+
+- NEVER modify files marked with 🔒 PRODUCTION-READY
+- ALWAYS ask human approval before touching protected files
+- SUGGEST alternative approaches instead of direct modifications
+- RESPECT the .claude-protection configuration file
+- PRESERVE algorithmic integrity of trading logic

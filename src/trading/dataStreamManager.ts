@@ -10,6 +10,12 @@ import {
     BinanceAggTradeStream,
     BinanceDiffBookDepthStream,
 } from "../types/binanceTypes.js";
+import {
+    ApiConnectivityMonitor,
+    type ApiConnectivityConfig,
+    type ConnectivityStatus,
+    type ConnectivityIssue,
+} from "../infrastructure/apiConnectivityMonitor.js";
 
 /**
  * Enhanced connection states for better state management
@@ -38,6 +44,12 @@ export interface DataStreamConfig {
     streamHealthTimeout?: number;
     enableStreamHealthCheck?: boolean;
     reconnectOnHealthFailure?: boolean;
+    // Hard reload configuration
+    enableHardReload?: boolean;
+    hardReloadAfterAttempts?: number;
+    hardReloadCooldownMs?: number;
+    maxHardReloads?: number;
+    hardReloadRestartCommand?: string;
 }
 
 /**
@@ -61,7 +73,7 @@ export class DataStreamManager extends EventEmitter {
 
     // Enhanced state management
     private connectionState = ConnectionState.DISCONNECTED;
-    private reconnectAttempts = 0;
+    private reconnectAttempts = 0n;
     private connectedAt?: number;
     private lastReconnectAttempt = 0;
 
@@ -90,6 +102,9 @@ export class DataStreamManager extends EventEmitter {
         isHealthy: false,
     };
 
+    // API Connectivity Monitor
+    private connectivityMonitor: ApiConnectivityMonitor;
+
     constructor(
         private readonly config: DataStreamConfig,
         private readonly binanceFeed: IBinanceDataFeed,
@@ -107,6 +122,52 @@ export class DataStreamManager extends EventEmitter {
         this.streamHealthTimeout = config.streamHealthTimeout || 60000; // 1 minute
         this.enableStreamHealthCheck = config.enableStreamHealthCheck ?? true;
         this.reconnectOnHealthFailure = config.reconnectOnHealthFailure ?? true;
+
+        // Initialize API connectivity monitor
+        const connectivityConfig: ApiConnectivityConfig = {
+            tradeStaleThresholdMs: 30000, // 30 seconds - trades can be sparse
+            depthStaleThresholdMs: 10000, // 10 seconds - depth should be frequent
+            asymmetricDetectionMs: 20000, // 20 seconds to detect asymmetric issues
+            maxAllowedLagMs: 5000, // 5 seconds max lag between streams
+            syncCheckIntervalMs: 10000, // Check sync every 10 seconds
+            healthCheckIntervalMs: 15000, // Overall health check every 15 seconds
+            minHealthyScore: 0.7, // 70% minimum score for healthy
+            issueThrottleMs: 60000, // Don't repeat same issue within 1 minute
+        };
+
+        this.connectivityMonitor = new ApiConnectivityMonitor(
+            connectivityConfig,
+            logger,
+            metricsCollector
+        );
+
+        // Set up connectivity monitor event handlers
+        this.connectivityMonitor.on(
+            "connectivityIssue",
+            (issue: ConnectivityIssue) => {
+                this.handleConnectivityIssue(issue);
+            }
+        );
+
+        this.connectivityMonitor.on("healthy", (status: ConnectivityStatus) => {
+            this.logger.info("API connectivity restored", {
+                score: status.connectivityScore,
+            });
+            this.emit("healthy");
+        });
+
+        this.connectivityMonitor.on(
+            "unhealthy",
+            (status: ConnectivityStatus) => {
+                this.logger.warn("API connectivity degraded", {
+                    score: status.connectivityScore,
+                    tradeStale: status.tradeStreamHealth.isStale,
+                    depthStale: status.depthStreamHealth.isStale,
+                    lastIssue: status.lastIssueDetected?.type,
+                });
+                this.emit("unhealthy");
+            }
+        );
     }
 
     public async connect(): Promise<void> {
@@ -133,7 +194,7 @@ export class DataStreamManager extends EventEmitter {
                 "Connecting to Binance streams",
                 {
                     symbol: this.config.symbol,
-                    attempt: this.reconnectAttempts + 1,
+                    attempt: Number(this.reconnectAttempts + 1n),
                     state: this.connectionState,
                 },
                 correlationId
@@ -149,7 +210,7 @@ export class DataStreamManager extends EventEmitter {
             this.setupDataStreams();
 
             this.setConnectionState(ConnectionState.CONNECTED);
-            this.reconnectAttempts = 0;
+            this.reconnectAttempts = 0n;
             this.connectedAt = Date.now();
             this.resetStreamHealth();
 
@@ -165,7 +226,7 @@ export class DataStreamManager extends EventEmitter {
                 "Successfully connected to Binance streams",
                 {
                     symbol: this.config.symbol,
-                    reconnectAttempts: this.reconnectAttempts,
+                    reconnectAttempts: Number(this.reconnectAttempts),
                 },
                 correlationId
             );
@@ -178,14 +239,14 @@ export class DataStreamManager extends EventEmitter {
                 {
                     error,
                     symbol: this.config.symbol,
-                    attempt: this.reconnectAttempts + 1,
+                    attempt: Number(this.reconnectAttempts + 1n),
                     state: this.connectionState,
                 },
                 correlationId
             );
 
             // Don't throw on reconnection attempts, schedule next attempt instead
-            if (this.reconnectAttempts > 0) {
+            if (this.reconnectAttempts > 0n) {
                 this.scheduleReconnect();
                 return;
             }
@@ -207,6 +268,10 @@ export class DataStreamManager extends EventEmitter {
             to: newState,
             symbol: this.config.symbol,
         });
+
+        // Report WebSocket state to connectivity monitor
+        const isConnected = newState === ConnectionState.CONNECTED;
+        this.connectivityMonitor.onWebSocketStateChange(isConnected);
 
         this.metricsCollector.recordGauge(
             "stream.connection.state",
@@ -299,10 +364,15 @@ export class DataStreamManager extends EventEmitter {
     ): void {
         if (!data || data.s !== this.config.symbol) return;
 
+        const timestamp = Date.now();
+
         // Update stream health
-        this.streamHealth.lastTradeMessage = Date.now();
+        this.streamHealth.lastTradeMessage = timestamp;
         this.streamHealth.tradeMessageCount++;
         this.updateStreamHealthStatus();
+
+        // Report to connectivity monitor
+        this.connectivityMonitor.onTradeMessage(timestamp);
 
         this.emit("trade", data);
         this.metricsCollector.incrementCounter("stream.trade.messages");
@@ -313,10 +383,15 @@ export class DataStreamManager extends EventEmitter {
     ): void {
         if (!data || data.s !== this.config.symbol) return;
 
+        const timestamp = Date.now();
+
         // Update stream health
-        this.streamHealth.lastDepthMessage = Date.now();
+        this.streamHealth.lastDepthMessage = timestamp;
         this.streamHealth.depthMessageCount++;
         this.updateStreamHealthStatus();
+
+        // Report to connectivity monitor
+        this.connectivityMonitor.onDepthMessage(timestamp);
 
         this.emit("depth", data);
         this.metricsCollector.incrementCounter("stream.depth.messages");
@@ -404,12 +479,43 @@ export class DataStreamManager extends EventEmitter {
         }
 
         // Check if we've exceeded max attempts
-        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+        if (this.reconnectAttempts >= BigInt(this.maxReconnectAttempts)) {
             this.setConnectionState(ConnectionState.FAILED);
             const error = new ConnectionError(
                 `Max reconnection attempts (${this.maxReconnectAttempts}) exceeded`,
                 "binance_api"
             );
+
+            // Emit hard reload request if configured
+            const hardReloadAfterAttempts =
+                this.config.hardReloadAfterAttempts ??
+                this.maxReconnectAttempts;
+            if (
+                this.config.enableHardReload &&
+                this.reconnectAttempts >= BigInt(hardReloadAfterAttempts)
+            ) {
+                this.logger.error(
+                    "[DataStreamManager] Requesting hard reload after exhausted reconnection attempts",
+                    {
+                        symbol: this.config.symbol,
+                        reconnectAttempts: Number(this.reconnectAttempts),
+                        maxReconnectAttempts: this.maxReconnectAttempts,
+                    }
+                );
+
+                this.emit("hardReloadRequired", {
+                    reason: "max_reconnect_attempts_exceeded",
+                    component: "DataStreamManager",
+                    attempts: Number(this.reconnectAttempts),
+                    timestamp: Date.now(),
+                    metadata: {
+                        symbol: this.config.symbol,
+                        connectionState: this.connectionState,
+                        lastError: error.message,
+                    },
+                });
+            }
+
             this.emit("error", error);
             this.metricsCollector.incrementCounter(
                 "stream.reconnect.exhausted"
@@ -431,12 +537,18 @@ export class DataStreamManager extends EventEmitter {
         }
 
         this.reconnectAttempts++;
+
+        // Reset if approaching safe limits for serialization
+        if (this.reconnectAttempts > 9007199254740991n) {
+            this.reconnectAttempts = 0n;
+        }
         this.lastReconnectAttempt = now;
         this.setConnectionState(ConnectionState.RECONNECTING);
 
         // Enhanced exponential backoff with jitter
         const baseDelay =
-            this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+            this.reconnectDelay *
+            Math.pow(2, Number(this.reconnectAttempts - 1n));
         const cappedDelay = Math.min(baseDelay, this.maxBackoffDelay);
         const jitter = Math.random() * Math.min(cappedDelay * 0.1, 5000); // Up to 10% jitter, max 5s
         const delay = cappedDelay + jitter;
@@ -628,7 +740,7 @@ export class DataStreamManager extends EventEmitter {
 
         this.setConnectionState(ConnectionState.SHUTTING_DOWN);
         await this.cleanup();
-        this.reconnectAttempts = 0; // Reset for future connections
+        this.reconnectAttempts = 0n; // Reset for future connections
         this.emit("disconnected", "manual_disconnect");
     }
 
@@ -651,7 +763,7 @@ export class DataStreamManager extends EventEmitter {
         return {
             state: this.connectionState,
             isConnected: this.connectionState === ConnectionState.CONNECTED,
-            reconnectAttempts: this.reconnectAttempts,
+            reconnectAttempts: Number(this.reconnectAttempts),
             symbol: this.config.symbol,
             uptime: this.getUptime(),
             streamHealth: { ...this.streamHealth },
@@ -684,7 +796,7 @@ export class DataStreamManager extends EventEmitter {
             connection: {
                 state: this.connectionState,
                 uptime,
-                reconnectAttempts: this.reconnectAttempts,
+                reconnectAttempts: Number(this.reconnectAttempts),
                 lastReconnectAttempt: this.lastReconnectAttempt,
             },
             streams: {
@@ -717,6 +829,57 @@ export class DataStreamManager extends EventEmitter {
             this.handleConnectionClose();
         } else {
             await this.connect();
+        }
+    }
+
+    /**
+     * Handle connectivity issues from the monitor
+     */
+    private handleConnectivityIssue(issue: ConnectivityIssue): void {
+        this.logger.warn("API connectivity issue detected", {
+            type: issue.type,
+            severity: issue.severity,
+            description: issue.description,
+            affectedStreams: issue.affectedStreams,
+            suggestedAction: issue.suggestedAction,
+        });
+
+        // Emit specific connectivity issue event
+        this.emit("connectivityIssue", issue);
+
+        // Take action based on issue severity
+        if (
+            issue.severity === "critical" &&
+            issue.type === "both_streams_stale"
+        ) {
+            this.logger.error(
+                "Critical connectivity issue: both streams stale, attempting reconnection"
+            );
+            // Trigger reconnection for critical connectivity issues
+            void this.handleConnectionClose();
+        } else if (
+            issue.severity === "high" &&
+            issue.type === "asymmetric_streaming"
+        ) {
+            this.logger.warn(
+                "Asymmetric streaming detected, monitoring for escalation"
+            );
+        }
+    }
+
+    /**
+     * Get current API connectivity status
+     */
+    public getConnectivityStatus(): ConnectivityStatus {
+        return this.connectivityMonitor.getStatus();
+    }
+
+    /**
+     * Stop connectivity monitoring
+     */
+    public stopConnectivityMonitoring(): void {
+        if (this.connectivityMonitor) {
+            this.connectivityMonitor.stop();
         }
     }
 }

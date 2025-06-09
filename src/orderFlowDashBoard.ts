@@ -22,6 +22,12 @@ import { Logger } from "./infrastructure/logger.js";
 import { MetricsCollector } from "./infrastructure/metricsCollector.js";
 import { RateLimiter } from "./infrastructure/rateLimiter.js";
 import { CircuitBreaker } from "./infrastructure/circuitBreaker.js";
+import {
+    RecoveryManager,
+    type HardReloadEvent,
+} from "./infrastructure/recoveryManager.js";
+import { MicrostructureAnalyzer } from "./data/microstructureAnalyzer.js";
+import { IndividualTradesManager } from "./data/individualTradesManager.js";
 
 // Service imports
 import { DetectorFactory } from "./utils/detectorFactory.js";
@@ -44,20 +50,27 @@ import { AlertManager } from "./alerts/alertManager.js";
 // Indicator imports
 import { AbsorptionDetector } from "./indicators/absorptionDetector.js";
 import { ExhaustionDetector } from "./indicators/exhaustionDetector.js";
-import { DistributionDetector } from "./indicators/distributionDetector.js";
-import { AccumulationDetector } from "./indicators/accumulationDetector.js";
+// Legacy detectors removed - using zone-based architecture
 import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
+import { SupportResistanceDetector } from "./indicators/supportResistanceDetector.js";
+
+// Zone-based Detector imports
+import { AccumulationZoneDetector } from "./indicators/accumulationZoneDetector.js";
+import { DistributionZoneDetector } from "./indicators/distributionZoneDetector.js";
+import type {
+    AccumulationZone,
+    ZoneUpdate,
+    ZoneSignal,
+    ZoneAnalysisResult,
+} from "./types/zoneTypes.js";
 
 // Utils imports
 import { TradeData } from "./utils/utils.js";
-//import {
-//    calculateProfitTarget,
-//    calculateStopLoss,
-//} from "./utils/calculations.js";
 
 // Types
 import type { Dependencies } from "./types/dependencies.js";
-import type { Signal, AccumulationResult } from "./types/signalTypes.js";
+import type { Signal, ConfirmedSignal } from "./types/signalTypes.js";
+import type { ConnectivityIssue } from "./infrastructure/apiConnectivityMonitor.js";
 import type {
     TimeContext,
     DetectorRegisteredEvent,
@@ -73,11 +86,10 @@ import { runMigrations } from "./infrastructure/migrate.js";
 import { Storage } from "./storage/storage.js";
 import { PipelineStorage } from "./storage/pipelineStorage.js";
 import { BinanceDataFeed } from "./utils/binance.js";
+import { SignalTracker } from "./analysis/signalTracker.js";
+import { MarketContextCollector } from "./analysis/marketContextCollector.js";
 import { TradesProcessor } from "./clients/tradesProcessor.js";
-import {
-    OrderBookProcessor,
-    OrderBookProcessorOptions,
-} from "./clients/orderBookProcessor.js";
+import { OrderBookProcessor } from "./clients/orderBookProcessor.js";
 import { SignalLogger } from "./services/signalLogger.js";
 import type { WebSocketMessage } from "./utils/interfaces.js";
 import { SpoofingDetector } from "./services/spoofingDetector.js";
@@ -94,6 +106,7 @@ export class OrderFlowDashboard {
     private readonly httpServer = express();
     private readonly logger: Logger;
     private readonly metricsCollector: MetricsCollector;
+    private readonly recoveryManager: RecoveryManager;
 
     // Managers
     private readonly wsManager: WebSocketManager;
@@ -108,11 +121,16 @@ export class OrderFlowDashboard {
     private readonly signalCoordinator: SignalCoordinator;
     private readonly anomalyDetector: AnomalyDetector;
 
-    // Detectors
+    // Event-based Detectors (keep as-is)
     private readonly absorptionDetector: AbsorptionDetector;
     private readonly exhaustionDetector: ExhaustionDetector;
-    private readonly distributionDetector: DistributionDetector;
-    private readonly accumulationDetector: AccumulationDetector;
+    private readonly supportResistanceDetector: SupportResistanceDetector;
+
+    // Zone-based Detectors (new architecture)
+    private readonly accumulationZoneDetector: AccumulationZoneDetector;
+    private readonly distributionZoneDetector: DistributionZoneDetector;
+
+    // Legacy detectors removed - replaced by zone-based architecture
 
     // Indicators
     private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
@@ -130,6 +148,7 @@ export class OrderFlowDashboard {
     private readonly purgeIntervalMs = 10 * 60 * 1000; // 10 minutes
     private purgeIntervalId?: NodeJS.Timeout;
     private statsBroadcaster: StatsBroadcaster;
+    private lastTradePrice = 0; // Track last trade price for anomaly context
 
     public static async create(
         dependencies: Dependencies,
@@ -150,7 +169,9 @@ export class OrderFlowDashboard {
             Config.PREPROCESSOR,
             this.orderBook,
             dependencies.logger,
-            dependencies.metricsCollector
+            dependencies.metricsCollector,
+            dependencies.individualTradesManager,
+            dependencies.microstructureAnalyzer
         );
         this.logger.info(
             "[OrderFlowDashboard] Orderflow preprocessor initialized"
@@ -174,6 +195,21 @@ export class OrderFlowDashboard {
         this.logger = dependencies.logger;
         this.metricsCollector = dependencies.metricsCollector;
 
+        // Initialize recovery manager
+        this.recoveryManager = new RecoveryManager(
+            {
+                enableHardReload: Config.DATASTREAM.enableHardReload ?? false,
+                hardReloadCooldownMs:
+                    Config.DATASTREAM.hardReloadCooldownMs ?? 300000,
+                maxHardReloads: Config.DATASTREAM.maxHardReloads ?? 3,
+                hardReloadRestartCommand:
+                    Config.DATASTREAM.hardReloadRestartCommand ??
+                    "process.exit",
+            },
+            this.logger,
+            this.metricsCollector
+        );
+
         // Initialize coordinators
         this.signalCoordinator = dependencies.signalCoordinator;
         this.anomalyDetector = dependencies.anomalyDetector;
@@ -184,7 +220,8 @@ export class OrderFlowDashboard {
             this.logger,
             dependencies.rateLimiter,
             this.metricsCollector,
-            this.createWSHandlers()
+            this.createWSHandlers(),
+            (ws) => this.onClientConnected(ws)
         );
 
         this.signalManager = dependencies.signalManager;
@@ -201,7 +238,8 @@ export class OrderFlowDashboard {
             this.metricsCollector,
             this.dataStreamManager,
             this.wsManager,
-            this.logger
+            this.logger,
+            dependencies.signalTracker
         );
         DetectorFactory.initialize(dependencies);
 
@@ -216,7 +254,7 @@ export class OrderFlowDashboard {
         this.signalCoordinator.registerDetector(
             this.absorptionDetector,
             ["absorption"],
-            100,
+            60,
             true
         );
 
@@ -231,39 +269,12 @@ export class OrderFlowDashboard {
         this.signalCoordinator.registerDetector(
             this.exhaustionDetector,
             ["exhaustion"],
-            90,
+            100,
             true
         );
 
-        this.accumulationDetector = DetectorFactory.createAccumulationDetector(
-            (signal) => {
-                console.log("Accumulation signal:", signal);
-            },
-            Config.ACCUMULATION_DETECTOR,
-            dependencies,
-            { id: "ltcusdt-accumulation-main" }
-        );
-        this.signalCoordinator.registerDetector(
-            this.accumulationDetector,
-            ["accumulation"],
-            50,
-            true
-        );
-
-        this.distributionDetector = DetectorFactory.createDistributionDetector(
-            (signal) => {
-                console.log("Distribution signal:", signal);
-            },
-            Config.DISTRIBUTION_DETECTOR,
-            dependencies,
-            { id: "ltcusdt-distribution-main" }
-        );
-        this.signalCoordinator.registerDetector(
-            this.distributionDetector,
-            ["distribution"],
-            50,
-            true
-        );
+        // Legacy accumulation/distribution detectors removed
+        // Replaced by zone-based AccumulationZoneDetector and DistributionZoneDetector
 
         // Initialize other components
         this.deltaCVDConfirmation =
@@ -279,6 +290,57 @@ export class OrderFlowDashboard {
             this.deltaCVDConfirmation,
             ["cvd_confirmation"],
             30,
+            true
+        );
+
+        // Support/Resistance Detector
+        this.supportResistanceDetector =
+            DetectorFactory.createSupportResistanceDetector(
+                (signal) => {
+                    console.log("Support/Resistance level detected:", signal);
+                },
+                Config.SUPPORT_RESISTANCE_DETECTOR,
+                dependencies,
+                { id: "ltcusdt-support-resistance-main" }
+            );
+        this.signalCoordinator.registerDetector(
+            this.supportResistanceDetector,
+            ["support_resistance_level"],
+            10,
+            true
+        );
+
+        // Initialize Zone-based Detectors
+        this.accumulationZoneDetector =
+            DetectorFactory.createAccumulationDetector(
+                (signal) => {
+                    console.log("Accumulation zone detected:", signal);
+                },
+                Config.ACCUMULATION_ZONE_DETECTOR,
+                dependencies,
+                { id: "ltcusdt-accumulation-zone-main" }
+            );
+        this.signalCoordinator.registerDetector(
+            this.supportResistanceDetector,
+            ["accumulation"],
+            40,
+            true
+        );
+
+        // Initialize Zone-based Detectors
+        this.distributionZoneDetector =
+            DetectorFactory.createDistributionDetector(
+                (signal) => {
+                    console.log("Distribution zone detected:", signal);
+                },
+                Config.DISTRIBUTION_ZONE_DETECTOR,
+                dependencies,
+                { id: "ltcusdt-distribution-zone-main" }
+            );
+        this.signalCoordinator.registerDetector(
+            this.supportResistanceDetector,
+            ["distribution"],
+            40,
             true
         );
 
@@ -307,6 +369,131 @@ export class OrderFlowDashboard {
     private DeltaCVDConfirmationCallback = (event: unknown): void => {
         void event; //todo
     };
+
+    private onClientConnected(ws: ExtendedWebSocket): void {
+        try {
+            const backlogAmount =
+                Config.TRADES_PROCESSOR.backlogBatchSize ?? 1000;
+            let backlog =
+                this.dependencies.tradesProcessor.requestBacklog(backlogAmount);
+            backlog = backlog.reverse();
+            ws.send(
+                JSON.stringify({
+                    type: "backlog",
+                    data: backlog,
+                    now: Date.now(),
+                })
+            );
+
+            // Extended signal backlog for better client experience
+            const maxSignalBacklogAge = 90 * 60 * 1000; // 90 minutes (matches chart range)
+            const since = Math.max(
+                backlog.length > 0 ? backlog[0].time : Date.now(),
+                Date.now() - maxSignalBacklogAge
+            );
+
+            // Get more comprehensive signals and deduplicate
+            const signals =
+                this.dependencies.pipelineStore.getRecentConfirmedSignals(
+                    since,
+                    100 // Increased from 30 to 100 for better coverage
+                );
+            const deduplicatedSignals = this.deduplicateSignals(signals);
+
+            if (deduplicatedSignals.length > 0) {
+                this.logger.info(
+                    `Sending ${deduplicatedSignals.length} signals in backlog to client`,
+                    {
+                        clientId: ws.clientId,
+                        originalCount: signals.length,
+                        deduplicatedCount: deduplicatedSignals.length,
+                        timeWindow: `${maxSignalBacklogAge / 60000} minutes`,
+                    }
+                );
+
+                ws.send(
+                    JSON.stringify({
+                        type: "signal_backlog",
+                        data: deduplicatedSignals,
+                        now: Date.now(),
+                    })
+                );
+            }
+
+            // Send current active zones to new client
+            const accumulationZones =
+                this.accumulationZoneDetector.getActiveZones();
+            const distributionZones =
+                this.distributionZoneDetector.getActiveZones();
+            const allActiveZones = [...accumulationZones, ...distributionZones];
+
+            if (allActiveZones.length > 0) {
+                this.logger.info(
+                    `Sending ${allActiveZones.length} active zones to client`,
+                    {
+                        clientId: ws.clientId,
+                        accumulation: accumulationZones.length,
+                        distribution: distributionZones.length,
+                    }
+                );
+
+                for (const zone of allActiveZones) {
+                    ws.send(
+                        JSON.stringify({
+                            type: "zoneUpdate",
+                            data: {
+                                updateType: "zone_created",
+                                zone: {
+                                    id: zone.id,
+                                    type: zone.type,
+                                    priceRange: zone.priceRange,
+                                    strength: zone.strength,
+                                    completion: zone.completion,
+                                    confidence: zone.confidence,
+                                    significance: zone.significance,
+                                    totalVolume: zone.totalVolume,
+                                    timeInZone: zone.timeInZone,
+                                },
+                                significance: zone.significance,
+                                timestamp: Date.now(),
+                            },
+                            now: Date.now(),
+                        })
+                    );
+                }
+            }
+
+            // Send current support/resistance levels to new client
+            const currentLevels = this.supportResistanceDetector.getLevels();
+            if (currentLevels.length > 0) {
+                this.logger.info(
+                    `Sending ${currentLevels.length} support/resistance levels to client`,
+                    {
+                        clientId: ws.clientId,
+                        levels: currentLevels.map((l) => ({
+                            id: l.id,
+                            price: l.price,
+                            type: l.type,
+                            strength: l.strength,
+                        })),
+                    }
+                );
+
+                // Send each level as individual supportResistanceLevel messages
+                currentLevels.forEach((level) => {
+                    ws.send(
+                        JSON.stringify({
+                            type: "supportResistanceLevel",
+                            data: level,
+                            now: Date.now(),
+                        })
+                    );
+                });
+            }
+        } catch (error) {
+            this.handleError(error as Error, "on_connect_send");
+        }
+    }
 
     /**
      * Create WebSocket handlers
@@ -469,6 +656,48 @@ export class OrderFlowDashboard {
             this.handleError(error, "data_stream");
         });
 
+        // Handle hard reload requests from data stream manager
+        this.dataStreamManager.on(
+            "hardReloadRequired",
+            (event: HardReloadEvent) => {
+                this.handleHardReloadRequest(event);
+            }
+        );
+
+        // Handle recovery manager events
+        this.recoveryManager.on(
+            "hardReloadStarting",
+            (event: HardReloadEvent) => {
+                this.logger.error(
+                    "[OrderFlowDashboard] Hard reload starting, initiating graceful shutdown",
+                    {
+                        reason: event.reason,
+                        component: event.component,
+                    }
+                );
+                void this.gracefulShutdown();
+            }
+        );
+
+        this.recoveryManager.on(
+            "hardReloadLimitExceeded",
+            (event: HardReloadEvent) => {
+                this.logger.error(
+                    "[OrderFlowDashboard] Hard reload limit exceeded, system needs manual intervention",
+                    {
+                        reason: event.reason,
+                        component: event.component,
+                        hardReloadCount: (
+                            event as HardReloadEvent & {
+                                hardReloadCount: number;
+                            }
+                        ).hardReloadCount,
+                    }
+                );
+                // Could emit alert to external monitoring system here
+            }
+        );
+
         this.dataStreamManager.on("disconnected", (reason: string) => {
             this.logger.warn("[OrderFlowDashboard] Data stream disconnected", {
                 reason,
@@ -485,6 +714,14 @@ export class OrderFlowDashboard {
             );
             // Notify components that data stream is back up
             this.dependencies.tradesProcessor.emit("stream_connected");
+            void this.dependencies.tradesProcessor
+                .fillBacklog()
+                .catch((error) => {
+                    this.logger.error(
+                        "[OrderFlowDashboard] Failed to load missed trades",
+                        { error }
+                    );
+                });
             if (this.orderBook) {
                 void this.orderBook.recover().catch((error) => {
                     this.logger.error(
@@ -521,18 +758,43 @@ export class OrderFlowDashboard {
             );
         });
 
+        // Handle API connectivity issues
+        this.dataStreamManager.on(
+            "connectivityIssue",
+            (issue: ConnectivityIssue) => {
+                // Get current price for anomaly context - use last trade price or skip if no trades yet
+                if (this.lastTradePrice === 0) {
+                    this.logger.debug(
+                        "Skipping connectivity anomaly - no trades received yet"
+                    );
+                    return;
+                }
+                const currentPrice = this.lastTradePrice;
+
+                this.logger.warn("API connectivity issue detected", {
+                    type: issue.type,
+                    severity: issue.severity,
+                    description: issue.description,
+                    suggestedAction: issue.suggestedAction,
+                });
+
+                // Report to anomaly detector
+                this.anomalyDetector.onConnectivityIssue(issue, currentPrice);
+            }
+        );
+
         // Handle signal events
         // Handle data stream events
         if (!this.signalManager) {
             throw new Error("Signal Manager is not initialized");
         }
         // Listen to final trading signals
-        //this.signalManager.on("signalGenerated", (tradingSignal: Signal) => {
-        //    this.logger.info("Ready to trade:", { tradingSignal });
-        //    void this.broadcastSignal(tradingSignal).catch((error) => {
-        //        this.handleError(error as Error, "signal_broadcast");
-        //    });
-        //});
+        this.signalManager.on("signalGenerated", (tradingSignal: Signal) => {
+            this.logger.info("Ready to trade:", { tradingSignal });
+            void this.broadcastSignal(tradingSignal).catch((error) => {
+                this.handleError(error as Error, "signal_broadcast");
+            });
+        });
 
         this.signalManager.on(
             "signalRejected",
@@ -565,13 +827,29 @@ export class OrderFlowDashboard {
             this.preprocessor.on(
                 "enriched_trade",
                 (enrichedTrade: EnrichedTradeEvent) => {
-                    // TODO
+                    // Store last trade price for anomaly context
+                    this.lastTradePrice = enrichedTrade.price;
+
+                    // Feed trade data to event-based detectors
                     this.absorptionDetector.onEnrichedTrade(enrichedTrade);
                     this.anomalyDetector.onEnrichedTrade(enrichedTrade);
-                    this.accumulationDetector.onEnrichedTrade(enrichedTrade);
                     this.exhaustionDetector.onEnrichedTrade(enrichedTrade);
                     this.deltaCVDConfirmation.onEnrichedTrade(enrichedTrade);
-                    this.distributionDetector.onEnrichedTrade(enrichedTrade);
+                    this.supportResistanceDetector.onEnrichedTrade(
+                        enrichedTrade
+                    );
+
+                    // Legacy detectors removed - replaced by zone-based architecture
+
+                    // Process zone-based detectors (new architecture)
+                    const accumulationAnalysis =
+                        this.accumulationZoneDetector.analyze(enrichedTrade);
+                    const distributionAnalysis =
+                        this.distributionZoneDetector.analyze(enrichedTrade);
+
+                    // Handle zone updates and signals
+                    this.processZoneAnalysis(accumulationAnalysis);
+                    this.processZoneAnalysis(distributionAnalysis);
 
                     const aggTradeMessage: WebSocketMessage =
                         this.dependencies.tradesProcessor.onEnrichedTrade(
@@ -595,20 +873,7 @@ export class OrderFlowDashboard {
             );
         }
 
-        if (this.accumulationDetector) {
-            this.logger.info(
-                "[OrderFlowDashboard] Setting up accumulation detector event handlers..."
-            );
-            this.accumulationDetector.on(
-                "accumulation",
-                (event: AccumulationResult) => {
-                    //TODO make this robust
-                    this.logger.warn("Market accumulation detected:", {
-                        event,
-                    });
-                }
-            );
-        }
+        // Legacy accumulation detector event handler removed
 
         if (this.anomalyDetector) {
             this.logger.info(
@@ -617,12 +882,211 @@ export class OrderFlowDashboard {
             this.anomalyDetector.on("anomaly", (event: AnomalyEvent) => {
                 const message: WebSocketMessage = {
                     type: "anomaly",
-                    data: event,
+                    data: { ...event, details: event.details },
                     now: Date.now(),
                 };
                 this.wsManager.broadcast(message);
             });
         }
+
+        if (this.supportResistanceDetector) {
+            this.logger.info(
+                "[OrderFlowDashboard] Setting up support/resistance detector event handlers..."
+            );
+            this.supportResistanceDetector.on(
+                "supportResistanceLevel",
+                (event: {
+                    type: string;
+                    data: Record<string, unknown>;
+                    timestamp: Date;
+                }) => {
+                    const message: WebSocketMessage = {
+                        type: "supportResistanceLevel",
+                        data: event.data,
+                        now: Date.now(),
+                    };
+                    this.wsManager.broadcast(message);
+                    this.logger.info(
+                        "Support/Resistance level broadcasted via WebSocket",
+                        {
+                            levelId: event.data.id,
+                            price: event.data.price,
+                            type: event.data.type,
+                        }
+                    );
+                }
+            );
+        }
+
+        // Setup zone-based detector event handlers
+        this.setupZoneEventHandlers();
+    }
+
+    /**
+     * Process zone analysis results from zone-based detectors
+     */
+    private processZoneAnalysis(analysis: ZoneAnalysisResult): void {
+        try {
+            // Process zone updates
+            for (const update of analysis.updates) {
+                this.handleZoneUpdate(update);
+            }
+
+            // Process zone signals
+            for (const signal of analysis.signals) {
+                this.handleZoneSignal(signal);
+            }
+        } catch (error) {
+            this.logger.error("Error processing zone analysis", {
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }
+
+    /**
+     * Handle zone updates (creation, strengthening, completion, etc.)
+     */
+    private handleZoneUpdate(update: ZoneUpdate): void {
+        const zone = update.zone;
+
+        this.logger.info(`Zone ${update.updateType}`, {
+            component: "ZoneProcessor",
+            zoneId: zone.id,
+            type: zone.type,
+            updateType: update.updateType,
+            significance: update.significance,
+            strength: zone.strength.toFixed(3),
+            completion: zone.completion.toFixed(3),
+            priceCenter: zone.priceRange.center,
+            totalVolume: zone.totalVolume,
+        });
+
+        // Broadcast zone update to clients
+        const message: WebSocketMessage = {
+            type: "zoneUpdate",
+            data: {
+                updateType: update.updateType,
+                zone: {
+                    id: zone.id,
+                    type: zone.type,
+                    priceRange: zone.priceRange,
+                    strength: zone.strength,
+                    completion: zone.completion,
+                    confidence: zone.confidence,
+                    significance: zone.significance,
+                    isActive: zone.isActive,
+                    totalVolume: zone.totalVolume,
+                    timeInZone: zone.timeInZone,
+                },
+                significance: update.significance,
+                changeMetrics: update.changeMetrics,
+            },
+            now: Date.now(),
+        };
+
+        this.wsManager.broadcast(message);
+    }
+
+    /**
+     * Handle zone signals (entry, strength change, completion, etc.)
+     */
+    private handleZoneSignal(signal: ZoneSignal): void {
+        const zone = signal.zone;
+
+        this.logger.info(`Zone signal generated`, {
+            component: "ZoneProcessor",
+            zoneId: zone.id,
+            signalType: signal.signalType,
+            actionType: signal.actionType,
+            confidence: signal.confidence.toFixed(3),
+            urgency: signal.urgency,
+            expectedDirection: signal.expectedDirection,
+            zoneStrength: signal.zoneStrength.toFixed(3),
+        });
+
+        // Broadcast zone signal to clients
+        const message: WebSocketMessage = {
+            type: "zoneSignal",
+            data: {
+                signalType: signal.signalType,
+                actionType: signal.actionType,
+                confidence: signal.confidence,
+                urgency: signal.urgency,
+                timeframe: signal.timeframe,
+                expectedDirection: signal.expectedDirection,
+                zoneStrength: signal.zoneStrength,
+                completionLevel: signal.completionLevel,
+                positionSizing: signal.positionSizing,
+                stopLossLevel: signal.stopLossLevel,
+                takeProfitLevel: signal.takeProfitLevel,
+                zone: {
+                    id: zone.id,
+                    type: zone.type,
+                    priceRange: zone.priceRange,
+                    strength: zone.strength,
+                    completion: zone.completion,
+                    significance: zone.significance,
+                },
+            },
+            now: Date.now(),
+        };
+
+        this.wsManager.broadcast(message);
+    }
+
+    /**
+     * Setup event handlers for zone-based detectors
+     */
+    private setupZoneEventHandlers(): void {
+        // Accumulation Zone Events
+        this.accumulationZoneDetector.on(
+            "zoneCreated",
+            (zone: AccumulationZone) => {
+                this.logger.info("Accumulation zone created", {
+                    zoneId: zone.id,
+                    priceCenter: zone.priceRange.center,
+                    strength: zone.strength.toFixed(3),
+                    significance: zone.significance,
+                });
+            }
+        );
+
+        this.accumulationZoneDetector.on(
+            "zoneCompleted",
+            (zone: AccumulationZone) => {
+                this.logger.info("Accumulation zone completed", {
+                    zoneId: zone.id,
+                    finalStrength: zone.strength.toFixed(3),
+                    duration: zone.timeInZone,
+                    totalVolume: zone.totalVolume,
+                });
+            }
+        );
+
+        // Distribution Zone Events
+        this.distributionZoneDetector.on(
+            "zoneCreated",
+            (zone: AccumulationZone) => {
+                this.logger.info("Distribution zone created", {
+                    zoneId: zone.id,
+                    priceCenter: zone.priceRange.center,
+                    strength: zone.strength.toFixed(3),
+                    significance: zone.significance,
+                });
+            }
+        );
+
+        this.distributionZoneDetector.on(
+            "zoneCompleted",
+            (zone: AccumulationZone) => {
+                this.logger.info("Distribution zone completed", {
+                    zoneId: zone.id,
+                    finalStrength: zone.strength.toFixed(3),
+                    duration: zone.timeInZone,
+                    totalVolume: zone.totalVolume,
+                });
+            }
+        );
     }
 
     /**
@@ -644,6 +1108,9 @@ export class OrderFlowDashboard {
                     connections: this.wsManager.getConnectionCount(),
                     circuitBreakerState:
                         this.dependencies.circuitBreaker.getState(),
+                    dataStreamState:
+                        this.dataStreamManager?.getStatus()?.state ?? "unknown",
+                    recovery: this.recoveryManager.getStats(),
                     metrics: {
                         signalsGenerated: metrics.legacy.signalsGenerated,
                         averageLatency:
@@ -703,7 +1170,7 @@ export class OrderFlowDashboard {
 
         try {
             // Update detectors
-            if (this.preprocessor) this.preprocessor.handleAggTrade(data);
+            if (this.preprocessor) void this.preprocessor.handleAggTrade(data);
 
             const processingTime = Date.now() - startTime;
             this.metricsCollector.updateMetric(
@@ -788,7 +1255,7 @@ export class OrderFlowDashboard {
                         price: signal.price,
                         takeProfit: signal.takeProfit,
                         stopLoss: signal.stopLoss,
-                        label: signal.closeReason,
+                        label: signal.type,
                         correlationId,
                     },
                     correlationId
@@ -881,6 +1348,80 @@ export class OrderFlowDashboard {
             errorContext,
             correlationId
         );
+    }
+
+    /**
+     * Handle hard reload requests from components
+     */
+    private handleHardReloadRequest(event: HardReloadEvent): void {
+        this.logger.error("[OrderFlowDashboard] Hard reload requested", {
+            reason: event.reason,
+            component: event.component,
+            attempts: event.attempts,
+            metadata: event.metadata,
+        });
+
+        // Forward to recovery manager
+        const success = this.recoveryManager.requestHardReload(event);
+
+        if (!success) {
+            this.logger.warn(
+                "[OrderFlowDashboard] Hard reload request rejected by recovery manager",
+                {
+                    reason: event.reason,
+                    component: event.component,
+                }
+            );
+        }
+    }
+
+    /**
+     * Graceful shutdown before hard reload
+     */
+    private async gracefulShutdown(): Promise<void> {
+        this.logger.info(
+            "[OrderFlowDashboard] Starting graceful shutdown for hard reload"
+        );
+
+        try {
+            // Stop accepting new connections
+            if (this.wsManager) {
+                this.wsManager.shutdown();
+            }
+
+            // Disconnect data streams
+            if (this.dataStreamManager) {
+                await this.dataStreamManager.disconnect();
+            }
+
+            // Stop signal processing
+            if (this.signalCoordinator) {
+                // Signal coordinator doesn't have a stop method, but we can let pending signals finish
+                this.logger.info(
+                    "[OrderFlowDashboard] Allowing signal coordinator to finish pending signals"
+                );
+            }
+
+            // Clean up storage connections
+            if (this.dependencies?.storage) {
+                // Most storage implementations don't need explicit cleanup
+                this.logger.info(
+                    "[OrderFlowDashboard] Storage cleanup completed"
+                );
+            }
+
+            this.logger.info(
+                "[OrderFlowDashboard] Graceful shutdown completed"
+            );
+        } catch (error) {
+            this.logger.error(
+                "[OrderFlowDashboard] Error during graceful shutdown",
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
+        }
     }
 
     /**
@@ -1023,6 +1564,67 @@ export class OrderFlowDashboard {
             throw error;
         }
     }
+
+    /**
+     * Deduplicate confirmed signals based on price tolerance and time proximity
+     */
+    private deduplicateSignals(signals: ConfirmedSignal[]): ConfirmedSignal[] {
+        if (signals.length === 0) return signals;
+
+        const deduplicationConfig = {
+            priceTolerancePercent: 0.02, // 0.02% price tolerance
+            timeWindowMs: 30000, // 30 second time window
+        };
+
+        const deduplicated: ConfirmedSignal[] = [];
+
+        // Sort by time (newest first)
+        signals.sort((a, b) => b.confirmedAt - a.confirmedAt);
+
+        for (const signal of signals) {
+            let isDuplicate = false;
+
+            // Check against already added signals
+            for (const existingSignal of deduplicated) {
+                const timeDiff = Math.abs(
+                    signal.confirmedAt - existingSignal.confirmedAt
+                );
+                const priceDiff = Math.abs(
+                    signal.finalPrice - existingSignal.finalPrice
+                );
+                const priceThreshold =
+                    signal.finalPrice *
+                    (deduplicationConfig.priceTolerancePercent / 100);
+
+                // Also check if they have overlapping signal types
+                const signalTypes = new Set(
+                    signal.originalSignals.map((s) => s.type)
+                );
+                const existingTypes = new Set(
+                    existingSignal.originalSignals.map((s) => s.type)
+                );
+                const hasOverlappingTypes = [...signalTypes].some((type) =>
+                    existingTypes.has(type)
+                );
+
+                if (
+                    timeDiff <= deduplicationConfig.timeWindowMs &&
+                    priceDiff <= priceThreshold &&
+                    hasOverlappingTypes
+                ) {
+                    isDuplicate = true;
+                    break;
+                }
+            }
+
+            if (!isDuplicate) {
+                deduplicated.push(signal);
+            }
+        }
+
+        // Sort final result by time (newest first)
+        return deduplicated.sort((a, b) => b.confirmedAt - a.confirmedAt);
+    }
 }
 
 /**
@@ -1039,24 +1641,27 @@ export function createDependencies(): Dependencies {
     const pipelineStore = new PipelineStorage(db, {});
     const storage = new Storage(db);
     const spoofingDetector = new SpoofingDetector(Config.SPOOFING_DETECTOR);
+    const binanceFeed = new BinanceDataFeed();
+    const individualTradesManager = new IndividualTradesManager(
+        Config.INDIVIDUAL_TRADES_MANAGER,
+        logger,
+        metricsCollector,
+        binanceFeed
+    );
+    const microstructureAnalyzer = new MicrostructureAnalyzer(
+        Config.MICROSTRUCTURE_ANALYZER,
+        logger,
+        metricsCollector
+    );
 
     const orderBookProcessor = new OrderBookProcessor(
-        {
-            binSize: 10,
-            numLevels: 10,
-            maxBufferSize: 1000,
-            tickSize: Config.TICK_SIZE,
-            precision: Config.PRICE_PRECISION,
-        } as OrderBookProcessorOptions,
+        Config.ORDERBOOK_PROCESSOR,
         logger,
         metricsCollector
     );
 
     const tradesProcessor = new TradesProcessor(
-        {
-            symbol: Config.SYMBOL,
-            storageTime: Config.MAX_STORAGE_TIME,
-        },
+        Config.TRADES_PROCESSOR,
         storage,
         logger,
         metricsCollector
@@ -1072,32 +1677,31 @@ export function createDependencies(): Dependencies {
         parseInt(process.env.ALERT_COOLDOWN_MS || "300000", 10)
     );
 
-    // TODO
+    // Create SignalTracker and MarketContextCollector for performance analysis
+    const signalTracker = new SignalTracker(
+        logger,
+        metricsCollector,
+        pipelineStore
+    );
+
+    const marketContextCollector = new MarketContextCollector(
+        logger,
+        metricsCollector
+    );
+
     const signalManager = new SignalManager(
         anomalyDetector,
         alertManager,
         logger,
         metricsCollector,
         pipelineStore,
-        {
-            confidenceThreshold: 0.75,
-            enableAlerts: true,
-        }
+        signalTracker,
+        marketContextCollector,
+        Config.SIGNAL_MANAGER
     );
 
-    /*
-    config: Partial<SignalCoordinatorConfig> = {},
-        logger: Logger,
-        metricsCollector: MetricsCollector,
-        signalLogger: SignalLogger,
-        signalManager: SignalManager,
-        detectorFactory: DetectorFactory,
-)
-*/
     const signalCoordinator = new SignalCoordinator(
-        {
-            maxConcurrentProcessing: 10, // TODO
-        },
+        Config.SIGNAL_COORDINATOR,
         logger,
         metricsCollector,
         signalLogger,
@@ -1107,7 +1711,7 @@ export function createDependencies(): Dependencies {
 
     return {
         storage,
-        binanceFeed: new BinanceDataFeed(),
+        pipelineStore,
         tradesProcessor,
         orderBookProcessor,
         signalLogger,
@@ -1120,6 +1724,11 @@ export function createDependencies(): Dependencies {
         anomalyDetector,
         signalManager,
         spoofingDetector,
+        individualTradesManager,
+        microstructureAnalyzer,
+        binanceFeed,
+        signalTracker,
+        marketContextCollector,
     };
 }
 

@@ -24,22 +24,10 @@ export type SignalType =
     | "swingLow"
     | "cvd_confirmation"
     | "cvd_confirmation_confirmed"
+    | "support_resistance_level"
     | "generic";
 
 export type SignalSide = "buy" | "sell";
-
-export type CloseReason =
-    | "take_profit"
-    | "stop_loss"
-    | "opposite_signal"
-    | "end_of_data"
-    | "invalidated"
-    | "exhaustion"
-    | "absorption"
-    | "delta_divergence"
-    | "cvd_slope_reversal"
-    | "both"
-    | "swing_detection";
 
 export interface Signal {
     id: string; // unique for each signal instance
@@ -52,7 +40,6 @@ export interface Signal {
     stopLoss?: number;
     takeProfit?: number;
     timeframe?: "Daytime" | "Nighttime";
-    closeReason?: CloseReason;
     totalAggressiveVolume?: number;
     passiveVolume?: number;
     refilled?: boolean;
@@ -73,6 +60,7 @@ export interface AbsorptionSignalData {
     refilled: boolean;
     confidence: number;
     metrics: Record<string, unknown>;
+    meta?: Record<string, unknown>;
 }
 
 export interface ExhaustionSignalData {

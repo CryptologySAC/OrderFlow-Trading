@@ -115,6 +115,9 @@ export class SignalCoordinator extends EventEmitter {
     private isRunning = false;
     private processingTick: NodeJS.Timeout | null = null;
     private readonly shutdownPromises: Promise<void>[] = [];
+    private readonly processListeners = new Map<string, () => void>();
+    private readonly errorHandler = (err: Error) =>
+        this.logger.error("SignalCoordinator error", { err });
 
     constructor(
         partialCfg: Partial<SignalCoordinatorConfig>,
@@ -270,6 +273,22 @@ export class SignalCoordinator extends EventEmitter {
         const reg = this.detectors.get(detector.getId());
         if (!reg || !reg.enabled) return;
 
+        // Track signal candidates received by type
+        this.metrics.incrementCounter(
+            "signal_coordinator_signals_received_total",
+            1,
+            {
+                detector_id: detector.getId(),
+                signal_type: candidate.type,
+                priority: reg.priority.toString(),
+            }
+        );
+        // Also track per-type totals for easier stats aggregation
+        this.metrics.incrementCounter(
+            `signal_coordinator_signals_received_total_${candidate.type}`,
+            1
+        );
+
         if (!reg.signalTypes.includes(candidate.type)) {
             this.logger.warn("Unsupported signalType from detector", {
                 detectorId: detector.getId(),
@@ -350,7 +369,38 @@ export class SignalCoordinator extends EventEmitter {
                 processingMs: Date.now() - start,
                 retry: job.retryCount,
             });
-            this.signalManager.handleProcessedSignal(processed);
+            const confirmed =
+                this.signalManager.handleProcessedSignal(processed);
+
+            if (confirmed) {
+                const data = processed.data as unknown as Record<
+                    string,
+                    unknown
+                >;
+                let zone = 0;
+                if (typeof data === "object" && data !== null) {
+                    if ("zone" in data && typeof data.zone === "number") {
+                        zone = data.zone;
+                    } else if (
+                        "price" in data &&
+                        typeof data.price === "number"
+                    ) {
+                        zone = data.price;
+                    }
+                }
+
+                let side: "buy" | "sell" = "buy";
+                if (
+                    typeof data === "object" &&
+                    data !== null &&
+                    "side" in data &&
+                    (data.side === "buy" || data.side === "sell")
+                ) {
+                    side = data.side;
+                }
+
+                detector.markSignalConfirmed(zone, side);
+            }
 
             this.metrics.incrementCounter(
                 "signal_coordinator_signals_processed_total",
@@ -360,6 +410,11 @@ export class SignalCoordinator extends EventEmitter {
                     signal_type: candidate.type,
                     ok: "1",
                 }
+            );
+            // Per-type processed counter
+            this.metrics.incrementCounter(
+                `signal_coordinator_signals_processed_total_${candidate.type}`,
+                1
             );
             this.metrics.recordHistogram(
                 "signal_coordinator_processing_duration_seconds",
@@ -499,16 +554,16 @@ export class SignalCoordinator extends EventEmitter {
     }
 
     private setupEventHandlers(): void {
-        this.on("error", (err: Error) =>
-            this.logger.error("SignalCoordinator error", { err })
-        );
+        this.on("error", this.errorHandler);
 
-        ["SIGTERM", "SIGINT"].forEach((sig) =>
-            process.on(sig, () => {
+        ["SIGTERM", "SIGINT"].forEach((sig) => {
+            const handler = () => {
                 this.logger.info(`${sig} received – shutting down…`);
                 void this.stop();
-            })
-        );
+            };
+            this.processListeners.set(sig, handler);
+            process.on(sig, handler);
+        });
     }
 
     private initializeMetrics(): void {
@@ -590,5 +645,27 @@ export class SignalCoordinator extends EventEmitter {
             queueSize: this.queue.size,
             activeJobs: this.active.size,
         };
+    }
+
+    /**
+     * Cleanup event listeners and internal state
+     */
+    public async cleanup(): Promise<void> {
+        await this.stop();
+
+        for (const reg of this.detectors.values()) {
+            reg.detector.removeAllListeners();
+        }
+        this.detectors.clear();
+
+        for (const [sig, handler] of this.processListeners) {
+            process.off(sig, handler);
+        }
+        this.processListeners.clear();
+
+        this.off("error", this.errorHandler);
+        this.removeAllListeners();
+
+        this.logger.info("SignalCoordinator cleanup completed");
     }
 }

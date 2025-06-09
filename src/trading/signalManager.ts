@@ -12,11 +12,19 @@ import { AnomalyDetector } from "../services/anomalyDetector.js";
 import { AlertManager } from "../alerts/alertManager.js";
 import { Logger } from "../infrastructure/logger.js";
 import type { IPipelineStorage } from "../storage/pipelineStorage.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import {
+    MetricsCollector,
+    type EnhancedMetrics,
+} from "../infrastructure/metricsCollector.js";
 import {
     calculateProfitTarget,
     calculateStopLoss,
 } from "../utils/calculations.js";
+import type {
+    SignalTracker,
+    PerformanceMetrics,
+} from "../analysis/signalTracker.js";
+import type { MarketContextCollector } from "../analysis/marketContextCollector.js";
 
 export interface SignalManagerConfig {
     confidenceThreshold?: number;
@@ -41,10 +49,16 @@ export class SignalManager extends EventEmitter {
     private readonly recentSignals = new Map<string, ProcessedSignal>();
     private readonly correlations = new Map<string, SignalCorrelation>();
     private readonly signalHistory: ProcessedSignal[] = [];
+    private lastRejectReason?: string;
 
     // Keep track of signals for correlation analysis
     private readonly maxHistorySize = 100;
     private readonly correlationWindowMs = 60000; // 1 minute
+
+    // Signal throttling and deduplication
+    private readonly recentTradingSignals = new Map<string, number>(); // signalKey -> timestamp
+    private readonly signalThrottleMs = 30000; // 30 seconds minimum between similar signals
+    private readonly priceTolerancePercent = 0.02; // 0.02% price tolerance for duplicates - very tight for precise deduplication
 
     constructor(
         private readonly anomalyDetector: AnomalyDetector,
@@ -52,6 +66,8 @@ export class SignalManager extends EventEmitter {
         private readonly logger: Logger,
         private readonly metricsCollector: MetricsCollector,
         private readonly storage: IPipelineStorage,
+        private readonly signalTracker?: SignalTracker,
+        private readonly marketContextCollector?: MarketContextCollector,
         config: Partial<SignalManagerConfig> = {}
     ) {
         super();
@@ -79,6 +95,7 @@ export class SignalManager extends EventEmitter {
         setInterval(() => {
             this.cleanupOldSignals();
             this.storage.purgeSignalHistory();
+            this.storage.purgeConfirmedSignals();
         }, 60000); // Every minute
     }
 
@@ -87,6 +104,7 @@ export class SignalManager extends EventEmitter {
      * No complex anomaly enhancement, just health-based allow/block decisions.
      */
     public processSignal(signal: ProcessedSignal): ConfirmedSignal | null {
+        this.lastRejectReason = undefined;
         try {
             // 1. Market health check (infrastructure safety)
             if (!this.checkMarketHealth()) {
@@ -97,21 +115,39 @@ export class SignalManager extends EventEmitter {
                 });
 
                 this.recordMetric("signal_blocked_by_health", signal.type);
+                this.recordDetailedSignalMetrics(
+                    signal,
+                    "blocked",
+                    "unhealthy_market"
+                );
+                this.lastRejectReason = "unhealthy_market";
                 return null;
             }
 
-            // 2. Confidence threshold check
-            if (signal.confidence < this.config.confidenceThreshold) {
+            // 2. Confidence threshold check (with floating-point rounding)
+            const roundedConfidence = Math.round(signal.confidence * 100) / 100;
+            const roundedThreshold =
+                Math.round(this.config.confidenceThreshold * 100) / 100;
+
+            if (roundedConfidence < roundedThreshold) {
                 this.logger.debug("Signal rejected due to low confidence", {
                     signalId: signal.id,
                     confidence: signal.confidence,
+                    roundedConfidence,
                     threshold: this.config.confidenceThreshold,
+                    roundedThreshold,
                 });
 
                 this.recordMetric(
                     "signal_rejected_low_confidence",
                     signal.type
                 );
+                this.recordDetailedSignalMetrics(
+                    signal,
+                    "rejected",
+                    "low_confidence"
+                );
+                this.lastRejectReason = "low_confidence";
                 return null;
             }
 
@@ -126,13 +162,25 @@ export class SignalManager extends EventEmitter {
 
             // 5. Log and emit metrics
             this.logSignalProcessing(signal, confirmedSignal);
-
+            this.recordDetailedSignalMetrics(
+                signal,
+                "confirmed",
+                undefined,
+                confirmedSignal
+            );
+            this.lastRejectReason = undefined;
             return confirmedSignal;
         } catch (error) {
             this.logger.error("Failed to process signal", {
                 signalId: signal.id,
                 error: error instanceof Error ? error.message : String(error),
             });
+            this.recordDetailedSignalMetrics(
+                signal,
+                "rejected",
+                "processing_error"
+            );
+            this.lastRejectReason = "processing_error";
             return null;
         }
     }
@@ -147,11 +195,12 @@ export class SignalManager extends EventEmitter {
         try {
             const health = this.anomalyDetector.getMarketHealth();
 
-            // Block trading for infrastructure issues or insufficient data
+            // Block trading only for critical issues or insufficient data
             if (
-                health.recommendation === "pause" ||
                 health.recommendation === "close_positions" ||
-                health.recommendation === "insufficient_data"
+                health.recommendation === "insufficient_data" ||
+                health.highestSeverity === "critical" ||
+                health.criticalIssues.length > 0
             ) {
                 return false;
             }
@@ -226,7 +275,37 @@ export class SignalManager extends EventEmitter {
             },
         };
 
+        // Ensure signals are persisted before emitting to prevent backlog issues
         this.storage.saveSignalHistory(signal);
+        this.storage.saveConfirmedSignal(confirmedSignal);
+
+        // Track signal performance if tracker is available
+        if (this.signalTracker && this.marketContextCollector) {
+            try {
+                const marketContext =
+                    this.marketContextCollector.getCurrentMarketContext(
+                        confirmedSignal.finalPrice,
+                        confirmedSignal.confirmedAt
+                    );
+                this.signalTracker.onSignalGenerated(
+                    confirmedSignal,
+                    marketContext
+                );
+
+                this.logger.debug("Signal tracking initiated", {
+                    signalId: confirmedSignal.id,
+                    price: confirmedSignal.finalPrice,
+                    confidence: confirmedSignal.confidence,
+                });
+            } catch (error) {
+                this.logger.error("Failed to initiate signal tracking", {
+                    signalId: confirmedSignal.id,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                });
+            }
+        }
+
         return confirmedSignal;
     }
 
@@ -274,7 +353,10 @@ export class SignalManager extends EventEmitter {
      * Handle processed signal from SignalCoordinator.
      * This is the main entry point for signals from the coordinator.
      */
-    public handleProcessedSignal(signal: ProcessedSignal): void {
+    public handleProcessedSignal(
+        signal: ProcessedSignal
+    ): ConfirmedSignal | null {
+        let confirmedSignal: ConfirmedSignal | null = null;
         try {
             this.logger.info("Handling processed signal", {
                 component: "SignalManager",
@@ -293,23 +375,48 @@ export class SignalManager extends EventEmitter {
                     detector_id: signal.detectorId,
                 }
             );
+            // Track received signals by type for stats page
+            this.metricsCollector.incrementCounter(
+                `signal_manager_signals_received_total_${signal.type}`,
+                1
+            );
 
             // Store signal for correlation analysis
             this.storeSignal(signal);
 
             // Process signal through simplified pipeline
-            const confirmedSignal = this.processSignal(signal);
+            confirmedSignal = this.processSignal(signal);
 
             if (!confirmedSignal) {
                 this.emit("signalRejected", {
                     signal,
-                    reason: "processing_failed",
+                    reason: this.lastRejectReason ?? "processing_failed",
                 });
-                return;
+                return null;
             }
 
             // Generate final trading signal
             const tradingSignal = this.createTradingSignal(confirmedSignal);
+
+            // Check for duplicate/throttled signals
+            if (this.isSignalThrottled(tradingSignal)) {
+                this.logger.info("Signal throttled to prevent duplicates", {
+                    signalId: tradingSignal.id,
+                    type: tradingSignal.type,
+                    price: tradingSignal.price,
+                    side: tradingSignal.side,
+                });
+                this.recordDetailedSignalMetrics(
+                    signal,
+                    "rejected",
+                    "throttled_duplicate"
+                );
+                this.lastRejectReason = "throttled_duplicate";
+                return null;
+            }
+
+            // Record this signal to prevent future duplicates
+            this.recordTradingSignal(tradingSignal);
 
             this.metricsCollector.incrementCounter(
                 "signal_manager_signals_confirmed_total",
@@ -319,6 +426,11 @@ export class SignalManager extends EventEmitter {
                     detector_id: signal.detectorId,
                     trading_side: tradingSignal.side,
                 }
+            );
+            // Track confirmed signals by type
+            this.metricsCollector.incrementCounter(
+                `signal_manager_signals_confirmed_total_${signal.type}`,
+                1
             );
 
             this.metricsCollector.recordHistogram(
@@ -356,7 +468,7 @@ export class SignalManager extends EventEmitter {
                 confidence: confirmedSignal.confidence,
                 marketHealth: confirmedSignal.anomalyData.marketHealthy,
             });
-        } catch (error) {
+        } catch (error: unknown) {
             this.logger.error("Failed to handle processed signal", {
                 component: "SignalManager",
                 operation: "handleProcessedSignal",
@@ -380,6 +492,10 @@ export class SignalManager extends EventEmitter {
             this.emit("signalError", { signal, error });
             throw error;
         }
+
+        const result = confirmedSignal;
+
+        return result;
     }
 
     /**
@@ -416,16 +532,48 @@ export class SignalManager extends EventEmitter {
             throw new Error("No original signal found");
         }
 
-        // Determine trading direction based on signal type
-        const side: "buy" | "sell" = this.getSignalDirection(
-            originalSignal.type
-        );
+        // Determine trading direction from signal data if available, otherwise use signal type
+        const side: "buy" | "sell" =
+            this.getSignalDirectionFromData(originalSignal);
 
-        const profitTarget = calculateProfitTarget(
+        // Validate finalPrice before calculating TP/SL
+        if (
+            !confirmedSignal.finalPrice ||
+            isNaN(confirmedSignal.finalPrice) ||
+            confirmedSignal.finalPrice <= 0
+        ) {
+            this.logger.error("Invalid finalPrice for signal calculations", {
+                signalId: confirmedSignal.id,
+                finalPrice: confirmedSignal.finalPrice,
+                side,
+            });
+            throw new Error(
+                `Invalid finalPrice: ${confirmedSignal.finalPrice}`
+            );
+        }
+
+        const profitTargetData = calculateProfitTarget(
             confirmedSignal.finalPrice,
             side
         );
         const stopLoss = calculateStopLoss(confirmedSignal.finalPrice, side);
+
+        // Extract price from profit target calculation result
+        const profitTarget = profitTargetData.price;
+
+        // Validate calculated values
+        if (isNaN(profitTarget) || isNaN(stopLoss)) {
+            this.logger.error("Invalid TP/SL calculations", {
+                signalId: confirmedSignal.id,
+                finalPrice: confirmedSignal.finalPrice,
+                side,
+                profitTarget,
+                stopLoss,
+            });
+            throw new Error(
+                `Invalid TP/SL calculations: TP=${profitTarget}, SL=${stopLoss}`
+            );
+        }
 
         const signalData: TradingSignalData = {
             confidence: confirmedSignal.confidence,
@@ -443,9 +591,8 @@ export class SignalManager extends EventEmitter {
             time: confirmedSignal.confirmedAt,
             price: confirmedSignal.finalPrice,
             type: this.getSignalTypeConfirmed(originalSignal.type),
-            takeProfit: profitTarget.price,
+            takeProfit: profitTarget,
             stopLoss,
-            closeReason: "swing_detection",
             signalData,
         };
 
@@ -453,7 +600,28 @@ export class SignalManager extends EventEmitter {
     }
 
     /**
-     * Get trading direction based on signal type.
+     * Get trading direction from signal data or fallback to signal type.
+     */
+    private getSignalDirectionFromData(
+        signal: ConfirmedSignal["originalSignals"][0]
+    ): "buy" | "sell" {
+        // Try to extract side from signal metadata first (metadata = signal.data from detector)
+        if (signal.metadata && typeof signal.metadata === "object") {
+            const metadata = signal.metadata as unknown as Record<
+                string,
+                unknown
+            >;
+            if (metadata.side === "buy" || metadata.side === "sell") {
+                return metadata.side;
+            }
+        }
+
+        // Fallback to signal type-based direction
+        return this.getSignalDirection(signal.type);
+    }
+
+    /**
+     * Get trading direction based on signal type (fallback method).
      */
     private getSignalDirection(signalType: SignalType): "buy" | "sell" {
         switch (signalType) {
@@ -526,6 +694,160 @@ export class SignalManager extends EventEmitter {
     }
 
     /**
+     * Check if a trading signal should be throttled to prevent duplicates.
+     */
+    private isSignalThrottled(tradingSignal: Signal): boolean {
+        const signalKey = this.generateSignalKey(tradingSignal);
+        const now = Date.now();
+
+        this.logger.debug("Checking signal throttling", {
+            signalId: tradingSignal.id,
+            signalKey,
+            type: tradingSignal.type,
+            side: tradingSignal.side,
+            price: tradingSignal.price,
+            recentSignalsCount: this.recentTradingSignals.size,
+        });
+
+        // Check if we have a recent similar signal
+        const lastSignalTime = this.recentTradingSignals.get(signalKey);
+        if (lastSignalTime && now - lastSignalTime < this.signalThrottleMs) {
+            const timeDiff = now - lastSignalTime;
+            this.logger.info("Signal throttled - exact match found", {
+                signalId: tradingSignal.id,
+                signalKey,
+                timeSinceLastMs: timeDiff,
+                throttleWindowMs: this.signalThrottleMs,
+            });
+            return true; // Signal is throttled
+        }
+
+        // Check for similar signals with price tolerance
+        for (const [
+            existingKey,
+            timestamp,
+        ] of this.recentTradingSignals.entries()) {
+            if (now - timestamp < this.signalThrottleMs) {
+                if (this.areSignalsSimilar(tradingSignal, existingKey)) {
+                    const timeDiff = now - timestamp;
+                    this.logger.info(
+                        "Signal throttled - similar signal found",
+                        {
+                            signalId: tradingSignal.id,
+                            newSignalKey: signalKey,
+                            existingKey,
+                            timeSinceLastMs: timeDiff,
+                            throttleWindowMs: this.signalThrottleMs,
+                        }
+                    );
+                    return true; // Similar signal found within throttle window
+                }
+            }
+        }
+
+        this.logger.debug("Signal not throttled - proceeding", {
+            signalId: tradingSignal.id,
+            signalKey,
+        });
+        return false;
+    }
+
+    /**
+     * Record a trading signal to prevent future duplicates.
+     */
+    private recordTradingSignal(tradingSignal: Signal): void {
+        const signalKey = this.generateSignalKey(tradingSignal);
+        const timestamp = Date.now();
+        this.recentTradingSignals.set(signalKey, timestamp);
+
+        this.logger.debug("Recorded trading signal for throttling", {
+            signalId: tradingSignal.id,
+            signalKey,
+            timestamp,
+            totalRecordedSignals: this.recentTradingSignals.size,
+        });
+
+        // Clean up old entries periodically
+        this.cleanupThrottledSignals();
+    }
+
+    /**
+     * Generate a unique key for signal deduplication.
+     */
+    private generateSignalKey(tradingSignal: Signal): string {
+        const priceKey = Math.round(tradingSignal.price * 100);
+        const key = `${tradingSignal.type}_${tradingSignal.side}_${priceKey}`;
+
+        this.logger.debug("Generated signal key", {
+            signalId: tradingSignal.id,
+            type: tradingSignal.type,
+            side: tradingSignal.side,
+            originalPrice: tradingSignal.price,
+            priceKey,
+            generatedKey: key,
+        });
+
+        return key;
+    }
+
+    /**
+     * Check if two signals are similar enough to be considered duplicates.
+     */
+    private areSignalsSimilar(
+        tradingSignal: Signal,
+        existingKey: string
+    ): boolean {
+        const parts = existingKey.split("_");
+        const priceStr = parts.pop();
+        const side = parts.pop();
+        const type = parts.join("_");
+
+        const existingPrice = priceStr ? parseInt(priceStr, 10) / 100 : NaN;
+
+        // Check if same type and side
+        if (tradingSignal.type !== type || tradingSignal.side !== side) {
+            this.logger.debug("Signals not similar - different type/side", {
+                newType: tradingSignal.type,
+                newSide: tradingSignal.side,
+                existingType: type,
+                existingSide: side,
+            });
+            return false;
+        }
+
+        // Check if prices are within tolerance
+        const priceDiff = Math.abs(tradingSignal.price - existingPrice);
+        const priceToleranceAbs =
+            existingPrice * (this.priceTolerancePercent / 100);
+        const isSimilar = priceDiff <= priceToleranceAbs;
+
+        this.logger.debug("Price similarity check", {
+            newPrice: tradingSignal.price,
+            existingPrice,
+            priceDiff,
+            priceToleranceAbs,
+            priceTolerancePercent: this.priceTolerancePercent,
+            isSimilar,
+        });
+
+        return isSimilar;
+    }
+
+    /**
+     * Clean up old throttled signals.
+     */
+    private cleanupThrottledSignals(): void {
+        const now = Date.now();
+        const cutoff = now - this.signalThrottleMs * 2; // Keep for 2x throttle period
+
+        for (const [key, timestamp] of this.recentTradingSignals.entries()) {
+            if (timestamp < cutoff) {
+                this.recentTradingSignals.delete(key);
+            }
+        }
+    }
+
+    /**
      * Clean up old signals and correlations.
      */
     private cleanupOldSignals(): void {
@@ -561,7 +883,7 @@ export class SignalManager extends EventEmitter {
     }
 
     /**
-     * Record signal processing metrics.
+     * Enhanced signal metrics recording with detailed statistics.
      */
     private recordMetric(metricName: string, signalType: string): void {
         this.metricsCollector.incrementCounter(
@@ -569,6 +891,324 @@ export class SignalManager extends EventEmitter {
             1,
             { signal_type: signalType }
         );
+    }
+
+    /**
+     * Record detailed signal processing metrics including quality and rejection reasons.
+     */
+    private recordDetailedSignalMetrics(
+        signal: ProcessedSignal,
+        outcome: "confirmed" | "rejected" | "blocked",
+        rejectionReason?: string,
+        confirmedSignal?: ConfirmedSignal
+    ): void {
+        const labels = {
+            signal_type: signal.type,
+            detector_id: signal.detectorId,
+            outcome,
+        };
+
+        // Core signal processing metrics
+        this.metricsCollector.incrementCounter(
+            `signal_manager_signals_processed_total`,
+            1,
+            labels
+        );
+
+        // Record confidence score distribution
+        this.metricsCollector.recordHistogram(
+            `signal_manager_signal_confidence_distribution`,
+            signal.confidence,
+            {
+                signal_type: signal.type,
+                detector_id: signal.detectorId,
+                outcome,
+            }
+        );
+
+        // Signal quality metrics
+        this.recordSignalQualityMetrics(signal, outcome, confirmedSignal);
+
+        // Rejection reason tracking
+        if (outcome === "rejected" || outcome === "blocked") {
+            this.recordRejectionMetrics(signal, rejectionReason ?? "unknown");
+        }
+
+        // Confirmation metrics with enhanced details
+        if (outcome === "confirmed" && confirmedSignal) {
+            this.recordConfirmationMetrics(signal, confirmedSignal);
+        }
+
+        // Signal timing metrics
+        this.recordSignalTimingMetrics(signal);
+    }
+
+    /**
+     * Record signal quality metrics including confidence adjustments and correlation strength.
+     */
+    private recordSignalQualityMetrics(
+        signal: ProcessedSignal,
+        outcome: string,
+        confirmedSignal?: ConfirmedSignal
+    ): void {
+        const qualityLabels = {
+            signal_type: signal.type,
+            detector_id: signal.detectorId,
+            quality_tier: this.getQualityTier(signal.confidence),
+        };
+
+        // Quality tier distribution
+        this.metricsCollector.incrementCounter(
+            `signal_manager_quality_tier_total`,
+            1,
+            qualityLabels
+        );
+
+        // Confidence score metrics by detector
+        this.metricsCollector.recordHistogram(
+            `signal_manager_detector_confidence_score`,
+            signal.confidence,
+            {
+                detector_id: signal.detectorId,
+                signal_type: signal.type,
+            }
+        );
+
+        // If confirmed, track confidence adjustments
+        if (confirmedSignal) {
+            const originalConfidence = signal.confidence;
+            const finalConfidence = confirmedSignal.confidence;
+            const adjustment = finalConfidence - originalConfidence;
+
+            this.metricsCollector.recordHistogram(
+                `signal_manager_confidence_adjustment`,
+                adjustment,
+                {
+                    signal_type: signal.type,
+                    adjustment_type:
+                        adjustment > 0
+                            ? "boost"
+                            : adjustment < 0
+                              ? "reduction"
+                              : "none",
+                }
+            );
+
+            // Correlation strength impact
+            const correlationStrength =
+                confirmedSignal.correlationData.correlationStrength;
+            this.metricsCollector.recordHistogram(
+                `signal_manager_correlation_strength_distribution`,
+                correlationStrength,
+                {
+                    signal_type: signal.type,
+                    has_correlation: correlationStrength > 0 ? "yes" : "no",
+                }
+            );
+        }
+    }
+
+    /**
+     * Record detailed rejection metrics with categorized reasons.
+     */
+    private recordRejectionMetrics(
+        signal: ProcessedSignal,
+        rejectionReason: string
+    ): void {
+        const rejectionLabels = {
+            signal_type: signal.type,
+            detector_id: signal.detectorId,
+            rejection_reason: rejectionReason,
+            confidence_bucket: this.getConfidenceBucket(signal.confidence),
+        };
+
+        // Detailed rejection tracking
+        this.metricsCollector.incrementCounter(
+            `signal_manager_rejections_detailed_total`,
+            1,
+            rejectionLabels
+        );
+
+        // Per-type rejection counter for stats aggregation
+        this.metricsCollector.incrementCounter(
+            `signal_manager_rejections_detailed_total_${signal.type}`,
+            1
+        );
+
+        // Rejection reason distribution
+        this.metricsCollector.incrementCounter(
+            `signal_manager_rejection_reasons_total`,
+            1,
+            { reason: rejectionReason }
+        );
+
+        // Track rejection by confidence level
+        this.metricsCollector.incrementCounter(
+            `signal_manager_rejections_by_confidence_total`,
+            1,
+            {
+                signal_type: signal.type,
+                confidence_bucket: this.getConfidenceBucket(signal.confidence),
+                rejection_category:
+                    this.categorizeRejectionReason(rejectionReason),
+            }
+        );
+
+        // Detector-specific rejection rates
+        this.metricsCollector.incrementCounter(
+            `signal_manager_detector_rejections_total`,
+            1,
+            {
+                detector_id: signal.detectorId,
+                rejection_reason: rejectionReason,
+            }
+        );
+    }
+
+    /**
+     * Record confirmation metrics with enhanced signal correlation data.
+     */
+    private recordConfirmationMetrics(
+        signal: ProcessedSignal,
+        confirmedSignal: ConfirmedSignal
+    ): void {
+        const confirmationLabels = {
+            signal_type: signal.type,
+            detector_id: signal.detectorId,
+            market_healthy: confirmedSignal.anomalyData.marketHealthy
+                ? "yes"
+                : "no",
+            has_correlation:
+                confirmedSignal.correlationData.correlatedSignals > 0
+                    ? "yes"
+                    : "no",
+        };
+
+        // Enhanced confirmation tracking
+        this.metricsCollector.incrementCounter(
+            `signal_manager_confirmations_enhanced_total`,
+            1,
+            confirmationLabels
+        );
+
+        // Market health impact on confirmations
+        this.metricsCollector.incrementCounter(
+            `signal_manager_confirmations_by_market_health_total`,
+            1,
+            {
+                signal_type: signal.type,
+                market_healthy: confirmedSignal.anomalyData.marketHealthy
+                    ? "healthy"
+                    : "unhealthy",
+                health_recommendation:
+                    confirmedSignal.anomalyData.healthRecommendation ??
+                    "unknown",
+            }
+        );
+
+        // Correlation impact metrics
+        if (confirmedSignal.correlationData.correlatedSignals > 0) {
+            this.metricsCollector.recordHistogram(
+                `signal_manager_correlated_signals_count`,
+                confirmedSignal.correlationData.correlatedSignals,
+                { signal_type: signal.type }
+            );
+
+            this.metricsCollector.incrementCounter(
+                `signal_manager_correlated_confirmations_total`,
+                1,
+                {
+                    signal_type: signal.type,
+                    correlation_strength_tier: this.getCorrelationTier(
+                        confirmedSignal.correlationData.correlationStrength
+                    ),
+                }
+            );
+        }
+
+        // Final confidence distribution for confirmed signals
+        this.metricsCollector.recordHistogram(
+            `signal_manager_confirmed_signal_final_confidence`,
+            confirmedSignal.confidence,
+            {
+                signal_type: signal.type,
+                detector_id: signal.detectorId,
+            }
+        );
+    }
+
+    /**
+     * Record signal timing and processing metrics.
+     */
+    private recordSignalTimingMetrics(signal: ProcessedSignal): void {
+        const processingTime = Date.now() - signal.timestamp.getTime();
+
+        this.metricsCollector.recordHistogram(
+            `signal_manager_signal_processing_duration_ms`,
+            processingTime,
+            {
+                signal_type: signal.type,
+                detector_id: signal.detectorId,
+            }
+        );
+
+        // Signal age when processed
+        this.metricsCollector.recordHistogram(
+            `signal_manager_signal_age_ms`,
+            processingTime,
+            { signal_type: signal.type }
+        );
+    }
+
+    /**
+     * Get quality tier based on confidence score.
+     */
+    private getQualityTier(confidence: number): string {
+        if (confidence >= 0.9) return "high";
+        if (confidence >= 0.8) return "medium_high";
+        if (confidence >= 0.7) return "medium";
+        if (confidence >= 0.6) return "medium_low";
+        return "low";
+    }
+
+    /**
+     * Get confidence bucket for statistical analysis.
+     */
+    private getConfidenceBucket(confidence: number): string {
+        const bucket = Math.floor(confidence * 10) * 10;
+        return `${bucket}-${bucket + 10}`;
+    }
+
+    /**
+     * Get correlation strength tier.
+     */
+    private getCorrelationTier(strength: number): string {
+        if (strength >= 0.8) return "very_strong";
+        if (strength >= 0.6) return "strong";
+        if (strength >= 0.4) return "moderate";
+        if (strength >= 0.2) return "weak";
+        return "very_weak";
+    }
+
+    /**
+     * Categorize rejection reasons for analysis.
+     */
+    private categorizeRejectionReason(reason: string): string {
+        switch (reason) {
+            case "low_confidence":
+                return "quality_filter";
+            case "unhealthy_market":
+                return "market_condition";
+            case "processing_error":
+                return "technical_error";
+            case "timeout":
+                return "timing_issue";
+            case "duplicate":
+            case "throttled_duplicate":
+                return "duplicate_filter";
+            default:
+                return "other";
+        }
     }
 
     /**
@@ -613,10 +1253,11 @@ export class SignalManager extends EventEmitter {
     }
 
     /**
-     * Initialize simplified metrics.
+     * Initialize enhanced signal metrics.
      */
     private initializeMetrics(): void {
         try {
+            // Legacy metrics (keep for compatibility)
             this.metricsCollector.createCounter(
                 "signal_manager_signals_received_total",
                 "Total number of signals received",
@@ -653,8 +1294,133 @@ export class SignalManager extends EventEmitter {
                 [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
             );
 
-            this.logger.debug("Simplified metrics initialized", {
+            // Enhanced detailed metrics
+            this.metricsCollector.createCounter(
+                "signal_manager_signals_processed_total",
+                "Total signals processed with detailed tracking",
+                ["signal_type", "detector_id", "outcome"]
+            );
+
+            this.metricsCollector.createHistogram(
+                "signal_manager_signal_confidence_distribution",
+                "Distribution of signal confidence scores by outcome",
+                ["signal_type", "detector_id", "outcome"],
+                [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+            );
+
+            this.metricsCollector.createCounter(
+                "signal_manager_quality_tier_total",
+                "Signals by quality tier",
+                ["signal_type", "detector_id", "quality_tier"]
+            );
+
+            this.metricsCollector.createHistogram(
+                "signal_manager_detector_confidence_score",
+                "Confidence scores by detector",
+                ["detector_id", "signal_type"],
+                [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+            );
+
+            this.metricsCollector.createHistogram(
+                "signal_manager_confidence_adjustment",
+                "Confidence adjustments during processing",
+                ["signal_type", "adjustment_type"],
+                [-0.5, -0.3, -0.2, -0.1, -0.05, 0, 0.05, 0.1, 0.2, 0.3, 0.5]
+            );
+
+            this.metricsCollector.createHistogram(
+                "signal_manager_correlation_strength_distribution",
+                "Distribution of correlation strength values",
+                ["signal_type", "has_correlation"],
+                [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+            );
+
+            // Rejection metrics
+            this.metricsCollector.createCounter(
+                "signal_manager_rejections_detailed_total",
+                "Detailed rejection tracking",
+                [
+                    "signal_type",
+                    "detector_id",
+                    "rejection_reason",
+                    "confidence_bucket",
+                ]
+            );
+
+            this.metricsCollector.createCounter(
+                "signal_manager_rejection_reasons_total",
+                "Rejection reasons distribution",
+                ["reason"]
+            );
+
+            this.metricsCollector.createCounter(
+                "signal_manager_rejections_by_confidence_total",
+                "Rejections by confidence level",
+                ["signal_type", "confidence_bucket", "rejection_category"]
+            );
+
+            this.metricsCollector.createCounter(
+                "signal_manager_detector_rejections_total",
+                "Detector-specific rejection rates",
+                ["detector_id", "rejection_reason"]
+            );
+
+            // Confirmation metrics
+            this.metricsCollector.createCounter(
+                "signal_manager_confirmations_enhanced_total",
+                "Enhanced confirmation tracking",
+                [
+                    "signal_type",
+                    "detector_id",
+                    "market_healthy",
+                    "has_correlation",
+                ]
+            );
+
+            this.metricsCollector.createCounter(
+                "signal_manager_confirmations_by_market_health_total",
+                "Confirmations by market health status",
+                ["signal_type", "market_healthy", "health_recommendation"]
+            );
+
+            this.metricsCollector.createHistogram(
+                "signal_manager_correlated_signals_count",
+                "Number of correlated signals",
+                ["signal_type"],
+                [0, 1, 2, 3, 4, 5, 10, 15, 20, 25, 50]
+            );
+
+            this.metricsCollector.createCounter(
+                "signal_manager_correlated_confirmations_total",
+                "Confirmations with correlation data",
+                ["signal_type", "correlation_strength_tier"]
+            );
+
+            this.metricsCollector.createHistogram(
+                "signal_manager_confirmed_signal_final_confidence",
+                "Final confidence for confirmed signals",
+                ["signal_type", "detector_id"],
+                [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+            );
+
+            // Timing metrics
+            this.metricsCollector.createHistogram(
+                "signal_manager_signal_processing_duration_ms",
+                "Signal processing duration",
+                ["signal_type", "detector_id"],
+                [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+            );
+
+            this.metricsCollector.createHistogram(
+                "signal_manager_signal_age_ms",
+                "Signal age when processed",
+                ["signal_type"],
+                [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+            );
+
+            this.logger.debug("Enhanced signal metrics initialized", {
                 component: "SignalManager",
+                metricsCount: "legacy + detailed tracking",
             });
         } catch (error) {
             this.logger.error("Failed to initialize metrics", {
@@ -673,14 +1439,286 @@ export class SignalManager extends EventEmitter {
         historySize: number;
         marketHealth: MarketHealthContext;
         config: SignalManagerConfig;
+        performanceTracking?: {
+            activeSignalsCount: number;
+            completedSignalsCount: number;
+            isTracking: boolean;
+        };
     } {
-        return {
+        const status = {
             recentSignalsCount: this.recentSignals.size,
             correlationsCount: this.correlations.size,
             historySize: this.signalHistory.length,
             marketHealth: this.getMarketHealthContext(),
             config: this.config,
+            performanceTracking: {
+                activeSignalsCount: 0,
+                completedSignalsCount: 0,
+                isTracking: false,
+            },
         };
+
+        // Add performance tracking status if available
+        if (this.signalTracker) {
+            const trackerStatus = this.signalTracker.getStatus();
+            status.performanceTracking = {
+                activeSignalsCount: trackerStatus.activeSignals,
+                completedSignalsCount: trackerStatus.completedSignals,
+                isTracking: true,
+            };
+        }
+
+        return status;
+    }
+
+    /**
+     * Retrieve the reason for the most recently rejected signal.
+     */
+    public getLastRejectReason(): string | undefined {
+        return this.lastRejectReason;
+    }
+
+    /**
+     * Get performance metrics from signal tracker if available.
+     */
+    public getPerformanceMetrics(
+        timeWindow?: number
+    ): PerformanceMetrics | null {
+        if (!this.signalTracker) {
+            this.logger.warn(
+                "Performance metrics requested but SignalTracker not available",
+                {
+                    component: "SignalManager",
+                }
+            );
+            return null;
+        }
+
+        try {
+            return this.signalTracker.getPerformanceMetrics(timeWindow);
+        } catch (error) {
+            this.logger.error("Failed to get performance metrics", {
+                component: "SignalManager",
+                error: error instanceof Error ? error.message : String(error),
+            });
+            return null;
+        }
+    }
+
+    /**
+     * Get comprehensive signal processing statistics.
+     */
+    public getSignalStatistics(): SignalStatistics {
+        const metrics = this.metricsCollector.getMetrics();
+
+        return {
+            processing: {
+                totalProcessed: this.getCounterValue(
+                    metrics,
+                    "signal_manager_signals_processed_total"
+                ),
+                totalReceived: this.getCounterValue(
+                    metrics,
+                    "signal_manager_signals_received_total"
+                ),
+                totalConfirmed: this.getCounterValue(
+                    metrics,
+                    "signal_manager_signals_confirmed_total"
+                ),
+                processingDurationP50: this.getHistogramPercentile(
+                    metrics,
+                    "signal_manager_signal_processing_duration_ms",
+                    50
+                ),
+                processingDurationP95: this.getHistogramPercentile(
+                    metrics,
+                    "signal_manager_signal_processing_duration_ms",
+                    95
+                ),
+            },
+            rejections: {
+                totalRejected: this.getCounterValue(
+                    metrics,
+                    "signal_manager_rejections_detailed_total"
+                ),
+                byReason: {
+                    lowConfidence: this.getCounterValue(
+                        metrics,
+                        "signal_manager_signal_rejected_low_confidence_total"
+                    ),
+                    unhealthyMarket: this.getCounterValue(
+                        metrics,
+                        "signal_manager_signal_blocked_by_health_total"
+                    ),
+                    processingError: this.getCounterValueByLabel(
+                        metrics,
+                        "signal_manager_rejection_reasons_total",
+                        "reason",
+                        "processing_error"
+                    ),
+                    timeout: this.getCounterValueByLabel(
+                        metrics,
+                        "signal_manager_rejection_reasons_total",
+                        "reason",
+                        "timeout"
+                    ),
+                    duplicate: this.getCounterValueByLabel(
+                        metrics,
+                        "signal_manager_rejection_reasons_total",
+                        "reason",
+                        "duplicate"
+                    ),
+                },
+                byConfidenceBucket:
+                    this.getRejectionsByConfidenceBucket(metrics),
+            },
+            quality: {
+                averageConfidence: this.getHistogramMean(
+                    metrics,
+                    "signal_manager_signal_confidence_distribution"
+                ),
+                confidenceP50: this.getHistogramPercentile(
+                    metrics,
+                    "signal_manager_signal_confidence_distribution",
+                    50
+                ),
+                confidenceP95: this.getHistogramPercentile(
+                    metrics,
+                    "signal_manager_signal_confidence_distribution",
+                    95
+                ),
+                qualityTiers: this.getQualityTierDistribution(metrics),
+                averageConfidenceAdjustment: this.getHistogramMean(
+                    metrics,
+                    "signal_manager_confidence_adjustment"
+                ),
+            },
+            correlation: {
+                averageStrength: this.getHistogramMean(
+                    metrics,
+                    "signal_manager_correlation_strength_distribution"
+                ),
+                correlatedSignalsP50: this.getHistogramPercentile(
+                    metrics,
+                    "signal_manager_correlated_signals_count",
+                    50
+                ),
+                correlatedSignalsP95: this.getHistogramPercentile(
+                    metrics,
+                    "signal_manager_correlated_signals_count",
+                    95
+                ),
+                confirmationsWithCorrelation: this.getCounterValueByLabel(
+                    metrics,
+                    "signal_manager_confirmations_enhanced_total",
+                    "has_correlation",
+                    "yes"
+                ),
+            },
+            byDetector: this.getDetectorStatistics(metrics),
+            bySignalType: this.getSignalTypeStatistics(metrics),
+            marketHealth: {
+                confirmationsHealthyMarket: this.getCounterValueByLabel(
+                    metrics,
+                    "signal_manager_confirmations_by_market_health_total",
+                    "market_healthy",
+                    "healthy"
+                ),
+                confirmationsUnhealthyMarket: this.getCounterValueByLabel(
+                    metrics,
+                    "signal_manager_confirmations_by_market_health_total",
+                    "market_healthy",
+                    "unhealthy"
+                ),
+                blockedByHealth: this.getCounterValue(
+                    metrics,
+                    "signal_manager_signal_blocked_by_health_total"
+                ),
+            },
+            timing: {
+                averageSignalAge: this.getHistogramMean(
+                    metrics,
+                    "signal_manager_signal_age_ms"
+                ),
+                signalAgeP95: this.getHistogramPercentile(
+                    metrics,
+                    "signal_manager_signal_age_ms",
+                    95
+                ),
+            },
+        };
+    }
+
+    // Helper methods for metrics extraction
+    private getCounterValue(
+        metrics: EnhancedMetrics,
+        metricName: string
+    ): number {
+        return Number(metrics.counters[metricName]?.value) || 0;
+    }
+
+    private getCounterValueByLabel(
+        metrics: EnhancedMetrics,
+        metricName: string,
+        labelKey: string,
+        labelValue: string
+    ): number {
+        // This is a simplified implementation - in practice, you'd need to filter by labels
+        // For now, return a placeholder value
+        void metrics;
+        void metricName;
+        void labelKey;
+        void labelValue;
+        return 0; // TODO: Implement proper label filtering when MetricsCollector supports it
+    }
+
+    private getHistogramPercentile(
+        metrics: EnhancedMetrics,
+        metricName: string,
+        percentile: number
+    ): number {
+        const histogram = metrics.histograms[metricName];
+        return histogram?.percentiles?.[`p${percentile}`] || 0;
+    }
+
+    private getHistogramMean(
+        metrics: EnhancedMetrics,
+        metricName: string
+    ): number {
+        const histogram = metrics.histograms[metricName];
+        return histogram?.mean || 0;
+    }
+
+    private getRejectionsByConfidenceBucket(
+        metrics: EnhancedMetrics
+    ): Record<string, number> {
+        void metrics;
+        // TODO: Implement when label-based filtering is available
+        return {};
+    }
+
+    private getQualityTierDistribution(
+        metrics: EnhancedMetrics
+    ): Record<string, number> {
+        void metrics;
+        // TODO: Implement when label-based filtering is available
+        return {};
+    }
+
+    private getDetectorStatistics(
+        metrics: EnhancedMetrics
+    ): Record<string, DetectorStats> {
+        void metrics;
+        // TODO: Implement when label-based filtering is available
+        return {};
+    }
+
+    private getSignalTypeStatistics(
+        metrics: EnhancedMetrics
+    ): Record<string, SignalTypeStats> {
+        void metrics;
+        // TODO: Implement when label-based filtering is available
+        return {};
     }
 }
 
@@ -691,3 +1729,69 @@ type MarketHealthContext = {
     recentAnomalyTypes: string[];
     lastUpdate: number;
 };
+
+// Enhanced signal statistics interfaces
+export interface SignalStatistics {
+    processing: {
+        totalProcessed: number;
+        totalReceived: number;
+        totalConfirmed: number;
+        processingDurationP50: number;
+        processingDurationP95: number;
+    };
+    rejections: {
+        totalRejected: number;
+        byReason: {
+            lowConfidence: number;
+            unhealthyMarket: number;
+            processingError: number;
+            timeout: number;
+            duplicate: number;
+        };
+        byConfidenceBucket: Record<string, number>;
+    };
+    quality: {
+        averageConfidence: number;
+        confidenceP50: number;
+        confidenceP95: number;
+        qualityTiers: Record<string, number>;
+        averageConfidenceAdjustment: number;
+    };
+    correlation: {
+        averageStrength: number;
+        correlatedSignalsP50: number;
+        correlatedSignalsP95: number;
+        confirmationsWithCorrelation: number;
+    };
+    byDetector: Record<string, DetectorStats>;
+    bySignalType: Record<string, SignalTypeStats>;
+    marketHealth: {
+        confirmationsHealthyMarket: number;
+        confirmationsUnhealthyMarket: number;
+        blockedByHealth: number;
+    };
+    timing: {
+        averageSignalAge: number;
+        signalAgeP95: number;
+    };
+}
+
+export interface DetectorStats {
+    totalProcessed: number;
+    totalConfirmed: number;
+    totalRejected: number;
+    averageConfidence: number;
+    rejectionRate: number;
+    confirmationRate: number;
+    averageProcessingTime: number;
+}
+
+export interface SignalTypeStats {
+    totalProcessed: number;
+    totalConfirmed: number;
+    totalRejected: number;
+    averageConfidence: number;
+    averageCorrelationStrength: number;
+    qualityDistribution: Record<string, number>;
+    rejectionReasons: Record<string, number>;
+}

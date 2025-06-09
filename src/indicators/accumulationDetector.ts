@@ -7,6 +7,7 @@ import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
+import { SharedPools } from "../utils/objectPool.js";
 
 import type {
     EnrichedTradeEvent,
@@ -119,11 +120,11 @@ export class AccumulationDetector
             }
 
             // Record detection attempt metrics
-            this.metricsCollector.incrementCounter(
-                "accumulation.detection.attempts"
+            this.metricsCollector.incrementMetric(
+                "accumulationDetectionAttempts"
             );
-            this.metricsCollector.recordGauge(
-                "accumulation.zones.active",
+            this.metricsCollector.updateMetric(
+                "accumulationZonesActive",
                 this.zoneData.size
             );
         } catch (error) {
@@ -131,8 +132,8 @@ export class AccumulationDetector
                 error as Error,
                 "AccumulationDetector.checkForSignal"
             );
-            this.metricsCollector.incrementCounter(
-                "accumulation.detection.errors"
+            this.metricsCollector.incrementMetric(
+                "accumulationDetectionErrors"
             );
         }
     }
@@ -190,14 +191,17 @@ export class AccumulationDetector
         const price = triggerTrade.price;
         const side = this.getTradeSide(triggerTrade);
 
-        // Check cooldown
-        if (!this.checkCooldown(zone, side)) {
+        // Check cooldown (only confirm updates later)
+        if (!this.checkCooldown(zone, side, false)) {
             return;
         }
 
-        // Analyze accumulation conditions
+        // Analyze accumulation conditions using object pooling
         const conditions = this.analyzeAccumulationConditions(zone, zoneData);
         const score = this.calculateAccumulationScore(conditions);
+
+        // Store conditions reference for later cleanup
+        const conditionsToRelease = conditions;
 
         // Check score threshold
         if (score < this.accumulationThreshold) {
@@ -216,16 +220,21 @@ export class AccumulationDetector
             return;
         }
 
-        // Spoofing check
+        // Spoofing check (includes layering detection)
         if (
             this.features.spoofingDetection &&
-            this.isSpoofed(price, side, triggerTrade.timestamp)
+            (this.isSpoofed(price, side, triggerTrade.timestamp) ||
+                this.detectLayeringAttack(price, side, triggerTrade.timestamp))
         ) {
             this.logger.debug(
                 `[AccumulationDetector] Signal rejected - spoofing detected`
             );
             this.metricsCollector.incrementCounter(
                 "accumulation.spoofing.rejected"
+            );
+            // Release pooled conditions object before early return
+            SharedPools.getInstance().accumulationConditions.release(
+                conditionsToRelease
             );
             return;
         }
@@ -260,6 +269,11 @@ export class AccumulationDetector
         this.metricsCollector.recordHistogram(
             "accumulation.duration",
             conditions.duration
+        );
+
+        // Release pooled conditions object back to pool
+        SharedPools.getInstance().accumulationConditions.release(
+            conditionsToRelease
         );
     }
 
@@ -310,21 +324,26 @@ export class AccumulationDetector
             velocity = this.calculateAccumulationVelocity(zoneData);
         }
 
-        return {
-            ratio,
-            duration,
-            aggressiveVolume,
-            relevantPassive,
-            totalPassive,
-            strength,
-            velocity,
-            dominantSide,
-            recentActivity,
-            tradeCount: zoneData.tradeCount,
-            meetsMinDuration: duration >= this.minDurationMs,
-            meetsMinRatio: ratio >= this.minRatio,
-            isRecentlyActive: recentActivity < this.minRecentActivityMs,
-        };
+        // Use pooled conditions object for optimal performance
+        const sharedPools = SharedPools.getInstance();
+        const conditions = sharedPools.accumulationConditions.acquire();
+
+        // Populate pooled conditions object
+        conditions.ratio = ratio;
+        conditions.duration = duration;
+        conditions.aggressiveVolume = aggressiveVolume;
+        conditions.relevantPassive = relevantPassive;
+        conditions.totalPassive = totalPassive;
+        conditions.strength = strength;
+        conditions.velocity = velocity;
+        conditions.dominantSide = dominantSide;
+        conditions.recentActivity = recentActivity;
+        conditions.tradeCount = zoneData.tradeCount;
+        conditions.meetsMinDuration = duration >= this.minDurationMs;
+        conditions.meetsMinRatio = ratio >= this.minRatio;
+        conditions.isRecentlyActive = recentActivity < this.minRecentActivityMs;
+
+        return conditions;
     }
 
     /**

@@ -14,6 +14,11 @@ import { SignalCoordinator } from "../services/signalCoordinator.js";
 import { AnomalyDetector } from "../services/anomalyDetector.js";
 import { SignalManager } from "../trading/signalManager.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
+import { IndividualTradesManager } from "../data/individualTradesManager.js";
+import { MicrostructureAnalyzer } from "../data/microstructureAnalyzer.js";
+import type { SignalTracker } from "../analysis/signalTracker.js";
+import type { MarketContextCollector } from "../analysis/marketContextCollector.js";
+import type { IPipelineStorage } from "../storage/pipelineStorage.js";
 
 /**
  * Application dependencies interface
@@ -21,6 +26,7 @@ import { SpoofingDetector } from "../services/spoofingDetector.js";
 export interface Dependencies {
     // Storage & Data
     storage: IStorage;
+    pipelineStore: IPipelineStorage;
     binanceFeed: IBinanceDataFeed;
     tradesProcessor: ITradesProcessor;
     orderBookProcessor: OrderBookProcessor;
@@ -38,4 +44,10 @@ export interface Dependencies {
     anomalyDetector: AnomalyDetector;
     signalManager: SignalManager;
     spoofingDetector: SpoofingDetector;
+    individualTradesManager?: IndividualTradesManager;
+    microstructureAnalyzer?: MicrostructureAnalyzer;
+
+    // Performance Analysis (optional)
+    signalTracker?: SignalTracker;
+    marketContextCollector?: MarketContextCollector;
 }

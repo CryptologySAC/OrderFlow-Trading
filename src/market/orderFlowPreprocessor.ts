@@ -4,12 +4,15 @@ import { EventEmitter } from "events";
 import type {
     AggressiveTrade,
     EnrichedTradeEvent,
+    HybridTradeEvent,
     OrderBookSnapshot,
 } from "../types/marketEvents.js";
 import { OrderBookState } from "./orderBookState.js";
 import { Logger } from "../infrastructure/logger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { randomUUID } from "crypto";
+import { IndividualTradesManager } from "../data/individualTradesManager.js";
+import { MicrostructureAnalyzer } from "../data/microstructureAnalyzer.js";
 
 export interface OrderflowPreprocessorOptions {
     pricePrecision?: number;
@@ -17,11 +20,12 @@ export interface OrderflowPreprocessorOptions {
     tickSize?: number;
     emitDepthMetrics?: boolean;
     symbol?: string;
+    enableIndividualTrades?: boolean;
 }
 
 export interface IOrderflowPreprocessor {
     handleDepth(update: SpotWebsocketStreams.DiffBookDepthResponse): void;
-    handleAggTrade(trade: SpotWebsocketStreams.AggTradeResponse): void;
+    handleAggTrade(trade: SpotWebsocketStreams.AggTradeResponse): Promise<void>;
     getStats(): {
         processedTrades: number;
         processedDepthUpdates: number;
@@ -41,6 +45,11 @@ export class OrderflowPreprocessor
     private readonly logger: Logger;
     private readonly metricsCollector: MetricsCollector;
     private readonly symbol; // Default symbol, can be made configurable
+    private readonly enableIndividualTrades: boolean;
+
+    // Individual trades components (optional)
+    private readonly individualTradesManager?: IndividualTradesManager;
+    private readonly microstructureAnalyzer?: MicrostructureAnalyzer;
 
     // Track processing stats
     private processedTrades = 0;
@@ -50,7 +59,9 @@ export class OrderflowPreprocessor
         opts: OrderflowPreprocessorOptions = {},
         orderBook: OrderBookState,
         logger: Logger,
-        metricsCollector: MetricsCollector
+        metricsCollector: MetricsCollector,
+        individualTradesManager?: IndividualTradesManager,
+        microstructureAnalyzer?: MicrostructureAnalyzer
     ) {
         super();
         this.logger = logger;
@@ -59,8 +70,28 @@ export class OrderflowPreprocessor
         this.bandTicks = opts.bandTicks ?? 5;
         this.tickSize = opts.tickSize ?? 0.01;
         this.emitDepthMetrics = opts.emitDepthMetrics ?? false;
+        this.enableIndividualTrades = opts.enableIndividualTrades ?? false;
         this.symbol = opts.symbol ?? "LTCUSDT"; // Default symbol, can be overridden
         this.bookState = orderBook;
+
+        // Initialize individual trades components if enabled
+        if (this.enableIndividualTrades) {
+            this.individualTradesManager = individualTradesManager;
+            this.microstructureAnalyzer = microstructureAnalyzer;
+
+            if (!this.individualTradesManager || !this.microstructureAnalyzer) {
+                this.logger.warn(
+                    "[OrderflowPreprocessor] Individual trades enabled but components not provided"
+                );
+            }
+        }
+
+        this.logger.info("[OrderflowPreprocessor] Initialized", {
+            symbol: this.symbol,
+            enableIndividualTrades: this.enableIndividualTrades,
+            hasIndividualTradesManager: !!this.individualTradesManager,
+            hasMicrostructureAnalyzer: !!this.microstructureAnalyzer,
+        });
     }
 
     // Should be called on every depth update
@@ -118,7 +149,9 @@ export class OrderflowPreprocessor
     }
 
     // Should be called on every aggtrade event
-    public handleAggTrade(trade: SpotWebsocketStreams.AggTradeResponse): void {
+    public async handleAggTrade(
+        trade: SpotWebsocketStreams.AggTradeResponse
+    ): Promise<void> {
         try {
             if (!this.isValidTrade(trade)) {
                 this.metricsCollector.incrementMetric("invalidTrades");
@@ -135,6 +168,7 @@ export class OrderflowPreprocessor
                 this.tickSize
             );
 
+            // Create basic enriched trade
             const enriched: EnrichedTradeEvent = {
                 ...aggressive,
                 passiveBidVolume: bookLevel?.bid ?? 0,
@@ -150,8 +184,88 @@ export class OrderflowPreprocessor
                         : undefined,
             };
 
+            // Check if we should enhance with individual trades data
+            let finalTrade: EnrichedTradeEvent | HybridTradeEvent = enriched;
+
+            if (
+                this.enableIndividualTrades &&
+                this.individualTradesManager &&
+                this.microstructureAnalyzer
+            ) {
+                try {
+                    // Check if we should fetch individual trades for this aggregated trade
+                    if (
+                        this.individualTradesManager.shouldFetchIndividualTrades(
+                            aggressive
+                        )
+                    ) {
+                        // Enhance with individual trades data
+                        finalTrade =
+                            await this.individualTradesManager.enhanceAggTradeWithIndividuals(
+                                enriched
+                            );
+
+                        // Add microstructure analysis if individual trades are available
+                        if (
+                            "hasIndividualData" in finalTrade &&
+                            finalTrade.hasIndividualData &&
+                            finalTrade.individualTrades
+                        ) {
+                            try {
+                                finalTrade.microstructure =
+                                    this.microstructureAnalyzer.analyze(
+                                        finalTrade.individualTrades
+                                    );
+                            } catch (analysisError) {
+                                this.logger.warn(
+                                    "[OrderflowPreprocessor] Microstructure analysis failed",
+                                    {
+                                        error:
+                                            analysisError instanceof Error
+                                                ? analysisError.message
+                                                : String(analysisError),
+                                        tradeId: aggressive.tradeId,
+                                    }
+                                );
+                                // Continue without microstructure data
+                            }
+                        }
+
+                        this.metricsCollector.incrementMetric(
+                            "hybridTradesProcessed"
+                        );
+                    } else {
+                        // Convert to HybridTradeEvent format but without individual data
+                        finalTrade = {
+                            ...enriched,
+                            hasIndividualData: false,
+                            tradeComplexity: "simple",
+                        };
+                    }
+                } catch (error) {
+                    this.logger.warn(
+                        "[OrderflowPreprocessor] Individual trades enhancement failed, falling back to basic enrichment",
+                        {
+                            error: (error as Error).message,
+                            tradeId: aggressive.tradeId,
+                        }
+                    );
+
+                    // Fallback to basic enriched trade
+                    finalTrade = {
+                        ...enriched,
+                        hasIndividualData: false,
+                        tradeComplexity: "simple",
+                    };
+
+                    this.metricsCollector.incrementMetric(
+                        "individualTradesEnhancementErrors"
+                    );
+                }
+            }
+
             this.processedTrades++;
-            this.emit("enriched_trade", enriched);
+            this.emit("enriched_trade", finalTrade);
 
             // Emit metrics periodically
             if (this.processedTrades % 100 === 0) {

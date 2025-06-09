@@ -22,7 +22,6 @@ const ITEM_MARGIN = 20; // fixed space between dashboard items
 // DOM references
 const tradesCanvas = document.getElementById("tradesChart");
 const orderBookCanvas = document.getElementById("orderBookChart");
-const delayGaugeCanvas = document.getElementById("delayGauge");
 const rangeSelector = document.querySelector(".rangeSelector");
 const directionText = document.getElementById("directionText");
 const ratioText = document.getElementById("ratioText");
@@ -34,15 +33,36 @@ const orderBookContainer = document.getElementById("orderBookContainer");
 // Charts
 let tradesChart = null;
 let orderBookChart = null;
-let delayGauge = null;
 
 let anomalyList = [];
 const anomalySeverityOrder = ["critical", "high", "medium", "info"];
 let anomalyFilters = new Set(["critical", "high"]);
 
+// Signals management
+let signalsList = [];
+let signalFilters = new Set(["buy", "sell"]);
+let activeSignalTooltip = null;
+
+// Support/Resistance levels management
+let supportResistanceLevels = [];
+let maxSupportResistanceLevels = 20;
+
+// Zone management
+let activeZones = new Map();
+let maxActiveZones = 10;
+
 // Used to control badge display
 let badgeTimeout = null;
 let latestBadgeElem = null;
+
+// Runtime configuration
+let dedupTolerance = 0.01;
+if (
+    window.runtimeConfig &&
+    typeof window.runtimeConfig.dedupTolerance === "number"
+) {
+    dedupTolerance = window.runtimeConfig.dedupTolerance;
+}
 
 function snap(value) {
     return Math.round(value / GRID_SIZE) * GRID_SIZE;
@@ -260,6 +280,36 @@ function getReadableAction(action) {
                 .replace(/\b\w/g, (l) => l.toUpperCase());
     }
 }
+
+function getAnomalySummary(anomaly) {
+    if (!anomaly || typeof anomaly !== "object") return "";
+    const details = anomaly.details || {};
+    const parts = [];
+    if (details.confidence !== undefined) {
+        const pct = Number(details.confidence) * 100;
+        if (!Number.isNaN(pct)) parts.push(`Conf: ${pct.toFixed(0)}%`);
+    }
+    if (details.imbalance !== undefined) {
+        const val = Number(details.imbalance);
+        if (!Number.isNaN(val)) parts.push(`Imb: ${val.toFixed(2)}`);
+    }
+    if (details.absorptionRatio !== undefined) {
+        const val = Number(details.absorptionRatio);
+        if (!Number.isNaN(val)) parts.push(`AbsRatio: ${val.toFixed(2)}`);
+    }
+    if (details.rationale) {
+        if (typeof details.rationale === "string") {
+            parts.push(details.rationale);
+        } else if (typeof details.rationale === "object") {
+            const flags = Object.entries(details.rationale)
+                .filter(([_, v]) => Boolean(v))
+                .map(([k]) => k)
+                .join(", ");
+            if (flags) parts.push(`Reasons: ${flags}`);
+        }
+    }
+    return parts.join(" | ");
+}
 function capitalize(str) {
     return str[0].toUpperCase() + str.slice(1);
 }
@@ -278,7 +328,7 @@ function renderAnomalyList() {
     listElem.innerHTML = filtered
         .map(
             (a) => `
-            <div class="anomaly-row ${a.severity}">
+            <div class="anomaly-row ${a.severity}" title="${getAnomalySummary(a)}">
                 <span class="anomaly-icon">${getAnomalyIcon(a.type)}</span>
                 <span class="anomaly-label">${getAnomalyLabel(a.type)}</span>
                 <span class="anomaly-price">${a.affectedPriceRange ? `${a.affectedPriceRange.min.toFixed(2)}-${a.affectedPriceRange.max.toFixed(2)}` : `${a.price?.toFixed(2) || "N/A"}`}</span>
@@ -304,6 +354,137 @@ function showAnomalyBadge(anomaly) {
     }, 4000);
 }
 
+function showSignalBundleBadge(signals) {
+    if (!Array.isArray(signals) || signals.length === 0) return;
+    const top = signals[0];
+    if (latestBadgeElem) latestBadgeElem.remove();
+    const badge = document.createElement("div");
+    badge.className = "anomaly-badge";
+    let color = "#757575"; // grey
+    if (top.confidence > 0.9) {
+        color = "#2e7d32"; // green
+    } else if (top.confidence >= 0.75) {
+        color = "#fb8c00"; // orange
+    }
+    badge.style.background = color;
+    badge.innerHTML = `${top.side.toUpperCase()} @ ${top.price.toFixed(2)} (${(
+        top.confidence * 100
+    ).toFixed(0)}%)`;
+    document.body.appendChild(badge);
+    latestBadgeElem = badge;
+    if (badgeTimeout) clearTimeout(badgeTimeout);
+    badgeTimeout = setTimeout(() => {
+        badge.remove();
+        latestBadgeElem = null;
+    }, 4000);
+}
+
+// Signal list rendering
+function formatSignalTime(timestamp) {
+    const s = Math.floor((Date.now() - timestamp) / 1000);
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    return `${h}h ${m % 60}m ago`;
+}
+
+function getSignalSummary(signal) {
+    const confidence = ((signal.signalData?.confidence || 0) * 100).toFixed(1);
+    const meta = signal.signalData?.meta || {};
+    const anomaly = signal.signalData?.anomalyCheck || {};
+
+    return [
+        `Signal: ${signal.type} (${signal.side})`,
+        `Price: $${signal.price.toFixed(2)}`,
+        `Confidence: ${confidence}%`,
+        `Take Profit: $${signal.takeProfit?.toFixed(2) || "N/A"}`,
+        `Stop Loss: $${signal.stopLoss?.toFixed(2) || "N/A"}`,
+        meta.volume ? `Volume: ${meta.volume.toFixed(2)}` : "",
+        meta.absorptionRatio
+            ? `Absorption: ${(meta.absorptionRatio * 100).toFixed(1)}%`
+            : "",
+        anomaly.marketHealthy !== undefined
+            ? `Market Health: ${anomaly.marketHealthy ? "Healthy" : "Unhealthy"}`
+            : "",
+        `Generated: ${new Date(signal.time).toLocaleString()}`,
+    ]
+        .filter(Boolean)
+        .join("\n");
+}
+
+function renderSignalsList() {
+    const listElem = document.getElementById("signalsList");
+    if (!listElem) return;
+
+    // Filter signals based on selected filters
+    const filtered = signalsList.filter((signal) =>
+        signalFilters.has(signal.side)
+    );
+
+    listElem.innerHTML = filtered
+        .map((signal) => {
+            const confidence = (
+                (signal.signalData?.confidence || 0) * 100
+            ).toFixed(0);
+            const timeAgo = formatSignalTime(signal.time);
+
+            return `
+                <div class="signal-row signal-${signal.side}" 
+                     data-signal-id="${signal.id}"
+                     title="${getSignalSummary(signal)}">
+                    <div class="signal-row-header">
+                        <span class="signal-type">${signal.type.replace("_confirmed", "").replace("_", " ")}</span>
+                        <span class="signal-side ${signal.side}">${signal.side.toUpperCase()}</span>
+                        <span class="signal-time">${timeAgo}</span>
+                    </div>
+                    <div class="signal-details">
+                        <span class="signal-price">$${signal.price.toFixed(2)}</span>
+                        <span class="signal-confidence">${confidence}%</span>
+                    </div>
+                    <div class="signal-targets">
+                        <span>TP: $${signal.takeProfit?.toFixed(2) || "N/A"}</span>
+                        <span>SL: $${signal.stopLoss?.toFixed(2) || "N/A"}</span>
+                    </div>
+                </div>
+            `;
+        })
+        .join("");
+}
+
+function updateTradeDelayIndicator(delay) {
+    const indicator = document.getElementById("tradeDelayIndicator");
+    const valueElement = document.getElementById("tradeDelayValue");
+
+    if (!indicator || !valueElement) return;
+
+    // Format delay with fixed width
+    let formattedDelay;
+    if (delay >= 1000) {
+        // Show as seconds with 1 decimal place
+        const seconds = (delay / 1000).toFixed(1);
+        formattedDelay = `${seconds}s`;
+    } else {
+        // Show as milliseconds, ensure consistent width
+        formattedDelay = `${delay}ms`;
+    }
+
+    // Update the displayed value
+    valueElement.textContent = formattedDelay;
+
+    // Remove previous delay classes
+    indicator.classList.remove("delay-green", "delay-orange", "delay-red");
+
+    // Add appropriate color class based on delay
+    if (delay < 100) {
+        indicator.classList.add("delay-green");
+    } else if (delay < 500) {
+        indicator.classList.add("delay-orange");
+    } else {
+        indicator.classList.add("delay-red");
+    }
+}
+
 // Improve Trade Chart update performance
 let chartUpdateScheduled = false;
 function scheduleTradesChartUpdate() {
@@ -318,11 +499,16 @@ function scheduleTradesChartUpdate() {
 
 // Improve Orderbook Chart performance
 let orderBookUpdateTimeout = null;
+let lastOrderBookDraw = 0;
 function scheduleOrderBookUpdate() {
+    if (!orderBookChart) return;
+    const now = Date.now();
+    const delay = Math.max(0, 500 - (now - lastOrderBookDraw));
     if (orderBookUpdateTimeout) clearTimeout(orderBookUpdateTimeout);
     orderBookUpdateTimeout = setTimeout(() => {
         orderBookChart.update();
-    }, 100); // Update 10 times/second max
+        lastOrderBookDraw = Date.now();
+    }, delay);
 }
 
 /**
@@ -389,71 +575,11 @@ function buildSignalLabel(signal) {
 
     // 1. Main signal summary (type/side/price/time)
     let label = `[${signal.type?.toUpperCase() ?? "?"}] ${signal.side?.toUpperCase() ?? "?"} @ ${signal.price?.toFixed(2) ?? "?"}`;
-    label += signal.time
-        ? `\n${new Date(signal.time).toLocaleTimeString()}`
-        : "";
 
-    // 2. TP/SL
-    if (signal.takeProfit) label += `\nTP: ${signal.takeProfit.toFixed(2)}`;
-    if (signal.stopLoss) label += ` | SL: ${signal.stopLoss.toFixed(2)}`;
-
-    // 3. Confidence/Confirmations
-    if (signal.confidence !== undefined)
+    // 2. Confidence/Confirmations
+    if (signal.confidence !== undefined) {
         label += `\nConf: ${(signal.confidence * 100).toFixed(0)}%`;
-    if (signal.confirmations?.length)
-        label += ` | Confirms: ${signal.confirmations.join(", ")}`;
-
-    // 4. Zone/Volumes/Refilled
-    if (signal.zone !== undefined) label += `\nZone: ${signal.zone}`;
-    if (signal.totalAggressiveVolume !== undefined)
-        label += ` | Agg: ${Number(signal.totalAggressiveVolume).toFixed(2)}`;
-    if (signal.passiveVolume !== undefined)
-        label += ` | Passive: ${Number(signal.passiveVolume).toFixed(2)}`;
-    if (signal.refilled !== undefined)
-        label += ` | Ref: ${signal.refilled ? "Yes" : "No"}`;
-
-    // 5. Reason/closeReason
-    if (signal.closeReason) label += `\nReason: ${signal.closeReason}`;
-
-    // 6. Anomaly
-    if (signal.anomaly && signal.anomaly.detected)
-        label += `\nAnomaly: ${signal.anomaly.type || "?"} (${signal.anomaly.severity || "?"})`;
-
-    // 7. Signal-specific details
-    if (signal.signalData) {
-        if ("absorptionType" in signal.signalData) {
-            label += `\nAbsorption: ${signal.signalData.absorptionType}`;
-            if (signal.signalData.spoofed) label += " | Spoofed!";
-            if (signal.signalData.recentAggressive !== undefined)
-                label += `\nAgg: ${Number(signal.signalData.recentAggressive).toFixed(2)}`;
-            if (signal.signalData.rollingZonePassive !== undefined)
-                label += ` | RollingPassive: ${Number(signal.signalData.rollingZonePassive).toFixed(2)}`;
-            if (signal.signalData.avgPassive !== undefined)
-                label += ` | AvgPassive: ${Number(signal.signalData.avgPassive).toFixed(2)}`;
-        }
-        if ("exhaustionType" in signal.signalData) {
-            label += `\nExhaustion: ${signal.signalData.exhaustionType}`;
-            if (signal.signalData.spoofed) label += " | Spoofed!";
-            if (signal.signalData.recentAggressive !== undefined)
-                label += `\nAgg: ${Number(signal.signalData.recentAggressive).toFixed(2)}`;
-            if (signal.signalData.oppositeQty !== undefined)
-                label += ` | OppQty: ${Number(signal.signalData.oppositeQty).toFixed(2)}`;
-            if (signal.signalData.avgLiquidity !== undefined)
-                label += ` | AvgBook: ${Number(signal.signalData.avgLiquidity).toFixed(2)}`;
-            if (signal.signalData.spread !== undefined)
-                label += ` | Spread: ${(signal.signalData.spread * 100).toFixed(3)}%`;
-        }
-        if ("swingType" in signal.signalData) {
-            label += `\nSwing: ${signal.signalData.swingType} | Str: ${signal.signalData.strength}`;
-        }
-        if ("divergence" in signal.signalData) {
-            label += `\nDiv: ${signal.signalData.divergence}`;
-        }
-        // Add more per-type details as needed.
     }
-
-    // 8. Invalidation (for signal lifecycle tracking)
-    if (signal.isInvalidated) label += "\n❌ Invalidated";
 
     // Optional: truncate if label is too long for chart
     if (label.length > 250) label = label.slice(0, 245) + "...";
@@ -471,10 +597,6 @@ const tradeWebsocket = new TradeWebSocket({
     pongWaitTime: PONG_WAIT_MS,
     onBacklog: (backLog) => {
         console.log(`${backLog.length} backlog trades received.`);
-        if (delayGauge) {
-            delayGauge.value = 0;
-            delayGauge.title = "Loading Backlog";
-        }
 
         trades.length = 0;
         for (const trade of backLog) {
@@ -528,18 +650,19 @@ const tradeWebsocket = new TradeWebSocket({
 
     onMessage: (message) => {
         try {
+            // Check if message is null or undefined
+            if (!message) {
+                console.warn("Received null or undefined message");
+                return;
+            }
+
             const receiveTime = Date.now();
             const messageTime = message.now ?? 0;
             const delay = receiveTime - messageTime;
-            if (delay >= 0 && delayGauge) {
-                delayGauge.value = parseInt(delay, 10);
+            if (delay >= 0) {
+                // Update the trade delay indicator (gauge was removed)
+                updateTradeDelayIndicator(delay);
             }
-
-            if (tradeTimeoutId) clearTimeout(tradeTimeoutId);
-            tradeTimeoutId = setTimeout(
-                () => setGaugeTimeout(delayGauge),
-                TRADE_TIMEOUT_MS
-            );
 
             switch (message.type) {
                 case "anomaly":
@@ -598,6 +721,9 @@ const tradeWebsocket = new TradeWebSocket({
                             updateTimeAnnotations(trade.time, activeRange);
                         }
 
+                        // Check for support/resistance zone breaches
+                        checkSupportResistanceBreaches(trade.price, trade.time);
+
                         scheduleTradesChartUpdate();
                     }
                     break;
@@ -606,6 +732,15 @@ const tradeWebsocket = new TradeWebSocket({
                     const label = buildSignalLabel(message.data);
                     const id = message.data.id;
 
+                    // Add to signals list
+                    signalsList.unshift(message.data);
+                    // Limit list length
+                    if (signalsList.length > 50) {
+                        signalsList = signalsList.slice(0, 50);
+                    }
+                    renderSignalsList();
+
+                    // Add to chart
                     tradesChart.options.plugins.annotation.annotations[id] = {
                         type: "label",
                         xValue: message.data.time,
@@ -628,6 +763,140 @@ const tradeWebsocket = new TradeWebSocket({
                     console.log("Signal label added:", label);
                     break;
 
+                case "signal_backlog":
+                    console.log(
+                        `${message.data.length} backlog signals received.`
+                    );
+
+                    // Process backlog signals in reverse order (oldest first)
+                    const backlogSignals = [...message.data].reverse();
+
+                    for (const signal of backlogSignals) {
+                        // Normalize confirmed signal structure for display
+                        const normalizedSignal = {
+                            id: signal.id,
+                            type:
+                                signal.originalSignals?.[0]?.type ||
+                                "confirmed",
+                            side:
+                                signal.originalSignals?.[0]?.metadata?.side ||
+                                "unknown",
+                            price: signal.finalPrice || signal.price,
+                            time: signal.confirmedAt || signal.time,
+                            confidence: signal.confidence,
+                            // Include original signal data for buildSignalLabel
+                            ...signal,
+                        };
+
+                        const signalLabel = buildSignalLabel(normalizedSignal);
+                        const signalId = signal.id;
+
+                        // Add to signals list - use unshift to maintain newest-first order
+                        signalsList.unshift(normalizedSignal);
+
+                        // Add to chart
+                        tradesChart.options.plugins.annotation.annotations[
+                            signalId
+                        ] = {
+                            type: "label",
+                            xValue: normalizedSignal.time,
+                            yValue: normalizedSignal.price,
+                            content: signalLabel,
+                            backgroundColor: "rgba(90, 50, 255, 0.4)", // Slightly more transparent for backlog
+                            color: "white",
+                            font: {
+                                size: 12,
+                                family: "monospace",
+                            },
+                            borderRadius: 4,
+                            padding: 8,
+                            position: {
+                                x: "center",
+                                y: "center",
+                            },
+                        };
+                    }
+
+                    // Limit total signals list length
+                    if (signalsList.length > 50) {
+                        signalsList = signalsList.slice(-50); // Keep most recent 50
+                    }
+
+                    renderSignalsList();
+                    tradesChart.update("none");
+                    console.log(
+                        `${backlogSignals.length} backlog signals added to chart and list`
+                    );
+                    break;
+
+                case "signal_bundle":
+                    if (Array.isArray(message.data) && message.data.length) {
+                        const filtered = message.data.filter((s) => {
+                            const last = signalsList[0];
+                            if (!last) return true;
+                            const diff = Math.abs(s.price - last.price);
+                            return diff > last.price * dedupTolerance;
+                        });
+
+                        filtered.forEach((signal) => {
+                            signalsList.unshift(signal);
+                            if (signalsList.length > 50) {
+                                signalsList = signalsList.slice(0, 50);
+                            }
+
+                            const label = buildSignalLabel(signal);
+                            tradesChart.options.plugins.annotation.annotations[
+                                signal.id
+                            ] = {
+                                type: "label",
+                                xValue: signal.time,
+                                yValue: signal.price,
+                                content: label,
+                                backgroundColor: "rgba(90, 50, 255, 0.5)",
+                                color: "white",
+                                font: { size: 12, family: "monospace" },
+                                borderRadius: 4,
+                                padding: 8,
+                                position: { x: "center", y: "center" },
+                            };
+                        });
+
+                        renderSignalsList();
+                        tradesChart.update("none");
+                        showSignalBundleBadge(filtered);
+                    }
+                    break;
+
+                case "runtimeConfig":
+                    if (message.data && typeof message.data === "object") {
+                        window.runtimeConfig = {
+                            ...(window.runtimeConfig || {}),
+                            ...message.data,
+                        };
+                        if (typeof message.data.dedupTolerance === "number") {
+                            dedupTolerance = message.data.dedupTolerance;
+                        }
+                    }
+                    break;
+
+                case "supportResistanceLevel":
+                    console.log(
+                        "Support/Resistance level received:",
+                        message.data
+                    );
+                    handleSupportResistanceLevel(message.data);
+                    break;
+
+                case "zoneUpdate":
+                    console.log("Zone update received:", message.data);
+                    handleZoneUpdate(message.data);
+                    break;
+
+                case "zoneSignal":
+                    console.log("Zone signal received:", message.data);
+                    handleZoneSignal(message.data);
+                    break;
+
                 case "orderbook":
                     if (
                         !message.data ||
@@ -647,7 +916,14 @@ const tradeWebsocket = new TradeWebSocket({
                         const askData = [];
                         const bidData = [];
 
-                        orderBookData.priceLevels.forEach((level) => {
+                        // Limit display to max 30 levels to prevent UI performance issues
+                        const maxLevels = 30;
+                        const levelsToShow = orderBookData.priceLevels.slice(
+                            0,
+                            maxLevels
+                        );
+
+                        levelsToShow.forEach((level) => {
                             const priceStr = level.price
                                 ? level.price.toFixed(2)
                                 : "0.00";
@@ -688,8 +964,6 @@ const tradeWebsocket = new TradeWebSocket({
         }
     },
 });
-
-tradeWebsocket.connect();
 
 /**
  * Global timeout ID for trade delay gauge.
@@ -863,78 +1137,6 @@ function initializeTradesChart(ctx) {
             },
         },
     });
-}
-
-/**
- * Initializes the trade delay gauge.
- * @param {HTMLCanvasElement} canvas - The canvas element for the gauge.
- * @returns {Object|null} The Gauge instance or null if initialization fails.
- */
-function initializeDelayGauge(canvas) {
-    if (delayGauge) return delayGauge;
-
-    if (typeof RadialGauge === "undefined") return null;
-
-    // Get current theme for initial colors
-    const currentTheme = getCurrentTheme();
-    const actualTheme =
-        currentTheme === "system" ? getSystemTheme() : currentTheme;
-
-    // Theme-aware colors
-    const plateColor = actualTheme === "dark" ? "#2d2d2d" : "#fff";
-    const textColor = actualTheme === "dark" ? "#ffffff" : "#000000";
-    const tickColor = actualTheme === "dark" ? "#e0e0e0" : "#444444";
-    const minorTickColor = actualTheme === "dark" ? "#b0b0b0" : "#666666";
-
-    return new RadialGauge({
-        renderTo: canvas,
-        width: 200,
-        height: 160,
-        units: "ms",
-        title: "Trade Delay",
-        minValue: 0,
-        maxValue: 2000,
-        valueDec: 0,
-        valueInt: 4,
-        majorTicks: ["0", "500", "1000", "1500", "2000"],
-        minorTicks: 5,
-        strokeTicks: true,
-        highlights: [
-            { from: 0, to: 500, color: "rgba(0, 255, 0, 0.3)" },
-            { from: 500, to: 1000, color: "rgba(255, 165, 0, 0.3)" },
-            { from: 1000, to: 2000, color: "rgba(255, 0, 0, 0.3)" },
-        ],
-        colorPlate: plateColor,
-        colorMajorTicks: tickColor,
-        colorMinorTicks: minorTickColor,
-        colorTitle: textColor,
-        colorUnits: textColor,
-        colorNumbers: tickColor,
-        colorNeedleStart: "rgba(240, 128, 128, 1)",
-        colorNeedleEnd: "rgba(255, 160, 122, .9)",
-        value: 0,
-        valueBox: true,
-        valueTextShadow: false,
-        animationRule: "linear",
-        animationDuration: 10,
-    }).draw();
-}
-
-/**
- * Sets the trade delay gauge to timeout state.
- * @param {Object} gauge - The Gauge instance.
- */
-function setGaugeTimeout(gauge) {
-    if (gauge) {
-        gauge.value = 0;
-        gauge.title = "TIMEOUT";
-        //gauge.set({
-        //  title: 'Trade Timeout',
-        //  highlights: [{ from: 0, to: 2000, color: 'rgba(128, 128, 128, 0.3)' }], // Gray: Timeout
-        //  value: 0,
-        //});
-        //gauge.draw();
-    }
 }
 
 /**
@@ -1644,27 +1846,7 @@ function updateChartTheme(theme) {
         // Update order book bar colors with better visibility in dark mode
         updateOrderBookBarColors(theme);
 
-        orderBookChart.update("none");
-    }
-
-    // Update gauge colors
-    if (delayGauge) {
-        const plateColor = theme === "dark" ? "#2d2d2d" : "#fff";
-        const textColor = theme === "dark" ? "#ffffff" : "#000000";
-        const tickColor = theme === "dark" ? "#e0e0e0" : "#444444";
-        const minorTickColor = theme === "dark" ? "#b0b0b0" : "#666666";
-
-        delayGauge.update({
-            colorPlate: plateColor,
-            colorTitle: textColor,
-            colorUnits: textColor,
-            colorNumbers: tickColor,
-            colorMajorTicks: tickColor,
-            colorMinorTicks: minorTickColor,
-        });
-
-        // Force redraw to apply color changes
-        delayGauge.draw();
+        scheduleOrderBookUpdate();
     }
 }
 
@@ -1732,7 +1914,6 @@ function triggerChartResize() {
     // Trigger chart resize after column resize
     if (tradesChart) tradesChart.resize();
     if (orderBookChart) orderBookChart.resize();
-    if (delayGauge) delayGauge.update();
 }
 
 /**
@@ -2245,11 +2426,6 @@ function initialize() {
         return;
     }
 
-    if (!delayGaugeCanvas) {
-        console.error("Delay gauge canvas not found");
-        return;
-    }
-
     const tradesCtx = tradesCanvas.getContext("2d");
     if (!tradesCtx) {
         console.error("Could not get 2D context for trades chart");
@@ -2265,7 +2441,9 @@ function initialize() {
     // Initialize charts
     tradesChart = initializeTradesChart(tradesCtx);
     orderBookChart = initializeOrderBookChart(orderBookCtx);
-    delayGauge = initializeDelayGauge(delayGaugeCanvas);
+
+    // Connect to the trade WebSocket after charts are ready
+    tradeWebsocket.connect();
 
     // Setup interact.js for column resizing (this includes restoreColumnWidths)
     setupColumnResizing();
@@ -2320,16 +2498,21 @@ function initialize() {
             }
         });
     }
+
+    // Setup periodic cleanup for support/resistance levels
+    setInterval(cleanupOldSupportResistanceLevels, 300000); // Every 5 minutes
+    setInterval(cleanupOldZones, 300000); // Every 5 minutes
+
+    // Setup periodic update for signal times display
+    setInterval(renderSignalsList, 60000); // Update every minute
 }
 
 function addAnomalyChartLabel(anomaly) {
-    if (!window.tradesChart) return;
+    if (!tradesChart) return;
     const now = anomaly.time || anomaly.detectedAt || Date.now();
-    window.tradesChart.options.plugins.annotation.annotations =
-        window.tradesChart.options.plugins.annotation.annotations || {};
-    window.tradesChart.options.plugins.annotation.annotations[
-        `anomaly.${now}`
-    ] = {
+    tradesChart.options.plugins.annotation.annotations =
+        tradesChart.options.plugins.annotation.annotations || {};
+    tradesChart.options.plugins.annotation.annotations[`anomaly.${now}`] = {
         type: "label",
         xValue: anomaly.time || anomaly.detectedAt,
         yValue: anomaly.price,
@@ -2348,7 +2531,566 @@ function addAnomalyChartLabel(anomaly) {
         borderRadius: 6,
         id: `anomaly.${now}`,
     };
-    window.tradesChart.update("none");
+    tradesChart.update("none");
+}
+
+/**
+ * Handle incoming support/resistance level data
+ */
+function handleSupportResistanceLevel(levelData) {
+    if (!tradesChart || !levelData.data) return;
+
+    const level = levelData.data;
+
+    // Add to levels array
+    supportResistanceLevels.unshift(level);
+
+    // Limit the number of levels to prevent chart clutter
+    if (supportResistanceLevels.length > maxSupportResistanceLevels) {
+        // Remove oldest level from chart
+        const oldestLevel = supportResistanceLevels.pop();
+        removeSupportResistanceLevel(oldestLevel.id);
+    }
+
+    // Add level to chart
+    addSupportResistanceToChart(level);
+
+    console.log("Support/Resistance level added to chart:", {
+        id: level.id,
+        price: level.price,
+        type: level.type,
+        strength: level.strength,
+        touchCount: level.touchCount,
+    });
+}
+
+/**
+ * Add support/resistance level as translucent bar on chart
+ */
+function addSupportResistanceToChart(level) {
+    if (!tradesChart) return;
+
+    const annotations = tradesChart.options.plugins.annotation.annotations;
+    const levelId = `sr_level_${level.id}`;
+
+    // Determine color based on type and strength
+    const isSupport = level.type === "support";
+    const baseColor = isSupport ? "34, 197, 94" : "239, 68, 68"; // Green for support, red for resistance
+    const alpha = Math.max(0.2, Math.min(0.5, level.strength)); // Opacity based on strength
+
+    // Calculate time boundaries for the zone
+    const now = Date.now();
+    const startTime = level.firstDetected;
+    // Zone is valid until crossed or for a maximum duration
+    const maxValidDuration = 4 * 60 * 60 * 1000; // 4 hours maximum
+    const endTime = Math.min(
+        now + maxValidDuration,
+        level.lastTouched + maxValidDuration
+    );
+
+    // Create price tolerance for zone height - make it proportional to strength and touch count
+    const baseThickness = level.price * 0.0008; // 0.08% base thickness
+    const strengthMultiplier = 1 + level.strength * 2; // 1x to 3x based on strength
+    const touchMultiplier = 1 + Math.min(level.touchCount / 10, 1); // Additional thickness for more touches
+    const zoneHeight = baseThickness * strengthMultiplier * touchMultiplier;
+
+    // Add the time-bounded zone box
+    annotations[levelId] = {
+        type: "box",
+        xMin: startTime,
+        xMax: endTime,
+        yMin: level.price - zoneHeight / 2,
+        yMax: level.price + zoneHeight / 2,
+        backgroundColor: `rgba(${baseColor}, ${alpha})`,
+        borderColor: `rgba(${baseColor}, ${Math.min(alpha * 1.5, 0.8)})`,
+        borderWidth: 1,
+        borderDash: level.roleReversals?.length > 0 ? [5, 5] : undefined, // Dashed if has role reversals
+        drawTime: "beforeDatasetsDraw",
+        z: 1,
+        // Add hover interaction
+        enter: function (context, event) {
+            showSupportResistanceTooltip(level, event);
+        },
+        leave: function () {
+            hideSupportResistanceTooltip();
+        },
+    };
+
+    // Add a label for the level - positioned at the start of the zone
+    const labelId = `sr_label_${level.id}`;
+    annotations[labelId] = {
+        type: "label",
+        xValue: startTime,
+        yValue: level.price,
+        content: `${isSupport ? "SUPPORT" : "RESISTANCE"} $${level.price.toFixed(2)}`,
+        backgroundColor: `rgba(${baseColor}, 0.9)`,
+        color: "white",
+        font: {
+            size: 9,
+            weight: "bold",
+            family: "monospace",
+        },
+        padding: 3,
+        borderRadius: 3,
+        position: {
+            x: "start",
+            y: "center",
+        },
+        xAdjust: 5,
+        drawTime: "afterDatasetsDraw",
+        z: 5,
+    };
+
+    tradesChart.update("none");
+}
+
+/**
+ * Remove support/resistance level from chart
+ */
+function removeSupportResistanceLevel(levelId) {
+    if (!tradesChart) return;
+
+    const annotations = tradesChart.options.plugins.annotation.annotations;
+    const barId = `sr_level_${levelId}`;
+    const labelId = `sr_label_${levelId}`;
+
+    delete annotations[barId];
+    delete annotations[labelId];
+
+    tradesChart.update("none");
+}
+
+/**
+ * Show tooltip for support/resistance level
+ */
+function showSupportResistanceTooltip(level, event) {
+    const tooltip = document.createElement("div");
+    tooltip.className = "sr-tooltip";
+    tooltip.innerHTML = `
+        <div><strong>${level.type.toUpperCase()}: $${level.price.toFixed(2)}</strong></div>
+        <div>Strength: ${(level.strength * 100).toFixed(1)}%</div>
+        <div>Touches: ${level.touchCount}</div>
+        <div>Volume: ${level.volumeAtLevel.toFixed(2)}</div>
+        ${level.roleReversals?.length > 0 ? `<div>Role Reversals: ${level.roleReversals.length}</div>` : ""}
+        <div>First: ${new Date(level.firstDetected).toLocaleTimeString()}</div>
+        <div>Last: ${new Date(level.lastTouched).toLocaleTimeString()}</div>
+    `;
+
+    tooltip.style.position = "absolute";
+    tooltip.style.background = "var(--bg-secondary)";
+    tooltip.style.border = "1px solid var(--border-color)";
+    tooltip.style.borderRadius = "4px";
+    tooltip.style.padding = "8px";
+    tooltip.style.fontSize = "11px";
+    tooltip.style.zIndex = "1000";
+    tooltip.style.pointerEvents = "none";
+    tooltip.style.left = `${event.clientX + 10}px`;
+    tooltip.style.top = `${event.clientY - 10}px`;
+
+    document.body.appendChild(tooltip);
+
+    // Store reference for cleanup
+    window.activeSRTooltip = tooltip;
+}
+
+/**
+ * Hide support/resistance tooltip
+ */
+function hideSupportResistanceTooltip() {
+    if (window.activeSRTooltip) {
+        window.activeSRTooltip.remove();
+        window.activeSRTooltip = null;
+    }
+}
+
+/**
+ * Check if a trade price breaches any support/resistance zones and invalidate them
+ */
+function checkSupportResistanceBreaches(tradePrice, tradeTime) {
+    if (!supportResistanceLevels.length) return;
+
+    supportResistanceLevels = supportResistanceLevels.filter((level) => {
+        // Calculate breach threshold - zone is breached if price moves significantly beyond it
+        const zoneHeight =
+            level.price *
+            0.0008 *
+            (1 + level.strength * 2) *
+            (1 + Math.min(level.touchCount / 10, 1));
+        const breachThreshold = zoneHeight * 2; // Breach if price moves 2x zone height beyond level
+
+        let isBreached = false;
+
+        if (level.type === "support") {
+            // Support is breached if price falls significantly below it
+            isBreached = tradePrice < level.price - breachThreshold;
+        } else {
+            // Resistance is breached if price rises significantly above it
+            isBreached = tradePrice > level.price + breachThreshold;
+        }
+
+        if (isBreached) {
+            console.log(`${level.type.toUpperCase()} level breached:`, {
+                levelPrice: level.price,
+                tradePrice: tradePrice,
+                threshold: breachThreshold,
+                levelId: level.id,
+            });
+
+            removeSupportResistanceLevel(level.id);
+            return false; // Remove from array
+        }
+
+        return true; // Keep in array
+    });
+}
+
+/**
+ * Clean up old support/resistance levels based on time
+ */
+function cleanupOldSupportResistanceLevels() {
+    const cutoffTime = Date.now() - 2 * 60 * 60 * 1000; // 2 hours
+
+    supportResistanceLevels = supportResistanceLevels.filter((level) => {
+        if (level.lastTouched < cutoffTime) {
+            removeSupportResistanceLevel(level.id);
+            return false;
+        }
+        return true;
+    });
+}
+
+/**
+ * Zone Management Functions
+ * Handle accumulation/distribution zones as visual boxes on the chart
+ */
+
+/**
+ * Handle zone update messages from WebSocket
+ */
+function handleZoneUpdate(updateData) {
+    const { updateType, zone, significance } = updateData;
+
+    switch (updateType) {
+        case "zone_created":
+            createZoneBox(zone);
+            break;
+        case "zone_updated":
+        case "zone_strengthened":
+        case "zone_weakened":
+            updateZoneBox(zone);
+            break;
+        case "zone_completed":
+            completeZoneBox(zone);
+            break;
+        case "zone_invalidated":
+            removeZoneBox(zone.id);
+            break;
+    }
+}
+
+/**
+ * Handle zone signal messages - add to signals list
+ */
+function handleZoneSignal(signalData) {
+    const {
+        signalType,
+        zone,
+        actionType,
+        confidence,
+        urgency,
+        expectedDirection,
+    } = signalData;
+
+    // Create a normalized signal for the signals list
+    const normalizedSignal = {
+        id: `zone_${zone.id}_${Date.now()}`,
+        type: `${zone.type}_zone_${signalType}`,
+        price: zone.priceRange.center,
+        time: Date.now(),
+        side:
+            expectedDirection === "up"
+                ? "buy"
+                : expectedDirection === "down"
+                  ? "sell"
+                  : "neutral",
+        confidence: confidence,
+        urgency: urgency,
+        zone: zone,
+        stopLoss: signalData.stopLossLevel,
+        takeProfit: signalData.takeProfitLevel,
+        positionSizing: signalData.positionSizing,
+    };
+
+    // Add to signals list
+    signalsList.unshift(normalizedSignal);
+    if (signalsList.length > 50) {
+        signalsList = signalsList.slice(0, 50);
+    }
+    renderSignalsList();
+}
+
+/**
+ * Create a zone box on the chart
+ */
+function createZoneBox(zone) {
+    // Store zone data
+    activeZones.set(zone.id, zone);
+
+    // Limit number of active zones
+    if (activeZones.size > maxActiveZones) {
+        const oldestZoneId = activeZones.keys().next().value;
+        removeZoneBox(oldestZoneId);
+    }
+
+    // Add zone box to chart
+    addZoneToChart(zone);
+}
+
+/**
+ * Update an existing zone box
+ */
+function updateZoneBox(zone) {
+    activeZones.set(zone.id, zone);
+
+    // Update the chart annotation
+    if (tradesChart?.options?.plugins?.annotation?.annotations) {
+        const annotation =
+            tradesChart.options.plugins.annotation.annotations[
+                `zone_${zone.id}`
+            ];
+        if (annotation) {
+            // Update zone properties
+            annotation.yMin = zone.priceRange.min;
+            annotation.yMax = zone.priceRange.max;
+            annotation.backgroundColor = getZoneColor(zone);
+            annotation.borderColor = getZoneBorderColor(zone);
+            annotation.label.content = getZoneLabel(zone);
+
+            tradesChart.update("none");
+        }
+    }
+}
+
+/**
+ * Mark zone as completed (change visual style)
+ */
+function completeZoneBox(zone) {
+    activeZones.set(zone.id, zone);
+
+    if (tradesChart?.options?.plugins?.annotation?.annotations) {
+        const annotation =
+            tradesChart.options.plugins.annotation.annotations[
+                `zone_${zone.id}`
+            ];
+        if (annotation) {
+            // Change to completed zone style
+            annotation.backgroundColor = getCompletedZoneColor(zone);
+            annotation.borderColor = getCompletedZoneBorderColor(zone);
+            annotation.borderWidth = 2;
+            annotation.borderDash = [5, 5]; // Dashed border for completed zones
+            annotation.label.content = getZoneLabel(zone) + " ✓";
+
+            tradesChart.update("none");
+
+            // Auto-remove completed zones after 30 minutes
+            setTimeout(
+                () => {
+                    removeZoneBox(zone.id);
+                },
+                30 * 60 * 1000
+            );
+        }
+    }
+}
+
+/**
+ * Remove zone box from chart
+ */
+function removeZoneBox(zoneId) {
+    activeZones.delete(zoneId);
+
+    if (tradesChart?.options?.plugins?.annotation?.annotations) {
+        delete tradesChart.options.plugins.annotation.annotations[
+            `zone_${zoneId}`
+        ];
+        tradesChart.update("none");
+    }
+}
+
+/**
+ * Add zone as chart annotation
+ */
+function addZoneToChart(zone) {
+    if (!tradesChart?.options?.plugins?.annotation?.annotations) return;
+
+    const zoneAnnotation = {
+        type: "box",
+        xMin: zone.startTime,
+        xMax: Date.now() + 5 * 60 * 1000, // Extend 5 minutes into future
+        yMin: zone.priceRange.min,
+        yMax: zone.priceRange.max,
+        backgroundColor: getZoneColor(zone),
+        borderColor: getZoneBorderColor(zone),
+        borderWidth: 1,
+        label: {
+            display: true,
+            content: getZoneLabel(zone),
+            position: "start",
+            font: {
+                size: 10,
+                weight: "bold",
+            },
+            color: getZoneTextColor(zone),
+            backgroundColor: "rgba(255, 255, 255, 0.8)",
+            padding: 4,
+            borderRadius: 3,
+        },
+        enter: (ctx, event) => {
+            showZoneTooltip(zone, event);
+        },
+        leave: () => {
+            hideZoneTooltip();
+        },
+    };
+
+    tradesChart.options.plugins.annotation.annotations[`zone_${zone.id}`] =
+        zoneAnnotation;
+    tradesChart.update("none");
+}
+
+/**
+ * Get zone background color based on type and strength
+ */
+function getZoneColor(zone) {
+    const alpha = Math.max(0.15, zone.strength * 0.4); // Min 15%, max 40% opacity
+
+    if (zone.type === "accumulation") {
+        return `rgba(34, 197, 94, ${alpha})`; // Green
+    } else {
+        return `rgba(239, 68, 68, ${alpha})`; // Red
+    }
+}
+
+/**
+ * Get zone border color
+ */
+function getZoneBorderColor(zone) {
+    if (zone.type === "accumulation") {
+        return "rgba(34, 197, 94, 0.8)"; // Green
+    } else {
+        return "rgba(239, 68, 68, 0.8)"; // Red
+    }
+}
+
+/**
+ * Get completed zone colors (more muted)
+ */
+function getCompletedZoneColor(zone) {
+    if (zone.type === "accumulation") {
+        return "rgba(34, 197, 94, 0.2)"; // Lighter green
+    } else {
+        return "rgba(239, 68, 68, 0.2)"; // Lighter red
+    }
+}
+
+function getCompletedZoneBorderColor(zone) {
+    if (zone.type === "accumulation") {
+        return "rgba(34, 197, 94, 0.5)"; // Muted green
+    } else {
+        return "rgba(239, 68, 68, 0.5)"; // Muted red
+    }
+}
+
+/**
+ * Get zone text color
+ */
+function getZoneTextColor(zone) {
+    if (zone.type === "accumulation") {
+        return "rgba(21, 128, 61, 1)"; // Dark green
+    } else {
+        return "rgba(153, 27, 27, 1)"; // Dark red
+    }
+}
+
+/**
+ * Generate zone label text
+ */
+function getZoneLabel(zone) {
+    const typeLabel = zone.type === "accumulation" ? "ACC" : "DIST";
+    const strengthPercent = Math.round(zone.strength * 100);
+    const completionPercent = Math.round(zone.completion * 100);
+
+    return `${typeLabel} ${strengthPercent}% (${completionPercent}%)`;
+}
+
+/**
+ * Show zone tooltip on hover
+ */
+function showZoneTooltip(zone, event) {
+    const tooltip = document.createElement("div");
+    tooltip.id = "zoneTooltip";
+    tooltip.style.cssText = `
+        position: fixed;
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
+        padding: 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-family: monospace;
+        pointer-events: none;
+        z-index: 10000;
+        max-width: 300px;
+        line-height: 1.4;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    `;
+
+    const duration = Math.round((Date.now() - zone.startTime) / 60000);
+    const volumeFormatted = zone.totalVolume.toLocaleString();
+
+    tooltip.innerHTML = `
+        <div style="font-weight: bold; margin-bottom: 6px; color: ${zone.type === "accumulation" ? "#22c55e" : "#ef4444"}">
+            ${zone.type.toUpperCase()} ZONE
+        </div>
+        <div>Price Range: $${zone.priceRange.min.toFixed(4)} - $${zone.priceRange.max.toFixed(4)}</div>
+        <div>Center: $${zone.priceRange.center.toFixed(4)}</div>
+        <div>Strength: ${(zone.strength * 100).toFixed(1)}%</div>
+        <div>Completion: ${(zone.completion * 100).toFixed(1)}%</div>
+        <div>Confidence: ${(zone.confidence * 100).toFixed(1)}%</div>
+        <div>Duration: ${duration}m</div>
+        <div>Volume: ${volumeFormatted}</div>
+        <div>Trades: ${zone.tradeCount}</div>
+        <div style="margin-top: 6px; font-size: 10px; opacity: 0.8">
+            ID: ${zone.id}
+        </div>
+    `;
+
+    tooltip.style.left = `${event.clientX + 10}px`;
+    tooltip.style.top = `${event.clientY - 10}px`;
+
+    document.body.appendChild(tooltip);
+}
+
+/**
+ * Hide zone tooltip
+ */
+function hideZoneTooltip() {
+    const tooltip = document.getElementById("zoneTooltip");
+    if (tooltip) {
+        tooltip.remove();
+    }
+}
+
+/**
+ * Cleanup old completed zones
+ */
+function cleanupOldZones() {
+    const cutoffTime = Date.now() - 60 * 60 * 1000; // 1 hour
+
+    for (const [zoneId, zone] of activeZones) {
+        if (!zone.isActive && zone.endTime && zone.endTime < cutoffTime) {
+            removeZoneBox(zoneId);
+        }
+    }
 }
 
 // Start application
@@ -2366,5 +3108,88 @@ document.addEventListener("DOMContentLoaded", () => {
                 saveAnomalyFilters();
             });
         });
+    }
+
+    // Setup signal filter checkboxes
+    const signalFilterBox = document.querySelector(".signals-filter");
+    if (signalFilterBox) {
+        signalFilterBox
+            .querySelectorAll("input[type=checkbox]")
+            .forEach((box) => {
+                box.addEventListener("change", () => {
+                    if (box.checked) signalFilters.add(box.value);
+                    else signalFilters.delete(box.value);
+                    renderSignalsList();
+                });
+            });
+    }
+
+    // Setup signal hover interactions for chart transparency
+    const signalsList = document.getElementById("signalsList");
+    if (signalsList) {
+        signalsList.addEventListener(
+            "mouseenter",
+            (e) => {
+                if (e.target.closest(".signal-row")) {
+                    const signalRow = e.target.closest(".signal-row");
+                    const signalId = signalRow.dataset.signalId;
+
+                    // Make other chart annotations transparent
+                    if (
+                        tradesChart?.options?.plugins?.annotation?.annotations
+                    ) {
+                        Object.keys(
+                            tradesChart.options.plugins.annotation.annotations
+                        ).forEach((key) => {
+                            if (key !== signalId && key !== "lastPriceLine") {
+                                const annotation =
+                                    tradesChart.options.plugins.annotation
+                                        .annotations[key];
+                                if (annotation && annotation.backgroundColor) {
+                                    annotation.backgroundColor =
+                                        annotation.backgroundColor.replace(
+                                            /[\d\.]+\)$/,
+                                            "0.1)"
+                                        );
+                                }
+                            }
+                        });
+                        tradesChart.update("none");
+                    }
+                }
+            },
+            true
+        );
+
+        signalsList.addEventListener(
+            "mouseleave",
+            (e) => {
+                if (e.target.closest(".signal-row")) {
+                    // Restore normal transparency for all annotations
+                    if (
+                        tradesChart?.options?.plugins?.annotation?.annotations
+                    ) {
+                        Object.keys(
+                            tradesChart.options.plugins.annotation.annotations
+                        ).forEach((key) => {
+                            if (key !== "lastPriceLine") {
+                                const annotation =
+                                    tradesChart.options.plugins.annotation
+                                        .annotations[key];
+                                if (annotation && annotation.backgroundColor) {
+                                    annotation.backgroundColor =
+                                        annotation.backgroundColor.replace(
+                                            /[\d\.]+\)$/,
+                                            "0.5)"
+                                        );
+                                }
+                            }
+                        });
+                        tradesChart.update("none");
+                    }
+                }
+            },
+            true
+        );
     }
 });

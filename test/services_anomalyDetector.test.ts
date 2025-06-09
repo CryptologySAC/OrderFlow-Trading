@@ -17,27 +17,42 @@ describe("services/AnomalyDetector", () => {
     });
 
     it("calculates price statistics for anomaly detection", () => {
+        vi.useFakeTimers();
         const detector = new AnomalyDetector(
-            { tickSize: 0.5, minHistory: 1 },
+            { tickSize: 0.5, minHistory: 1, spreadThresholdBps: 200 },
             new Logger()
         );
         detector.updateBestQuotes(100, 101);
-        detector.onEnrichedTrade({
-            price: 100,
-            quantity: 1,
-            timestamp: Date.now(),
-            buyerIsMaker: false,
-            symbol: "TEST",
-            tradeId: "1",
-            passiveBidVolume: 0,
-            originalTrade: { s: "TEST" },
-            passiveAskVolume: 0,
-            zonePassiveBidVolume: 0,
-            zonePassiveAskVolume: 0,
-        } as any);
+
+        const start = Date.now();
+        for (let i = 0; i < 15; i++) {
+            detector.onEnrichedTrade({
+                price: 100,
+                quantity: 1,
+                timestamp: start + i * 1000,
+                buyerIsMaker: false,
+                symbol: "TEST",
+                tradeId: String(i),
+                passiveBidVolume: 0,
+                originalTrade: { s: "TEST" },
+                passiveAskVolume: 0,
+                zonePassiveBidVolume: 0,
+                zonePassiveAskVolume: 0,
+            } as any);
+            vi.advanceTimersByTime(1000);
+        }
+
         const health = detector.getMarketHealth();
-        expect(health.isHealthy).toBeDefined();
-        expect(health.recommendation).toBeDefined();
+
+        expect(health.isHealthy).toBe(false);
+        expect(health.recommendation).toBe("pause");
+        expect(health.recentAnomalies).toBeGreaterThan(0);
+        expect(health.metrics.spreadBps).toBe(100);
+        expect(health.metrics.flowImbalance).toBe(1);
+        expect(health.metrics.volatility).toBe(0);
+        expect(health.metrics.lastUpdateAge).toBe(1000);
+
+        vi.useRealTimers();
     });
 
     it("stores trade snapshots in history", () => {

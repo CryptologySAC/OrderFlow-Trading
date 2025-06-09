@@ -58,5 +58,4 @@ function triggerChartResize() {
     // Trigger chart resize after column resize
     if (window.tradesChart) window.tradesChart.resize();
     if (window.orderBookChart) window.orderBookChart.resize();
-    if (window.delayGauge) window.delayGauge.update();
 }
