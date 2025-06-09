@@ -22,16 +22,86 @@ interface SignalMessage {
 
 type WorkerMessage = LogMessage | SignalMessage | { type: "shutdown" };
 
+// Add global error handlers
+process.on("uncaughtException", (error: Error) => {
+    logger.error("Uncaught exception in logger worker", {
+        error: error.message,
+        stack: error.stack,
+    });
+    gracefulShutdown(1);
+});
+
+process.on("unhandledRejection", (reason: unknown) => {
+    logger.error("Unhandled promise rejection in logger worker", {
+        reason: reason instanceof Error ? reason.message : String(reason),
+        stack: reason instanceof Error ? reason.stack : undefined,
+    });
+    gracefulShutdown(1);
+});
+
+function gracefulShutdown(exitCode: number = 0): void {
+    try {
+        logger.info("Logger worker starting graceful shutdown");
+
+        // Signal logger uses synchronous file operations, no flush needed
+
+        logger.info("Logger worker shutdown complete");
+        process.exit(exitCode);
+    } catch (error) {
+        logger.error("Error during logger worker shutdown", {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        process.exit(1);
+    }
+}
+
 parentPort?.on("message", (msg: WorkerMessage) => {
-    switch (msg.type) {
-        case "log":
-            handleLog(msg);
-            break;
-        case "signal":
-            signalLogger.logEvent(msg.event);
-            break;
-        case "shutdown":
-            process.exit(0);
+    try {
+        switch (msg.type) {
+            case "log":
+                try {
+                    handleLog(msg);
+                } catch (error) {
+                    // Failed to log message - notify parent
+                    parentPort?.postMessage({
+                        type: "error",
+                        message: `Failed to log message: ${error instanceof Error ? error.message : String(error)}`,
+                    });
+                }
+                break;
+            case "signal":
+                try {
+                    signalLogger.logEvent(msg.event);
+                } catch (error: unknown) {
+                    logger.error("Failed to log signal event", {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                        event: msg.event,
+                    });
+                    parentPort?.postMessage({
+                        type: "error",
+                        message: `Failed to log signal: ${error instanceof Error ? error.message : String(error)}`,
+                    });
+                }
+                break;
+            case "shutdown":
+                gracefulShutdown(0);
+                break;
+        }
+    } catch (error) {
+        logger.error("Error handling worker message", {
+            messageType: msg.type,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+        });
+
+        // Notify parent of error
+        parentPort?.postMessage({
+            type: "error",
+            message: `Error handling ${msg.type} message: ${error instanceof Error ? error.message : String(error)}`,
+        });
     }
 });
 

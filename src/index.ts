@@ -27,11 +27,26 @@ export async function main(): Promise<void> {
             "Order Flow Trading system (Multithreaded) started successfully"
         );
 
-        const shutdown = (): void => {
-            void threadManager.shutdown();
+        const shutdown = async (): Promise<void> => {
+            console.log(
+                "Received shutdown signal, shutting down gracefully..."
+            );
+            try {
+                await threadManager.shutdown();
+                console.log("Shutdown completed successfully");
+                process.exit(0);
+            } catch (error) {
+                console.error("Error during shutdown:", error);
+                process.exit(1);
+            }
         };
-        process.on("SIGINT", shutdown);
-        process.on("SIGTERM", shutdown);
+
+        process.on("SIGINT", () => {
+            void shutdown();
+        });
+        process.on("SIGTERM", () => {
+            void shutdown();
+        });
     } catch (error: unknown) {
         const err = error instanceof Error ? error : new Error(String(error));
         console.error("Failed to start Order Flow Trading system:", err);

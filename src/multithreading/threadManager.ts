@@ -16,6 +16,19 @@ function isMetricsMessage(msg: unknown): msg is MetricsMessage {
     );
 }
 
+interface ErrorMessage {
+    type: "error";
+    message: string;
+}
+
+function isErrorMessage(msg: unknown): msg is ErrorMessage {
+    return (
+        typeof msg === "object" &&
+        msg !== null &&
+        (msg as { type?: unknown }).type === "error"
+    );
+}
+
 export class ThreadManager {
     private readonly loggerWorker: Worker;
     private readonly binanceWorker: Worker;
@@ -37,6 +50,21 @@ export class ThreadManager {
         this.binanceWorker.on("message", (msg: unknown) => {
             if (isMetricsMessage(msg)) {
                 this.commWorker.postMessage(msg);
+            } else if (isErrorMessage(msg)) {
+                console.error("Binance worker error:", msg.message);
+            }
+        });
+
+        // Handle error messages from other workers
+        this.loggerWorker.on("message", (msg: unknown) => {
+            if (isErrorMessage(msg)) {
+                console.error("Logger worker error:", msg.message);
+            }
+        });
+
+        this.commWorker.on("message", (msg: unknown) => {
+            if (isErrorMessage(msg)) {
+                console.error("Communication worker error:", msg.message);
             }
         });
 

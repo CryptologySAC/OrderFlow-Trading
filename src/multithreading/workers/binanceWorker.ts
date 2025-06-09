@@ -21,32 +21,126 @@ const manager = new DataStreamManager(
 // Store interval reference for proper cleanup
 let metricsInterval: NodeJS.Timeout | null = null;
 
+// Add global error handlers
+process.on("uncaughtException", (error: Error) => {
+    logger.error("Uncaught exception in binance worker", {
+        error: error.message,
+        stack: error.stack,
+    });
+    void gracefulShutdown(1);
+});
+
+process.on("unhandledRejection", (reason: unknown) => {
+    logger.error("Unhandled promise rejection in binance worker", {
+        reason: reason instanceof Error ? reason.message : String(reason),
+        stack: reason instanceof Error ? reason.stack : undefined,
+    });
+    void gracefulShutdown(1);
+});
+
+async function gracefulShutdown(exitCode: number = 0): Promise<void> {
+    try {
+        logger.info("Binance worker starting graceful shutdown");
+
+        // Clear metrics interval
+        if (metricsInterval) {
+            clearInterval(metricsInterval);
+            metricsInterval = null;
+        }
+
+        // Disconnect from data stream with timeout
+        const disconnectPromise = manager.disconnect();
+        const timeoutPromise = new Promise<void>((resolve) => {
+            setTimeout(() => resolve(), 5000); // 5 second timeout
+        });
+
+        await Promise.race([disconnectPromise, timeoutPromise]);
+
+        logger.info("Binance worker shutdown complete");
+        process.exit(exitCode);
+    } catch (error) {
+        logger.error("Error during binance worker shutdown", {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        process.exit(1);
+    }
+}
+
 parentPort?.on("message", (msg: { type: string }) => {
-    if (msg.type === "start") {
-        void manager.connect();
-        // Start metrics reporting when worker starts
-        if (!metricsInterval) {
-            metricsInterval = setInterval(() => {
-                parentPort?.postMessage({
-                    type: "metrics",
-                    data: manager.getDetailedMetrics(),
+    try {
+        if (msg.type === "start") {
+            manager
+                .connect()
+                .then(() => {
+                    logger.info("Binance data stream connected successfully");
+                })
+                .catch((error: unknown) => {
+                    logger.error("Failed to connect binance data stream", {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
+                    parentPort?.postMessage({
+                        type: "error",
+                        message: "Failed to connect to binance data stream",
+                    });
                 });
-            }, 1000);
+
+            // Start metrics reporting when worker starts
+            if (!metricsInterval) {
+                metricsInterval = setInterval(() => {
+                    try {
+                        parentPort?.postMessage({
+                            type: "metrics",
+                            data: manager.getDetailedMetrics(),
+                        });
+                    } catch (error) {
+                        logger.error("Error sending metrics", {
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                        });
+                    }
+                }, 1000);
+            }
+        } else if (msg.type === "stop") {
+            manager
+                .disconnect()
+                .then(() => {
+                    logger.info(
+                        "Binance data stream disconnected successfully"
+                    );
+                })
+                .catch((error: unknown) => {
+                    logger.error("Error disconnecting binance data stream", {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
+                });
+
+            // Clear metrics interval when stopped
+            if (metricsInterval) {
+                clearInterval(metricsInterval);
+                metricsInterval = null;
+            }
+        } else if (msg.type === "shutdown") {
+            void gracefulShutdown(0);
         }
-    } else if (msg.type === "stop") {
-        void manager.disconnect();
-        // Clear metrics interval when stopped
-        if (metricsInterval) {
-            clearInterval(metricsInterval);
-            metricsInterval = null;
-        }
-    } else if (msg.type === "shutdown") {
-        // Clean up resources before shutdown
-        if (metricsInterval) {
-            clearInterval(metricsInterval);
-            metricsInterval = null;
-        }
-        void manager.disconnect();
-        process.exit(0);
+    } catch (error) {
+        logger.error("Error handling worker message", {
+            messageType: msg.type,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+        });
+
+        // Notify parent of error
+        parentPort?.postMessage({
+            type: "error",
+            message: `Error handling ${msg.type} message: ${error instanceof Error ? error.message : String(error)}`,
+        });
     }
 });
