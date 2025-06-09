@@ -285,7 +285,9 @@ export class PassiveVolumeTracker {
     updatePassiveVolume(price: number, bid: number, ask: number): void {
         let history = this.passiveVolumeHistory.get(price) || [];
         history.push({ time: Date.now(), bid, ask });
-        if (history.length > 30) history = history.slice(-30);
+        if (history.length > 30) {
+            history.shift(); // Remove oldest item instead of creating new array
+        }
         this.passiveVolumeHistory.set(price, history);
         this.lastSeenPassive.set(price, { bid, ask });
     }

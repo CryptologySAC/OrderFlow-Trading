@@ -42,7 +42,9 @@ export class SpoofingDetector {
         const now = Date.now();
         let history = this.passiveChangeHistory.get(price) || [];
         history.push({ time: now, bid, ask });
-        if (history.length > 10) history = history.slice(-10);
+        if (history.length > 10) {
+            history.shift(); // Remove oldest item instead of creating new array
+        }
         this.passiveChangeHistory.set(price, history);
     }
 
