@@ -12,6 +12,9 @@ export interface Metrics {
     circuitBreakerState: string;
     uptime: number;
 
+    // Server Metrics
+    connections_active?: number;
+
     // Trade processing metrics
     tradeMessages?: number;
     depthMessages?: number;
