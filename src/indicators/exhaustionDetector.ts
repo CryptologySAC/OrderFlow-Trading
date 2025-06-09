@@ -24,6 +24,7 @@ import type {
     ExhaustionFeatures,
 } from "./interfaces/detectorInterfaces.js";
 import { SignalType, ExhaustionSignalData } from "../types/signalTypes.js";
+import { DepthLevel } from "../utils/utils.js";
 
 export interface ExhaustionSettings extends BaseDetectorSettings {
     features?: ExhaustionFeatures;
@@ -435,108 +436,28 @@ export class ExhaustionDetector
             errorCount: this.errorCount,
         });
 
-        // 🔍 DEBUG: Check depth map status
-        const depthKeys = Array.from(this.depth.keys()).slice(0, 10); // First 10 keys
-        const depthHasPrice = this.depth.has(price);
-        const depthMapSize: number = this.depth.size();
-        this.logger.info(`[ExhaustionDetector] 🗃️ DEPTH MAP STATUS`, {
+        // Get current book level
+        const bookLevel = this.getBookLevel(price, zone, side);
+        if (!bookLevel) {
+            this.logger.info(
+                `[ExhaustionDetector] No passive volume data for zone`,
+                {
+                    zone,
+                    price,
+                    side,
+                    zoneHistorySize:
+                        this.zonePassiveHistory.get(zone)?.count() || 0,
+                }
+            );
+            return;
+        }
+
+        this.logger.info(`[ExhaustionDetector] ✅ FOUND BOOK LEVEL DATA`, {
             zone,
             price,
             side,
-            depthSize: depthMapSize,
-            depthHasPrice,
-            searchedPrice: price,
-            pricePrecision: this.pricePrecision,
-            sampleDepthKeys: depthKeys,
-            latestTradeOriginalPrice: latestTrade.price,
+            bookLevel: { bid: bookLevel.bid, ask: bookLevel.ask },
         });
-
-        // Get current book level
-        let bookLevel = this.depth.get(price);
-        if (!bookLevel) {
-            // 🔍 TRY ALTERNATIVE PRICE FORMATS
-            const altPrice1 = parseFloat(price.toFixed(2)); // 2 decimal places
-            const altPrice2 = parseFloat(price.toFixed(4)); // 4 decimal places
-            const altPrice3 = Math.round(price * 100) / 100; // Round to cent
-            const originalPrice = latestTrade.price;
-
-            bookLevel =
-                this.depth.get(altPrice1) ||
-                this.depth.get(altPrice2) ||
-                this.depth.get(altPrice3) ||
-                this.depth.get(originalPrice);
-
-            this.logger.info(
-                `[ExhaustionDetector] 🔍 ALTERNATIVE PRICE SEARCH`,
-                {
-                    zone,
-                    price,
-                    side,
-                    originalPrice,
-                    altPrice1,
-                    altPrice2,
-                    altPrice3,
-                    foundWithAlt1: !!this.depth.get(altPrice1),
-                    foundWithAlt2: !!this.depth.get(altPrice2),
-                    foundWithAlt3: !!this.depth.get(altPrice3),
-                    foundWithOriginal: !!this.depth.get(originalPrice),
-                    finalBookLevel: !!bookLevel,
-                }
-            );
-        }
-
-        if (!bookLevel) {
-            // 🔍 FIND NEAREST PRICE LEVELS
-            const nearestPrices = this.findNearestPriceLevels(price, 5);
-
-            this.logger.info(
-                `[ExhaustionDetector] ❌ STILL NO BOOK LEVEL FOUND`,
-                {
-                    zone,
-                    price,
-                    side,
-                    searchedPrice: price,
-                    nearestAvailablePrices: nearestPrices,
-                    suggestion:
-                        "Check if depth map is being populated correctly",
-                }
-            );
-
-            // 🔧 FIX: Try to use nearest price level as fallback
-            if (nearestPrices.length > 0) {
-                const nearestPrice = nearestPrices[0];
-                bookLevel = this.depth.get(nearestPrice);
-
-                if (bookLevel) {
-                    this.logger.info(
-                        `[ExhaustionDetector] ✅ USING NEAREST PRICE LEVEL`,
-                        {
-                            zone,
-                            side,
-                            originalPrice: price,
-                            nearestPrice,
-                            priceDistance: Math.abs(price - nearestPrice),
-                        }
-                    );
-                }
-            }
-
-            // 🔧 FIX: If still no book level, continue with analysis anyway using estimated data
-            if (!bookLevel) {
-                this.logger.info(
-                    `[ExhaustionDetector] ⚠️ PROCEEDING WITHOUT BOOK LEVEL`,
-                    {
-                        zone,
-                        price,
-                        side,
-                        reason: "Will use trade data and skip book-dependent checks",
-                    }
-                );
-
-                // Create a minimal fake book level to continue analysis
-                bookLevel = { bid: 0, ask: 0 };
-            }
-        }
 
         // Check cooldown to prevent spam (update after confirmation)
         if (!this.checkCooldown(zone, side, false)) {
@@ -820,6 +741,100 @@ export class ExhaustionDetector
             );
 
         return allPrices.slice(0, maxResults);
+    }
+
+    private getBookLevelFromZoneHistory(zone: number): DepthLevel | undefined {
+        const zoneHistory = this.zonePassiveHistory.get(zone);
+        if (!zoneHistory || zoneHistory.count() === 0) {
+            return undefined; // ✅ Return undefined instead of null
+        }
+
+        const latestSnapshot = zoneHistory.toArray().at(-1);
+        if (!latestSnapshot) {
+            return undefined; // ✅ Return undefined instead of null
+        }
+
+        // ✅ Return proper DepthLevel object
+        return {
+            bid: latestSnapshot.bid,
+            ask: latestSnapshot.ask,
+        } as DepthLevel; // ✅ Cast to DepthLevel type
+    }
+
+    private getBookLevelFromRecentTrade(zone: number): DepthLevel | undefined {
+        // Find recent trades in this zone
+        const now = Date.now();
+        const recentTrades = this.trades.filter((trade) => {
+            const tradeZone = this.calculateZone(trade.price);
+            return tradeZone === zone && now - trade.timestamp < 30000; // Last 30 seconds
+        });
+
+        if (recentTrades.length === 0) {
+            return undefined;
+        }
+
+        // Get the most recent trade
+        const latestTrade = recentTrades[recentTrades.length - 1];
+
+        // If it's an EnrichedTradeEvent, it should have passive volume data
+        if (
+            "zonePassiveBidVolume" in latestTrade &&
+            "zonePassiveAskVolume" in latestTrade
+        ) {
+            const enrichedTrade = latestTrade as EnrichedTradeEvent;
+            return {
+                bid: enrichedTrade.zonePassiveBidVolume,
+                ask: enrichedTrade.zonePassiveAskVolume,
+            };
+        }
+
+        return undefined;
+    }
+
+    private getBookLevel(
+        price: number,
+        zone: number,
+        side: "buy" | "sell"
+    ): { bid: number; ask: number } | null {
+        // Method 1: Try this.depth (if it gets populated later)
+        let bookLevel = this.depth.get(price);
+        if (bookLevel && (bookLevel.bid > 0 || bookLevel.ask > 0)) {
+            this.logger.debug(
+                `[ExhaustionDetector] Book level from depth map`,
+                { price, bookLevel }
+            );
+            return bookLevel;
+        }
+
+        // Method 2: Use zone passive history (current working data)
+        bookLevel = this.getBookLevelFromZoneHistory(zone);
+        if (bookLevel && (bookLevel.bid > 0 || bookLevel.ask > 0)) {
+            this.logger.debug(
+                `[ExhaustionDetector] Book level from zone history`,
+                { zone, bookLevel }
+            );
+            return bookLevel;
+        }
+
+        // Method 3: Try recent enriched trade data
+        bookLevel = this.getBookLevelFromRecentTrade(zone);
+        if (bookLevel && (bookLevel.bid > 0 || bookLevel.ask > 0)) {
+            this.logger.debug(
+                `[ExhaustionDetector] Book level from recent trade`,
+                { zone, bookLevel }
+            );
+            return bookLevel;
+        }
+
+        // No book level data available
+        this.logger.debug(`[ExhaustionDetector] No book level data available`, {
+            price,
+            zone,
+            side,
+            zoneHistorySize: this.zonePassiveHistory.get(zone)?.count() || 0,
+        });
+
+        return null;
     }
 
     protected handleDetection(signal: ExhaustionSignalData): void {
