@@ -179,10 +179,10 @@
                 "testLogMinSpoof": 100
             },
             "exhaustion": {
-                "minAggVolume": 1,
+                "minAggVolume": 50,
                 "threshold": 0.1,
-                "windowMs": 20000,
-                "zoneTicks": 1,
+                "windowMs": 30000,
+                "zoneTicks": 3,
                 "eventCooldownMs": 5000,
                 "signalCooldownMs": 35000,
                 "maxPassiveRatio": 1,
@@ -193,11 +193,11 @@
                 "features": {
                     "depletionTracking": true,
                     "spreadAdjustment": true,
-                    "spoofingDetection": false,
-                    "autoCalibrate": false,
-                    "adaptiveZone": false,
-                    "multiZone": false,
-                    "volumeVelocity": false,
+                    "spoofingDetection": true,
+                    "autoCalibrate": true,
+                    "adaptiveZone": true,
+                    "multiZone": true,
+                    "volumeVelocity": true,
                     "passiveHistory": true
                 }
             },
