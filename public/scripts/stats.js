@@ -1,4 +1,4 @@
-const wsUrl = `ws://localhost:3001`;
+const wsUrl = `wss://api.cryptology.pe/ltcusdt_trades`;
 let ws;
 let pingTimer;
 

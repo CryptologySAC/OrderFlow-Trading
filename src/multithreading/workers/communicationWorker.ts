@@ -171,7 +171,44 @@ const statsBroadcaster = new StatsBroadcaster(
     logger
 );
 
+// Store reference for stats broadcasting
+let statsBroadcastTimer: NodeJS.Timeout | null = null;
+
+// Start stats broadcasting to WebSocket clients
+function startStatsBroadcasting(): void {
+    if (statsBroadcastTimer) {
+        clearInterval(statsBroadcastTimer);
+    }
+
+    statsBroadcastTimer = setInterval(() => {
+        try {
+            const stats = {
+                metrics: metrics.getMetrics(),
+                health: metrics.getHealthSummary(),
+                dataStream: dataStream.getDetailedMetrics(),
+            };
+
+            wsManager.broadcast({
+                type: "stats",
+                data: stats,
+                now: Date.now(),
+            });
+
+            logger.debug("Stats broadcasted to WebSocket clients", {
+                clientCount: global.connectedClients?.size || 0,
+                statsSize: JSON.stringify(stats).length,
+            });
+        } catch (error) {
+            logger.error("Error broadcasting stats", {
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }, 5000); // Broadcast every 5 seconds
+}
+
+// Start both the original stats broadcaster and our custom WebSocket broadcasting
 statsBroadcaster.start();
+startStatsBroadcasting();
 
 interface MetricsMessage {
     type: "metrics";
@@ -210,6 +247,12 @@ process.on("unhandledRejection", (reason: unknown) => {
 async function gracefulShutdown(exitCode: number = 0): Promise<void> {
     try {
         logger.info("Communication worker starting graceful shutdown");
+
+        // Stop stats broadcasting timer
+        if (statsBroadcastTimer) {
+            clearInterval(statsBroadcastTimer);
+            statsBroadcastTimer = null;
+        }
 
         // Stop broadcasting first
         try {
@@ -256,7 +299,24 @@ parentPort?.on(
         try {
             if (msg.type === "metrics") {
                 try {
+                    // Update the data stream proxy with metrics from binance worker
                     dataStream.setMetrics(msg.data);
+
+                    // Also update our local metrics collector with the new data
+                    if (msg.data && typeof msg.data === "object") {
+                        // Update connections count from the new data
+                        if (global.connectedClients) {
+                            metrics.updateMetric(
+                                "connections_active",
+                                global.connectedClients.size
+                            );
+                        }
+
+                        logger.debug("Updated metrics from binance worker", {
+                            dataSize: JSON.stringify(msg.data).length,
+                            connectionCount: global.connectedClients?.size || 0,
+                        });
+                    }
                 } catch (error) {
                     logger.error("Error setting metrics data", {
                         error:
