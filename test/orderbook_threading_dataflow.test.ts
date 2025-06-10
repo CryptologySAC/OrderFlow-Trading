@@ -6,6 +6,11 @@ import {
 import { ThreadManager } from "../src/multithreading/threadManager.js";
 import type { SpotWebsocketStreams } from "@binance/spot";
 
+// Mock external dependencies that connect to live services
+vi.mock("../src/utils/binance.js");
+vi.mock("../src/infrastructure/logger.js");
+vi.mock("../src/infrastructure/metricsCollector.js");
+
 // Mock worker threads
 vi.mock("worker_threads", () => ({
     Worker: vi.fn(),
@@ -165,9 +170,8 @@ describe("OrderBook Threading Data Flow", () => {
         await new Promise((resolve) => setTimeout(resolve, 10));
 
         // Verify the orderbook processor was called
-        // Note: This might not be called immediately due to async processing
-        // The test verifies the data flow path exists
-        expect(orderBookUpdateSpy).toHaveBeenCalledTimes(0); // May be 0 if orderbook isn't initialized yet
+        // The data flow is working correctly if this is called
+        expect(orderBookUpdateSpy).toHaveBeenCalledTimes(1);
 
         orderBookUpdateSpy.mockRestore();
         broadcastSpy.mockRestore();
