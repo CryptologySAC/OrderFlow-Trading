@@ -2,7 +2,7 @@
 import { EventEmitter } from "events";
 import { WorkerLogger } from "../../multithreading/workerLogger";
 import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
-import { ISignalLogger } from "../../services/signalLogger.js";
+import { ISignalLogger } from "../../infrastructure/signalLoggerInterface.js";
 import type { EnrichedTradeEvent } from "../../types/marketEvents.js";
 import type { SignalCandidate } from "../../types/signalTypes.js";
 

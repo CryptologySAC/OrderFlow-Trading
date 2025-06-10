@@ -4,7 +4,7 @@ import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import { BaseDetector } from "./base/baseDetector.js";
 import { WorkerLogger } from "../multithreading/workerLogger";
 import type { MetricsCollector } from "../infrastructure/metricsCollector.js";
-import type { ISignalLogger } from "../services/signalLogger.js";
+import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
 import type {
     DetectorCallback,

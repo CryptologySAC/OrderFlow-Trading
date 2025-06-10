@@ -1,6 +1,88 @@
+import * as fs from "fs";
+import * as path from "path";
 import { parentPort } from "worker_threads";
 import { Logger } from "../../infrastructure/logger.js";
-import { SignalLogger, type SignalEvent } from "../../services/signalLogger.js";
+import {
+    ISignalLogger,
+    SignalEvent,
+} from "../../infrastructure/signalLoggerInterface.js";
+import type {
+    ProcessedSignal,
+    SignalCandidate,
+} from "../../types/signalTypes.js";
+
+class SignalLogger implements ISignalLogger {
+    private readonly logger: Logger | null;
+    private file: string;
+    private headerWritten = false;
+
+    constructor(filename: string, logger: Logger) {
+        this.file = path.resolve(filename);
+        if (!fs.existsSync(this.file)) {
+            this.headerWritten = false;
+        } else {
+            this.headerWritten = true;
+        }
+
+        this.logger = logger;
+    }
+
+    // Implement the interface method (same as logEvent)
+    logEvent(event: SignalEvent) {
+        const header = Object.keys(event).join(",") + "\n";
+        const row =
+            Object.values(event)
+                .map((v) => (v === undefined ? "" : `"${v}"`))
+                .join(",") + "\n";
+
+        if (!this.headerWritten) {
+            fs.appendFileSync(this.file, header);
+            this.headerWritten = true;
+        }
+        fs.appendFileSync(this.file, row);
+    }
+
+    /**
+     * Log processed signal
+     */
+    public logProcessedSignal(
+        signal: ProcessedSignal,
+        metadata: Record<string, unknown>
+    ): void {
+        if (this.logger) {
+            this.logger.info("Signal processed", {
+                component: "SignalLogger",
+                operation: "logProcessedSignal",
+                signalId: signal.id,
+                signalType: signal.type,
+                detectorId: signal.detectorId,
+                confidence: signal.confidence,
+                ...metadata,
+            });
+        }
+    }
+
+    /**
+     * Log processing error
+     */
+    public logProcessingError(
+        candidate: SignalCandidate,
+        error: Error,
+        metadata: Record<string, unknown>
+    ): void {
+        if (this.logger) {
+            this.logger.error("Signal processing error", {
+                component: "SignalLogger",
+                operation: "logProcessingError",
+                candidateId: candidate.id,
+                candidateType: candidate.type,
+                error: error.message,
+                stack: error.stack,
+                ...metadata,
+            });
+        }
+    }
+}
 
 const logger = new Logger(process.env.NODE_ENV === "development");
 const signalLogger = new SignalLogger("./storage/signals.csv", logger);

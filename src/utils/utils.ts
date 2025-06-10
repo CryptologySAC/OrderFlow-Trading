@@ -1,5 +1,5 @@
 import { SpotWebsocketStreams } from "@binance/spot";
-import { ISignalLogger } from "../services/signalLogger.js";
+import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 
 /**
  * Utility to parse boolean-like environment strings.

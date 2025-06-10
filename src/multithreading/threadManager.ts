@@ -1,6 +1,6 @@
 import { Worker } from "worker_threads";
 
-import type { SignalEvent } from "../services/signalLogger.js";
+import type { SignalEvent } from "../infrastructure/signalLoggerInterface.js";
 import type { WebSocketMessage } from "../utils/interfaces.js";
 import type { SignalTracker } from "../analysis/signalTracker.js";
 

@@ -2,7 +2,7 @@ import { Detector } from "./detectorEnrichedTrade.js";
 import { EnrichedTradeEvent } from "../../types/marketEvents.js";
 import { WorkerLogger } from "../../multithreading/workerLogger";
 import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
-import { ISignalLogger } from "../../services/signalLogger.js";
+import { ISignalLogger } from "../../infrastructure/signalLoggerInterface.js";
 import { ZoneManager } from "../../trading/zoneManager.js";
 import {
     ZoneAnalysisResult,

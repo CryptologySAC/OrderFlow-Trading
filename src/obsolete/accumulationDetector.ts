@@ -4,7 +4,7 @@ import { SpotWebsocketStreams } from "@binance/spot";
 import { BaseDetector } from "../indicators/base/baseDetector.js";
 import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
-import { ISignalLogger } from "../services/signalLogger.js";
+import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
 import { SharedPools } from "../utils/objectPool.js";

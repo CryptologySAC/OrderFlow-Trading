@@ -4,7 +4,7 @@ import type { IStorage } from "../storage/storage.js";
 import type { IBinanceDataFeed } from "../utils/binance.js";
 import type { ITradesProcessor } from "../clients/tradesProcessor.js";
 import type { OrderBookProcessor } from "../clients/orderBookProcessor.js";
-import type { ISignalLogger } from "../services/signalLogger.js";
+import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { RateLimiter } from "../infrastructure/rateLimiter.js";

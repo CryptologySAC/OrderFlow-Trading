@@ -1,5 +1,8 @@
 import type { ProcessedSignal, SignalCandidate } from "../types/signalTypes.js";
-import type { ISignalLogger, SignalEvent } from "../services/signalLogger.js";
+import type {
+    ISignalLogger,
+    SignalEvent,
+} from "../infrastructure/signalLoggerInterface.js";
 import { ThreadManager } from "./threadManager.js";
 
 export class WorkerSignalLogger implements ISignalLogger {

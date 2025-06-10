@@ -7,7 +7,7 @@ import {
     SignalType,
 } from "../types/signalTypes.js";
 import { BaseDetector } from "../indicators/base/baseDetector.js";
-import type { ISignalLogger } from "./signalLogger.js";
+import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { SignalManager } from "../trading/signalManager.js";
 import { WorkerLogger } from "../multithreading/workerLogger";
 import { IPipelineStorage } from "../storage/pipelineStorage.js";
