@@ -13,6 +13,7 @@ describe("TradesProcessor", () => {
     let metrics: MetricsCollector;
     let storage: any;
     let processor: TradesProcessor;
+    let mockBinanceFeed: any;
 
     beforeEach(() => {
         vi.useFakeTimers();
@@ -22,11 +23,16 @@ describe("TradesProcessor", () => {
             saveAggregatedTradesBulk: vi.fn(),
             getLatestAggregatedTrades: vi.fn().mockReturnValue([]),
         };
+        mockBinanceFeed = {
+            disconnect: vi.fn().mockResolvedValue(undefined),
+            fetchAggTradesByTime: vi.fn().mockResolvedValue([]),
+        };
         processor = new TradesProcessor(
             { symbol: "TEST", healthCheckInterval: 1000000, saveQueueSize: 10 },
             storage,
             logger,
-            metrics
+            metrics,
+            mockBinanceFeed
         );
     });
 

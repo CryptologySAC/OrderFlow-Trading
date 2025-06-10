@@ -2,6 +2,52 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🏛️ INSTITUTIONAL GRADE DEVELOPMENT STANDARDS
+
+This is a **PRODUCTION TRADING SYSTEM** handling real financial data and trading decisions. All code changes must meet institutional-grade standards with zero tolerance for errors that could impact trading operations.
+
+### 🚨 CRITICAL PROTECTION PROTOCOLS
+
+#### Change Management Hierarchy (STRICT ENFORCEMENT)
+
+**🔒 PRODUCTION-CRITICAL FILES (NO MODIFICATIONS WITHOUT EXPLICIT APPROVAL):**
+
+- `src/trading/dataStreamManager.ts` - Market data connectivity
+- `src/market/orderFlowPreprocessor.ts` - Core trade processing
+- `src/indicators/*/` - All pattern detection algorithms
+- `src/services/signalCoordinator.ts` - Signal processing pipeline
+- `src/trading/signalManager.ts` - Trading signal validation
+- `src/multithreading/threadManager.ts` - Worker thread orchestration
+- `src/multithreading/workers/*` - All worker thread implementations
+- `src/multithreading/workerLogger.ts` - Worker logging delegation
+- `/public/scripts/dashboard.js` - Production WebSocket URLs
+- `config.json` - Production configuration parameters
+
+**⚠️ BUSINESS-CRITICAL FILES (REQUIRES VALIDATION):**
+
+- `src/infrastructure/db.ts` - Database operations
+- `src/infrastructure/migrate.ts` - Data migrations
+- `src/websocket/websocketManager.ts` - Client connections
+- `src/core/config.ts` - Configuration management
+
+**✅ DEVELOPMENT-SAFE FILES:**
+
+- Test files (`test/**/*.test.ts`)
+- Documentation (`docs/**/*.md`)
+- Build scripts (`package.json`, `tsconfig.json`)
+- Development utilities
+
+#### Mandatory Change Validation Protocol
+
+**BEFORE ANY CODE MODIFICATION:**
+
+1. **Risk Assessment**: Evaluate potential impact on trading operations
+2. **Worker Thread Isolation Check**: Ensure no fallback/duplicate implementations
+3. **Dependency Analysis**: Identify all affected components
+4. **Test Coverage**: Ensure comprehensive test coverage exists
+5. **Rollback Plan**: Define immediate rollback procedure
+6. **User Approval**: Get explicit approval for business-critical changes
+
 ## Development Commands
 
 ### Core Development
@@ -10,13 +56,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `yarn start:dev` - Run in development mode with hot reload
 - `yarn start` - Start the production build
 - `yarn test` - Run all tests with Vitest
-- `yarn test:coverage` - Run tests with coverage report
-- `yarn lint` - Run ESLint
+- `yarn test:coverage` - Run tests with coverage report (MUST be >95%)
+- `yarn lint` - Run ESLint (MUST pass with zero warnings)
 
-### Testing Individual Components
+### Institutional Testing Requirements
 
-- `yarn test -- --run src/path/to/component` - Run specific test file
-- Use the test files in `test/` directory which follow the pattern `componentName.test.ts`
+- `yarn test:integration` - Full integration test suite
+- `yarn test:stress` - Performance and stress testing
+- `yarn test:security` - Security vulnerability scanning
+- `yarn test:compliance` - Regulatory compliance validation
 
 ## Architecture Overview
 
@@ -38,6 +86,7 @@ Binance WebSocket → OrderFlowPreprocessor → Pattern Detectors → SignalCoor
 - `src/trading/` - Signal processing and trading logic
 - `src/storage/` - Data persistence layer
 - `src/websocket/` - WebSocket connection management
+- `src/multithreading/` - Worker thread management for high-performance processing
 
 ### Main Entry Point
 
@@ -99,6 +148,66 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 - Circuit breaker pattern for external API calls
 - Correlation IDs for request tracing across components
 
+## 🏦 INSTITUTIONAL DEVELOPMENT STANDARDS
+
+### Code Quality Requirements (NON-NEGOTIABLE)
+
+#### TypeScript Standards
+
+- **ZERO `any` types** - Use precise typing or well-defined interfaces
+- **NEVER `unknown`** without proper type guards and validation
+- **ALL functions must have explicit return types**
+- **ALL parameters must have explicit types**
+- **Strict null checking enabled**
+- **No implicit returns**
+
+#### Error Handling Standards
+
+- **ALL async operations MUST have try-catch blocks**
+- **ALL database operations MUST handle connection failures**
+- **ALL external API calls MUST have circuit breaker protection**
+- **ALL errors MUST include correlation IDs for tracing**
+- **NO silent failures - ALL errors must be logged**
+
+#### Performance Standards
+
+- **Sub-millisecond latency for trade processing**
+- **Memory usage must remain stable under load**
+- **CPU usage optimized for real-time processing**
+- **Database queries must be indexed and optimized**
+- **WebSocket connections must handle 1000+ concurrent clients**
+
+#### Security Standards
+
+- **NO hardcoded secrets or API keys**
+- **ALL inputs must be validated and sanitized**
+- **Rate limiting on ALL external endpoints**
+- **Proper correlation ID propagation**
+- **Secure WebSocket connections only**
+
+### Financial System Compliance
+
+#### Data Integrity
+
+- **ALL trade data must be immutable once processed**
+- **Signal timestamps must be precise to microseconds**
+- **Order book state must be atomic and consistent**
+- **Database transactions must be ACID compliant**
+
+#### Monitoring & Observability
+
+- **ALL critical paths must emit metrics**
+- **Component health checks mandatory**
+- **Performance metrics collection required**
+- **Alert thresholds for system anomalies**
+
+#### Disaster Recovery
+
+- **Graceful degradation under partial failures**
+- **Automatic reconnection with exponential backoff**
+- **Circuit breaker patterns for external dependencies**
+- **Data backup and recovery procedures**
+
 ## Important Development Notes
 
 ### 🚨 CRITICAL: WebSocket URL Protection
@@ -110,9 +219,41 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 - This external WebSocket provides real-time market data that the system depends on
 - Any modification to this URL must be explicitly approved by the user
 
-### Lint Strict
+### 🛡️ MANDATORY CHANGE CONTROL PROCESS
 
-Code must pass Lint stric, that means never use <any> types and use real types where possible instead of <unknown>.
+#### For ANY modification to production-critical files:
+
+1. **STOP** - Identify the change impact level
+2. **ASSESS** - Document all affected components
+3. **PLAN** - Create detailed implementation and rollback plan
+4. **REQUEST** - Get explicit user approval with risk assessment
+5. **IMPLEMENT** - Make changes with comprehensive logging
+6. **VALIDATE** - Run full test suite and performance benchmarks
+7. **MONITOR** - Track system behavior post-change
+
+#### Change Categories:
+
+**🔴 HIGH RISK (Requires Approval + Testing + Monitoring):**
+
+- Trading algorithm modifications
+- Data processing pipeline changes
+- WebSocket connection logic
+- Signal generation algorithms
+- Database schema changes
+
+**🟡 MEDIUM RISK (Requires Testing + Validation):**
+
+- Configuration parameter changes
+- UI/Dashboard modifications
+- Logging and monitoring updates
+- Performance optimizations
+
+**🟢 LOW RISK (Standard Development):**
+
+- Test file additions/modifications
+- Documentation updates
+- Code comments and formatting
+- Development tool configurations
 
 ### When Adding New Detectors
 
@@ -122,7 +263,9 @@ Code must pass Lint stric, that means never use <any> types and use real types w
 2. Implement the `detect(trade: EnrichedTradeEvent)` method
 3. Register in `DetectorFactory`
 4. Add configuration options to symbol config
-5. Include comprehensive tests
+5. Include comprehensive tests (>95% coverage)
+6. Performance benchmark against existing detectors
+7. Risk assessment for false positive/negative rates
 
 #### Zone-Based Detectors (Advanced)
 
@@ -132,25 +275,35 @@ Code must pass Lint stric, that means never use <any> types and use real types w
 4. Handle zone candidates and zone formation logic
 5. Emit zone updates and signals via WebSocket broadcasting
 6. See [Zone-Based Architecture Documentation](docs/Zone-Based-Architecture.md) for implementation details
+7. Memory usage analysis for zone state management
+8. Concurrent access pattern validation
 
 ### When Modifying Signal Processing
 
 - Maintain correlation ID propagation for tracing
 - Update anomaly integration if detector behavior changes
 - Test signal priority queue behavior in `SignalCoordinator`
+- Validate signal latency under load
+- Ensure signal ordering consistency
+- Test signal deduplication logic
 
 ### Database Changes
 
 - Always create migrations in `src/infrastructure/migrate.ts`
 - Update version number and add migration logic
 - Test both forward and rollback scenarios
+- Validate data integrity during migration
+- Performance test with production-size datasets
+- Backup strategy for migration failures
 
 ### Configuration Changes
 
 - Update TypeScript interfaces in `src/types/configTypes.ts`
 - Validate new config options in `src/core/config.ts`
 - Document parameter ranges and effects in configuration comments
-- every class that has configurable options need to use /config.json
+- Every class that has configurable options need to use /config.json
+- Backward compatibility validation
+- Default value safety analysis
 
 ### WebSocket Management
 
@@ -170,26 +323,189 @@ Code must pass Lint stric, that means never use <any> types and use real types w
 - When stream reconnects: OrderBookState automatically triggers recovery to rebuild order book
 - All components properly handle reconnection events to maintain system consistency
 
-### 🚨 CRITICAL: Development Guidelines
+### 🧵 WORKER THREAD ARCHITECTURE (CRITICAL)
 
-**NEVER ask Codex to make code changes:**
+**STRICT ISOLATION PRINCIPLE:**
+This system uses a dedicated worker thread architecture with absolute separation of concerns. **NO EXCEPTIONS.**
 
-- Codex changes often break the carefully balanced trading algorithms
-- Always use Claude Code for modifications instead
-- Preserve the existing architecture and patterns
-- Maintain strict TypeScript typing and error handling
+#### Worker Thread Responsibilities (EXCLUSIVE):
 
-### When these protection markers are in place, Claude Code should:
+- **Logger Worker**: ALL logging operations (no console.log in main thread)
+- **Binance Worker**: ALL upstream API communication (no direct API calls in main thread)
+- **Communication Worker**: ALL downstream WebSocket/MQTT (no direct client communication in main thread)
 
-- NEVER modify files marked with 🔒 PRODUCTION-READY
-- ALWAYS ask human approval before touching protected files
-- SUGGEST alternative approaches instead of direct modifications
-- RESPECT the .claude-protection configuration file
-- PRESERVE algorithmic integrity of trading logic
+#### MANDATORY RULES:
 
-# important-instruction-reminders
+**🚫 NEVER CREATE FALLBACK IMPLEMENTATIONS:**
+
+- If functionality is handled by a worker thread, it MUST ONLY be handled by that worker
+- NO "backup" implementations in main thread
+- NO "emergency" direct implementations
+- NO duplicate code paths for same functionality
+
+**🚫 NEVER MIX MAIN THREAD AND WORKER IMPLEMENTATIONS:**
+
+- Logging: Use WorkerProxyLogger ONLY, never direct Logger instantiation in workers
+- API Calls: Use worker thread communication ONLY, never direct HTTP clients
+- WebSocket: Use ThreadManager broadcast ONLY, never direct socket.send()
+
+**✅ CORRECT PATTERN:**
+
+```typescript
+// ❌ WRONG - Creates fallback/duplicate functionality
+const logger = useWorkerLogger ? new WorkerProxyLogger() : new Logger();
+
+// ✅ CORRECT - Single source of truth
+const logger = new WorkerProxyLogger("worker-name");
+```
+
+**✅ WORKER THREAD COMMUNICATION:**
+
+- Main thread communicates with workers via ThreadManager ONLY
+- Workers communicate with main thread via parentPort.postMessage() ONLY
+- Inter-worker communication via main thread message forwarding ONLY
+- NO direct worker-to-worker communication channels
+
+#### Violation Detection:
+
+**Immediate red flags requiring approval:**
+
+- `new Logger()` in worker files (use WorkerProxyLogger)
+- Direct HTTP/WebSocket clients in main thread
+- `console.log()` anywhere except fallback error scenarios
+- Multiple implementations of same functionality
+- Conditional logic choosing between worker/non-worker paths
+
+#### Architecture Benefits (Why This Matters):
+
+- **Performance**: Dedicated threads for I/O operations
+- **Reliability**: Isolated failure domains
+- **Scalability**: Independent thread scaling
+- **Maintainability**: Single responsibility per thread
+- **Debugging**: Clear thread ownership of functionality
+
+**⚠️ BREAKING THIS ISOLATION CAN CAUSE:**
+
+- Race conditions between threads
+- Inconsistent logging/data
+- Performance degradation
+- Memory leaks from duplicate connections
+- Unpredictable system behavior under load
+
+### Absolute Prohibitions (ZERO TOLERANCE)
+
+**NEVER:**
+
+- Modify production-critical algorithms without explicit approval
+- Change WebSocket URLs or connection parameters
+- Alter signal processing logic without validation
+- Modify database schemas without migration planning
+- Change configuration defaults without impact analysis
+- Use `any` types or unsafe type assertions
+- Create silent failure conditions
+- Bypass error handling or logging
+- Make breaking changes to public interfaces
+- **Create fallback implementations for worker thread functionality**
+- **Duplicate worker thread logic in main thread**
+- **Mix worker thread and main thread implementations for same functionality**
+
+### Required Approvals Matrix
+
+| Change Type     | Approval Required | Testing Required           | Monitoring Period |
+| --------------- | ----------------- | -------------------------- | ----------------- |
+| Algorithm Logic | YES               | Full Suite + Performance   | 48 hours          |
+| Data Processing | YES               | Integration + Stress       | 24 hours          |
+| Configuration   | YES               | Validation + Compatibility | 12 hours          |
+| UI/Dashboard    | NO                | Unit + E2E                 | 4 hours           |
+| Documentation   | NO                | None                       | None              |
+| Tests           | NO                | Self-validation            | None              |
+
+### Emergency Override Protocol
+
+**ONLY in system-down scenarios:**
+
+1. Document the emergency situation
+2. Make minimal necessary changes
+3. Log all modifications with timestamps
+4. Schedule immediate post-emergency review
+5. Create comprehensive rollback plan
+
+## 🎯 CLAUDE CODE OPERATIONAL GUIDELINES
+
+### When Asked to Make Changes:
+
+1. **ASSESS FIRST**: "This change affects [X] components and has [Y] risk level"
+2. **CHECK WORKER ISOLATION**: "This maintains/violates worker thread isolation because [reason]"
+3. **ASK APPROVAL**: "This requires approval due to [specific reasons]"
+4. **PROVIDE ALTERNATIVES**: "Safer approaches include [alternatives]"
+5. **ESTIMATE IMPACT**: "Expected performance/reliability impact: [analysis]"
+6. **REQUEST VALIDATION**: "Please confirm you want to proceed with these risks"
+
+**For Worker Thread Violations:**
+
+```
+🧵 WORKER THREAD ISOLATION VIOLATION DETECTED 🧵
+
+Violation type: [Fallback implementation/Duplicate functionality/Mixed threading]
+File: [filename]
+Issue: [specific violation description]
+
+This violates the strict worker thread isolation principle:
+- Worker thread functionality MUST remain exclusive to workers
+- NO fallback implementations permitted
+- NO duplicate code paths allowed
+
+Required corrections:
+1. [specific fix needed]
+2. [architectural principle to follow]
+
+This change is PROHIBITED without explicit architectural approval.
+```
+
+```
+⚠️ HIGH RISK CHANGE DETECTED ⚠️
+
+This modification affects: [list components]
+Risk level: [HIGH/MEDIUM/LOW]
+Potential impact: [describe risks]
+
+Required before proceeding:
+- [ ] User approval confirmation
+- [ ] Test suite validation
+- [ ] Performance impact assessment
+- [ ] Rollback plan preparation
+
+Do you want to proceed? Please confirm with explicit approval.
+```
+
+**For Protected Files:**
+
+```
+🔒 PRODUCTION-CRITICAL FILE DETECTED 🔒
+
+File: [filename]
+Protection level: [level]
+Reason: [why it's protected]
+
+This file requires special handling due to production dependencies.
+Recommended alternatives:
+1. [alternative approach 1]
+2. [alternative approach 2]
+
+Request explicit approval to modify this protected file.
+```
+
+# Important Instruction Reminders
 
 Do what has been asked; nothing more, nothing less.
 NEVER create files unless they're absolutely necessary for achieving your goal.
 ALWAYS prefer editing an existing file to creating a new one.
 NEVER proactively create documentation files (\*.md) or README files. Only create documentation files if explicitly requested by the User.
+
+**FOR INSTITUTIONAL TRADING SYSTEMS:**
+
+- ALWAYS assess financial impact of changes
+- NEVER compromise data integrity or processing accuracy
+- ALWAYS maintain audit trail of modifications
+- NEVER deploy changes without comprehensive testing
+- ALWAYS have rollback plans ready
