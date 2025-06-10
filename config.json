@@ -180,7 +180,7 @@
             },
             "exhaustion": {
                 "minAggVolume": 500,
-                "threshold": 0.70,
+                "threshold": 0.7,
                 "windowMs": 75000,
                 "zoneTicks": 3,
                 "eventCooldownMs": 30000,
