@@ -1,10 +1,11 @@
 // src/market/orderBookState.ts
-
+import { Mutex } from "async-mutex";
 import type { SpotWebsocketStreams } from "@binance/spot";
 import { type IBinanceDataFeed } from "../utils/binance.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import type { PassiveLevel, OrderBookHealth } from "../types/marketEvents.js";
-import { WorkerLogger } from "../multithreading/workerLogger";
+import { ILogger } from "../infrastructure/loggerInterface.js";
+import { FinancialMath } from "../utils/financialMath.js";
 
 type SnapShot = Map<number, PassiveLevel>;
 
@@ -19,7 +20,9 @@ export interface OrderBookStateOptions {
 }
 
 export interface IOrderBookState {
-    updateDepth(update: SpotWebsocketStreams.DiffBookDepthResponse): void;
+    updateDepth(
+        update: SpotWebsocketStreams.DiffBookDepthResponse
+    ): Promise<void>;
     getLevel(price: number): PassiveLevel | undefined;
     getBestBid(): number;
     getBestAsk(): number;
@@ -45,7 +48,7 @@ export interface IOrderBookState {
 }
 
 export class OrderBookState implements IOrderBookState {
-    private readonly logger: WorkerLogger;
+    private readonly logger: ILogger;
     private readonly metricsCollector: MetricsCollector;
 
     private isInitialized = false;
@@ -56,12 +59,12 @@ export class OrderBookState implements IOrderBookState {
     private pruneIntervalMs = 30000; // 30 seconds
     private pruneTimer?: NodeJS.Timeout;
     private lastPruneTime = 0;
-    private lastUpdateTime = Date.now();
+    protected lastUpdateTime = Date.now();
 
     private maxLevels: number = 1000;
     private maxPriceDistance: number = 0.1; // 10% max price distance for levels
 
-    private book: SnapShot = new Map();
+    protected book: SnapShot = new Map();
     private readonly pricePrecision: number;
     private readonly tickSize: number;
     private readonly symbol: string;
@@ -79,9 +82,13 @@ export class OrderBookState implements IOrderBookState {
     private circuitOpen: boolean = false;
     private circuitOpenUntil: number = 0;
 
+    // Mutex
+    private readonly quoteMutex = new Mutex();
+    private pendingQuoteUpdate: { bid: number; ask: number } | null = null;
+
     constructor(
         options: OrderBookStateOptions,
-        logger: WorkerLogger,
+        logger: ILogger,
         metricsCollector: MetricsCollector,
         binanceFeed: IBinanceDataFeed
     ) {
@@ -102,7 +109,7 @@ export class OrderBookState implements IOrderBookState {
 
     public static async create(
         options: OrderBookStateOptions,
-        logger: WorkerLogger,
+        logger: ILogger,
         metricsCollector: MetricsCollector,
         binanceFeed: IBinanceDataFeed
     ): Promise<OrderBookState> {
@@ -125,7 +132,7 @@ export class OrderBookState implements IOrderBookState {
         this.processBufferedUpdates();
     }
 
-    public updateDepth(
+    public _updateDepth(
         update: SpotWebsocketStreams.DiffBookDepthResponse
     ): void {
         if (this.circuitOpen && Date.now() < this.circuitOpenUntil) {
@@ -177,15 +184,111 @@ export class OrderBookState implements IOrderBookState {
         this.lastUpdateTime = Date.now();
     }
 
+    public async updateDepth(
+        update: SpotWebsocketStreams.DiffBookDepthResponse
+    ): Promise<void> {
+        if (this.circuitOpen && Date.now() < this.circuitOpenUntil) {
+            this.metricsCollector.incrementMetric("orderbookCircuitRejected");
+            return;
+        }
+
+        if (this.expectedUpdateId && update.U) {
+            const gap = update.U - this.expectedUpdateId;
+            if (gap > 1) {
+                throw new Error(
+                    `Sequence gap detected: expected ${this.expectedUpdateId}, got ${update.U}`
+                );
+            }
+        }
+        this.expectedUpdateId = update.u ? update.u + 1 : undefined;
+
+        if (!this.isInitialized) {
+            this.snapshotBuffer.push(update);
+            return;
+        }
+
+        if (update.u && this.lastUpdateId && update.u <= this.lastUpdateId) {
+            return;
+        }
+        this.lastUpdateId = update.u ?? this.lastUpdateId;
+
+        const bids = (update.b as [string, string][]) || [];
+        const asks = (update.a as [string, string][]) || [];
+
+        // 🔒 ATOMIC UPDATE: Process all changes and update quotes atomically
+        await this.processUpdateAtomic(bids, asks);
+
+        this.lastUpdateTime = Date.now();
+    }
+
+    private async processUpdateAtomic(
+        bids: [string, string][],
+        asks: [string, string][]
+    ): Promise<void> {
+        const release = await this.quoteMutex.acquire();
+
+        try {
+            // Track if best quotes might have changed
+            let needsBestRecalc = false;
+            const currentBestBid = this._bestBid;
+            const currentBestAsk = this._bestAsk;
+
+            // Process bids
+            needsBestRecalc = this.processBidsSync(bids, needsBestRecalc);
+
+            // Process asks
+            needsBestRecalc =
+                this.processAsksSync(asks, needsBestRecalc) || needsBestRecalc;
+
+            // Recalculate best quotes if needed
+            if (needsBestRecalc) {
+                this.recalculateBestQuotes();
+            }
+
+            // Validate quote consistency (optional safety check)
+            if (
+                currentBestBid > currentBestAsk &&
+                currentBestAsk !== Infinity
+            ) {
+                this.logger.warn(
+                    "[OrderBookState] Quote inversion detected, forcing recalc",
+                    {
+                        bestBid: currentBestBid,
+                        bestAsk: currentBestAsk,
+                    }
+                );
+                this.recalculateBestQuotes();
+            }
+        } finally {
+            release();
+        }
+    }
+
+    // Updated orderBookState.ts methods
+    protected normalizePrice(price: number): number {
+        return FinancialMath.normalizePriceToTick(price, this.tickSize);
+    }
+
+    public getMidPrice(): number {
+        if (this._bestBid === 0 || this._bestAsk === Infinity) return 0;
+        return FinancialMath.calculateMidPrice(
+            this._bestBid,
+            this._bestAsk,
+            this.pricePrecision
+        );
+    }
+
     public getLevel(price: number): PassiveLevel | undefined {
         return this.book.get(this.normalizePrice(price));
     }
 
     public getBestBid(): number {
+        // Return atomic snapshot
         return this._bestBid;
     }
 
     public getBestAsk(): number {
+        // Return atomic snapshot
         return this._bestAsk === Infinity ? 0 : this._bestAsk;
     }
 
@@ -194,12 +297,17 @@ export class OrderBookState implements IOrderBookState {
         return this._bestAsk - this._bestBid;
     }
 
-    public getMidPrice(): number {
-        if (this._bestBid === 0 || this._bestAsk === Infinity) return 0;
-        // Use integer arithmetic for financial precision
-        const scale = Math.pow(10, this.pricePrecision);
-        const midPrice = (this._bestBid + this._bestAsk) / 2;
-        return Math.round(midPrice * scale) / scale;
+    public getBestQuotesAtomic(): {
+        bid: number;
+        ask: number;
+        timestamp: number;
+    } {
+        // Thread-safe access to both quotes
+        return {
+            bid: this._bestBid,
+            ask: this._bestAsk === Infinity ? 0 : this._bestAsk,
+            timestamp: this.lastUpdateTime,
+        };
     }
 
     public sumBand(
@@ -450,6 +558,46 @@ export class OrderBookState implements IOrderBookState {
         return needsBestRecalc;
     }
 
+    private processBidsSync(
+        bids: [string, string][],
+        needsBestRecalc: boolean
+    ): boolean {
+        const now = Date.now();
+
+        for (const [priceStr, qtyStr] of bids) {
+            const price = this.normalizePrice(parseFloat(priceStr));
+            const qty = parseFloat(qtyStr);
+
+            if (qty === 0) {
+                const level = this.book.get(price);
+                if (level && level.ask === 0) {
+                    this.book.delete(price);
+                } else if (level) {
+                    level.bid = 0;
+                    level.timestamp = now;
+                }
+                // Mark for recalc if removing current best bid
+                if (price === this._bestBid) needsBestRecalc = true;
+            } else {
+                const level = this.book.get(price) || {
+                    price,
+                    bid: 0,
+                    ask: 0,
+                    timestamp: now,
+                };
+                level.bid = qty;
+                level.timestamp = now;
+                this.book.set(price, level);
+
+                // Update best bid only if better
+                if (price > this._bestBid) {
+                    this._bestBid = price;
+                }
+            }
+        }
+        return needsBestRecalc;
+    }
+
     private processAsks(
         asks: [string, string][],
         needsBestRecalc: boolean
@@ -490,10 +638,44 @@ export class OrderBookState implements IOrderBookState {
         return needsBestRecalc;
     }
 
-    private normalizePrice(price: number): number {
-        // Use integer arithmetic for financial precision
-        const scale = Math.pow(10, this.pricePrecision);
-        return Math.round(price * scale) / scale;
+    private processAsksSync(
+        asks: [string, string][],
+        needsBestRecalc: boolean
+    ): boolean {
+        const now = Date.now();
+
+        for (const [priceStr, qtyStr] of asks) {
+            const price = this.normalizePrice(parseFloat(priceStr));
+            const qty = parseFloat(qtyStr);
+
+            if (qty === 0) {
+                const level = this.book.get(price);
+                if (level && level.bid === 0) {
+                    this.book.delete(price);
+                } else if (level) {
+                    level.ask = 0;
+                    level.timestamp = now;
+                }
+                // Mark for recalc if removing current best ask
+                if (price === this._bestAsk) needsBestRecalc = true;
+            } else {
+                const level = this.book.get(price) || {
+                    price,
+                    bid: 0,
+                    ask: 0,
+                    timestamp: now,
+                };
+                level.ask = qty;
+                level.timestamp = now;
+                this.book.set(price, level);
+
+                // Update best ask only if better
+                if (price < this._bestAsk) {
+                    this._bestAsk = price;
+                }
+            }
+        }
+        return needsBestRecalc;
     }
 
     private recalculateBestQuotes(): void {
@@ -627,7 +809,6 @@ export class OrderBookState implements IOrderBookState {
         );
     }
 
-    // Add these methods
     public async shutdown(): Promise<void> {
         this.logger.info("[OrderBookState] Shutting down");
 
@@ -637,17 +818,20 @@ export class OrderBookState implements IOrderBookState {
             this.pruneTimer = undefined;
         }
 
-        // Save state
-        //TODO await this.saveState();
+        // Wait for any pending quote updates to complete
+        const release = await this.quoteMutex.acquire();
+        try {
+            // Disconnect feed
+            await this.binanceFeed.disconnect();
 
-        // Disconnect feed
-        await this.binanceFeed.disconnect();
-
-        // Clear book
-        this.book.clear();
-        this._bestBid = 0;
-        this._bestAsk = Infinity;
-        this.isInitialized = false;
+            // Clear book
+            this.book.clear();
+            this._bestBid = 0;
+            this._bestAsk = Infinity;
+            this.isInitialized = false;
+        } finally {
+            release();
+        }
 
         this.logger.info("[OrderBookState] Shutdown complete");
     }

@@ -24,7 +24,9 @@ export interface OrderflowPreprocessorOptions {
 }
 
 export interface IOrderflowPreprocessor {
-    handleDepth(update: SpotWebsocketStreams.DiffBookDepthResponse): void;
+    handleDepth(
+        update: SpotWebsocketStreams.DiffBookDepthResponse
+    ): Promise<void>;
     handleAggTrade(trade: SpotWebsocketStreams.AggTradeResponse): Promise<void>;
     getStats(): {
         processedTrades: number;
@@ -95,12 +97,12 @@ export class OrderflowPreprocessor
     }
 
     // Should be called on every depth update
-    public handleDepth(
+    public async handleDepth(
         update: SpotWebsocketStreams.DiffBookDepthResponse
-    ): void {
+    ): Promise<void> {
         try {
             if (this.bookState) {
-                this.bookState.updateDepth(update);
+                await this.bookState.updateDepth(update);
                 this.processedDepthUpdates++;
 
                 // Emit depth metrics if enabled

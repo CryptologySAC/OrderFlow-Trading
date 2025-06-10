@@ -97,7 +97,9 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
 
     // Health monitoring
     private healthCheckTimer?: NodeJS.Timeout;
+    private gapCheckTimer?: NodeJS.Timeout;
     private isStreamConnected = true;
+    private lastGapCheckTime = Date.now();
 
     constructor(
         options: TradesProcessorOptions,
@@ -135,6 +137,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         // Start background tasks
         this.startSaveQueue();
         this.startHealthCheck();
+        this.startGapMonitoring();
 
         // Listen for stream connection events
         this.setupStreamEventHandlers();
@@ -551,6 +554,89 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     }
 
     /**
+     * Start continuous gap monitoring
+     */
+    private startGapMonitoring(): void {
+        // Check for gaps every 5 minutes
+        this.gapCheckTimer = setInterval(() => {
+            void this.performGapCheck();
+        }, 300000); // 5 minutes
+    }
+
+    /**
+     * Perform gap check and fill any detected gaps
+     */
+    private async performGapCheck(): Promise<void> {
+        if (this.isShuttingDown) return;
+
+        try {
+            const currentTime = Date.now();
+            const windowStartTime = currentTime - this.storageTime;
+
+            // Only check since last gap check to avoid redundant work
+            const checkStartTime = Math.max(
+                windowStartTime,
+                this.lastGapCheckTime
+            );
+
+            this.logger.info(
+                "[TradesProcessor] Performing periodic gap check",
+                {
+                    checkStartTime: new Date(checkStartTime).toISOString(),
+                    currentTime: new Date(currentTime).toISOString(),
+                    windowDurationMinutes: (
+                        (currentTime - checkStartTime) /
+                        60000
+                    ).toFixed(2),
+                }
+            );
+
+            const gaps = this.storage.detectGaps(
+                this.symbol,
+                checkStartTime,
+                currentTime,
+                60000 // 1 minute gap threshold
+            );
+
+            if (gaps.length > 0) {
+                this.logger.warn(
+                    "[TradesProcessor] Detected gaps during monitoring",
+                    {
+                        gapCount: gaps.length,
+                        gaps: gaps.map((g) => ({
+                            start: new Date(g.start).toISOString(),
+                            end: new Date(g.end).toISOString(),
+                            durationMinutes: (
+                                (g.end - g.start) /
+                                60000
+                            ).toFixed(2),
+                        })),
+                    }
+                );
+
+                // Fill each gap sequentially
+                for (const gap of gaps) {
+                    await this.fillGap(gap.start, gap.end);
+                }
+
+                this.logger.info("[TradesProcessor] Gap filling completed", {
+                    filledGaps: gaps.length,
+                });
+            } else {
+                this.logger.info(
+                    "[TradesProcessor] No gaps detected during monitoring"
+                );
+            }
+
+            this.lastGapCheckTime = currentTime;
+        } catch (error) {
+            this.logger.error("[TradesProcessor] Error during gap monitoring", {
+                error: (error as Error).message,
+            });
+        }
+    }
+
+    /**
      * Setup stream event handlers
      */
     private setupStreamEventHandlers(): void {
@@ -563,6 +649,16 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             this.logger.info("[TradesProcessor] Stream reconnected");
             this.isStreamConnected = true;
             this.lastTradeTime = Date.now(); // Reset trade timeout
+
+            // Trigger gap check after reconnection
+            void this.performGapCheck().catch((error) => {
+                this.logger.error(
+                    "[TradesProcessor] Error during reconnection gap check",
+                    {
+                        error: (error as Error).message,
+                    }
+                );
+            });
         });
     }
 
@@ -649,6 +745,9 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         }
         if (this.healthCheckTimer) {
             clearInterval(this.healthCheckTimer);
+        }
+        if (this.gapCheckTimer) {
+            clearInterval(this.gapCheckTimer);
         }
 
         // Process remaining save queue

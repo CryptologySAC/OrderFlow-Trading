@@ -239,7 +239,11 @@ export class OrderFlowDashboard {
         // Set up stream data handler for multithreaded mode
         this.threadManager.setStreamDataHandler(
             (dataType: string, data: unknown) => {
-                this.handleWorkerStreamData(dataType, data);
+                this.handleWorkerStreamData(dataType, data).catch((err) =>
+                    this.logger.error("threadManager.setStreamDataHandler", {
+                        err,
+                    })
+                );
             }
         );
 
@@ -512,7 +516,10 @@ export class OrderFlowDashboard {
     /**
      * Handle stream data from worker thread
      */
-    private handleWorkerStreamData(dataType: string, data: unknown): void {
+    private async handleWorkerStreamData(
+        dataType: string,
+        data: unknown
+    ): Promise<void> {
         try {
             switch (dataType) {
                 case "trade":
@@ -521,7 +528,7 @@ export class OrderFlowDashboard {
                     );
                     break;
                 case "depth":
-                    this.processDepth(
+                    await this.processDepth(
                         data as SpotWebsocketStreams.DiffBookDepthResponse
                     );
                     break;
@@ -1007,15 +1014,17 @@ export class OrderFlowDashboard {
     /**
      * Process incoming depth data
      */
-    private processDepth(
+    private async processDepth(
         data: SpotWebsocketStreams.DiffBookDepthResponse
-    ): void {
+    ): Promise<void> {
         const correlationId = randomUUID();
         const startTime = Date.now();
 
         try {
             // Update preprocessor
-            if (this.preprocessor) this.preprocessor.handleDepth(data);
+            if (this.preprocessor) {
+                await this.preprocessor.handleDepth(data);
+            }
 
             const processingTime = Date.now() - startTime;
             this.metricsCollector.updateMetric(
