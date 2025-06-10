@@ -6,6 +6,7 @@ import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import type { PassiveLevel, OrderBookHealth } from "../types/marketEvents.js";
 import { ILogger } from "../infrastructure/loggerInterface.js";
 import { FinancialMath } from "../utils/financialMath.js";
+import { RedBlackTree } from "./helpers/redBlackTree.js";
 
 type SnapShot = Map<number, PassiveLevel>;
 
@@ -64,7 +65,11 @@ export class OrderBookState implements IOrderBookState {
     private maxLevels: number = 1000;
     private maxPriceDistance: number = 0.1; // 10% max price distance for levels
 
-    protected book: SnapShot = new Map();
+    protected book: RedBlackTree = new RedBlackTree();
+
+    // Optimized price tracking for O(1) best quote access
+    private bidPrices: number[] = [];
+    private askPrices: number[] = [];
     private readonly pricePrecision: number;
     private readonly tickSize: number;
     private readonly symbol: string;
@@ -132,58 +137,6 @@ export class OrderBookState implements IOrderBookState {
         this.processBufferedUpdates();
     }
 
-    public _updateDepth(
-        update: SpotWebsocketStreams.DiffBookDepthResponse
-    ): void {
-        if (this.circuitOpen && Date.now() < this.circuitOpenUntil) {
-            this.metricsCollector.incrementMetric("orderbookCircuitRejected");
-            return; // Reject updates while circuit is open
-        }
-
-        if (this.expectedUpdateId && update.U) {
-            const gap = update.U - this.expectedUpdateId;
-            if (gap > 1) {
-                throw new Error(
-                    `Sequence gap detected: expected ${this.expectedUpdateId}, got ${update.U}`
-                );
-            }
-        }
-        this.expectedUpdateId = update.u ? update.u + 1 : undefined;
-
-        if (!this.isInitialized) {
-            // Buffer updates until initialized
-            this.snapshotBuffer.push(update);
-            return;
-        }
-
-        // Validate update sequence - ignore outdated updates
-        if (update.u && this.lastUpdateId && update.u <= this.lastUpdateId) {
-            // Skip duplicate/out-of-date update
-            return;
-        }
-        this.lastUpdateId = update.u ?? this.lastUpdateId;
-
-        const bids = (update.b as [string, string][]) || [];
-        const asks = (update.a as [string, string][]) || [];
-
-        // Track if we need to recalculate best bid/ask
-        let needsBestRecalc = false;
-
-        // Process bids and track if best bid/ask needs recalculation
-        needsBestRecalc = this.processBids(bids, needsBestRecalc);
-
-        // Process asks and accumulate recalculation flag
-        needsBestRecalc =
-            this.processAsks(asks, needsBestRecalc) || needsBestRecalc;
-
-        // Recalculate best bid/ask if needed
-        if (needsBestRecalc) {
-            this.recalculateBestQuotes();
-        }
-
-        this.lastUpdateTime = Date.now();
-    }
-
     public async updateDepth(
         update: SpotWebsocketStreams.DiffBookDepthResponse
     ): Promise<void> {
@@ -230,8 +183,6 @@ export class OrderBookState implements IOrderBookState {
         try {
             // Track if best quotes might have changed
             let needsBestRecalc = false;
-            const currentBestBid = this._bestBid;
-            const currentBestAsk = this._bestAsk;
 
             // Process bids
             needsBestRecalc = this.processBidsSync(bids, needsBestRecalc);
@@ -245,18 +196,13 @@ export class OrderBookState implements IOrderBookState {
                 this.recalculateBestQuotes();
             }
 
-            // Validate quote consistency (optional safety check)
-            if (
-                currentBestBid > currentBestAsk &&
-                currentBestAsk !== Infinity
-            ) {
+            /* ── Consistency check AFTER the recalculation ───────────── */
+            if (this._bestBid > this._bestAsk && this._bestAsk !== Infinity) {
                 this.logger.warn(
-                    "[OrderBookState] Quote inversion detected, forcing recalc",
-                    {
-                        bestBid: currentBestBid,
-                        bestAsk: currentBestAsk,
-                    }
+                    "[OrderBookState] Quote inversion detected **after** recalc",
+                    { bestBid: this._bestBid, bestAsk: this._bestAsk }
                 );
+                // One more full scan just in case something slipped through
                 this.recalculateBestQuotes();
             }
         } finally {
@@ -269,6 +215,23 @@ export class OrderBookState implements IOrderBookState {
         return FinancialMath.normalizePriceToTick(price, this.tickSize);
     }
 
+    public getLevel(price: number): PassiveLevel | undefined {
+        return this.book.get(this.normalizePrice(price));
+    }
+
+    public getBestBid(): number {
+        return this._bestBid;
+    }
+
+    public getBestAsk(): number {
+        return this._bestAsk === Infinity ? 0 : this._bestAsk;
+    }
+
+    public getSpread(): number {
+        if (this._bestBid === 0 || this._bestAsk === Infinity) return 0;
+        return this._bestAsk - this._bestBid;
+    }
+
     public getMidPrice(): number {
         if (this._bestBid === 0 || this._bestAsk === Infinity) return 0;
         return FinancialMath.calculateMidPrice(
@@ -276,25 +239,6 @@ export class OrderBookState implements IOrderBookState {
             this._bestAsk,
             this.pricePrecision
         );
-    }
-
-    public getLevel(price: number): PassiveLevel | undefined {
-        return this.book.get(this.normalizePrice(price));
-    }
-
-    public getBestBid(): number {
-        // Return atomic snapshot
-        return this._bestBid;
-    }
-
-    public getBestAsk(): number {
-        // Return atomic snapshot
-        return this._bestAsk === Infinity ? 0 : this._bestAsk;
-    }
-
-    public getSpread(): number {
-        if (this._bestBid === 0 || this._bestAsk === Infinity) return 0;
-        return this._bestAsk - this._bestBid;
     }
 
     public getBestQuotesAtomic(): {
@@ -328,7 +272,11 @@ export class OrderBookState implements IOrderBookState {
         const min = (scaledCenter - scaledBandSize) / scale;
         const max = (scaledCenter + scaledBandSize) / scale;
 
-        for (const [price, lvl] of this.book) {
+        // Iterate through Red-Black Tree nodes
+        const nodes = this.book.getAllNodes();
+        for (const node of nodes) {
+            const price = node.price;
+            const lvl = node.level;
             if (price >= min && price <= max) {
                 sumBid += lvl.bid;
                 sumAsk += lvl.ask;
@@ -342,8 +290,9 @@ export class OrderBookState implements IOrderBookState {
     public snapshot(): SnapShot {
         // Deep clone for thread safety
         const snap: SnapShot = new Map<number, PassiveLevel>();
-        for (const [price, level] of this.book) {
-            snap.set(price, { ...level });
+        const nodes = this.book.getAllNodes();
+        for (const node of nodes) {
+            snap.set(node.price, { ...node.level });
         }
         return snap;
     }
@@ -361,7 +310,9 @@ export class OrderBookState implements IOrderBookState {
         let totalBidVolume = 0;
         let totalAskVolume = 0;
 
-        for (const level of this.book.values()) {
+        const nodes = this.book.getAllNodes();
+        for (const node of nodes) {
+            const level = node.level;
             if (level.bid > 0) {
                 bidLevels++;
                 totalBidVolume += level.bid;
@@ -379,7 +330,7 @@ export class OrderBookState implements IOrderBookState {
                 : 0;
 
         return {
-            totalLevels: this.book.size,
+            totalLevels: this.book.size(),
             bidLevels,
             askLevels,
             totalBidVolume,
@@ -399,12 +350,12 @@ export class OrderBookState implements IOrderBookState {
 
         try {
             // Prune distant levels
-            const beforeSize = this.book.size;
+            const beforeSize = this.book.size();
             this.pruneDistantLevels();
-            const afterSize = this.book.size;
+            const afterSize = this.book.size();
 
             // Prune stale levels
-            this.pruneStaleeLevels();
+            this.pruneStaleLevels();
 
             // Enforce max levels
             this.enforceMaxLevels();
@@ -439,17 +390,18 @@ export class OrderBookState implements IOrderBookState {
     }
 
     private enforceMaxLevels(): void {
-        if (this.book.size <= this.maxLevels) return;
+        if (this.book.size() <= this.maxLevels) return;
 
         const mid = this.getMidPrice();
         if (!mid) return;
 
         // Sort levels by distance from mid
-        const levels = Array.from(this.book.entries())
-            .map(([price, level]) => ({
-                price,
-                level,
-                distance: Math.abs(price - mid),
+        const nodes = this.book.getAllNodes();
+        const levels = nodes
+            .map((node) => ({
+                price: node.price,
+                level: node.level,
+                distance: Math.abs(node.price - mid),
             }))
             .sort((a, b) => b.distance - a.distance);
 
@@ -460,17 +412,19 @@ export class OrderBookState implements IOrderBookState {
         }
     }
 
-    private pruneStaleeLevels(): void {
+    private pruneStaleLevels(): void {
         const now = Date.now();
         const staleThreshold = 300000; // 5 minutes
 
-        for (const [price, level] of this.book) {
+        const nodes = this.book.getAllNodes();
+        for (const node of nodes) {
+            const level = node.level;
             if (
                 now - level.timestamp > staleThreshold &&
                 level.bid === 0 &&
                 level.ask === 0
             ) {
-                this.book.delete(price);
+                this.book.delete(node.price);
             }
         }
     }
@@ -497,11 +451,12 @@ export class OrderBookState implements IOrderBookState {
                 let needsBestRecalc = false;
 
                 // Process bids and track recalculation flag
-                needsBestRecalc = this.processBids(bids, needsBestRecalc);
+                needsBestRecalc = this.processBidsSync(bids, needsBestRecalc);
 
                 // Process asks and accumulate
                 needsBestRecalc =
-                    this.processAsks(asks, needsBestRecalc) || needsBestRecalc;
+                    this.processAsksSync(asks, needsBestRecalc) ||
+                    needsBestRecalc;
 
                 // Recalculate best bid/ask if needed
                 if (needsBestRecalc) {
@@ -517,47 +472,6 @@ export class OrderBookState implements IOrderBookState {
         this.snapshotBuffer = []; // Clear buffer after processing
     }
 
-    private processBids(
-        bids: [string, string][],
-        needsBestRecalc: boolean
-    ): boolean {
-        const now = Date.now();
-        for (const [priceStr, qtyStr] of bids) {
-            const price = this.normalizePrice(parseFloat(priceStr));
-            const qty = parseFloat(qtyStr);
-
-            if (qty === 0) {
-                // Only delete if both sides would be zero
-                const level = this.book.get(price);
-                if (level && level.ask === 0) {
-                    this.book.delete(price);
-                } else if (level) {
-                    level.bid = 0;
-                    level.timestamp = now;
-                }
-                if (price === this._bestBid) needsBestRecalc = true;
-            } else {
-                const level = this.book.get(price) || {
-                    price,
-                    bid: 0,
-                    ask: 0,
-                    timestamp: now,
-                };
-                level.bid = qty;
-                level.timestamp = now;
-                this.book.set(price, level);
-
-                // Update best bid if necessary
-                if (price > this._bestBid) {
-                    this._bestBid = price;
-                } else if (price === this._bestBid) {
-                    needsBestRecalc = true;
-                }
-            }
-        }
-        return needsBestRecalc;
-    }
-
     private processBidsSync(
         bids: [string, string][],
         needsBestRecalc: boolean
@@ -570,13 +484,17 @@ export class OrderBookState implements IOrderBookState {
 
             if (qty === 0) {
                 const level = this.book.get(price);
-                if (level && level.ask === 0) {
-                    this.book.delete(price);
-                } else if (level) {
+                if (level) {
                     level.bid = 0;
                     level.timestamp = now;
+
+                    /* NEW — when bid goes to 0, also wipe the ask *flag* at that price */
+                    if (level.bid === 0 && level.ask === 0) {
+                        this.book.delete(price);
+                    } else {
+                        this.book.insert(price, level);
+                    }
                 }
-                // Mark for recalc if removing current best bid
                 if (price === this._bestBid) needsBestRecalc = true;
             } else {
                 const level = this.book.get(price) || {
@@ -587,51 +505,11 @@ export class OrderBookState implements IOrderBookState {
                 };
                 level.bid = qty;
                 level.timestamp = now;
-                this.book.set(price, level);
+                this.book.insert(price, level);
 
                 // Update best bid only if better
                 if (price > this._bestBid) {
                     this._bestBid = price;
-                }
-            }
-        }
-        return needsBestRecalc;
-    }
-
-    private processAsks(
-        asks: [string, string][],
-        needsBestRecalc: boolean
-    ): boolean {
-        const now = Date.now();
-        for (const [priceStr, qtyStr] of asks) {
-            const price = this.normalizePrice(parseFloat(priceStr));
-            const qty = parseFloat(qtyStr);
-
-            if (qty === 0) {
-                const level = this.book.get(price);
-                if (level && level.bid === 0) {
-                    this.book.delete(price);
-                } else if (level) {
-                    level.ask = 0;
-                    level.timestamp = now;
-                }
-                if (price === this._bestAsk) needsBestRecalc = true;
-            } else {
-                const level = this.book.get(price) || {
-                    price,
-                    bid: 0,
-                    ask: 0,
-                    timestamp: now,
-                };
-                level.ask = qty;
-                level.timestamp = now;
-                this.book.set(price, level);
-
-                // Update best ask if necessary
-                if (price < this._bestAsk) {
-                    this._bestAsk = price;
-                } else if (price === this._bestAsk) {
-                    needsBestRecalc = true;
                 }
             }
         }
@@ -650,13 +528,17 @@ export class OrderBookState implements IOrderBookState {
 
             if (qty === 0) {
                 const level = this.book.get(price);
-                if (level && level.bid === 0) {
-                    this.book.delete(price);
-                } else if (level) {
+                if (level) {
                     level.ask = 0;
                     level.timestamp = now;
+
+                    /* NEW — when ask goes to 0, also wipe the bid *flag* at that price */
+                    if (level.bid === 0 && level.ask === 0) {
+                        this.book.delete(price);
+                    } else {
+                        this.book.insert(price, level);
+                    }
                 }
-                // Mark for recalc if removing current best ask
                 if (price === this._bestAsk) needsBestRecalc = true;
             } else {
                 const level = this.book.get(price) || {
@@ -667,7 +549,7 @@ export class OrderBookState implements IOrderBookState {
                 };
                 level.ask = qty;
                 level.timestamp = now;
-                this.book.set(price, level);
+                this.book.insert(price, level);
 
                 // Update best ask only if better
                 if (price < this._bestAsk) {
@@ -679,15 +561,32 @@ export class OrderBookState implements IOrderBookState {
     }
 
     private recalculateBestQuotes(): void {
-        this._bestBid = 0;
-        this._bestAsk = Infinity;
+        // Use Red-Black Tree optimized lookups - O(log n)
+        this._bestBid = this.book.getBestBid();
+        this._bestAsk = this.book.getBestAsk();
 
-        for (const [price, level] of this.book) {
-            if (level.bid > 0 && price > this._bestBid) {
-                this._bestBid = price;
+        this.purgeCrossedLevels();
+    }
+
+    private purgeCrossedLevels(): void {
+        const nodes = this.book.getAllNodes();
+
+        for (const n of nodes) {
+            // 1️⃣ asks that sit at or below bestBid
+            if (n.level.ask > 0 && n.price <= this._bestBid) {
+                if (n.level.bid === 0) this.book.delete(n.price);
+                else {
+                    n.level.ask = 0;
+                    this.book.insert(n.price, n.level);
+                }
             }
-            if (level.ask > 0 && price < this._bestAsk) {
-                this._bestAsk = price;
+            // 2️⃣ bids that sit at or above bestAsk
+            if (n.level.bid > 0 && n.price >= this._bestAsk) {
+                if (n.level.ask === 0) this.book.delete(n.price);
+                else {
+                    n.level.bid = 0;
+                    this.book.insert(n.price, n.level);
+                }
             }
         }
     }
@@ -706,8 +605,9 @@ export class OrderBookState implements IOrderBookState {
         const maxPrice =
             (scaledMid * (scale + scaledDistance)) / (scale * scale);
 
-        for (const [price, level] of this.book) {
-            void level; // Ensure level is defined
+        const nodes = this.book.getAllNodes();
+        for (const node of nodes) {
+            const price = node.price;
             if (price < minPrice || price > maxPrice) {
                 this.book.delete(price);
             }
@@ -739,11 +639,11 @@ export class OrderBookState implements IOrderBookState {
             this.lastUpdateId = snapshot.lastUpdateId ?? this.lastUpdateId;
 
             // Process bids and track recalculation
-            needsBestRecalc = this.processBids(bids, needsBestRecalc);
+            needsBestRecalc = this.processBidsSync(bids, needsBestRecalc);
 
             // Process asks and accumulate
             needsBestRecalc =
-                this.processAsks(asks, needsBestRecalc) || needsBestRecalc;
+                this.processAsksSync(asks, needsBestRecalc) || needsBestRecalc;
 
             // Recalculate best bid/ask if needed
             if (needsBestRecalc) {
@@ -868,8 +768,9 @@ export class OrderBookState implements IOrderBookState {
 
         // Count stale levels
         let staleLevels = 0;
-        for (const level of this.book.values()) {
-            if (now - level.timestamp > 300000) staleLevels++;
+        const nodes = this.book.getAllNodes();
+        for (const node of nodes) {
+            if (now - node.level.timestamp > 300000) staleLevels++;
         }
 
         // Determine status
@@ -879,7 +780,7 @@ export class OrderBookState implements IOrderBookState {
         } else if (
             this.errorWindow.length > this.maxErrorRate / 2 ||
             lastUpdateAge > 5000 ||
-            staleLevels > this.book.size * 0.1
+            staleLevels > this.book.size() * 0.1
         ) {
             status = "degraded";
         }
@@ -890,7 +791,7 @@ export class OrderBookState implements IOrderBookState {
             lastUpdateMs: lastUpdateAge,
             circuitBreakerOpen: this.circuitOpen,
             errorRate: this.errorWindow.length,
-            bookSize: this.book.size,
+            bookSize: this.book.size(),
             spread: this.getSpread(),
             midPrice: this.getMidPrice(),
             details: {
@@ -902,8 +803,8 @@ export class OrderBookState implements IOrderBookState {
     }
 
     private estimateMemoryUsage(): number {
-        // Rough estimate: each level ~200 bytes
-        return this.book.size * 200;
+        // Rough estimate: each RB node ~250 bytes (vs 200 for Map entry)
+        return this.book.size() * 250;
     }
 
     public async recover(): Promise<void> {
