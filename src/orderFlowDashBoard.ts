@@ -29,7 +29,6 @@ import {
 import { MicrostructureAnalyzer } from "./data/microstructureAnalyzer.js";
 import { IndividualTradesManager } from "./data/individualTradesManager.js";
 import { ThreadManager } from "./multithreading/threadManager.js";
-import { WorkerLogger } from "./multithreading/workerLogger.js";
 import { WorkerSignalLogger } from "./multithreading/workerSignalLogger.js";
 
 // Service imports
@@ -1835,12 +1834,7 @@ export class OrderFlowDashboard {
 export function createDependencies(
     threadManager?: ThreadManager
 ): Dependencies {
-    const logger = threadManager
-        ? new WorkerLogger(
-              threadManager,
-              process.env.NODE_ENV === "development"
-          )
-        : new Logger(process.env.NODE_ENV === "development");
+    const logger = new Logger(process.env.NODE_ENV === "development");
     const metricsCollector = new MetricsCollector();
     const signalLogger = threadManager
         ? new WorkerSignalLogger(threadManager)

@@ -1,15 +1,16 @@
-import { Logger } from "../infrastructure/logger.js";
 import { ThreadManager } from "./threadManager.js";
+import { ILogger } from "../infrastructure/loggerInterface.js";
 
-export class WorkerLogger extends Logger {
+/**
+ * WorkerLogger that delegates logging to a worker thread
+ */
+export class WorkerLogger implements ILogger {
     private workerCorrelationContext = new Map<string, string>();
 
     constructor(
         private readonly manager: ThreadManager,
-        pretty = false
-    ) {
-        super(pretty);
-    }
+        private readonly pretty = false
+    ) {}
 
     public setCorrelationId(id: string, context: string): void {
         this.workerCorrelationContext.set(id, context);
@@ -23,7 +24,7 @@ export class WorkerLogger extends Logger {
         this.manager.removeCorrelationContext(id);
     }
 
-    public override info(
+    public info(
         message: string,
         context?: Record<string, unknown>,
         correlationId?: string
@@ -31,7 +32,7 @@ export class WorkerLogger extends Logger {
         this.manager.log("info", message, context, correlationId);
     }
 
-    public override error(
+    public error(
         message: string,
         context?: Record<string, unknown>,
         correlationId?: string
@@ -39,7 +40,7 @@ export class WorkerLogger extends Logger {
         this.manager.log("error", message, context, correlationId);
     }
 
-    public override warn(
+    public warn(
         message: string,
         context?: Record<string, unknown>,
         correlationId?: string
@@ -47,7 +48,7 @@ export class WorkerLogger extends Logger {
         this.manager.log("warn", message, context, correlationId);
     }
 
-    public override debug(
+    public debug(
         message: string,
         context?: Record<string, unknown>,
         correlationId?: string

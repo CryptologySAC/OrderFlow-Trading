@@ -24,7 +24,6 @@ export class StatsBroadcaster {
 
     public start(): void {
         this.stop();
-
         if (Config.MQTT?.url) {
             const mqttOptions: mqtt.IClientOptions = {
                 keepalive: Config.MQTT.keepalive ?? 60,
@@ -63,7 +62,7 @@ export class StatsBroadcaster {
             this.mqttClient.on("error", (err: ErrorWithReasonCode | Error) => {
                 this.logger.error("MQTT connection error", {
                     error: err.message,
-                    code: "code" in err ? err.code : undefined,
+                    code: (err as ErrorWithReasonCode).code,
                     url: Config.MQTT?.url ?? undefined,
                 });
 
@@ -94,36 +93,30 @@ export class StatsBroadcaster {
                 this.logger.info("MQTT reconnecting...");
             });
         }
-
         this.timer = setInterval(() => {
             try {
                 const stats = {
                     metrics: this.metrics.getMetrics(),
                     health: this.metrics.getHealthSummary(),
-                    timestamp: Date.now(),
                     dataStream: this.dataStream.getDetailedMetrics(),
-                    signalTracking: {} as Record<string, unknown>,
+                    signalPerformance:
+                        this.signalTracker?.getPerformanceMetrics(86400000), // 24h window
+                    signalTrackerStatus: this.signalTracker?.getStatus(),
                 };
-
-                // Broadcast to WebSocket clients
                 this.wsManager.broadcast({
                     type: "stats",
                     data: stats,
-                    now: stats.timestamp,
+                    now: Date.now(),
                 });
-
-                // Publish to MQTT if configured and connected (temporarily disabled for type safety)
-                // if (this.mqttClient?.connected && Config.MQTT?.topic) {
-                //     const topic = Config.MQTT.topic as string;
-                //     this.mqttClient.publish(topic, JSON.stringify(stats), {
-                //         qos: 0,
-                //     });
-                // }
-            } catch (error: unknown) {
-                const errorMessage =
-                    error instanceof Error ? error.message : String(error);
-                this.logger.error("Error collecting and broadcasting stats", {
-                    error: errorMessage,
+                if (this.mqttClient && this.mqttClient.connected) {
+                    this.mqttClient.publish(
+                        Config.MQTT?.statsTopic ?? "orderflow/stats",
+                        JSON.stringify(stats)
+                    );
+                }
+            } catch (err) {
+                this.logger.error("Stats broadcast error", {
+                    error: err as Error,
                 });
             }
         }, this.intervalMs);
@@ -134,7 +127,6 @@ export class StatsBroadcaster {
             clearInterval(this.timer);
             this.timer = undefined;
         }
-
         if (this.mqttClient) {
             this.mqttClient.end(true);
             this.mqttClient = undefined;
