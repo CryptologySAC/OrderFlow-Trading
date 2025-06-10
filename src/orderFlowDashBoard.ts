@@ -416,8 +416,9 @@ export class OrderFlowDashboard {
                 signalsCount: deduplicatedSignals.length,
             });
 
-            // Send backlog to communication worker
-            this.threadManager.sendBacklogToClients(
+            // Send backlog to communication worker with client ID for isolation
+            this.threadManager.sendBacklogToSpecificClient(
+                clientId,
                 backlog,
                 deduplicatedSignals
             );
@@ -990,6 +991,29 @@ export class OrderFlowDashboard {
         const startTime = Date.now();
 
         try {
+            // Store stream data to database (CRITICAL: prevents gaps on reload)
+            this.dependencies.storage.saveAggregatedTrade(
+                data,
+                data.s || "LTCUSDT"
+            );
+
+            // Create simple trade object for broadcasting to WebSocket clients
+            const tradeMessage = {
+                type: "trade" as const,
+                now: Date.now(),
+                data: {
+                    time: data.T || Date.now(),
+                    price: parseFloat(data.p || "0"),
+                    quantity: parseFloat(data.q || "0"),
+                    orderType: data.m ? "SELL" : "BUY",
+                    symbol: data.s || "LTCUSDT",
+                    tradeId: data.a || 0,
+                },
+            };
+
+            // Broadcast to WebSocket clients
+            this.broadcastMessage(tradeMessage);
+
             // Update detectors
             if (this.preprocessor) void this.preprocessor.handleAggTrade(data);
 
@@ -998,11 +1022,11 @@ export class OrderFlowDashboard {
                 "processingLatency",
                 processingTime
             );
-        } catch {
+        } catch (error) {
             this.handleError(
                 new SignalProcessingError(
                     "Error processing trade data",
-                    { data },
+                    { data, error: (error as Error).message },
                     correlationId
                 ),
                 "trade_processing",
@@ -1241,6 +1265,40 @@ export class OrderFlowDashboard {
     }
 
     /**
+     * Start stream connection for live data (runs parallel with backlog fill)
+     */
+    private async startStreamConnection(): Promise<void> {
+        const correlationId = randomUUID();
+
+        try {
+            this.logger.info(
+                "Starting live stream connection in parallel with backlog fill",
+                {},
+                correlationId
+            );
+
+            // Start BinanceWorker for live stream data
+            this.threadManager.startBinance();
+
+            // Wait a moment for the connection to establish
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+
+            this.logger.info(
+                "Live stream connection initiated successfully",
+                {},
+                correlationId
+            );
+        } catch (error) {
+            this.handleError(
+                error as Error,
+                "stream_connection",
+                correlationId
+            );
+            throw error;
+        }
+    }
+
+    /**
      * Preload historical data
      */
     public async preloadHistoricalData(): Promise<void> {
@@ -1368,10 +1426,12 @@ export class OrderFlowDashboard {
                 correlationId
             );
 
-            // Start components in parallel
+            // Start components in parallel: HTTP server, backlog fill, AND stream connection
+            // This ensures no gap between 90-minute historical data and live stream
             await Promise.all([
                 this.startHttpServer(),
-                this.preloadHistoricalData(),
+                this.preloadHistoricalData(), // API calls for 90 minutes
+                this.startStreamConnection(), // WebSocket stream in parallel
             ]);
 
             // Data streams connected by BinanceWorker

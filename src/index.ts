@@ -12,7 +12,7 @@ import { ThreadManager } from "./multithreading/threadManager.js";
 export async function main(): Promise<void> {
     try {
         const threadManager = new ThreadManager();
-        threadManager.startBinance();
+        // BinanceWorker will be started by dashboard in parallel with backlog fill
 
         // Create dependencies
         const dependencies = createDependencies(threadManager);

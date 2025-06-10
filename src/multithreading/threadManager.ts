@@ -263,6 +263,17 @@ export class ThreadManager {
         });
     }
 
+    public sendBacklogToSpecificClient(
+        clientId: string,
+        backlog: unknown[],
+        signals: unknown[]
+    ): void {
+        this.commWorker.postMessage({
+            type: "send_backlog",
+            data: { backlog, signals, targetClientId: clientId },
+        });
+    }
+
     public setBacklogRequestHandler(
         handler: (clientId: string, amount: number) => void
     ): void {

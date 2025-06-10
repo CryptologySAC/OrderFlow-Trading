@@ -76,6 +76,62 @@ This is a real-time cryptocurrency trading system that analyzes Binance order fl
 Binance WebSocket → OrderFlowPreprocessor → Pattern Detectors → SignalCoordinator → TradingSignals
 ```
 
+### 🚨 CRITICAL ARCHITECTURE INSIGHTS
+
+#### Data Storage and Stream Management
+
+**CRITICAL UNDERSTANDING**: The system has TWO parallel data paths that MUST run simultaneously:
+
+1. **BinanceWorker (WebSocket Stream)**: Handles real-time live data from WebSocket
+
+    - Processes live trade/depth data from Binance WebSocket API
+    - **MUST store stream data to database** to prevent gaps on client reload
+    - Runs in dedicated worker thread for isolation
+
+2. **API Backlog Fill**: Fetches 90 minutes of historical data via REST API
+    - Uses Binance REST API to fill historical aggregated trades
+    - Runs in main thread via `TradesProcessor.fillBacklog()`
+    - **MUST run in parallel with WebSocket stream** to prevent gaps
+
+#### Parallel Execution Requirements
+
+**WHY PARALLEL EXECUTION IS CRITICAL:**
+
+- Stream data provides real-time processing for signals
+- API data provides historical context for pattern detection
+- Any gap between historical data end and live stream start causes data loss
+- Client reloads require complete data continuity from storage
+
+**IMPLEMENTATION PATTERN:**
+
+```typescript
+// ✅ CORRECT: Parallel execution
+await Promise.all([
+    this.preloadHistoricalData(), // API calls for 90 minutes
+    this.startStreamConnection(), // WebSocket stream in parallel
+]);
+
+// ❌ WRONG: Sequential execution creates gaps
+await this.preloadHistoricalData();
+await this.startStreamConnection(); // Creates gap!
+```
+
+#### Stream Data Storage
+
+**CRITICAL**: All stream data from BinanceWorker MUST be stored via:
+
+```typescript
+// In processTrade() method:
+this.dependencies.storage.saveAggregatedTrade(data, symbol);
+```
+
+**WHY STORAGE IS REQUIRED:**
+
+- WebSocket data is real-time and cannot be re-fetched
+- Client reloads depend on stored data for backlog
+- Missing storage creates permanent data gaps
+- Trading signals require complete historical context
+
 ### Key Directories
 
 - `src/core/` - Configuration management and error handling

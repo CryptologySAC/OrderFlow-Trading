@@ -97,9 +97,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
 
     // Health monitoring
     private healthCheckTimer?: NodeJS.Timeout;
-    private gapCheckTimer?: NodeJS.Timeout;
     private isStreamConnected = true;
-    private lastGapCheckTime = Date.now();
 
     constructor(
         options: TradesProcessorOptions,
@@ -150,49 +148,23 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     }
 
     /**
-     * Preload the backlog of aggregated trades into storage
+     * Reload the last 90 minutes of trade data from Binance API
      */
     public async fillBacklog(): Promise<void> {
         const startTime = Date.now();
         const targetTime = Date.now();
+        const backlogStartTime = targetTime - this.storageTime; // 90 minutes ago
         let totalFetched = 0;
         let consecutiveEmptyBatches = 0;
         let retries = 0;
 
-        // First, detect and fill any gaps in the requested timeframe
-        const requestedStartTime = Date.now() - this.storageTime;
-        const gaps = this.storage.detectGaps(
-            this.symbol,
-            requestedStartTime,
-            targetTime,
-            60000
-        ); // 1 minute gap threshold
+        // Set threshold to start of backlog window
+        this.thresholdTime = backlogStartTime;
 
-        if (gaps.length > 0) {
-            this.logger.info(
-                "[TradesProcessor] Detected gaps in historical data",
-                {
-                    gapCount: gaps.length,
-                    gaps: gaps.map((g) => ({
-                        start: new Date(g.start).toISOString(),
-                        end: new Date(g.end).toISOString(),
-                        durationMinutes: ((g.end - g.start) / 60000).toFixed(2),
-                    })),
-                }
-            );
-
-            // Fill each gap sequentially
-            for (const gap of gaps) {
-                await this.fillGap(gap.start, gap.end);
-                totalFetched += this.countTradesInRange(gap.start, gap.end);
-            }
-        }
-
-        this.logger.info("[TradesProcessor] Starting backlog fill", {
-            from: new Date(this.thresholdTime).toISOString(),
+        this.logger.info("[TradesProcessor] Starting 90-minute data reload", {
+            from: new Date(backlogStartTime).toISOString(),
             to: new Date(targetTime).toISOString(),
-            hours: ((targetTime - this.thresholdTime) / 3600000).toFixed(2),
-            gapsFilled: gaps.length,
+            durationMinutes: (this.storageTime / 60000).toFixed(2),
         });
 
         try {
@@ -554,83 +526,32 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     }
 
     /**
-     * Start continuous gap monitoring
+     * Start continuous gap monitoring - REMOVED
+     * Replaced with simple 90-minute reload on startup and stream reconnection
      */
     private startGapMonitoring(): void {
-        // Check for gaps every 5 minutes
-        this.gapCheckTimer = setInterval(() => {
-            void this.performGapCheck();
-        }, 300000); // 5 minutes
+        // No longer needed - using simple reload strategy
+        this.logger.info(
+            "[TradesProcessor] Gap monitoring removed - using 90-minute reload strategy"
+        );
     }
 
     /**
-     * Perform gap check and fill any detected gaps
+     * Reload 90 minutes of trade data
      */
-    private async performGapCheck(): Promise<void> {
+    private async reloadTradeData(): Promise<void> {
         if (this.isShuttingDown) return;
 
         try {
-            const currentTime = Date.now();
-            const windowStartTime = currentTime - this.storageTime;
-
-            // Only check since last gap check to avoid redundant work
-            const checkStartTime = Math.max(
-                windowStartTime,
-                this.lastGapCheckTime
-            );
-
             this.logger.info(
-                "[TradesProcessor] Performing periodic gap check",
-                {
-                    checkStartTime: new Date(checkStartTime).toISOString(),
-                    currentTime: new Date(currentTime).toISOString(),
-                    windowDurationMinutes: (
-                        (currentTime - checkStartTime) /
-                        60000
-                    ).toFixed(2),
-                }
+                "[TradesProcessor] Starting 90-minute data reload"
             );
-
-            const gaps = this.storage.detectGaps(
-                this.symbol,
-                checkStartTime,
-                currentTime,
-                60000 // 1 minute gap threshold
+            await this.fillBacklog();
+            this.logger.info(
+                "[TradesProcessor] Data reload completed successfully"
             );
-
-            if (gaps.length > 0) {
-                this.logger.warn(
-                    "[TradesProcessor] Detected gaps during monitoring",
-                    {
-                        gapCount: gaps.length,
-                        gaps: gaps.map((g) => ({
-                            start: new Date(g.start).toISOString(),
-                            end: new Date(g.end).toISOString(),
-                            durationMinutes: (
-                                (g.end - g.start) /
-                                60000
-                            ).toFixed(2),
-                        })),
-                    }
-                );
-
-                // Fill each gap sequentially
-                for (const gap of gaps) {
-                    await this.fillGap(gap.start, gap.end);
-                }
-
-                this.logger.info("[TradesProcessor] Gap filling completed", {
-                    filledGaps: gaps.length,
-                });
-            } else {
-                this.logger.info(
-                    "[TradesProcessor] No gaps detected during monitoring"
-                );
-            }
-
-            this.lastGapCheckTime = currentTime;
         } catch (error) {
-            this.logger.error("[TradesProcessor] Error during gap monitoring", {
+            this.logger.error("[TradesProcessor] Error during data reload", {
                 error: (error as Error).message,
             });
         }
@@ -650,10 +571,10 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             this.isStreamConnected = true;
             this.lastTradeTime = Date.now(); // Reset trade timeout
 
-            // Trigger gap check after reconnection
-            void this.performGapCheck().catch((error) => {
+            // Reload 90 minutes of data after reconnection
+            void this.reloadTradeData().catch((error) => {
                 this.logger.error(
-                    "[TradesProcessor] Error during reconnection gap check",
+                    "[TradesProcessor] Error during reconnection data reload",
                     {
                         error: (error as Error).message,
                     }
@@ -746,9 +667,6 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         if (this.healthCheckTimer) {
             clearInterval(this.healthCheckTimer);
         }
-        if (this.gapCheckTimer) {
-            clearInterval(this.gapCheckTimer);
-        }
 
         // Process remaining save queue
         if (this.saveQueue.length > 0) {
@@ -804,105 +722,6 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             errorContext,
             correlationId
         );
-    }
-
-    /**
-     * Fill a specific gap in historical data
-     */
-    private async fillGap(startTime: number, endTime: number): Promise<void> {
-        this.logger.info("[TradesProcessor] Filling gap", {
-            start: new Date(startTime).toISOString(),
-            end: new Date(endTime).toISOString(),
-            durationMinutes: ((endTime - startTime) / 60000).toFixed(2),
-        });
-
-        let currentTime = startTime;
-        let retries = 0;
-        const maxRetries = 3;
-
-        while (currentTime < endTime && !this.isShuttingDown) {
-            try {
-                const aggregatedTrades =
-                    await this.binanceFeed.fetchAggTradesByTime(
-                        this.symbol,
-                        currentTime
-                    );
-
-                if (aggregatedTrades.length === 0) {
-                    // No trades found, skip ahead
-                    currentTime += 60000; // Skip 1 minute
-                    continue;
-                }
-
-                const tradesToSave = aggregatedTrades.filter(
-                    (trade) =>
-                        trade.T && trade.T >= currentTime && trade.T <= endTime
-                );
-
-                if (tradesToSave.length > 0) {
-                    await this.bulkSaveTrades(tradesToSave);
-
-                    // Update current time to the latest trade timestamp
-                    const maxTimestamp = Math.max(
-                        ...tradesToSave.map((t) => t.T || 0)
-                    );
-                    currentTime = maxTimestamp + 1;
-
-                    this.logger.info("[TradesProcessor] Gap fill progress", {
-                        saved: tradesToSave.length,
-                        currentTime: new Date(currentTime).toISOString(),
-                    });
-                } else {
-                    currentTime += 60000; // Skip 1 minute if no relevant trades
-                }
-
-                retries = 0; // Reset retries on success
-                await this.sleep(100); // Rate limiting
-            } catch (error) {
-                retries++;
-                if (retries >= maxRetries) {
-                    this.logger.error(
-                        "[TradesProcessor] Failed to fill gap after retries",
-                        {
-                            error: (error as Error).message,
-                            currentTime: new Date(currentTime).toISOString(),
-                        }
-                    );
-                    break;
-                }
-
-                this.logger.warn("[TradesProcessor] Gap fill retry", {
-                    error: (error as Error).message,
-                    retry: retries,
-                    currentTime: new Date(currentTime).toISOString(),
-                });
-
-                await this.sleep(Math.pow(2, retries) * 1000);
-            }
-        }
-    }
-
-    /**
-     * Count trades in a specific time range (for reporting)
-     */
-    private countTradesInRange(startTime: number, endTime: number): number {
-        try {
-            const trades = this.storage.getLatestAggregatedTrades(
-                10000,
-                this.symbol
-            );
-            return trades.filter(
-                (trade) => trade.T && trade.T >= startTime && trade.T <= endTime
-            ).length;
-        } catch (error) {
-            this.logger.error(
-                "[TradesProcessor] Error counting trades in range",
-                {
-                    error: (error as Error).message,
-                }
-            );
-            return 0;
-        }
     }
 
     /**

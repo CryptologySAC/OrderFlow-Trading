@@ -156,6 +156,7 @@ const wsHandlers = {
                     amount,
                     correlationId,
                     directResponse: true,
+                    isolatedRequest: true, // Flag for isolated client-specific response
                 },
             });
 
@@ -224,14 +225,10 @@ const onClientConnect = (ws: IsolatedWebSocket) => {
     // Store client-specific state (isolated from other clients)
     ws.clientState = clientState;
 
-    // Request backlog and signals from main thread for this new client
-    parentPort?.postMessage({
-        type: "request_backlog",
-        data: {
-            clientId: ws.clientId || "unknown",
-            amount: 1000,
-            isolated: true, // Flag for isolated handling
-        },
+    // Don't auto-request backlog on connection - let clients explicitly request when needed
+    // This prevents interference between dashboard.html and stats.html clients
+    logger.info("Client connected - waiting for explicit backlog request", {
+        clientId: ws.clientId,
     });
 
     ws.on("close", () => {
@@ -465,6 +462,7 @@ interface BacklogMessage {
     data: {
         backlog: unknown[];
         signals: unknown[];
+        targetClientId?: string;
     };
 }
 
@@ -594,50 +592,119 @@ parentPort?.on(
                 }
             } else if (msg.type === "send_backlog") {
                 try {
-                    // Send backlog and signals to all connected clients (isolated)
-                    if (global.connectedClients) {
-                        global.connectedClients.forEach(
-                            (ws: IsolatedWebSocket) => {
-                                try {
-                                    // Send backlog
+                    // Check if this is an isolated client-specific response
+                    const targetClientId = msg.data.targetClientId;
+
+                    if (targetClientId) {
+                        // Send only to the specific requesting client (ISOLATED)
+                        const pendingRequest =
+                            global.pendingBacklogRequests?.get(targetClientId);
+                        if (pendingRequest) {
+                            const { ws, correlationId } = pendingRequest;
+                            try {
+                                // Send backlog
+                                ws.send(
+                                    JSON.stringify({
+                                        type: "backlog",
+                                        data: msg.data.backlog,
+                                        now: Date.now(),
+                                        correlationId,
+                                    })
+                                );
+
+                                // Send signal backlog
+                                if (
+                                    msg.data.signals &&
+                                    msg.data.signals.length > 0
+                                ) {
                                     ws.send(
                                         JSON.stringify({
-                                            type: "backlog",
-                                            data: msg.data.backlog,
+                                            type: "signal_backlog",
+                                            data: msg.data.signals,
                                             now: Date.now(),
+                                            correlationId,
                                         })
                                     );
+                                }
 
-                                    // Send signal backlog
-                                    if (
-                                        msg.data.signals &&
-                                        msg.data.signals.length > 0
-                                    ) {
+                                logger.info(
+                                    "Isolated backlog sent to specific client",
+                                    {
+                                        clientId: targetClientId,
+                                        backlogCount:
+                                            msg.data.backlog?.length || 0,
+                                        signalsCount:
+                                            msg.data.signals?.length || 0,
+                                    }
+                                );
+
+                                // Remove from pending requests
+                                global.pendingBacklogRequests?.delete(
+                                    targetClientId
+                                );
+                            } catch (error) {
+                                logger.error(
+                                    "Error sending isolated backlog to client",
+                                    {
+                                        error:
+                                            error instanceof Error
+                                                ? error.message
+                                                : String(error),
+                                        clientId: targetClientId,
+                                    }
+                                );
+                            }
+                        } else {
+                            logger.warn("No pending request found for client", {
+                                targetClientId,
+                            });
+                        }
+                    } else {
+                        // Legacy behavior: Send backlog to all connected clients (for broadcast scenarios)
+                        if (global.connectedClients) {
+                            global.connectedClients.forEach(
+                                (ws: IsolatedWebSocket) => {
+                                    try {
+                                        // Send backlog
                                         ws.send(
                                             JSON.stringify({
-                                                type: "signal_backlog",
-                                                data: msg.data.signals,
+                                                type: "backlog",
+                                                data: msg.data.backlog,
                                                 now: Date.now(),
                                             })
                                         );
-                                    }
-                                } catch (error) {
-                                    logger.error(
-                                        "Error sending backlog to client",
-                                        {
-                                            error:
-                                                error instanceof Error
-                                                    ? error.message
-                                                    : String(error),
+
+                                        // Send signal backlog
+                                        if (
+                                            msg.data.signals &&
+                                            msg.data.signals.length > 0
+                                        ) {
+                                            ws.send(
+                                                JSON.stringify({
+                                                    type: "signal_backlog",
+                                                    data: msg.data.signals,
+                                                    now: Date.now(),
+                                                })
+                                            );
                                         }
-                                    );
+                                    } catch (error) {
+                                        logger.error(
+                                            "Error sending backlog to client",
+                                            {
+                                                error:
+                                                    error instanceof Error
+                                                        ? error.message
+                                                        : String(error),
+                                            }
+                                        );
+                                    }
                                 }
-                            }
-                        );
+                            );
+                        }
                     }
 
-                    // Check for pending direct responses
-                    if (global.pendingBacklogRequests) {
+                    // Legacy direct response handling (only if not isolated)
+                    if (!targetClientId && global.pendingBacklogRequests) {
                         global.pendingBacklogRequests.forEach(
                             ({ ws, correlationId }, clientId) => {
                                 try {
@@ -667,7 +734,7 @@ parentPort?.on(
                                     }
 
                                     logger.info(
-                                        "Direct backlog response sent",
+                                        "Legacy direct backlog response sent",
                                         {
                                             clientId,
                                             backlogCount:
@@ -679,7 +746,7 @@ parentPort?.on(
                                     );
                                 } catch (error) {
                                     logger.error(
-                                        "Error sending direct backlog response",
+                                        "Error sending legacy direct backlog response",
                                         {
                                             error:
                                                 error instanceof Error
