@@ -44,7 +44,7 @@ import {
     type ExtendedWebSocket,
 } from "./websocket/websocketManager.js";
 import { SignalManager } from "./trading/signalManager.js";
-import { DataStreamManager } from "./trading/dataStreamManager.js";
+// DataStreamManager handled by BinanceWorker in threaded mode
 import { SignalCoordinator } from "./services/signalCoordinator.js";
 import { AnomalyDetector, AnomalyEvent } from "./services/anomalyDetector.js";
 import { AlertManager } from "./alerts/alertManager.js";
@@ -111,10 +111,10 @@ export class OrderFlowDashboard {
     private readonly recoveryManager: RecoveryManager;
 
     // Managers
-    private readonly wsManager?: WebSocketManager;
-    private readonly threadManager?: ThreadManager;
+    private readonly wsManager: WebSocketManager;
+    private readonly threadManager: ThreadManager;
     private readonly signalManager: SignalManager;
-    private readonly dataStreamManager?: DataStreamManager;
+    // DataStreamManager is handled by BinanceWorker in threaded mode
 
     // Market
     private orderBook: OrderBookState | null = null;
@@ -167,7 +167,8 @@ export class OrderFlowDashboard {
         this.orderBook = await OrderBookState.create(
             Config.ORDERBOOK_STATE,
             dependencies.logger,
-            dependencies.metricsCollector
+            dependencies.metricsCollector,
+            dependencies.mainThreadBinanceFeed
         );
         this.preprocessor = new OrderflowPreprocessor(
             Config.PREPROCESSOR,
@@ -220,68 +221,47 @@ export class OrderFlowDashboard {
         this.anomalyDetector = dependencies.anomalyDetector;
 
         // Initialize managers
-        if (this.threadManager) {
-            this.broadcastMessage = (msg: WebSocketMessage): void => {
-                this.threadManager!.broadcast(msg);
-            };
+        this.broadcastMessage = (msg: WebSocketMessage): void => {
+            this.threadManager.broadcast(msg);
+        };
 
-            // Set up backlog request handler for multithreaded mode
-            this.threadManager.setBacklogRequestHandler(
-                (clientId: string, amount: number) => {
-                    this.handleBacklogRequest(clientId, amount);
-                }
-            );
+        // Set up backlog request handler for multithreaded mode
+        this.threadManager.setBacklogRequestHandler(
+            (clientId: string, amount: number) => {
+                this.handleBacklogRequest(clientId, amount);
+            }
+        );
 
-            // Set up stream event handler for multithreaded mode
-            this.threadManager.setStreamEventHandler(
-                (eventType: string, data: unknown) => {
-                    this.handleWorkerStreamEvent(eventType, data);
-                }
-            );
+        // Set up stream event handler for multithreaded mode
+        this.threadManager.setStreamEventHandler(
+            (eventType: string, data: unknown) => {
+                this.handleWorkerStreamEvent(eventType, data);
+            }
+        );
 
-            // Set up stream data handler for multithreaded mode
-            this.threadManager.setStreamDataHandler(
-                (dataType: string, data: unknown) => {
-                    this.handleWorkerStreamData(dataType, data);
-                }
-            );
-        } else {
-            this.wsManager = new WebSocketManager(
-                Config.WS_PORT,
-                dependencies.logger,
-                dependencies.rateLimiter,
-                this.metricsCollector,
-                this.createWSHandlers(),
-                (ws) => this.onClientConnected(ws)
-            );
-            this.broadcastMessage = (msg: WebSocketMessage): void => {
-                this.wsManager!.broadcast(msg);
-            };
-        }
+        // Set up stream data handler for multithreaded mode
+        this.threadManager.setStreamDataHandler(
+            (dataType: string, data: unknown) => {
+                this.handleWorkerStreamData(dataType, data);
+            }
+        );
+
+        this.wsManager = new WebSocketManager(
+            Config.WS_PORT,
+            dependencies.logger,
+            dependencies.rateLimiter,
+            this.metricsCollector,
+            this.createWSHandlers(),
+            (ws) => this.onClientConnected(ws)
+        );
 
         this.signalManager = dependencies.signalManager;
 
-        // Only create DataStreamManager in non-threaded mode
-        // In threaded mode, the BinanceWorker handles streaming
-        if (!this.threadManager) {
-            this.dataStreamManager = new DataStreamManager(
-                Config.DATASTREAM,
-                dependencies.binanceFeed,
-                dependencies.circuitBreaker,
-                dependencies.logger,
-                this.metricsCollector
-            );
-        }
+        // DataStreamManager is handled by BinanceWorker in threaded mode
+        // No local DataStreamManager needed in main thread
 
-        if (!this.threadManager && this.dataStreamManager) {
-            this.statsBroadcaster = new StatsBroadcaster(
-                this.metricsCollector,
-                this.dataStreamManager,
-                this.wsManager!,
-                dependencies.logger,
-                dependencies.signalTracker
-            );
-        }
+        // StatsBroadcaster not needed in threaded mode
+        // Stats are handled by the multithreading system
         DetectorFactory.initialize(dependencies);
 
         this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
@@ -443,12 +423,10 @@ export class OrderFlowDashboard {
             });
 
             // Send backlog to communication worker
-            if (this.threadManager) {
-                this.threadManager.sendBacklogToClients(
-                    backlog,
-                    deduplicatedSignals
-                );
-            }
+            this.threadManager.sendBacklogToClients(
+                backlog,
+                deduplicatedSignals
+            );
         } catch (error) {
             this.logger.error(
                 `Error handling backlog request for client ${clientId}`,
@@ -827,170 +805,10 @@ export class OrderFlowDashboard {
             }
         );
 
-        // Handle data stream events (only in non-threaded mode)
-        if (!this.dataStreamManager) {
-            if (!this.threadManager) {
-                // Critical error: non-threaded mode MUST have dataStreamManager
-                console.error(
-                    "FATAL: Data stream manager is not initialized in non-threaded mode"
-                );
-                process.exit(1);
-            }
-            // In threaded mode, skip setting up local stream handlers
-            // The ThreadManager will handle stream events from the worker
-            return;
-        }
-
-        this.logger.info(
-            "[OrderFlowDashboard] Setting up data stream event handlers..."
-        );
-        this.dataStreamManager.on(
-            "trade",
-            (data: SpotWebsocketStreams.AggTradeResponse) => {
-                this.processTrade(data);
-            }
-        );
-
-        this.dataStreamManager.on(
-            "depth",
-            (data: SpotWebsocketStreams.DiffBookDepthResponse) => {
-                this.processDepth(data);
-            }
-        );
-
-        this.dataStreamManager.on("error", (error: Error) => {
-            this.handleError(error, "data_stream");
-        });
-
-        // Handle hard reload requests from data stream manager
-        this.dataStreamManager.on(
-            "hardReloadRequired",
-            (event: HardReloadEvent) => {
-                this.handleHardReloadRequest(event);
-            }
-        );
-
-        // Handle recovery manager events
-        this.recoveryManager.on(
-            "hardReloadStarting",
-            (event: HardReloadEvent) => {
-                this.logger.error(
-                    "[OrderFlowDashboard] Hard reload starting, initiating graceful shutdown",
-                    {
-                        reason: event.reason,
-                        component: event.component,
-                    }
-                );
-                void this.gracefulShutdown();
-            }
-        );
-
-        this.recoveryManager.on(
-            "hardReloadLimitExceeded",
-            (event: HardReloadEvent) => {
-                this.logger.error(
-                    "[OrderFlowDashboard] Hard reload limit exceeded, system needs manual intervention",
-                    {
-                        reason: event.reason,
-                        component: event.component,
-                        hardReloadCount: (
-                            event as HardReloadEvent & {
-                                hardReloadCount: number;
-                            }
-                        ).hardReloadCount,
-                    }
-                );
-                // Could emit alert to external monitoring system here
-            }
-        );
-
-        this.dataStreamManager.on("disconnected", (reason: string) => {
-            this.logger.warn("[OrderFlowDashboard] Data stream disconnected", {
-                reason,
-            });
-            // Notify components that data stream is down
-            this.dependencies.tradesProcessor.emit("stream_disconnected", {
-                reason,
-            });
-        });
-
-        this.dataStreamManager.on("connected", () => {
-            this.logger.info(
-                "[OrderFlowDashboard] Data stream reconnected successfully"
-            );
-            // Notify components that data stream is back up
-            this.dependencies.tradesProcessor.emit("stream_connected");
-            void this.dependencies.tradesProcessor
-                .fillBacklog()
-                .catch((error) => {
-                    this.logger.error(
-                        "[OrderFlowDashboard] Failed to load missed trades",
-                        { error }
-                    );
-                });
-            if (this.orderBook) {
-                void this.orderBook.recover().catch((error) => {
-                    this.logger.error(
-                        "[OrderFlowDashboard] OrderBook recovery failed after reconnection",
-                        { error }
-                    );
-                });
-            }
-        });
-
-        this.dataStreamManager.on(
-            "reconnecting",
-            ({ attempt, delay, maxAttempts }) => {
-                this.logger.info(
-                    "[OrderFlowDashboard] Data stream reconnecting",
-                    {
-                        attempt,
-                        delay,
-                        maxAttempts,
-                    }
-                );
-            }
-        );
-
-        this.dataStreamManager.on("unhealthy", () => {
-            this.logger.warn(
-                "[OrderFlowDashboard] Data stream health degraded"
-            );
-        });
-
-        this.dataStreamManager.on("healthy", () => {
-            this.logger.info(
-                "[OrderFlowDashboard] Data stream health restored"
-            );
-        });
-
-        // Handle API connectivity issues
-        this.dataStreamManager.on(
-            "connectivityIssue",
-            (issue: ConnectivityIssue) => {
-                // Get current price for anomaly context - use last trade price or skip if no trades yet
-                if (this.lastTradePrice === 0) {
-                    this.logger.debug(
-                        "Skipping connectivity anomaly - no trades received yet"
-                    );
-                    return;
-                }
-                const currentPrice = this.lastTradePrice;
-
-                this.logger.warn("API connectivity issue detected", {
-                    type: issue.type,
-                    severity: issue.severity,
-                    description: issue.description,
-                    suggestedAction: issue.suggestedAction,
-                });
-
-                // Report to anomaly detector
-                this.anomalyDetector.onConnectivityIssue(issue, currentPrice);
-            }
-        );
+        // In threaded mode, stream events come from BinanceWorker via ThreadManager
+        // No local DataStreamManager event handlers needed
 
         // Handle signal events
-        // Handle data stream events
         if (!this.signalManager) {
             throw new Error("Signal Manager is not initialized");
         }
@@ -1315,8 +1133,7 @@ export class OrderFlowDashboard {
                     connections: this.wsManager?.getConnectionCount() ?? 0,
                     circuitBreakerState:
                         this.dependencies.circuitBreaker.getState(),
-                    dataStreamState:
-                        this.dataStreamManager?.getStatus()?.state ?? "unknown",
+                    dataStreamState: "threaded", // DataStreamManager handled by BinanceWorker
                     recovery: this.recoveryManager.getStats(),
                     metrics: {
                         signalsGenerated: metrics.legacy.signalsGenerated,
@@ -1348,8 +1165,7 @@ export class OrderFlowDashboard {
                 const stats = {
                     metrics: this.metricsCollector.getMetrics(),
                     health: this.metricsCollector.getHealthSummary(),
-                    dataStream:
-                        this.dataStreamManager?.getDetailedMetrics() || null,
+                    dataStream: null, // DataStreamManager handled by BinanceWorker
                     correlationId,
                 };
                 res.json(stats);
@@ -1586,21 +1402,17 @@ export class OrderFlowDashboard {
     /**
      * Graceful shutdown before hard reload
      */
-    private async gracefulShutdown(): Promise<void> {
+    private gracefulShutdown(): void {
         this.logger.info(
             "[OrderFlowDashboard] Starting graceful shutdown for hard reload"
         );
 
         try {
             // Stop accepting new connections
-            if (this.wsManager) {
-                this.wsManager.shutdown();
-            }
+            this.wsManager.shutdown();
 
             // Disconnect data streams
-            if (this.dataStreamManager) {
-                await this.dataStreamManager.disconnect();
-            }
+            // DataStreamManager disconnect handled by BinanceWorker
 
             // Stop signal processing
             if (this.signalCoordinator) {
@@ -1711,7 +1523,7 @@ export class OrderFlowDashboard {
      * Setup graceful shutdown
      */
     private setupGracefulShutdown(): void {
-        const shutdown = async (signal: string): Promise<void> => {
+        const shutdown = (signal: string): void => {
             this.logger.info(`Received ${signal}, starting graceful shutdown`);
             this.isShuttingDown = true;
 
@@ -1721,12 +1533,8 @@ export class OrderFlowDashboard {
             }
 
             // Shutdown components
-            if (this.wsManager) {
-                this.wsManager.shutdown();
-            }
-            if (this.dataStreamManager) {
-                await this.dataStreamManager.disconnect();
-            }
+            this.wsManager.shutdown();
+            // DataStreamManager disconnect handled by BinanceWorker
 
             // Give time for cleanup
             if (this.statsBroadcaster) {
@@ -1761,10 +1569,7 @@ export class OrderFlowDashboard {
                 this.preloadHistoricalData(),
             ]);
 
-            // Connect to data streams (only in non-threaded mode)
-            if (this.dataStreamManager) {
-                await this.dataStreamManager.connect();
-            }
+            // Data streams connected by BinanceWorker
 
             // Start periodic tasks
             this.startPeriodicTasks();
@@ -1956,6 +1761,7 @@ export function createDependencies(threadManager: ThreadManager): Dependencies {
         individualTradesManager,
         microstructureAnalyzer,
         binanceFeed,
+        mainThreadBinanceFeed,
         signalTracker,
         marketContextCollector,
         threadManager,

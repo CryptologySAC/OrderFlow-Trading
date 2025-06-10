@@ -1,7 +1,7 @@
 // src/market/orderBookState.ts
 
 import type { SpotWebsocketStreams } from "@binance/spot";
-import { BinanceDataFeed } from "../utils/binance.js";
+import { type IBinanceDataFeed } from "../utils/binance.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import type { PassiveLevel, OrderBookHealth } from "../types/marketEvents.js";
 import { WorkerLogger } from "../multithreading/workerLogger";
@@ -49,7 +49,7 @@ export class OrderBookState implements IOrderBookState {
     private readonly metricsCollector: MetricsCollector;
 
     private isInitialized = false;
-    private readonly binanceFeed = new BinanceDataFeed();
+    private readonly binanceFeed: IBinanceDataFeed;
     private snapshotBuffer: SpotWebsocketStreams.DiffBookDepthResponse[] = [];
     private expectedUpdateId?: number;
 
@@ -82,13 +82,15 @@ export class OrderBookState implements IOrderBookState {
     constructor(
         options: OrderBookStateOptions,
         logger: WorkerLogger,
-        metricsCollector: MetricsCollector
+        metricsCollector: MetricsCollector,
+        binanceFeed: IBinanceDataFeed
     ) {
         this.pricePrecision = options.pricePrecision;
         this.tickSize = Math.pow(10, -this.pricePrecision);
         this.symbol = options.symbol;
         this.logger = logger;
         this.metricsCollector = metricsCollector;
+        this.binanceFeed = binanceFeed;
         this.maxLevels = options.maxLevels ?? this.maxLevels;
         this.maxPriceDistance =
             options.maxPriceDistance ?? this.maxPriceDistance;
@@ -101,9 +103,15 @@ export class OrderBookState implements IOrderBookState {
     public static async create(
         options: OrderBookStateOptions,
         logger: WorkerLogger,
-        metricsCollector: MetricsCollector
+        metricsCollector: MetricsCollector,
+        binanceFeed: IBinanceDataFeed
     ): Promise<OrderBookState> {
-        const instance = new OrderBookState(options, logger, metricsCollector);
+        const instance = new OrderBookState(
+            options,
+            logger,
+            metricsCollector,
+            binanceFeed
+        );
         await instance.initialize();
         return instance;
     }

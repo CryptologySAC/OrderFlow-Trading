@@ -29,6 +29,7 @@ export interface Dependencies {
     storage: IStorage;
     pipelineStore: IPipelineStorage;
     binanceFeed: IBinanceDataFeed;
+    mainThreadBinanceFeed: IBinanceDataFeed;
     tradesProcessor: ITradesProcessor;
     orderBookProcessor: OrderBookProcessor;
     signalLogger: ISignalLogger;
@@ -52,6 +53,6 @@ export interface Dependencies {
     signalTracker?: SignalTracker;
     marketContextCollector?: MarketContextCollector;
 
-    /** Optional thread manager for worker offloading */
-    threadManager?: ThreadManager;
+    /** Thread manager for worker offloading */
+    threadManager: ThreadManager;
 }
