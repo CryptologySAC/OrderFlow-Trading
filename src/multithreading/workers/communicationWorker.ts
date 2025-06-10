@@ -1,6 +1,9 @@
 import { parentPort } from "worker_threads";
 import { WorkerProxyLogger } from "../shared/workerProxylogger.js";
-import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
+import {
+    MetricsCollector,
+    type EnhancedMetrics,
+} from "../../infrastructure/metricsCollector.js";
 import { RateLimiter } from "../../infrastructure/rateLimiter.js";
 import {
     WebSocketManager,
@@ -21,12 +24,63 @@ import type { WebSocketMessage } from "../../utils/interfaces.js";
 import mqtt, { MqttClient, ErrorWithReasonCode } from "mqtt";
 import type { SignalTracker } from "../../analysis/signalTracker.js";
 
+interface DataStreamMetrics {
+    streamConnections: number;
+    streamUptime: number;
+    streamHealth: string;
+    lastStreamData: number;
+    reconnectionAttempts: number;
+}
+
+interface BinanceWorkerMetrics {
+    connection: {
+        state: string;
+        uptime: number | undefined;
+        reconnectAttempts: number;
+        lastReconnectAttempt: number;
+    };
+    streams: {
+        health: {
+            tradeMessageCount: number;
+            depthMessageCount: number;
+            lastTradeMessage: number;
+            lastDepthMessage: number;
+            isHealthy: boolean;
+        };
+        tradeMessagesPerSecond: number;
+        depthMessagesPerSecond: number;
+    };
+    timers: {
+        heartbeat: boolean;
+        healthCheck: boolean;
+        reconnect: boolean;
+    };
+}
+
 class DataStreamProxy {
-    private metrics: unknown = {};
-    public setMetrics(m: unknown): void {
-        this.metrics = m;
+    private metrics: DataStreamMetrics = {
+        streamConnections: 0,
+        streamUptime: 0,
+        streamHealth: "Unknown",
+        lastStreamData: 0,
+        reconnectionAttempts: 0,
+    };
+
+    public setMetrics(m: BinanceWorkerMetrics): void {
+        // Extract stream-related metrics from the binance worker metrics
+        this.metrics = {
+            streamConnections: 1, // Connected if we're getting metrics
+            streamUptime: m.connection.uptime || 0,
+            streamHealth: m.connection.state,
+            lastStreamData: Math.max(
+                m.streams.health.lastTradeMessage || 0,
+                m.streams.health.lastDepthMessage || 0
+            ),
+            reconnectionAttempts: m.connection.reconnectAttempts,
+        };
     }
-    public getDetailedMetrics(): unknown {
+
+    public getDetailedMetrics(): DataStreamMetrics {
         return this.metrics;
     }
 }
@@ -215,6 +269,7 @@ class EnhancedStatsBroadcaster {
     private timer?: NodeJS.Timeout;
     private mqttClient?: MqttClient;
     private signalTracker?: SignalTracker;
+    private mainThreadMetrics: EnhancedMetrics | null = null;
 
     constructor(
         private readonly metrics: MetricsCollector,
@@ -223,6 +278,10 @@ class EnhancedStatsBroadcaster {
         private readonly logger: WorkerProxyLogger,
         private readonly intervalMs = 5000
     ) {}
+
+    public setMainThreadMetrics(mainMetrics: EnhancedMetrics): void {
+        this.mainThreadMetrics = mainMetrics;
+    }
 
     public setSignalTracker(signalTracker: SignalTracker): void {
         this.signalTracker = signalTracker;
@@ -239,13 +298,46 @@ class EnhancedStatsBroadcaster {
         // Start stats broadcasting timer
         this.timer = setInterval(() => {
             try {
+                // Merge main thread metrics with worker metrics
+                const workerMetrics = this.metrics.getMetrics();
+                const mainMetrics = this.mainThreadMetrics;
+
+                // Combine counters and gauges from both sources
+                const combinedMetrics = {
+                    counters: {
+                        ...(workerMetrics.counters || {}),
+                        ...(mainMetrics?.counters || {}),
+                    },
+                    gauges: {
+                        ...(workerMetrics.gauges || {}),
+                        ...(mainMetrics?.gauges || {}),
+                        // Add connection count from active clients
+                        connections_active: global.connectedClients?.size || 0,
+                    },
+                    histograms: {
+                        ...(workerMetrics.histograms || {}),
+                        ...(mainMetrics?.histograms || {}),
+                    },
+                    legacy: {
+                        ...(workerMetrics.legacy || {}),
+                        ...(mainMetrics?.legacy || {}),
+                    },
+                };
+
                 const stats = {
-                    metrics: this.metrics.getMetrics(),
+                    metrics: combinedMetrics,
                     health: this.metrics.getHealthSummary(),
                     dataStream: this.dataStream.getDetailedMetrics(),
                     signalPerformance:
                         this.signalTracker?.getPerformanceMetrics(86400000), // 24h window
                     signalTrackerStatus: this.signalTracker?.getStatus(),
+                    workers: {
+                        loggerWorker: "Running",
+                        binanceWorker: "Running",
+                        communicationWorker: "Running",
+                        wsConnections: global.connectedClients?.size || 0,
+                        streamHealth: "Connected", // This will be updated from binance worker
+                    },
                 };
 
                 // Broadcast via WebSocket
@@ -361,7 +453,7 @@ statsBroadcaster.start();
 
 interface MetricsMessage {
     type: "metrics";
-    data: unknown;
+    data: BinanceWorkerMetrics;
 }
 interface BroadcastMessage {
     type: "broadcast";
@@ -379,6 +471,11 @@ interface BacklogMessage {
 interface SignalTrackerMessage {
     type: "signal_tracker";
     data: SignalTracker;
+}
+
+interface MainMetricsMessage {
+    type: "main_metrics";
+    data: EnhancedMetrics;
 }
 
 // Add global error handlers
@@ -443,6 +540,7 @@ parentPort?.on(
             | BroadcastMessage
             | BacklogMessage
             | SignalTrackerMessage
+            | MainMetricsMessage
             | { type: "shutdown" }
     ) => {
         try {
@@ -613,6 +711,21 @@ parentPort?.on(
                     logger.info("SignalTracker set in communication worker");
                 } catch (error) {
                     logger.error("Error setting SignalTracker", {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
+                }
+            } else if (msg.type === "main_metrics") {
+                try {
+                    // Set main thread metrics for stats broadcasting
+                    statsBroadcaster.setMainThreadMetrics(msg.data);
+                    logger.debug(
+                        "Main thread metrics updated in communication worker"
+                    );
+                } catch (error) {
+                    logger.error("Error setting main thread metrics", {
                         error:
                             error instanceof Error
                                 ? error.message

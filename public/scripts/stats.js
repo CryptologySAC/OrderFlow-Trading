@@ -428,6 +428,19 @@ function getPercentile(histogram, percentile) {
     return histogram.percentiles[`p${percentile}`] || 0;
 }
 
+function updateWorkerInfo(data) {
+    const workers = data.workers || {};
+
+    updateElement("loggerWorkerStatus", workers.loggerWorker || "Unknown");
+    updateElement("binanceWorkerStatus", workers.binanceWorker || "Unknown");
+    updateElement(
+        "communicationWorkerStatus",
+        workers.communicationWorker || "Unknown"
+    );
+    updateElement("wsConnections", formatNumber(workers.wsConnections || 0));
+    updateElement("streamHealth", workers.streamHealth || "Unknown");
+}
+
 function updateVisuals(data) {
     const metrics = data.metrics || data;
 
@@ -447,6 +460,9 @@ function updateVisuals(data) {
 
     // Update signal metrics sections
     updateSignalMetrics(metrics);
+
+    // Update worker information
+    updateWorkerInfo(data);
 }
 
 function connect() {

@@ -1275,6 +1275,19 @@ export class OrderFlowDashboard {
             this.metricsCollector.updateMetric("circuitBreakerState", state);
         }, 30000);
 
+        // Send main thread metrics to communication worker
+        setInterval(() => {
+            try {
+                const mainMetrics = this.metricsCollector.getMetrics();
+                this.threadManager.updateMainThreadMetrics(mainMetrics);
+            } catch (error) {
+                this.logger.error("Error sending main thread metrics", {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                });
+            }
+        }, 5000); // Send every 5 seconds
+
         // Database purge
         this.purgeIntervalId = setInterval(() => {
             if (this.isShuttingDown) return;

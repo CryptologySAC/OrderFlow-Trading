@@ -3,10 +3,36 @@ import { Worker } from "worker_threads";
 import type { SignalEvent } from "../infrastructure/signalLoggerInterface.js";
 import type { WebSocketMessage } from "../utils/interfaces.js";
 import type { SignalTracker } from "../analysis/signalTracker.js";
+import type { EnhancedMetrics } from "../infrastructure/metricsCollector.js";
+
+interface BinanceWorkerMetrics {
+    connection: {
+        state: string;
+        uptime: number | undefined;
+        reconnectAttempts: number;
+        lastReconnectAttempt: number;
+    };
+    streams: {
+        health: {
+            tradeMessageCount: number;
+            depthMessageCount: number;
+            lastTradeMessage: number;
+            lastDepthMessage: number;
+            isHealthy: boolean;
+        };
+        tradeMessagesPerSecond: number;
+        depthMessagesPerSecond: number;
+    };
+    timers: {
+        heartbeat: boolean;
+        healthCheck: boolean;
+        reconnect: boolean;
+    };
+}
 
 interface MetricsMessage {
     type: "metrics";
-    data: unknown;
+    data: BinanceWorkerMetrics;
 }
 
 function isMetricsMessage(msg: unknown): msg is MetricsMessage {
@@ -47,7 +73,7 @@ interface StreamEventMessage {
 interface StreamDataMessage {
     type: "stream_data";
     dataType: "trade" | "depth";
-    data: unknown;
+    data: Record<string, unknown>;
 }
 
 interface ProxyLogMessage {
@@ -276,6 +302,13 @@ export class ThreadManager {
         this.commWorker.postMessage({
             type: "signal_tracker",
             data: signalTracker,
+        });
+    }
+
+    public updateMainThreadMetrics(metrics: EnhancedMetrics): void {
+        this.commWorker.postMessage({
+            type: "main_metrics",
+            data: metrics,
         });
     }
 
