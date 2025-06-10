@@ -114,7 +114,7 @@ export class OrderFlowDashboard {
     private readonly wsManager?: WebSocketManager;
     private readonly threadManager?: ThreadManager;
     private readonly signalManager: SignalManager;
-    private readonly dataStreamManager: DataStreamManager;
+    private readonly dataStreamManager?: DataStreamManager;
 
     // Market
     private orderBook: OrderBookState | null = null;
@@ -261,15 +261,19 @@ export class OrderFlowDashboard {
 
         this.signalManager = dependencies.signalManager;
 
-        this.dataStreamManager = new DataStreamManager(
-            Config.DATASTREAM,
-            dependencies.binanceFeed,
-            dependencies.circuitBreaker,
-            dependencies.logger,
-            this.metricsCollector
-        );
-
+        // Only create DataStreamManager in non-threaded mode
+        // In threaded mode, the BinanceWorker handles streaming
         if (!this.threadManager) {
+            this.dataStreamManager = new DataStreamManager(
+                Config.DATASTREAM,
+                dependencies.binanceFeed,
+                dependencies.circuitBreaker,
+                dependencies.logger,
+                this.metricsCollector
+            );
+        }
+
+        if (!this.threadManager && this.dataStreamManager) {
             this.statsBroadcaster = new StatsBroadcaster(
                 this.metricsCollector,
                 this.dataStreamManager,
@@ -823,9 +827,18 @@ export class OrderFlowDashboard {
             }
         );
 
-        // Handle data stream events
+        // Handle data stream events (only in non-threaded mode)
         if (!this.dataStreamManager) {
-            throw new Error("Data stream manager is not initialized");
+            if (!this.threadManager) {
+                // Critical error: non-threaded mode MUST have dataStreamManager
+                console.error(
+                    "FATAL: Data stream manager is not initialized in non-threaded mode"
+                );
+                process.exit(1);
+            }
+            // In threaded mode, skip setting up local stream handlers
+            // The ThreadManager will handle stream events from the worker
+            return;
         }
 
         this.logger.info(
@@ -1335,7 +1348,8 @@ export class OrderFlowDashboard {
                 const stats = {
                     metrics: this.metricsCollector.getMetrics(),
                     health: this.metricsCollector.getHealthSummary(),
-                    dataStream: this.dataStreamManager.getDetailedMetrics(),
+                    dataStream:
+                        this.dataStreamManager?.getDetailedMetrics() || null,
                     correlationId,
                 };
                 res.json(stats);
@@ -1621,7 +1635,7 @@ export class OrderFlowDashboard {
     /**
      * Preload historical data
      */
-    private async preloadData(): Promise<void> {
+    public async preloadHistoricalData(): Promise<void> {
         const correlationId = randomUUID();
 
         try {
@@ -1710,7 +1724,9 @@ export class OrderFlowDashboard {
             if (this.wsManager) {
                 this.wsManager.shutdown();
             }
-            await this.dataStreamManager.disconnect();
+            if (this.dataStreamManager) {
+                await this.dataStreamManager.disconnect();
+            }
 
             // Give time for cleanup
             if (this.statsBroadcaster) {
@@ -1740,10 +1756,15 @@ export class OrderFlowDashboard {
             );
 
             // Start components in parallel
-            await Promise.all([this.startHttpServer(), this.preloadData()]);
+            await Promise.all([
+                this.startHttpServer(),
+                this.preloadHistoricalData(),
+            ]);
 
-            // Connect to data streams
-            await this.dataStreamManager.connect();
+            // Connect to data streams (only in non-threaded mode)
+            if (this.dataStreamManager) {
+                await this.dataStreamManager.connect();
+            }
 
             // Start periodic tasks
             this.startPeriodicTasks();
@@ -1864,11 +1885,15 @@ export function createDependencies(threadManager: ThreadManager): Dependencies {
         metricsCollector
     );
 
+    // Create separate BinanceDataFeed for main thread historical data loading
+    const mainThreadBinanceFeed = new BinanceDataFeed();
+
     const tradesProcessor = new TradesProcessor(
         Config.TRADES_PROCESSOR,
         storage,
         logger,
-        metricsCollector
+        metricsCollector,
+        mainThreadBinanceFeed
     );
 
     const anomalyDetector = new AnomalyDetector(

@@ -58,7 +58,7 @@ interface SaveQueueItem {
 }
 
 export class TradesProcessor extends EventEmitter implements ITradesProcessor {
-    private readonly binanceFeed = new BinanceDataFeed();
+    private readonly binanceFeed: BinanceDataFeed;
     private readonly symbol: string;
     private readonly storage: Storage;
     private readonly storageTime: number;
@@ -103,12 +103,14 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         options: TradesProcessorOptions,
         storage: Storage,
         logger: WorkerLogger,
-        metricsCollector: MetricsCollector
+        metricsCollector: MetricsCollector,
+        binanceFeed: BinanceDataFeed
     ) {
         super();
         this.logger = logger;
         this.metricsCollector = metricsCollector;
         this.storage = storage;
+        this.binanceFeed = binanceFeed;
 
         // Configuration
         this.symbol = options.symbol ?? "LTCUSDT";

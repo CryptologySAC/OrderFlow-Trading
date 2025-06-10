@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
-import { SignalLogger } from "../src/services/signalLogger";
+import { SignalLogger } from "../src/infrastructure/signalLogger";
 
 import { Logger } from "../src/infrastructure/logger";
 vi.mock("../src/infrastructure/logger");
