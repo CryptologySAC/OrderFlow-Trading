@@ -6,6 +6,16 @@ import {
     WebSocketManager,
     type ExtendedWebSocket,
 } from "../../websocket/websocketManager.js";
+
+// Extend the WebSocket interface with client-specific state
+interface IsolatedWebSocket extends ExtendedWebSocket {
+    clientState?: {
+        id: string;
+        connectTime: number;
+        lastActivity: number;
+        pendingRequests: Set<string>;
+    };
+}
 import { StatsBroadcaster } from "../../services/statsBroadcaster.js";
 import { Config } from "../../core/config.js";
 import type { WebSocketMessage } from "../../utils/interfaces.js";
@@ -25,9 +35,9 @@ const logger = new Logger();
 const metrics = new MetricsCollector();
 const rateLimiter = new RateLimiter(60000, 100);
 const dataStream = new DataStreamProxy();
-// WebSocket handlers for client connections
+// WebSocket handlers for client connections with isolation
 const wsHandlers = {
-    ping: (ws: ExtendedWebSocket, _: unknown, correlationId?: string) => {
+    ping: (ws: IsolatedWebSocket, _: unknown, correlationId?: string) => {
         // Respond to ping with pong (exact same format as original)
         try {
             ws.send(
@@ -45,7 +55,7 @@ const wsHandlers = {
             });
         }
     },
-    backlog: (ws: ExtendedWebSocket, data: unknown, correlationId?: string) => {
+    backlog: (ws: IsolatedWebSocket, data: unknown, correlationId?: string) => {
         const startTime = Date.now();
         try {
             let amount = 1000;
@@ -122,23 +132,37 @@ const wsHandlers = {
     },
 };
 
-// Store connected clients and pending requests globally
+// Store connected clients and pending requests globally with isolation
 declare global {
-    var connectedClients: Set<ExtendedWebSocket> | undefined;
+    var connectedClients: Set<IsolatedWebSocket> | undefined;
     var pendingBacklogRequests:
-        | Map<string, { ws: ExtendedWebSocket; correlationId?: string }>
+        | Map<string, { ws: IsolatedWebSocket; correlationId?: string }>
         | undefined;
 }
 
-// Client connection handler
-const onClientConnect = (ws: ExtendedWebSocket) => {
-    logger.info("Client connected to WebSocket");
+// Client connection handler with proper isolation
+const onClientConnect = (ws: IsolatedWebSocket) => {
+    logger.info("Client connected to WebSocket", {
+        clientId: ws.clientId,
+        connectionTime: Date.now(),
+    });
 
-    // Store reference for later backlog/signal sending
+    // Store reference for later backlog/signal sending with client-specific state
     if (!global.connectedClients) {
-        global.connectedClients = new Set<ExtendedWebSocket>();
+        global.connectedClients = new Set<IsolatedWebSocket>();
     }
     global.connectedClients.add(ws);
+
+    // Create isolated client state to prevent interference
+    const clientState = {
+        id: ws.clientId || "unknown",
+        connectTime: Date.now(),
+        lastActivity: Date.now(),
+        pendingRequests: new Set<string>(),
+    };
+
+    // Store client-specific state (isolated from other clients)
+    ws.clientState = clientState;
 
     // Request backlog and signals from main thread for this new client
     parentPort?.postMessage({
@@ -146,13 +170,28 @@ const onClientConnect = (ws: ExtendedWebSocket) => {
         data: {
             clientId: ws.clientId || "unknown",
             amount: 1000,
+            isolated: true, // Flag for isolated handling
         },
     });
 
     ws.on("close", () => {
+        logger.info("Client disconnecting", {
+            clientId: ws.clientId,
+            connectionDuration: Date.now() - clientState.connectTime,
+        });
+
+        // Clean up client-specific state to prevent memory leaks
         if (global.connectedClients) {
             global.connectedClients.delete(ws);
         }
+
+        // Clean up any pending requests for this client
+        if (global.pendingBacklogRequests && ws.clientId) {
+            global.pendingBacklogRequests.delete(ws.clientId);
+        }
+
+        // Clear client state
+        delete ws.clientState;
     });
 };
 
@@ -171,44 +210,8 @@ const statsBroadcaster = new StatsBroadcaster(
     logger
 );
 
-// Store reference for stats broadcasting
-let statsBroadcastTimer: NodeJS.Timeout | null = null;
-
-// Start stats broadcasting to WebSocket clients
-function startStatsBroadcasting(): void {
-    if (statsBroadcastTimer) {
-        clearInterval(statsBroadcastTimer);
-    }
-
-    statsBroadcastTimer = setInterval(() => {
-        try {
-            const stats = {
-                metrics: metrics.getMetrics(),
-                health: metrics.getHealthSummary(),
-                dataStream: dataStream.getDetailedMetrics(),
-            };
-
-            wsManager.broadcast({
-                type: "stats",
-                data: stats,
-                now: Date.now(),
-            });
-
-            logger.debug("Stats broadcasted to WebSocket clients", {
-                clientCount: global.connectedClients?.size || 0,
-                statsSize: JSON.stringify(stats).length,
-            });
-        } catch (error) {
-            logger.error("Error broadcasting stats", {
-                error: error instanceof Error ? error.message : String(error),
-            });
-        }
-    }, 5000); // Broadcast every 5 seconds
-}
-
-// Start both the original stats broadcaster and our custom WebSocket broadcasting
+// Start only the original stats broadcaster (remove duplicate broadcasting)
 statsBroadcaster.start();
-startStatsBroadcasting();
 
 interface MetricsMessage {
     type: "metrics";
@@ -247,12 +250,6 @@ process.on("unhandledRejection", (reason: unknown) => {
 async function gracefulShutdown(exitCode: number = 0): Promise<void> {
     try {
         logger.info("Communication worker starting graceful shutdown");
-
-        // Stop stats broadcasting timer
-        if (statsBroadcastTimer) {
-            clearInterval(statsBroadcastTimer);
-            statsBroadcastTimer = null;
-        }
 
         // Stop broadcasting first
         try {
@@ -347,10 +344,10 @@ parentPort?.on(
                 }
             } else if (msg.type === "send_backlog") {
                 try {
-                    // Send backlog and signals to all connected clients
+                    // Send backlog and signals to all connected clients (isolated)
                     if (global.connectedClients) {
                         global.connectedClients.forEach(
-                            (ws: ExtendedWebSocket) => {
+                            (ws: IsolatedWebSocket) => {
                                 try {
                                     // Send backlog
                                     ws.send(
