@@ -22,6 +22,8 @@ describe("TradesProcessor", () => {
         storage = {
             saveAggregatedTradesBulk: vi.fn(),
             getLatestAggregatedTrades: vi.fn().mockReturnValue([]),
+            getLastTradeTimestamp: vi.fn().mockReturnValue(null),
+            detectGaps: vi.fn().mockReturnValue([]),
         };
         mockBinanceFeed = {
             disconnect: vi.fn().mockResolvedValue(undefined),

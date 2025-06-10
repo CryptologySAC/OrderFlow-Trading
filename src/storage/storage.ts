@@ -35,6 +35,15 @@ export interface IStorage {
 
     purgeOldEntries(hours?: number): number;
 
+    getLastTradeTimestamp(symbol: string): number | null;
+
+    detectGaps(
+        symbol: string,
+        startTime: number,
+        endTime: number,
+        maxGapMs?: number
+    ): Array<{ start: number; end: number }>;
+
     close(): void;
 }
 
@@ -43,6 +52,8 @@ export class Storage implements IStorage {
     private readonly insertAggregatedTrade: Statement;
     private readonly getAggregatedTrades: Statement;
     private readonly purgeAggregatedTrades: Statement;
+    private readonly getLastTradeTimestampStmt: Statement;
+    private readonly getTradesInRange: Statement;
 
     constructor(db: Database) {
         this.db = db;
@@ -94,6 +105,21 @@ export class Storage implements IStorage {
 
         this.purgeAggregatedTrades = this.db.prepare(`
             DELETE FROM aggregated_trades WHERE tradeTime < @cutOffTime
+        `);
+
+        this.getLastTradeTimestampStmt = this.db.prepare(`
+            SELECT MAX(tradeTime) as lastTime 
+            FROM aggregated_trades 
+            WHERE symbol = @symbol
+        `);
+
+        this.getTradesInRange = this.db.prepare(`
+            SELECT tradeTime 
+            FROM aggregated_trades 
+            WHERE symbol = @symbol 
+                AND tradeTime >= @startTime 
+                AND tradeTime <= @endTime 
+            ORDER BY tradeTime ASC
         `);
     }
 
@@ -242,6 +268,81 @@ export class Storage implements IStorage {
         } catch (error) {
             console.error("Error purging old entries:", error);
             return 0;
+        }
+    }
+
+    /**
+     * Get the timestamp of the most recent trade for a symbol.
+     * Returns null if no trades exist for the symbol.
+     */
+    public getLastTradeTimestamp(symbol: string): number | null {
+        try {
+            const result = this.getLastTradeTimestampStmt.get({
+                symbol: symbol,
+            }) as { lastTime: number | null } | undefined;
+
+            return result?.lastTime || null;
+        } catch (error) {
+            console.error("Error getting last trade timestamp:", error);
+            return null;
+        }
+    }
+
+    /**
+     * Detect gaps in stored trade data within a time range.
+     * Returns array of gap periods that need to be filled.
+     */
+    public detectGaps(
+        symbol: string,
+        startTime: number,
+        endTime: number,
+        maxGapMs: number = 60000 // 1 minute default gap threshold
+    ): Array<{ start: number; end: number }> {
+        try {
+            const rows = this.getTradesInRange.all({
+                symbol,
+                startTime,
+                endTime,
+            }) as Array<{ tradeTime: number }>;
+
+            if (rows.length === 0) {
+                // No trades found, entire range is a gap
+                return [{ start: startTime, end: endTime }];
+            }
+
+            const gaps: Array<{ start: number; end: number }> = [];
+
+            // Check for gap at the beginning
+            if (rows[0].tradeTime - startTime > maxGapMs) {
+                gaps.push({
+                    start: startTime,
+                    end: rows[0].tradeTime - 1,
+                });
+            }
+
+            // Check for gaps between consecutive trades
+            for (let i = 1; i < rows.length; i++) {
+                const gapSize = rows[i].tradeTime - rows[i - 1].tradeTime;
+                if (gapSize > maxGapMs) {
+                    gaps.push({
+                        start: rows[i - 1].tradeTime + 1,
+                        end: rows[i].tradeTime - 1,
+                    });
+                }
+            }
+
+            // Check for gap at the end
+            if (endTime - rows[rows.length - 1].tradeTime > maxGapMs) {
+                gaps.push({
+                    start: rows[rows.length - 1].tradeTime + 1,
+                    end: endTime,
+                });
+            }
+
+            return gaps;
+        } catch (error) {
+            console.error("Error detecting gaps:", error);
+            return [];
         }
     }
 

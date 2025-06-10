@@ -121,8 +121,13 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         this.saveQueueSize = options.saveQueueSize ?? 5000;
         this.healthCheckInterval = options.healthCheckInterval ?? 30000; // 30s
 
-        // Initialize state
-        this.thresholdTime = Date.now() - this.storageTime;
+        // Initialize state - use last stored timestamp to prevent data gaps
+        const lastStoredTimestamp: number | null =
+            this.storage.getLastTradeTimestamp(this.symbol);
+        this.thresholdTime =
+            lastStoredTimestamp !== null
+                ? lastStoredTimestamp + 1
+                : Date.now() - this.storageTime;
         this.latestTradeTimestamp = this.thresholdTime;
         this.recentTrades = new CircularBuffer<PlotTrade>(this.maxMemoryTrades);
         this.processingTimes = new CircularBuffer<number>(1000);
@@ -151,10 +156,40 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         let consecutiveEmptyBatches = 0;
         let retries = 0;
 
+        // First, detect and fill any gaps in the requested timeframe
+        const requestedStartTime = Date.now() - this.storageTime;
+        const gaps = this.storage.detectGaps(
+            this.symbol,
+            requestedStartTime,
+            targetTime,
+            60000
+        ); // 1 minute gap threshold
+
+        if (gaps.length > 0) {
+            this.logger.info(
+                "[TradesProcessor] Detected gaps in historical data",
+                {
+                    gapCount: gaps.length,
+                    gaps: gaps.map((g) => ({
+                        start: new Date(g.start).toISOString(),
+                        end: new Date(g.end).toISOString(),
+                        durationMinutes: ((g.end - g.start) / 60000).toFixed(2),
+                    })),
+                }
+            );
+
+            // Fill each gap sequentially
+            for (const gap of gaps) {
+                await this.fillGap(gap.start, gap.end);
+                totalFetched += this.countTradesInRange(gap.start, gap.end);
+            }
+        }
+
         this.logger.info("[TradesProcessor] Starting backlog fill", {
             from: new Date(this.thresholdTime).toISOString(),
             to: new Date(targetTime).toISOString(),
             hours: ((targetTime - this.thresholdTime) / 3600000).toFixed(2),
+            gapsFilled: gaps.length,
         });
 
         try {
@@ -670,6 +705,105 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             errorContext,
             correlationId
         );
+    }
+
+    /**
+     * Fill a specific gap in historical data
+     */
+    private async fillGap(startTime: number, endTime: number): Promise<void> {
+        this.logger.info("[TradesProcessor] Filling gap", {
+            start: new Date(startTime).toISOString(),
+            end: new Date(endTime).toISOString(),
+            durationMinutes: ((endTime - startTime) / 60000).toFixed(2),
+        });
+
+        let currentTime = startTime;
+        let retries = 0;
+        const maxRetries = 3;
+
+        while (currentTime < endTime && !this.isShuttingDown) {
+            try {
+                const aggregatedTrades =
+                    await this.binanceFeed.fetchAggTradesByTime(
+                        this.symbol,
+                        currentTime
+                    );
+
+                if (aggregatedTrades.length === 0) {
+                    // No trades found, skip ahead
+                    currentTime += 60000; // Skip 1 minute
+                    continue;
+                }
+
+                const tradesToSave = aggregatedTrades.filter(
+                    (trade) =>
+                        trade.T && trade.T >= currentTime && trade.T <= endTime
+                );
+
+                if (tradesToSave.length > 0) {
+                    await this.bulkSaveTrades(tradesToSave);
+
+                    // Update current time to the latest trade timestamp
+                    const maxTimestamp = Math.max(
+                        ...tradesToSave.map((t) => t.T || 0)
+                    );
+                    currentTime = maxTimestamp + 1;
+
+                    this.logger.info("[TradesProcessor] Gap fill progress", {
+                        saved: tradesToSave.length,
+                        currentTime: new Date(currentTime).toISOString(),
+                    });
+                } else {
+                    currentTime += 60000; // Skip 1 minute if no relevant trades
+                }
+
+                retries = 0; // Reset retries on success
+                await this.sleep(100); // Rate limiting
+            } catch (error) {
+                retries++;
+                if (retries >= maxRetries) {
+                    this.logger.error(
+                        "[TradesProcessor] Failed to fill gap after retries",
+                        {
+                            error: (error as Error).message,
+                            currentTime: new Date(currentTime).toISOString(),
+                        }
+                    );
+                    break;
+                }
+
+                this.logger.warn("[TradesProcessor] Gap fill retry", {
+                    error: (error as Error).message,
+                    retry: retries,
+                    currentTime: new Date(currentTime).toISOString(),
+                });
+
+                await this.sleep(Math.pow(2, retries) * 1000);
+            }
+        }
+    }
+
+    /**
+     * Count trades in a specific time range (for reporting)
+     */
+    private countTradesInRange(startTime: number, endTime: number): number {
+        try {
+            const trades = this.storage.getLatestAggregatedTrades(
+                10000,
+                this.symbol
+            );
+            return trades.filter(
+                (trade) => trade.T && trade.T >= startTime && trade.T <= endTime
+            ).length;
+        } catch (error) {
+            this.logger.error(
+                "[TradesProcessor] Error counting trades in range",
+                {
+                    error: (error as Error).message,
+                }
+            );
+            return 0;
+        }
     }
 
     /**
