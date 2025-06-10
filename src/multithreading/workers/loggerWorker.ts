@@ -20,7 +20,18 @@ interface SignalMessage {
     event: SignalEvent;
 }
 
-type WorkerMessage = LogMessage | SignalMessage | { type: "shutdown" };
+interface CorrelationMessage {
+    type: "correlation";
+    action: "set" | "remove";
+    id: string;
+    context?: string;
+}
+
+type WorkerMessage =
+    | LogMessage
+    | SignalMessage
+    | CorrelationMessage
+    | { type: "shutdown" };
 
 // Add global error handlers
 process.on("uncaughtException", (error: Error) => {
@@ -86,6 +97,16 @@ parentPort?.on("message", (msg: WorkerMessage) => {
                     });
                 }
                 break;
+            case "correlation":
+                try {
+                    handleCorrelation(msg);
+                } catch (error) {
+                    parentPort?.postMessage({
+                        type: "error",
+                        message: `Failed to handle correlation: ${error instanceof Error ? error.message : String(error)}`,
+                    });
+                }
+                break;
             case "shutdown":
                 gracefulShutdown(0);
                 break;
@@ -118,6 +139,19 @@ function handleLog(msg: LogMessage): void {
             break;
         case "debug":
             logger.debug(msg.message, msg.context, msg.correlationId);
+            break;
+    }
+}
+
+function handleCorrelation(msg: CorrelationMessage): void {
+    switch (msg.action) {
+        case "set":
+            if (msg.context) {
+                logger.setCorrelationId(msg.id, msg.context);
+            }
+            break;
+        case "remove":
+            logger.removeCorrelationId(msg.id);
             break;
     }
 }

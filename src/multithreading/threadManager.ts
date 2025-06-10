@@ -2,6 +2,7 @@ import { Worker } from "worker_threads";
 
 import type { SignalEvent } from "../services/signalLogger.js";
 import type { WebSocketMessage } from "../utils/interfaces.js";
+import type { SignalTracker } from "../analysis/signalTracker.js";
 
 interface MetricsMessage {
     type: "metrics";
@@ -186,6 +187,30 @@ export class ThreadManager {
         handler: (dataType: string, data: unknown) => void
     ): void {
         this.streamDataHandler = handler;
+    }
+
+    public setCorrelationContext(id: string, context: string): void {
+        this.loggerWorker.postMessage({
+            type: "correlation",
+            action: "set",
+            id,
+            context,
+        });
+    }
+
+    public removeCorrelationContext(id: string): void {
+        this.loggerWorker.postMessage({
+            type: "correlation",
+            action: "remove",
+            id,
+        });
+    }
+
+    public setSignalTracker(signalTracker: SignalTracker): void {
+        this.commWorker.postMessage({
+            type: "signal_tracker",
+            data: signalTracker,
+        });
     }
 
     private handleBacklogRequest(data: {

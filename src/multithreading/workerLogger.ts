@@ -2,11 +2,25 @@ import { Logger } from "../infrastructure/logger.js";
 import { ThreadManager } from "./threadManager.js";
 
 export class WorkerLogger extends Logger {
+    private workerCorrelationContext = new Map<string, string>();
+
     constructor(
         private readonly manager: ThreadManager,
         pretty = false
     ) {
         super(pretty);
+    }
+
+    public setCorrelationId(id: string, context: string): void {
+        this.workerCorrelationContext.set(id, context);
+        // Forward correlation context to worker thread
+        this.manager.setCorrelationContext(id, context);
+    }
+
+    public removeCorrelationId(id: string): void {
+        this.workerCorrelationContext.delete(id);
+        // Forward removal to worker thread
+        this.manager.removeCorrelationContext(id);
     }
 
     public override info(

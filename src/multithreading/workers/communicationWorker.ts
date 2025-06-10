@@ -16,10 +16,10 @@ interface IsolatedWebSocket extends ExtendedWebSocket {
         pendingRequests: Set<string>;
     };
 }
-import { StatsBroadcaster } from "../../services/statsBroadcaster.js";
 import { Config } from "../../core/config.js";
 import type { WebSocketMessage } from "../../utils/interfaces.js";
-import type { DataStreamManager } from "../../trading/dataStreamManager.js";
+import mqtt, { MqttClient, ErrorWithReasonCode } from "mqtt";
+import type { SignalTracker } from "../../analysis/signalTracker.js";
 
 class DataStreamProxy {
     private metrics: unknown = {};
@@ -35,9 +35,15 @@ const logger = new Logger();
 const metrics = new MetricsCollector();
 const rateLimiter = new RateLimiter(60000, 100);
 const dataStream = new DataStreamProxy();
+
 // WebSocket handlers for client connections with isolation
 const wsHandlers = {
     ping: (ws: IsolatedWebSocket, _: unknown, correlationId?: string) => {
+        // Update client activity tracking
+        if (ws.clientState) {
+            ws.clientState.lastActivity = Date.now();
+        }
+
         // Respond to ping with pong (exact same format as original)
         try {
             ws.send(
@@ -203,9 +209,149 @@ const wsManager = new WebSocketManager(
     wsHandlers,
     onClientConnect
 );
-const statsBroadcaster = new StatsBroadcaster(
+
+// Enhanced stats broadcaster with MQTT and SignalTracker support
+class EnhancedStatsBroadcaster {
+    private timer?: NodeJS.Timeout;
+    private mqttClient?: MqttClient;
+    private signalTracker?: SignalTracker;
+
+    constructor(
+        private readonly metrics: MetricsCollector,
+        private readonly dataStream: DataStreamProxy,
+        private readonly wsManager: WebSocketManager,
+        private readonly logger: Logger,
+        private readonly intervalMs = 5000
+    ) {}
+
+    public setSignalTracker(signalTracker: SignalTracker): void {
+        this.signalTracker = signalTracker;
+    }
+
+    public start(): void {
+        this.stop();
+
+        // Initialize MQTT if configured
+        if (Config.MQTT?.url) {
+            this.initializeMQTT();
+        }
+
+        // Start stats broadcasting timer
+        this.timer = setInterval(() => {
+            try {
+                const stats = {
+                    metrics: this.metrics.getMetrics(),
+                    health: this.metrics.getHealthSummary(),
+                    dataStream: this.dataStream.getDetailedMetrics(),
+                    signalPerformance:
+                        this.signalTracker?.getPerformanceMetrics(86400000), // 24h window
+                    signalTrackerStatus: this.signalTracker?.getStatus(),
+                };
+
+                // Broadcast via WebSocket
+                this.wsManager.broadcast({
+                    type: "stats",
+                    data: stats,
+                    now: Date.now(),
+                });
+
+                // Publish to MQTT if connected
+                if (this.mqttClient && this.mqttClient.connected) {
+                    this.mqttClient.publish(
+                        Config.MQTT?.statsTopic ?? "orderflow/stats",
+                        JSON.stringify(stats)
+                    );
+                }
+            } catch (err) {
+                this.logger.error("Stats broadcast error", {
+                    error: err as Error,
+                });
+            }
+        }, this.intervalMs);
+    }
+
+    private initializeMQTT(): void {
+        if (!Config.MQTT?.url) return;
+
+        const mqttOptions: mqtt.IClientOptions = {
+            keepalive: Config.MQTT.keepalive ?? 60,
+            connectTimeout: Config.MQTT.connectTimeout ?? 4000,
+            reconnectPeriod: Config.MQTT.reconnectPeriod ?? 1000,
+            clientId:
+                Config.MQTT.clientId ?? `orderflow-dashboard-${Date.now()}`,
+            rejectUnauthorized: false,
+            protocolVersion: 4,
+            clean: true,
+        };
+
+        // Add authentication if provided
+        if (Config.MQTT.username) {
+            mqttOptions.username = Config.MQTT.username;
+        }
+        if (Config.MQTT.password) {
+            mqttOptions.password = Config.MQTT.password;
+        }
+
+        this.logger.info("Connecting to MQTT broker", {
+            url: Config.MQTT.url,
+            clientId: mqttOptions.clientId,
+            hasAuth: !!(Config.MQTT.username && Config.MQTT.password),
+        });
+
+        this.mqttClient = mqtt.connect(Config.MQTT.url, mqttOptions);
+
+        this.mqttClient.on("connect", () => {
+            this.logger.info("MQTT connected successfully", {
+                clientId: mqttOptions.clientId,
+            });
+        });
+
+        this.mqttClient.on("error", (err: ErrorWithReasonCode | Error) => {
+            this.logger.error("MQTT connection error", {
+                error: err.message,
+                code: (err as ErrorWithReasonCode).code,
+                url: Config.MQTT?.url ?? undefined,
+            });
+
+            if (err.message.includes("SSL") || err.message.includes("EPROTO")) {
+                this.logger.warn(
+                    "SSL/TLS error detected. Try these alternatives:",
+                    {
+                        suggestions: [
+                            "Use 'ws://' instead of 'wss://' for plain WebSocket",
+                            "Use 'mqtt://' for standard MQTT (port 1883)",
+                            "Use 'mqtts://' for MQTT over TLS (port 8883)",
+                            "Check if broker supports WebSocket on this port",
+                        ],
+                    }
+                );
+            }
+        });
+
+        this.mqttClient.on("close", () => {
+            this.logger.warn("MQTT connection closed");
+        });
+
+        this.mqttClient.on("reconnect", () => {
+            this.logger.info("MQTT reconnecting...");
+        });
+    }
+
+    public stop(): void {
+        if (this.timer) {
+            clearInterval(this.timer);
+            this.timer = undefined;
+        }
+        if (this.mqttClient) {
+            this.mqttClient.end(true);
+            this.mqttClient = undefined;
+        }
+    }
+}
+
+const statsBroadcaster = new EnhancedStatsBroadcaster(
     metrics,
-    dataStream as unknown as DataStreamManager,
+    dataStream,
     wsManager,
     logger
 );
@@ -230,6 +376,11 @@ interface BacklogMessage {
     };
 }
 
+interface SignalTrackerMessage {
+    type: "signal_tracker";
+    data: SignalTracker;
+}
+
 // Add global error handlers
 process.on("uncaughtException", (error: Error) => {
     logger.error("Uncaught exception in communication worker", {
@@ -251,11 +402,11 @@ async function gracefulShutdown(exitCode: number = 0): Promise<void> {
     try {
         logger.info("Communication worker starting graceful shutdown");
 
-        // Stop broadcasting first
+        // Stop enhanced stats broadcaster first
         try {
             statsBroadcaster.stop();
         } catch (error) {
-            logger.error("Error stopping stats broadcaster", {
+            logger.error("Error stopping enhanced stats broadcaster", {
                 error: error instanceof Error ? error.message : String(error),
             });
         }
@@ -291,6 +442,7 @@ parentPort?.on(
             | MetricsMessage
             | BroadcastMessage
             | BacklogMessage
+            | SignalTrackerMessage
             | { type: "shutdown" }
     ) => {
         try {
@@ -448,6 +600,19 @@ parentPort?.on(
                     }
                 } catch (error) {
                     logger.error("Error handling backlog message", {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
+                }
+            } else if (msg.type === "signal_tracker") {
+                try {
+                    // Set the SignalTracker instance for enhanced stats broadcasting
+                    statsBroadcaster.setSignalTracker(msg.data);
+                    logger.info("SignalTracker set in communication worker");
+                } catch (error) {
+                    logger.error("Error setting SignalTracker", {
                         error:
                             error instanceof Error
                                 ? error.message
