@@ -5,7 +5,7 @@ import type {
     MicrostructureMetrics,
     CoordinationSignal,
 } from "../types/marketEvents.js";
-import { Logger } from "../infrastructure/logger.js";
+import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 
 export interface MicrostructureAnalyzerConfig {
@@ -26,13 +26,13 @@ export interface MicrostructureAnalyzerConfig {
 }
 
 export class MicrostructureAnalyzer {
-    private readonly logger: Logger;
+    private readonly logger: WorkerLogger;
     private readonly metricsCollector: MetricsCollector;
     private readonly config: MicrostructureAnalyzerConfig;
 
     constructor(
         config: MicrostructureAnalyzerConfig,
-        logger: Logger,
+        logger: WorkerLogger,
         metricsCollector: MetricsCollector
     ) {
         this.config = config;

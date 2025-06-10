@@ -1,4 +1,4 @@
-import { Logger } from "../infrastructure/logger.js";
+import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { DataStreamManager } from "../trading/dataStreamManager.js";
 import { WebSocketManager } from "../websocket/websocketManager.js";
@@ -17,7 +17,7 @@ export class StatsBroadcaster {
         private readonly metrics: MetricsCollector,
         private readonly dataStream: DataStreamManager,
         private readonly wsManager: WebSocketManager,
-        private readonly logger: Logger,
+        private readonly logger: WorkerLogger,
         private readonly signalTracker?: SignalTracker,
         private readonly intervalMs = 5000
     ) {}

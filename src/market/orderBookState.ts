@@ -4,7 +4,7 @@ import type { SpotWebsocketStreams } from "@binance/spot";
 import { BinanceDataFeed } from "../utils/binance.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import type { PassiveLevel, OrderBookHealth } from "../types/marketEvents.js";
-import { Logger } from "../infrastructure/logger.js";
+import { WorkerLogger } from "../multithreading/workerLogger";
 
 type SnapShot = Map<number, PassiveLevel>;
 
@@ -45,7 +45,7 @@ export interface IOrderBookState {
 }
 
 export class OrderBookState implements IOrderBookState {
-    private readonly logger: Logger;
+    private readonly logger: WorkerLogger;
     private readonly metricsCollector: MetricsCollector;
 
     private isInitialized = false;
@@ -81,7 +81,7 @@ export class OrderBookState implements IOrderBookState {
 
     constructor(
         options: OrderBookStateOptions,
-        logger: Logger,
+        logger: WorkerLogger,
         metricsCollector: MetricsCollector
     ) {
         this.pricePrecision = options.pricePrecision;
@@ -100,7 +100,7 @@ export class OrderBookState implements IOrderBookState {
 
     public static async create(
         options: OrderBookStateOptions,
-        logger: Logger,
+        logger: WorkerLogger,
         metricsCollector: MetricsCollector
     ): Promise<OrderBookState> {
         const instance = new OrderBookState(options, logger, metricsCollector);

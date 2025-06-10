@@ -50,6 +50,41 @@ interface StreamDataMessage {
     data: unknown;
 }
 
+interface ProxyLogMessage {
+    type: "log_message";
+    data: {
+        level: "info" | "error" | "warn" | "debug";
+        message: string;
+        context?: Record<string, unknown>;
+        correlationId?: string;
+    };
+}
+
+interface ProxyCorrelationMessage {
+    type: "log_correlation";
+    action: "set" | "remove";
+    id: string;
+    context?: string;
+}
+
+function isProxyLogMessage(msg: unknown): msg is ProxyLogMessage {
+    return (
+        typeof msg === "object" &&
+        msg !== null &&
+        (msg as { type?: unknown }).type === "log_message"
+    );
+}
+
+function isProxyCorrelationMessage(
+    msg: unknown
+): msg is ProxyCorrelationMessage {
+    return (
+        typeof msg === "object" &&
+        msg !== null &&
+        (msg as { type?: unknown }).type === "log_correlation"
+    );
+}
+
 function isErrorMessage(msg: unknown): msg is ErrorMessage {
     return (
         typeof msg === "object" &&
@@ -109,11 +144,26 @@ export class ThreadManager {
             } else if (isErrorMessage(msg)) {
                 console.error("Binance worker error:", msg.message);
             } else if (isStreamEventMessage(msg)) {
-                // Forward stream events to parent application
                 this.handleStreamEvent(msg.eventType, msg.data);
             } else if (isStreamDataMessage(msg)) {
-                // Forward stream data to parent application
                 this.handleStreamData(msg.dataType, msg.data);
+            } else if (isProxyLogMessage(msg)) {
+                // Forward proxy log messages to logger worker
+                this.loggerWorker.postMessage({
+                    type: "log",
+                    level: msg.data.level,
+                    message: msg.data.message,
+                    context: msg.data.context,
+                    correlationId: msg.data.correlationId,
+                });
+            } else if (isProxyCorrelationMessage(msg)) {
+                // Forward correlation messages to logger worker
+                this.loggerWorker.postMessage({
+                    type: "correlation",
+                    action: msg.action,
+                    id: msg.id,
+                    context: msg.context,
+                });
             }
         });
 
@@ -128,8 +178,24 @@ export class ThreadManager {
             if (isErrorMessage(msg)) {
                 console.error("Communication worker error:", msg.message);
             } else if (isBacklogRequestMessage(msg)) {
-                // Forward backlog request to the main thread
                 this.handleBacklogRequest(msg.data);
+            } else if (isProxyLogMessage(msg)) {
+                // Forward proxy log messages to logger worker
+                this.loggerWorker.postMessage({
+                    type: "log",
+                    level: msg.data.level,
+                    message: msg.data.message,
+                    context: msg.data.context,
+                    correlationId: msg.data.correlationId,
+                });
+            } else if (isProxyCorrelationMessage(msg)) {
+                // Forward correlation messages to logger worker
+                this.loggerWorker.postMessage({
+                    type: "correlation",
+                    action: msg.action,
+                    id: msg.id,
+                    context: msg.context,
+                });
             }
         });
 

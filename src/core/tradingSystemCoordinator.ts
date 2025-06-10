@@ -1,7 +1,7 @@
 // Enhanced DetectorFactory with Worker Thread Integration
 import { Worker } from "worker_threads";
 import { EventEmitter } from "events";
-import { Logger } from "../infrastructure/logger.js";
+import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
 import { BaseDetector } from "../indicators/base/baseDetector.js";
@@ -787,7 +787,7 @@ export class EnhancedDetectorFactory extends EventEmitter {
     private static wrapCallback(
         originalCallback: DetectorCallback,
         detectorId: string,
-        logger: Logger
+        logger: WorkerLogger
     ): DetectorCallback {
         // ... your existing callback wrapping logic
         void detectorId;
@@ -894,7 +894,7 @@ export interface EnhancedFactoryStats extends FactoryStats {
 
 // Import your existing types
 export interface DetectorDependencies {
-    logger: Logger;
+    logger: WorkerLogger;
     spoofingDetector: unknown;
     metricsCollector: MetricsCollector;
     signalLogger?: ISignalLogger;

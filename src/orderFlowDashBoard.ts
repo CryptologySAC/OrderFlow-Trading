@@ -18,7 +18,6 @@ import { Config } from "./core/config.js";
 import { SignalProcessingError, WebSocketError } from "./core/errors.js";
 
 // Infrastructure imports
-import { Logger } from "./infrastructure/logger.js";
 import { MetricsCollector } from "./infrastructure/metricsCollector.js";
 import { RateLimiter } from "./infrastructure/rateLimiter.js";
 import { CircuitBreaker } from "./infrastructure/circuitBreaker.js";
@@ -30,6 +29,7 @@ import { MicrostructureAnalyzer } from "./data/microstructureAnalyzer.js";
 import { IndividualTradesManager } from "./data/individualTradesManager.js";
 import { ThreadManager } from "./multithreading/threadManager.js";
 import { WorkerSignalLogger } from "./multithreading/workerSignalLogger.js";
+import { WorkerLogger } from "./multithreading/workerLogger.js";
 
 // Service imports
 import { DetectorFactory } from "./utils/detectorFactory.js";
@@ -92,10 +92,10 @@ import { SignalTracker } from "./analysis/signalTracker.js";
 import { MarketContextCollector } from "./analysis/marketContextCollector.js";
 import { TradesProcessor } from "./clients/tradesProcessor.js";
 import { OrderBookProcessor } from "./clients/orderBookProcessor.js";
-import { SignalLogger } from "./services/signalLogger.js";
 import type { WebSocketMessage } from "./utils/interfaces.js";
 import { SpoofingDetector } from "./services/spoofingDetector.js";
 import { StatsBroadcaster } from "./services/statsBroadcaster.js";
+import { ILogger } from "./infrastructure/loggerInterface.js";
 
 EventEmitter.defaultMaxListeners = 20;
 
@@ -106,7 +106,7 @@ EventEmitter.defaultMaxListeners = 20;
 export class OrderFlowDashboard {
     // Infrastructure components
     private readonly httpServer = express();
-    private readonly logger: Logger;
+    private readonly logger: ILogger;
     private readonly metricsCollector: MetricsCollector;
     private readonly recoveryManager: RecoveryManager;
 
@@ -211,7 +211,7 @@ export class OrderFlowDashboard {
                     Config.DATASTREAM.hardReloadRestartCommand ??
                     "process.exit",
             },
-            this.logger,
+            dependencies.logger,
             this.metricsCollector
         );
 
@@ -248,7 +248,7 @@ export class OrderFlowDashboard {
         } else {
             this.wsManager = new WebSocketManager(
                 Config.WS_PORT,
-                this.logger,
+                dependencies.logger,
                 dependencies.rateLimiter,
                 this.metricsCollector,
                 this.createWSHandlers(),
@@ -265,7 +265,7 @@ export class OrderFlowDashboard {
             Config.DATASTREAM,
             dependencies.binanceFeed,
             dependencies.circuitBreaker,
-            this.logger,
+            dependencies.logger,
             this.metricsCollector
         );
 
@@ -274,7 +274,7 @@ export class OrderFlowDashboard {
                 this.metricsCollector,
                 this.dataStreamManager,
                 this.wsManager!,
-                this.logger,
+                dependencies.logger,
                 dependencies.signalTracker
             );
         }
@@ -1831,14 +1831,13 @@ export class OrderFlowDashboard {
  * Factory function to create dependencies
  */
 
-export function createDependencies(
-    threadManager?: ThreadManager
-): Dependencies {
-    const logger = new Logger(process.env.NODE_ENV === "development");
+export function createDependencies(threadManager: ThreadManager): Dependencies {
+    const logger = new WorkerLogger(
+        threadManager,
+        process.env.NODE_ENV === "development"
+    );
     const metricsCollector = new MetricsCollector();
-    const signalLogger = threadManager
-        ? new WorkerSignalLogger(threadManager)
-        : new SignalLogger("./storage/signals.csv");
+    const signalLogger = new WorkerSignalLogger(threadManager);
     const rateLimiter = new RateLimiter(60000, 100);
     const circuitBreaker = new CircuitBreaker(5, 60000, logger);
     const db = getDB("./storage/trades.db");

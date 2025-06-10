@@ -9,7 +9,7 @@ import {
     ZoneQueryOptions,
 } from "../types/zoneTypes.js";
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
-import { Logger } from "../infrastructure/logger.js";
+import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 
 export class ZoneManager extends EventEmitter {
@@ -22,7 +22,7 @@ export class ZoneManager extends EventEmitter {
 
     constructor(
         config: Partial<ZoneDetectorConfig>,
-        private logger: Logger,
+        private logger: WorkerLogger,
         private metricsCollector: MetricsCollector
     ) {
         super();

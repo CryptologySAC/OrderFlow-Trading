@@ -1,5 +1,5 @@
 // src/infrastructure/circuitBreaker.ts
-import { Logger } from "./logger.js";
+import { ILogger } from "./loggerInterface";
 
 export enum CircuitState {
     CLOSED = "CLOSED",
@@ -21,7 +21,7 @@ export class CircuitBreaker {
     constructor(
         private readonly threshold: number,
         private readonly timeoutMs: number,
-        private readonly logger: Logger
+        private readonly logger: ILogger
     ) {}
 
     public canExecute(): boolean {

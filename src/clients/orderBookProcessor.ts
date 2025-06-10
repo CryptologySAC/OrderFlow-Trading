@@ -1,7 +1,7 @@
 // src/clients/orderBookProcessor.ts
 import type { OrderBookSnapshot, PassiveLevel } from "../types/marketEvents.js";
 import type { WebSocketMessage } from "../utils/interfaces.js";
-import { Logger } from "../infrastructure/logger.js";
+import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { CircularBuffer } from "../utils/utils.js";
 
@@ -63,7 +63,7 @@ export interface OrderBookProcessorOptions {
 }
 
 export class OrderBookProcessor implements IOrderBookProcessor {
-    private readonly logger: Logger;
+    private readonly logger: WorkerLogger;
     private readonly metricsCollector: MetricsCollector;
 
     // Configuration
@@ -91,7 +91,7 @@ export class OrderBookProcessor implements IOrderBookProcessor {
 
     constructor(
         config: OrderBookProcessorOptions = {},
-        logger: Logger,
+        logger: WorkerLogger,
         metricsCollector: MetricsCollector
     ) {
         this.binSize = config.binSize ?? 10;

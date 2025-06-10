@@ -1,5 +1,5 @@
 // src/utils/detectorFactory.ts
-import { Logger } from "../infrastructure/logger.js";
+import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
 import { BaseDetector } from "../indicators/base/baseDetector.js";
@@ -805,7 +805,7 @@ export class DetectorFactory {
     private static wrapCallback(
         originalCallback: DetectorCallback,
         detectorId: string,
-        logger: Logger
+        logger: WorkerLogger
     ): DetectorCallback {
         return (signal) => {
             try {
@@ -1015,7 +1015,7 @@ export interface DetectorSuite {
 }
 
 export interface DetectorDependencies {
-    logger: Logger;
+    logger: WorkerLogger;
     spoofingDetector: SpoofingDetector;
     metricsCollector: MetricsCollector;
     signalLogger?: ISignalLogger;
@@ -1074,7 +1074,7 @@ type DetectorConstructor<
 > = new (
     callback: DetectorCallback,
     settings: BaseDetectorSettings | ZoneDetectorConfig,
-    logger: Logger,
+    logger: WorkerLogger,
     metricsCollector: MetricsCollector,
     signalLogger?: ISignalLogger
 ) => T;

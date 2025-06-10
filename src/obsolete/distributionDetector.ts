@@ -3,8 +3,8 @@ import {
     SuperiorZoneFlowData,
     SuperiorFlowConditions,
     SignalCreationParams,
-} from "./base/flowDetectorBase.js";
-import { DetectorUtils } from "./base/detectorUtils.js";
+} from "../indicators/base/flowDetectorBase.js";
+import { DetectorUtils } from "../indicators/base/detectorUtils.js";
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import type { DistributionResult } from "../types/signalTypes.js";
 

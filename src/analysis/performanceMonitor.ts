@@ -1,7 +1,7 @@
 // src/analysis/performanceMonitor.ts
 
 import { EventEmitter } from "events";
-import { Logger } from "../infrastructure/logger.js";
+import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { AlertManager } from "../alerts/alertManager.js";
 import type { SignalTracker } from "./signalTracker.js";
@@ -111,7 +111,7 @@ export class PerformanceMonitor extends EventEmitter {
         private readonly performanceAnalyzer: PerformanceAnalyzer,
         private readonly failureAnalyzer: FailureAnalyzer,
         private readonly alertManager: AlertManager,
-        private readonly logger: Logger,
+        private readonly logger: WorkerLogger,
         private readonly metricsCollector: MetricsCollector,
         config: Partial<PerformanceMonitorConfig> = {}
     ) {

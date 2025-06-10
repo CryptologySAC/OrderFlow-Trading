@@ -5,7 +5,7 @@ import type { IBinanceDataFeed } from "../utils/binance.js";
 import type { ITradesProcessor } from "../clients/tradesProcessor.js";
 import type { OrderBookProcessor } from "../clients/orderBookProcessor.js";
 import type { ISignalLogger } from "../services/signalLogger.js";
-import { Logger } from "../infrastructure/logger.js";
+import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { RateLimiter } from "../infrastructure/rateLimiter.js";
 import { CircuitBreaker } from "../infrastructure/circuitBreaker.js";
@@ -34,7 +34,7 @@ export interface Dependencies {
     signalLogger: ISignalLogger;
 
     // Infrastructure
-    logger: Logger;
+    logger: WorkerLogger;
     metricsCollector: MetricsCollector;
     rateLimiter: RateLimiter;
     circuitBreaker: CircuitBreaker;

@@ -3,7 +3,7 @@
 //import { SpotWebsocketStreams } from "@binance/spot";
 import { BaseDetector } from "./baseDetector.js";
 import { DetectorUtils } from "./detectorUtils.js";
-import { Logger } from "../../infrastructure/logger.js";
+import { WorkerLogger } from "../../multithreading/workerLogger";
 import {
     MetricsCollector,
     type Metrics,
@@ -76,7 +76,7 @@ export abstract class FlowDetectorBase extends BaseDetector {
         id: string,
         callback: DetectorCallback,
         settings: SuperiorFlowSettings = {},
-        logger: Logger,
+        logger: WorkerLogger,
         spoofingDetector: SpoofingDetector,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger

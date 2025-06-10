@@ -3,11 +3,11 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { RawData } from "ws";
 import { randomUUID } from "crypto";
-import { Logger } from "../infrastructure/logger.js";
 import { RateLimiter } from "../infrastructure/rateLimiter.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { WebSocketError } from "../core/errors.js";
 import type { WebSocketMessage } from "../utils/interfaces.js";
+import { ILogger } from "../infrastructure/loggerInterface.js";
 
 export interface ExtendedWebSocket extends WebSocket {
     clientId?: string;
@@ -30,7 +30,7 @@ export class WebSocketManager {
 
     constructor(
         port: number,
-        private readonly logger: Logger,
+        private readonly logger: ILogger,
         private readonly rateLimiter: RateLimiter,
         private readonly metricsCollector: MetricsCollector,
         private readonly wsHandlers: Record<string, WSHandler>,

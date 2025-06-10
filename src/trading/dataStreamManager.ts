@@ -1,7 +1,7 @@
 import { SpotWebsocketStreams } from "@binance/spot";
 import { EventEmitter } from "events";
 import { randomUUID } from "crypto";
-import { Logger } from "../infrastructure/logger.js";
+import { ILogger } from "../infrastructure/loggerInterface.js";
 import { CircuitBreaker } from "../infrastructure/circuitBreaker.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ConnectionError } from "../core/errors.js";
@@ -109,7 +109,7 @@ export class DataStreamManager extends EventEmitter {
         private readonly config: DataStreamConfig,
         private readonly binanceFeed: IBinanceDataFeed,
         private readonly circuitBreaker: CircuitBreaker,
-        private readonly logger: Logger,
+        private readonly logger: ILogger,
         private readonly metricsCollector: MetricsCollector
     ) {
         super();

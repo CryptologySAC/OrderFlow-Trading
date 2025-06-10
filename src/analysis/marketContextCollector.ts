@@ -1,7 +1,7 @@
 // src/analysis/marketContextCollector.ts
 
 import { EventEmitter } from "events";
-import { Logger } from "../infrastructure/logger.js";
+import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import type { HybridTradeEvent } from "../types/marketEvents.js";
 import type { MarketContext } from "./signalTracker.js";
@@ -126,7 +126,7 @@ export class MarketContextCollector extends EventEmitter {
     private regimeUpdateInterval?: NodeJS.Timeout;
 
     constructor(
-        private readonly logger: Logger,
+        private readonly logger: WorkerLogger,
         private readonly metricsCollector: MetricsCollector,
         config: Partial<MarketContextCollectorConfig> = {}
     ) {

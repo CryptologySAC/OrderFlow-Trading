@@ -16,7 +16,7 @@ import type {
     DeltaCVDConfirmationResult,
     SignalType,
 } from "../types/signalTypes.js";
-import { Logger } from "../infrastructure/logger.js";
+import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
@@ -144,7 +144,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
         id: string,
         callback: DetectorCallback,
         settings: DeltaCVDConfirmationSettings = {},
-        logger: Logger,
+        logger: WorkerLogger,
         spoofingDetector: SpoofingDetector,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger

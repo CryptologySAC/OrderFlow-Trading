@@ -48,7 +48,7 @@ export class SignalLogger implements ISignalLogger {
     private file: string;
     private headerWritten = false;
 
-    constructor(filename: string, logger?: Logger) {
+    constructor(filename: string, logger: Logger) {
         this.file = path.resolve(filename);
         if (!fs.existsSync(this.file)) {
             this.headerWritten = false;
@@ -56,7 +56,7 @@ export class SignalLogger implements ISignalLogger {
             this.headerWritten = true;
         }
 
-        this.logger = logger ?? null;
+        this.logger = logger;
     }
 
     // Implement the interface method (same as logEvent)

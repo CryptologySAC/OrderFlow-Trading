@@ -1,8 +1,8 @@
 // src/indicators/accumulationDetector.ts
 
 import { SpotWebsocketStreams } from "@binance/spot";
-import { BaseDetector } from "./base/baseDetector.js";
-import { Logger } from "../infrastructure/logger.js";
+import { BaseDetector } from "../indicators/base/baseDetector.js";
+import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../services/signalLogger.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
@@ -18,7 +18,7 @@ import type {
     AccumulationSettings,
     AccumulationFeatures,
     IAccumulationDetector,
-} from "./interfaces/detectorInterfaces.js";
+} from "../indicators/interfaces/detectorInterfaces.js";
 import { SignalType, AccumulationResult } from "../types/signalTypes.js";
 
 /**
@@ -47,7 +47,7 @@ export class AccumulationDetector
         id: string,
         callback: DetectorCallback,
         settings: AccumulationSettings = {},
-        logger: Logger,
+        logger: WorkerLogger,
         spoofingDetector: SpoofingDetector,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger

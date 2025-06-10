@@ -1,12 +1,13 @@
 import { parentPort } from "worker_threads";
-import { Logger } from "../../infrastructure/logger.js";
+import { WorkerProxyLogger } from "../shared/workerProxylogger.js";
 import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
 import { CircuitBreaker } from "../../infrastructure/circuitBreaker.js";
 import { BinanceDataFeed } from "../../utils/binance.js";
 import { DataStreamManager } from "../../trading/dataStreamManager.js";
 import { Config } from "../../core/config.js";
 
-const logger = new Logger();
+// Use proxy logger that forwards to logger worker
+const logger = new WorkerProxyLogger("binance");
 const metricsCollector = new MetricsCollector();
 const circuitBreaker = new CircuitBreaker(5, 60000, logger);
 const binanceFeed = new BinanceDataFeed();
@@ -14,7 +15,7 @@ const manager = new DataStreamManager(
     Config.DATASTREAM,
     binanceFeed,
     circuitBreaker,
-    logger,
+    logger, // Now this uses the logger worker!
     metricsCollector
 );
 
@@ -155,81 +156,102 @@ async function gracefulShutdown(exitCode: number = 0): Promise<void> {
     }
 }
 
-parentPort?.on("message", (msg: { type: string }) => {
+parentPort?.on("message", (msg: unknown) => {
     try {
-        if (msg.type === "start") {
-            manager
-                .connect()
-                .then(() => {
-                    logger.info("Binance data stream connected successfully");
-                })
-                .catch((error: unknown) => {
-                    logger.error("Failed to connect binance data stream", {
-                        error:
-                            error instanceof Error
-                                ? error.message
-                                : String(error),
-                    });
-                    parentPort?.postMessage({
-                        type: "error",
-                        message: "Failed to connect to binance data stream",
-                    });
-                });
+        // Enhanced message validation
+        if (!msg || typeof msg !== "object" || !("type" in msg)) {
+            logger.warn("Invalid message received", { message: msg });
+            return;
+        }
 
-            // Start metrics reporting when worker starts
-            if (!metricsInterval) {
-                metricsInterval = setInterval(() => {
-                    try {
-                        parentPort?.postMessage({
-                            type: "metrics",
-                            data: manager.getDetailedMetrics(),
-                        });
-                    } catch (error) {
-                        logger.error("Error sending metrics", {
+        const message = msg as { type: string; [key: string]: unknown };
+
+        switch (message.type) {
+            case "start":
+                manager
+                    .connect()
+                    .then(() => {
+                        logger.info(
+                            "Binance data stream connected successfully"
+                        );
+                    })
+                    .catch((error: unknown) => {
+                        logger.error("Failed to connect binance data stream", {
                             error:
                                 error instanceof Error
                                     ? error.message
                                     : String(error),
                         });
-                    }
-                }, 1000);
-            }
-        } else if (msg.type === "stop") {
-            manager
-                .disconnect()
-                .then(() => {
-                    logger.info(
-                        "Binance data stream disconnected successfully"
-                    );
-                })
-                .catch((error: unknown) => {
-                    logger.error("Error disconnecting binance data stream", {
-                        error:
-                            error instanceof Error
-                                ? error.message
-                                : String(error),
+                        parentPort?.postMessage({
+                            type: "error",
+                            message: "Failed to connect to binance data stream",
+                        });
                     });
-                });
 
-            // Clear metrics interval when stopped
-            if (metricsInterval) {
-                clearInterval(metricsInterval);
-                metricsInterval = null;
-            }
-        } else if (msg.type === "shutdown") {
-            void gracefulShutdown(0);
+                // Start metrics reporting
+                if (!metricsInterval) {
+                    metricsInterval = setInterval(() => {
+                        try {
+                            parentPort?.postMessage({
+                                type: "metrics",
+                                data: manager.getDetailedMetrics(),
+                            });
+                        } catch (error) {
+                            logger.error("Error sending metrics", {
+                                error:
+                                    error instanceof Error
+                                        ? error.message
+                                        : String(error),
+                            });
+                        }
+                    }, 1000);
+                }
+                break;
+
+            case "stop":
+                manager
+                    .disconnect()
+                    .then(() => {
+                        logger.info(
+                            "Binance data stream disconnected successfully"
+                        );
+                    })
+                    .catch((error: unknown) => {
+                        logger.error(
+                            "Error disconnecting binance data stream",
+                            {
+                                error:
+                                    error instanceof Error
+                                        ? error.message
+                                        : String(error),
+                            }
+                        );
+                    });
+
+                if (metricsInterval) {
+                    clearInterval(metricsInterval);
+                    metricsInterval = null;
+                }
+                break;
+
+            case "shutdown":
+                void gracefulShutdown(0);
+                break;
+
+            default:
+                logger.warn("Unknown message type received", {
+                    messageType: message.type,
+                });
         }
     } catch (error) {
         logger.error("Error handling worker message", {
-            messageType: msg.type,
             error: error instanceof Error ? error.message : String(error),
             stack: error instanceof Error ? error.stack : undefined,
         });
 
-        // Notify parent of error
         parentPort?.postMessage({
             type: "error",
-            message: `Error handling ${msg.type} message: ${error instanceof Error ? error.message : String(error)}`,
+            message: `Error handling message: ${error instanceof Error ? error.message : String(error)}`,
         });
     }
 });

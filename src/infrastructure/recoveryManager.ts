@@ -2,7 +2,7 @@
 
 import { EventEmitter } from "events";
 import { spawn } from "child_process";
-import { Logger } from "./logger.js";
+import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "./metricsCollector.js";
 
 export interface HardReloadEvent {
@@ -21,7 +21,7 @@ export interface RecoveryManagerConfig {
 }
 
 export class RecoveryManager extends EventEmitter {
-    private readonly logger: Logger;
+    private readonly logger: WorkerLogger;
     private readonly metricsCollector: MetricsCollector;
     private readonly config: RecoveryManagerConfig;
 
@@ -31,7 +31,7 @@ export class RecoveryManager extends EventEmitter {
 
     constructor(
         config: RecoveryManagerConfig,
-        logger: Logger,
+        logger: WorkerLogger,
         metricsCollector: MetricsCollector
     ) {
         super();

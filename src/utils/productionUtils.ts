@@ -1,6 +1,6 @@
 // src/utils/productionUtils.ts - NEW UTILITY CLASS
 import type { BaseDetectorSettings } from "../indicators/interfaces/detectorInterfaces.js";
-import { Logger } from "../infrastructure/logger.js";
+import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { CircuitBreaker } from "../infrastructure/circuitBreaker.js";
 
@@ -11,7 +11,7 @@ export class ProductionUtils {
     public static createCircuitBreaker(
         errorThreshold: number,
         timeoutMs: number,
-        logger: Logger
+        logger: WorkerLogger
     ): CircuitBreaker {
         return new CircuitBreaker(errorThreshold, timeoutMs, logger);
     }

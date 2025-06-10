@@ -1,5 +1,5 @@
 import { parentPort } from "worker_threads";
-import { Logger } from "../../infrastructure/logger.js";
+import { WorkerProxyLogger } from "../shared/workerProxylogger.js";
 import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
 import { RateLimiter } from "../../infrastructure/rateLimiter.js";
 import {
@@ -31,7 +31,7 @@ class DataStreamProxy {
     }
 }
 
-const logger = new Logger();
+const logger = new WorkerProxyLogger("communication");
 const metrics = new MetricsCollector();
 const rateLimiter = new RateLimiter(60000, 100);
 const dataStream = new DataStreamProxy();
@@ -220,7 +220,7 @@ class EnhancedStatsBroadcaster {
         private readonly metrics: MetricsCollector,
         private readonly dataStream: DataStreamProxy,
         private readonly wsManager: WebSocketManager,
-        private readonly logger: Logger,
+        private readonly logger: WorkerProxyLogger,
         private readonly intervalMs = 5000
     ) {}
 

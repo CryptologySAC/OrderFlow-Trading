@@ -1,8 +1,8 @@
 // src/infrastructure/apiConnectivityMonitor.ts
 
 import { EventEmitter } from "events";
-import type { Logger } from "./logger.js";
-import type { MetricsCollector } from "./metricsCollector.js";
+import { ILogger } from "./loggerInterface.js";
+import { MetricsCollector } from "./metricsCollector.js";
 
 export interface ConnectivityStatus {
     isHealthy: boolean;
@@ -71,7 +71,7 @@ export interface ApiConnectivityConfig {
 }
 
 export class ApiConnectivityMonitor extends EventEmitter {
-    private readonly logger: Logger;
+    private readonly logger: ILogger;
     private readonly metricsCollector: MetricsCollector;
     private readonly config: ApiConnectivityConfig;
 
@@ -99,7 +99,7 @@ export class ApiConnectivityMonitor extends EventEmitter {
 
     constructor(
         config: ApiConnectivityConfig,
-        logger: Logger,
+        logger: ILogger,
         metricsCollector: MetricsCollector
     ) {
         super();
