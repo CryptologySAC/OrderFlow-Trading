@@ -12,15 +12,22 @@ import type {
     EnrichedTradeEvent,
     AggressiveTrade,
 } from "../src/types/marketEvents.js";
-import { Logger } from "../src/infrastructure/logger.js";
+import { WorkerLogger } from "../src/multithreading/workerLogger.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
+import { SpoofingDetector } from "../src/services/spoofingDetector.js";
+import { OrderBookState } from "../src/market/orderBookState.js";
+import { Detected } from "../src/indicators/interfaces/detectorInterfaces.js";
 
 describe("AbsorptionDetector - Passive Side Logic", () => {
     let detector: AbsorptionDetector;
-    let mockLogger: Logger;
+    let mockCallback: vi.MockedFunction<(signal: Detected) => void>;
+    let mockLogger: WorkerLogger;
     let mockMetrics: MetricsCollector;
+    let mockSpoofing: SpoofingDetector;
+    let mockOrderBook: OrderBookState;
 
     beforeEach(() => {
+        mockCallback = vi.fn();
         mockLogger = {
             info: vi.fn(),
             debug: vi.fn(),
@@ -29,11 +36,32 @@ describe("AbsorptionDetector - Passive Side Logic", () => {
         } as any;
 
         mockMetrics = {
+            incrementCounter: vi.fn(),
             incrementMetric: vi.fn(),
             updateMetric: vi.fn(),
+            recordHistogram: vi.fn(),
+            recordGauge: vi.fn(),
+            setGauge: vi.fn(),
+            createCounter: vi.fn(),
+            createHistogram: vi.fn(),
+            createGauge: vi.fn(),
+        } as any;
+
+        mockSpoofing = {
+            checkWallSpoofing: vi.fn().mockReturnValue(false),
+            getWallDetectionMetrics: vi.fn().mockReturnValue({}),
+            wasSpoofed: vi.fn().mockReturnValue(false),
+            trackPassiveChange: vi.fn(),
+        } as any;
+
+        mockOrderBook = {
+            getLevel: vi.fn().mockReturnValue({ bid: 100, ask: 100 }),
+            getCurrentSpread: vi.fn().mockReturnValue({ spread: 0.01 }),
         } as any;
 
         detector = new AbsorptionDetector(
+            "test-absorption",
+            mockCallback,
             {
                 symbol: "LTCUSDT",
                 pricePrecision: 2,
@@ -41,8 +69,16 @@ describe("AbsorptionDetector - Passive Side Logic", () => {
                 absorptionThreshold: 0.75,
                 windowMs: 90000,
                 zoneTicks: 3,
+                features: {
+                    spoofingDetection: false,
+                    icebergDetection: false,
+                    liquidityGradient: false,
+                    absorptionVelocity: false,
+                },
             },
+            mockOrderBook,
             mockLogger,
+            mockSpoofing,
             mockMetrics
         );
     });
