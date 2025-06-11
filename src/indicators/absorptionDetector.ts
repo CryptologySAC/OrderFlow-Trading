@@ -133,9 +133,9 @@ export class AbsorptionDetector
         // 🔧 CRITICAL FIX: Fix backwards thresholds
         this.adaptiveThresholdCalculator.updateBaseThresholds({
             absorptionLevels: {
-                strong: 0.1, // 10% ratio = strong absorption
-                moderate: 0.3, // 30% ratio = moderate absorption
-                weak: 0.5, // 50% ratio = weak absorption
+                strong: 0.1, // 10% ratio = strong absorption (LOWER ratios = stronger)
+                moderate: 0.3, // 30% ratio = moderate absorption (LOWER ratios = stronger)
+                weak: 0.5, // 50% ratio = weak absorption (LOWER ratios = stronger)
             },
             minimumConfidence: 0.05, // Lower from 0.5 to 0.05
             consistencyRequirement: 0.4, // Lower from 0.6 to 0.4
@@ -221,8 +221,9 @@ export class AbsorptionDetector
     private calculateAbsorptionScore(conditions: AbsorptionConditions): number {
         // NEW: Update thresholds if needed
 
+        // Legacy scoring method for backwards compatibility (currently disabled)
         if (this.useOldScoringMethod) {
-            return this.calculateAbsorptionScore(conditions);
+            return this.calculateAbsorptionScoreOld(conditions);
         }
         this.maybeUpdateThresholds();
 
@@ -274,8 +275,8 @@ export class AbsorptionDetector
             }
         );
 
-        // Factor 1: Adaptive absorption ratio (CHANGED from hardcoded)
-        if (conditions.absorptionRatio >= thresholds.absorptionLevels.strong) {
+        // Factor 1: Adaptive absorption ratio (LOWER ratios = stronger absorption)
+        if (conditions.absorptionRatio <= thresholds.absorptionLevels.strong) {
             score += thresholds.absorptionScores.strong;
             this.logger.info(
                 `[AbsorptionDetector] ✅ STRONG absorption bonus: +${thresholds.absorptionScores.strong}`,
@@ -284,7 +285,7 @@ export class AbsorptionDetector
                 }
             );
         } else if (
-            conditions.absorptionRatio >= thresholds.absorptionLevels.moderate
+            conditions.absorptionRatio <= thresholds.absorptionLevels.moderate
         ) {
             score += thresholds.absorptionScores.moderate;
             this.logger.info(
@@ -294,7 +295,7 @@ export class AbsorptionDetector
                 }
             );
         } else if (
-            conditions.absorptionRatio >= thresholds.absorptionLevels.weak
+            conditions.absorptionRatio <= thresholds.absorptionLevels.weak
         ) {
             score += thresholds.absorptionScores.weak;
             this.logger.info(

@@ -22,6 +22,7 @@ This is a **PRODUCTION TRADING SYSTEM** handling real financial data and trading
 - `src/multithreading/workerLogger.ts` - Worker logging delegation
 - `/public/scripts/dashboard.js` - Production WebSocket URLs
 - `config.json` - Production configuration parameters
+- `.env` - **CRITICAL: Contains production API keys and secrets - NEVER MODIFY**
 
 **⚠️ BUSINESS-CRITICAL FILES (REQUIRES VALIDATION):**
 
@@ -236,6 +237,8 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 #### Security Standards
 
 - **NO hardcoded secrets or API keys**
+- **NEVER modify `.env` file - Contains irreplaceable production API credentials**
+- **NEVER copy `exmple.env` over `.env` - This destroys production API keys**
 - **ALL inputs must be validated and sanitized**
 - **Rate limiting on ALL external endpoints**
 - **Proper correlation ID propagation**
@@ -452,6 +455,7 @@ const logger = new WorkerProxyLogger("worker-name");
 
 **NEVER:**
 
+- **Modify, overwrite, or copy over the `.env` file - Contains irreplaceable production API keys**
 - Modify production-critical algorithms without explicit approval
 - Change WebSocket URLs or connection parameters
 - Alter signal processing logic without validation
