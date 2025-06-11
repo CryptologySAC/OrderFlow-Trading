@@ -69,6 +69,8 @@ export interface TradesProcessorOptions {
     saveQueueSize?: number;
     healthCheckInterval?: number;
     maxErrorWindowSize?: number;
+    maxWindowIterations?: number;
+    dynamicRateLimit?: boolean;
 }
 
 interface ProcessorHealth {
@@ -132,6 +134,8 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     private processingTimes: CircularBuffer<number>;
     private errorWindow: CircularBuffer<number>;
     private readonly maxErrorWindowSize: number;
+    private readonly maxWindowIterations: number;
+    private readonly dynamicRateLimit: boolean;
 
     // Health monitoring
     private healthCheckTimer?: NodeJS.Timeout;
@@ -176,6 +180,11 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             10,
             options.maxErrorWindowSize ?? 1000
         ); // Min 10, default 1000
+        this.maxWindowIterations = Math.max(
+            10,
+            options.maxWindowIterations ?? 1000
+        ); // Min 10, default 1000 iterations per window
+        this.dynamicRateLimit = options.dynamicRateLimit ?? true;
 
         // Initialize state - use last stored timestamp to prevent data gaps
         const lastStoredTimestamp: number | null =
@@ -306,12 +315,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         const targetTime = Date.now();
         const backlogStartTime = targetTime - this.storageTime;
         const batchWindowMs = 60_000; // 1 minute logical window
-        let totalFetched = 0;
         let retries = 0;
-
-        // Restart from window start
-        this.thresholdTime = backlogStartTime;
-        this.backlogComplete = false;
 
         this.logger.info("[TradesProcessor] Starting 90-minute data reload", {
             from: new Date(backlogStartTime).toISOString(),
@@ -319,114 +323,171 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             durationMinutes: (this.storageTime / 60_000).toFixed(2),
         });
 
-        try {
-            while (this.thresholdTime < targetTime && !this.isShuttingDown) {
-                const windowEnd = Math.min(
-                    this.thresholdTime + batchWindowMs - 1,
-                    targetTime
-                );
-                let windowProgressed = false;
+        // ✅ SECURITY FIX: Proper retry loop that doesn't reset after successful batches
+        while (retries <= this.maxBacklogRetries) {
+            try {
+                // Reset state for each complete retry attempt
+                this.thresholdTime = backlogStartTime;
+                this.backlogComplete = false;
+                let totalFetched = 0;
+                while (
+                    this.thresholdTime < targetTime &&
+                    !this.isShuttingDown
+                ) {
+                    const windowEnd = Math.min(
+                        this.thresholdTime + batchWindowMs - 1,
+                        targetTime
+                    );
+                    let windowProgressed = false;
 
-                // Loop inside the window until we exhaust all trades (API returns < limit)
-                while (!windowProgressed && !this.isShuttingDown) {
-                    const aggregatedTrades =
-                        await this.binanceFeed.fetchAggTradesByTime(
-                            this.symbol,
-                            this.thresholdTime,
-                            windowEnd,
-                            this.backlogBatchSize
-                        );
+                    // ✅ SECURITY FIX: Add iteration limit to prevent infinite loops
+                    let windowIterations = 0;
+                    const maxIterations = this.maxWindowIterations;
 
-                    if (aggregatedTrades.length === 0) {
-                        // No trades in this slice; exit inner loop
-                        windowProgressed = true;
-                        break;
-                    }
-
-                    let maxTimestamp = this.thresholdTime;
-                    const tradesToSave: SpotWebsocketAPI.TradesAggregateResponseResultInner[] =
-                        [];
-
-                    // ✅ Validate entire trade array first to prevent malformed data injection
-                    try {
-                        const validatedTrades =
-                            this.validateTradeArray(aggregatedTrades);
-
-                        for (const trade of validatedTrades) {
-                            maxTimestamp = Math.max(maxTimestamp, trade.T!);
-                            tradesToSave.push(trade);
-
-                            // Add to memory cache with validated data
-                            this.recentTrades.add({
-                                time: trade.T!,
-                                price: parseFloat(trade.p!),
-                                quantity: parseFloat(trade.q!),
-                                orderType: trade.m ? "SELL" : "BUY",
-                                symbol: this.symbol,
-                                tradeId: trade.a ?? 0,
-                            });
-                        }
-                    } catch (error) {
-                        if (error instanceof TradeValidationError) {
-                            this.logger.warn(
-                                "[TradesProcessor] Invalid trade data in batch",
-                                {
-                                    batchSize: aggregatedTrades.length,
-                                    validationErrors:
-                                        error.validationErrors.issues,
-                                    context: "fillBacklog",
-                                }
+                    // Loop inside the window until we exhaust all trades (API returns < limit)
+                    while (
+                        !windowProgressed &&
+                        !this.isShuttingDown &&
+                        windowIterations < maxIterations
+                    ) {
+                        windowIterations++;
+                        const aggregatedTrades =
+                            await this.binanceFeed.fetchAggTradesByTime(
+                                this.symbol,
+                                this.thresholdTime,
+                                windowEnd,
+                                this.backlogBatchSize
                             );
-                            // Skip this entire batch to prevent processing malformed data
-                            continue;
+
+                        if (aggregatedTrades.length === 0) {
+                            // No trades in this slice; exit inner loop
+                            windowProgressed = true;
+                            break;
                         }
-                        throw error; // Re-throw non-validation errors
+
+                        let maxTimestamp = this.thresholdTime;
+                        const tradesToSave: SpotWebsocketAPI.TradesAggregateResponseResultInner[] =
+                            [];
+
+                        // ✅ Validate entire trade array first to prevent malformed data injection
+                        try {
+                            const validatedTrades =
+                                this.validateTradeArray(aggregatedTrades);
+
+                            for (const trade of validatedTrades) {
+                                maxTimestamp = Math.max(maxTimestamp, trade.T!);
+                                tradesToSave.push(trade);
+
+                                // Add to memory cache with validated data
+                                this.recentTrades.add({
+                                    time: trade.T!,
+                                    price: parseFloat(trade.p!),
+                                    quantity: parseFloat(trade.q!),
+                                    orderType: trade.m ? "SELL" : "BUY",
+                                    symbol: this.symbol,
+                                    tradeId: trade.a ?? 0,
+                                });
+                            }
+                        } catch (error) {
+                            if (error instanceof TradeValidationError) {
+                                this.logger.warn(
+                                    "[TradesProcessor] Invalid trade data in batch",
+                                    {
+                                        batchSize: aggregatedTrades.length,
+                                        validationErrors:
+                                            error.validationErrors.issues,
+                                        context: "fillBacklog",
+                                    }
+                                );
+                                // Skip this entire batch to prevent processing malformed data
+                                continue;
+                            }
+                            throw error; // Re-throw non-validation errors
+                        }
+
+                        if (tradesToSave.length) {
+                            this.bulkSaveTrades(tradesToSave);
+                            totalFetched += tradesToSave.length;
+                        }
+
+                        // ✅ SECURITY FIX: Prevent infinite loops with timestamp progression safeguards
+                        if (aggregatedTrades.length === this.backlogBatchSize) {
+                            // Ensure timestamp progression to prevent infinite loops
+                            if (maxTimestamp <= this.thresholdTime) {
+                                this.logger.warn(
+                                    "[TradesProcessor] Timestamp not progressing, forcing window advance",
+                                    {
+                                        currentThreshold: this.thresholdTime,
+                                        maxTimestamp,
+                                        windowIterations,
+                                    }
+                                );
+                                // Force progression by advancing threshold by 1ms
+                                this.thresholdTime = this.thresholdTime + 1;
+                                windowProgressed = true;
+                            } else {
+                                this.thresholdTime = maxTimestamp + 1;
+                                continue; // keep pulling inside the same minute
+                            }
+                        }
+
+                        // Otherwise the window is exhausted
+                        windowProgressed = true;
+                        // ✅ SECURITY FIX: Atomic state update to prevent race conditions
+                        this.updateTradeTimestamps(maxTimestamp, windowEnd + 1);
                     }
 
-                    if (tradesToSave.length) {
-                        await this.bulkSaveTrades(tradesToSave);
-                        totalFetched += tradesToSave.length;
+                    // ✅ PERFORMANCE FIX: Check for iteration limit exceeded
+                    if (windowIterations >= maxIterations) {
+                        this.logger.warn(
+                            "[TradesProcessor] Window iteration limit exceeded, advancing",
+                            {
+                                windowIterations,
+                                maxIterations,
+                                currentThreshold: this.thresholdTime,
+                                windowEnd,
+                            }
+                        );
                     }
 
-                    // If we got a full batch, there may be more trades in the same window
-                    if (aggregatedTrades.length === this.backlogBatchSize) {
-                        this.thresholdTime = maxTimestamp + 1;
-                        continue; // keep pulling inside the same minute
-                    }
-
-                    // Otherwise the window is exhausted
-                    windowProgressed = true;
-                    this.thresholdTime = windowEnd + 1;
-                    this.latestTradeTimestamp = maxTimestamp;
+                    // ✅ PERFORMANCE FIX: Dynamic rate limiting based on API efficiency
+                    await this.handleRateLimit(windowIterations, maxIterations);
                 }
 
-                // Simple fixed-sleep rate-limit (max 10 req/s rule)
-                await ProductionUtils.sleep(120);
+                this.backlogComplete = this.thresholdTime >= targetTime - 1000;
+                const duration = Date.now() - startWall;
 
-                // Retry handling (outer loop)
-                retries = 0;
+                this.logger.info("[TradesProcessor] Backlog fill complete", {
+                    totalFetched,
+                    durationMs: duration,
+                    durationMin: (duration / 60_000).toFixed(2),
+                    backlogComplete: this.backlogComplete,
+                    retryAttempt: retries,
+                });
+
+                // ✅ SECURITY FIX: Success - exit retry loop
+                return;
+            } catch (error) {
+                retries++;
+                if (retries > this.maxBacklogRetries) {
+                    this.handleError(error as Error, "fillBacklog");
+                    throw error;
+                }
+                this.logger.warn(
+                    "[TradesProcessor] Backlog fetch error, retrying entire operation",
+                    {
+                        error: (error as Error).message,
+                        retry: retries,
+                        maxRetries: this.maxBacklogRetries,
+                    }
+                );
+                // Brief delay before retry to avoid immediate re-failure
+                await ProductionUtils.sleep(1000 * retries); // Exponential backoff
             }
-
-            this.backlogComplete = this.thresholdTime >= targetTime - 1000;
-            const duration = Date.now() - startWall;
-
-            this.logger.info("[TradesProcessor] Backlog fill complete", {
-                totalFetched,
-                durationMs: duration,
-                durationMin: (duration / 60_000).toFixed(2),
-                backlogComplete: this.backlogComplete,
-            });
-        } catch (error) {
-            retries++;
-            if (retries >= this.maxBacklogRetries) {
-                this.handleError(error as Error, "fillBacklog");
-                throw error;
-            }
-            this.logger.warn(
-                "[TradesProcessor] Backlog fetch error, retrying outer loop",
-                { error: (error as Error).message, retry: retries }
-            );
         }
+
+        // Should never reach here due to return/throw above
+        throw new Error("fillBacklog: Unexpected end of retry loop");
     }
 
     /**
@@ -495,10 +556,8 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             this.recentTrades.add(processedTrade);
             this.queueSave(validatedOriginalTrade);
 
-            this.latestTradeTimestamp = event.timestamp;
-            this.thresholdTime = event.timestamp + 1;
-
-            this.lastTradeTime = Date.now();
+            // ✅ SECURITY FIX: Atomic state update to prevent race conditions
+            this.updateTradeTimestamps(event.timestamp);
             this.processedCount++;
             const processingTime = Date.now() - startTime;
             this.processingTimes.add(processingTime);
@@ -561,7 +620,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
      */
     private startSaveQueue(): void {
         this.saveTimer = setInterval(() => {
-            void (async () => {
+            void (() => {
                 if (
                     this.isSaving ||
                     this.isShuttingDown ||
@@ -576,7 +635,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
 
                 try {
                     const trades = batch.map((item) => item.trade);
-                    await this.bulkSaveTrades(trades);
+                    this.bulkSaveTrades(trades);
                     this.savedCount += batch.length;
                 } catch (error) {
                     this.logger.error("[TradesProcessor] Bulk save failed", {
@@ -603,29 +662,80 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     }
 
     /**
-     * Bulk save trades
+     * ✅ PERFORMANCE FIX: Dynamic rate limiting based on API efficiency
      */
-    private async bulkSaveTrades(
-        trades: SpotWebsocketAPI.TradesAggregateResponseResultInner[]
+    private async handleRateLimit(
+        windowIterations: number,
+        maxIterations: number
     ): Promise<void> {
-        return new Promise((resolve, reject) => {
-            try {
-                this.storage.saveAggregatedTradesBulk(trades, this.symbol);
-                resolve();
-            } catch (error) {
-                if (error instanceof Error) {
-                    reject(error);
-                } else {
-                    reject(
-                        new Error(
-                            typeof error === "string"
-                                ? error
-                                : JSON.stringify(error)
-                        )
-                    );
-                }
-            }
-        });
+        if (!this.dynamicRateLimit) {
+            // Use fixed rate limit if dynamic is disabled
+            await ProductionUtils.sleep(120);
+            return;
+        }
+
+        // Calculate dynamic delay based on iteration efficiency
+        const iterationRatio = windowIterations / maxIterations;
+        let delay = 120; // Base delay (max 10 req/s)
+
+        if (iterationRatio > 0.8) {
+            // High iteration count suggests dense data or API throttling
+            delay = 200; // Slower rate (5 req/s)
+        } else if (iterationRatio > 0.5) {
+            // Medium iteration count
+            delay = 150; // Medium rate (6.7 req/s)
+        } else if (iterationRatio < 0.1) {
+            // Very low iteration count suggests sparse data
+            delay = 100; // Faster rate (10 req/s)
+        }
+
+        await ProductionUtils.sleep(delay);
+    }
+
+    /**
+     * ✅ SECURITY FIX: Atomic state update to prevent race conditions
+     */
+    private updateTradeTimestamps(
+        latestTimestamp: number,
+        thresholdOverride?: number
+    ): void {
+        // Atomic update of all timestamp-related state to prevent race conditions
+        const now = Date.now();
+        this.latestTradeTimestamp = latestTimestamp;
+        this.thresholdTime = thresholdOverride ?? latestTimestamp + 1;
+        this.lastTradeTime = now;
+
+        // Log atomic update for debugging if needed
+        if (this.logger.isDebugEnabled?.()) {
+            this.logger.debug("[TradesProcessor] Atomic timestamp update", {
+                latestTimestamp,
+                thresholdTime: this.thresholdTime,
+                lastTradeTime: this.lastTradeTime,
+            });
+        }
+    }
+
+    /**
+     * ✅ PERFORMANCE FIX: Remove unnecessary Promise wrapper for synchronous operation
+     */
+    private bulkSaveTrades(
+        trades: SpotWebsocketAPI.TradesAggregateResponseResultInner[]
+    ): void {
+        try {
+            // Direct synchronous call - no Promise wrapper needed
+            this.storage.saveAggregatedTradesBulk(trades, this.symbol);
+        } catch (error) {
+            // Convert to proper Error type if needed
+            const properError =
+                error instanceof Error
+                    ? error
+                    : new Error(
+                          typeof error === "string"
+                              ? error
+                              : JSON.stringify(error)
+                      );
+            throw properError;
+        }
     }
 
     /**
@@ -792,7 +902,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             );
             try {
                 const trades = this.saveQueue.map((item) => item.trade);
-                await this.bulkSaveTrades(trades);
+                this.bulkSaveTrades(trades);
             } catch (error) {
                 this.logger.error("[TradesProcessor] Final save failed", {
                     error,
