@@ -1,15 +1,15 @@
 import { TradesProcessor } from "../src/clients/tradesProcessor";
-import { Logger } from "../src/infrastructure/logger";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents";
 import type { SpotWebsocketAPI } from "@binance/spot";
 
-vi.mock("../src/infrastructure/logger");
+vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
 vi.mock("../src/utils/binance");
 
 describe("TradesProcessor", () => {
-    let logger: Logger;
+    let logger: WorkerLogger;
     let metrics: MetricsCollector;
     let storage: any;
     let processor: TradesProcessor;
@@ -17,7 +17,8 @@ describe("TradesProcessor", () => {
 
     beforeEach(() => {
         vi.useFakeTimers();
-        logger = new Logger();
+        tradeIdCounter = 1; // Reset counter for each test
+        logger = new WorkerLogger({} as any);
         metrics = new MetricsCollector();
         storage = {
             saveAggregatedTradesBulk: vi.fn(),
@@ -43,27 +44,30 @@ describe("TradesProcessor", () => {
         await processor.shutdown();
     });
 
-    const createEvent = (): EnrichedTradeEvent => {
+    let tradeIdCounter = 1;
+
+    const createEvent = (customTradeId?: number): EnrichedTradeEvent => {
+        const tradeId = customTradeId ?? tradeIdCounter++;
         const originalTrade: SpotWebsocketAPI.TradesAggregateResponseResultInner =
             {
                 e: "aggTrade",
                 s: "TEST",
-                a: 1,
+                a: tradeId,
                 p: "100",
                 q: "2",
-                f: 1,
-                l: 1,
-                T: Date.now(),
+                f: tradeId,
+                l: tradeId,
+                T: Date.now() + tradeId, // Ensure unique timestamps too
                 m: false,
                 M: true,
             } as any;
         return {
             price: 100,
             quantity: 2,
-            timestamp: Date.now(),
+            timestamp: Date.now() + tradeId,
             buyerIsMaker: false,
             pair: "TEST",
-            tradeId: "1",
+            tradeId: tradeId.toString(),
             originalTrade,
             passiveBidVolume: 0,
             passiveAskVolume: 0,
