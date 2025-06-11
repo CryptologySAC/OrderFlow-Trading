@@ -27,6 +27,11 @@ export interface Metrics {
     hybridTradesProcessed?: number;
     individualTradesEnhancementErrors?: number;
 
+    // Duplicate detection metrics
+    duplicateTradesDetected?: number;
+    processedTradeIdsCount?: number;
+    tradeIdCleanupOperations?: number;
+
     // Individual trades metrics
     "individualTrades.cacheHits"?: number;
     "individualTrades.fetchSuccess"?: number;

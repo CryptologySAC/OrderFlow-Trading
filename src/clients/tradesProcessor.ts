@@ -71,6 +71,8 @@ export interface TradesProcessorOptions {
     maxErrorWindowSize?: number;
     maxWindowIterations?: number;
     dynamicRateLimit?: boolean;
+    maxTradeIdCacheSize?: number;
+    tradeIdCleanupInterval?: number;
 }
 
 interface ProcessorHealth {
@@ -89,6 +91,8 @@ interface ProcessorStats {
     backlogProgress: number;
     averageProcessingTime: number;
     p99ProcessingTime: number;
+    duplicatesDetected: number;
+    processedTradeIdsCount: number;
 }
 
 interface SaveQueueItem {
@@ -123,6 +127,12 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     private processStartTime = process.hrtime.bigint();
     private lastTradeMonotonicTime = process.hrtime.bigint();
 
+    // ✅ DUPLICATE DETECTION: Track processed trade IDs to prevent duplicates during reconnections
+    private processedTradeIds: Set<number> = new Set();
+    private readonly maxTradeIdCacheSize: number;
+    private readonly tradeIdCleanupInterval: number;
+    private tradeIdCleanupTimer?: NodeJS.Timeout;
+
     // Memory cache for recent trades
     private recentTrades: CircularBuffer<PlotTrade>;
 
@@ -135,6 +145,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     private processedCount = 0;
     private savedCount = 0;
     private failedSaves = 0;
+    private duplicatesDetected = 0;
     private processingTimes: CircularBuffer<number>;
     private errorWindow: CircularBuffer<number>;
     private readonly maxErrorWindowSize: number;
@@ -189,6 +200,11 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             options.maxWindowIterations ?? 1000
         ); // Min 10, default 1000 iterations per window
         this.dynamicRateLimit = options.dynamicRateLimit ?? true;
+        this.maxTradeIdCacheSize = Math.max(
+            1000,
+            options.maxTradeIdCacheSize ?? 10000
+        ); // Keep 10k trade IDs by default
+        this.tradeIdCleanupInterval = options.tradeIdCleanupInterval ?? 300000; // 5 minutes
 
         // Initialize state - use last stored timestamp to prevent data gaps
         const lastStoredTimestamp: number | null =
@@ -206,6 +222,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         this.startSaveQueue();
         this.startHealthCheck();
         this.startGapMonitoring();
+        this.startTradeIdCleanup();
 
         // Listen for stream connection events
         this.setupStreamEventHandlers();
@@ -379,8 +396,32 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                                 this.validateTradeArray(aggregatedTrades);
 
                             for (const trade of validatedTrades) {
+                                // ✅ DUPLICATE DETECTION: Skip trades we've already processed
+                                if (trade.a && this.isDuplicateTrade(trade.a)) {
+                                    this.logger.debug(
+                                        "[TradesProcessor] Skipping duplicate trade",
+                                        {
+                                            tradeId: trade.a,
+                                            symbol: this.symbol,
+                                            price: trade.p,
+                                            quantity: trade.q,
+                                            timestamp: trade.T,
+                                        }
+                                    );
+                                    this.duplicatesDetected++;
+                                    this.metricsCollector.incrementMetric(
+                                        "duplicateTradesDetected"
+                                    );
+                                    continue;
+                                }
+
                                 maxTimestamp = Math.max(maxTimestamp, trade.T!);
                                 tradesToSave.push(trade);
+
+                                // Mark trade as processed to prevent future duplicates
+                                if (trade.a) {
+                                    this.markTradeAsProcessed(trade.a);
+                                }
                             }
 
                             // ✅ DATA CONSISTENCY FIX: Only add to cache after successful storage
@@ -553,13 +594,47 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                 event.originalTrade
             );
 
+            // ✅ DUPLICATE DETECTION: Skip trades we've already processed
+            const tradeId = validatedOriginalTrade.a ?? event.timestamp;
+            if (this.isDuplicateTrade(tradeId)) {
+                this.logger.debug(
+                    "[TradesProcessor] Skipping duplicate enriched trade",
+                    {
+                        tradeId,
+                        symbol: event.pair,
+                        price: event.price,
+                        quantity: event.quantity,
+                        timestamp: event.timestamp,
+                    }
+                );
+                this.duplicatesDetected++;
+                this.metricsCollector.incrementMetric(
+                    "duplicateTradesDetected"
+                );
+                return {
+                    type: "trade",
+                    now: Date.now(),
+                    data: {
+                        time: event.timestamp,
+                        price: event.price,
+                        quantity: event.quantity,
+                        orderType: event.buyerIsMaker ? "SELL" : "BUY",
+                        symbol: event.pair,
+                        tradeId,
+                    },
+                };
+            }
+
+            // Mark trade as processed
+            this.markTradeAsProcessed(tradeId);
+
             const processedTrade: PlotTrade = {
                 time: event.timestamp,
                 price: event.price,
                 quantity: event.quantity,
                 orderType: event.buyerIsMaker ? "SELL" : "BUY",
                 symbol: event.pair,
-                tradeId: validatedOriginalTrade.a ?? event.timestamp,
+                tradeId,
             };
 
             // ✅ DATA CONSISTENCY FIX: Queue save first, add to cache only if successful
@@ -816,6 +891,16 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             this.isStreamConnected = true;
             this.lastTradeTime = Date.now();
 
+            // ✅ DUPLICATE DETECTION: On reconnection, we keep the trade ID cache to prevent
+            // processing duplicates that might arrive during the gap coverage process
+            this.logger.info(
+                "[TradesProcessor] Maintaining trade ID cache through reconnection",
+                {
+                    cachedTradeIds: this.processedTradeIds.size,
+                    duplicatesDetectedSoFar: this.duplicatesDetected,
+                }
+            );
+
             void this.reloadTradeData().catch((error) => {
                 this.logger.error(
                     "[TradesProcessor] Error during reconnection data reload",
@@ -899,6 +984,8 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             backlogProgress,
             averageProcessingTime: avgTime,
             p99ProcessingTime: p99Time,
+            duplicatesDetected: this.duplicatesDetected,
+            processedTradeIdsCount: this.processedTradeIds.size,
         };
     }
 
@@ -911,6 +998,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
 
         if (this.saveTimer) clearInterval(this.saveTimer);
         if (this.healthCheckTimer) clearInterval(this.healthCheckTimer);
+        if (this.tradeIdCleanupTimer) clearInterval(this.tradeIdCleanupTimer);
 
         if (this.saveQueue.length) {
             this.logger.info(
@@ -929,6 +1017,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
 
         this.recentTrades.clear();
         this.saveQueue = [];
+        this.processedTradeIds.clear();
 
         await this.binanceFeed.disconnect();
 
@@ -972,6 +1061,95 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                 `[${context}] ${error.message}`,
                 errorContext,
                 correlationId
+            );
+        }
+    }
+
+    /**
+     * ✅ DUPLICATE DETECTION: Check if a trade ID has already been processed
+     */
+    private isDuplicateTrade(tradeId: number): boolean {
+        return this.processedTradeIds.has(tradeId);
+    }
+
+    /**
+     * ✅ DUPLICATE DETECTION: Mark a trade ID as processed
+     */
+    private markTradeAsProcessed(tradeId: number): void {
+        this.processedTradeIds.add(tradeId);
+
+        // If cache is getting too large, trigger cleanup
+        if (this.processedTradeIds.size > this.maxTradeIdCacheSize * 1.1) {
+            this.cleanupOldTradeIds();
+        }
+
+        this.metricsCollector.updateMetric(
+            "processedTradeIdsCount",
+            this.processedTradeIds.size
+        );
+    }
+
+    /**
+     * ✅ DUPLICATE DETECTION: Start periodic cleanup of old trade IDs
+     */
+    private startTradeIdCleanup(): void {
+        this.tradeIdCleanupTimer = setInterval(() => {
+            this.cleanupOldTradeIds();
+        }, this.tradeIdCleanupInterval);
+
+        this.logger.info("[TradesProcessor] Trade ID cleanup started", {
+            cleanupInterval: this.tradeIdCleanupInterval,
+            maxCacheSize: this.maxTradeIdCacheSize,
+        });
+    }
+
+    /**
+     * ✅ DUPLICATE DETECTION: Clean up old trade IDs to prevent memory growth
+     *
+     * Strategy: Keep the most recent trade IDs based on timestamp ordering.
+     * Since trade IDs are generally sequential, we can use a simple approach.
+     */
+    private cleanupOldTradeIds(): void {
+        const initialSize = this.processedTradeIds.size;
+
+        if (initialSize <= this.maxTradeIdCacheSize) {
+            return; // No cleanup needed
+        }
+
+        try {
+            // Convert to sorted array (trade IDs are generally sequential)
+            const sortedIds = Array.from(this.processedTradeIds).sort(
+                (a, b) => a - b
+            );
+
+            // Keep only the most recent trade IDs
+            const idsToKeep = sortedIds.slice(-this.maxTradeIdCacheSize);
+
+            // Rebuild the set with only recent IDs
+            this.processedTradeIds = new Set(idsToKeep);
+
+            const finalSize = this.processedTradeIds.size;
+            const removedCount = initialSize - finalSize;
+
+            this.logger.info("[TradesProcessor] Trade ID cache cleaned up", {
+                initialSize,
+                finalSize,
+                removedCount,
+                maxCacheSize: this.maxTradeIdCacheSize,
+            });
+
+            this.metricsCollector.updateMetric(
+                "processedTradeIdsCount",
+                finalSize
+            );
+            this.metricsCollector.updateMetric("tradeIdCleanupOperations", 1);
+        } catch (error) {
+            this.logger.error(
+                "[TradesProcessor] Error during trade ID cleanup",
+                {
+                    error: (error as Error).message,
+                    cacheSize: initialSize,
+                }
             );
         }
     }
