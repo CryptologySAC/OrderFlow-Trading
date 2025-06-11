@@ -89,6 +89,10 @@ export class AbsorptionDetector
 
     private readonly orderBook: OrderBookState;
 
+    // Interval handles for proper cleanup
+    private thresholdUpdateInterval?: NodeJS.Timeout;
+    private historyCleanupInterval?: NodeJS.Timeout;
+
     // TODO DEBUG
     private useOldScoringMethod = false;
 
@@ -144,10 +148,16 @@ export class AbsorptionDetector
         this.updateThresholds(); // Force recalculation
 
         // NEW: Set up periodic threshold updates
-        setInterval(() => this.updateThresholds(), this.updateIntervalMs);
+        this.thresholdUpdateInterval = setInterval(
+            () => this.updateThresholds(),
+            this.updateIntervalMs
+        );
 
         // Setup periodic cleanup for absorption tracking
-        setInterval(() => this.cleanupAbsorptionHistory(), this.windowMs);
+        this.historyCleanupInterval = setInterval(
+            () => this.cleanupAbsorptionHistory(),
+            this.windowMs
+        );
     }
 
     protected getSignalType(): SignalType {
@@ -537,6 +547,29 @@ export class AbsorptionDetector
         // Convert boolean to numerical performance score
         const performance = profitable ? 1.0 : 0.0;
         this.recordSignalPerformance(signalId, performance);
+    }
+
+    /**
+     * Override cleanup to properly clear interval timers and prevent memory leaks
+     */
+    public cleanup(): void {
+        // Clear absorption detector specific intervals
+        if (this.thresholdUpdateInterval) {
+            clearInterval(this.thresholdUpdateInterval);
+            this.thresholdUpdateInterval = undefined;
+        }
+
+        if (this.historyCleanupInterval) {
+            clearInterval(this.historyCleanupInterval);
+            this.historyCleanupInterval = undefined;
+        }
+
+        // Call parent cleanup for zone management and other base cleanup
+        super.cleanup();
+
+        this.logger.info(
+            "[AbsorptionDetector] Cleanup completed - intervals cleared"
+        );
     }
 
     public getThresholdStatus(): {
