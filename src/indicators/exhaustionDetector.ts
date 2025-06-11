@@ -7,11 +7,7 @@ import { RollingWindow } from "../utils/rollingWindow.js";
 import { DetectorUtils } from "./base/detectorUtils.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
 import { SharedPools } from "../utils/objectPool.js";
-import {
-    AdaptiveThresholdCalculator,
-    AdaptiveThresholds,
-    MarketRegime,
-} from "./marketRegimeDetector.js";
+import { AdaptiveThresholds, MarketRegime } from "./marketRegimeDetector.js";
 
 import type {
     EnrichedTradeEvent,
@@ -92,14 +88,6 @@ export class ExhaustionDetector
     private readonly maxPassiveRatio: number;
     private readonly minDepletionFactor: number;
 
-    // NEW: Add adaptive threshold system
-    private readonly thresholdCalculator = new AdaptiveThresholdCalculator();
-    private currentThresholds: AdaptiveThresholds;
-    private readonly performanceHistory = new Map<string, number>();
-    private recentSignalCount = 0;
-    private lastThresholdUpdate = 0;
-    private readonly updateIntervalMs = 300000; // Update every 5 minutes
-
     constructor(
         id: string,
         callback: DetectorCallback,
@@ -131,13 +119,6 @@ export class ExhaustionDetector
             volumeVelocity: false,
             ...settings.features,
         };
-
-        // NEW: Initialize adaptive thresholds
-        this.currentThresholds =
-            this.thresholdCalculator.calculateAdaptiveThresholds(
-                this.performanceHistory,
-                this.recentSignalCount
-            );
 
         // NEW: Set up periodic threshold updates
         setInterval(() => this.updateThresholds(), this.updateIntervalMs);
@@ -196,7 +177,7 @@ export class ExhaustionDetector
         snap.timestamp = event.timestamp;
 
         const spread = this.getCurrentSpread()?.spread ?? 0;
-        this.thresholdCalculator.updateMarketData(
+        this.adaptiveThresholdCalculator.updateMarketData(
             event.price,
             event.quantity,
             spread
@@ -226,7 +207,7 @@ export class ExhaustionDetector
         this.maybeUpdateThresholds();
 
         let score = 0;
-        const thresholds = this.currentThresholds; // NEW: Use adaptive thresholds
+        const thresholds = this.getAdaptiveThresholds(); // NEW: Use adaptive thresholds
 
         // Factor 1: Adaptive depletion ratio (CHANGED from hardcoded values)
         if (conditions.depletionRatio > thresholds.depletionLevels.extreme) {
@@ -305,22 +286,16 @@ export class ExhaustionDetector
      * Update adaptive thresholds
      */
     private updateThresholds(): void {
-        const oldThresholds = { ...this.currentThresholds };
+        const oldThresholds = this.getAdaptiveThresholds();
 
-        this.currentThresholds =
-            this.thresholdCalculator.calculateAdaptiveThresholds(
-                this.performanceHistory,
-                this.recentSignalCount
-            );
-
-        this.lastThresholdUpdate = Date.now();
-        this.recentSignalCount = 0; // Reset for next period
+        this.updateAdaptiveThresholds(); // Use BaseDetector method
 
         // Log significant threshold changes
-        if (this.hasSignificantChange(oldThresholds, this.currentThresholds)) {
+        const newThresholds = this.getAdaptiveThresholds();
+        if (this.hasSignificantChange(oldThresholds, newThresholds)) {
             this.logger?.info("[ExhaustionDetector] Thresholds adapted", {
                 old: oldThresholds,
-                new: this.currentThresholds,
+                new: newThresholds,
                 timestamp: new Date().toISOString(),
             });
         }
@@ -561,7 +536,7 @@ export class ExhaustionDetector
             zone,
             price,
             side,
-            currentThresholds: this.currentThresholds,
+            currentThresholds: this.getAdaptiveThresholds(),
         });
 
         // Calculate score with confidence adjustment
@@ -843,7 +818,7 @@ export class ExhaustionDetector
         // NEW: Add adaptive threshold info to signal metadata
         signal.meta = {
             ...signal.meta,
-            adaptiveThresholds: this.currentThresholds,
+            adaptiveThresholds: this.getAdaptiveThresholds(),
             thresholdVersion: "adaptive-v1.0",
         };
 
@@ -864,22 +839,10 @@ export class ExhaustionDetector
     /**
      * Record signal performance for learning
      */
-    public recordSignalResult(
-        signalId: string,
-        profitable: boolean,
-        regime?: string
-    ): void {
-        if (regime) {
-            this.thresholdCalculator.recordSignalPerformance(
-                regime,
-                profitable
-            );
-
-            // Update performance history
-            const currentPerf = this.performanceHistory.get(regime) ?? 0.5;
-            const newPerf = currentPerf * 0.9 + (profitable ? 1 : 0) * 0.1; // Exponential moving average
-            this.performanceHistory.set(regime, newPerf);
-        }
+    public recordSignalResult(signalId: string, profitable: boolean): void {
+        // Convert boolean to numerical performance score
+        const performance = profitable ? 1.0 : 0.0;
+        this.recordSignalPerformance(signalId, performance);
     }
 
     /**
@@ -892,7 +855,7 @@ export class ExhaustionDetector
         performanceByRegime: Map<string, number>;
     } {
         return {
-            current: { ...this.currentThresholds },
+            current: this.getAdaptiveThresholds(),
             recentSignals: this.recentSignalCount,
             lastUpdated: new Date(this.lastThresholdUpdate),
             performanceByRegime: new Map(this.performanceHistory),
@@ -910,7 +873,7 @@ export class ExhaustionDetector
      * Get current market regime (for debugging/monitoring)
      */
     public getCurrentMarketRegime(): MarketRegime {
-        return this.thresholdCalculator.detectCurrentRegime();
+        return this.adaptiveThresholdCalculator.detectCurrentRegime();
     }
 
     /**

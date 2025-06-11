@@ -6,11 +6,7 @@ import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
-import {
-    AdaptiveThresholdCalculator,
-    AdaptiveThresholds,
-    MarketRegime,
-} from "./marketRegimeDetector.js";
+import { AdaptiveThresholds, MarketRegime } from "./marketRegimeDetector.js";
 import type {
     IAbsorptionDetector,
     DetectorCallback,
@@ -87,13 +83,6 @@ export class AbsorptionDetector
     private readonly icebergDetectionSensitivity: number;
     private readonly maxAbsorptionRatio: number;
 
-    private readonly thresholdCalculator = new AdaptiveThresholdCalculator();
-    private currentThresholds: AdaptiveThresholds;
-    private readonly performanceHistory = new Map<string, number>();
-    private recentSignalCount = 0;
-    private lastThresholdUpdate = 0;
-    private readonly updateIntervalMs = 300000;
-
     // Advanced tracking
     private readonly absorptionHistory = new Map<number, AbsorptionEvent[]>();
     private readonly liquidityLayers = new Map<number, LiquidityLayer[]>();
@@ -141,14 +130,8 @@ export class AbsorptionDetector
             ...settings.features,
         };
 
-        this.currentThresholds =
-            this.thresholdCalculator.calculateAdaptiveThresholds(
-                this.performanceHistory,
-                this.recentSignalCount
-            );
-
         // 🔧 CRITICAL FIX: Fix backwards thresholds
-        this.thresholdCalculator.updateBaseThresholds({
+        this.adaptiveThresholdCalculator.updateBaseThresholds({
             absorptionLevels: {
                 strong: 0.1, // 10% ratio = strong absorption
                 moderate: 0.3, // 30% ratio = moderate absorption
@@ -223,7 +206,7 @@ export class AbsorptionDetector
         }
 
         const spread = this.getCurrentSpread()?.spread ?? 0;
-        this.thresholdCalculator.updateMarketData(
+        this.adaptiveThresholdCalculator.updateMarketData(
             event.price,
             event.quantity,
             spread
@@ -490,13 +473,7 @@ export class AbsorptionDetector
     private updateThresholds(): void {
         const oldThresholds = { ...this.currentThresholds };
 
-        this.currentThresholds =
-            this.thresholdCalculator.calculateAdaptiveThresholds(
-                this.performanceHistory,
-                this.recentSignalCount
-            );
-
-        this.lastThresholdUpdate = Date.now();
+        this.updateAdaptiveThresholds(); // Use BaseDetector method
         this.recentSignalCount = 0;
 
         if (this.hasSignificantChange(oldThresholds, this.currentThresholds)) {
@@ -555,20 +532,10 @@ export class AbsorptionDetector
     }
 
     // NEW: Add monitoring methods (same as exhaustion detector)
-    public recordSignalResult(
-        signalId: string,
-        profitable: boolean,
-        regime?: string
-    ): void {
-        if (regime) {
-            this.thresholdCalculator.recordSignalPerformance(
-                regime,
-                profitable
-            );
-            const currentPerf = this.performanceHistory.get(regime) ?? 0.5;
-            const newPerf = currentPerf * 0.9 + (profitable ? 1 : 0) * 0.1;
-            this.performanceHistory.set(regime, newPerf);
-        }
+    public recordSignalResult(signalId: string, profitable: boolean): void {
+        // Convert boolean to numerical performance score
+        const performance = profitable ? 1.0 : 0.0;
+        this.recordSignalPerformance(signalId, performance);
     }
 
     public getThresholdStatus(): {
@@ -578,7 +545,7 @@ export class AbsorptionDetector
         performanceByRegime: Map<string, number>;
     } {
         return {
-            current: { ...this.currentThresholds },
+            current: this.getAdaptiveThresholds(),
             recentSignals: this.recentSignalCount,
             lastUpdated: new Date(this.lastThresholdUpdate),
             performanceByRegime: new Map(this.performanceHistory),
@@ -586,7 +553,7 @@ export class AbsorptionDetector
     }
 
     public getCurrentMarketRegime(): MarketRegime {
-        return this.thresholdCalculator.detectCurrentRegime();
+        return this.adaptiveThresholdCalculator.detectCurrentRegime();
     }
 
     /**

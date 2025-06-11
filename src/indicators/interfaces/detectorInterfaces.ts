@@ -66,6 +66,7 @@ export interface BaseDetectorSettings {
     confirmationTimeoutMs?: number;
     maxRevisitTicks?: number;
     symbol?: string;
+    updateIntervalMs?: number; // Adaptive threshold update interval
     spoofing?: SpoofingDetectorConfig;
     maxZoneHistory?: number; // Max zones to track in history
     cleanupIntervalMs?: number; // How often to cleanup old data

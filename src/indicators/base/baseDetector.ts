@@ -28,6 +28,10 @@ import {
     DepthLevel,
 } from "../../utils/utils.js";
 import { SpoofingDetector } from "../../services/spoofingDetector.js";
+import {
+    AdaptiveThresholdCalculator,
+    AdaptiveThresholds,
+} from "../marketRegimeDetector.js";
 import type {
     IDetector,
     DetectorStats,
@@ -76,6 +80,14 @@ export abstract class BaseDetector extends Detector implements IDetector {
     protected readonly adaptiveZoneCalculator: AdaptiveZoneCalculator;
     protected readonly passiveVolumeTracker: PassiveVolumeTracker;
     protected readonly autoCalibrator: AutoCalibrator;
+
+    // Adaptive threshold system (shared across detectors)
+    protected readonly adaptiveThresholdCalculator: AdaptiveThresholdCalculator;
+    protected currentThresholds: AdaptiveThresholds;
+    protected readonly performanceHistory: Map<string, number>;
+    protected recentSignalCount: number;
+    protected lastThresholdUpdate: number;
+    protected readonly updateIntervalMs: number;
 
     // Dependencies
     protected readonly callback: DetectorCallback;
@@ -144,6 +156,18 @@ export abstract class BaseDetector extends Detector implements IDetector {
         this.adaptiveZoneCalculator = new AdaptiveZoneCalculator();
         this.passiveVolumeTracker = new PassiveVolumeTracker();
         this.autoCalibrator = new AutoCalibrator();
+
+        // Initialize adaptive threshold system
+        this.adaptiveThresholdCalculator = new AdaptiveThresholdCalculator();
+        this.performanceHistory = new Map<string, number>();
+        this.recentSignalCount = 0;
+        this.lastThresholdUpdate = 0;
+        this.updateIntervalMs = settings.updateIntervalMs ?? 300000; // 5 minutes default
+        this.currentThresholds =
+            this.adaptiveThresholdCalculator.calculateAdaptiveThresholds(
+                this.performanceHistory,
+                this.recentSignalCount
+            );
 
         // NEW: initialize rolling window for passive volume, window size based on windowMs (1 sample per second)
         const rollingWindowSize = Math.max(Math.ceil(this.windowMs / 1000), 10);
@@ -1172,6 +1196,77 @@ export abstract class BaseDetector extends Detector implements IDetector {
         });
 
         this.emit("statusChange", newStatus);
+    }
+
+    /**
+     * Update adaptive thresholds based on performance history
+     */
+    protected updateAdaptiveThresholds(): void {
+        const now = Date.now();
+        if (now - this.lastThresholdUpdate < this.updateIntervalMs) {
+            return; // Skip update if not enough time has passed
+        }
+
+        this.currentThresholds =
+            this.adaptiveThresholdCalculator.calculateAdaptiveThresholds(
+                this.performanceHistory,
+                this.recentSignalCount
+            );
+
+        this.lastThresholdUpdate = now;
+
+        this.logger.debug(
+            `[${this.constructor.name}] Updated adaptive thresholds`,
+            {
+                detectorId: this.id,
+                signalCount: this.recentSignalCount,
+                thresholds: this.currentThresholds,
+            }
+        );
+    }
+
+    /**
+     * Record signal performance for adaptive threshold calculation
+     */
+    protected recordSignalPerformance(
+        signalId: string,
+        performance: number
+    ): void {
+        this.performanceHistory.set(signalId, performance);
+        this.recentSignalCount++;
+
+        // Clean up old performance history (keep last 100 entries)
+        if (this.performanceHistory.size > 100) {
+            const entries = Array.from(this.performanceHistory.entries());
+            const toDelete = entries.slice(0, entries.length - 100);
+            toDelete.forEach(([key]) => this.performanceHistory.delete(key));
+        }
+    }
+
+    /**
+     * Get current adaptive thresholds (readonly access for child detectors)
+     */
+    protected getAdaptiveThresholds(): Readonly<AdaptiveThresholds> {
+        return Object.freeze({ ...this.currentThresholds });
+    }
+
+    /**
+     * Reset adaptive threshold performance tracking
+     */
+    protected resetAdaptiveThresholds(): void {
+        this.performanceHistory.clear();
+        this.recentSignalCount = 0;
+        this.lastThresholdUpdate = 0;
+        this.currentThresholds =
+            this.adaptiveThresholdCalculator.calculateAdaptiveThresholds(
+                this.performanceHistory,
+                this.recentSignalCount
+            );
+
+        this.logger.info(
+            `[${this.constructor.name}] Reset adaptive thresholds`,
+            { detectorId: this.id }
+        );
     }
 
     /**
