@@ -4,6 +4,7 @@ import { EventEmitter } from "events";
 import { spawn } from "child_process";
 import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "./metricsCollector.js";
+import { ProductionUtils } from "../utils/productionUtils.js";
 
 export interface HardReloadEvent {
     reason: string;
@@ -142,7 +143,7 @@ export class RecoveryManager extends EventEmitter {
         });
 
         // Give components time to clean up
-        await this.delay(2000);
+        await ProductionUtils.sleep(2000);
 
         try {
             if (this.config.hardReloadRestartCommand === "process.exit") {
@@ -256,9 +257,5 @@ export class RecoveryManager extends EventEmitter {
         this.hardReloadCount = 0;
         this.lastHardReloadTime = 0;
         this.logger.info("[RecoveryManager] Hard reload counter reset");
-    }
-
-    private delay(ms: number): Promise<void> {
-        return new Promise((resolve) => setTimeout(resolve, ms));
     }
 }

@@ -85,6 +85,7 @@ import { runMigrations } from "./infrastructure/migrate.js";
 import { Storage } from "./storage/storage.js";
 import { PipelineStorage } from "./storage/pipelineStorage.js";
 import { BinanceDataFeed } from "./utils/binance.js";
+import { ProductionUtils } from "./utils/productionUtils.js";
 import { SignalTracker } from "./analysis/signalTracker.js";
 import { MarketContextCollector } from "./analysis/marketContextCollector.js";
 import { TradesProcessor } from "./clients/tradesProcessor.js";
@@ -1282,7 +1283,7 @@ export class OrderFlowDashboard {
             this.threadManager.startBinance();
 
             // Wait a moment for the connection to establish
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await ProductionUtils.sleep(1000);
 
             this.logger.info(
                 "Live stream connection initiated successfully",

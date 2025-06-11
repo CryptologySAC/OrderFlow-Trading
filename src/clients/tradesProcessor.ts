@@ -8,6 +8,7 @@ import type { PlotTrade } from "../utils/types.js";
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import { ProductionUtils } from "../utils/productionUtils.js";
 import { CircularBuffer } from "../utils/utils.js";
 import { EventEmitter } from "events";
 
@@ -265,7 +266,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                     );
 
                     // Rate limiting
-                    await this.sleep(100);
+                    await ProductionUtils.sleep(100);
                 } catch (error) {
                     retries++;
                     if (retries >= this.maxBacklogRetries) {
@@ -282,7 +283,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                         }
                     );
 
-                    await this.sleep(Math.pow(2, retries) * 1000);
+                    await ProductionUtils.sleep(Math.pow(2, retries) * 1000);
                 }
             }
 
@@ -727,7 +728,4 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     /**
      * Sleep utility
      */
-    private sleep(ms: number): Promise<void> {
-        return new Promise((resolve) => setTimeout(resolve, ms));
-    }
 }

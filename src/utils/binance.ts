@@ -13,6 +13,8 @@ import {
     Logger,
     LogLevel,
 } from "@binance/common";
+import { TimeAwareCache } from "./utils.js";
+import { ProductionUtils } from "./productionUtils.js";
 
 // --- Error Types ---
 export class BinanceApiError extends Error {
@@ -38,44 +40,6 @@ export class BinanceConfigurationError extends Error {
     constructor(message: string) {
         super(message);
         this.name = "BinanceConfigurationError";
-    }
-}
-
-// --- Generic Cache Utility ---
-interface CacheEntry<T> {
-    data: T;
-    timestamp: number;
-    ttl: number;
-}
-
-class TimedCache<T> {
-    private cache = new Map<string, CacheEntry<T>>();
-
-    get(key: string): T | null {
-        const entry = this.cache.get(key);
-        if (!entry) return null;
-        if (Date.now() > entry.timestamp + entry.ttl) {
-            this.cache.delete(key);
-            return null;
-        }
-        return entry.data;
-    }
-
-    set(key: string, data: T, ttlMs: number) {
-        this.cache.set(key, { data, timestamp: Date.now(), ttl: ttlMs });
-    }
-
-    clear() {
-        this.cache.clear();
-    }
-
-    cleanup() {
-        const now = Date.now();
-        for (const [key, entry] of this.cache.entries()) {
-            if (now > entry.timestamp + entry.ttl) {
-                this.cache.delete(key);
-            }
-        }
     }
 }
 
@@ -108,8 +72,9 @@ export class BinanceDataFeed implements IBinanceDataFeed {
     private readonly logger: Logger;
     private apiConnection?: SpotWebsocketAPI.WebsocketAPIConnection;
     private streamConnection?: SpotWebsocketStreams.WebsocketStreamsConnection;
-    private cache = new TimedCache<unknown>();
     private readonly defaultCacheTtlMs = 5000; // 5s default cache for all endpoints
+    private cache = new TimeAwareCache<string, unknown>(this.defaultCacheTtlMs);
+    private depthCache = new TimeAwareCache<string, unknown>(2000); // shorter cache for depth
 
     private readonly configurationWebsocketStreams: ConfigurationWebsocketStreams =
         {
@@ -183,7 +148,7 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         const cacheKey = `tradesAggregate-${symbol}-${limit}-${fromId ?? ""}`;
         const cached = this.cache.get(cacheKey) as
             | SpotWebsocketAPI.TradesAggregateResponseResultInner[]
-            | null;
+            | undefined;
         if (cached) {
             this.logger.info(`[tradesAggregate] Cache hit for ${symbol}`);
             return cached;
@@ -196,7 +161,7 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         const result = await this.executeWithRetry(() =>
             this.executeWithApiConnection(config, "tradesAggregate")
         );
-        this.cache.set(cacheKey, result, this.defaultCacheTtlMs);
+        this.cache.set(cacheKey, result);
         return result;
     }
 
@@ -220,7 +185,7 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         const result = await this.executeWithRetry(() =>
             this.executeWithApiConnection(config, "fetchAggTradesByTime")
         );
-        this.cache.set(cacheKey, result, this.defaultCacheTtlMs);
+        this.cache.set(cacheKey, result);
         return result;
     }
 
@@ -248,7 +213,7 @@ export class BinanceDataFeed implements IBinanceDataFeed {
             this.executeWithTradesConnection(config, "getTrades")
         );
 
-        this.cache.set(cacheKey, result, this.defaultCacheTtlMs);
+        this.cache.set(cacheKey, result);
         return result;
     }
 
@@ -257,9 +222,9 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         limit = 1000
     ): Promise<SpotWebsocketAPI.DepthResponseResult> {
         const cacheKey = `depthSnapshot-${symbol}-${limit}`;
-        const cached = this.cache.get(
-            cacheKey
-        ) as SpotWebsocketAPI.DepthResponseResult | null;
+        const cached = this.depthCache.get(cacheKey) as
+            | SpotWebsocketAPI.DepthResponseResult
+            | undefined;
         if (cached) {
             this.logger.info(`[getDepthSnapshot] Cache hit for ${symbol}`);
             return cached;
@@ -268,7 +233,7 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         const result = await this.executeWithRetry(() =>
             this.executeWithDepthConnection(config, "getDepthSnapshot")
         );
-        this.cache.set(cacheKey, result, 2000); // shorter cache for depth
+        this.depthCache.set(cacheKey, result); // shorter cache for depth
         return result;
     }
 
@@ -289,12 +254,12 @@ export class BinanceDataFeed implements IBinanceDataFeed {
                     this.logger.warn(
                         `Rate limit hit, backoff ${backoff}ms, attempt ${attempt}/${maxRetries}`
                     );
-                    await this.sleep(backoff);
+                    await ProductionUtils.sleep(backoff);
                     backoff *= 2;
                 } else if (attempt === maxRetries) {
                     throw lastError;
                 } else {
-                    await this.sleep(backoff);
+                    await ProductionUtils.sleep(backoff);
                 }
             }
         }
@@ -418,10 +383,6 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         return snap;
     }
 
-    private sleep(ms: number): Promise<void> {
-        return new Promise((resolve) => setTimeout(resolve, ms));
-    }
-
     // --- Disconnects all resources ---
     public async disconnect(): Promise<void> {
         try {
@@ -434,6 +395,7 @@ export class BinanceDataFeed implements IBinanceDataFeed {
                 this.streamConnection = undefined;
             }
             this.cache.clear();
+            this.depthCache.clear();
             this.logger.info("BinanceDataFeed disconnected and cleaned up");
         } catch (error) {
             this.logger.error(

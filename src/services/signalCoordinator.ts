@@ -8,6 +8,7 @@ import {
 } from "../types/signalTypes.js";
 import { BaseDetector } from "../indicators/base/baseDetector.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
+import { ProductionUtils } from "../utils/productionUtils.js";
 import { SignalManager } from "../trading/signalManager.js";
 import { WorkerLogger } from "../multithreading/workerLogger";
 import { IPipelineStorage } from "../storage/pipelineStorage.js";
@@ -449,7 +450,7 @@ export class SignalCoordinator extends EventEmitter {
         candidate: SignalCandidate,
         detector: BaseDetector
     ): Promise<ProcessedSignal> {
-        await new Promise((r) => setTimeout(r, 10)); // TODO: real logic
+        await ProductionUtils.sleep(10); // TODO: real logic
         return {
             id: `proc_${ulid()}`,
             originalCandidate: candidate,

@@ -6,6 +6,13 @@ import { CircuitBreaker } from "../infrastructure/circuitBreaker.js";
 
 export class ProductionUtils {
     /**
+     * Async sleep utility - consolidates duplicate sleep implementations
+     */
+    public static sleep(ms: number): Promise<void> {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    /**
      * Circuit breaker for detector error handling
      */
     public static createCircuitBreaker(

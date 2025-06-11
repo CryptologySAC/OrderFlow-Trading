@@ -8,10 +8,12 @@ import {
     AutoCalibrator,
     PriceConfirmationManager,
     isValidBacklogRequest,
-    calculateProfitTarget,
-    calculateBreakeven,
     getAggressiveSide,
 } from "../src/utils/utils";
+import {
+    calculateProfitTarget,
+    calculateBreakeven,
+} from "../src/utils/calculations";
 
 describe("utils/utils", () => {
     beforeEach(() => {
@@ -112,7 +114,7 @@ describe("utils/utils", () => {
     });
 
     it("calculates profit and breakeven", () => {
-        expect(calculateProfitTarget(100, "buy")).toBeGreaterThan(100);
+        expect(calculateProfitTarget(100, "buy").price).toBeGreaterThan(100);
         expect(calculateBreakeven(100, "sell")).toBeLessThan(100);
         expect(getAggressiveSide(false)).toBe("buy");
     });
@@ -258,7 +260,7 @@ describe("utils/utils", () => {
     });
 
     it("profit and breakeven other sides", () => {
-        expect(calculateProfitTarget(100, "sell")).toBeLessThan(100);
+        expect(calculateProfitTarget(100, "sell").price).toBeLessThan(100);
         expect(calculateBreakeven(100, "buy")).toBeGreaterThan(100);
         expect(getAggressiveSide(true)).toBe("sell");
     });

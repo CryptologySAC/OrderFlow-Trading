@@ -196,6 +196,11 @@ export class TimeAwareCache<K, V> {
         this.cache.delete(key);
     }
 
+    clear(): void {
+        this.cache.clear();
+        this.lastCleanup = Date.now();
+    }
+
     /**
      * Manual cleanup for explicit testing/maintenance.
      */
@@ -584,36 +589,6 @@ export function isValidBacklogRequest(
         "type" in obj &&
         (obj as { type: unknown }).type === "backlog"
     );
-}
-
-// utils.ts - Add profit calculation
-export function calculateProfitTarget(
-    entryPrice: number,
-    side: "buy" | "sell",
-    targetPercent: number = 0.015, // 1.5% default
-    commissionRate: number = 0.001 // 0.1% per side
-): number {
-    const grossTarget = targetPercent + commissionRate * 2; // Cover round-trip
-
-    if (side === "buy") {
-        return entryPrice * (1 + grossTarget);
-    } else {
-        return entryPrice * (1 - grossTarget);
-    }
-}
-
-export function calculateBreakeven(
-    entryPrice: number,
-    side: "buy" | "sell",
-    commissionRate: number = 0.001
-): number {
-    const totalCommission = commissionRate * 2; // Round-trip
-
-    if (side === "buy") {
-        return entryPrice * (1 + totalCommission);
-    } else {
-        return entryPrice * (1 - totalCommission);
-    }
 }
 
 export const getAggressiveSide = (buyerIsMaker: boolean) =>
