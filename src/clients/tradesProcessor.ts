@@ -221,7 +221,6 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         // Start background tasks
         this.startSaveQueue();
         this.startHealthCheck();
-        this.startGapMonitoring();
         this.startTradeIdCleanup();
 
         // Listen for stream connection events
@@ -848,15 +847,6 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     }
 
     /**
-     * Start continuous gap monitoring - REMOVED
-     */
-    private startGapMonitoring(): void {
-        this.logger.info(
-            "[TradesProcessor] Gap monitoring removed - using 90-minute reload strategy"
-        );
-    }
-
-    /**
      * Reload 90 minutes of trade data
      */
     private async reloadTradeData(): Promise<void> {
@@ -996,9 +986,22 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         this.logger.info("[TradesProcessor] Shutting down");
         this.isShuttingDown = true;
 
-        if (this.saveTimer) clearInterval(this.saveTimer);
-        if (this.healthCheckTimer) clearInterval(this.healthCheckTimer);
-        if (this.tradeIdCleanupTimer) clearInterval(this.tradeIdCleanupTimer);
+        // ✅ RESOURCE CLEANUP FIX: Properly clear and nullify timers
+        if (this.saveTimer) {
+            clearInterval(this.saveTimer);
+            this.saveTimer = undefined;
+        }
+        if (this.healthCheckTimer) {
+            clearInterval(this.healthCheckTimer);
+            this.healthCheckTimer = undefined;
+        }
+        if (this.tradeIdCleanupTimer) {
+            clearInterval(this.tradeIdCleanupTimer);
+            this.tradeIdCleanupTimer = undefined;
+        }
+
+        // ✅ RESOURCE CLEANUP FIX: Remove all EventEmitter listeners to prevent memory leaks
+        this.removeAllListeners();
 
         if (this.saveQueue.length) {
             this.logger.info(
@@ -1015,13 +1018,21 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             }
         }
 
+        // ✅ RESOURCE CLEANUP FIX: Clear all data structures and confirm cleanup
         this.recentTrades.clear();
         this.saveQueue = [];
         this.processedTradeIds.clear();
 
+        // Confirm CircularBuffer cleanup
+        if (this.errorWindow) {
+            this.errorWindow.clear();
+        }
+
         await this.binanceFeed.disconnect();
 
-        this.logger.info("[TradesProcessor] Shutdown complete");
+        this.logger.info(
+            "[TradesProcessor] Shutdown complete - all resources cleaned up"
+        );
     }
 
     /**
