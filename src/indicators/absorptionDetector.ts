@@ -1454,11 +1454,11 @@ export class AbsorptionDetector
                 conditions.velocityIncrease = velocityIncrease;
                 conditions.spread = spread;
 
+                // Calculate hasRefill: maxPassive > avgPassive * 1.1 indicates refill activity
+                conditions.hasRefill = maxPassive > avgPassive * 1.1;
+
                 // Release imbalance result back to pool
                 sharedPools.imbalanceResults.release(imbalanceResult);
-
-                // ✅ VALIDATION: Ensure all fields are properly set
-                this.validateConditions(conditions, price, side, zone);
 
                 return conditions;
             } finally {
@@ -1598,119 +1598,6 @@ export class AbsorptionDetector
     /**
      * ✅ FIX: Add validation to ensure all required fields are present
      */
-    private validateConditions(
-        conditions: AbsorptionConditions,
-        price: number,
-        side: string,
-        zone: number
-    ): void {
-        const requiredFields = [
-            "absorptionRatio",
-            "passiveStrength",
-            "hasRefill",
-            "icebergSignal",
-            "liquidityGradient",
-            "absorptionVelocity",
-            "currentPassive",
-            "avgPassive",
-            "maxPassive",
-            "minPassive",
-            "aggressiveVolume",
-            "imbalance",
-            "sampleCount",
-            "dominantSide",
-            "consistency",
-            "velocityIncrease",
-            "spread",
-        ];
-
-        const missingFields = requiredFields.filter((field) => {
-            const key = field as keyof AbsorptionConditions;
-            const value = conditions[key];
-            return (
-                !(field in conditions) ||
-                value === undefined ||
-                (typeof value === "number" && !isFinite(value))
-            );
-        });
-
-        if (missingFields.length > 0) {
-            this.logger.error(
-                `[AbsorptionDetector] ❌ VALIDATION FAILED - Missing/invalid fields`,
-                {
-                    missingFields,
-                    price,
-                    side,
-                    zone,
-                    conditions: Object.keys(conditions).reduce(
-                        (obj, key) => {
-                            obj[key] =
-                                conditions[key as keyof AbsorptionConditions];
-                            return obj;
-                        },
-                        {} as Record<string, unknown>
-                    ),
-                }
-            );
-
-            // Fill missing fields with safe defaults
-            missingFields.forEach((field) => {
-                switch (field) {
-                    case "consistency":
-                        conditions.consistency = 0.7;
-                        break;
-                    case "velocityIncrease":
-                        conditions.velocityIncrease = 0.7;
-                        break;
-                    case "passiveStrength":
-                        conditions.passiveStrength = 0.7;
-                        break;
-                    case "spread":
-                        conditions.spread = 0;
-                        break;
-                    case "imbalance":
-                        conditions.imbalance = 0;
-                        break;
-                    case "icebergSignal":
-                        conditions.icebergSignal = 0;
-                        break;
-                    case "liquidityGradient":
-                        conditions.liquidityGradient = 0;
-                        break;
-                    case "absorptionVelocity":
-                        conditions.absorptionVelocity = 0;
-                        break;
-                    case "dominantSide":
-                        conditions.dominantSide = "neutral";
-                        break;
-                    case "hasRefill":
-                        conditions.hasRefill = false;
-                        break;
-                    case "absorptionRatio":
-                        conditions.absorptionRatio = 1;
-                        break;
-                    case "currentPassive":
-                        conditions.currentPassive = 0;
-                        break;
-                    case "avgPassive":
-                        conditions.avgPassive = 0;
-                        break;
-                    case "maxPassive":
-                        conditions.maxPassive = 0;
-                        break;
-                    case "minPassive":
-                        conditions.minPassive = 0;
-                        break;
-                    case "aggressiveVolume":
-                        conditions.aggressiveVolume = 0;
-                        break;
-                    case "sampleCount":
-                        conditions.sampleCount = 0;
-                        break;
-                }
-            });
-        }
-    }
 
     /**
      * ✅ FIX: Enhanced default conditions with all required fields
