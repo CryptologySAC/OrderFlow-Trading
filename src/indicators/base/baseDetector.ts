@@ -37,6 +37,7 @@ import type {
     ImbalanceResult,
     VolumeCalculationResult,
 } from "../interfaces/detectorInterfaces.js";
+import { EWMA } from "../../utils/ewma.js";
 
 export type ZoneSample = {
     bid: number;
@@ -96,6 +97,9 @@ export abstract class BaseDetector extends Detector implements IDetector {
         number,
         RollingWindow<ZoneSample>
     > = new Map();
+
+    protected readonly passiveEWMA = new EWMA(15_000);
+    protected readonly aggressiveEWMA = new EWMA(15_000);
 
     constructor(
         id: string,
@@ -239,16 +243,9 @@ export abstract class BaseDetector extends Detector implements IDetector {
     public addTrade(tradeData: AggressiveTrade): void {
         try {
             this.trades.add(tradeData);
-            const zone = this.calculateZone(tradeData.price);
+            this.aggressiveEWMA.push(tradeData.quantity);
 
-            this.logger.info(`[${this.constructor.name}] Trade added`, {
-                price: tradeData.price,
-                quantity: tradeData.quantity,
-                side: this.getTradeSide(tradeData),
-                zone,
-                totalTradesInBuffer: this.trades.length,
-                timestamp: new Date(tradeData.timestamp).toISOString(),
-            });
+            const zone = this.calculateZone(tradeData.price);
 
             // Copy-on-write: create new bucket instead of mutating
             const currentBucket = this.zoneAgg.get(zone);
@@ -258,13 +255,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
             );
 
             this.zoneAgg.set(zone, newBucket);
-
-            this.logger.info(`[${this.constructor.name}] Zone updated`, {
-                zone,
-                tradesInZone: newBucket.trades.length,
-                volumeInZone: newBucket.vol,
-                activeZones: this.zoneAgg.size,
-            });
 
             if (this.features.adaptiveZone) {
                 this.adaptiveZoneCalculator.updatePrice(tradeData.price);

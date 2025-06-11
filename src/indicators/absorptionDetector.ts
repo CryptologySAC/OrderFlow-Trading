@@ -187,6 +187,12 @@ export class AbsorptionDetector
         snap.total = event.zonePassiveBidVolume + event.zonePassiveAskVolume;
         snap.timestamp = event.timestamp;
 
+        this.passiveEWMA.push(
+            event.buyerIsMaker
+                ? event.zonePassiveBidVolume // aggressive sell → tests BID
+                : event.zonePassiveAskVolume // aggressive buy  → tests ASK
+        );
+
         if (!last || last.bid !== snap.bid || last.ask !== snap.ask) {
             // Use pool-aware push to handle evicted objects
             this.pushToZoneHistoryWithPoolCleanup(zoneHistory, snap);
@@ -957,12 +963,7 @@ export class AbsorptionDetector
         }
 
         // Analyze absorption conditions using object pooling
-        const conditions = this.analyzeAbsorptionConditions(
-            price,
-            side,
-            zone,
-            tradesAtZone
-        );
+        const conditions = this.analyzeAbsorptionConditions(price, side, zone);
 
         const missingFields = [
             "consistency",
@@ -1347,8 +1348,7 @@ export class AbsorptionDetector
     private analyzeAbsorptionConditions(
         price: number,
         side: "buy" | "sell",
-        zone: number,
-        tradesAtZone: AggressiveTrade[]
+        zone: number
     ): AbsorptionConditions {
         const sharedPools = SharedPools.getInstance();
         const conditions = sharedPools.absorptionConditions.acquire();
@@ -1387,12 +1387,11 @@ export class AbsorptionDetector
                 const maxPassive = Math.max(...relevantPassiveValues);
                 const minPassive = Math.min(...relevantPassiveValues);
 
-                const aggressiveVolume = tradesAtZone.reduce(
-                    (sum, t) => sum + t.quantity,
-                    0
-                );
-                const absorptionRatio =
-                    avgPassive > 0 ? aggressiveVolume / avgPassive : 1;
+                /* ── Aligned 15-second ratio ──────────────────────────────────────────── */
+                const ewmaAgg = this.aggressiveEWMA.get(); // 15 s aggressive
+                const ewmaPas = this.passiveEWMA.get(); // 15 s passive (opposite side)
+
+                const absorptionRatio = ewmaPas > 0 ? ewmaAgg / ewmaPas : 1; // smaller = stronger absorption
 
                 // ✅ FIX 1: Properly calculate passive strength
                 const passiveStrength =
@@ -1455,7 +1454,7 @@ export class AbsorptionDetector
                 conditions.avgPassive = avgPassive;
                 conditions.maxPassive = maxPassive;
                 conditions.minPassive = minPassive;
-                conditions.aggressiveVolume = aggressiveVolume;
+                conditions.aggressiveVolume = ewmaAgg;
                 conditions.imbalance = Math.abs(imbalanceResult.imbalance);
                 conditions.sampleCount = snapshots.length;
                 conditions.dominantSide = imbalanceResult.dominantSide;
