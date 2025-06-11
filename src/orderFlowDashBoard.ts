@@ -48,7 +48,7 @@ import { AlertManager } from "./alerts/alertManager.js";
 
 // Indicator imports
 import { AbsorptionDetector } from "./indicators/absorptionDetector.js";
-import { ExhaustionDetector } from "./indicators/exhaustionDetector.js";
+//todo import { ExhaustionDetector } from "./indicators/exhaustionDetector.js";
 // Legacy detectors removed - using zone-based architecture
 import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
 import { SupportResistanceDetector } from "./indicators/supportResistanceDetector.js";
@@ -124,7 +124,7 @@ export class OrderFlowDashboard {
 
     // Event-based Detectors (keep as-is)
     private readonly absorptionDetector: AbsorptionDetector;
-    private readonly exhaustionDetector: ExhaustionDetector;
+    //TODO private readonly exhaustionDetector: ExhaustionDetector;
     private readonly supportResistanceDetector: SupportResistanceDetector;
 
     // Zone-based Detectors (new architecture)
@@ -275,23 +275,20 @@ export class OrderFlowDashboard {
             true
         );
 
-        this.exhaustionDetector = DetectorFactory.createExhaustionDetector(
-            (signal) => {
-                console.log("Exhaustion signal:", signal);
-            },
-            Config.EXHAUSTION_DETECTOR,
-            dependencies,
-            { id: "ltcusdt-exhaustion-main" }
-        );
-        this.signalCoordinator.registerDetector(
-            this.exhaustionDetector,
-            ["exhaustion"],
-            100,
-            true
-        );
-
-        // Legacy accumulation/distribution detectors removed
-        // Replaced by zone-based AccumulationZoneDetector and DistributionZoneDetector
+        //TODO this.exhaustionDetector = DetectorFactory.createExhaustionDetector(
+        //    (signal) => {
+        //        console.log("Exhaustion signal:", signal);
+        //    },
+        //    Config.EXHAUSTION_DETECTOR,
+        //    dependencies,
+        //    { id: "ltcusdt-exhaustion-main" }
+        //);
+        //this.signalCoordinator.registerDetector(
+        //    this.exhaustionDetector,
+        //    ["exhaustion"],
+        //    100,
+        //    true
+        //);
 
         // Initialize other components
         this.deltaCVDConfirmation =
@@ -657,7 +654,7 @@ export class OrderFlowDashboard {
                     // Feed trade data to event-based detectors
                     this.absorptionDetector.onEnrichedTrade(enrichedTrade);
                     this.anomalyDetector.onEnrichedTrade(enrichedTrade);
-                    this.exhaustionDetector.onEnrichedTrade(enrichedTrade);
+                    // TODO this.exhaustionDetector.onEnrichedTrade(enrichedTrade);
                     this.deltaCVDConfirmation.onEnrichedTrade(enrichedTrade);
                     this.supportResistanceDetector.onEnrichedTrade(
                         enrichedTrade
@@ -1428,15 +1425,9 @@ export class OrderFlowDashboard {
                 correlationId
             );
 
-            // Start components in parallel: HTTP server, backlog fill, AND stream connection
-            // This ensures no gap between 90-minute historical data and live stream
-            await Promise.all([
-                this.startHttpServer(),
-                this.preloadHistoricalData(), // API calls for 90 minutes
-                this.startStreamConnection(), // WebSocket stream in parallel
-            ]);
-
-            // Data streams connected by BinanceWorker
+            await this.startStreamConnection();
+            await this.preloadHistoricalData();
+            await this.startHttpServer();
 
             // Start periodic tasks
             this.startPeriodicTasks();

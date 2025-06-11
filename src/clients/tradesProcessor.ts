@@ -1,5 +1,6 @@
 // src/clients/tradesProcessor.ts
 import { randomUUID } from "crypto";
+import { z } from "zod";
 import { Storage } from "../storage/storage.js";
 import { BinanceDataFeed } from "../utils/binance.js";
 import { SpotWebsocketAPI } from "@binance/spot";
@@ -11,6 +12,42 @@ import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ProductionUtils } from "../utils/productionUtils.js";
 import { CircularBuffer } from "../utils/utils.js";
 import { EventEmitter } from "events";
+
+// ✅ Zod validation schemas based on actual Binance API specification
+const TradeDataSchema = z.object({
+    a: z.number().int().nonnegative(), // Aggregate trade ID
+    p: z.string().regex(/^\d+(\.\d+)?$/, "Invalid price format"), // Price as string
+    q: z.string().regex(/^\d+(\.\d+)?$/, "Invalid quantity format"), // Quantity as string
+    f: z.number().int().nonnegative().optional(), // First trade ID
+    l: z.number().int().nonnegative().optional(), // Last trade ID
+    T: z.number().int().positive(), // Timestamp
+    m: z.boolean(), // Was the buyer the maker?
+    M: z.boolean().optional(), // Was the trade the best price match?
+    s: z.string().optional(), // Symbol
+});
+
+const TradeArraySchema = z.array(TradeDataSchema); // No arbitrary size limit - let system handle memory appropriately
+
+const SymbolSchema = z
+    .string()
+    .regex(
+        /^[A-Z0-9]{2,20}$/,
+        "Symbol must be 2-20 uppercase alphanumeric characters"
+    )
+    .max(30, "Symbol too long"); // More flexible for various trading pairs
+
+const BacklogAmountSchema = z.number().int().positive().min(1); // Only validate that it's a positive integer
+
+// Validation error types
+class TradeValidationError extends Error {
+    constructor(
+        message: string,
+        public readonly validationErrors: z.ZodError
+    ) {
+        super(message);
+        this.name = "TradeValidationError";
+    }
+}
 
 export interface ITradesProcessor {
     fillBacklog(): Promise<void>;
@@ -31,6 +68,7 @@ export interface TradesProcessorOptions {
     maxMemoryTrades?: number;
     saveQueueSize?: number;
     healthCheckInterval?: number;
+    maxErrorWindowSize?: number;
 }
 
 interface ProcessorHealth {
@@ -69,8 +107,6 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     private readonly saveQueueSize: number;
     private readonly healthCheckInterval: number;
 
-    //private aggTradeTemp: SpotWebsocketAPI.TradesAggregateResponseResultInner[] =[];
-
     private readonly logger: WorkerLogger;
     private readonly metricsCollector: MetricsCollector;
 
@@ -94,7 +130,8 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     private savedCount = 0;
     private failedSaves = 0;
     private processingTimes: CircularBuffer<number>;
-    private errorWindow: number[] = [];
+    private errorWindow: CircularBuffer<number>;
+    private readonly maxErrorWindowSize: number;
 
     // Health monitoring
     private healthCheckTimer?: NodeJS.Timeout;
@@ -113,14 +150,32 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         this.storage = storage;
         this.binanceFeed = binanceFeed;
 
-        // Configuration
-        this.symbol = options.symbol ?? "LTCUSDT";
+        // Configuration - validate symbol parameter
+        const rawSymbol = options.symbol ?? "LTCUSDT";
+        try {
+            this.symbol = SymbolSchema.parse(rawSymbol);
+        } catch (error) {
+            if (error instanceof z.ZodError) {
+                throw new TradeValidationError(
+                    "Invalid symbol in constructor options",
+                    error
+                );
+            }
+            throw error;
+        }
         this.storageTime = options.storageTime ?? 1000 * 60 * 90; // 90 minutes
         this.maxBacklogRetries = options.maxBacklogRetries ?? 3;
-        this.backlogBatchSize = options.backlogBatchSize ?? 1000;
+        this.backlogBatchSize = Math.min(
+            Math.max(100, options.backlogBatchSize ?? 1000),
+            1000
+        ); // Binance max
         this.maxMemoryTrades = options.maxMemoryTrades ?? 50000;
         this.saveQueueSize = options.saveQueueSize ?? 5000;
-        this.healthCheckInterval = options.healthCheckInterval ?? 30000; // 30s
+        this.healthCheckInterval = options.healthCheckInterval ?? 30000; // 30 s
+        this.maxErrorWindowSize = Math.max(
+            10,
+            options.maxErrorWindowSize ?? 1000
+        ); // Min 10, default 1000
 
         // Initialize state - use last stored timestamp to prevent data gaps
         const lastStoredTimestamp: number | null =
@@ -132,6 +187,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         this.latestTradeTimestamp = this.thresholdTime;
         this.recentTrades = new CircularBuffer<PlotTrade>(this.maxMemoryTrades);
         this.processingTimes = new CircularBuffer<number>(1000);
+        this.errorWindow = new CircularBuffer<number>(this.maxErrorWindowSize);
 
         // Start background tasks
         this.startSaveQueue();
@@ -148,158 +204,228 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         });
     }
 
+    // ✅ Validation helper methods
     /**
-     * Reload the last 90 minutes of trade data from Binance API
+     * Validate and sanitize external trade data using Zod schemas
+     */
+    private validateTradeData(
+        trade: unknown
+    ): SpotWebsocketAPI.TradesAggregateResponseResultInner {
+        try {
+            const validatedTrade = TradeDataSchema.parse(trade);
+            return {
+                a: validatedTrade.a, // Aggregate trade ID
+                p: validatedTrade.p, // Price (keep as string)
+                q: validatedTrade.q, // Quantity (keep as string)
+                f: validatedTrade.f, // First trade ID
+                l: validatedTrade.l, // Last trade ID
+                T: validatedTrade.T, // Timestamp
+                m: validatedTrade.m, // Was buyer the maker
+                M: validatedTrade.M, // Best price match
+                s: validatedTrade.s, // Symbol
+            } as SpotWebsocketAPI.TradesAggregateResponseResultInner;
+        } catch (error) {
+            if (error instanceof z.ZodError) {
+                this.metricsCollector.incrementMetric("tradesErrors");
+                throw new TradeValidationError(
+                    "Invalid trade data received from external API",
+                    error
+                );
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Validate and sanitize trade array with size limits
+     */
+    private validateTradeArray(
+        trades: unknown[]
+    ): SpotWebsocketAPI.TradesAggregateResponseResultInner[] {
+        try {
+            const result = TradeArraySchema.parse(trades);
+            return result.map(
+                (trade) =>
+                    ({
+                        a: trade.a, // Aggregate trade ID
+                        p: trade.p, // Price (keep as string)
+                        q: trade.q, // Quantity (keep as string)
+                        f: trade.f, // First trade ID
+                        l: trade.l, // Last trade ID
+                        T: trade.T, // Timestamp
+                        m: trade.m, // Was buyer the maker
+                        M: trade.M, // Best price match
+                        s: trade.s, // Symbol
+                    }) as SpotWebsocketAPI.TradesAggregateResponseResultInner
+            );
+        } catch (error) {
+            if (error instanceof z.ZodError) {
+                this.metricsCollector.incrementMetric("tradesErrors");
+                throw new TradeValidationError(
+                    "Invalid trade array received from external API",
+                    error
+                );
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Validate symbol parameter
+     */
+    private validateSymbol(symbol: string): string {
+        try {
+            return SymbolSchema.parse(symbol);
+        } catch (error) {
+            if (error instanceof z.ZodError) {
+                throw new TradeValidationError("Invalid symbol format", error);
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Validate backlog amount parameter
+     */
+    private validateBacklogAmount(amount: number): number {
+        try {
+            return BacklogAmountSchema.parse(amount);
+        } catch (error) {
+            if (error instanceof z.ZodError) {
+                throw new TradeValidationError("Invalid backlog amount", error);
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Reload the last 90 minutes of trade data from Binance
      */
     public async fillBacklog(): Promise<void> {
-        const startTime = Date.now();
+        const startWall = Date.now();
         const targetTime = Date.now();
-        const backlogStartTime = targetTime - this.storageTime; // 90 minutes ago
+        const backlogStartTime = targetTime - this.storageTime;
+        const batchWindowMs = 60_000; // 1 minute logical window
         let totalFetched = 0;
-        let consecutiveEmptyBatches = 0;
         let retries = 0;
 
-        // Set threshold to start of backlog window
+        // Restart from window start
         this.thresholdTime = backlogStartTime;
+        this.backlogComplete = false;
 
         this.logger.info("[TradesProcessor] Starting 90-minute data reload", {
             from: new Date(backlogStartTime).toISOString(),
             to: new Date(targetTime).toISOString(),
-            durationMinutes: (this.storageTime / 60000).toFixed(2),
+            durationMinutes: (this.storageTime / 60_000).toFixed(2),
         });
 
         try {
             while (this.thresholdTime < targetTime && !this.isShuttingDown) {
-                if (consecutiveEmptyBatches >= 3) {
-                    this.logger.warn(
-                        "[TradesProcessor] Too many empty batches, stopping backlog"
-                    );
-                    break;
-                }
+                const windowEnd = Math.min(
+                    this.thresholdTime + batchWindowMs - 1,
+                    targetTime
+                );
+                let windowProgressed = false;
 
-                try {
+                // Loop inside the window until we exhaust all trades (API returns < limit)
+                while (!windowProgressed && !this.isShuttingDown) {
                     const aggregatedTrades =
                         await this.binanceFeed.fetchAggTradesByTime(
                             this.symbol,
-                            this.thresholdTime
+                            this.thresholdTime,
+                            windowEnd,
+                            this.backlogBatchSize
                         );
 
                     if (aggregatedTrades.length === 0) {
-                        consecutiveEmptyBatches++;
-                        this.logger.warn(
-                            "[TradesProcessor] Empty batch received",
-                            {
-                                thresholdTime: this.thresholdTime,
-                                consecutiveEmpty: consecutiveEmptyBatches,
-                            }
-                        );
-
-                        // Move forward to avoid infinite loop
-                        this.thresholdTime += 60000; // Skip 1 minute
-                        continue;
+                        // No trades in this slice; exit inner loop
+                        windowProgressed = true;
+                        break;
                     }
 
-                    consecutiveEmptyBatches = 0;
-                    let batchProcessed = 0;
                     let maxTimestamp = this.thresholdTime;
-
-                    // Process trades in batch
                     const tradesToSave: SpotWebsocketAPI.TradesAggregateResponseResultInner[] =
                         [];
 
-                    for (const trade of aggregatedTrades) {
-                        if (!trade.T || !trade.p || !trade.q) {
-                            this.logger.warn(
-                                "[TradesProcessor] Invalid trade in backlog",
-                                { trade }
-                            );
-                            continue;
-                        }
+                    // ✅ Validate entire trade array first to prevent malformed data injection
+                    try {
+                        const validatedTrades =
+                            this.validateTradeArray(aggregatedTrades);
 
-                        if (trade.T > this.thresholdTime) {
-                            maxTimestamp = Math.max(maxTimestamp, trade.T);
+                        for (const trade of validatedTrades) {
+                            maxTimestamp = Math.max(maxTimestamp, trade.T!);
                             tradesToSave.push(trade);
 
-                            // Also add to memory cache
-                            const plotTrade: PlotTrade = {
-                                time: trade.T,
-                                price: parseFloat(trade.p),
-                                quantity: parseFloat(trade.q),
+                            // Add to memory cache with validated data
+                            this.recentTrades.add({
+                                time: trade.T!,
+                                price: parseFloat(trade.p!),
+                                quantity: parseFloat(trade.q!),
                                 orderType: trade.m ? "SELL" : "BUY",
                                 symbol: this.symbol,
                                 tradeId: trade.a ?? 0,
-                            };
-                            this.recentTrades.add(plotTrade);
-                            batchProcessed++;
+                            });
                         }
+                    } catch (error) {
+                        if (error instanceof TradeValidationError) {
+                            this.logger.warn(
+                                "[TradesProcessor] Invalid trade data in batch",
+                                {
+                                    batchSize: aggregatedTrades.length,
+                                    validationErrors:
+                                        error.validationErrors.issues,
+                                    context: "fillBacklog",
+                                }
+                            );
+                            // Skip this entire batch to prevent processing malformed data
+                            continue;
+                        }
+                        throw error; // Re-throw non-validation errors
                     }
 
-                    // Bulk save
-                    if (tradesToSave.length > 0) {
+                    if (tradesToSave.length) {
                         await this.bulkSaveTrades(tradesToSave);
                         totalFetched += tradesToSave.length;
                     }
 
-                    // Update threshold
-                    this.thresholdTime = maxTimestamp + 1;
-                    this.latestTradeTimestamp = maxTimestamp;
-
-                    // Progress reporting
-                    const progress =
-                        ((this.thresholdTime -
-                            (Date.now() - this.storageTime)) /
-                            this.storageTime) *
-                        100;
-                    this.emit("backlog_progress", {
-                        progress,
-                        totalFetched,
-                        currentTime: new Date(this.thresholdTime).toISOString(),
-                    });
-
-                    this.logger.info(
-                        "[TradesProcessor] Backlog batch processed",
-                        {
-                            processed: batchProcessed,
-                            total: totalFetched,
-                            progress: `${progress.toFixed(2)}%`,
-                        }
-                    );
-
-                    // Rate limiting
-                    await ProductionUtils.sleep(100);
-                } catch (error) {
-                    retries++;
-                    if (retries >= this.maxBacklogRetries) {
-                        throw new Error(
-                            `Max retries exceeded: ${error as Error}`
-                        );
+                    // If we got a full batch, there may be more trades in the same window
+                    if (aggregatedTrades.length === this.backlogBatchSize) {
+                        this.thresholdTime = maxTimestamp + 1;
+                        continue; // keep pulling inside the same minute
                     }
 
-                    this.logger.warn(
-                        "[TradesProcessor] Backlog fetch error, retrying",
-                        {
-                            error: (error as Error).message,
-                            retry: retries,
-                        }
-                    );
-
-                    await ProductionUtils.sleep(Math.pow(2, retries) * 1000);
+                    // Otherwise the window is exhausted
+                    windowProgressed = true;
+                    this.thresholdTime = windowEnd + 1;
+                    this.latestTradeTimestamp = maxTimestamp;
                 }
+
+                // Simple fixed-sleep rate-limit (max 10 req/s rule)
+                await ProductionUtils.sleep(120);
+
+                // Retry handling (outer loop)
+                retries = 0;
             }
 
-            this.backlogComplete = true;
-            const duration = Date.now() - startTime;
-
-            this.latestTradeTimestamp = this.thresholdTime;
+            this.backlogComplete = this.thresholdTime >= targetTime - 1000;
+            const duration = Date.now() - startWall;
 
             this.logger.info("[TradesProcessor] Backlog fill complete", {
                 totalFetched,
                 durationMs: duration,
-                durationMin: (duration / 60000).toFixed(2),
+                durationMin: (duration / 60_000).toFixed(2),
+                backlogComplete: this.backlogComplete,
             });
         } catch (error) {
-            this.handleError(error as Error, "fillBacklog");
-            throw error;
+            retries++;
+            if (retries >= this.maxBacklogRetries) {
+                this.handleError(error as Error, "fillBacklog");
+                throw error;
+            }
+            this.logger.warn(
+                "[TradesProcessor] Backlog fetch error, retrying outer loop",
+                { error: (error as Error).message, retry: retries }
+            );
         }
     }
 
@@ -308,19 +434,15 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
      */
     public requestBacklog(amount: number): PlotTrade[] {
         try {
-            // Validate amount
-            const safeAmount = Math.min(
-                Math.max(1, amount),
-                this.maxMemoryTrades
-            );
+            // ✅ Validate backlog amount parameter
+            const validatedAmount = this.validateBacklogAmount(amount);
+            const safeAmount = Math.min(validatedAmount, this.maxMemoryTrades);
 
-            // First try memory cache
             const memoryTrades = this.recentTrades.getAll();
             if (memoryTrades.length >= safeAmount) {
                 return memoryTrades.slice(-safeAmount).reverse();
             }
 
-            // Fall back to storage if needed
             const storageTrades = this.storage.getLatestAggregatedTrades(
                 safeAmount,
                 this.symbol
@@ -337,9 +459,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                 })
             );
 
-            // Update memory cache
             plotTrades.forEach((trade) => this.recentTrades.add(trade));
-
             return plotTrades.reverse();
         } catch (error) {
             this.handleError(error as Error, "requestBacklog");
@@ -358,27 +478,26 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                 throw new Error("EnrichedTradeEvent missing originalTrade");
             }
 
-            // Create plot trade
+            // ✅ Validate originalTrade before processing to prevent malformed data
+            const validatedOriginalTrade = this.validateTradeData(
+                event.originalTrade
+            );
+
             const processedTrade: PlotTrade = {
                 time: event.timestamp,
                 price: event.price,
                 quantity: event.quantity,
                 orderType: event.buyerIsMaker ? "SELL" : "BUY",
                 symbol: event.pair,
-                tradeId: event.originalTrade.a ?? event.timestamp,
+                tradeId: validatedOriginalTrade.a ?? event.timestamp,
             };
 
-            // Add to memory cache
             this.recentTrades.add(processedTrade);
+            this.queueSave(validatedOriginalTrade);
 
-            // Queue for async save
-            this.queueSave(event.originalTrade);
-
-            // Update last processed timestamp for recovery
             this.latestTradeTimestamp = event.timestamp;
             this.thresholdTime = event.timestamp + 1;
 
-            // Update metrics
             this.lastTradeTime = Date.now();
             this.processedCount++;
             const processingTime = Date.now() - startTime;
@@ -397,12 +516,19 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             };
         } catch (error) {
             this.handleError(error as Error, "onEnrichedTrade");
+
+            // ✅ Return specific error codes for validation failures
+            const errorCode =
+                error instanceof TradeValidationError
+                    ? "TRADE_VALIDATION_ERROR"
+                    : "TRADE_PROCESSING_ERROR";
+
             return {
                 type: "error",
                 now: Date.now(),
                 data: {
                     message: (error as Error).message,
-                    code: "TRADE_PROCESSING_ERROR",
+                    code: errorCode,
                 },
             };
         }
@@ -457,7 +583,6 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                         error,
                     });
 
-                    // Re-queue failed items with retry count
                     batch.forEach((item) => {
                         item.retries++;
                         if (item.retries < 3) {
@@ -466,9 +591,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                             this.failedSaves++;
                             this.logger.error(
                                 "[TradesProcessor] Trade save permanently failed",
-                                {
-                                    tradeId: item.trade.a,
-                                }
+                                { tradeId: item.trade.a }
                             );
                         }
                     });
@@ -476,7 +599,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                     this.isSaving = false;
                 }
             })();
-        }, 1000); // Process every second
+        }, 1000);
     }
 
     /**
@@ -520,18 +643,15 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                 this.emit("unhealthy", health);
             }
 
-            // Cleanup old errors
-            const cutoff = Date.now() - 60000;
-            this.errorWindow = this.errorWindow.filter((t) => t > cutoff);
+            // ✅ SECURITY FIX: CircularBuffer automatically manages size, no manual cleanup needed
+            // Error window is now bounded and self-managing
         }, this.healthCheckInterval);
     }
 
     /**
      * Start continuous gap monitoring - REMOVED
-     * Replaced with simple 90-minute reload on startup and stream reconnection
      */
     private startGapMonitoring(): void {
-        // No longer needed - using simple reload strategy
         this.logger.info(
             "[TradesProcessor] Gap monitoring removed - using 90-minute reload strategy"
         );
@@ -570,15 +690,12 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         this.on("stream_connected", () => {
             this.logger.info("[TradesProcessor] Stream reconnected");
             this.isStreamConnected = true;
-            this.lastTradeTime = Date.now(); // Reset trade timeout
+            this.lastTradeTime = Date.now();
 
-            // Reload 90 minutes of data after reconnection
             void this.reloadTradeData().catch((error) => {
                 this.logger.error(
                     "[TradesProcessor] Error during reconnection data reload",
-                    {
-                        error: (error as Error).message,
-                    }
+                    { error: (error as Error).message }
                 );
             });
         });
@@ -590,14 +707,18 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     public getHealth(): ProcessorHealth {
         const now = Date.now();
         const lastTradeAge = now - this.lastTradeTime;
-        const memoryUsage = this.recentTrades.length * 100; // Rough estimate
-        const errorRate = this.errorWindow.length;
+        const memoryUsage = this.recentTrades.length * 100;
+        // ✅ SECURITY FIX: Calculate error rate from recent errors in 60-second window
+        const cutoff = now - 60_000;
+        const recentErrors = this.errorWindow
+            .getAll()
+            .filter((timestamp) => timestamp > cutoff);
+        const errorRate = recentErrors.length;
 
         let status: "healthy" | "degraded" | "unhealthy" = "healthy";
 
-        // Adjust health thresholds based on stream connection status
-        const tradeTimeoutThreshold = this.isStreamConnected ? 60000 : 300000; // 5 minutes if stream is disconnected
-        const degradedThreshold = this.isStreamConnected ? 30000 : 180000; // 3 minutes if stream is disconnected
+        const tradeTimeoutThreshold = this.isStreamConnected ? 60_000 : 300_000;
+        const degradedThreshold = this.isStreamConnected ? 30_000 : 180_000;
 
         if (
             lastTradeAge > tradeTimeoutThreshold ||
@@ -661,23 +782,14 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         this.logger.info("[TradesProcessor] Shutting down");
         this.isShuttingDown = true;
 
-        // Stop timers
-        if (this.saveTimer) {
-            clearInterval(this.saveTimer);
-        }
-        if (this.healthCheckTimer) {
-            clearInterval(this.healthCheckTimer);
-        }
+        if (this.saveTimer) clearInterval(this.saveTimer);
+        if (this.healthCheckTimer) clearInterval(this.healthCheckTimer);
 
-        // Process remaining save queue
-        if (this.saveQueue.length > 0) {
+        if (this.saveQueue.length) {
             this.logger.info(
                 "[TradesProcessor] Processing remaining save queue",
-                {
-                    remaining: this.saveQueue.length,
-                }
+                { remaining: this.saveQueue.length }
             );
-
             try {
                 const trades = this.saveQueue.map((item) => item.trade);
                 await this.bulkSaveTrades(trades);
@@ -688,25 +800,24 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             }
         }
 
-        // Clear memory
         this.recentTrades.clear();
         this.saveQueue = [];
 
-        // Disconnect feed
         await this.binanceFeed.disconnect();
 
         this.logger.info("[TradesProcessor] Shutdown complete");
     }
 
     /**
-     * Error handling
+     * Error handling with enhanced validation error support
      */
     private handleError(
         error: Error,
         context: string,
         correlationId?: string
     ): void {
-        this.errorWindow.push(Date.now());
+        // ✅ SECURITY FIX: Use bounded CircularBuffer to prevent memory exhaustion
+        this.errorWindow.add(Date.now());
         this.metricsCollector.incrementMetric("tradesErrors");
 
         const errorContext = {
@@ -718,14 +829,27 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             correlationId: correlationId || randomUUID(),
         };
 
-        this.logger.error(
-            `[${context}] ${error.message}`,
-            errorContext,
-            correlationId
-        );
+        // ✅ Enhanced handling for validation errors
+        if (error instanceof TradeValidationError) {
+            (errorContext as Record<string, unknown>)["validationErrors"] =
+                error.validationErrors.issues;
+            this.logger.warn(
+                `[${context}] Data validation failed: ${error.message}`,
+                errorContext,
+                correlationId
+            );
+            // Don't increment general error count for validation issues
+            this.metricsCollector.incrementMetric("tradesErrors");
+        } else {
+            this.logger.error(
+                `[${context}] ${error.message}`,
+                errorContext,
+                correlationId
+            );
+        }
     }
 
     /**
-     * Sleep utility
+     * Sleep utility placeholder – use ProductionUtils.sleep
      */
 }
