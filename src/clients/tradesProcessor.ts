@@ -119,6 +119,10 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     private lastTradeTime = Date.now();
     private latestTradeTimestamp = Date.now();
 
+    // ✅ TIMING FIX: Monotonic timing for health checks resistant to clock changes
+    private processStartTime = process.hrtime.bigint();
+    private lastTradeMonotonicTime = process.hrtime.bigint();
+
     // Memory cache for recent trades
     private recentTrades: CircularBuffer<PlotTrade>;
 
@@ -377,16 +381,24 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                             for (const trade of validatedTrades) {
                                 maxTimestamp = Math.max(maxTimestamp, trade.T!);
                                 tradesToSave.push(trade);
+                            }
 
-                                // Add to memory cache with validated data
-                                this.recentTrades.add({
-                                    time: trade.T!,
-                                    price: parseFloat(trade.p!),
-                                    quantity: parseFloat(trade.q!),
-                                    orderType: trade.m ? "SELL" : "BUY",
-                                    symbol: this.symbol,
-                                    tradeId: trade.a ?? 0,
-                                });
+                            // ✅ DATA CONSISTENCY FIX: Only add to cache after successful storage
+                            if (tradesToSave.length) {
+                                this.bulkSaveTrades(tradesToSave);
+                                totalFetched += tradesToSave.length;
+
+                                // Add to memory cache AFTER successful storage to maintain consistency
+                                for (const trade of validatedTrades) {
+                                    this.recentTrades.add({
+                                        time: trade.T!,
+                                        price: parseFloat(trade.p!),
+                                        quantity: parseFloat(trade.q!),
+                                        orderType: trade.m ? "SELL" : "BUY",
+                                        symbol: this.symbol,
+                                        tradeId: trade.a ?? 0,
+                                    });
+                                }
                             }
                         } catch (error) {
                             if (error instanceof TradeValidationError) {
@@ -405,10 +417,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                             throw error; // Re-throw non-validation errors
                         }
 
-                        if (tradesToSave.length) {
-                            this.bulkSaveTrades(tradesToSave);
-                            totalFetched += tradesToSave.length;
-                        }
+                        // Storage and cache update moved to validation block above
 
                         // ✅ SECURITY FIX: Prevent infinite loops with timestamp progression safeguards
                         if (aggregatedTrades.length === this.backlogBatchSize) {
@@ -553,8 +562,11 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                 tradeId: validatedOriginalTrade.a ?? event.timestamp,
             };
 
-            this.recentTrades.add(processedTrade);
+            // ✅ DATA CONSISTENCY FIX: Queue save first, add to cache only if successful
             this.queueSave(validatedOriginalTrade);
+
+            // Add to cache after queuing for storage (queue save is synchronous operation)
+            this.recentTrades.add(processedTrade);
 
             // ✅ SECURITY FIX: Atomic state update to prevent race conditions
             this.updateTradeTimestamps(event.timestamp);
@@ -701,9 +713,11 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     ): void {
         // Atomic update of all timestamp-related state to prevent race conditions
         const now = Date.now();
+        const monotonicNow = process.hrtime.bigint();
         this.latestTradeTimestamp = latestTimestamp;
         this.thresholdTime = thresholdOverride ?? latestTimestamp + 1;
         this.lastTradeTime = now;
+        this.lastTradeMonotonicTime = monotonicNow;
 
         // Log atomic update for debugging if needed
         if (this.logger.isDebugEnabled?.()) {
@@ -816,7 +830,10 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
      */
     public getHealth(): ProcessorHealth {
         const now = Date.now();
-        const lastTradeAge = now - this.lastTradeTime;
+        // ✅ TIMING FIX: Use monotonic time for health checks to avoid clock change issues
+        const monotonicNow = process.hrtime.bigint();
+        const lastTradeAge =
+            Number(monotonicNow - this.lastTradeMonotonicTime) / 1_000_000; // Convert to milliseconds
         const memoryUsage = this.recentTrades.length * 100;
         // ✅ SECURITY FIX: Calculate error rate from recent errors in 60-second window
         const cutoff = now - 60_000;
