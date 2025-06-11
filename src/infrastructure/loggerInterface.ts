@@ -26,6 +26,8 @@ export interface ILogger {
         correlationId?: string
     ): void;
 
+    isDebugEnabled(): boolean;
+
     setCorrelationId(id: string, context: string): void;
 
     removeCorrelationId(id: string): void;

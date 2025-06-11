@@ -240,191 +240,249 @@ export class AbsorptionDetector
         let score = 0;
         const thresholds = this.currentThresholds; // NEW: Use adaptive thresholds
 
-        this.logger.info(
-            `[AbsorptionDetector] 🎯 DETAILED SCORE CALCULATION START`,
-            {
-                inputConditions: {
-                    absorptionRatio: conditions.absorptionRatio,
-                    aggressiveVolume: conditions.aggressiveVolume,
-                    avgPassive: conditions.avgPassive,
-                    consistency: conditions.consistency,
-                    sampleCount: conditions.sampleCount,
-                    velocityIncrease: conditions.velocityIncrease,
-                    spread: conditions.spread,
-                },
-                thresholds: {
-                    absorptionLevels: thresholds.absorptionLevels,
-                    absorptionScores: thresholds.absorptionScores,
-                    volumeThresholds: thresholds.volumeThresholds,
-                    consistencyRequirement: thresholds.consistencyRequirement,
-                    minimumConfidence: thresholds.minimumConfidence,
-                },
-                initialScore: score,
-            }
-        );
+        if (this.logger.isDebugEnabled?.()) {
+            this.logger.debug(
+                `[AbsorptionDetector] 🎯 DETAILED SCORE CALCULATION START`,
+                {
+                    inputConditions: {
+                        absorptionRatio: conditions.absorptionRatio,
+                        aggressiveVolume: conditions.aggressiveVolume,
+                        avgPassive: conditions.avgPassive,
+                        consistency: conditions.consistency,
+                        sampleCount: conditions.sampleCount,
+                        velocityIncrease: conditions.velocityIncrease,
+                        spread: conditions.spread,
+                    },
+                    thresholds: {
+                        absorptionLevels: thresholds.absorptionLevels,
+                        absorptionScores: thresholds.absorptionScores,
+                        volumeThresholds: thresholds.volumeThresholds,
+                        consistencyRequirement:
+                            thresholds.consistencyRequirement,
+                        minimumConfidence: thresholds.minimumConfidence,
+                    },
+                    initialScore: score,
+                }
+            );
+        }
 
         // Factor 1: Adaptive absorption ratio
-        this.logger.info(
-            `[AbsorptionDetector] 📊 Factor 1: Absorption Ratio Check`,
-            {
-                absorptionRatio: conditions.absorptionRatio,
-                strongThreshold: thresholds.absorptionLevels.strong,
-                moderateThreshold: thresholds.absorptionLevels.moderate,
-                weakThreshold: thresholds.absorptionLevels.weak,
-                checks: {
-                    isStrong:
-                        conditions.absorptionRatio >=
-                        thresholds.absorptionLevels.strong,
-                    isModerate:
-                        conditions.absorptionRatio >=
-                        thresholds.absorptionLevels.moderate,
-                    isWeak:
-                        conditions.absorptionRatio >=
-                        thresholds.absorptionLevels.weak,
-                },
-            }
-        );
+        if (this.logger.isDebugEnabled?.()) {
+            this.logger.debug(
+                `[AbsorptionDetector] 📊 Factor 1: Absorption Ratio Check`,
+                {
+                    absorptionRatio: conditions.absorptionRatio,
+                    strongThreshold: thresholds.absorptionLevels.strong,
+                    moderateThreshold: thresholds.absorptionLevels.moderate,
+                    weakThreshold: thresholds.absorptionLevels.weak,
+                    checks: {
+                        isStrong:
+                            conditions.absorptionRatio >=
+                            thresholds.absorptionLevels.strong,
+                        isModerate:
+                            conditions.absorptionRatio >=
+                            thresholds.absorptionLevels.moderate,
+                        isWeak:
+                            conditions.absorptionRatio >=
+                            thresholds.absorptionLevels.weak,
+                    },
+                }
+            );
+        }
 
         // Factor 1: Adaptive absorption ratio (LOWER ratios = stronger absorption)
         if (conditions.absorptionRatio <= thresholds.absorptionLevels.strong) {
             score += thresholds.absorptionScores.strong;
-            this.logger.info(
-                `[AbsorptionDetector] ✅ STRONG absorption bonus: +${thresholds.absorptionScores.strong}`,
-                {
-                    newScore: score,
-                }
-            );
+            if (this.logger.isDebugEnabled?.()) {
+                this.logger.debug(
+                    `[AbsorptionDetector] ✅ STRONG absorption bonus: +${thresholds.absorptionScores.strong}`,
+                    {
+                        newScore: score,
+                    }
+                );
+            }
         } else if (
             conditions.absorptionRatio <= thresholds.absorptionLevels.moderate
         ) {
             score += thresholds.absorptionScores.moderate;
-            this.logger.info(
-                `[AbsorptionDetector] ✅ MODERATE absorption bonus: +${thresholds.absorptionScores.moderate}`,
-                {
-                    newScore: score,
-                }
-            );
+            if (this.logger.isDebugEnabled?.()) {
+                this.logger.debug(
+                    `[AbsorptionDetector] ✅ MODERATE absorption bonus: +${thresholds.absorptionScores.moderate}`,
+                    {
+                        newScore: score,
+                    }
+                );
+            }
         } else if (
             conditions.absorptionRatio <= thresholds.absorptionLevels.weak
         ) {
             score += thresholds.absorptionScores.weak;
-            this.logger.info(
-                `[AbsorptionDetector] ✅ WEAK absorption bonus: +${thresholds.absorptionScores.weak}`,
-                {
-                    newScore: score,
-                }
-            );
+            if (this.logger.isDebugEnabled?.()) {
+                this.logger.debug(
+                    `[AbsorptionDetector] ✅ WEAK absorption bonus: +${thresholds.absorptionScores.weak}`,
+                    {
+                        newScore: score,
+                    }
+                );
+            }
         } else {
-            this.logger.info(`[AbsorptionDetector] ❌ NO absorption bonus`, {
-                absorptionRatio: conditions.absorptionRatio,
-                weakThreshold: thresholds.absorptionLevels.weak,
-                problem: "absorptionRatio is below even the weak threshold",
-            });
+            if (this.logger.isDebugEnabled?.()) {
+                this.logger.debug(
+                    `[AbsorptionDetector] ❌ NO absorption bonus`,
+                    {
+                        absorptionRatio: conditions.absorptionRatio,
+                        weakThreshold: thresholds.absorptionLevels.weak,
+                        problem:
+                            "absorptionRatio is below even the weak threshold",
+                    }
+                );
+            }
         }
 
         // Factor 2: Adaptive volume strength (CHANGED from hardcoded)
         const volumeRatio = conditions.aggressiveVolume / conditions.avgPassive;
-        this.logger.info(
-            `[AbsorptionDetector] 📊 Factor 2: Volume Ratio Check`,
-            {
-                aggressiveVolume: conditions.aggressiveVolume,
-                avgPassive: conditions.avgPassive,
-                volumeRatio: volumeRatio,
-                highThreshold: thresholds.volumeThresholds.highVolume,
-                mediumThreshold: thresholds.volumeThresholds.mediumVolume,
-                checks: {
-                    isHigh:
-                        volumeRatio >= thresholds.volumeThresholds.highVolume,
-                    isMedium:
-                        volumeRatio >= thresholds.volumeThresholds.mediumVolume,
-                },
-            }
-        );
+        if (this.logger.isDebugEnabled?.()) {
+            this.logger.debug(
+                `[AbsorptionDetector] 📊 Factor 2: Volume Ratio Check`,
+                {
+                    aggressiveVolume: conditions.aggressiveVolume,
+                    avgPassive: conditions.avgPassive,
+                    volumeRatio: volumeRatio,
+                    highThreshold: thresholds.volumeThresholds.highVolume,
+                    mediumThreshold: thresholds.volumeThresholds.mediumVolume,
+                    checks: {
+                        isHigh:
+                            volumeRatio >=
+                            thresholds.volumeThresholds.highVolume,
+                        isMedium:
+                            volumeRatio >=
+                            thresholds.volumeThresholds.mediumVolume,
+                    },
+                }
+            );
+        }
         if (volumeRatio >= thresholds.volumeThresholds.highVolume) {
             score += 0.2; // High volume boost
-            this.logger.info(
-                `[AbsorptionDetector] ✅ HIGH volume bonus: +0.2`,
-                { newScore: score }
-            );
+            if (this.logger.isDebugEnabled?.()) {
+                this.logger.debug(
+                    `[AbsorptionDetector] ✅ HIGH volume bonus: +0.2`,
+                    { newScore: score }
+                );
+            }
         } else if (volumeRatio >= thresholds.volumeThresholds.mediumVolume) {
             score += 0.1; // Medium volume boost
-            this.logger.info(
-                `[AbsorptionDetector] ✅ MEDIUM volume bonus: +0.1`,
-                { newScore: score }
-            );
+            if (this.logger.isDebugEnabled?.()) {
+                this.logger.debug(
+                    `[AbsorptionDetector] ✅ MEDIUM volume bonus: +0.1`,
+                    { newScore: score }
+                );
+            }
         } else {
-            this.logger.info(`[AbsorptionDetector] ❌ NO volume bonus`, {
-                volumeRatio,
-                mediumThreshold: thresholds.volumeThresholds.mediumVolume,
-            });
+            if (this.logger.isDebugEnabled?.()) {
+                this.logger.debug(`[AbsorptionDetector] ❌ NO volume bonus`, {
+                    volumeRatio,
+                    mediumThreshold: thresholds.volumeThresholds.mediumVolume,
+                });
+            }
         }
 
         // Factor 3: Adaptive consistency requirements (CHANGED from hardcoded)
-        this.logger.info(
-            `[AbsorptionDetector] 📊 Factor 3: Consistency Check`,
-            {
-                consistency: conditions.consistency,
-                requirement: thresholds.consistencyRequirement,
-                partialRequirement: thresholds.consistencyRequirement * 0.8,
-                checks: {
-                    meetsRequirement:
-                        conditions.consistency >=
-                        thresholds.consistencyRequirement,
-                    meetsPartial:
-                        conditions.consistency >=
-                        thresholds.consistencyRequirement * 0.8,
-                },
-            }
-        );
+        if (this.logger.isDebugEnabled?.()) {
+            this.logger.debug(
+                `[AbsorptionDetector] 📊 Factor 3: Consistency Check`,
+                {
+                    consistency: conditions.consistency,
+                    requirement: thresholds.consistencyRequirement,
+                    partialRequirement: thresholds.consistencyRequirement * 0.8,
+                    checks: {
+                        meetsRequirement:
+                            conditions.consistency >=
+                            thresholds.consistencyRequirement,
+                        meetsPartial:
+                            conditions.consistency >=
+                            thresholds.consistencyRequirement * 0.8,
+                    },
+                }
+            );
+        }
         if (conditions.consistency >= thresholds.consistencyRequirement) {
             score += 0.15; // Consistency bonus
-            this.logger.info(
-                `[AbsorptionDetector] ✅ FULL consistency bonus: +0.15`,
-                { newScore: score }
-            );
+            if (this.logger.isDebugEnabled?.()) {
+                this.logger.debug(
+                    `[AbsorptionDetector] ✅ FULL consistency bonus: +0.15`,
+                    { newScore: score }
+                );
+            }
         } else if (
             conditions.consistency >=
             thresholds.consistencyRequirement * 0.8
         ) {
             score += 0.08; // Partial consistency bonus
-            this.logger.info(
-                `[AbsorptionDetector] ✅ PARTIAL consistency bonus: +0.08`,
-                { newScore: score }
-            );
+            if (this.logger.isDebugEnabled?.()) {
+                this.logger.debug(
+                    `[AbsorptionDetector] ✅ PARTIAL consistency bonus: +0.08`,
+                    { newScore: score }
+                );
+            }
         } else {
-            this.logger.info(`[AbsorptionDetector] ❌ NO consistency bonus`, {
-                consistency: conditions.consistency,
-                requirement: thresholds.consistencyRequirement,
-            });
+            if (this.logger.isDebugEnabled?.()) {
+                this.logger.debug(
+                    `[AbsorptionDetector] ❌ NO consistency bonus`,
+                    {
+                        consistency: conditions.consistency,
+                        requirement: thresholds.consistencyRequirement,
+                    }
+                );
+            }
         }
 
         // Factor 4-6: Keep existing logic for spread, velocity, etc. (UNCHANGED)
-        this.logger.info(`[AbsorptionDetector] 📊 Factor 4: Spread Check`, {
-            spread: conditions.spread,
-            hasSpreadFeature: this.features.spreadImpact,
-            checks: {
-                isHigh: conditions.spread > 0.003,
-                isMedium: conditions.spread > 0.001,
-            },
-        });
+        if (this.logger.isDebugEnabled?.()) {
+            this.logger.debug(
+                `[AbsorptionDetector] 📊 Factor 4: Spread Check`,
+                {
+                    spread: conditions.spread,
+                    hasSpreadFeature: this.features.spreadImpact,
+                    checks: {
+                        isHigh: conditions.spread > 0.003,
+                        isMedium: conditions.spread > 0.001,
+                    },
+                }
+            );
+        }
 
         if (this.features.spreadImpact && conditions.spread > 0.003) {
             score += 0.05;
-            this.logger.info(`[AbsorptionDetector] ✅ SPREAD bonus: +0.05`, {
-                newScore: score,
-            });
+            if (this.logger.isDebugEnabled?.()) {
+                this.logger.debug(
+                    `[AbsorptionDetector] ✅ SPREAD bonus: +0.05`,
+                    {
+                        newScore: score,
+                    }
+                );
+            }
         }
 
-        this.logger.info(`[AbsorptionDetector] 📊 Factor 5: Velocity Check`, {
-            velocityIncrease: conditions.velocityIncrease,
-            threshold: 1.5,
-            passes: conditions.velocityIncrease > 1.5,
-        });
+        if (this.logger.isDebugEnabled?.()) {
+            this.logger.debug(
+                `[AbsorptionDetector] 📊 Factor 5: Velocity Check`,
+                {
+                    velocityIncrease: conditions.velocityIncrease,
+                    threshold: 1.5,
+                    passes: conditions.velocityIncrease > 1.5,
+                }
+            );
+        }
         if (conditions.velocityIncrease > 1.5) {
             score += 0.1;
-            this.logger.info(`[AbsorptionDetector] ✅ VELOCITY bonus: +0.1`, {
-                newScore: score,
-            });
+            if (this.logger.isDebugEnabled?.()) {
+                this.logger.debug(
+                    `[AbsorptionDetector] ✅ VELOCITY bonus: +0.1`,
+                    {
+                        newScore: score,
+                    }
+                );
+            }
         }
 
         // Penalty for insufficient data (UNCHANGED)
@@ -451,24 +509,26 @@ export class AbsorptionDetector
         const passesMinConfidence = finalScore >= thresholds.minimumConfidence;
         const returnedScore = passesMinConfidence ? finalScore : 0;
 
-        this.logger.info(`[AbsorptionDetector] 🎯 FINAL SCORE BREAKDOWN`, {
-            calculationSteps: {
-                beforeConfidenceCheck: beforeConfidenceCheck,
-                afterFactors: beforePenalty,
-                afterPenalty: score,
-                afterBounds: finalScore,
-                afterMinConfidence: returnedScore,
-            },
-            finalChecks: {
-                minimumConfidence: thresholds.minimumConfidence,
-                passesMinConfidence,
-                finalScoreBeforeConfidenceCheck: finalScore,
-                returnedScore,
-            },
-            reasoning: passesMinConfidence
-                ? "Score passed all checks"
-                : `Score ${finalScore} below minimum confidence ${thresholds.minimumConfidence}`,
-        });
+        if (this.logger.isDebugEnabled?.()) {
+            this.logger.debug(`[AbsorptionDetector] 🎯 FINAL SCORE BREAKDOWN`, {
+                calculationSteps: {
+                    beforeConfidenceCheck: beforeConfidenceCheck,
+                    afterFactors: beforePenalty,
+                    afterPenalty: score,
+                    afterBounds: finalScore,
+                    afterMinConfidence: returnedScore,
+                },
+                finalChecks: {
+                    minimumConfidence: thresholds.minimumConfidence,
+                    passesMinConfidence,
+                    finalScoreBeforeConfidenceCheck: finalScore,
+                    returnedScore,
+                },
+                reasoning: passesMinConfidence
+                    ? "Score passed all checks"
+                    : `Score ${finalScore} below minimum confidence ${thresholds.minimumConfidence}`,
+            });
+        }
 
         return returnedScore;
     }
@@ -613,13 +673,18 @@ export class AbsorptionDetector
         const now = Date.now();
         const zoneTicks = this.getEffectiveZoneTicks();
 
-        this.logger.info(`[AbsorptionDetector] Detection attempt started`, {
-            triggerPrice: triggerTrade.price,
-            triggerSide: this.getTradeSide(triggerTrade),
-            zoneTicks,
-            activeZones: this.zoneAgg.size,
-            tradesInBuffer: this.trades.length,
-        });
+        if (this.logger.isDebugEnabled?.()) {
+            this.logger.debug(
+                `[AbsorptionDetector] Detection attempt started`,
+                {
+                    triggerPrice: triggerTrade.price,
+                    triggerSide: this.getTradeSide(triggerTrade),
+                    zoneTicks,
+                    activeZones: this.zoneAgg.size,
+                    tradesInBuffer: this.trades.length,
+                }
+            );
+        }
 
         try {
             // Record detection metrics once per trade
@@ -921,13 +986,15 @@ export class AbsorptionDetector
         const price = +latestTrade.price.toFixed(this.pricePrecision);
         const side = this.getTradeSide(latestTrade);
 
-        this.logger.info(`[AbsorptionDetector] Zone analysis started`, {
-            zone,
-            price,
-            side,
-            tradesCount: tradesAtZone.length,
-            latestTradeTime: new Date(latestTrade.timestamp).toISOString(),
-        });
+        if (this.logger.isDebugEnabled?.()) {
+            this.logger.debug(`[AbsorptionDetector] Zone analysis started`, {
+                zone,
+                price,
+                side,
+                tradesCount: tradesAtZone.length,
+                latestTradeTime: new Date(latestTrade.timestamp).toISOString(),
+            });
+        }
 
         // Get book data (with fallback to zone history)
         let bookLevel = this.depth.get(price);

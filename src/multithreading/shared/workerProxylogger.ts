@@ -65,6 +65,14 @@ export class WorkerProxyLogger implements ILogger {
         this.sendLogMessage("debug", message, context, correlationId);
     }
 
+    public isDebugEnabled(): boolean {
+        // For worker proxy logger, check environment variables for debug level
+        return (
+            process.env.NODE_ENV === "development" ||
+            process.env.LOG_LEVEL === "debug"
+        );
+    }
+
     private sendLogMessage(
         level: "info" | "error" | "warn" | "debug",
         message: string,
