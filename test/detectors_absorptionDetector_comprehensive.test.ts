@@ -1,18 +1,20 @@
 // test/detectors_absorptionDetector_simple.test.ts
 import { describe, it, expect, beforeEach, vi, MockedFunction } from "vitest";
 import { AbsorptionDetector } from "../src/indicators/absorptionDetector.js";
-import { Logger } from "../src/infrastructure/logger.js";
+import { WorkerLogger } from "../src/multithreading/workerLogger.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
+import { OrderBookState } from "../src/market/orderBookState.js";
 import { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import { Detected } from "../src/indicators/interfaces/detectorInterfaces.js";
 
 describe("AbsorptionDetector - Simple Test", () => {
     let detector: AbsorptionDetector;
     let mockCallback: MockedFunction<(signal: Detected) => void>;
-    let mockLogger: Logger;
+    let mockLogger: WorkerLogger;
     let mockMetrics: MetricsCollector;
     let mockSpoofing: SpoofingDetector;
+    let mockOrderBook: OrderBookState;
 
     const BTCUSDT_PRICE = 50000;
 
@@ -40,6 +42,10 @@ describe("AbsorptionDetector - Simple Test", () => {
             checkWallSpoofing: vi.fn().mockReturnValue(false),
             getWallDetectionMetrics: vi.fn().mockReturnValue({}),
         } as any;
+        mockOrderBook = {
+            getLevel: vi.fn().mockReturnValue({ bid: 100, ask: 100 }),
+            getCurrentSpread: vi.fn().mockReturnValue({ spread: 0.01 }),
+        } as any;
 
         // Create detector with very permissive settings
         detector = new AbsorptionDetector(
@@ -63,6 +69,7 @@ describe("AbsorptionDetector - Simple Test", () => {
                     spoofingDetection: false,
                 },
             },
+            mockOrderBook,
             mockLogger,
             mockSpoofing,
             mockMetrics

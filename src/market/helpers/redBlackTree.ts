@@ -9,7 +9,16 @@ export class RedBlackTree {
         // Create NIL node (sentinel)
         this.nil = new RBNode(
             0,
-            { price: 0, bid: 0, ask: 0, timestamp: 0 },
+            {
+                price: 0,
+                bid: 0,
+                ask: 0,
+                timestamp: 0,
+                consumedAsk: 0,
+                consumedBid: 0,
+                addedAsk: 0,
+                addedBid: 0,
+            },
             "black"
         );
         this.root = this.nil;

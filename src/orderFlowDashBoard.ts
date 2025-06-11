@@ -263,6 +263,7 @@ export class OrderFlowDashboard {
                 console.log("Absorption signal:", signal);
             },
             Config.ABSORPTION_DETECTOR,
+            this.orderBook as OrderBookState,
             dependencies,
             { id: "ltcusdt-absorption-main" }
         );

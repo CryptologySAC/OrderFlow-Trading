@@ -381,6 +381,12 @@ export class OrderBookState implements IOrderBookState {
                     }
                 );
             }
+
+            for (const node of this.book.getAllNodes()) {
+                const lvl = node.level;
+                lvl.consumedBid = lvl.consumedAsk = 0;
+                lvl.addedBid = lvl.addedAsk = 0;
+            }
         } catch (error) {
             this.handleError(
                 error as Error,
@@ -502,10 +508,19 @@ export class OrderBookState implements IOrderBookState {
                     bid: 0,
                     ask: 0,
                     timestamp: now,
+                    consumedAsk: 0,
+                    consumedBid: 0,
+                    addedAsk: 0,
+                    addedBid: 0,
                 };
                 level.bid = qty;
                 level.timestamp = now;
                 this.book.insert(price, level);
+
+                const delta = qty - level.bid;
+                if (delta > 0) {
+                    level.addedBid = (level.addedBid ?? 0) + delta; // accumulation
+                }
 
                 // Update best bid only if better
                 if (price > this._bestBid) {
@@ -546,10 +561,19 @@ export class OrderBookState implements IOrderBookState {
                     bid: 0,
                     ask: 0,
                     timestamp: now,
+                    consumedAsk: 0,
+                    consumedBid: 0,
+                    addedAsk: 0,
+                    addedBid: 0,
                 };
                 level.ask = qty;
                 level.timestamp = now;
                 this.book.insert(price, level);
+
+                const delta = qty - level.bid;
+                if (delta > 0) {
+                    level.addedAsk = (level.addedAsk ?? 0) + delta; // accumulation
+                }
 
                 // Update best ask only if better
                 if (price < this._bestAsk) {
@@ -566,6 +590,26 @@ export class OrderBookState implements IOrderBookState {
         this._bestAsk = this.book.getBestAsk();
 
         this.purgeCrossedLevels();
+    }
+
+    public registerTradeImpact(
+        price: number,
+        qty: number,
+        side: "buy" | "sell"
+    ): void {
+        const level = this.book.get(price);
+        if (!level) return;
+
+        if (side === "buy") {
+            // buy = hits the ASK
+            level.ask = Math.max(0, level.ask - qty);
+            level.consumedAsk = (level.consumedAsk ?? 0) + qty;
+        } else {
+            // sell = hits the BID
+            level.bid = Math.max(0, level.bid - qty);
+            level.consumedBid = (level.consumedBid ?? 0) + qty;
+        }
+        this.book.insert(price, level);
     }
 
     private purgeCrossedLevels(): void {

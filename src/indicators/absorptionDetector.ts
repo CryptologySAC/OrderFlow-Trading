@@ -27,6 +27,7 @@ import {
 import { DetectorUtils } from "./base/detectorUtils.js";
 import { AbsorptionSignalData, SignalType } from "../types/signalTypes.js";
 import { SharedPools } from "../utils/objectPool.js";
+import { OrderBookState } from "../market/orderBookState.js";
 
 export interface AbsorptionSettings extends BaseDetectorSettings {
     features?: AbsorptionFeatures;
@@ -97,6 +98,8 @@ export class AbsorptionDetector
     private readonly absorptionHistory = new Map<number, AbsorptionEvent[]>();
     private readonly liquidityLayers = new Map<number, LiquidityLayer[]>();
 
+    private readonly orderBook: OrderBookState;
+
     // TODO DEBUG
     private useOldScoringMethod = false;
 
@@ -104,6 +107,7 @@ export class AbsorptionDetector
         id: string,
         callback: DetectorCallback,
         settings: AbsorptionSettings = {},
+        orderBook: OrderBookState,
         logger: WorkerLogger,
         spoofingDetector: SpoofingDetector,
         metricsCollector: MetricsCollector,
@@ -118,6 +122,8 @@ export class AbsorptionDetector
             metricsCollector,
             signalLogger
         );
+
+        this.orderBook = orderBook;
 
         // Initialize absorption-specific settings
         this.absorptionThreshold = settings.absorptionThreshold ?? 0.7;
@@ -704,8 +710,26 @@ export class AbsorptionDetector
     ): boolean {
         // For buy absorption: aggressive buys hit the ASK (passive sellers)
         // For sell absorption: aggressive sells hit the BID (passive buyers)
+
+        //Check for Iceberg first
         const zoneHistory = this.zonePassiveHistory.get(zone);
         if (!zoneHistory) return false;
+
+        const lvl = this.orderBook.getLevel(price); // existing helper
+
+        const icebergLikely =
+            lvl &&
+            (side === "buy"
+                ? (lvl.addedAsk ?? 0) > (lvl.consumedAsk ?? 0) * 0.8
+                : (lvl.addedBid ?? 0) > (lvl.consumedBid ?? 0) * 0.8);
+
+        if (icebergLikely) {
+            this.logger.debug(
+                "Queue is constantly replenished – ignore absorption",
+                { price, side, level: lvl }
+            );
+            return false; // abort this zone / skip scoring
+        }
 
         // Get the RELEVANT passive side
         // ✅ VERIFIED LOGIC: Aggressive flow hits opposite-side passive liquidity
@@ -726,7 +750,10 @@ export class AbsorptionDetector
         const minPassive = Math.min(...relevantPassive);
 
         // Get recent aggressive volume
-        const recentAggressive = this.getAggressiveVolumeAtPrice(price, 5000);
+        const recentAggressive =
+            side === "buy"
+                ? this.aggrBuyEWMA.get() // “buy” absorption: compare to buy aggression
+                : this.aggrSellEWMA.get(); // “sell” absorption: compare to sell aggression
 
         // Absorption checks:
         // 1. Current passive exceeds aggressive (classic absorption)
@@ -740,34 +767,6 @@ export class AbsorptionDetector
         const growingPassive = currentPassive > avgPassive * 1.2;
 
         return classicAbsorption || maintainedPassive || growingPassive;
-    }
-
-    /**
-     * Advanced passive refill detection
-     */
-    private detectPassiveRefill(
-        price: number,
-        side: "buy" | "sell",
-        zone: number,
-        snapshots: ZoneSample[]
-    ): boolean {
-        if (snapshots.length < 5) return false;
-
-        const relevantSide = side === "buy" ? "ask" : "bid";
-        const recent = snapshots.slice(-5);
-
-        let refillEvents = 0;
-        for (let i = 1; i < recent.length; i++) {
-            const current: number = recent[i][relevantSide];
-            const previous: number = recent[i - 1][relevantSide];
-
-            if (current > previous * 1.1) {
-                // 10% increase
-                refillEvents++;
-            }
-        }
-
-        return refillEvents >= 2;
     }
 
     /**
@@ -1397,14 +1396,6 @@ export class AbsorptionDetector
                 const passiveStrength =
                     avgPassive > 0 ? currentPassive / avgPassive : 0;
 
-                // ✅ FIX 2: Properly implement hasRefill detection
-                const hasRefill = this.detectPassiveRefill(
-                    price,
-                    side,
-                    zone,
-                    snapshots
-                );
-
                 // ✅ FIX 3: Properly implement iceberg detection
                 const icebergSignal = this.features.icebergDetection
                     ? this.detectIcebergPattern(zone, snapshots, side)
@@ -1446,7 +1437,6 @@ export class AbsorptionDetector
                 // ✅ POPULATE ALL FIELDS: Ensure every field is properly set
                 conditions.absorptionRatio = absorptionRatio;
                 conditions.passiveStrength = passiveStrength;
-                conditions.hasRefill = hasRefill;
                 conditions.icebergSignal = icebergSignal;
                 conditions.liquidityGradient = liquidityGradient;
                 conditions.absorptionVelocity = absorptionVelocity;

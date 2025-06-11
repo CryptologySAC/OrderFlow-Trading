@@ -17,6 +17,10 @@ export interface PassiveLevel {
     bid: number;
     ask: number;
     timestamp: number;
+    consumedBid: number;
+    consumedAsk: number;
+    addedBid: number;
+    addedAsk: number;
 }
 
 export interface EnrichedTradeEvent extends AggressiveTrade {

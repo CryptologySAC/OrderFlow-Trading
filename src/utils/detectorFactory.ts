@@ -32,6 +32,7 @@ import { Config } from "../core/config.js";
 import { AccumulationZoneDetector } from "../indicators/accumulationZoneDetector.js";
 import { DistributionZoneDetector } from "../indicators/distributionZoneDetector.js";
 import { ZoneDetectorConfig } from "../types/zoneTypes.js";
+import { OrderBookState } from "../market/orderBookState";
 
 /**
  * Production detector factory with monitoring, validation, and lifecycle management
@@ -69,6 +70,7 @@ export class DetectorFactory {
     public static createAbsorptionDetector(
         callback: DetectorCallback,
         settings: AbsorptionSettings,
+        orderBook: OrderBookState,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
     ): AbsorptionDetector {
@@ -86,6 +88,7 @@ export class DetectorFactory {
             id,
             this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
+            orderBook,
             dependencies.logger,
             dependencies.spoofingDetector,
             dependencies.metricsCollector,
@@ -333,68 +336,6 @@ export class DetectorFactory {
             { type: "cvd_confirmation", config: {} },
             { type: "support_resistance", config: {} },
         ];
-    }
-
-    /**
-     * Create a detector instance by type (for SignalCoordinator)
-     */
-    public static create(
-        type: string,
-        config: Record<string, unknown>
-    ): BaseDetector | AccumulationZoneDetector | DistributionZoneDetector {
-        if (!this.dependencies) {
-            throw new Error(
-                "DetectorFactory not initialized. Call DetectorFactory.initialize() first."
-            );
-        }
-
-        const callback: DetectorCallback = (signal) => {
-            // Default callback - will be overridden by coordinator
-            void signal;
-        };
-
-        const baseSettings = config as BaseDetectorSettings;
-
-        switch (type) {
-            case "absorption":
-                return this.createAbsorptionDetector(
-                    callback,
-                    baseSettings as AbsorptionSettings,
-                    this.dependencies
-                );
-            case "exhaustion":
-                return this.createExhaustionDetector(
-                    callback,
-                    baseSettings as ExhaustionSettings,
-                    this.dependencies
-                );
-            case "accumulation":
-                return this.createAccumulationDetector(
-                    callback,
-                    baseSettings as ZoneDetectorConfig,
-                    this.dependencies
-                );
-            case "distribution":
-                return this.createDistributionDetector(
-                    callback,
-                    baseSettings as ZoneDetectorConfig,
-                    this.dependencies
-                );
-            case "cvd_confirmation":
-                return this.createDeltaCVDConfirmationDetector(
-                    callback,
-                    baseSettings as DeltaCVDConfirmationSettings,
-                    this.dependencies
-                );
-            case "support_resistance":
-                return this.createSupportResistanceDetector(
-                    callback,
-                    baseSettings as Partial<SupportResistanceConfig>,
-                    this.dependencies
-                );
-            default:
-                throw new Error(`Unknown detector type: ${type}`);
-        }
     }
 
     /**

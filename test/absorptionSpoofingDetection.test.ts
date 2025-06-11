@@ -1,20 +1,31 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { AbsorptionDetector } from "../src/indicators/absorptionDetector";
-import { Logger } from "../src/infrastructure/logger";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { SpoofingDetector } from "../src/services/spoofingDetector";
+import { OrderBookState } from "../src/market/orderBookState";
 import type { AggressiveTrade } from "../src/types/marketEvents";
 
 describe("AbsorptionDetector - Spoofing Detection", () => {
     let detector: AbsorptionDetector;
-    let logger: Logger;
+    let logger: WorkerLogger;
     let metrics: MetricsCollector;
     let spoofingDetector: SpoofingDetector;
+    let orderBook: OrderBookState;
 
     beforeEach(() => {
-        logger = new Logger();
+        logger = {
+            info: () => {},
+            warn: () => {},
+            error: () => {},
+            debug: () => {},
+        } as any;
         metrics = new MetricsCollector();
-        spoofingDetector = new SpoofingDetector(logger, metrics);
+        spoofingDetector = new SpoofingDetector(logger as any, metrics);
+        orderBook = {
+            getLevel: () => ({ bid: 100, ask: 100 }),
+            getCurrentSpread: () => ({ spread: 0.01 }),
+        } as any;
 
         detector = new AbsorptionDetector(
             "test-absorption",
@@ -28,6 +39,7 @@ describe("AbsorptionDetector - Spoofing Detection", () => {
                     spoofingDetection: true,
                 },
             },
+            orderBook,
             logger,
             spoofingDetector,
             metrics

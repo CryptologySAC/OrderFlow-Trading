@@ -266,6 +266,12 @@ export class OrderflowPreprocessor
                 }
             }
 
+            // Iceberg detection in OrderBook
+            const side = finalTrade.buyerIsMaker ? "sell" : "buy";
+            const price = finalTrade.price;
+            const qty = finalTrade.quantity;
+
+            this.bookState.registerTradeImpact(price, qty, side);
             this.processedTrades++;
             this.emit("enriched_trade", finalTrade);
 

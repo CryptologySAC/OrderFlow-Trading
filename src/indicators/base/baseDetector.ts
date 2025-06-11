@@ -100,6 +100,8 @@ export abstract class BaseDetector extends Detector implements IDetector {
 
     protected readonly passiveEWMA = new EWMA(15_000);
     protected readonly aggressiveEWMA = new EWMA(15_000);
+    protected readonly aggrBuyEWMA: EWMA = new EWMA(15_000);
+    protected readonly aggrSellEWMA: EWMA = new EWMA(15_000);
 
     constructor(
         id: string,
@@ -258,6 +260,12 @@ export abstract class BaseDetector extends Detector implements IDetector {
 
             if (this.features.adaptiveZone) {
                 this.adaptiveZoneCalculator.updatePrice(tradeData.price);
+            }
+
+            if (tradeData.buyerIsMaker) {
+                this.aggrSellEWMA.push(tradeData.quantity);
+            } else {
+                this.aggrBuyEWMA.push(tradeData.quantity);
             }
 
             this.checkForSignal(tradeData);
