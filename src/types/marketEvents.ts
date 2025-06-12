@@ -115,6 +115,10 @@ export interface OrderBookHealth {
         totalAskVolume: number;
         staleLevels: number;
         memoryUsageMB: number;
+        // Stream connection status
+        isStreamConnected: boolean;
+        streamConnectionTime: number;
+        timeoutThreshold: number;
     };
 }
 

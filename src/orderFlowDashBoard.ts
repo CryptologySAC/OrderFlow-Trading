@@ -82,8 +82,6 @@ import type {
 // Storage and processors
 import { getDB } from "./infrastructure/db.js";
 import { runMigrations } from "./infrastructure/migrate.js";
-import { Storage } from "./storage/storage.js";
-import { PipelineStorage } from "./storage/pipelineStorage.js";
 import { BinanceDataFeed } from "./utils/binance.js";
 import { ProductionUtils } from "./utils/productionUtils.js";
 import { SignalTracker } from "./analysis/signalTracker.js";
@@ -226,7 +224,7 @@ export class OrderFlowDashboard {
         // Set up backlog request handler for multithreaded mode
         this.threadManager.setBacklogRequestHandler(
             (clientId: string, amount: number) => {
-                this.handleBacklogRequest(clientId, amount);
+                void this.handleBacklogRequest(clientId, amount);
             }
         );
 
@@ -358,7 +356,7 @@ export class OrderFlowDashboard {
             true
         );
 
-        this.signalCoordinator.start();
+        void this.signalCoordinator.start();
         this.logger.info("SignalCoordinator started");
         this.logger.info("Status:", this.signalCoordinator.getStatus());
         const signalCoordinatorInfo = this.signalCoordinator.getDetectorInfo();
@@ -384,7 +382,10 @@ export class OrderFlowDashboard {
         void event; //todo
     };
 
-    private handleBacklogRequest(clientId: string, amount: number): void {
+    private async handleBacklogRequest(
+        clientId: string,
+        amount: number
+    ): Promise<void> {
         try {
             this.logger.info(
                 `Handling backlog request for client ${clientId}`,
@@ -393,7 +394,7 @@ export class OrderFlowDashboard {
 
             // Get backlog data
             let backlog =
-                this.dependencies.tradesProcessor.requestBacklog(amount);
+                await this.dependencies.tradesProcessor.requestBacklog(amount);
             backlog = backlog.reverse();
 
             // Get signal backlog
@@ -403,11 +404,11 @@ export class OrderFlowDashboard {
                 Date.now() - maxSignalBacklogAge
             );
 
-            const signals =
-                this.dependencies.pipelineStore.getRecentConfirmedSignals(
-                    since,
-                    100
-                );
+            const signals = (await this.dependencies.threadManager.callStorage(
+                "getRecentConfirmedSignals",
+                since,
+                100
+            )) as ConfirmedSignal[];
             const deduplicatedSignals = this.deduplicateSignals(signals);
 
             this.logger.info(`Sending backlog to client ${clientId}`, {
@@ -443,6 +444,11 @@ export class OrderFlowDashboard {
                         "[OrderFlowDashboard] Data stream connected via worker"
                     );
                     this.dependencies.tradesProcessor.emit("stream_connected");
+
+                    // Notify OrderBookState of stream connection
+                    if (this.orderBook) {
+                        this.orderBook.onStreamConnected();
+                    }
                     break;
                 case "disconnected":
                     const disconnectData = data as { reason: string };
@@ -456,6 +462,13 @@ export class OrderFlowDashboard {
                         "stream_disconnected",
                         disconnectData
                     );
+
+                    // Notify OrderBookState of stream disconnection
+                    if (this.orderBook) {
+                        this.orderBook.onStreamDisconnected(
+                            disconnectData.reason
+                        );
+                    }
                     break;
                 case "error":
                     const errorData = data as {
@@ -523,7 +536,7 @@ export class OrderFlowDashboard {
         try {
             switch (dataType) {
                 case "trade":
-                    this.processTrade(
+                    await this.processTrade(
                         data as SpotWebsocketStreams.AggTradeResponse
                     );
                     break;
@@ -985,13 +998,16 @@ export class OrderFlowDashboard {
     /**
      * Process incoming trade data
      */
-    private processTrade(data: SpotWebsocketStreams.AggTradeResponse): void {
+    private async processTrade(
+        data: SpotWebsocketStreams.AggTradeResponse
+    ): Promise<void> {
         const correlationId = randomUUID();
         const startTime = Date.now();
 
         try {
             // Store stream data to database (CRITICAL: prevents gaps on reload)
-            this.dependencies.storage.saveAggregatedTrade(
+            await this.threadManager.callStorage(
+                "saveAggregatedTrade",
                 data,
                 data.s || "LTCUSDT"
             );
@@ -1227,25 +1243,11 @@ export class OrderFlowDashboard {
         );
 
         try {
-            // Stop accepting new connections
-            // WebSocketManager shutdown handled by communication worker
-
-            // Disconnect data streams
-            // DataStreamManager disconnect handled by BinanceWorker
-
             // Stop signal processing
             if (this.signalCoordinator) {
                 // Signal coordinator doesn't have a stop method, but we can let pending signals finish
                 this.logger.info(
                     "[OrderFlowDashboard] Allowing signal coordinator to finish pending signals"
-                );
-            }
-
-            // Clean up storage connections
-            if (this.dependencies?.storage) {
-                // Most storage implementations don't need explicit cleanup
-                this.logger.info(
-                    "[OrderFlowDashboard] Storage cleanup completed"
                 );
             }
 
@@ -1352,20 +1354,16 @@ export class OrderFlowDashboard {
             const correlationId = randomUUID();
             this.logger.info("Starting scheduled purge", {}, correlationId);
 
-            try {
-                this.dependencies.storage.purgeOldEntries();
-                this.logger.info(
-                    "Scheduled purge completed successfully",
-                    {},
-                    correlationId
-                );
-            } catch (error) {
-                this.handleError(
-                    error as Error,
-                    "database_purge",
-                    correlationId
-                );
-            }
+            this.threadManager
+                .callStorage("purgeOldEntries")
+                .then()
+                .catch((error) => {
+                    this.handleError(
+                        error as Error,
+                        "database_purge",
+                        correlationId
+                    );
+                });
         }, this.purgeIntervalMs);
     }
 
@@ -1526,8 +1524,6 @@ export function createDependencies(threadManager: ThreadManager): Dependencies {
     const circuitBreaker = new CircuitBreaker(5, 60000, logger);
     const db = getDB("./storage/trades.db");
     runMigrations(db);
-    const pipelineStore = new PipelineStorage(db, {});
-    const storage = new Storage(db);
     const spoofingDetector = new SpoofingDetector(Config.SPOOFING_DETECTOR);
     const binanceFeed = new BinanceDataFeed();
     const individualTradesManager = new IndividualTradesManager(
@@ -1553,10 +1549,10 @@ export function createDependencies(threadManager: ThreadManager): Dependencies {
 
     const tradesProcessor = new TradesProcessor(
         Config.TRADES_PROCESSOR,
-        storage,
         logger,
         metricsCollector,
-        mainThreadBinanceFeed
+        mainThreadBinanceFeed,
+        threadManager
     );
 
     const anomalyDetector = new AnomalyDetector(
@@ -1570,11 +1566,7 @@ export function createDependencies(threadManager: ThreadManager): Dependencies {
     );
 
     // Create SignalTracker and MarketContextCollector for performance analysis
-    const signalTracker = new SignalTracker(
-        logger,
-        metricsCollector,
-        pipelineStore
-    );
+    const signalTracker = new SignalTracker(logger, metricsCollector);
 
     const marketContextCollector = new MarketContextCollector(
         logger,
@@ -1586,7 +1578,7 @@ export function createDependencies(threadManager: ThreadManager): Dependencies {
         alertManager,
         logger,
         metricsCollector,
-        pipelineStore,
+        threadManager,
         signalTracker,
         marketContextCollector,
         Config.SIGNAL_MANAGER
@@ -1598,12 +1590,10 @@ export function createDependencies(threadManager: ThreadManager): Dependencies {
         metricsCollector,
         signalLogger,
         signalManager,
-        pipelineStore
+        threadManager
     );
 
     return {
-        storage,
-        pipelineStore,
         tradesProcessor,
         orderBookProcessor,
         signalLogger,

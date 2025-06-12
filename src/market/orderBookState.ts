@@ -62,6 +62,10 @@ export class OrderBookState implements IOrderBookState {
     private lastPruneTime = 0;
     protected lastUpdateTime = Date.now();
 
+    // Stream connection awareness for health monitoring
+    private isStreamConnected = true; // Assume connected initially
+    private streamConnectionTime = Date.now();
+
     private maxLevels: number = 1000;
     private maxPriceDistance: number = 0.1; // 10% max price distance for levels
 
@@ -110,6 +114,14 @@ export class OrderBookState implements IOrderBookState {
         this.maxErrorRate = options.maxErrorRate ?? this.maxErrorRate;
         this.startPruning();
         setInterval(() => this.connectionHealthCheck(), 10000);
+
+        this.logger.info(
+            "[OrderBookState] Stream-aware health monitoring initialized",
+            {
+                symbol: this.symbol,
+                initialConnectionStatus: this.isStreamConnected,
+            }
+        );
     }
 
     public static async create(
@@ -842,6 +854,10 @@ export class OrderBookState implements IOrderBookState {
                 ...metrics,
                 staleLevels,
                 memoryUsageMB: this.estimateMemoryUsage() / 1024 / 1024,
+                // Stream connection status
+                isStreamConnected: this.isStreamConnected,
+                streamConnectionTime: this.streamConnectionTime,
+                timeoutThreshold: this.isStreamConnected ? 30000 : 300000,
             },
         };
     }
@@ -849,6 +865,43 @@ export class OrderBookState implements IOrderBookState {
     private estimateMemoryUsage(): number {
         // Rough estimate: each RB node ~250 bytes (vs 200 for Map entry)
         return this.book.size() * 250;
+    }
+
+    /**
+     * Handle stream connection events
+     */
+    public onStreamConnected(): void {
+        const wasConnected = this.isStreamConnected;
+        this.isStreamConnected = true;
+        this.streamConnectionTime = Date.now();
+
+        if (!wasConnected) {
+            this.logger.info("[OrderBookState] Stream connection restored", {
+                symbol: this.symbol,
+                connectionTime: new Date(
+                    this.streamConnectionTime
+                ).toISOString(),
+            });
+        }
+    }
+
+    /**
+     * Handle stream disconnection events
+     */
+    public onStreamDisconnected(reason?: string): void {
+        const wasConnected = this.isStreamConnected;
+        this.isStreamConnected = false;
+
+        if (wasConnected) {
+            this.logger.info(
+                "[OrderBookState] Stream disconnected, adjusting health monitoring",
+                {
+                    symbol: this.symbol,
+                    reason: reason || "unknown",
+                    lastUpdateAge: Date.now() - this.lastUpdateTime,
+                }
+            );
+        }
     }
 
     public async recover(): Promise<void> {
@@ -877,15 +930,60 @@ export class OrderBookState implements IOrderBookState {
         const now = Date.now();
         const timeSinceLastUpdate = now - this.lastUpdateTime;
 
-        if (timeSinceLastUpdate > 30000 && this.isInitialized) {
+        // Stream-aware timeout thresholds (similar to TradesProcessor)
+        const connectedTimeout = 30000; // 30 seconds when stream is connected
+        const disconnectedTimeout = 300000; // 5 minutes when stream is disconnected
+        const currentTimeout = this.isStreamConnected
+            ? connectedTimeout
+            : disconnectedTimeout;
+
+        if (timeSinceLastUpdate > currentTimeout && this.isInitialized) {
+            const timeoutDescription = this.isStreamConnected
+                ? "30s (stream connected)"
+                : "5m (stream disconnected)";
+
             this.logger.error(
-                "[OrderBookState] No updates for 30s, triggering recovery"
+                "[OrderBookState] No updates for " +
+                    timeoutDescription +
+                    ", triggering recovery",
+                {
+                    symbol: this.symbol,
+                    timeSinceLastUpdate,
+                    isStreamConnected: this.isStreamConnected,
+                    lastUpdateTime: new Date(this.lastUpdateTime).toISOString(),
+                    streamConnectionTime: new Date(
+                        this.streamConnectionTime
+                    ).toISOString(),
+                }
             );
+
             this.recover().catch((error) => {
                 this.logger.error("[OrderBookState] Recovery failed", {
                     error,
+                    symbol: this.symbol,
+                    isStreamConnected: this.isStreamConnected,
                 });
             });
+        } else if (
+            timeSinceLastUpdate > currentTimeout * 0.6 &&
+            this.isInitialized
+        ) {
+            // Early warning at 60% of timeout threshold
+            const timeoutDescription = this.isStreamConnected
+                ? "18s (stream connected)"
+                : "3m (stream disconnected)";
+
+            this.logger.warn(
+                "[OrderBookState] Approaching update timeout (" +
+                    timeoutDescription +
+                    ")",
+                {
+                    symbol: this.symbol,
+                    timeSinceLastUpdate,
+                    isStreamConnected: this.isStreamConnected,
+                    timeoutThreshold: currentTimeout,
+                }
+            );
         }
     }
 }
