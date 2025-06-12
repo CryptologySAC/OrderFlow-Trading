@@ -1292,7 +1292,14 @@ export class OrderFlowDashboard {
         const correlationId = randomUUID();
 
         try {
-            // TODO Preload trades
+            // 🚨 CRITICAL: Clear trade data first to eliminate gaps
+            await this.dependencies.circuitBreaker.execute(
+                () =>
+                    this.dependencies.tradesProcessor.clearTradeDataOnStartup(),
+                correlationId
+            );
+
+            // Load fresh 90 minutes of trade data
             await this.dependencies.circuitBreaker.execute(
                 () => this.dependencies.tradesProcessor.fillBacklog(),
                 correlationId

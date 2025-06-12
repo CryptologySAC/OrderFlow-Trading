@@ -67,6 +67,7 @@ class TradeValidationError extends Error {
 }
 
 export interface ITradesProcessor {
+    clearTradeDataOnStartup(): Promise<number>;
     fillBacklog(): Promise<void>;
     requestBacklog(amount: number): Promise<PlotTrade[]>;
     onEnrichedTrade(event: EnrichedTradeEvent): WebSocketMessage;
@@ -128,6 +129,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     private readonly maxMemoryTrades: number;
     private readonly saveQueueSize: number;
     private readonly healthCheckInterval: number;
+    private readonly bufferRetentionMs: number; // Time-based buffer retention
 
     private readonly logger: WorkerLogger;
     private readonly metricsCollector: MetricsCollector;
@@ -148,6 +150,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     private readonly maxTradeIdCacheSize: number;
     private readonly tradeIdCleanupInterval: number;
     private tradeIdCleanupTimer?: NodeJS.Timeout;
+    private tradeBufferCleanupTimer?: NodeJS.Timeout;
 
     // Memory cache for recent trades
     private recentTrades: CircularBuffer<PlotTrade>;
@@ -204,9 +207,11 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             Math.max(100, options.backlogBatchSize ?? 1000),
             1000
         ); // Binance max
-        this.maxMemoryTrades = options.maxMemoryTrades ?? 50000;
+        // Large buffer size to handle high-volume periods, cleaned by time not size
+        this.maxMemoryTrades = options.maxMemoryTrades ?? 200000;
         this.saveQueueSize = options.saveQueueSize ?? 5000;
         this.healthCheckInterval = options.healthCheckInterval ?? 30000; // 30 s
+        this.bufferRetentionMs = 100 * 60 * 1000; // 100 minutes in milliseconds
         this.maxErrorWindowSize = Math.max(
             10,
             options.maxErrorWindowSize ?? 1000
@@ -234,6 +239,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         this.startSaveQueue();
         this.startHealthCheck();
         this.startTradeIdCleanup();
+        this.startTradeBufferCleanup();
 
         // Listen for stream connection events
         this.setupStreamEventHandlers();
@@ -335,6 +341,49 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             if (error instanceof z.ZodError) {
                 throw new TradeValidationError("Invalid backlog amount", error);
             }
+            throw error;
+        }
+    }
+
+    /**
+     * Clear all trade data on startup to eliminate data gaps.
+     * Preserves signal history. Called before fillBacklog().
+     */
+    public async clearTradeDataOnStartup(): Promise<number> {
+        const correlationId = randomUUID();
+
+        this.logger.info(
+            "[TradesProcessor] Clearing trade data on startup to eliminate gaps",
+            {
+                reason: "Eliminates 15min+ data gaps between shutdown and restart",
+                preserves: "Signal history and other non-trade data",
+            }
+        );
+
+        try {
+            const deletedCount = (await this.threadManager.callStorage(
+                "clearAllTradeData",
+                correlationId
+            )) as number;
+
+            this.logger.info(
+                "[TradesProcessor] Startup trade cleanup completed successfully",
+                {
+                    deletedTrades: deletedCount,
+                    correlationId,
+                }
+            );
+
+            return deletedCount;
+        } catch (error) {
+            this.logger.error(
+                "[TradesProcessor] Error during startup trade cleanup",
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    correlationId,
+                }
+            );
             throw error;
         }
     }
@@ -1007,6 +1056,10 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             clearInterval(this.tradeIdCleanupTimer);
             this.tradeIdCleanupTimer = undefined;
         }
+        if (this.tradeBufferCleanupTimer) {
+            clearInterval(this.tradeBufferCleanupTimer);
+            this.tradeBufferCleanupTimer = undefined;
+        }
 
         // ✅ RESOURCE CLEANUP FIX: Remove all EventEmitter listeners to prevent memory leaks
         this.removeAllListeners();
@@ -1118,6 +1171,48 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             cleanupInterval: this.tradeIdCleanupInterval,
             maxCacheSize: this.maxTradeIdCacheSize,
         });
+    }
+
+    /**
+     * Start periodic cleanup of trade buffer based on time retention
+     */
+    private startTradeBufferCleanup(): void {
+        this.tradeBufferCleanupTimer = setInterval(() => {
+            this.cleanupOldTradesFromBuffer();
+        }, 120000); // Clean every 2 minutes
+
+        this.logger.info("[TradesProcessor] Trade buffer cleanup started", {
+            retentionMs: this.bufferRetentionMs,
+            cleanupInterval: 120000,
+        });
+    }
+
+    /**
+     * Remove trades older than bufferRetentionMs (100 minutes) from memory buffer
+     */
+    private cleanupOldTradesFromBuffer(): void {
+        const cutoffTime = Date.now() - this.bufferRetentionMs;
+        const allTrades = this.recentTrades.getAll();
+        const initialCount = allTrades.length;
+
+        // Filter out trades older than cutoff time
+        const recentTrades = allTrades.filter(
+            (trade) => trade.time >= cutoffTime
+        );
+        const removedCount = initialCount - recentTrades.length;
+
+        if (removedCount > 0) {
+            // Clear and rebuild buffer with only recent trades
+            this.recentTrades.clear();
+            recentTrades.forEach((trade) => this.recentTrades.add(trade));
+
+            this.logger.info("[TradesProcessor] Trade buffer cleaned up", {
+                initialCount,
+                removedCount,
+                remainingCount: recentTrades.length,
+                cutoffTime: new Date(cutoffTime).toISOString(),
+            });
+        }
     }
 
     /**

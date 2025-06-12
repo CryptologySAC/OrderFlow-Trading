@@ -349,6 +349,7 @@ export class ThreadManager {
             | "getLatestAggregatedTrades"
             | "saveAggregatedTradesBulk"
             | "purgeOldEntries"
+            | "clearAllTradeData"
             | "getLastTradeTimestamp"
             | "close"
             | "enqueueJob"

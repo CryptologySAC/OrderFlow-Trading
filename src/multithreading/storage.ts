@@ -93,6 +93,8 @@ export interface IStorage extends IPipelineStorage {
 
     purgeOldEntries(correlationId: string, hours?: number): number;
 
+    clearAllTradeData(correlationId: string): number;
+
     getLastTradeTimestamp(symbol: string): number | null;
 
     close(): void;
@@ -115,6 +117,7 @@ export class Storage implements IStorage {
     private readonly insertAggregatedTrade: Statement;
     private readonly getAggregatedTrades: Statement;
     private readonly purgeAggregatedTrades: Statement;
+    private readonly clearAllTrades: Statement;
     private readonly getLastTradeTimestampStmt: Statement;
     private readonly logger: ILogger;
     private readonly pipelineStorage: PipelineStorage;
@@ -183,6 +186,10 @@ export class Storage implements IStorage {
 
         this.purgeAggregatedTrades = this.db.prepare(`
             DELETE FROM aggregated_trades WHERE tradeTime < @cutOffTime
+        `);
+
+        this.clearAllTrades = this.db.prepare(`
+            DELETE FROM aggregated_trades
         `);
 
         this.getLastTradeTimestampStmt = this.db.prepare(`
@@ -510,6 +517,45 @@ export class Storage implements IStorage {
             );
             return typeof info.changes === "number" ? info.changes : 0;
         } catch (error) {
+            throw error;
+        }
+    }
+
+    /**
+     * Clear ALL trade data (for startup cleanup to eliminate gaps).
+     * Preserves signal history and other non-trade data.
+     * Returns number of deleted rows.
+     */
+    public clearAllTradeData(correlationId: string): number {
+        try {
+            const info = this.clearAllTrades.run();
+
+            const deletedCount =
+                typeof info.changes === "number" ? info.changes : 0;
+
+            this.logger.info(
+                "Startup trade data cleanup completed - eliminates data gaps",
+                {
+                    deletedTrades: deletedCount,
+                    preservedSignalHistory: "✅ Preserved",
+                },
+                correlationId
+            );
+
+            // Reset audit counters since we're starting fresh
+            this.droppedRecords = 0;
+            this.lastDroppedLog = 0;
+
+            return deletedCount;
+        } catch (error) {
+            this.logger.error(
+                "Error during startup trade data cleanup",
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                },
+                correlationId
+            );
             throw error;
         }
     }

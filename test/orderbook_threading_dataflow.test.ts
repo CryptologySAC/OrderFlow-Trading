@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import {
-    OrderFlowDashboard,
-    createDependencies,
-} from "../src/orderFlowDashBoard.js";
+import { OrderFlowDashboard } from "../src/orderFlowDashBoard.js";
+import { createDependencies } from "../src/core/dependencies.js";
 import { ThreadManager } from "../src/multithreading/threadManager.js";
 import type { SpotWebsocketStreams } from "@binance/spot";
 
