@@ -23,7 +23,8 @@ export interface WebSocketMessage {
         | "zoneSignal"
         | "error"
         | "test"
-        | "stats";
+        | "stats"
+        | "connection_status";
     data: unknown;
     now: number;
 }

@@ -71,6 +71,28 @@ interface StreamEventMessage {
     data: unknown;
 }
 
+interface StatusRequestMessage {
+    type: "status_request";
+    requestId: string;
+}
+
+interface StatusResponseMessage {
+    type: "status_response";
+    requestId: string;
+    status: {
+        isConnected: boolean;
+        connectionState: string;
+        reconnectAttempts: number;
+        uptime?: number;
+        lastReconnectAttempt: number;
+        streamHealth: {
+            isHealthy: boolean;
+            lastTradeMessage: number;
+            lastDepthMessage: number;
+        };
+    };
+}
+
 interface StreamDataMessage {
     type: "stream_data";
     dataType: "trade" | "depth";
@@ -144,6 +166,14 @@ function isStreamDataMessage(msg: unknown): msg is StreamDataMessage {
     );
 }
 
+function isStatusResponseMessage(msg: unknown): msg is StatusResponseMessage {
+    return (
+        typeof msg === "object" &&
+        msg !== null &&
+        (msg as { type?: unknown }).type === "status_response"
+    );
+}
+
 export class ThreadManager {
     private readonly loggerWorker: Worker;
     private readonly binanceWorker: Worker;
@@ -157,6 +187,45 @@ export class ThreadManager {
         string,
         { resolve: (val: unknown) => void; reject: (err: Error) => void }
     >();
+    private readonly statusResolvers = new Map<
+        string,
+        {
+            resolve: (status: {
+                isConnected: boolean;
+                connectionState: string;
+                reconnectAttempts: number;
+                uptime?: number;
+                lastReconnectAttempt: number;
+                streamHealth: {
+                    isHealthy: boolean;
+                    lastTradeMessage: number;
+                    lastDepthMessage: number;
+                };
+            }) => void;
+            reject: (err: Error) => void;
+        }
+    >();
+
+    // Connection status cache
+    private cachedConnectionStatus: {
+        isConnected: boolean;
+        connectionState: string;
+        lastUpdated: number;
+        streamHealth: {
+            isHealthy: boolean;
+            lastTradeMessage: number;
+            lastDepthMessage: number;
+        };
+    } = {
+        isConnected: false,
+        connectionState: "disconnected",
+        lastUpdated: Date.now(),
+        streamHealth: {
+            isHealthy: false,
+            lastTradeMessage: 0,
+            lastDepthMessage: 0,
+        },
+    };
 
     constructor() {
         this.loggerWorker = new Worker(
@@ -179,9 +248,12 @@ export class ThreadManager {
             } else if (isErrorMessage(msg)) {
                 console.error("Binance worker error:", msg.message);
             } else if (isStreamEventMessage(msg)) {
+                this.updateConnectionStatusCache(msg.eventType);
                 this.handleStreamEvent(msg.eventType, msg.data);
             } else if (isStreamDataMessage(msg)) {
                 this.handleStreamData(msg.dataType, msg.data);
+            } else if (isStatusResponseMessage(msg)) {
+                this.handleStatusResponse(msg);
             } else if (isProxyLogMessage(msg)) {
                 // Forward proxy log messages to logger worker
                 this.loggerWorker.postMessage({
@@ -419,6 +491,75 @@ export class ThreadManager {
         });
     }
 
+    /**
+     * Get current connection status from cache (fast, no worker communication)
+     */
+    public getCachedConnectionStatus(): {
+        isConnected: boolean;
+        connectionState: string;
+        lastUpdated: number;
+        cacheAge: number;
+        streamHealth: {
+            isHealthy: boolean;
+            lastTradeMessage: number;
+            lastDepthMessage: number;
+        };
+    } {
+        const now = Date.now();
+        return {
+            ...this.cachedConnectionStatus,
+            cacheAge: now - this.cachedConnectionStatus.lastUpdated,
+        };
+    }
+
+    /**
+     * Request fresh connection status from BinanceWorker (async)
+     */
+    public async getConnectionStatus(timeoutMs = 5000): Promise<{
+        isConnected: boolean;
+        connectionState: string;
+        reconnectAttempts: number;
+        uptime?: number;
+        lastReconnectAttempt: number;
+        streamHealth: {
+            isHealthy: boolean;
+            lastTradeMessage: number;
+            lastDepthMessage: number;
+        };
+    }> {
+        if (this.isShuttingDown) {
+            throw new Error("ThreadManager is shutting down");
+        }
+
+        const requestId = randomUUID();
+        return new Promise((resolve, reject) => {
+            const timeoutHandle = setTimeout(() => {
+                this.statusResolvers.delete(requestId);
+                reject(
+                    new Error(`Status request timeout after ${timeoutMs}ms`)
+                );
+            }, timeoutMs);
+
+            this.statusResolvers.set(requestId, {
+                resolve: (status) => {
+                    clearTimeout(timeoutHandle);
+                    // Update cache with fresh data
+                    this.updateConnectionStatusFromResponse(status);
+                    resolve(status);
+                },
+                reject: (err: Error) => {
+                    clearTimeout(timeoutHandle);
+                    reject(err);
+                },
+            });
+
+            this.binanceWorker.postMessage({
+                type: "status_request",
+                requestId,
+            } as StatusRequestMessage);
+        });
+    }
+
     private handleBacklogRequest(data: {
         clientId: string;
         amount: number;
@@ -447,6 +588,64 @@ export class ThreadManager {
             console.warn(
                 `Stream data '${dataType}' received but no handler registered`
             );
+        }
+    }
+
+    private updateConnectionStatusCache(eventType: string): void {
+        const now = Date.now();
+        this.cachedConnectionStatus.lastUpdated = now;
+
+        switch (eventType) {
+            case "connected":
+                this.cachedConnectionStatus.isConnected = true;
+                this.cachedConnectionStatus.connectionState = "connected";
+                break;
+            case "disconnected":
+                this.cachedConnectionStatus.isConnected = false;
+                this.cachedConnectionStatus.connectionState = "disconnected";
+                break;
+            case "reconnecting":
+                this.cachedConnectionStatus.isConnected = false;
+                this.cachedConnectionStatus.connectionState = "reconnecting";
+                break;
+            case "healthy":
+                this.cachedConnectionStatus.streamHealth.isHealthy = true;
+                break;
+            case "unhealthy":
+                this.cachedConnectionStatus.streamHealth.isHealthy = false;
+                break;
+            case "error":
+                this.cachedConnectionStatus.connectionState = "error";
+                break;
+        }
+    }
+
+    private updateConnectionStatusFromResponse(status: {
+        isConnected: boolean;
+        connectionState: string;
+        streamHealth?: {
+            isHealthy: boolean;
+            lastTradeMessage: number;
+            lastDepthMessage: number;
+        };
+    }): void {
+        this.cachedConnectionStatus = {
+            isConnected: status.isConnected,
+            connectionState: status.connectionState,
+            lastUpdated: Date.now(),
+            streamHealth: {
+                isHealthy: status.streamHealth?.isHealthy || false,
+                lastTradeMessage: status.streamHealth?.lastTradeMessage || 0,
+                lastDepthMessage: status.streamHealth?.lastDepthMessage || 0,
+            },
+        };
+    }
+
+    private handleStatusResponse(msg: StatusResponseMessage): void {
+        const resolver = this.statusResolvers.get(msg.requestId);
+        if (resolver) {
+            this.statusResolvers.delete(msg.requestId);
+            resolver.resolve(msg.status);
         }
     }
 

@@ -234,6 +234,45 @@ parentPort?.on("message", (msg: unknown) => {
                 }
                 break;
 
+            case "status_request":
+                try {
+                    const statusMsg = message as {
+                        requestId: string;
+                        type: string;
+                    };
+                    if (!statusMsg.requestId) {
+                        logger.error("Status request missing requestId");
+                        break;
+                    }
+                    const status = manager.getStatus();
+                    parentPort?.postMessage({
+                        type: "status_response",
+                        requestId: statusMsg.requestId,
+                        status: {
+                            isConnected: status.isConnected,
+                            connectionState: status.state,
+                            reconnectAttempts: status.reconnectAttempts,
+                            uptime: status.uptime,
+                            lastReconnectAttempt: status.lastReconnectAttempt,
+                            streamHealth: {
+                                isHealthy: status.streamHealth.isHealthy,
+                                lastTradeMessage:
+                                    status.streamHealth.lastTradeMessage,
+                                lastDepthMessage:
+                                    status.streamHealth.lastDepthMessage,
+                            },
+                        },
+                    });
+                } catch (error) {
+                    logger.error("Error handling status request", {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
+                }
+                break;
+
             case "shutdown":
                 void gracefulShutdown(0);
                 break;

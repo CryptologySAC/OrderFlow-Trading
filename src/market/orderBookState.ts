@@ -99,7 +99,8 @@ export class OrderBookState implements IOrderBookState {
         options: OrderBookStateOptions,
         logger: ILogger,
         metricsCollector: MetricsCollector,
-        binanceFeed: IBinanceDataFeed
+        binanceFeed: IBinanceDataFeed,
+        private threadManager?: import("../multithreading/threadManager.js").ThreadManager
     ) {
         this.pricePrecision = options.pricePrecision;
         this.tickSize = Math.pow(10, -this.pricePrecision);
@@ -128,13 +129,15 @@ export class OrderBookState implements IOrderBookState {
         options: OrderBookStateOptions,
         logger: ILogger,
         metricsCollector: MetricsCollector,
-        binanceFeed: IBinanceDataFeed
+        binanceFeed: IBinanceDataFeed,
+        threadManager?: import("../multithreading/threadManager.js").ThreadManager
     ): Promise<OrderBookState> {
         const instance = new OrderBookState(
             options,
             logger,
             metricsCollector,
-            binanceFeed
+            binanceFeed,
+            threadManager
         );
         await instance.initialize();
         return instance;
@@ -930,6 +933,9 @@ export class OrderBookState implements IOrderBookState {
         const now = Date.now();
         const timeSinceLastUpdate = now - this.lastUpdateTime;
 
+        // Enhanced connection status checking
+        this.verifyConnectionStatus();
+
         // Stream-aware timeout thresholds (similar to TradesProcessor)
         const connectedTimeout = 30000; // 30 seconds when stream is connected
         const disconnectedTimeout = 300000; // 5 minutes when stream is disconnected
@@ -985,5 +991,137 @@ export class OrderBookState implements IOrderBookState {
                 }
             );
         }
+    }
+
+    /**
+     * Enhanced connection status verification using ThreadManager
+     */
+    private verifyConnectionStatus(): void {
+        if (!this.threadManager) return;
+
+        try {
+            // Use cached status for fast checks
+            const cachedStatus = this.threadManager.getCachedConnectionStatus();
+            const cacheAgeLimit = 30000; // 30 seconds
+
+            // If cache is recent, use it to update our status
+            if (cachedStatus.cacheAge < cacheAgeLimit) {
+                const actuallyConnected = cachedStatus.isConnected;
+
+                // Detect status discrepancies
+                if (this.isStreamConnected !== actuallyConnected) {
+                    this.logger.warn(
+                        "[OrderBookState] Connection status mismatch detected",
+                        {
+                            symbol: this.symbol,
+                            orderBookThinks: this.isStreamConnected,
+                            actualStatus: actuallyConnected,
+                            connectionState: cachedStatus.connectionState,
+                            cacheAge: cachedStatus.cacheAge,
+                        }
+                    );
+
+                    // Update our status to match reality
+                    this.isStreamConnected = actuallyConnected;
+                    this.streamConnectionTime = Date.now();
+                }
+            }
+            // If cache is old, trigger an async fresh status check
+            else if (cachedStatus.cacheAge > cacheAgeLimit * 2) {
+                void this.requestFreshConnectionStatus();
+            }
+        } catch (error) {
+            this.logger.debug(
+                "[OrderBookState] Error verifying connection status",
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
+        }
+    }
+
+    /**
+     * Request fresh connection status from BinanceWorker
+     */
+    private async requestFreshConnectionStatus(): Promise<void> {
+        if (!this.threadManager) return;
+
+        try {
+            const freshStatus =
+                await this.threadManager.getConnectionStatus(3000);
+            const actuallyConnected = freshStatus.isConnected;
+
+            if (this.isStreamConnected !== actuallyConnected) {
+                this.logger.info(
+                    "[OrderBookState] Updated connection status from fresh query",
+                    {
+                        symbol: this.symbol,
+                        previousStatus: this.isStreamConnected,
+                        actualStatus: actuallyConnected,
+                        connectionState: freshStatus.connectionState,
+                        reconnectAttempts: freshStatus.reconnectAttempts,
+                    }
+                );
+
+                this.isStreamConnected = actuallyConnected;
+                this.streamConnectionTime = Date.now();
+            }
+        } catch (error) {
+            this.logger.warn(
+                "[OrderBookState] Failed to get fresh connection status",
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    symbol: this.symbol,
+                }
+            );
+        }
+    }
+
+    /**
+     * Get enhanced connection status information
+     */
+    public getConnectionDiagnostics(): {
+        orderBookStatus: {
+            isStreamConnected: boolean;
+            streamConnectionTime: number;
+        };
+        cachedWorkerStatus?: {
+            isConnected: boolean;
+            connectionState: string;
+            cacheAge: number;
+            streamHealth: {
+                isHealthy: boolean;
+                lastTradeMessage: number;
+                lastDepthMessage: number;
+            };
+        };
+        statusMismatch: boolean;
+    } {
+        const orderBookStatus = {
+            isStreamConnected: this.isStreamConnected,
+            streamConnectionTime: this.streamConnectionTime,
+        };
+
+        let cachedWorkerStatus;
+        let statusMismatch = false;
+
+        if (this.threadManager) {
+            try {
+                cachedWorkerStatus =
+                    this.threadManager.getCachedConnectionStatus();
+                statusMismatch =
+                    this.isStreamConnected !== cachedWorkerStatus.isConnected;
+            } catch {
+                // Ignore errors when getting cached status
+            }
+        }
+
+        return {
+            orderBookStatus,
+            cachedWorkerStatus,
+            statusMismatch,
+        };
     }
 }
