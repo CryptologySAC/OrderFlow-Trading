@@ -138,10 +138,11 @@ describe("ThreadManager Resource Leak Fixes", () => {
         const threadManager = new ThreadManager();
 
         // Verify workers were created
-        expect(MockedWorker).toHaveBeenCalledTimes(3);
-        expect(mockWorkerInstances).toHaveLength(3);
+        expect(MockedWorker).toHaveBeenCalledTimes(4);
+        expect(mockWorkerInstances).toHaveLength(4);
 
-        const [loggerWorker, binanceWorker, commWorker] = mockWorkerInstances;
+        const [loggerWorker, binanceWorker, commWorker, storageWorker] =
+            mockWorkerInstances;
 
         // Verify error handlers were set up
         expect(loggerWorker.on).toHaveBeenCalledWith(
@@ -168,6 +169,14 @@ describe("ThreadManager Resource Leak Fixes", () => {
             "exit",
             expect.any(Function)
         );
+        expect(storageWorker.on).toHaveBeenCalledWith(
+            "error",
+            expect.any(Function)
+        );
+        expect(storageWorker.on).toHaveBeenCalledWith(
+            "exit",
+            expect.any(Function)
+        );
 
         // Test graceful shutdown
         const shutdownPromise = threadManager.shutdown();
@@ -182,12 +191,16 @@ describe("ThreadManager Resource Leak Fixes", () => {
         expect(commWorker.postMessage).toHaveBeenCalledWith({
             type: "shutdown",
         });
+        expect(storageWorker.postMessage).toHaveBeenCalledWith({
+            type: "shutdown",
+        });
 
         // Simulate workers exiting gracefully
         setTimeout(() => {
             loggerWorker.emit("exit", 0);
             binanceWorker.emit("exit", 0);
             commWorker.emit("exit", 0);
+            storageWorker.emit("exit", 0);
         }, 10);
 
         await shutdownPromise;
@@ -196,6 +209,7 @@ describe("ThreadManager Resource Leak Fixes", () => {
         expect(loggerWorker.terminate).not.toHaveBeenCalled();
         expect(binanceWorker.terminate).not.toHaveBeenCalled();
         expect(commWorker.terminate).not.toHaveBeenCalled();
+        expect(storageWorker.terminate).not.toHaveBeenCalled();
     });
 
     it("should handle worker timeout and force termination", async () => {
@@ -204,7 +218,8 @@ describe("ThreadManager Resource Leak Fixes", () => {
         );
 
         const threadManager = new ThreadManager();
-        const [loggerWorker, binanceWorker, commWorker] = mockWorkerInstances;
+        const [loggerWorker, binanceWorker, commWorker, storageWorker] =
+            mockWorkerInstances;
 
         // Mock console.warn to verify timeout warnings
         const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -231,7 +246,8 @@ describe("ThreadManager Resource Leak Fixes", () => {
         );
 
         const threadManager = new ThreadManager();
-        const [loggerWorker, binanceWorker, commWorker] = mockWorkerInstances;
+        const [loggerWorker, binanceWorker, commWorker, storageWorker] =
+            mockWorkerInstances;
 
         // Mock console.error to capture error handling
         const errorSpy = vi
@@ -243,6 +259,7 @@ describe("ThreadManager Resource Leak Fixes", () => {
         loggerWorker.emit("error", testError);
         binanceWorker.emit("error", testError);
         commWorker.emit("error", testError);
+        storageWorker.emit("error", testError);
 
         // Verify errors were logged
         expect(errorSpy).toHaveBeenCalledWith(
@@ -257,11 +274,16 @@ describe("ThreadManager Resource Leak Fixes", () => {
             "Communication worker error:",
             testError
         );
+        expect(errorSpy).toHaveBeenCalledWith(
+            "Storage worker error:",
+            testError
+        );
 
         // Simulate unexpected worker exits
         loggerWorker.emit("exit", 1); // Non-zero exit code
         binanceWorker.emit("exit", 1);
         commWorker.emit("exit", 1);
+        storageWorker.emit("exit", 1);
 
         expect(errorSpy).toHaveBeenCalledWith(
             "Logger worker exited with code 1"
@@ -271,6 +293,9 @@ describe("ThreadManager Resource Leak Fixes", () => {
         );
         expect(errorSpy).toHaveBeenCalledWith(
             "Communication worker exited with code 1"
+        );
+        expect(errorSpy).toHaveBeenCalledWith(
+            "Storage worker exited with code 1"
         );
 
         errorSpy.mockRestore();

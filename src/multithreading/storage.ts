@@ -1,5 +1,18 @@
 import { Database, Statement } from "better-sqlite3";
 import { SpotWebsocketAPI } from "@binance/spot";
+import { ILogger } from "../infrastructure/loggerInterface.js";
+import {
+    PipelineStorage,
+    IPipelineStorage,
+} from "../storage/pipelineStorage.js";
+import type { ProcessingJob } from "../utils/types.js";
+import type { AnomalyEvent } from "../services/anomalyDetector.js";
+import type {
+    SignalOutcome,
+    MarketContext,
+    FailedSignalAnalysis,
+} from "../analysis/signalTracker.js";
+import type { ProcessedSignal, ConfirmedSignal } from "../types/signalTypes.js";
 
 /**
  * Shape of the rows stored in the aggregated_trades table.
@@ -17,7 +30,7 @@ interface AggregatedTradeRow {
     bestMatch: number; // 1 or 0
 }
 
-export interface IStorage {
+export interface IStorage extends IPipelineStorage {
     saveAggregatedTrade(
         aggTrade: SpotWebsocketAPI.TradesAggregateResponseResultInner,
         symbol: string
@@ -33,7 +46,7 @@ export interface IStorage {
         symbol: string
     ): number;
 
-    purgeOldEntries(hours?: number): number;
+    purgeOldEntries(correlationId: string, hours?: number): number;
 
     getLastTradeTimestamp(symbol: string): number | null;
 
@@ -46,9 +59,14 @@ export class Storage implements IStorage {
     private readonly getAggregatedTrades: Statement;
     private readonly purgeAggregatedTrades: Statement;
     private readonly getLastTradeTimestampStmt: Statement;
+    private readonly logger: ILogger;
+    private readonly pipelineStorage: PipelineStorage;
 
-    constructor(db: Database) {
+    constructor(db: Database, logger: ILogger) {
         this.db = db;
+        this.logger = logger;
+
+        this.pipelineStorage = new PipelineStorage(db, {});
 
         // Handle process signals for graceful DB closure
         ["SIGINT", "SIGTERM"].forEach((signal) =>
@@ -241,16 +259,21 @@ export class Storage implements IStorage {
      * Purge all entries older than the cutoff timestamp (ms since epoch).
      * Returns number of deleted rows.
      */
-    public purgeOldEntries(hours = 24): number {
+    public purgeOldEntries(correlationId: string, hours = 24): number {
         const cutoffMs = Date.now() - hours * 60 * 60 * 1000;
         try {
             const info = this.purgeAggregatedTrades.run({
                 cutOffTime: cutoffMs,
             });
+
+            this.logger.info(
+                "Scheduled purge completed successfully",
+                {},
+                correlationId
+            );
             return typeof info.changes === "number" ? info.changes : 0;
         } catch (error) {
-            console.error("Error purging old entries:", error);
-            return 0;
+            throw error;
         }
     }
 
@@ -278,8 +301,125 @@ export class Storage implements IStorage {
         try {
             this.db.close();
             console.info("Database connection closed.");
+            this.pipelineStorage.close();
+            console.info("PipeLine Storage conenction closed.");
         } catch (e) {
             console.error("Error closing database:", e);
         }
+    }
+
+    public enqueueJob(job: ProcessingJob): void {
+        this.pipelineStorage.enqueueJob(job);
+    }
+
+    public dequeueJobs(limit: number): ProcessingJob[] {
+        return this.pipelineStorage.dequeueJobs(limit);
+    }
+
+    public markJobCompleted(jobId: string): void {
+        this.pipelineStorage.markJobCompleted(jobId);
+    }
+
+    public restoreQueuedJobs(): ProcessingJob[] {
+        return this.pipelineStorage.restoreQueuedJobs();
+    }
+
+    public saveActiveAnomaly(anomaly: AnomalyEvent): void {
+        this.pipelineStorage.saveActiveAnomaly(anomaly);
+    }
+
+    public removeActiveAnomaly(type: string): void {
+        this.pipelineStorage.removeActiveAnomaly(type);
+    }
+
+    public getActiveAnomalies(): AnomalyEvent[] {
+        return this.pipelineStorage.getActiveAnomalies();
+    }
+
+    public saveSignalHistory(signal: ProcessedSignal): void {
+        this.pipelineStorage.saveSignalHistory(signal);
+    }
+
+    public getRecentSignals(since: number, symbol?: string): ProcessedSignal[] {
+        return this.pipelineStorage.getRecentSignals(since, symbol);
+    }
+
+    public purgeSignalHistory(): void {
+        this.pipelineStorage.purgeSignalHistory();
+    }
+
+    public saveConfirmedSignal(signal: ConfirmedSignal): void {
+        return this.pipelineStorage.saveConfirmedSignal(signal);
+    }
+
+    public getRecentConfirmedSignals(
+        since: number,
+        limit?: number
+    ): ConfirmedSignal[] {
+        return this.pipelineStorage.getRecentConfirmedSignals(since, limit);
+    }
+
+    public purgeConfirmedSignals(): void {
+        this.pipelineStorage.purgeConfirmedSignals();
+    }
+
+    // Signal tracking methods
+    public async saveSignalOutcome(outcome: SignalOutcome): Promise<void> {
+        await this.pipelineStorage.saveSignalOutcome(outcome);
+    }
+
+    public async updateSignalOutcome(
+        signalId: string,
+        updates: Partial<SignalOutcome>
+    ): Promise<void> {
+        await this.pipelineStorage.updateSignalOutcome(signalId, updates);
+    }
+
+    public async getSignalOutcome(
+        signalId: string
+    ): Promise<SignalOutcome | null> {
+        return await this.pipelineStorage.getSignalOutcome(signalId);
+    }
+
+    public async getSignalOutcomes(
+        timeWindow: number,
+        endTime?: number
+    ): Promise<SignalOutcome[]> {
+        return await this.pipelineStorage.getSignalOutcomes(
+            timeWindow,
+            endTime
+        );
+    }
+
+    // Market context methods
+    public async saveMarketContext(
+        signalId: string,
+        context: MarketContext
+    ): Promise<void> {
+        await this.pipelineStorage.saveMarketContext(signalId, context);
+    }
+
+    public async getMarketContext(
+        signalId: string
+    ): Promise<MarketContext | null> {
+        return await this.pipelineStorage.getMarketContext(signalId);
+    }
+
+    // Failed signal analysis methods
+    public async saveFailedSignalAnalysis(
+        analysis: FailedSignalAnalysis
+    ): Promise<void> {
+        await this.pipelineStorage.saveFailedSignalAnalysis(analysis);
+    }
+
+    public async getFailedSignalAnalyses(
+        timeWindow: number
+    ): Promise<FailedSignalAnalysis[]> {
+        return await this.pipelineStorage.getFailedSignalAnalyses(timeWindow);
+    }
+
+    // Data cleanup
+    public async purgeOldSignalData(olderThan: number): Promise<void> {
+        await this.pipelineStorage.purgeOldSignalData(olderThan);
     }
 }

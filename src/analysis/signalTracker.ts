@@ -3,7 +3,7 @@
 import { EventEmitter } from "events";
 import { WorkerLogger } from "../multithreading/workerLogger";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
-import type { IPipelineStorage } from "../storage/pipelineStorage.js";
+//import { ThreadManager } from "../multithreading/threadManager";
 import type { ConfirmedSignal, SignalType } from "../types/signalTypes.js";
 
 export interface MarketContext {
@@ -185,7 +185,7 @@ export class SignalTracker extends EventEmitter {
     constructor(
         private readonly logger: WorkerLogger,
         private readonly metricsCollector: MetricsCollector,
-        private readonly storage: IPipelineStorage,
+        //private readonly threadManager: ThreadManager,
         config: Partial<SignalTrackerConfig> = {}
     ) {
         super();

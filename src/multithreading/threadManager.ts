@@ -1,4 +1,5 @@
 import { Worker } from "worker_threads";
+import { randomUUID } from "crypto";
 
 import type { SignalEvent } from "../infrastructure/signalLoggerInterface.js";
 import type { WebSocketMessage } from "../utils/interfaces.js";
@@ -147,10 +148,15 @@ export class ThreadManager {
     private readonly loggerWorker: Worker;
     private readonly binanceWorker: Worker;
     private readonly commWorker: Worker;
+    private readonly storageWorker: Worker;
     private isShuttingDown = false;
     private backlogRequestHandler?: (clientId: string, amount: number) => void;
     private streamEventHandler?: (eventType: string, data: unknown) => void;
     private streamDataHandler?: (dataType: string, data: unknown) => void;
+    private readonly storageResolvers = new Map<
+        string,
+        { resolve: (val: unknown) => void; reject: (err: Error) => void }
+    >();
 
     constructor() {
         this.loggerWorker = new Worker(
@@ -161,6 +167,9 @@ export class ThreadManager {
         );
         this.commWorker = new Worker(
             new URL("./workers/communicationWorker.js", import.meta.url)
+        );
+        this.storageWorker = new Worker(
+            new URL("./workers/storageWorker.js", import.meta.url)
         );
 
         // Forward metrics from binance worker to communication worker
@@ -190,6 +199,32 @@ export class ThreadManager {
                     id: msg.id,
                     context: msg.context,
                 });
+            }
+        });
+
+        this.storageWorker.on("message", (msg: unknown) => {
+            if (
+                typeof msg === "object" &&
+                msg !== null &&
+                (msg as { type?: unknown }).type === "reply"
+            ) {
+                const { requestId, ok, result, error } = msg as {
+                    requestId: string;
+                    ok: boolean;
+                    result: unknown;
+                    error?: string;
+                };
+
+                const entry = this.storageResolvers.get(requestId);
+                if (entry) {
+                    this.storageResolvers.delete(requestId);
+
+                    if (ok) {
+                        entry.resolve(result);
+                    } else {
+                        entry.reject(new Error(error));
+                    }
+                }
             }
         });
 
@@ -231,6 +266,67 @@ export class ThreadManager {
 
     public startBinance(): void {
         this.binanceWorker.postMessage({ type: "start" });
+    }
+
+    /**
+     * Type-safe async proxy to storageWorker.
+     */
+    public async callStorage<
+        M extends
+            | "saveAggregatedTrade"
+            | "getLatestAggregatedTrades"
+            | "saveAggregatedTradesBulk"
+            | "purgeOldEntries"
+            | "getLastTradeTimestamp"
+            | "close"
+            | "enqueueJob"
+            | "dequeueJobs"
+            | "markJobCompleted"
+            | "restoreQueuedJobs"
+            | "saveActiveAnomaly"
+            | "removeActiveAnomaly"
+            | "getActiveAnomalies"
+            | "saveSignalHistory"
+            | "getRecentSignals"
+            | "purgeSignalHistory"
+            | "saveConfirmedSignal"
+            | "getRecentConfirmedSignals"
+            | "purgeConfirmedSignals"
+            | "saveSignalOutcome"
+            | "updateSignalOutcome"
+            | "getSignalOutcome"
+            | "getSignalOutcomes"
+            | "saveMarketContext"
+            | "getMarketContext"
+            | "saveFailedSignalAnalysis"
+            | "getFailedSignalAnalyses"
+            | "purgeOldSignalData",
+    >(
+        method: M,
+        ...args: Parameters<Storage[M]>
+    ): Promise<Awaited<ReturnType<Storage[M]>>> {
+        if (this.isShuttingDown) {
+            throw new Error("ThreadManager is shutting down");
+        }
+
+        const requestId = randomUUID();
+        return new Promise<Awaited<ReturnType<Storage[M]>>>(
+            (resolvePromise, rejectPromise) => {
+                this.storageResolvers.set(requestId, {
+                    resolve: (val: unknown) => {
+                        // cast once, still type-safe
+                        resolvePromise(val as Awaited<ReturnType<Storage[M]>>);
+                    },
+                    reject: rejectPromise,
+                });
+                this.storageWorker.postMessage({
+                    type: "call",
+                    method,
+                    args,
+                    requestId,
+                });
+            }
+        );
     }
 
     public log(
@@ -363,6 +459,7 @@ export class ThreadManager {
             this.loggerWorker.postMessage({ type: "shutdown" });
             this.binanceWorker.postMessage({ type: "shutdown" });
             this.commWorker.postMessage({ type: "shutdown" });
+            this.storageWorker.postMessage({ type: "shutdown" });
 
             // Wait for workers to gracefully shut down
             const shutdownPromises = [
@@ -372,6 +469,7 @@ export class ThreadManager {
                     this.commWorker,
                     "communication"
                 ),
+                this.terminateWorkerGracefully(this.storageWorker, "storage"),
             ];
 
             // Wait up to 5 seconds for graceful shutdown
@@ -394,6 +492,10 @@ export class ThreadManager {
             console.error("Communication worker error:", error);
         });
 
+        this.storageWorker.on("error", (error) => {
+            console.error("Storage worker error:", error);
+        });
+
         // Handle worker exits
         this.loggerWorker.on("exit", (code) => {
             if (!this.isShuttingDown && code !== 0) {
@@ -410,6 +512,12 @@ export class ThreadManager {
         this.commWorker.on("exit", (code) => {
             if (!this.isShuttingDown && code !== 0) {
                 console.error(`Communication worker exited with code ${code}`);
+            }
+        });
+
+        this.storageWorker.on("exit", (code) => {
+            if (!this.isShuttingDown && code !== 0) {
+                console.error(`Storage worker exited with code ${code}`);
             }
         });
     }

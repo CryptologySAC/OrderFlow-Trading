@@ -11,7 +11,7 @@ import type {
 import { AnomalyDetector } from "../services/anomalyDetector.js";
 import { AlertManager } from "../alerts/alertManager.js";
 import { WorkerLogger } from "../multithreading/workerLogger";
-import type { IPipelineStorage } from "../storage/pipelineStorage.js";
+import { ThreadManager } from "../multithreading/threadManager.js";
 import {
     MetricsCollector,
     type EnhancedMetrics,
@@ -65,7 +65,7 @@ export class SignalManager extends EventEmitter {
         private readonly alertManager: AlertManager,
         private readonly logger: WorkerLogger,
         private readonly metricsCollector: MetricsCollector,
-        private readonly storage: IPipelineStorage,
+        private readonly threadManager: ThreadManager,
         private readonly signalTracker?: SignalTracker,
         private readonly marketContextCollector?: MarketContextCollector,
         config: Partial<SignalManagerConfig> = {}
@@ -94,8 +94,8 @@ export class SignalManager extends EventEmitter {
         // Clean up old signals periodically
         setInterval(() => {
             this.cleanupOldSignals();
-            this.storage.purgeSignalHistory();
-            this.storage.purgeConfirmedSignals();
+            void this.threadManager.callStorage("purgeSignalHistory");
+            void this.threadManager.callStorage("purgeConfirmedSignals");
         }, 60000); // Every minute
     }
 
@@ -276,8 +276,11 @@ export class SignalManager extends EventEmitter {
         };
 
         // Ensure signals are persisted before emitting to prevent backlog issues
-        this.storage.saveSignalHistory(signal);
-        this.storage.saveConfirmedSignal(confirmedSignal);
+        void this.threadManager.callStorage("saveSignalHistory", signal);
+        void this.threadManager.callStorage(
+            "saveConfirmedSignal",
+            confirmedSignal
+        );
 
         // Track signal performance if tracker is available
         if (this.signalTracker && this.marketContextCollector) {

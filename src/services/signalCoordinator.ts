@@ -11,7 +11,7 @@ import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { ProductionUtils } from "../utils/productionUtils.js";
 import { SignalManager } from "../trading/signalManager.js";
 import { WorkerLogger } from "../multithreading/workerLogger";
-import { IPipelineStorage } from "../storage/pipelineStorage.js";
+import { ThreadManager } from "../multithreading/threadManager.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import type {
     DetectorErrorEvent,
@@ -99,7 +99,7 @@ export class SignalCoordinator extends EventEmitter {
     private readonly logger: WorkerLogger;
     private readonly signalLogger: ISignalLogger;
     private readonly signalManager: SignalManager;
-    private readonly storage: IPipelineStorage;
+    private readonly threadManager: ThreadManager;
     private readonly metrics: MetricsCollector;
     private readonly cfg: SignalCoordinatorConfig;
 
@@ -126,7 +126,7 @@ export class SignalCoordinator extends EventEmitter {
         metricsCollector: MetricsCollector,
         signalLogger: ISignalLogger,
         signalManager: SignalManager,
-        storage: IPipelineStorage
+        threadManager: ThreadManager
     ) {
         super();
 
@@ -144,7 +144,7 @@ export class SignalCoordinator extends EventEmitter {
         this.metrics = metricsCollector;
         this.signalLogger = signalLogger;
         this.signalManager = signalManager;
-        this.storage = storage;
+        this.threadManager = threadManager;
 
         this.setupEventHandlers();
         this.initializeMetrics();
@@ -225,16 +225,20 @@ export class SignalCoordinator extends EventEmitter {
     /*  LIFECYCLE                                                             */
     /* ---------------------------------------------------------------------- */
 
-    public start(): void {
+    public async start(): Promise<void> {
         if (this.isRunning) return;
         this.isRunning = true;
 
         /* restore any jobs left in the DB from a previous run */
-        for (const j of this.storage.restoreQueuedJobs()) {
+        const restoreQueuedJobs: ProcessingJob[] =
+            (await this.threadManager.callStorage(
+                "restoreQueuedJobs"
+            )) as ProcessingJob[];
+        for (const j of restoreQueuedJobs) {
             this.queue.push(j);
         }
 
-        this.processingTick = setInterval(() => this.processQueue(), 100);
+        this.processingTick = setInterval(() => void this.processQueue(), 100);
 
         this.logger.info("SignalCoordinator started");
         this.emit("started");
@@ -309,7 +313,7 @@ export class SignalCoordinator extends EventEmitter {
         };
 
         this.queue.push(job);
-        this.storage.enqueueJob(job);
+        void this.threadManager.callStorage("enqueueJob", job);
         this.metrics.setGauge("signal_coordinator_queue_size", this.queue.size);
 
         this.emit("signalQueued", {
@@ -318,14 +322,18 @@ export class SignalCoordinator extends EventEmitter {
         } as SignalQueuedEvent);
     }
 
-    private processQueue(): void {
+    private async processQueue(): Promise<void> {
         if (!this.isRunning) return;
         const slots = this.cfg.maxConcurrentProcessing - this.active.size;
         if (slots <= 0) return;
 
         /* if the in-memory queue is drained, refill from persistent storage */
         if (this.queue.size === 0) {
-            for (const j of this.storage.dequeueJobs(slots)) this.queue.push(j);
+            for (const j of await this.threadManager.callStorage(
+                "dequeueJobs",
+                slots
+            ))
+                this.queue.push(j as ProcessingJob);
         }
         if (this.queue.size === 0) return;
 
@@ -434,7 +442,7 @@ export class SignalCoordinator extends EventEmitter {
             this.handleProcessingError(job, err as Error);
         } finally {
             this.active.delete(job.id);
-            this.storage.markJobCompleted(job.id);
+            await this.threadManager.callStorage("markJobCompleted", job.id);
             this.metrics.setGauge(
                 "signal_coordinator_active_jobs",
                 this.active.size
@@ -500,7 +508,7 @@ export class SignalCoordinator extends EventEmitter {
             setTimeout(
                 () => {
                     this.queue.push(retryJob);
-                    this.storage.enqueueJob(retryJob);
+                    void this.threadManager.callStorage("enqueueJob", retryJob);
                 },
                 this.cfg.retryDelayMs * 2 ** job.retryCount
             );

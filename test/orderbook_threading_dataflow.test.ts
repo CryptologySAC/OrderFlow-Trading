@@ -62,7 +62,7 @@ describe("OrderBook Threading Data Flow", () => {
         });
 
         threadManager = new ThreadManager();
-        [, mockBinanceWorker] = mockWorkerInstances; // Logger, Binance, Communication
+        [, mockBinanceWorker] = mockWorkerInstances; // Logger, Binance, Communication, Storage
     });
 
     afterEach(async () => {
@@ -74,8 +74,8 @@ describe("OrderBook Threading Data Flow", () => {
 
     it("should have stream data handler registered", () => {
         // Verify ThreadManager was created with proper initialization
-        expect(MockedWorker).toHaveBeenCalledTimes(3);
-        expect(mockWorkerInstances).toHaveLength(3);
+        expect(MockedWorker).toHaveBeenCalledTimes(4);
+        expect(mockWorkerInstances).toHaveLength(4);
 
         // Check that binance worker has message listeners
         const [, binanceWorker] = mockWorkerInstances;
@@ -184,7 +184,10 @@ describe("OrderBook Threading Data Flow", () => {
 
         // Create ThreadManager but don't set stream data handler
         const tm = new ThreadManager();
-        const [, binanceWorker] = mockWorkerInstances.slice(-3); // Get the latest workers
+        // After creating tm, we now have 8 workers total (4 from threadManager, 4 from tm)
+        // Get the latest 4 workers from tm: [logger, binance, comm, storage]
+        const tmWorkers = mockWorkerInstances.slice(-4);
+        const [, binanceWorker] = tmWorkers;
 
         // Simulate depth data without handler
         const streamDataMessage = {
