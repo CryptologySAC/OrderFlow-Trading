@@ -8,7 +8,7 @@ import {
     ZoneAnalysisResult,
     ZoneDetectorConfig,
 } from "../../types/zoneTypes.js";
-import { Config } from "../../orderFlowDashBoard.js";
+import { Config } from "../../core/config.js";
 
 export abstract class ZoneDetector extends Detector {
     protected readonly config: ZoneDetectorConfig;

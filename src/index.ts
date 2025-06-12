@@ -1,9 +1,7 @@
 // src/index.ts
 //import { App } from "./app.js";
-import {
-    OrderFlowDashboard,
-    createDependencies,
-} from "./orderFlowDashBoard.js";
+import { OrderFlowDashboard } from "./orderFlowDashBoard.js";
+import { createDependencies } from "./core/dependencies.js";
 import { ThreadManager } from "./multithreading/threadManager.js";
 
 /**

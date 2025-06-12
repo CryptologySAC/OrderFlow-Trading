@@ -19,17 +19,12 @@ import { SignalProcessingError } from "./core/errors.js";
 
 // Infrastructure imports
 import { MetricsCollector } from "./infrastructure/metricsCollector.js";
-import { RateLimiter } from "./infrastructure/rateLimiter.js";
-import { CircuitBreaker } from "./infrastructure/circuitBreaker.js";
+
 import {
     RecoveryManager,
     type HardReloadEvent,
 } from "./infrastructure/recoveryManager.js";
-import { MicrostructureAnalyzer } from "./data/microstructureAnalyzer.js";
-import { IndividualTradesManager } from "./data/individualTradesManager.js";
 import { ThreadManager } from "./multithreading/threadManager.js";
-import { WorkerSignalLogger } from "./multithreading/workerSignalLogger.js";
-import { WorkerLogger } from "./multithreading/workerLogger.js";
 
 // Service imports
 import { DetectorFactory } from "./utils/detectorFactory.js";
@@ -39,17 +34,13 @@ import type {
 } from "./types/marketEvents.js";
 import { OrderflowPreprocessor } from "./market/orderFlowPreprocessor.js";
 import { OrderBookState } from "./market/orderBookState.js";
-// WebSocketManager handled by communication worker
 import { SignalManager } from "./trading/signalManager.js";
-// DataStreamManager handled by BinanceWorker in threaded mode
 import { SignalCoordinator } from "./services/signalCoordinator.js";
 import { AnomalyDetector, AnomalyEvent } from "./services/anomalyDetector.js";
-import { AlertManager } from "./alerts/alertManager.js";
 
 // Indicator imports
 import { AbsorptionDetector } from "./indicators/absorptionDetector.js";
 //todo import { ExhaustionDetector } from "./indicators/exhaustionDetector.js";
-// Legacy detectors removed - using zone-based architecture
 import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
 import { SupportResistanceDetector } from "./indicators/supportResistanceDetector.js";
 
@@ -67,7 +58,7 @@ import type {
 import { TradeData } from "./utils/utils.js";
 
 // Types
-import type { Dependencies } from "./types/dependencies.js";
+import type { Dependencies } from "./core/dependencies.js";
 import type { Signal, ConfirmedSignal } from "./types/signalTypes.js";
 import type { ConnectivityIssue } from "./infrastructure/apiConnectivityMonitor.js";
 import type {
@@ -80,17 +71,10 @@ import type {
 } from "./utils/types.js";
 
 // Storage and processors
-import { getDB } from "./infrastructure/db.js";
-import { runMigrations } from "./infrastructure/migrate.js";
-import { BinanceDataFeed } from "./utils/binance.js";
+
 import { ProductionUtils } from "./utils/productionUtils.js";
-import { SignalTracker } from "./analysis/signalTracker.js";
-import { MarketContextCollector } from "./analysis/marketContextCollector.js";
-import { TradesProcessor } from "./clients/tradesProcessor.js";
-import { OrderBookProcessor } from "./clients/orderBookProcessor.js";
+
 import type { WebSocketMessage } from "./utils/interfaces.js";
-import { SpoofingDetector } from "./services/spoofingDetector.js";
-// StatsBroadcaster handled by communication worker
 import { ILogger } from "./infrastructure/loggerInterface.js";
 
 EventEmitter.defaultMaxListeners = 20;
@@ -1508,114 +1492,3 @@ export class OrderFlowDashboard {
         return deduplicated.sort((a, b) => b.confirmedAt - a.confirmedAt);
     }
 }
-
-/**
- * Factory function to create dependencies
- */
-
-export function createDependencies(threadManager: ThreadManager): Dependencies {
-    const logger = new WorkerLogger(
-        threadManager,
-        process.env.NODE_ENV === "development"
-    );
-    const metricsCollector = new MetricsCollector();
-    const signalLogger = new WorkerSignalLogger(threadManager);
-    const rateLimiter = new RateLimiter(60000, 100);
-    const circuitBreaker = new CircuitBreaker(5, 60000, logger);
-    const db = getDB("./storage/trades.db");
-    runMigrations(db);
-    const spoofingDetector = new SpoofingDetector(Config.SPOOFING_DETECTOR);
-    const binanceFeed = new BinanceDataFeed();
-    const individualTradesManager = new IndividualTradesManager(
-        Config.INDIVIDUAL_TRADES_MANAGER,
-        logger,
-        metricsCollector,
-        binanceFeed
-    );
-    const microstructureAnalyzer = new MicrostructureAnalyzer(
-        Config.MICROSTRUCTURE_ANALYZER,
-        logger,
-        metricsCollector
-    );
-
-    const orderBookProcessor = new OrderBookProcessor(
-        Config.ORDERBOOK_PROCESSOR,
-        logger,
-        metricsCollector
-    );
-
-    // Create separate BinanceDataFeed for main thread historical data loading
-    const mainThreadBinanceFeed = new BinanceDataFeed();
-
-    const tradesProcessor = new TradesProcessor(
-        Config.TRADES_PROCESSOR,
-        logger,
-        metricsCollector,
-        mainThreadBinanceFeed,
-        threadManager
-    );
-
-    const anomalyDetector = new AnomalyDetector(
-        Config.ANOMALY_DETECTOR,
-        logger
-    );
-
-    const alertManager = new AlertManager(
-        process.env.ALERT_WEBHOOK_URL,
-        parseInt(process.env.ALERT_COOLDOWN_MS || "300000", 10)
-    );
-
-    // Create SignalTracker and MarketContextCollector for performance analysis
-    const signalTracker = new SignalTracker(logger, metricsCollector);
-
-    const marketContextCollector = new MarketContextCollector(
-        logger,
-        metricsCollector
-    );
-
-    const signalManager = new SignalManager(
-        anomalyDetector,
-        alertManager,
-        logger,
-        metricsCollector,
-        threadManager,
-        signalTracker,
-        marketContextCollector,
-        Config.SIGNAL_MANAGER
-    );
-
-    const signalCoordinator = new SignalCoordinator(
-        Config.SIGNAL_COORDINATOR,
-        logger,
-        metricsCollector,
-        signalLogger,
-        signalManager,
-        threadManager
-    );
-
-    return {
-        tradesProcessor,
-        orderBookProcessor,
-        signalLogger,
-        logger,
-        metricsCollector,
-        rateLimiter,
-        circuitBreaker,
-        alertManager,
-        signalCoordinator,
-        anomalyDetector,
-        signalManager,
-        spoofingDetector,
-        individualTradesManager,
-        microstructureAnalyzer,
-        binanceFeed,
-        mainThreadBinanceFeed,
-        signalTracker,
-        marketContextCollector,
-        threadManager,
-    };
-}
-
-// Export for use
-export { Config } from "./core/config.js";
-export type { Dependencies } from "./types/dependencies.js";
