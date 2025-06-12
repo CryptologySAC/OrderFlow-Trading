@@ -181,9 +181,6 @@ export class PipelineStorage implements IPipelineStorage {
 
         /* ---------------- DB open & pragma ------------------------ */
         this.db = db;
-        this.db.pragma("journal_mode = WAL");
-        this.db.pragma("synchronous = NORMAL");
-        this.db.pragma("foreign_keys = ON");
 
         /* ---------------- schema ------------------------------- */
         this.db.exec(`

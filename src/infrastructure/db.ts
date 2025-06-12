@@ -7,7 +7,7 @@ export function getDB(dbPath = "./storage/trades.db"): Database {
         dbInstance = new BetterSqlite3(dbPath);
         dbInstance.pragma("journal_mode = WAL");
         dbInstance.pragma("synchronous = NORMAL");
-        dbInstance.pragma("busy_timeout = 5000"); // wait up to 5 s on lock
+        dbInstance.pragma("busy_timeout = 60000"); // wait up to 60 s on lock
         dbInstance.pragma("foreign_keys = ON");
     }
     return dbInstance;
