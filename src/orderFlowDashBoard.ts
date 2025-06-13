@@ -1290,7 +1290,6 @@ export class OrderFlowDashboard {
      */
     public async preloadHistoricalData(): Promise<void> {
         const correlationId = randomUUID();
-
         try {
             // 🚨 CRITICAL: Clear trade data first to eliminate gaps
             await this.dependencies.circuitBreaker.execute(
@@ -1311,6 +1310,7 @@ export class OrderFlowDashboard {
                 correlationId
             );
         } catch (error) {
+            this.logger.error("WRONG!", { error });
             this.handleError(error as Error, "preload_data", correlationId);
             throw error;
         }
@@ -1469,8 +1469,18 @@ export class OrderFlowDashboard {
                 correlationId
             );
 
-            await this.startStreamConnection();
-            await this.preloadHistoricalData();
+            // 🚨 CRITICAL FIX: Parallel execution to prevent data gaps
+            // Stream and backfill MUST run simultaneously as per CLAUDE.md architecture
+            this.logger.info(
+                "Starting parallel data loading: live stream + 90min backfill",
+                {},
+                correlationId
+            );
+
+            await Promise.all([
+                this.startStreamConnection(), // Live data stream
+                this.preloadHistoricalData(), // 90-minute backfill
+            ]);
             await this.startHttpServer();
 
             // Start periodic tasks

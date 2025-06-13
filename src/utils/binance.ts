@@ -92,7 +92,7 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         this.validateConfiguration();
 
         this.logger = Logger.getInstance();
-        this.logger.setMinLogLevel(LogLevel.WARN);
+        this.logger.setMinLogLevel(LogLevel.INFO);
 
         this.streamClient = new Spot({
             configurationWebsocketStreams: this.configurationWebsocketStreams,
@@ -145,6 +145,7 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         limit: number,
         fromId?: number
     ): Promise<SpotWebsocketAPI.TradesAggregateResponseResultInner[]> {
+
         const config: SpotWebsocketAPI.TradesAggregateRequest = {
             symbol,
             limit,
@@ -153,6 +154,8 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         const result = await this.executeWithRetry(() =>
             this.executeWithApiConnection(config, "tradesAggregate")
         );
+
+
         return result;
     }
 
@@ -168,9 +171,55 @@ export class BinanceDataFeed implements IBinanceDataFeed {
             endTime,
             limit,
         };
+
+
+        this.logger.info(
+            `[fetchAggTradesByTime] Requesting trades for ${symbol}`,
+            {
+                startTime: new Date(startTime).toISOString(),
+                endTime: new Date(endTime).toISOString(),
+                requestedDurationMinutes: (
+                    (endTime - startTime) /
+                    60000
+                ).toFixed(2),
+                limit,
+                rawStartTime: startTime,
+                rawEndTime: endTime,
+            }
+        );
+
         const result = await this.executeWithRetry(() =>
             this.executeWithApiConnection(config, "fetchAggTradesByTime")
         );
+
+
+        this.logger.info(
+            `[fetchAggTradesByTime] Received ${result.length} trades`,
+            {
+                symbol,
+                tradesReceived: result.length,
+                requestedLimit: limit,
+                firstTradeTime:
+                    result.length > 0
+                        ? new Date(result[0].T || 0).toISOString()
+                        : "N/A",
+                lastTradeTime:
+                    result.length > 0
+                        ? new Date(
+                              result[result.length - 1].T || 0
+                          ).toISOString()
+                        : "N/A",
+                timeSpanMinutes:
+                    result.length > 1
+                        ? (
+                              ((result[result.length - 1].T || 0) -
+                                  (result[0].T || 0)) /
+                              60000
+                          ).toFixed(2)
+                        : "N/A",
+            }
+        );
+
         return result;
     }
 

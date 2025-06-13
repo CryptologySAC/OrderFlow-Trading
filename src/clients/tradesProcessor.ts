@@ -389,193 +389,265 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     }
 
     /**
-     * Reload the last 90 minutes of trade data from Binance
+     * Smart ID-based backlog fill: Dynamically fetch trades until target time coverage is achieved.
+     * Uses a two-step approach: first gets recent trades for baseline, then fetches older trades
+     * by jumping backwards in trade ID chunks until 100 minutes of coverage is reached.
      */
     public async fillBacklog(): Promise<void> {
         const startWall = Date.now();
-        const targetTime = Date.now();
-        const backlogStartTime = targetTime - this.storageTime;
-        const batchWindowMs = 60_000; // 1 minute logical window
+        const targetCoverageMs = this.storageTime + 10 * 60 * 1000; // 90min + 10min buffer = 100min
+        const maxBlocks = 50; // Safety limit
+        const tradesPerBlock = 1000;
         let retries = 0;
 
-        this.logger.info("[TradesProcessor] Starting 90-minute data reload", {
-            from: new Date(backlogStartTime).toISOString(),
-            to: new Date(targetTime).toISOString(),
-            durationMinutes: (this.storageTime / 60_000).toFixed(2),
-        });
+        this.logger.info(
+            "[TradesProcessor] Starting smart ID-based backlog fill",
+            {
+                targetCoverageMs,
+                targetCoverageMinutes: (targetCoverageMs / 60000).toFixed(1),
+                maxBlocks,
+                tradesPerBlock,
+                approach: "Smart ID-based with time coverage target",
+            }
+        );
 
-        // ✅ SECURITY FIX: Proper retry loop that doesn't reset after successful batches
         while (retries <= this.maxBacklogRetries) {
             try {
-                // Reset state for each complete retry attempt
-                this.thresholdTime = backlogStartTime;
-                this.backlogComplete = false;
                 let totalFetched = 0;
-                while (
-                    this.thresholdTime < targetTime &&
-                    !this.isShuttingDown
-                ) {
-                    const windowEnd = Math.min(
-                        this.thresholdTime + batchWindowMs - 1,
-                        targetTime
+                const allTradeIds: number[] = [];
+                let oldestTradeTime: number | null = null;
+                let newestTradeTime: number | null = null;
+                let hasReachedTargetCoverage = false;
+
+                // Get most recent trades to establish baseline
+                const recentTrades = await this.binanceFeed.tradesAggregate(
+                    this.symbol,
+                    1000,
+                    undefined
+                );
+
+                if (recentTrades.length === 0) {
+                    this.logger.warn(
+                        "[TradesProcessor] No recent trades available"
                     );
-                    let windowProgressed = false;
+                    this.backlogComplete = true;
+                    return;
+                }
 
-                    // ✅ SECURITY FIX: Add iteration limit to prevent infinite loops
-                    let windowIterations = 0;
-                    const maxIterations = this.maxWindowIterations;
+                // Process recent trades
+                const recentValidated = this.validateTradeArray(recentTrades);
+                await this.bulkSaveTrades(recentValidated);
+                totalFetched += recentValidated.length;
 
-                    // Loop inside the window until we exhaust all trades (API returns < limit)
-                    while (
-                        !windowProgressed &&
-                        !this.isShuttingDown &&
-                        windowIterations < maxIterations
-                    ) {
-                        windowIterations++;
-                        const aggregatedTrades =
-                            await this.binanceFeed.fetchAggTradesByTime(
-                                this.symbol,
-                                this.thresholdTime,
-                                windowEnd,
-                                this.backlogBatchSize
-                            );
+                // Track time and IDs
+                newestTradeTime = Math.max(...recentTrades.map((t) => t.T!));
+                oldestTradeTime = Math.min(...recentTrades.map((t) => t.T!));
+                recentTrades.forEach((t) => t.a && allTradeIds.push(t.a));
 
-                        if (aggregatedTrades.length === 0) {
-                            // No trades in this slice; exit inner loop
-                            windowProgressed = true;
-                            break;
-                        }
+                // Add to memory cache
+                for (const trade of recentValidated) {
+                    this.recentTrades.add({
+                        time: trade.T!,
+                        price: parseFloat(trade.p!),
+                        quantity: parseFloat(trade.q!),
+                        orderType: trade.m ? "SELL" : "BUY",
+                        symbol: this.symbol,
+                        tradeId: trade.a ?? 0,
+                    });
+                }
 
-                        let maxTimestamp = this.thresholdTime;
+                const initialCoverageMs = newestTradeTime - oldestTradeTime;
+                if (initialCoverageMs >= targetCoverageMs) {
+                    hasReachedTargetCoverage = true;
+                }
+
+                // Fetch older trades by going backwards in time
+                let currentFromId =
+                    Math.min(...recentTrades.map((t) => t.a!)) - 1000;
+
+                for (
+                    let blockIndex = 1;
+                    blockIndex < maxBlocks &&
+                    !this.isShuttingDown &&
+                    !hasReachedTargetCoverage;
+                    blockIndex++
+                ) {
+
+                    const aggregatedTrades =
+                        await this.binanceFeed.tradesAggregate(
+                            this.symbol,
+                            tradesPerBlock,
+                            currentFromId
+                        );
+
+                    if (aggregatedTrades.length === 0) {
+                        this.logger.warn(
+                            `[TradesProcessor] Block ${blockIndex + 1} returned 0 trades, stopping`,
+                            {
+                                currentFromId,
+                                blockIndex,
+                                reason: "Reached oldest available trades",
+                            }
+                        );
+                        break;
+                    }
+
+
+                    // Validate and process trades
+                    try {
+                        const validatedTrades =
+                            this.validateTradeArray(aggregatedTrades);
                         const tradesToSave: SpotWebsocketAPI.TradesAggregateResponseResultInner[] =
                             [];
 
-                        // ✅ Validate entire trade array first to prevent malformed data injection
-                        try {
-                            const validatedTrades =
-                                this.validateTradeArray(aggregatedTrades);
-
-                            for (const trade of validatedTrades) {
-                                // ✅ DUPLICATE DETECTION: Skip trades we've already processed
-                                if (trade.a && this.isDuplicateTrade(trade.a)) {
-                                    this.logger.debug(
-                                        "[TradesProcessor] Skipping duplicate trade",
-                                        {
-                                            tradeId: trade.a,
-                                            symbol: this.symbol,
-                                            price: trade.p,
-                                            quantity: trade.q,
-                                            timestamp: trade.T,
-                                        }
-                                    );
-                                    this.duplicatesDetected++;
-                                    this.metricsCollector.incrementMetric(
-                                        "duplicateTradesDetected"
-                                    );
-                                    continue;
-                                }
-
-                                maxTimestamp = Math.max(maxTimestamp, trade.T!);
-                                tradesToSave.push(trade);
-
-                                // Mark trade as processed to prevent future duplicates
-                                if (trade.a) {
-                                    this.markTradeAsProcessed(trade.a);
-                                }
+                        for (const trade of validatedTrades) {
+                            // Track all trade IDs for gap analysis
+                            if (trade.a) {
+                                allTradeIds.push(trade.a);
                             }
 
-                            // ✅ DATA CONSISTENCY FIX: Only add to cache after successful storage
-                            if (tradesToSave.length) {
-                                await this.bulkSaveTrades(tradesToSave);
-                                totalFetched += tradesToSave.length;
-
-                                // Add to memory cache AFTER successful storage to maintain consistency
-                                for (const trade of validatedTrades) {
-                                    this.recentTrades.add({
-                                        time: trade.T!,
-                                        price: parseFloat(trade.p!),
-                                        quantity: parseFloat(trade.q!),
-                                        orderType: trade.m ? "SELL" : "BUY",
-                                        symbol: this.symbol,
-                                        tradeId: trade.a ?? 0,
-                                    });
-                                }
-                            }
-                        } catch (error) {
-                            if (error instanceof TradeValidationError) {
-                                this.logger.warn(
-                                    "[TradesProcessor] Invalid trade data in batch",
-                                    {
-                                        batchSize: aggregatedTrades.length,
-                                        validationErrors:
-                                            error.validationErrors.issues,
-                                        context: "fillBacklog",
-                                    }
+                            // Skip duplicates
+                            if (trade.a && this.isDuplicateTrade(trade.a)) {
+                                this.duplicatesDetected++;
+                                this.metricsCollector.incrementMetric(
+                                    "duplicateTradesDetected"
                                 );
-                                // Skip this entire batch to prevent processing malformed data
                                 continue;
                             }
-                            throw error; // Re-throw non-validation errors
-                        }
 
-                        // Storage and cache update moved to validation block above
+                            tradesToSave.push(trade);
 
-                        // ✅ SECURITY FIX: Prevent infinite loops with timestamp progression safeguards
-                        if (aggregatedTrades.length === this.backlogBatchSize) {
-                            // Ensure timestamp progression to prevent infinite loops
-                            if (maxTimestamp <= this.thresholdTime) {
-                                this.logger.warn(
-                                    "[TradesProcessor] Timestamp not progressing, forcing window advance",
-                                    {
-                                        currentThreshold: this.thresholdTime,
-                                        maxTimestamp,
-                                        windowIterations,
-                                    }
-                                );
-                                // Force progression by advancing threshold by 1ms
-                                this.thresholdTime = this.thresholdTime + 1;
-                                windowProgressed = true;
-                            } else {
-                                this.thresholdTime = maxTimestamp + 1;
-                                continue; // keep pulling inside the same minute
+                            // Mark as processed
+                            if (trade.a) {
+                                this.markTradeAsProcessed(trade.a);
                             }
                         }
 
-                        // Otherwise the window is exhausted
-                        windowProgressed = true;
-                        // ✅ SECURITY FIX: Atomic state update to prevent race conditions
-                        this.updateTradeTimestamps(maxTimestamp, windowEnd + 1);
+                        // Save to storage
+                        if (tradesToSave.length > 0) {
+                            await this.bulkSaveTrades(tradesToSave);
+                            totalFetched += tradesToSave.length;
+
+                            // Add to memory cache
+                            for (const trade of validatedTrades) {
+                                this.recentTrades.add({
+                                    time: trade.T!,
+                                    price: parseFloat(trade.p!),
+                                    quantity: parseFloat(trade.q!),
+                                    orderType: trade.m ? "SELL" : "BUY",
+                                    symbol: this.symbol,
+                                    tradeId: trade.a ?? 0,
+                                });
+                            }
+                        }
+
+                        // Update time range tracking
+                        const blockOldestTime = Math.min(
+                            ...aggregatedTrades.map((t) => t.T!)
+                        );
+                        oldestTradeTime = blockOldestTime; // Keep pushing oldest time back
+
+                        const currentCoverageMs =
+                            newestTradeTime - oldestTradeTime;
+
+                        // Set fromId for next block (go further back)
+                        if (aggregatedTrades.length > 0) {
+                            const oldestTradeId = Math.min(
+                                ...aggregatedTrades.map((t) => t.a!)
+                            );
+                            currentFromId = oldestTradeId - 1000; // Jump back by 1000 IDs
+                        }
+
+                        // Check if we've reached our target coverage AFTER processing
+                        if (currentCoverageMs >= targetCoverageMs) {
+                            hasReachedTargetCoverage = true;
+                            this.logger.info(
+                                `[TradesProcessor] Target coverage reached, stopping fetch`,
+                                {
+                                    achievedCoverageMin: (
+                                        currentCoverageMs / 60000
+                                    ).toFixed(1),
+                                    targetCoverageMin: (
+                                        targetCoverageMs / 60000
+                                    ).toFixed(1),
+                                    totalBlocks: blockIndex + 1,
+                                    totalTrades: totalFetched,
+                                }
+                            );
+                        }
+                    } catch (error) {
+                        if (error instanceof TradeValidationError) {
+                            this.logger.warn(
+                                `[TradesProcessor] Invalid trade data in block ${blockIndex + 1}`,
+                                {
+                                    batchSize: aggregatedTrades.length,
+                                    validationErrors:
+                                        error.validationErrors.issues,
+                                }
+                            );
+                            continue; // Skip this block
+                        }
+                        throw error;
                     }
 
-                    // ✅ PERFORMANCE FIX: Check for iteration limit exceeded
-                    if (windowIterations >= maxIterations) {
+                    // Rate limiting between blocks
+                    await ProductionUtils.sleep(100);
+                }
+
+                // Analyze for gaps in trade IDs
+                if (allTradeIds.length > 1) {
+                    allTradeIds.sort((a, b) => a - b);
+                    const gaps: { start: number; end: number; size: number }[] =
+                        [];
+
+                    for (let i = 1; i < allTradeIds.length; i++) {
+                        const gap = allTradeIds[i] - allTradeIds[i - 1] - 1;
+                        if (gap > 0) {
+                            gaps.push({
+                                start: allTradeIds[i - 1],
+                                end: allTradeIds[i],
+                                size: gap,
+                            });
+                        }
+                    }
+
+                    if (gaps.length > 0) {
                         this.logger.warn(
-                            "[TradesProcessor] Window iteration limit exceeded, advancing",
+                            "[TradesProcessor] Trade ID gaps detected",
                             {
-                                windowIterations,
-                                maxIterations,
-                                currentThreshold: this.thresholdTime,
-                                windowEnd,
+                                gapsFound: gaps.length,
+                                totalGapSize: gaps.reduce(
+                                    (sum, gap) => sum + gap.size,
+                                    0
+                                ),
+                                largestGap: Math.max(
+                                    ...gaps.map((gap) => gap.size)
+                                ),
                             }
                         );
                     }
-
-                    // ✅ PERFORMANCE FIX: Dynamic rate limiting based on API efficiency
-                    await this.handleRateLimit(windowIterations, maxIterations);
                 }
 
-                this.backlogComplete = this.thresholdTime >= targetTime - 1000;
+                this.backlogComplete = true;
                 const duration = Date.now() - startWall;
+                const finalCoverageMs =
+                    oldestTradeTime && newestTradeTime
+                        ? newestTradeTime - oldestTradeTime
+                        : 0;
 
-                this.logger.info("[TradesProcessor] Backlog fill complete", {
-                    totalFetched,
-                    durationMs: duration,
-                    durationMin: (duration / 60_000).toFixed(2),
-                    backlogComplete: this.backlogComplete,
-                    retryAttempt: retries,
-                });
+                this.logger.info(
+                    "[TradesProcessor] Smart ID-based backlog fill complete",
+                    {
+                        totalFetched,
+                        durationMs: duration,
+                        timeCoverageMin: (finalCoverageMs / 60_000).toFixed(1),
+                        targetCoverageMin: (targetCoverageMs / 60_000).toFixed(1),
+                        coverageAchieved: finalCoverageMs >= targetCoverageMs,
+                        backlogComplete: this.backlogComplete,
+                        approach: "Smart ID-based with dynamic coverage",
+                    }
+                );
 
-                // ✅ SECURITY FIX: Success - exit retry loop
                 return;
             } catch (error) {
                 retries++;
@@ -584,19 +656,17 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                     throw error;
                 }
                 this.logger.warn(
-                    "[TradesProcessor] Backlog fetch error, retrying entire operation",
+                    "[TradesProcessor] Smart ID-based backlog fetch error, retrying",
                     {
                         error: (error as Error).message,
                         retry: retries,
                         maxRetries: this.maxBacklogRetries,
                     }
                 );
-                // Brief delay before retry to avoid immediate re-failure
-                await ProductionUtils.sleep(1000 * retries); // Exponential backoff
+                await ProductionUtils.sleep(1000 * retries);
             }
         }
 
-        // Should never reach here due to return/throw above
         throw new Error("fillBacklog: Unexpected end of retry loop");
     }
 
@@ -858,15 +928,6 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         this.thresholdTime = thresholdOverride ?? latestTimestamp + 1;
         this.lastTradeTime = now;
         this.lastTradeMonotonicTime = monotonicNow;
-
-        // Log atomic update for debugging if needed
-        if (this.logger.isDebugEnabled?.()) {
-            this.logger.debug("[TradesProcessor] Atomic timestamp update", {
-                latestTimestamp,
-                thresholdTime: this.thresholdTime,
-                lastTradeTime: this.lastTradeTime,
-            });
-        }
     }
 
     /**
