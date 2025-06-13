@@ -5,10 +5,6 @@ import { WorkerCircuitBreakerProxy } from "../shared/workerCircuitBreakerProxy.j
 import { BinanceDataFeed } from "../../utils/binance.js";
 import { DataStreamManager } from "../../trading/dataStreamManager.js";
 import { Config } from "../../core/config.js";
-import type {
-    IWorkerMetricsCollector,
-    IWorkerCircuitBreaker,
-} from "../shared/workerInterfaces.js";
 
 // Validate worker thread context
 if (!parentPort) {
@@ -22,26 +18,26 @@ if (!parentPort) {
 // Use shared proxy implementations instead of direct infrastructure imports
 function initializeComponents() {
     const logger = new WorkerProxyLogger("binance");
-    const metricsCollector: IWorkerMetricsCollector = new WorkerMetricsProxy(
-        "binance"
-    );
-    const circuitBreaker: IWorkerCircuitBreaker = new WorkerCircuitBreakerProxy(
-        5,
-        60000,
-        "binance"
-    );
+    const metricsCollector = new WorkerMetricsProxy("binance");
+    const circuitBreaker = new WorkerCircuitBreakerProxy(5, 60000, "binance");
     const binanceFeed = new BinanceDataFeed();
 
-    // Cast to expected types for DataStreamManager compatibility
+    // Proxies implement ICircuitBreaker interface for compatibility
     const manager = new DataStreamManager(
         Config.DATASTREAM,
         binanceFeed,
-        circuitBreaker as unknown as import("../../infrastructure/circuitBreaker.js").CircuitBreaker,
+        circuitBreaker,
         logger,
-        metricsCollector as unknown as import("../../infrastructure/metricsCollector.js").MetricsCollector
+        metricsCollector
     );
 
-    return { logger, metricsCollector, circuitBreaker, binanceFeed, manager };
+    return {
+        logger,
+        metricsCollector,
+        circuitBreaker,
+        binanceFeed,
+        manager,
+    };
 }
 
 let components: ReturnType<typeof initializeComponents>;

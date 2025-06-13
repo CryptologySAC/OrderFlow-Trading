@@ -259,6 +259,7 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 - **ALL parameters must have explicit types**
 - **Strict null checking enabled**
 - **No implicit returns**
+- **KEEP CODE SIMPLE** - Avoid complex casting patterns, prefer interface compatibility
 
 #### Error Handling Standards
 

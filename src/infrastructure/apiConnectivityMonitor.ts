@@ -2,7 +2,7 @@
 
 import { EventEmitter } from "events";
 import { ILogger } from "./loggerInterface.js";
-import { MetricsCollector } from "./metricsCollector.js";
+import type { IWorkerMetricsCollector } from "../multithreading/shared/workerInterfaces.js";
 
 export interface ConnectivityStatus {
     isHealthy: boolean;
@@ -72,7 +72,7 @@ export interface ApiConnectivityConfig {
 
 export class ApiConnectivityMonitor extends EventEmitter {
     private readonly logger: ILogger;
-    private readonly metricsCollector: MetricsCollector;
+    private readonly metricsCollector: IWorkerMetricsCollector;
     private readonly config: ApiConnectivityConfig;
 
     // Stream tracking
@@ -100,7 +100,7 @@ export class ApiConnectivityMonitor extends EventEmitter {
     constructor(
         config: ApiConnectivityConfig,
         logger: ILogger,
-        metricsCollector: MetricsCollector
+        metricsCollector: IWorkerMetricsCollector
     ) {
         super();
         this.config = config;

@@ -1159,7 +1159,7 @@ export class OrderFlowDashboard {
                     { webhookUrl },
                     correlationId
                 );
-            }, correlationId);
+            });
         } catch (error) {
             this.handleError(error as Error, "webhook_send", correlationId);
         }
@@ -1292,16 +1292,13 @@ export class OrderFlowDashboard {
         const correlationId = randomUUID();
         try {
             // 🚨 CRITICAL: Clear trade data first to eliminate gaps
-            await this.dependencies.circuitBreaker.execute(
-                () =>
-                    this.dependencies.tradesProcessor.clearTradeDataOnStartup(),
-                correlationId
+            await this.dependencies.circuitBreaker.execute(() =>
+                this.dependencies.tradesProcessor.clearTradeDataOnStartup()
             );
 
             // Load fresh 90 minutes of trade data
-            await this.dependencies.circuitBreaker.execute(
-                () => this.dependencies.tradesProcessor.fillBacklog(),
-                correlationId
+            await this.dependencies.circuitBreaker.execute(() =>
+                this.dependencies.tradesProcessor.fillBacklog()
             );
 
             this.logger.info(

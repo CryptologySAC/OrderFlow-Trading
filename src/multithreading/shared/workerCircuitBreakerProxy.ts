@@ -1,6 +1,7 @@
 // src/multithreading/shared/workerCircuitBreakerProxy.ts
 import { parentPort } from "worker_threads";
 import type { IWorkerCircuitBreaker } from "./workerInterfaces.js";
+import type { ICircuitBreaker } from "../../infrastructure/circuitBreakerInterface.js";
 
 enum CircuitState {
     CLOSED = "CLOSED",
@@ -12,8 +13,9 @@ enum CircuitState {
  * Worker-side proxy for CircuitBreaker that communicates via message passing
  * Provides complete CircuitBreaker compatibility with error handling
  */
-export class WorkerCircuitBreakerProxy implements IWorkerCircuitBreaker {
-    private errorCount = 0n; // Use BigInt like original CircuitBreaker
+export class WorkerCircuitBreakerProxy
+    implements IWorkerCircuitBreaker, ICircuitBreaker
+{
     private successCount = 0n;
     private lastFailure = 0;
     private state: CircuitState = CircuitState.CLOSED;
@@ -21,6 +23,8 @@ export class WorkerCircuitBreakerProxy implements IWorkerCircuitBreaker {
     private readonly maxFailures: number;
     private readonly timeoutMs: number;
     private readonly workerName: string;
+
+    private errorCount = 0n;
 
     constructor(maxFailures: number, timeoutMs: number, workerName: string) {
         this.maxFailures = maxFailures;
@@ -59,17 +63,23 @@ export class WorkerCircuitBreakerProxy implements IWorkerCircuitBreaker {
         }
 
         if (
-            this.errorCount >= BigInt(this.maxFailures) &&
+            Number(this.errorCount) >= this.maxFailures &&
             this.state !== CircuitState.OPEN
         ) {
             this.state = CircuitState.OPEN;
             this.lastTripTime = now;
 
-            // Notify main thread with error handling
+            // Notify main thread with error handling and safe BigInt serialization
             try {
                 parentPort?.postMessage({
                     type: "circuit_breaker_failure",
-                    failures: Number(this.errorCount),
+                    failures:
+                        this.errorCount <= Number.MAX_SAFE_INTEGER
+                            ? Number(this.errorCount)
+                            : Number.MAX_SAFE_INTEGER,
+                    failuresString: this.errorCount.toString(), // Safe serialization
+                    failuresIsTruncated:
+                        this.errorCount > Number.MAX_SAFE_INTEGER,
                     worker: this.workerName,
                     state: this.state,
                     timestamp: now,
@@ -99,11 +109,20 @@ export class WorkerCircuitBreakerProxy implements IWorkerCircuitBreaker {
         errorCount: number;
         isOpen: boolean;
         lastTripTime: number;
+        errorCountString?: string;
+        errorCountIsTruncated?: boolean;
     } {
+        const errorCountNumber =
+            this.errorCount <= Number.MAX_SAFE_INTEGER
+                ? Number(this.errorCount)
+                : Number.MAX_SAFE_INTEGER;
+
         return {
-            errorCount: Number(this.errorCount),
+            errorCount: errorCountNumber,
             isOpen: this.state === CircuitState.OPEN,
             lastTripTime: this.lastTripTime,
+            errorCountString: this.errorCount.toString(),
+            errorCountIsTruncated: this.errorCount > Number.MAX_SAFE_INTEGER,
         };
     }
 
@@ -120,6 +139,10 @@ export class WorkerCircuitBreakerProxy implements IWorkerCircuitBreaker {
             this.recordError();
             throw error;
         }
+    }
+
+    getState(): string {
+        return this.state;
     }
 
     private generateCorrelationId(): string {

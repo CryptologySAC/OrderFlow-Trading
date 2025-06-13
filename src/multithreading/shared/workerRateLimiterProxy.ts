@@ -9,6 +9,7 @@ export class WorkerRateLimiterProxy implements IWorkerRateLimiter {
     private requests: number[] = [];
     private readonly windowMs: number;
     private readonly maxRequests: number;
+    private readonly MAX_REQUESTS_HISTORY = 10000; // Memory leak prevention
 
     constructor(windowMs: number, maxRequests: number) {
         this.windowMs = windowMs;
@@ -17,6 +18,12 @@ export class WorkerRateLimiterProxy implements IWorkerRateLimiter {
 
     isAllowed(): boolean {
         const now = Date.now();
+
+        // Efficient cleanup with size limit to prevent memory leaks
+        if (this.requests.length > this.MAX_REQUESTS_HISTORY) {
+            this.requests = this.requests.slice(-this.MAX_REQUESTS_HISTORY);
+        }
+
         this.requests = this.requests.filter(
             (time) => now - time < this.windowMs
         );
@@ -31,6 +38,12 @@ export class WorkerRateLimiterProxy implements IWorkerRateLimiter {
 
     getRemainingRequests(): number {
         const now = Date.now();
+
+        // Efficient cleanup with size limit to prevent memory leaks
+        if (this.requests.length > this.MAX_REQUESTS_HISTORY) {
+            this.requests = this.requests.slice(-this.MAX_REQUESTS_HISTORY);
+        }
+
         this.requests = this.requests.filter(
             (time) => now - time < this.windowMs
         );

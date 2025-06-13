@@ -181,10 +181,8 @@ const wsHandlers = {
             });
 
             // Store client reference for direct response
-            if (!global.pendingBacklogRequests) {
-                global.pendingBacklogRequests = new Map();
-            }
-            global.pendingBacklogRequests.set(ws.clientId || "unknown", {
+            const workerState = CommunicationWorkerState.getInstance();
+            workerState.addPendingRequest(ws.clientId || "unknown", {
                 ws,
                 correlationId,
             });
@@ -235,11 +233,51 @@ const wsHandlers = {
 };
 
 // Store connected clients and pending requests globally with isolation
-declare global {
-    var connectedClients: Set<IsolatedWebSocket> | undefined;
-    var pendingBacklogRequests:
-        | Map<string, { ws: IsolatedWebSocket; correlationId?: string }>
-        | undefined;
+// Use module-scoped singleton instead of global variables
+class CommunicationWorkerState {
+    private static instance: CommunicationWorkerState;
+    private connectedClients = new Set<IsolatedWebSocket>();
+    private pendingBacklogRequests = new Map<
+        string,
+        { ws: IsolatedWebSocket; correlationId?: string }
+    >();
+
+    static getInstance(): CommunicationWorkerState {
+        if (!this.instance) {
+            this.instance = new CommunicationWorkerState();
+        }
+        return this.instance;
+    }
+
+    getConnectedClients(): Set<IsolatedWebSocket> {
+        return this.connectedClients;
+    }
+
+    addClient(client: IsolatedWebSocket): void {
+        this.connectedClients.add(client);
+    }
+
+    removeClient(client: IsolatedWebSocket): void {
+        this.connectedClients.delete(client);
+    }
+
+    getPendingBacklogRequests(): Map<
+        string,
+        { ws: IsolatedWebSocket; correlationId?: string }
+    > {
+        return this.pendingBacklogRequests;
+    }
+
+    addPendingRequest(
+        key: string,
+        request: { ws: IsolatedWebSocket; correlationId?: string }
+    ): void {
+        this.pendingBacklogRequests.set(key, request);
+    }
+
+    removePendingRequest(key: string): void {
+        this.pendingBacklogRequests.delete(key);
+    }
 }
 
 // Client connection handler with proper isolation
@@ -250,10 +288,8 @@ const onClientConnect = (ws: IsolatedWebSocket) => {
     });
 
     // Store reference for later backlog/signal sending with client-specific state
-    if (!global.connectedClients) {
-        global.connectedClients = new Set<IsolatedWebSocket>();
-    }
-    global.connectedClients.add(ws);
+    const workerState = CommunicationWorkerState.getInstance();
+    workerState.addClient(ws);
 
     // Create isolated client state to prevent interference
     const clientState = {
@@ -279,13 +315,12 @@ const onClientConnect = (ws: IsolatedWebSocket) => {
         });
 
         // Clean up client-specific state to prevent memory leaks
-        if (global.connectedClients) {
-            global.connectedClients.delete(ws);
-        }
+        const workerState = CommunicationWorkerState.getInstance();
+        workerState.removeClient(ws);
 
         // Clean up any pending requests for this client
-        if (global.pendingBacklogRequests && ws.clientId) {
-            global.pendingBacklogRequests.delete(ws.clientId);
+        if (ws.clientId) {
+            workerState.removePendingRequest(ws.clientId);
         }
 
         // Clear client state
@@ -350,7 +385,9 @@ class EnhancedStatsBroadcaster {
                         ...(workerMetrics.gauges || {}),
                         ...(mainMetrics?.gauges || {}),
                         // Add connection count from active clients
-                        connections_active: global.connectedClients?.size || 0,
+                        connections_active:
+                            CommunicationWorkerState.getInstance().getConnectedClients()
+                                .size,
                     },
                     histograms: {
                         ...(workerMetrics.histograms || {}),
@@ -373,7 +410,9 @@ class EnhancedStatsBroadcaster {
                         loggerWorker: "Running",
                         binanceWorker: "Running",
                         communicationWorker: "Running",
-                        wsConnections: global.connectedClients?.size || 0,
+                        wsConnections:
+                            CommunicationWorkerState.getInstance().getConnectedClients()
+                                .size,
                         streamHealth: "Connected", // This will be updated from binance worker
                     },
                 };
@@ -622,12 +661,12 @@ parentPort?.on(
 
                     // Also update our local metrics collector with the new data
                     // Update connections count from the new data
-                    if (global.connectedClients) {
-                        metrics.updateMetric(
-                            "connections_active",
-                            global.connectedClients.size
-                        );
-                    }
+                    const connectedClients =
+                        CommunicationWorkerState.getInstance().getConnectedClients();
+                    metrics.updateMetric(
+                        "connections_active",
+                        connectedClients.size
+                    );
 
                     // Metrics updated successfully - no logging needed to avoid spam
                 } catch (error) {
@@ -667,7 +706,9 @@ parentPort?.on(
                     if (targetClientId) {
                         // Send only to the specific requesting client (ISOLATED)
                         const pendingRequest =
-                            global.pendingBacklogRequests?.get(targetClientId);
+                            CommunicationWorkerState.getInstance()
+                                .getPendingBacklogRequests()
+                                .get(targetClientId);
                         if (pendingRequest) {
                             const { ws, correlationId } = pendingRequest;
                             try {
@@ -708,7 +749,7 @@ parentPort?.on(
                                 );
 
                                 // Remove from pending requests
-                                global.pendingBacklogRequests?.delete(
+                                CommunicationWorkerState.getInstance().removePendingRequest(
                                     targetClientId
                                 );
                             } catch (error) {
@@ -730,8 +771,10 @@ parentPort?.on(
                         }
                     } else {
                         // Legacy behavior: Send backlog to all connected clients (for broadcast scenarios)
-                        if (global.connectedClients) {
-                            global.connectedClients.forEach(
+                        const connectedClients =
+                            CommunicationWorkerState.getInstance().getConnectedClients();
+                        if (connectedClients.size > 0) {
+                            connectedClients.forEach(
                                 (ws: IsolatedWebSocket) => {
                                     try {
                                         // Send backlog
@@ -773,8 +816,10 @@ parentPort?.on(
                     }
 
                     // Legacy direct response handling (only if not isolated)
-                    if (!targetClientId && global.pendingBacklogRequests) {
-                        global.pendingBacklogRequests.forEach(
+                    if (!targetClientId) {
+                        const pendingRequests =
+                            CommunicationWorkerState.getInstance().getPendingBacklogRequests();
+                        pendingRequests.forEach(
                             ({ ws, correlationId }, clientId) => {
                                 try {
                                     // Send direct backlog response
@@ -830,7 +875,9 @@ parentPort?.on(
                         );
 
                         // Clear pending requests after sending
-                        global.pendingBacklogRequests.clear();
+                        CommunicationWorkerState.getInstance()
+                            .getPendingBacklogRequests()
+                            .clear();
                     }
                 } catch (error) {
                     logger.error("Error handling backlog message", {

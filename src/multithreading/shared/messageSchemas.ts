@@ -34,6 +34,8 @@ export const MetricsIncrementMessageSchema = z.object({
 export const CircuitBreakerFailureMessageSchema = z.object({
     type: z.literal("circuit_breaker_failure"),
     failures: z.number(),
+    failuresString: z.string().optional(), // Safe BigInt serialization
+    failuresIsTruncated: z.boolean().optional(), // Indicates if failures exceeded Number.MAX_SAFE_INTEGER
     worker: z.string(),
     state: z.string().optional(),
     timestamp: z.number().optional(),

@@ -2,8 +2,8 @@ import { SpotWebsocketStreams } from "@binance/spot";
 import { EventEmitter } from "events";
 import { randomUUID } from "crypto";
 import { ILogger } from "../infrastructure/loggerInterface.js";
-import { CircuitBreaker } from "../infrastructure/circuitBreaker.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import { ICircuitBreaker } from "../infrastructure/circuitBreakerInterface.js";
+import type { IWorkerMetricsCollector } from "../multithreading/shared/workerInterfaces.js";
 import { ConnectionError } from "../core/errors.js";
 import type { IBinanceDataFeed } from "../utils/binance.js";
 import {
@@ -108,9 +108,9 @@ export class DataStreamManager extends EventEmitter {
     constructor(
         private readonly config: DataStreamConfig,
         private readonly binanceFeed: IBinanceDataFeed,
-        private readonly circuitBreaker: CircuitBreaker,
+        private readonly circuitBreaker: ICircuitBreaker,
         private readonly logger: ILogger,
-        private readonly metricsCollector: MetricsCollector
+        private readonly metricsCollector: IWorkerMetricsCollector
     ) {
         super();
         this.reconnectDelay = config.reconnectDelay || 5000;
@@ -201,9 +201,8 @@ export class DataStreamManager extends EventEmitter {
             );
 
             // Use circuit breaker for all connection attempts
-            this.connection = await this.circuitBreaker.execute(
-                () => this.binanceFeed.connectToStreams(),
-                correlationId
+            this.connection = await this.circuitBreaker.execute(() =>
+                this.binanceFeed.connectToStreams()
             );
 
             this.setupConnectionHandlers();

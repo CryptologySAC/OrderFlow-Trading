@@ -1,5 +1,6 @@
 // src/infrastructure/circuitBreaker.ts
 import { ILogger } from "./loggerInterface";
+import { ICircuitBreaker } from "./circuitBreakerInterface";
 
 export enum CircuitState {
     CLOSED = "CLOSED",
@@ -10,7 +11,7 @@ export enum CircuitState {
 /**
  * Circuit breaker for error handling
  */
-export class CircuitBreaker {
+export class CircuitBreaker implements ICircuitBreaker {
     private errorCount = 0n;
     private successCount = 0n;
     private lastErrorTime = 0;
@@ -62,6 +63,33 @@ export class CircuitBreaker {
         }
     }
 
+    public recordSuccess(): void {
+        this.successCount++;
+        if (this.state === CircuitState.HALF_OPEN) {
+            this.state = CircuitState.CLOSED;
+            this.isOpen = false;
+            this.errorCount = 0n;
+            this.logger.info(
+                "[CircuitBreaker] Circuit breaker closed after successful operation"
+            );
+        }
+    }
+
+    public async execute<T>(operation: () => Promise<T>): Promise<T> {
+        if (!this.canExecute()) {
+            throw new Error(`Circuit breaker is ${this.state.toLowerCase()}`);
+        }
+
+        try {
+            const result = await operation();
+            this.recordSuccess();
+            return result;
+        } catch (error) {
+            this.recordError();
+            throw error;
+        }
+    }
+
     public isTripped(): boolean {
         return this.isOpen;
     }
@@ -78,62 +106,7 @@ export class CircuitBreaker {
         };
     }
 
-    getState(): CircuitState {
+    getState(): string {
         return this.state;
-    }
-
-    private onSuccess(): void {
-        this.errorCount = 0n;
-        if (this.state === CircuitState.HALF_OPEN) {
-            this.successCount++;
-
-            // Reset if approaching safe limits for serialization
-            if (this.successCount > 9007199254740991n) {
-                this.successCount = 0n;
-            }
-
-            if (this.successCount >= 3n) {
-                this.state = CircuitState.CLOSED;
-            }
-        }
-    }
-
-    private onFailure(): void {
-        this.errorCount++;
-        this.lastErrorTime = Date.now();
-
-        // Reset if approaching safe limits for serialization
-        if (this.errorCount > 9007199254740991n) {
-            this.errorCount = 0n;
-        }
-
-        if (this.errorCount >= BigInt(this.threshold)) {
-            this.state = CircuitState.OPEN;
-        }
-    }
-
-    async execute<T>(
-        operation: () => Promise<T>,
-        correlationId?: string
-    ): Promise<T> {
-        if (this.state === CircuitState.OPEN) {
-            if (Date.now() - this.lastErrorTime > this.timeoutMs) {
-                this.state = CircuitState.HALF_OPEN;
-                this.successCount = 0n;
-            } else {
-                throw new Error(
-                    `Circuit breaker is OPEN. Correlation ID: ${correlationId}`
-                );
-            }
-        }
-
-        try {
-            const result = await operation();
-            this.onSuccess();
-            return result;
-        } catch (error) {
-            this.onFailure();
-            throw error;
-        }
     }
 }

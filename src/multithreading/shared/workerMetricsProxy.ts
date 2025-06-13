@@ -21,6 +21,12 @@ export class WorkerMetricsProxy implements IWorkerMetricsCollector {
     private readonly startTime = Date.now();
     private lastRateCalculation = Date.now();
 
+    // Memory leak prevention
+    private readonly MAX_METRICS = 10000;
+    private readonly CLEANUP_INTERVAL = 300000; // 5 minutes
+    private lastCleanup = Date.now();
+    private cleanupTimer?: NodeJS.Timeout;
+
     // Batching for performance
     private batchBuffer: MetricUpdate[] = [];
     private batchTimer?: NodeJS.Timeout;
@@ -28,10 +34,17 @@ export class WorkerMetricsProxy implements IWorkerMetricsCollector {
 
     constructor(workerName: string) {
         this.workerName = workerName;
+
+        // Initialize cleanup timer
+        this.cleanupTimer = setInterval(() => {
+            this.cleanupOldMetrics();
+        }, this.CLEANUP_INTERVAL);
     }
 
     updateMetric(name: string, value: number): void {
         try {
+            this.checkAndCleanupIfNeeded();
+
             this.localMetrics.set(name, value);
             this.gaugeMetrics.set(name, value);
 
@@ -48,6 +61,8 @@ export class WorkerMetricsProxy implements IWorkerMetricsCollector {
 
     incrementMetric(name: string): void {
         try {
+            this.checkAndCleanupIfNeeded();
+
             const current = this.localMetrics.get(name) || 0;
             const newValue = current + 1;
             this.localMetrics.set(name, newValue);
@@ -232,7 +247,51 @@ export class WorkerMetricsProxy implements IWorkerMetricsCollector {
     }
 
     private generateCorrelationId(): string {
-        return `${this.workerName}-metrics-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        return `${this.workerName}-metrics-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+    }
+
+    private checkAndCleanupIfNeeded(): void {
+        const now = Date.now();
+        if (now - this.lastCleanup > this.CLEANUP_INTERVAL) {
+            this.cleanupOldMetrics();
+        }
+    }
+
+    private cleanupOldMetrics(): void {
+        const now = Date.now();
+        this.lastCleanup = now;
+
+        // Clean up localMetrics if exceeding limit
+        if (this.localMetrics.size > this.MAX_METRICS) {
+            const entries = Array.from(this.localMetrics.entries());
+            // Keep 80% of the limit, removing oldest entries
+            const toKeep = entries.slice(-Math.floor(this.MAX_METRICS * 0.8));
+            this.localMetrics = new Map(toKeep);
+        }
+
+        // Clean up counterMetrics if exceeding limit
+        if (this.counterMetrics.size > this.MAX_METRICS) {
+            const entries = Array.from(this.counterMetrics.entries());
+            // Sort by lastIncrement timestamp, keep most recent
+            entries.sort((a, b) => b[1].lastIncrement - a[1].lastIncrement);
+            const toKeep = entries.slice(0, Math.floor(this.MAX_METRICS * 0.8));
+            this.counterMetrics = new Map(toKeep);
+        }
+
+        // Clean up gaugeMetrics if exceeding limit
+        if (this.gaugeMetrics.size > this.MAX_METRICS) {
+            const entries = Array.from(this.gaugeMetrics.entries());
+            const toKeep = entries.slice(-Math.floor(this.MAX_METRICS * 0.8));
+            this.gaugeMetrics = new Map(toKeep);
+        }
+
+        // Clean up old counter metrics (>1 hour old)
+        const oneHourAgo = now - 3600000;
+        for (const [name, counter] of this.counterMetrics.entries()) {
+            if (counter.lastIncrement < oneHourAgo) {
+                this.counterMetrics.delete(name);
+            }
+        }
     }
 
     // Complete MetricsCollector API implementation
@@ -334,6 +393,10 @@ export class WorkerMetricsProxy implements IWorkerMetricsCollector {
         if (this.batchTimer) {
             clearTimeout(this.batchTimer);
             this.flushBatch(); // Final flush
+        }
+
+        if (this.cleanupTimer) {
+            clearInterval(this.cleanupTimer);
         }
     }
 }

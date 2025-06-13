@@ -1,6 +1,10 @@
 import { Worker } from "worker_threads";
 import { randomUUID } from "crypto";
 import { WorkerMessageRouter } from "./shared/workerMessageRouter.js";
+import {
+    MetricsBatchMessageSchema,
+    type MetricsBatchMessage,
+} from "./shared/messageSchemas.js";
 
 import type { SignalEvent } from "../infrastructure/signalLoggerInterface.js";
 import type { WebSocketMessage } from "../utils/interfaces.js";
@@ -123,24 +127,15 @@ interface MetricsIncrementMessage {
 interface CircuitBreakerFailureMessage {
     type: "circuit_breaker_failure";
     failures: number;
+    failuresString?: string; // Safe BigInt serialization
+    failuresIsTruncated?: boolean; // Indicates if failures exceeded Number.MAX_SAFE_INTEGER
     worker: string;
     state?: string;
     timestamp?: number;
     correlationId?: string;
 }
 
-interface MetricsBatchMessage {
-    type: "metrics_batch";
-    updates: Array<{
-        name: string;
-        value: number;
-        timestamp: number;
-        type: "update" | "increment";
-    }>;
-    worker: string;
-    timestamp: number;
-    correlationId: string;
-}
+// MetricsBatchMessage interface removed - now using imported schema type
 
 // Message type guards removed as they're handled by message router
 
@@ -295,32 +290,63 @@ export class ThreadManager {
         );
 
         this.messageRouter.registerHandler("metrics_batch", (msg: unknown) => {
-            const batchMsg = msg as MetricsBatchMessage;
-            // Handle batched metrics for performance
+            // Use Zod schema for message validation
+            const validationResult = MetricsBatchMessageSchema.safeParse(msg);
+            if (!validationResult.success) {
+                this.log("error", "Invalid metrics batch message", {
+                    error: validationResult.error.message,
+                    correlationId: `threadmanager-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+                });
+                return;
+            }
+            const batchMsg: MetricsBatchMessage = validationResult.data;
+
+            // Optimized batch processing - group by type for fewer IPC calls
+            const updateMetrics: Array<{
+                name: string;
+                value: number;
+                timestamp: number;
+            }> = [];
+            const incrementMetrics: Array<{ name: string; timestamp: number }> =
+                [];
+
             batchMsg.updates.forEach((update) => {
                 if (update.type === "update") {
-                    this.commWorker.postMessage({
-                        type: "metrics",
-                        data: {
-                            action: "update",
-                            metricName: update.name,
-                            value: update.value,
-                            worker: batchMsg.worker,
-                            timestamp: update.timestamp,
-                        },
+                    updateMetrics.push({
+                        name: update.name,
+                        value: update.value,
+                        timestamp: update.timestamp,
                     });
                 } else if (update.type === "increment") {
-                    this.commWorker.postMessage({
-                        type: "metrics",
-                        data: {
-                            action: "increment",
-                            metricName: update.name,
-                            worker: batchMsg.worker,
-                            timestamp: update.timestamp,
-                        },
+                    incrementMetrics.push({
+                        name: update.name,
+                        timestamp: update.timestamp,
                     });
                 }
             });
+
+            // Send batched updates in fewer IPC calls
+            if (updateMetrics.length > 0) {
+                this.commWorker.postMessage({
+                    type: "metrics",
+                    data: {
+                        action: "batch_update",
+                        metrics: updateMetrics,
+                        worker: batchMsg.worker,
+                    },
+                });
+            }
+
+            if (incrementMetrics.length > 0) {
+                this.commWorker.postMessage({
+                    type: "metrics",
+                    data: {
+                        action: "batch_increment",
+                        metrics: incrementMetrics,
+                        worker: batchMsg.worker,
+                    },
+                });
+            }
 
             // Metrics batch processed successfully - no logging to avoid spam
         });
@@ -330,13 +356,21 @@ export class ThreadManager {
             "circuit_breaker_failure",
             (msg: unknown) => {
                 const failureMsg = msg as CircuitBreakerFailureMessage;
+                const actualFailures =
+                    failureMsg.failuresString || failureMsg.failures.toString();
+                const truncationWarning = failureMsg.failuresIsTruncated
+                    ? " (count exceeded Number.MAX_SAFE_INTEGER, showing truncated value)"
+                    : "";
+
                 this.loggerWorker.postMessage({
                     type: "log",
                     level: "warn",
-                    message: `Circuit breaker failure in ${failureMsg.worker} worker`,
+                    message: `Circuit breaker failure in ${failureMsg.worker} worker - ${actualFailures} failures${truncationWarning}`,
                     context: {
                         worker: failureMsg.worker,
                         failures: failureMsg.failures,
+                        failuresString: failureMsg.failuresString,
+                        failuresIsTruncated: failureMsg.failuresIsTruncated,
                         state: failureMsg.state,
                         timestamp: failureMsg.timestamp || Date.now(),
                         correlationId: failureMsg.correlationId,
@@ -684,31 +718,53 @@ export class ThreadManager {
 
     private updateConnectionStatusCache(eventType: string): void {
         const now = Date.now();
-        this.cachedConnectionStatus.lastUpdated = now;
+
+        // Atomic update using object spread to prevent race conditions
+        const newStatus = {
+            ...this.cachedConnectionStatus,
+            lastUpdated: now,
+        };
 
         switch (eventType) {
             case "connected":
-                this.cachedConnectionStatus.isConnected = true;
-                this.cachedConnectionStatus.connectionState = "connected";
+                Object.assign(newStatus, {
+                    isConnected: true,
+                    connectionState: "connected",
+                });
                 break;
             case "disconnected":
-                this.cachedConnectionStatus.isConnected = false;
-                this.cachedConnectionStatus.connectionState = "disconnected";
+                Object.assign(newStatus, {
+                    isConnected: false,
+                    connectionState: "disconnected",
+                });
                 break;
             case "reconnecting":
-                this.cachedConnectionStatus.isConnected = false;
-                this.cachedConnectionStatus.connectionState = "reconnecting";
+                Object.assign(newStatus, {
+                    isConnected: false,
+                    connectionState: "reconnecting",
+                });
                 break;
             case "healthy":
-                this.cachedConnectionStatus.streamHealth.isHealthy = true;
+                newStatus.streamHealth = {
+                    ...newStatus.streamHealth,
+                    isHealthy: true,
+                };
                 break;
             case "unhealthy":
-                this.cachedConnectionStatus.streamHealth.isHealthy = false;
+                newStatus.streamHealth = {
+                    ...newStatus.streamHealth,
+                    isHealthy: false,
+                };
                 break;
             case "error":
-                this.cachedConnectionStatus.connectionState = "error";
+                Object.assign(newStatus, {
+                    connectionState: "error",
+                });
                 break;
         }
+
+        // Atomic assignment - prevents partial state updates
+        this.cachedConnectionStatus = newStatus;
     }
 
     private updateConnectionStatusFromResponse(status: {
@@ -720,7 +776,8 @@ export class ThreadManager {
             lastDepthMessage: number;
         };
     }): void {
-        this.cachedConnectionStatus = {
+        // Atomic update with complete object replacement
+        const newStatus = {
             isConnected: status.isConnected,
             connectionState: status.connectionState,
             lastUpdated: Date.now(),
@@ -730,6 +787,9 @@ export class ThreadManager {
                 lastDepthMessage: status.streamHealth?.lastDepthMessage || 0,
             },
         };
+
+        // Atomic assignment
+        this.cachedConnectionStatus = newStatus;
     }
 
     private handleStatusResponse(msg: StatusResponseMessage): void {
