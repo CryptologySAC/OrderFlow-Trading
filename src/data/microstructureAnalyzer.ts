@@ -5,8 +5,8 @@ import type {
     MicrostructureMetrics,
     CoordinationSignal,
 } from "../types/marketEvents.js";
-import { WorkerLogger } from "../multithreading/workerLogger";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IWorkerMetricsCollector } from "../multithreading/shared/workerInterfaces.js";
 
 export interface MicrostructureAnalyzerConfig {
     // Timing analysis thresholds
@@ -26,14 +26,14 @@ export interface MicrostructureAnalyzerConfig {
 }
 
 export class MicrostructureAnalyzer {
-    private readonly logger: WorkerLogger;
-    private readonly metricsCollector: MetricsCollector;
+    private readonly logger: ILogger;
+    private readonly metricsCollector: IWorkerMetricsCollector;
     private readonly config: MicrostructureAnalyzerConfig;
 
     constructor(
         config: MicrostructureAnalyzerConfig,
-        logger: WorkerLogger,
-        metricsCollector: MetricsCollector
+        logger: ILogger,
+        metricsCollector: IWorkerMetricsCollector
     ) {
         this.config = config;
         this.logger = logger;

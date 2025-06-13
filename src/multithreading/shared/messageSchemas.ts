@@ -49,7 +49,14 @@ export const MetricsBatchMessageSchema = z.object({
             name: z.string(),
             value: z.number(),
             timestamp: z.number(),
-            type: z.enum(["update", "increment"]),
+            type: z.enum([
+                "update",
+                "increment",
+                "gauge",
+                "counter",
+                "histogram",
+            ]),
+            labels: z.record(z.string()).optional(),
         })
     ),
     worker: z.string(),

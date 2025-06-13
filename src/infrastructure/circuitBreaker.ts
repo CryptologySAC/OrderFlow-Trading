@@ -37,8 +37,11 @@ export class CircuitBreaker implements ICircuitBreaker {
         // Check if circuit breaker should be reset
         if (this.isOpen && now - this.lastTripTime > this.timeoutMs) {
             this.isOpen = false;
+            this.state = CircuitState.HALF_OPEN;
             this.errorCount = 0n;
-            this.logger.info("[CircuitBreaker] Circuit breaker reset");
+            this.logger.info(
+                "[CircuitBreaker] Circuit breaker reset to half-open"
+            );
         }
 
         return !this.isOpen;
@@ -56,6 +59,7 @@ export class CircuitBreaker implements ICircuitBreaker {
 
         if (this.errorCount >= BigInt(this.threshold) && !this.isOpen) {
             this.isOpen = true;
+            this.state = CircuitState.OPEN;
             this.lastTripTime = now;
             this.logger.error(
                 `[CircuitBreaker] Circuit breaker tripped after ${this.errorCount} errors`

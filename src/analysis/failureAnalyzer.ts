@@ -1,7 +1,7 @@
 // src/analysis/failureAnalyzer.ts
 
-import { WorkerLogger } from "../multithreading/workerLogger";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IWorkerMetricsCollector } from "../multithreading/shared/workerInterfaces.js";
 import type { IPipelineStorage } from "../storage/pipelineStorage.js";
 import type {
     SignalOutcome,
@@ -173,8 +173,8 @@ export class FailureAnalyzer {
     private lastPatternUpdate = 0;
 
     constructor(
-        private readonly logger: WorkerLogger,
-        private readonly metricsCollector: MetricsCollector,
+        private readonly logger: ILogger,
+        private readonly metricsCollector: IWorkerMetricsCollector,
         private readonly storage: IPipelineStorage,
         config: Partial<FailureAnalyzerConfig> = {}
     ) {

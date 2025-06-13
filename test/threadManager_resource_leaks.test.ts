@@ -254,6 +254,11 @@ describe("ThreadManager Resource Leak Fixes", () => {
             .spyOn(console, "error")
             .mockImplementation(() => {});
 
+        // Mock process.exit to prevent test from actually exiting
+        const exitSpy = vi
+            .spyOn(process, "exit")
+            .mockImplementation(() => undefined as never);
+
         // Simulate worker errors
         const testError = new Error("Test worker error");
         loggerWorker.emit("error", testError);
@@ -289,7 +294,7 @@ describe("ThreadManager Resource Leak Fixes", () => {
             "Logger worker exited with code 1"
         );
         expect(errorSpy).toHaveBeenCalledWith(
-            "Binance worker exited with code 1"
+            "❌ CRITICAL: Binance worker exited with code 1"
         );
         expect(errorSpy).toHaveBeenCalledWith(
             "Communication worker exited with code 1"
@@ -298,7 +303,11 @@ describe("ThreadManager Resource Leak Fixes", () => {
             "Storage worker exited with code 1"
         );
 
+        // Verify process.exit was called when binance worker exited
+        expect(exitSpy).toHaveBeenCalledWith(1);
+
         errorSpy.mockRestore();
+        exitSpy.mockRestore();
 
         // Clean shutdown should still work - simulate graceful exit for shutdown
         const shutdownPromise = threadManager.shutdown();

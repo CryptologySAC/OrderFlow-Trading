@@ -178,7 +178,7 @@ describe("OrderBook Threading Data Flow", () => {
         broadcastSpy.mockRestore();
     });
 
-    it("should log warnings when stream data handler is not registered", () => {
+    it("should log warnings when stream data handler is not registered", async () => {
         const consoleSpy = vi
             .spyOn(console, "warn")
             .mockImplementation(() => {});
@@ -190,6 +190,9 @@ describe("OrderBook Threading Data Flow", () => {
         const tmWorkers = mockWorkerInstances.slice(-4);
         const [, binanceWorker] = tmWorkers;
 
+        // Verify no stream data handler is set initially
+        expect((tm as any).streamDataHandler).toBeUndefined();
+
         // Simulate depth data without handler
         const streamDataMessage = {
             type: "stream_data",
@@ -198,7 +201,12 @@ describe("OrderBook Threading Data Flow", () => {
         };
 
         const messageHandler = binanceWorker._eventListeners.message?.[0];
+        expect(messageHandler).toBeDefined();
+
         messageHandler(streamDataMessage);
+
+        // Wait for message processing
+        await new Promise((resolve) => setTimeout(resolve, 10));
 
         expect(consoleSpy).toHaveBeenCalledWith(
             "Stream data 'depth' received but no handler registered"

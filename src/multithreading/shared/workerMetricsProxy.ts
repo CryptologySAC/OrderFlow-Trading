@@ -1,6 +1,10 @@
 // src/multithreading/shared/workerMetricsProxy.ts
 import { parentPort } from "worker_threads";
-import type { EnhancedMetrics } from "../../infrastructure/metricsCollector.js";
+import type {
+    EnhancedMetrics,
+    HealthSummary,
+    HistogramSummary,
+} from "../../infrastructure/metricsCollector.js";
 import type {
     IWorkerMetricsCollector,
     MetricUpdate,
@@ -191,13 +195,24 @@ export class WorkerMetricsProxy implements IWorkerMetricsCollector {
         };
     }
 
-    getHealthSummary(): string {
+    getHealthSummary(): HealthSummary {
         const errorCount = this.localMetrics.get("errorsCount") || 0;
         const connectionCount = this.localMetrics.get("connectionsActive") || 0;
+        const uptime = Date.now() - this.startTime;
 
-        if (errorCount > 10) return "Degraded";
-        if (connectionCount === 0) return "Warning";
-        return "Healthy";
+        const healthy = errorCount <= 10 && connectionCount > 0;
+
+        return {
+            healthy,
+            uptime,
+            errorRate: errorCount / (uptime / 60000), // errors per minute
+            avgLatency: this.localMetrics.get("processingLatency") || 0,
+            activeConnections: connectionCount,
+            circuitBreakerState:
+                this.localMetrics.get("circuitBreakerState")?.toString() ||
+                "CLOSED",
+            timestamp: Date.now(),
+        };
     }
 
     private addToBatch(update: MetricUpdate): void {
@@ -337,8 +352,10 @@ export class WorkerMetricsProxy implements IWorkerMetricsCollector {
         return this.gaugeMetrics.get(name) ?? null;
     }
 
-    getHistogramSummary(): Record<string, number> | null {
-        return null; // Simplified for worker
+    getHistogramSummary(name: string): HistogramSummary | null {
+        // Simplified for worker - return null as histograms are not tracked in detail
+        void name;
+        return null;
     }
 
     getAverageLatency(): number {

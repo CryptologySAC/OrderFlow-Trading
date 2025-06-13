@@ -1,7 +1,11 @@
 // src/multithreading/shared/workerInterfaces.ts
 // Interface contracts for worker proxy implementations
 
-import type { EnhancedMetrics } from "../../infrastructure/metricsCollector.js";
+import type {
+    EnhancedMetrics,
+    HealthSummary,
+    HistogramSummary,
+} from "../../infrastructure/metricsCollector.js";
 
 /**
  * Minimal interface for metrics collection that workers need
@@ -34,8 +38,8 @@ export interface IWorkerMetricsCollector {
     createHistogram(
         name: string,
         description?: string,
-        buckets?: number[],
-        labels?: string[]
+        labels?: string[],
+        buckets?: number[]
     ): void;
     createGauge(name: string, description?: string, labels?: string[]): void;
     setGauge(
@@ -46,14 +50,14 @@ export interface IWorkerMetricsCollector {
 
     // Data retrieval
     getMetrics(): EnhancedMetrics;
-    getHealthSummary(): string;
+    getHealthSummary(): HealthSummary;
     getHistogramPercentiles(
         name: string,
         percentiles: number[]
     ): Record<string, number>;
     getCounterRate(name: string, windowMs?: number): number;
     getGaugeValue(name: string): number | null;
-    getHistogramSummary(name: string): Record<string, number> | null;
+    getHistogramSummary(name: string): HistogramSummary | null;
     getAverageLatency(): number;
     getLatencyPercentiles(): Record<string, number>;
 
