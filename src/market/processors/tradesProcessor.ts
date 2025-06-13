@@ -1,4 +1,4 @@
-// src/clients/tradesProcessor.ts
+// src/market/processors/tradesProcessor.ts
 /**
  * 🔒 PRODUCTION-READY - DO NOT MODIFY
  * ===================================
@@ -18,17 +18,17 @@
  */
 import { randomUUID } from "crypto";
 import { z } from "zod";
-import { BinanceDataFeed } from "../utils/binance.js";
+import { BinanceDataFeed } from "../../utils/binance.js";
 import { SpotWebsocketAPI } from "@binance/spot";
-import type { WebSocketMessage } from "../utils/interfaces.js";
-import type { PlotTrade } from "../utils/types.js";
-import type { EnrichedTradeEvent } from "../types/marketEvents.js";
-import { WorkerLogger } from "../multithreading/workerLogger";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
-import { ProductionUtils } from "../utils/productionUtils.js";
-import { CircularBuffer } from "../utils/utils.js";
+import type { WebSocketMessage } from "../../utils/interfaces.js";
+import type { PlotTrade } from "../../utils/types.js";
+import type { EnrichedTradeEvent } from "../../types/marketEvents.js";
+import { WorkerLogger } from "../../multithreading/workerLogger.js";
+import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
+import { ProductionUtils } from "../../utils/productionUtils.js";
+import { CircularBuffer } from "../../utils/utils.js";
 import { EventEmitter } from "events";
-import { ThreadManager } from "../multithreading/threadManager.js";
+import { ThreadManager } from "../../multithreading/threadManager.js";
 
 // ✅ Zod validation schemas based on actual Binance API specification
 const TradeDataSchema = z.object({

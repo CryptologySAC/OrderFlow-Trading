@@ -2,6 +2,7 @@
 // TODO If you want to score spoofing events, modify your SpoofingDetector to return the actual SpoofingEvent object (not just boolean).
 // TODO You could then emit a severity/confidence level proportional to the size and cancel/execution ratio.
 import { TimeAwareCache } from "../utils/utils.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 
 export interface SpoofingDetectorConfig {
     tickSize: number; // 0.01 for LTCUSDT
@@ -30,9 +31,11 @@ export class SpoofingDetector {
     >(300000); // 5 minutes TTL
 
     private config: SpoofingDetectorConfig;
+    private logger?: ILogger;
 
-    constructor(config: SpoofingDetectorConfig) {
+    constructor(config: SpoofingDetectorConfig, logger?: ILogger) {
         this.config = config;
+        this.logger = logger;
     }
 
     /**
@@ -125,20 +128,19 @@ export class SpoofingDetector {
 
                     // For test: log if canceled spoof >= threshold
                     if (testLogMinSpoof && canceled >= testLogMinSpoof) {
-                        console.log(
-                            "[SpoofingDetector][TEST] Large spoofed wall:",
-                            {
-                                priceStart: bandPrice,
-                                priceEnd: bandPrice,
-                                side,
-                                wallBefore: prevQty,
-                                wallAfter: currQty,
-                                canceled,
-                                executed,
-                                timestamp: curr.time,
-                                spoofedSide: side === "buy" ? "ask" : "bid",
-                            }
-                        );
+                        this.logger?.info("Large spoofed wall detected", {
+                            component: "SpoofingDetector",
+                            operation: "wasSpoofed",
+                            priceStart: bandPrice,
+                            priceEnd: bandPrice,
+                            side,
+                            wallBefore: prevQty,
+                            wallAfter: currQty,
+                            canceled,
+                            executed,
+                            timestamp: curr.time,
+                            spoofedSide: side === "buy" ? "ask" : "bid",
+                        });
                     }
 
                     // Only count as spoof if most was canceled, not executed
@@ -176,7 +178,9 @@ export class SpoofingDetector {
         if (spoofDetected && maxSpoofEvent && wallBand > 1) {
             // Summarize all spoofed prices in the band (for logging)
             // Optional: extend logic here to merge contiguous spoofed prices
-            console.log("[SpoofingDetector] Spoofing detected in band:", {
+            this.logger?.info("Spoofing detected in band", {
+                component: "SpoofingDetector",
+                operation: "wasSpoofed",
                 band: [maxSpoofEvent.priceStart, maxSpoofEvent.priceEnd],
                 ...maxSpoofEvent,
             });

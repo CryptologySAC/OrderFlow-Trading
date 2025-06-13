@@ -1,4 +1,4 @@
-import { OrderBookProcessor } from "../src/clients/orderBookProcessor";
+import { OrderBookProcessor } from "../src/market/processors/orderBookProcessor";
 import { Logger } from "../src/infrastructure/logger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import type {

@@ -1,12 +1,13 @@
 import { Worker } from "worker_threads";
 import { randomUUID } from "crypto";
+import { WorkerMessageRouter } from "./shared/workerMessageRouter.js";
 
 import type { SignalEvent } from "../infrastructure/signalLoggerInterface.js";
 import type { WebSocketMessage } from "../utils/interfaces.js";
 import type { SignalTracker } from "../analysis/signalTracker.js";
 import type { EnhancedMetrics } from "../infrastructure/metricsCollector.js";
 
-interface BinanceWorkerMetrics {
+export interface BinanceWorkerMetrics {
     connection: {
         state: string;
         uptime: number | undefined;
@@ -31,18 +32,7 @@ interface BinanceWorkerMetrics {
     };
 }
 
-interface MetricsMessage {
-    type: "metrics";
-    data: BinanceWorkerMetrics;
-}
-
-function isMetricsMessage(msg: unknown): msg is MetricsMessage {
-    return (
-        typeof msg === "object" &&
-        msg !== null &&
-        (msg as { type?: unknown }).type === "metrics"
-    );
-}
+// Metrics messages are handled by message router
 
 interface ErrorMessage {
     type: "error";
@@ -116,69 +106,50 @@ interface ProxyCorrelationMessage {
     context?: string;
 }
 
-function isProxyLogMessage(msg: unknown): msg is ProxyLogMessage {
-    return (
-        typeof msg === "object" &&
-        msg !== null &&
-        (msg as { type?: unknown }).type === "log_message"
-    );
+// New message types for worker proxy functionality
+interface MetricsUpdateMessage {
+    type: "metrics_update";
+    metricName: string;
+    value: number;
+    worker: string;
 }
 
-function isProxyCorrelationMessage(
-    msg: unknown
-): msg is ProxyCorrelationMessage {
-    return (
-        typeof msg === "object" &&
-        msg !== null &&
-        (msg as { type?: unknown }).type === "log_correlation"
-    );
+interface MetricsIncrementMessage {
+    type: "metrics_increment";
+    metricName: string;
+    worker: string;
 }
 
-function isErrorMessage(msg: unknown): msg is ErrorMessage {
-    return (
-        typeof msg === "object" &&
-        msg !== null &&
-        (msg as { type?: unknown }).type === "error"
-    );
+interface CircuitBreakerFailureMessage {
+    type: "circuit_breaker_failure";
+    failures: number;
+    worker: string;
+    state?: string;
+    timestamp?: number;
+    correlationId?: string;
 }
 
-function isBacklogRequestMessage(msg: unknown): msg is BacklogRequestMessage {
-    return (
-        typeof msg === "object" &&
-        msg !== null &&
-        (msg as { type?: unknown }).type === "request_backlog"
-    );
+interface MetricsBatchMessage {
+    type: "metrics_batch";
+    updates: Array<{
+        name: string;
+        value: number;
+        timestamp: number;
+        type: "update" | "increment";
+    }>;
+    worker: string;
+    timestamp: number;
+    correlationId: string;
 }
 
-function isStreamEventMessage(msg: unknown): msg is StreamEventMessage {
-    return (
-        typeof msg === "object" &&
-        msg !== null &&
-        (msg as { type?: unknown }).type === "stream_event"
-    );
-}
-
-function isStreamDataMessage(msg: unknown): msg is StreamDataMessage {
-    return (
-        typeof msg === "object" &&
-        msg !== null &&
-        (msg as { type?: unknown }).type === "stream_data"
-    );
-}
-
-function isStatusResponseMessage(msg: unknown): msg is StatusResponseMessage {
-    return (
-        typeof msg === "object" &&
-        msg !== null &&
-        (msg as { type?: unknown }).type === "status_response"
-    );
-}
+// Message type guards removed as they're handled by message router
 
 export class ThreadManager {
     private readonly loggerWorker: Worker;
     private readonly binanceWorker: Worker;
     private readonly commWorker: Worker;
     private readonly storageWorker: Worker;
+    private readonly messageRouter: WorkerMessageRouter;
     private isShuttingDown = false;
     private backlogRequestHandler?: (clientId: string, amount: number) => void;
     private streamEventHandler?: (eventType: string, data: unknown) => void;
@@ -228,6 +199,10 @@ export class ThreadManager {
     };
 
     constructor() {
+        // Initialize message router
+        this.messageRouter = new WorkerMessageRouter();
+        this.setupMessageRouterHandlers();
+
         this.loggerWorker = new Worker(
             new URL("./workers/loggerWorker.js", import.meta.url)
         );
@@ -241,37 +216,9 @@ export class ThreadManager {
             new URL("./workers/storageWorker.js", import.meta.url)
         );
 
-        // Forward metrics from binance worker to communication worker
+        // Use message router for all worker communication
         this.binanceWorker.on("message", (msg: unknown) => {
-            if (isMetricsMessage(msg)) {
-                this.commWorker.postMessage(msg);
-            } else if (isErrorMessage(msg)) {
-                console.error("Binance worker error:", msg.message);
-            } else if (isStreamEventMessage(msg)) {
-                this.updateConnectionStatusCache(msg.eventType);
-                this.handleStreamEvent(msg.eventType, msg.data);
-            } else if (isStreamDataMessage(msg)) {
-                this.handleStreamData(msg.dataType, msg.data);
-            } else if (isStatusResponseMessage(msg)) {
-                this.handleStatusResponse(msg);
-            } else if (isProxyLogMessage(msg)) {
-                // Forward proxy log messages to logger worker
-                this.loggerWorker.postMessage({
-                    type: "log",
-                    level: msg.data.level,
-                    message: msg.data.message,
-                    context: msg.data.context,
-                    correlationId: msg.data.correlationId,
-                });
-            } else if (isProxyCorrelationMessage(msg)) {
-                // Forward correlation messages to logger worker
-                this.loggerWorker.postMessage({
-                    type: "correlation",
-                    action: msg.action,
-                    id: msg.id,
-                    context: msg.context,
-                });
-            }
+            this.messageRouter.routeMessage(msg, this.binanceWorker);
         });
 
         this.storageWorker.on("message", (msg: unknown) => {
@@ -300,40 +247,183 @@ export class ThreadManager {
             }
         });
 
-        // Handle error messages from other workers
+        // Use message router for other workers too
         this.loggerWorker.on("message", (msg: unknown) => {
-            if (isErrorMessage(msg)) {
-                console.error("Logger worker error:", msg.message);
-            }
+            this.messageRouter.routeMessage(msg, this.loggerWorker);
         });
 
         this.commWorker.on("message", (msg: unknown) => {
-            if (isErrorMessage(msg)) {
-                console.error("Communication worker error:", msg.message);
-            } else if (isBacklogRequestMessage(msg)) {
-                this.handleBacklogRequest(msg.data);
-            } else if (isProxyLogMessage(msg)) {
-                // Forward proxy log messages to logger worker
-                this.loggerWorker.postMessage({
-                    type: "log",
-                    level: msg.data.level,
-                    message: msg.data.message,
-                    context: msg.data.context,
-                    correlationId: msg.data.correlationId,
-                });
-            } else if (isProxyCorrelationMessage(msg)) {
-                // Forward correlation messages to logger worker
-                this.loggerWorker.postMessage({
-                    type: "correlation",
-                    action: msg.action,
-                    id: msg.id,
-                    context: msg.context,
-                });
-            }
+            this.messageRouter.routeMessage(msg, this.commWorker);
         });
 
         // Set up error handlers for graceful degradation
         this.setupWorkerErrorHandlers();
+    }
+
+    private setupMessageRouterHandlers(): void {
+        // Handle metrics-related messages
+        this.messageRouter.registerHandler("metrics", (msg: unknown) => {
+            this.commWorker.postMessage(msg);
+        });
+
+        this.messageRouter.registerHandler("metrics_update", (msg: unknown) => {
+            const updateMsg = msg as MetricsUpdateMessage;
+            this.commWorker.postMessage({
+                type: "metrics",
+                data: {
+                    action: "update",
+                    metricName: updateMsg.metricName,
+                    value: updateMsg.value,
+                    worker: updateMsg.worker,
+                },
+            });
+        });
+
+        this.messageRouter.registerHandler(
+            "metrics_increment",
+            (msg: unknown) => {
+                const incrementMsg = msg as MetricsIncrementMessage;
+                this.commWorker.postMessage({
+                    type: "metrics",
+                    data: {
+                        action: "increment",
+                        metricName: incrementMsg.metricName,
+                        worker: incrementMsg.worker,
+                    },
+                });
+            }
+        );
+
+        this.messageRouter.registerHandler("metrics_batch", (msg: unknown) => {
+            const batchMsg = msg as MetricsBatchMessage;
+            // Handle batched metrics for performance
+            batchMsg.updates.forEach((update) => {
+                if (update.type === "update") {
+                    this.commWorker.postMessage({
+                        type: "metrics",
+                        data: {
+                            action: "update",
+                            metricName: update.name,
+                            value: update.value,
+                            worker: batchMsg.worker,
+                            timestamp: update.timestamp,
+                        },
+                    });
+                } else if (update.type === "increment") {
+                    this.commWorker.postMessage({
+                        type: "metrics",
+                        data: {
+                            action: "increment",
+                            metricName: update.name,
+                            worker: batchMsg.worker,
+                            timestamp: update.timestamp,
+                        },
+                    });
+                }
+            });
+
+            // Metrics batch processed successfully - no logging to avoid spam
+        });
+
+        // Handle circuit breaker failures
+        this.messageRouter.registerHandler(
+            "circuit_breaker_failure",
+            (msg: unknown) => {
+                const failureMsg = msg as CircuitBreakerFailureMessage;
+                this.loggerWorker.postMessage({
+                    type: "log",
+                    level: "warn",
+                    message: `Circuit breaker failure in ${failureMsg.worker} worker`,
+                    context: {
+                        worker: failureMsg.worker,
+                        failures: failureMsg.failures,
+                        state: failureMsg.state,
+                        timestamp: failureMsg.timestamp || Date.now(),
+                        correlationId: failureMsg.correlationId,
+                    },
+                });
+            }
+        );
+
+        // Handle stream events
+        this.messageRouter.registerHandler("stream_event", (msg: unknown) => {
+            const eventMsg = msg as StreamEventMessage;
+            this.updateConnectionStatusCache(eventMsg.eventType);
+            this.handleStreamEvent(eventMsg.eventType, eventMsg.data);
+        });
+
+        this.messageRouter.registerHandler("stream_data", (msg: unknown) => {
+            const dataMsg = msg as StreamDataMessage;
+            this.handleStreamData(dataMsg.dataType, dataMsg.data);
+        });
+
+        this.messageRouter.registerHandler(
+            "status_response",
+            (msg: unknown) => {
+                const statusMsg = msg as StatusResponseMessage;
+                this.handleStatusResponse(statusMsg);
+            }
+        );
+
+        // Handle log proxy messages
+        this.messageRouter.registerHandler("log_message", (msg: unknown) => {
+            const logMsg = msg as ProxyLogMessage;
+            this.loggerWorker.postMessage({
+                type: "log",
+                level: logMsg.data.level,
+                message: logMsg.data.message,
+                context: logMsg.data.context,
+                correlationId: logMsg.data.correlationId,
+            });
+        });
+
+        this.messageRouter.registerHandler(
+            "log_correlation",
+            (msg: unknown) => {
+                const correlationMsg = msg as ProxyCorrelationMessage;
+                this.loggerWorker.postMessage({
+                    type: "correlation",
+                    action: correlationMsg.action,
+                    id: correlationMsg.id,
+                    context: correlationMsg.context,
+                });
+            }
+        );
+
+        // Handle backlog requests
+        this.messageRouter.registerHandler(
+            "request_backlog",
+            (msg: unknown) => {
+                const backlogMsg = msg as BacklogRequestMessage;
+                this.handleBacklogRequest(backlogMsg.data);
+            }
+        );
+
+        // Handle errors
+        this.messageRouter.registerHandler("error", (msg: unknown) => {
+            const errorMsg = msg as ErrorMessage;
+            console.error("Worker error:", errorMsg.message);
+        });
+
+        // Handle storage replies (special case - bypass router for direct handling)
+        this.messageRouter.registerHandler("reply", (msg: unknown) => {
+            const replyMsg = msg as {
+                requestId: string;
+                ok: boolean;
+                result: unknown;
+                error?: string;
+            };
+            const { requestId, ok, result, error } = replyMsg;
+            const entry = this.storageResolvers.get(requestId);
+            if (entry) {
+                this.storageResolvers.delete(requestId);
+                if (ok) {
+                    entry.resolve(result);
+                } else {
+                    entry.reject(new Error(error));
+                }
+            }
+        });
     }
 
     public startBinance(): void {
@@ -655,6 +745,9 @@ export class ThreadManager {
         this.isShuttingDown = true;
 
         try {
+            // Shutdown message router first
+            this.messageRouter.shutdown();
+
             // Send shutdown messages to all workers
             this.loggerWorker.postMessage({ type: "shutdown" });
             this.binanceWorker.postMessage({ type: "shutdown" });
@@ -705,7 +798,16 @@ export class ThreadManager {
 
         this.binanceWorker.on("exit", (code) => {
             if (!this.isShuttingDown && code !== 0) {
-                console.error(`Binance worker exited with code ${code}`);
+                // POLICY OVERRIDE: Using console.error for system panic
+                // REASON: Binance worker crash is critical - entire system must exit immediately
+                console.error(
+                    `❌ CRITICAL: Binance worker exited with code ${code}`
+                );
+                console.error(
+                    "❌ Market data connectivity lost - system cannot continue"
+                );
+                console.error("❌ Initiating emergency shutdown");
+                process.exit(1);
             }
         });
 

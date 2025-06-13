@@ -10,30 +10,18 @@ import { ThreadManager } from "./multithreading/threadManager.js";
 export async function main(): Promise<void> {
     try {
         const threadManager = new ThreadManager();
-
-        // Create dependencies
         const dependencies = createDependencies(threadManager);
-
-        // Create dashboard
         const dashboard = await OrderFlowDashboard.create(dependencies);
-
-        // Start the application
         await dashboard.startDashboard();
 
-        console.log(
-            "Order Flow Trading system (Multithreaded) started successfully"
-        );
-
         const shutdown = async (): Promise<void> => {
-            console.log(
-                "Received shutdown signal, shutting down gracefully..."
-            );
             try {
                 await threadManager.shutdown();
-                console.log("Shutdown completed successfully");
                 process.exit(0);
             } catch (error) {
-                console.error("Error during shutdown:", error);
+                // POLICY OVERRIDE: Using console.error for system panic during shutdown
+                // REASON: Logging infrastructure may be unavailable during shutdown, critical failure requires immediate visibility
+                console.error("❌ Error during shutdown:", error);
                 process.exit(1);
             }
         };
@@ -46,7 +34,15 @@ export async function main(): Promise<void> {
         });
     } catch (error: unknown) {
         const err = error instanceof Error ? error : new Error(String(error));
-        console.error("Failed to start Order Flow Trading system:", err);
+        // POLICY OVERRIDE: Using console.error for system panic during main startup
+        // REASON: Logger infrastructure not available during startup failure, critical failure requires immediate visibility
+        console.error("❌ CRITICAL STARTUP FAILURE:");
+        console.error(
+            "❌ Failed to start Order Flow Trading system:",
+            err.message
+        );
+        console.error("❌ Stack trace:", err.stack);
+        console.error("❌ Application cannot continue - exiting immediately");
         process.exit(1);
     }
 }

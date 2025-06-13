@@ -33,24 +33,65 @@ import { parentPort } from "worker_threads";
 import { getDB } from "../../infrastructure/db.js";
 import { Storage } from "../storage.js";
 import { WorkerProxyLogger } from "../shared/workerProxylogger.js";
+import { WorkerMetricsProxy } from "../shared/workerMetricsProxy.js";
 import {
     isWorkerCallMessage,
     isWorkerShutdownMessage,
     serializeError,
 } from "../../storage/typeGuards.js";
+import type { IWorkerMetricsCollector } from "../shared/workerInterfaces.js";
 
 // Validate that we're running in a worker thread context
 if (!parentPort) {
-    console.error("StorageWorker must be run in a worker thread");
+    console.error("❌ CRITICAL: StorageWorker must be run in a worker thread");
+    console.error(
+        "❌ Application cannot continue without proper worker thread context"
+    );
     process.exit(1);
 }
 
-const logger = new WorkerProxyLogger("communication");
+const logger = new WorkerProxyLogger("storage");
+const metrics: IWorkerMetricsCollector = new WorkerMetricsProxy("storage");
+
+// Enhanced monitoring
+let workerStartTime = Date.now();
+let totalOperationsProcessed = 0;
+let totalErrorCount = 0;
+
+function updateWorkerMetrics(): void {
+    metrics.updateMetric("worker_uptime", Date.now() - workerStartTime);
+    metrics.updateMetric(
+        "total_operations_processed",
+        totalOperationsProcessed
+    );
+    metrics.updateMetric("total_errors", totalErrorCount);
+    metrics.updateMetric("database_connections_active", 1); // SQLite single connection
+}
 
 /* ────────── Instantiate original Storage (sync, WAL) ────────── */
-const db = getDB();
-db.pragma("journal_mode = WAL");
-const storage = new Storage(db, logger);
+let db: import("better-sqlite3").Database;
+let storage: Storage;
+
+try {
+    console.log("📦 StorageWorker: Initializing database connection...");
+    db = getDB();
+
+    console.log("🔧 StorageWorker: Setting WAL mode...");
+    db.pragma("journal_mode = WAL");
+
+    console.log("💾 StorageWorker: Creating storage instance...");
+    storage = new Storage(db, logger);
+
+    console.log("✅ StorageWorker: Database initialized successfully");
+} catch (error) {
+    console.error("❌ CRITICAL: StorageWorker database initialization failed:");
+    console.error("❌", error instanceof Error ? error.message : String(error));
+    console.error("❌ Stack:", error instanceof Error ? error.stack : "N/A");
+    console.error(
+        "❌ Trading system cannot function without database - exiting"
+    );
+    process.exit(1);
+}
 
 /* ────────── Utility: function keys of Storage ────────── */
 type FunctionKeys<T> = {
@@ -135,10 +176,77 @@ function invoke<M extends AllowedMethod>(
     }
 }
 
+// Start monitoring interval
+const monitoringInterval = setInterval(() => {
+    updateWorkerMetrics();
+}, 5000); // Update every 5 seconds
+
+// Add global error handlers
+process.on("uncaughtException", (error: Error) => {
+    logger.error("Uncaught exception in storage worker", {
+        error: error.message,
+        stack: error.stack,
+    });
+    void gracefulShutdown(1);
+});
+
+process.on("unhandledRejection", (reason: unknown) => {
+    logger.error("Unhandled promise rejection in storage worker", {
+        reason: reason instanceof Error ? reason.message : String(reason),
+        stack: reason instanceof Error ? reason.stack : undefined,
+    });
+    void gracefulShutdown(1);
+});
+
+async function gracefulShutdown(exitCode: number = 0): Promise<void> {
+    try {
+        logger.info("Storage worker starting graceful shutdown");
+
+        // Stop monitoring interval
+        try {
+            clearInterval(monitoringInterval);
+        } catch (error) {
+            logger.error("Error stopping monitoring interval", {
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+
+        // Cleanup proxy classes
+        try {
+            if (metrics.destroy) {
+                await (metrics.destroy as () => Promise<void>)();
+            }
+        } catch (error) {
+            logger.error("Error during proxy cleanup", {
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+
+        // Close database connection
+        try {
+            db.close();
+            logger.info("Database connection closed successfully");
+        } catch (error) {
+            logger.error("Error closing database during shutdown", {
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+
+        logger.info("Storage worker shutdown complete");
+        process.exit(exitCode);
+    } catch (error) {
+        logger.error("Error during storage worker shutdown", {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        process.exit(1);
+    }
+}
+
 /* ────────── Worker message loop (sync callback) ────────── */
 parentPort.on("message", (msg: unknown): void => {
     // Validate message structure
     if (!msg || typeof msg !== "object") {
+        totalErrorCount++;
         console.error("StorageWorker: Invalid message received:", msg);
         return;
     }
@@ -146,19 +254,14 @@ parentPort.on("message", (msg: unknown): void => {
     const typedMsg = msg as { type?: string };
 
     if (!typedMsg.type) {
+        totalErrorCount++;
         console.error("StorageWorker: Message missing type:", msg);
         return;
     }
 
     // Validate shutdown message
     if (isWorkerShutdownMessage(msg)) {
-        try {
-            db.close();
-        } catch (error) {
-            console.error("Error closing database during shutdown:", error);
-        } finally {
-            process.exit(0);
-        }
+        void gracefulShutdown(0);
         return;
     }
 
@@ -189,8 +292,19 @@ parentPort.on("message", (msg: unknown): void => {
     // Wrap async work inside an IIFE to keep the outer callback sync
     void (async () => {
         const { method, args, requestId } = msg;
+        const startTime = Date.now();
+
         try {
+            totalOperationsProcessed++;
+            metrics.incrementMetric("operations_attempted");
+
             const result = await invoke(method as AllowedMethod, args);
+
+            // Track successful operation
+            const processingTime = Date.now() - startTime;
+            metrics.updateMetric("last_operation_duration", processingTime);
+            metrics.incrementMetric("operations_successful");
+
             const reply: ReplySuccess = {
                 type: "reply",
                 requestId,
@@ -198,7 +312,26 @@ parentPort.on("message", (msg: unknown): void => {
                 result,
             };
             parentPort!.postMessage(reply as Reply);
+
+            logger.debug("Storage operation completed successfully", {
+                method,
+                processingTime,
+                requestId,
+            });
         } catch (err) {
+            totalErrorCount++;
+            metrics.incrementMetric("operations_failed");
+
+            const processingTime = Date.now() - startTime;
+            metrics.updateMetric("last_error_time", Date.now());
+
+            logger.error("Storage operation failed", {
+                method,
+                error: serializeError(err),
+                processingTime,
+                requestId,
+            });
+
             const reply: ReplyError = {
                 type: "reply",
                 requestId,

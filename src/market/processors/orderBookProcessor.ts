@@ -1,9 +1,12 @@
-// src/clients/orderBookProcessor.ts
-import type { OrderBookSnapshot, PassiveLevel } from "../types/marketEvents.js";
-import type { WebSocketMessage } from "../utils/interfaces.js";
-import { WorkerLogger } from "../multithreading/workerLogger";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
-import { CircularBuffer } from "../utils/utils.js";
+// src/market/processors/orderBookProcessor.ts
+import type {
+    OrderBookSnapshot,
+    PassiveLevel,
+} from "../../types/marketEvents.js";
+import type { WebSocketMessage } from "../../utils/interfaces.js";
+import { WorkerLogger } from "../../multithreading/workerLogger.js";
+import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
+import { CircularBuffer } from "../../utils/utils.js";
 
 export interface IOrderBookProcessor {
     onOrderBookUpdate(event: OrderBookSnapshot): WebSocketMessage;

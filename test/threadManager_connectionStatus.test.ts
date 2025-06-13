@@ -7,6 +7,7 @@ const createMockWorker = () => {
     const messageHandlers: Array<(msg: any) => void> = [];
     const errorHandlers: Array<(error: Error) => void> = [];
     const exitHandlers: Array<(code: number) => void> = [];
+    let isShuttingDown = false;
 
     return {
         postMessage: vi.fn().mockImplementation((message: any) => {
@@ -32,6 +33,12 @@ const createMockWorker = () => {
                             },
                         })
                     );
+                } else if (message.type === "shutdown") {
+                    // Simulate graceful shutdown
+                    isShuttingDown = true;
+                    setTimeout(() => {
+                        exitHandlers.forEach((handler) => handler(0));
+                    }, 5);
                 }
             }, 10);
         }),
@@ -44,7 +51,14 @@ const createMockWorker = () => {
                 exitHandlers.push(handler as any);
             }
         }),
-        terminate: vi.fn().mockResolvedValue(0),
+        terminate: vi.fn().mockImplementation(() => {
+            if (!isShuttingDown) {
+                setTimeout(() => {
+                    exitHandlers.forEach((handler) => handler(0));
+                }, 5);
+            }
+            return Promise.resolve(0);
+        }),
         simulateMessage: (message: any) => {
             messageHandlers.forEach((handler) => handler(message));
         },
@@ -85,7 +99,7 @@ describe("ThreadManager Connection Status", () => {
         expect(cachedStatus.cacheAge).toBeGreaterThanOrEqual(0);
     });
 
-    it("should update cache when receiving stream events", () => {
+    it("should update cache when receiving stream events", async () => {
         // Simulate connected event
         mockBinanceWorker.simulateMessage({
             type: "stream_event",
@@ -93,18 +107,24 @@ describe("ThreadManager Connection Status", () => {
             data: { timestamp: Date.now() },
         });
 
+        // Wait for async message processing
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
         const cachedStatus = threadManager.getCachedConnectionStatus();
         expect(cachedStatus.isConnected).toBe(true);
         expect(cachedStatus.connectionState).toBe("connected");
     });
 
-    it("should handle disconnection events", () => {
+    it("should handle disconnection events", async () => {
         // First connect
         mockBinanceWorker.simulateMessage({
             type: "stream_event",
             eventType: "connected",
             data: { timestamp: Date.now() },
         });
+
+        // Wait for first message processing
+        await new Promise((resolve) => setTimeout(resolve, 20));
 
         // Then disconnect
         mockBinanceWorker.simulateMessage({
@@ -113,30 +133,39 @@ describe("ThreadManager Connection Status", () => {
             data: { reason: "network_error", timestamp: Date.now() },
         });
 
+        // Wait for second message processing
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
         const cachedStatus = threadManager.getCachedConnectionStatus();
         expect(cachedStatus.isConnected).toBe(false);
         expect(cachedStatus.connectionState).toBe("disconnected");
     });
 
-    it("should handle reconnecting state", () => {
+    it("should handle reconnecting state", async () => {
         mockBinanceWorker.simulateMessage({
             type: "stream_event",
             eventType: "reconnecting",
             data: { attempt: 1, delay: 5000, maxAttempts: 10 },
         });
 
+        // Wait for async message processing
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
         const cachedStatus = threadManager.getCachedConnectionStatus();
         expect(cachedStatus.isConnected).toBe(false);
         expect(cachedStatus.connectionState).toBe("reconnecting");
     });
 
-    it("should handle health status changes", () => {
+    it("should handle health status changes", async () => {
         // Start healthy
         mockBinanceWorker.simulateMessage({
             type: "stream_event",
             eventType: "healthy",
             data: { timestamp: Date.now() },
         });
+
+        // Wait for async message processing
+        await new Promise((resolve) => setTimeout(resolve, 20));
 
         let cachedStatus = threadManager.getCachedConnectionStatus();
         expect(cachedStatus.streamHealth.isHealthy).toBe(true);
@@ -147,6 +176,9 @@ describe("ThreadManager Connection Status", () => {
             eventType: "unhealthy",
             data: { timestamp: Date.now() },
         });
+
+        // Wait for async message processing
+        await new Promise((resolve) => setTimeout(resolve, 20));
 
         cachedStatus = threadManager.getCachedConnectionStatus();
         expect(cachedStatus.streamHealth.isHealthy).toBe(false);

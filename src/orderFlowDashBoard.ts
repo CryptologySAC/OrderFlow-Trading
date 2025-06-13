@@ -652,8 +652,8 @@ export class OrderFlowDashboard {
 
                     // Feed trade data to event-based detectors
                     this.absorptionDetector.onEnrichedTrade(enrichedTrade);
-                    this.anomalyDetector.onEnrichedTrade(enrichedTrade);
                     // TODO this.exhaustionDetector.onEnrichedTrade(enrichedTrade);
+                    this.anomalyDetector.onEnrichedTrade(enrichedTrade);
                     this.deltaCVDConfirmation.onEnrichedTrade(enrichedTrade);
                     this.supportResistanceDetector.onEnrichedTrade(
                         enrichedTrade

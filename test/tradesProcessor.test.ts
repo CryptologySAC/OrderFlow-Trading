@@ -1,4 +1,4 @@
-import { TradesProcessor } from "../src/clients/tradesProcessor";
+import { TradesProcessor } from "../src/market/processors/tradesProcessor";
 import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents";

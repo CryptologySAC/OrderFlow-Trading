@@ -1,10 +1,9 @@
 import { parentPort } from "worker_threads";
 import { WorkerProxyLogger } from "../shared/workerProxylogger.js";
-import {
-    MetricsCollector,
-    type EnhancedMetrics,
-} from "../../infrastructure/metricsCollector.js";
-import { RateLimiter } from "../../infrastructure/rateLimiter.js";
+import { WorkerMetricsProxy } from "../shared/workerMetricsProxy.js";
+import { WorkerRateLimiterProxy } from "../shared/workerRateLimiterProxy.js";
+import type { EnhancedMetrics } from "../../infrastructure/metricsCollector.js";
+import type { IWorkerMetricsCollector } from "../shared/workerInterfaces.js";
 import {
     WebSocketManager,
     type ExtendedWebSocket,
@@ -67,16 +66,32 @@ class DataStreamProxy {
     };
 
     public setMetrics(m: BinanceWorkerMetrics): void {
+        // Add safety checks for undefined connection object
+        const connection = m?.connection;
+        const streams = m?.streams;
+
+        if (!connection) {
+            // Handle case where connection data is missing
+            this.metrics = {
+                streamConnections: 0,
+                streamUptime: 0,
+                streamHealth: "Unknown",
+                lastStreamData: 0,
+                reconnectionAttempts: 0,
+            };
+            return;
+        }
+
         // Extract stream-related metrics from the binance worker metrics
         this.metrics = {
             streamConnections: 1, // Connected if we're getting metrics
-            streamUptime: m.connection.uptime || 0,
-            streamHealth: m.connection.state,
+            streamUptime: connection.uptime || 0,
+            streamHealth: connection.state || "Unknown",
             lastStreamData: Math.max(
-                m.streams.health.lastTradeMessage || 0,
-                m.streams.health.lastDepthMessage || 0
+                streams?.health?.lastTradeMessage || 0,
+                streams?.health?.lastDepthMessage || 0
             ),
-            reconnectionAttempts: m.connection.reconnectAttempts,
+            reconnectionAttempts: connection.reconnectAttempts || 0,
         };
     }
 
@@ -85,10 +100,36 @@ class DataStreamProxy {
     }
 }
 
+// Validate worker thread context
+if (!parentPort) {
+    console.error(
+        "❌ CRITICAL: CommunicationWorker must be run in a worker thread"
+    );
+    console.error(
+        "❌ Application cannot continue without proper worker thread context"
+    );
+    process.exit(1);
+}
+
 const logger = new WorkerProxyLogger("communication");
-const metrics = new MetricsCollector();
-const rateLimiter = new RateLimiter(60000, 100);
+const metrics = new WorkerMetricsProxy("communication");
+const rateLimiter = new WorkerRateLimiterProxy(60000, 100);
 const dataStream = new DataStreamProxy();
+
+// Enhanced monitoring
+let workerStartTime = Date.now();
+let totalRequestsProcessed = 0;
+let errorCount = 0;
+
+function updateWorkerMetrics(): void {
+    metrics.updateMetric("worker_uptime", Date.now() - workerStartTime);
+    metrics.updateMetric("total_requests_processed", totalRequestsProcessed);
+    metrics.updateMetric("error_count", errorCount);
+    metrics.updateMetric(
+        "rate_limiter_remaining",
+        rateLimiter.getRemainingRequests()
+    );
+}
 
 // WebSocket handlers for client connections with isolation
 const wsHandlers = {
@@ -255,8 +296,8 @@ const onClientConnect = (ws: IsolatedWebSocket) => {
 const wsManager = new WebSocketManager(
     Config.WS_PORT,
     logger,
-    rateLimiter,
-    metrics,
+    rateLimiter as unknown as import("../../infrastructure/rateLimiter.js").RateLimiter,
+    metrics as unknown as import("../../infrastructure/metricsCollector.js").MetricsCollector,
     wsHandlers,
     onClientConnect
 );
@@ -269,7 +310,7 @@ class EnhancedStatsBroadcaster {
     private mainThreadMetrics: EnhancedMetrics | null = null;
 
     constructor(
-        private readonly metrics: MetricsCollector,
+        private readonly metrics: IWorkerMetricsCollector,
         private readonly dataStream: DataStreamProxy,
         private readonly wsManager: WebSocketManager,
         private readonly logger: WorkerProxyLogger,
@@ -448,6 +489,11 @@ const statsBroadcaster = new EnhancedStatsBroadcaster(
 // Start only the original stats broadcaster (remove duplicate broadcasting)
 statsBroadcaster.start();
 
+// Start monitoring interval
+const monitoringInterval = setInterval(() => {
+    updateWorkerMetrics();
+}, 5000); // Update every 5 seconds
+
 interface MetricsMessage {
     type: "metrics";
     data: BinanceWorkerMetrics;
@@ -497,11 +543,29 @@ async function gracefulShutdown(exitCode: number = 0): Promise<void> {
     try {
         logger.info("Communication worker starting graceful shutdown");
 
-        // Stop enhanced stats broadcaster first
+        // Stop monitoring interval
+        try {
+            clearInterval(monitoringInterval);
+        } catch (error) {
+            logger.error("Error stopping monitoring interval", {
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+
+        // Stop enhanced stats broadcaster
         try {
             statsBroadcaster.stop();
         } catch (error) {
             logger.error("Error stopping enhanced stats broadcaster", {
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+
+        // Cleanup proxy classes
+        try {
+            metrics.destroy();
+        } catch (error) {
+            logger.error("Error during proxy cleanup", {
                 error: error instanceof Error ? error.message : String(error),
             });
         }
@@ -544,30 +608,35 @@ parentPort?.on(
         try {
             if (msg.type === "metrics") {
                 try {
+                    // Validate metrics structure before processing
+                    if (!msg.data || typeof msg.data !== "object") {
+                        logger.warn("Received invalid metrics data", {
+                            dataType: typeof msg.data,
+                            data: JSON.stringify(msg.data),
+                        });
+                        return;
+                    }
+
                     // Update the data stream proxy with metrics from binance worker
                     dataStream.setMetrics(msg.data);
 
                     // Also update our local metrics collector with the new data
-                    if (msg.data && typeof msg.data === "object") {
-                        // Update connections count from the new data
-                        if (global.connectedClients) {
-                            metrics.updateMetric(
-                                "connections_active",
-                                global.connectedClients.size
-                            );
-                        }
-
-                        logger.debug("Updated metrics from binance worker", {
-                            dataSize: JSON.stringify(msg.data).length,
-                            connectionCount: global.connectedClients?.size || 0,
-                        });
+                    // Update connections count from the new data
+                    if (global.connectedClients) {
+                        metrics.updateMetric(
+                            "connections_active",
+                            global.connectedClients.size
+                        );
                     }
+
+                    // Metrics updated successfully - no logging needed to avoid spam
                 } catch (error) {
                     logger.error("Error setting metrics data", {
                         error:
                             error instanceof Error
                                 ? error.message
                                 : String(error),
+                        rawData: JSON.stringify(msg.data),
                     });
                     parentPort?.postMessage({
                         type: "error",
@@ -788,9 +857,7 @@ parentPort?.on(
                 try {
                     // Set main thread metrics for stats broadcasting
                     statsBroadcaster.setMainThreadMetrics(msg.data);
-                    logger.debug(
-                        "Main thread metrics updated in communication worker"
-                    );
+                    // Main thread metrics updated successfully - no logging needed to avoid spam
                 } catch (error) {
                     logger.error("Error setting main thread metrics", {
                         error:

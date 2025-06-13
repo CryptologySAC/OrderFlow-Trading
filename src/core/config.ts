@@ -23,10 +23,10 @@ import type { SuperiorFlowSettings } from "../indicators/base/flowDetectorBase.j
 import type { SupportResistanceConfig } from "../indicators/supportResistanceDetector.js";
 import type { IndividualTradesManagerConfig } from "../data/individualTradesManager.js";
 import type { MicrostructureAnalyzerConfig } from "../data/microstructureAnalyzer.js";
-import type { TradesProcessorOptions } from "../clients/tradesProcessor.js";
+import type { TradesProcessorOptions } from "../market/processors/tradesProcessor.js";
 import type { SignalManagerConfig } from "../trading/signalManager.js";
 import type { SignalCoordinatorConfig } from "../services/signalCoordinator.js";
-import type { OrderBookProcessorOptions } from "../clients/orderBookProcessor.js";
+import type { OrderBookProcessorOptions } from "../market/processors/orderBookProcessor.js";
 import type { MQTTConfig } from "../types/configTypes.js";
 let cfg: ConfigType = JSON.parse(
     readFileSync(resolve(process.cwd(), "config.json"), "utf-8")

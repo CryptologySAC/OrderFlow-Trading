@@ -286,6 +286,16 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 - **Proper correlation ID propagation**
 - **Secure WebSocket connections only**
 
+#### Logging Standards (MANDATORY)
+
+- **ALL logging MUST use ILogger interface** (`src/infrastructure/loggerInterface.ts`)
+- **NEVER import concrete Logger implementations** (Logger, WorkerLogger, etc.)
+- **ALWAYS use dependency injection for ILogger**
+- **NO console.log, console.info, console.warn, console.debug** - use ILogger methods
+- **ONLY console.error for system panic** with documented POLICY OVERRIDE
+- **ALL components accepting logger MUST use ILogger interface**
+- **Worker threads MUST use WorkerProxyLogger through ILogger interface**
+
 ### Financial System Compliance
 
 #### Data Integrity
@@ -429,11 +439,14 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 **STRICT ISOLATION PRINCIPLE:**
 This system uses a dedicated worker thread architecture with absolute separation of concerns. **NO EXCEPTIONS.**
 
+See comprehensive documentation: [Worker Thread Isolation Architecture](docs/Worker-Thread-Isolation-Architecture.md)
+
 #### Worker Thread Responsibilities (EXCLUSIVE):
 
 - **Logger Worker**: ALL logging operations (no console.log in main thread)
 - **Binance Worker**: ALL upstream API communication (no direct API calls in main thread)
 - **Communication Worker**: ALL downstream WebSocket/MQTT (no direct client communication in main thread)
+- **Storage Worker**: ALL database operations (no direct SQLite access in main thread)
 
 #### MANDATORY RULES:
 
@@ -446,9 +459,10 @@ This system uses a dedicated worker thread architecture with absolute separation
 
 **🚫 NEVER MIX MAIN THREAD AND WORKER IMPLEMENTATIONS:**
 
-- Logging: Use WorkerProxyLogger ONLY, never direct Logger instantiation in workers
+- Logging: Use `WorkerProxyLogger` ONLY in workers, never direct Logger instantiation
 - API Calls: Use worker thread communication ONLY, never direct HTTP clients
 - WebSocket: Use ThreadManager broadcast ONLY, never direct socket.send()
+- Database: Use ThreadManager.callStorage() ONLY, never direct Storage instantiation
 
 **✅ CORRECT PATTERN:**
 
@@ -458,7 +472,23 @@ const logger = useWorkerLogger ? new WorkerProxyLogger() : new Logger();
 
 // ✅ CORRECT - Single source of truth
 const logger = new WorkerProxyLogger("worker-name");
+const metrics: IWorkerMetricsCollector = new WorkerMetricsProxy("worker-name");
+const circuitBreaker: IWorkerCircuitBreaker = new WorkerCircuitBreakerProxy(
+    5,
+    60000,
+    "worker-name"
+);
 ```
+
+**✅ SHARED PROXY SYSTEM:**
+
+All workers MUST use shared proxy implementations from `src/multithreading/shared/`:
+
+- `WorkerProxyLogger` - Logging via IPC message passing
+- `WorkerMetricsProxy` - Metrics collection with 100ms batching for performance
+- `WorkerCircuitBreakerProxy` - Circuit breaker with BigInt support and failure tracking
+- `WorkerRateLimiterProxy` - Rate limiting with request tracking
+- `WorkerMessageRouter` - Message routing with 10ms queue flushing
 
 **✅ WORKER THREAD COMMUNICATION:**
 
@@ -466,32 +496,82 @@ const logger = new WorkerProxyLogger("worker-name");
 - Workers communicate with main thread via parentPort.postMessage() ONLY
 - Inter-worker communication via main thread message forwarding ONLY
 - NO direct worker-to-worker communication channels
+- ALL messages include correlation IDs for request tracing
+
+**✅ INTERFACE CONTRACTS:**
+
+Workers use strict interface contracts to ensure compatibility:
+
+```typescript
+interface IWorkerMetricsCollector {
+    updateMetric(name: string, value: number): void;
+    incrementMetric(name: string): void;
+    getMetrics(): EnhancedMetrics;
+    getHealthSummary(): string;
+    destroy?(): void | Promise<void>;
+}
+
+interface IWorkerCircuitBreaker {
+    canExecute(): boolean;
+    recordError(): void;
+    recordSuccess(): void;
+    execute<T>(operation: () => Promise<T>): Promise<T>;
+    isTripped(): boolean;
+    getStats(): { errorCount: number; isOpen: boolean; lastTripTime: number };
+}
+```
+
+#### PERFORMANCE OPTIMIZATIONS:
+
+**Batched Metrics Collection:**
+
+- 100ms batching reduces IPC overhead by ~60%
+- Maintains sub-millisecond latency for critical operations
+- Automatic correlation ID generation for request tracing
+
+**Message Queue Management:**
+
+- 10ms flush intervals for low-latency message routing
+- Maximum queue size of 1000 messages to prevent memory issues
+- Automatic queue cleanup and overflow handling
+
+**Enhanced Monitoring:**
+
+- Worker uptime, error rates, and processing metrics tracked
+- Circuit breaker state monitoring with failure thresholds
+- Connection health monitoring across all workers
 
 #### Violation Detection:
 
 **Immediate red flags requiring approval:**
 
-- `new Logger()` in worker files (use WorkerProxyLogger)
+- `new Logger()` in worker files (use `WorkerProxyLogger`)
+- `new MetricsCollector()` in worker files (use `WorkerMetricsProxy`)
+- `new CircuitBreaker()` in worker files (use `WorkerCircuitBreakerProxy`)
 - Direct HTTP/WebSocket clients in main thread
 - `console.log()` anywhere except fallback error scenarios
 - Multiple implementations of same functionality
 - Conditional logic choosing between worker/non-worker paths
+- Direct infrastructure imports in worker files (use shared proxies)
 
 #### Architecture Benefits (Why This Matters):
 
-- **Performance**: Dedicated threads for I/O operations
-- **Reliability**: Isolated failure domains
-- **Scalability**: Independent thread scaling
-- **Maintainability**: Single responsibility per thread
-- **Debugging**: Clear thread ownership of functionality
+- **Performance**: Dedicated threads for I/O operations with batched communication
+- **Reliability**: Isolated failure domains with circuit breaker protection
+- **Scalability**: Independent thread scaling with queue management
+- **Maintainability**: Single responsibility per thread with interface contracts
+- **Debugging**: Clear thread ownership with correlation ID tracing
+- **Monitoring**: Comprehensive metrics and health tracking per worker
 
 **⚠️ BREAKING THIS ISOLATION CAN CAUSE:**
 
 - Race conditions between threads
 - Inconsistent logging/data
-- Performance degradation
+- Performance degradation from excessive IPC
 - Memory leaks from duplicate connections
 - Unpredictable system behavior under load
+- Circuit breaker bypass leading to cascade failures
+- Lost correlation context for debugging
 
 ### Absolute Prohibitions (ZERO TOLERANCE)
 
@@ -542,6 +622,55 @@ const logger = new WorkerProxyLogger("worker-name");
 4. **PROVIDE ALTERNATIVES**: "Safer approaches include [alternatives]"
 5. **ESTIMATE IMPACT**: "Expected performance/reliability impact: [analysis]"
 6. **REQUEST VALIDATION**: "Please confirm you want to proceed with these risks"
+
+### 🧵 WORKER THREAD DEVELOPMENT GUIDELINES
+
+**Before Making Any Changes to Worker Files:**
+
+1. **IDENTIFY WORKER SCOPE**: Determine which worker thread the change affects
+2. **CHECK PROXY USAGE**: Ensure only shared proxy classes are used, never direct infrastructure
+3. **VALIDATE INTERFACES**: Confirm interface contracts are maintained (`IWorkerMetricsCollector`, `IWorkerCircuitBreaker`)
+4. **ASSESS PERFORMANCE**: Consider impact on message batching and IPC overhead
+5. **VERIFY ISOLATION**: Ensure no direct cross-thread communication is introduced
+
+**When Adding New Worker Functionality:**
+
+```typescript
+// ✅ CORRECT: Use shared proxy implementations
+const logger = new WorkerProxyLogger("worker-name");
+const metrics: IWorkerMetricsCollector = new WorkerMetricsProxy("worker-name");
+const circuitBreaker: IWorkerCircuitBreaker = new WorkerCircuitBreakerProxy(
+    5,
+    60000,
+    "worker-name"
+);
+
+// ✅ CORRECT: Message passing pattern
+parentPort?.postMessage({
+    type: "operation_result",
+    data: result,
+    worker: "worker-name",
+    correlationId: generateCorrelationId(),
+});
+
+// ❌ WRONG: Direct infrastructure import
+import { Logger } from "../../infrastructure/logger.js"; // VIOLATION!
+import { MetricsCollector } from "../../infrastructure/metricsCollector.js"; // VIOLATION!
+```
+
+**When Modifying Existing Infrastructure:**
+
+1. **UPDATE INTERFACES**: If changing infrastructure classes, update corresponding interfaces
+2. **MAINTAIN COMPATIBILITY**: Ensure proxy classes continue to work with changes
+3. **TEST WORKER ISOLATION**: Verify no worker uses direct infrastructure after changes
+4. **UPDATE DOCUMENTATION**: Update [Worker Thread Isolation Architecture](docs/Worker-Thread-Isolation-Architecture.md)
+
+**Performance Considerations:**
+
+- **Metrics Batching**: Changes affecting metrics should maintain 100ms batching interval
+- **Message Queue**: Keep queue flush interval at 10ms for low latency
+- **Correlation IDs**: Always include correlation IDs for tracing
+- **Error Handling**: Implement circuit breaker patterns for external operations
 
 **For Worker Thread Violations:**
 

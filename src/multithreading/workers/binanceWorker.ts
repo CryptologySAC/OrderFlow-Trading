@@ -1,26 +1,79 @@
 import { parentPort } from "worker_threads";
 import { WorkerProxyLogger } from "../shared/workerProxylogger.js";
-import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
-import { CircuitBreaker } from "../../infrastructure/circuitBreaker.js";
+import { WorkerMetricsProxy } from "../shared/workerMetricsProxy.js";
+import { WorkerCircuitBreakerProxy } from "../shared/workerCircuitBreakerProxy.js";
 import { BinanceDataFeed } from "../../utils/binance.js";
 import { DataStreamManager } from "../../trading/dataStreamManager.js";
 import { Config } from "../../core/config.js";
+import type {
+    IWorkerMetricsCollector,
+    IWorkerCircuitBreaker,
+} from "../shared/workerInterfaces.js";
 
-// Use proxy logger that forwards to logger worker
-const logger = new WorkerProxyLogger("binance");
-const metricsCollector = new MetricsCollector();
-const circuitBreaker = new CircuitBreaker(5, 60000, logger);
-const binanceFeed = new BinanceDataFeed();
-const manager = new DataStreamManager(
-    Config.DATASTREAM,
-    binanceFeed,
-    circuitBreaker,
-    logger, // Now this uses the logger worker!
-    metricsCollector
-);
+// Validate worker thread context
+if (!parentPort) {
+    console.error("❌ CRITICAL: BinanceWorker must be run in a worker thread");
+    console.error(
+        "❌ Application cannot continue without proper worker thread context"
+    );
+    process.exit(1);
+}
+
+// Use shared proxy implementations instead of direct infrastructure imports
+function initializeComponents() {
+    const logger = new WorkerProxyLogger("binance");
+    const metricsCollector: IWorkerMetricsCollector = new WorkerMetricsProxy(
+        "binance"
+    );
+    const circuitBreaker: IWorkerCircuitBreaker = new WorkerCircuitBreakerProxy(
+        5,
+        60000,
+        "binance"
+    );
+    const binanceFeed = new BinanceDataFeed();
+
+    // Cast to expected types for DataStreamManager compatibility
+    const manager = new DataStreamManager(
+        Config.DATASTREAM,
+        binanceFeed,
+        circuitBreaker as unknown as import("../../infrastructure/circuitBreaker.js").CircuitBreaker,
+        logger,
+        metricsCollector as unknown as import("../../infrastructure/metricsCollector.js").MetricsCollector
+    );
+
+    return { logger, metricsCollector, circuitBreaker, binanceFeed, manager };
+}
+
+let components: ReturnType<typeof initializeComponents>;
+try {
+    components = initializeComponents();
+} catch (error) {
+    // POLICY OVERRIDE: Using console.error for system panic during worker initialization
+    // REASON: Logger infrastructure not yet available during startup, critical failure requires immediate visibility
+    // This is the only acceptable use of console methods - system panic before logging infrastructure is ready
+    console.error("❌ CRITICAL: BinanceWorker initialization failed:");
+    console.error("❌", error instanceof Error ? error.message : String(error));
+    console.error("❌ Stack:", error instanceof Error ? error.stack : "N/A");
+    console.error("❌ Market data connectivity is essential - exiting");
+    process.exit(1);
+}
+
+const { logger, metricsCollector, manager } = components;
 
 // Store interval reference for proper cleanup
 let metricsInterval: NodeJS.Timeout | null = null;
+
+// Enhanced monitoring and correlation tracking
+let currentCorrelationId: string | null = null;
+
+function clearCorrelationContext(): void {
+    if (currentCorrelationId) {
+        if (logger.removeCorrelationId) {
+            logger.removeCorrelationId(currentCorrelationId);
+        }
+        currentCorrelationId = null;
+    }
+}
 
 // Setup DataStreamManager event handlers to forward to parent thread
 manager.on("connected", () => {
@@ -192,9 +245,22 @@ parentPort?.on("message", (msg: unknown) => {
                 if (!metricsInterval) {
                     metricsInterval = setInterval(() => {
                         try {
+                            const metrics = manager.getDetailedMetrics();
+
+                            // Validate metrics structure before sending
+                            if (!metrics || !metrics.connection) {
+                                logger.warn(
+                                    "Invalid metrics structure from DataStreamManager",
+                                    {
+                                        metrics: JSON.stringify(metrics),
+                                    }
+                                );
+                                return;
+                            }
+
                             parentPort?.postMessage({
                                 type: "metrics",
-                                data: manager.getDetailedMetrics(),
+                                data: metrics,
                             });
                         } catch (error) {
                             logger.error("Error sending metrics", {
@@ -274,6 +340,20 @@ parentPort?.on("message", (msg: unknown) => {
                 break;
 
             case "shutdown":
+                // Cleanup proxy classes before shutdown
+                try {
+                    if (metricsCollector.destroy) {
+                        (metricsCollector.destroy as () => void)();
+                    }
+                    clearCorrelationContext();
+                } catch (error) {
+                    logger.error("Error during proxy cleanup", {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
+                }
                 void gracefulShutdown(0);
                 break;
 

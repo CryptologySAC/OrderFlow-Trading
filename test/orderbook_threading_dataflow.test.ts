@@ -124,6 +124,9 @@ describe("OrderBook Threading Data Flow", () => {
         // Simulate receiving message from binance worker
         messageHandler(streamDataMessage);
 
+        // Wait for async message processing
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
         // Verify depth processing was called
         expect(processDepthSpy).toHaveBeenCalledWith(mockDepthData);
 
