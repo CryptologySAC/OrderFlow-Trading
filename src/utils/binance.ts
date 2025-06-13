@@ -145,7 +145,6 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         limit: number,
         fromId?: number
     ): Promise<SpotWebsocketAPI.TradesAggregateResponseResultInner[]> {
-
         const config: SpotWebsocketAPI.TradesAggregateRequest = {
             symbol,
             limit,
@@ -154,7 +153,6 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         const result = await this.executeWithRetry(() =>
             this.executeWithApiConnection(config, "tradesAggregate")
         );
-
 
         return result;
     }
@@ -171,7 +169,6 @@ export class BinanceDataFeed implements IBinanceDataFeed {
             endTime,
             limit,
         };
-
 
         this.logger.info(
             `[fetchAggTradesByTime] Requesting trades for ${symbol}`,
@@ -191,7 +188,6 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         const result = await this.executeWithRetry(() =>
             this.executeWithApiConnection(config, "fetchAggTradesByTime")
         );
-
 
         this.logger.info(
             `[fetchAggTradesByTime] Received ${result.length} trades`,

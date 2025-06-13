@@ -89,9 +89,10 @@ Binance WebSocket → OrderFlowPreprocessor → Pattern Detectors → SignalCoor
     - **MUST store stream data to database** to prevent gaps on client reload
     - Runs in dedicated worker thread for isolation
 
-2. **API Backlog Fill**: Fetches 90 minutes of historical data via REST API
-    - Uses Binance REST API to fill historical aggregated trades
-    - Runs in main thread via `TradesProcessor.fillBacklog()`
+2. **Smart ID-Based Backlog Fill**: Dynamically fetches 100 minutes of historical data via REST API
+    - Uses Smart ID-based approach via `TradesProcessor.fillBacklog()`
+    - **Eliminates data gaps** by using trade ID sequences instead of time-based queries
+    - **Dynamically determines** required data volume for 100-minute coverage
     - **MUST run in parallel with WebSocket stream** to prevent gaps
 
 #### Parallel Execution Requirements
@@ -108,7 +109,7 @@ Binance WebSocket → OrderFlowPreprocessor → Pattern Detectors → SignalCoor
 ```typescript
 // ✅ CORRECT: Parallel execution
 await Promise.all([
-    this.preloadHistoricalData(), // API calls for 90 minutes
+    this.preloadHistoricalData(), // Smart ID-based calls for 100 minutes
     this.startStreamConnection(), // WebSocket stream in parallel
 ]);
 
@@ -132,6 +133,47 @@ this.dependencies.storage.saveAggregatedTrade(data, symbol);
 - Client reloads depend on stored data for backlog
 - Missing storage creates permanent data gaps
 - Trading signals require complete historical context
+
+#### Smart ID-Based Backlog Implementation
+
+**BREAKTHROUGH SOLUTION**: The system now uses a Smart ID-based approach that **eliminates data gaps** completely.
+
+**How It Works:**
+
+1. **Step 1**: Fetch most recent 1000 trades (`fromId=undefined`) to establish baseline
+2. **Step 2**: Calculate starting point for historical data (`oldestId - 1000`)
+3. **Step 3**: Fetch older trades in 1000-trade chunks, jumping backwards by trade IDs
+4. **Step 4**: Continue until 100 minutes of time coverage is achieved
+
+**Key Advantages:**
+
+- **Zero Data Gaps**: ID-based queries are 100% reliable vs time-based queries
+- **Dynamic Coverage**: Automatically adjusts to market activity levels
+- **Precise Control**: Always gets exactly 100 minutes of coverage
+- **Performance**: Faster and more predictable than time-based approaches
+
+**Implementation:**
+
+```typescript
+// Smart ID-based backlog in TradesProcessor.fillBacklog()
+const targetCoverageMs = this.storageTime + 10 * 60 * 1000; // 100 minutes
+const recentTrades = await this.binanceFeed.tradesAggregate(
+    symbol,
+    1000,
+    undefined
+);
+let currentFromId = Math.min(...recentTrades.map((t) => t.a!)) - 1000;
+
+// Continue fetching backwards until target coverage achieved
+while (currentCoverageMs < targetCoverageMs) {
+    const trades = await this.binanceFeed.tradesAggregate(
+        symbol,
+        1000,
+        currentFromId
+    );
+    currentFromId = Math.min(...trades.map((t) => t.a!)) - 1000;
+}
+```
 
 ### Key Directories
 

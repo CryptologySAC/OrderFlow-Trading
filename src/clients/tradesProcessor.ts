@@ -472,7 +472,6 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                     !hasReachedTargetCoverage;
                     blockIndex++
                 ) {
-
                     const aggregatedTrades =
                         await this.binanceFeed.tradesAggregate(
                             this.symbol,
@@ -491,7 +490,6 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                         );
                         break;
                     }
-
 
                     // Validate and process trades
                     try {
@@ -641,7 +639,9 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                         totalFetched,
                         durationMs: duration,
                         timeCoverageMin: (finalCoverageMs / 60_000).toFixed(1),
-                        targetCoverageMin: (targetCoverageMs / 60_000).toFixed(1),
+                        targetCoverageMin: (targetCoverageMs / 60_000).toFixed(
+                            1
+                        ),
                         coverageAchieved: finalCoverageMs >= targetCoverageMs,
                         backlogComplete: this.backlogComplete,
                         approach: "Smart ID-based with dynamic coverage",
