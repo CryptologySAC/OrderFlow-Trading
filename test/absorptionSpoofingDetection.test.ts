@@ -21,7 +21,7 @@ describe("AbsorptionDetector - Spoofing Detection", () => {
             debug: () => {},
         } as any;
         metrics = new MetricsCollector();
-        spoofingDetector = new SpoofingDetector(logger as any, metrics);
+        spoofingDetector = new SpoofingDetector({}, logger as any);
         orderBook = {
             getLevel: () => ({ bid: 100, ask: 100 }),
             getCurrentSpread: () => ({ spread: 0.01 }),

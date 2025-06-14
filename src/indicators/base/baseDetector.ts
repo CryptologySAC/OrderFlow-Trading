@@ -24,7 +24,6 @@ import { CircularBuffer } from "../../utils/circularBuffer.js";
 import { TimeAwareCache } from "../../utils/timeAwareCache.js";
 import { AdaptiveZoneCalculator } from "../../utils/adaptiveZoneCalculator.js";
 import { PassiveVolumeTracker } from "../../utils/passiveVolumeTracker.js";
-import { AutoCalibrator } from "../../utils/autoCalibrator.js";
 import { SpoofingDetector } from "../../services/spoofingDetector.js";
 import {
     AdaptiveThresholdCalculator,
@@ -77,7 +76,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
     protected readonly spoofingDetector: SpoofingDetector;
     protected readonly adaptiveZoneCalculator: AdaptiveZoneCalculator;
     protected readonly passiveVolumeTracker: PassiveVolumeTracker;
-    protected readonly autoCalibrator: AutoCalibrator;
 
     // Adaptive threshold system (shared across detectors)
     protected readonly adaptiveThresholdCalculator: AdaptiveThresholdCalculator;
@@ -153,7 +151,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
         this.spoofingDetector = spoofingDetector;
         this.adaptiveZoneCalculator = new AdaptiveZoneCalculator();
         this.passiveVolumeTracker = new PassiveVolumeTracker();
-        this.autoCalibrator = new AutoCalibrator();
 
         // Initialize adaptive threshold system
         this.adaptiveThresholdCalculator = new AdaptiveThresholdCalculator();
@@ -291,10 +288,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
             }
 
             this.checkForSignal(tradeData);
-
-            if (this.features.autoCalibrate) {
-                this.performAutoCalibration();
-            }
         } catch (error) {
             this.handleError(
                 error as Error,
@@ -528,10 +521,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
 
         this.emitSignalCandidate(detection);
 
-        if (this.features.autoCalibrate) {
-            this.autoCalibrator.recordSignal();
-        }
-
         // Emit metrics
         this.metricsCollector.incrementCounter(
             `detector_${this.detectorType}Signals`
@@ -703,24 +692,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
             );
         }
         return this.zoneTicks;
-    }
-
-    /**
-     * Perform auto calibration
-     */
-    protected performAutoCalibration(): void {
-        if (this.features.autoCalibrate) {
-            const newMinVolume = this.autoCalibrator.calibrate(
-                this.minAggVolume
-            );
-            if (newMinVolume !== this.minAggVolume) {
-                this.logger.info(
-                    `[${this.constructor.name}] Auto-calibrated minAggVolume`,
-                    { old: this.minAggVolume, new: newMinVolume }
-                );
-                this.minAggVolume = newMinVolume;
-            }
-        }
     }
 
     /**

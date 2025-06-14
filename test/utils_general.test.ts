@@ -9,7 +9,6 @@ import { CircularBuffer } from "../src/utils/circularBuffer";
 import { TimeAwareCache } from "../src/utils/timeAwareCache";
 import { AdaptiveZoneCalculator } from "../src/utils/adaptiveZoneCalculator";
 import { PassiveVolumeTracker } from "../src/utils/passiveVolumeTracker";
-import { AutoCalibrator } from "../src/utils/autoCalibrator";
 
 import {
     calculateProfitTarget,
@@ -71,14 +70,6 @@ describe("utils/utils", () => {
         vi.advanceTimersByTime(1000);
         tracker.updatePassiveVolume(100, 19, 19);
         expect(tracker.hasPassiveRefilled(100, "buy", 5000)).toBe(true);
-    });
-
-    it("AutoCalibrator adjusts volume", () => {
-        const auto = new AutoCalibrator();
-        auto.recordSignal();
-        vi.advanceTimersByTime(16 * 60 * 1000);
-        const result = auto.calibrate(100);
-        expect(result).toBeLessThan(100);
     });
 
     it("isValidBacklogRequest works", () => {
@@ -153,24 +144,6 @@ describe("utils/utils", () => {
         expect(tracker.getAveragePassiveBySide(201, "buy", 1000)).toBe(0);
         expect(tracker.getAveragePassive(200, 1000)).toBe(0);
         expect(tracker.getAveragePassive(999, 1000)).toBe(0);
-    });
-
-    it("AutoCalibrator raises volume when busy", () => {
-        const auto = new AutoCalibrator();
-        for (let i = 0; i < 11; i++) {
-            auto.recordSignal();
-        }
-        vi.advanceTimersByTime(16 * 60 * 1000);
-        const result = auto.calibrate(100);
-        expect(result).toBeGreaterThan(100);
-    });
-
-    it("AutoCalibrator keeps volume when moderate", () => {
-        const auto = new AutoCalibrator();
-        for (let i = 0; i < 5; i++) auto.recordSignal();
-        vi.advanceTimersByTime(16 * 60 * 1000);
-        const result = auto.calibrate(50);
-        expect(result).toBe(50);
     });
 
     it("profit and breakeven other sides", () => {
