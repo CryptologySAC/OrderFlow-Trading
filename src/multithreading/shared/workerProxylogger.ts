@@ -99,6 +99,9 @@ export class WorkerProxyLogger implements ILogger {
             // Validate message before sending
             const validation = ProxyLogMessageSchema.safeParse(logMessage);
             if (!validation.success) {
+                // POLICY OVERRIDE: Using console.error for logger proxy validation failure
+                // REASON: WorkerProxyLogger cannot use itself for error logging - creates infinite loop
+                // This is critical infrastructure failure that requires direct console output
                 console.error(
                     `[${this.workerName}] Invalid log message:`,
                     validation.error
@@ -108,10 +111,15 @@ export class WorkerProxyLogger implements ILogger {
 
             parentPort?.postMessage(logMessage);
         } catch (error) {
+            // POLICY OVERRIDE: Using console.error for logger proxy critical failure
+            // REASON: WorkerProxyLogger cannot use itself for error logging - creates infinite loop
+            // This is critical infrastructure failure requiring direct console fallback
             console.error(
                 `[${this.workerName}] Failed to send log message:`,
                 error
             );
+            // POLICY OVERRIDE: Using console[level] as fallback when proxy fails
+            // REASON: Must ensure message is logged somewhere when worker communication fails
             console[level](`[${this.workerName}] ${message}`, context);
         }
     }

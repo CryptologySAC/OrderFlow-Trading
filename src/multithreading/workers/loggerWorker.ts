@@ -14,6 +14,8 @@ import type {
 
 // Validate worker thread context
 if (!parentPort) {
+    // POLICY OVERRIDE: Using console.error for system panic during worker validation
+    // REASON: Worker thread validation failure is critical system state - logger not yet available
     console.error("❌ CRITICAL: LoggerWorker must be run in a worker thread");
     console.error(
         "❌ Application cannot continue without proper worker thread context"

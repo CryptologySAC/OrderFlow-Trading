@@ -43,6 +43,8 @@ import type { IWorkerMetricsCollector } from "../shared/workerInterfaces.js";
 
 // Validate that we're running in a worker thread context
 if (!parentPort) {
+    // POLICY OVERRIDE: Using console.error for system panic during worker validation
+    // REASON: Worker thread validation failure is critical system state - logger not yet available
     console.error("❌ CRITICAL: StorageWorker must be run in a worker thread");
     console.error(
         "❌ Application cannot continue without proper worker thread context"
@@ -73,17 +75,27 @@ let db: import("better-sqlite3").Database;
 let storage: Storage;
 
 try {
-    console.log("📦 StorageWorker: Initializing database connection...");
+    logger.info("StorageWorker: Initializing database connection", {
+        component: "StorageWorker"
+    });
     db = getDB();
 
-    console.log("🔧 StorageWorker: Setting WAL mode...");
+    logger.info("StorageWorker: Setting WAL mode", {
+        component: "StorageWorker"
+    });
     db.pragma("journal_mode = WAL");
 
-    console.log("💾 StorageWorker: Creating storage instance...");
+    logger.info("StorageWorker: Creating storage instance", {
+        component: "StorageWorker"
+    });
     storage = new Storage(db, logger);
 
-    console.log("✅ StorageWorker: Database initialized successfully");
+    logger.info("StorageWorker: Database initialized successfully", {
+        component: "StorageWorker"
+    });
 } catch (error) {
+    // POLICY OVERRIDE: Using console.error for system panic during database initialization
+    // REASON: Database failure is critical system state requiring immediate process exit
     console.error("❌ CRITICAL: StorageWorker database initialization failed:");
     console.error("❌", error instanceof Error ? error.message : String(error));
     console.error("❌ Stack:", error instanceof Error ? error.stack : "N/A");
@@ -247,7 +259,10 @@ parentPort.on("message", (msg: unknown): void => {
     // Validate message structure
     if (!msg || typeof msg !== "object") {
         totalErrorCount++;
-        console.error("StorageWorker: Invalid message received:", msg);
+        logger.error("StorageWorker: Invalid message received", {
+            message: msg,
+            component: "StorageWorker"
+        });
         return;
     }
 
@@ -255,7 +270,10 @@ parentPort.on("message", (msg: unknown): void => {
 
     if (!typedMsg.type) {
         totalErrorCount++;
-        console.error("StorageWorker: Message missing type:", msg);
+        logger.error("StorageWorker: Message missing type", {
+            message: msg,
+            component: "StorageWorker"
+        });
         return;
     }
 

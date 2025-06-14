@@ -10,6 +10,7 @@ import type { SignalEvent } from "../infrastructure/signalLoggerInterface.js";
 import type { WebSocketMessage } from "../utils/interfaces.js";
 import type { SignalTracker } from "../analysis/signalTracker.js";
 import type { EnhancedMetrics } from "../infrastructure/metricsCollector.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 import { WorkerProxyLogger } from "./shared/workerProxylogger.js";
 
 export interface BinanceWorkerMetrics {
@@ -146,6 +147,7 @@ export class ThreadManager {
     private readonly commWorker: Worker;
     private readonly storageWorker: Worker;
     private readonly messageRouter: WorkerMessageRouter;
+    private readonly logger: ILogger;
     private isShuttingDown = false;
     private backlogRequestHandler?: (clientId: string, amount: number) => void;
     private streamEventHandler?: (eventType: string, data: unknown) => void;
@@ -196,8 +198,8 @@ export class ThreadManager {
 
     constructor() {
         // Initialize message router
-        const logger = new WorkerProxyLogger("threadManager");
-        this.messageRouter = new WorkerMessageRouter(logger);
+        this.logger = new WorkerProxyLogger("threadManager");
+        this.messageRouter = new WorkerMessageRouter(this.logger);
         this.setupMessageRouterHandlers();
 
         this.loggerWorker = new Worker(
@@ -438,7 +440,10 @@ export class ThreadManager {
         // Handle errors
         this.messageRouter.registerHandler("error", (msg: unknown) => {
             const errorMsg = msg as ErrorMessage;
-            console.error("Worker error:", errorMsg.message);
+            this.logger.error("Worker error received", {
+                message: errorMsg.message,
+                component: "ThreadManager"
+            });
         });
 
         // Handle storage replies (special case - bypass router for direct handling)
@@ -694,7 +699,11 @@ export class ThreadManager {
         if (this.backlogRequestHandler) {
             this.backlogRequestHandler(data.clientId, data.amount);
         } else {
-            console.warn("Backlog request received but no handler registered");
+            this.logger.warn("Backlog request received but no handler registered", {
+                clientId: data.clientId,
+                amount: data.amount,
+                component: "ThreadManager"
+            });
         }
     }
 
@@ -702,9 +711,11 @@ export class ThreadManager {
         if (this.streamEventHandler) {
             this.streamEventHandler(eventType, data);
         } else {
-            console.warn(
-                `Stream event '${eventType}' received but no handler registered`
-            );
+            this.logger.warn("Stream event received but no handler registered", {
+                eventType,
+                data,
+                component: "ThreadManager"
+            });
         }
     }
 
@@ -712,9 +723,11 @@ export class ThreadManager {
         if (this.streamDataHandler) {
             this.streamDataHandler(dataType, data);
         } else {
-            console.warn(
-                `Stream data '${dataType}' received but no handler registered`
-            );
+            this.logger.warn("Stream data received but no handler registered", {
+                dataType,
+                data,
+                component: "ThreadManager"
+            });
         }
     }
 
@@ -830,31 +843,59 @@ export class ThreadManager {
             // Wait up to 5 seconds for graceful shutdown
             await Promise.allSettled(shutdownPromises);
         } catch (error) {
-            console.error("Error during ThreadManager shutdown:", error);
+            this.logger.error("Error during ThreadManager shutdown", {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+                component: "ThreadManager"
+            });
         }
     }
 
     private setupWorkerErrorHandlers(): void {
         this.loggerWorker.on("error", (error) => {
-            console.error("Logger worker error:", error);
+            this.logger.error("Logger worker error", {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+                component: "ThreadManager",
+                worker: "logger"
+            });
         });
 
         this.binanceWorker.on("error", (error) => {
-            console.error("Binance worker error:", error);
+            this.logger.error("Binance worker error", {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+                component: "ThreadManager",
+                worker: "binance"
+            });
         });
 
         this.commWorker.on("error", (error) => {
-            console.error("Communication worker error:", error);
+            this.logger.error("Communication worker error", {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+                component: "ThreadManager",
+                worker: "communication"
+            });
         });
 
         this.storageWorker.on("error", (error) => {
-            console.error("Storage worker error:", error);
+            this.logger.error("Storage worker error", {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+                component: "ThreadManager",
+                worker: "storage"
+            });
         });
 
         // Handle worker exits
         this.loggerWorker.on("exit", (code) => {
             if (!this.isShuttingDown && code !== 0) {
-                console.error(`Logger worker exited with code ${code}`);
+                this.logger.error("Logger worker exited unexpectedly", {
+                    exitCode: code,
+                    component: "ThreadManager",
+                    worker: "logger"
+                });
             }
         });
 
@@ -875,13 +916,21 @@ export class ThreadManager {
 
         this.commWorker.on("exit", (code) => {
             if (!this.isShuttingDown && code !== 0) {
-                console.error(`Communication worker exited with code ${code}`);
+                this.logger.error("Communication worker exited unexpectedly", {
+                    exitCode: code,
+                    component: "ThreadManager",
+                    worker: "communication"
+                });
             }
         });
 
         this.storageWorker.on("exit", (code) => {
             if (!this.isShuttingDown && code !== 0) {
-                console.error(`Storage worker exited with code ${code}`);
+                this.logger.error("Storage worker exited unexpectedly", {
+                    exitCode: code,
+                    component: "ThreadManager",
+                    worker: "storage"
+                });
             }
         });
     }
@@ -893,22 +942,30 @@ export class ThreadManager {
     ): Promise<void> {
         return new Promise<void>((resolve) => {
             const timeout = setTimeout(() => {
-                console.warn(
-                    `${name} worker did not exit gracefully, terminating...`
-                );
+                this.logger.warn("Worker did not exit gracefully, terminating", {
+                    workerName: name,
+                    component: "ThreadManager"
+                });
                 try {
                     const terminatePromise = worker.terminate();
                     // Handle terminate result which may or may not be a Promise
                     void Promise.resolve(terminatePromise)
                         .catch((err) => {
-                            console.error(
-                                `Error terminating ${name} worker:`,
-                                err
-                            );
+                            this.logger.error("Error terminating worker", {
+                                workerName: name,
+                                error: err instanceof Error ? err.message : String(err),
+                                stack: err instanceof Error ? err.stack : undefined,
+                                component: "ThreadManager"
+                            });
                         })
                         .finally(() => resolve());
                 } catch (err) {
-                    console.error(`Error terminating ${name} worker:`, err);
+                    this.logger.error("Error terminating worker", {
+                        workerName: name,
+                        error: err instanceof Error ? err.message : String(err),
+                        stack: err instanceof Error ? err.stack : undefined,
+                        component: "ThreadManager"
+                    });
                     resolve();
                 }
             }, timeoutMs);
