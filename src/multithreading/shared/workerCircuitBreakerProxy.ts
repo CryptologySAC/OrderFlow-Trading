@@ -2,6 +2,7 @@
 import { parentPort } from "worker_threads";
 import type { IWorkerCircuitBreaker } from "./workerInterfaces.js";
 import type { ICircuitBreaker } from "../../infrastructure/circuitBreakerInterface.js";
+import type { ILogger } from "../../infrastructure/loggerInterface.js";
 
 enum CircuitState {
     CLOSED = "CLOSED",
@@ -26,7 +27,12 @@ export class WorkerCircuitBreakerProxy
 
     private errorCount = 0n;
 
-    constructor(maxFailures: number, timeoutMs: number, workerName: string) {
+    constructor(
+        maxFailures: number,
+        timeoutMs: number,
+        workerName: string,
+        private readonly logger: ILogger
+    ) {
         this.maxFailures = maxFailures;
         this.timeoutMs = timeoutMs;
         this.workerName = workerName;
@@ -86,8 +92,17 @@ export class WorkerCircuitBreakerProxy
                     correlationId: this.generateCorrelationId(),
                 });
             } catch (error) {
-                console.error(
-                    `Failed to send circuit breaker notification: ${error instanceof Error ? error.message : String(error)}`
+                this.logger.error(
+                    "Failed to send circuit breaker notification",
+                    {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                        stack: error instanceof Error ? error.stack : undefined,
+                        component: "WorkerCircuitBreakerProxy",
+                        worker: this.workerName,
+                    }
                 );
             }
         }

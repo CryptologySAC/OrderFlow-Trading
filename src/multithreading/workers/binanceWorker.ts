@@ -19,7 +19,12 @@ if (!parentPort) {
 function initializeComponents() {
     const logger = new WorkerProxyLogger("binance");
     const metricsCollector = new WorkerMetricsProxy("binance");
-    const circuitBreaker = new WorkerCircuitBreakerProxy(5, 60000, "binance");
+    const circuitBreaker = new WorkerCircuitBreakerProxy(
+        5,
+        60000,
+        "binance",
+        logger
+    );
     const binanceFeed = new BinanceDataFeed();
 
     // Proxies implement ICircuitBreaker interface for compatibility

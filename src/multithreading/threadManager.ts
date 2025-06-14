@@ -10,6 +10,7 @@ import type { SignalEvent } from "../infrastructure/signalLoggerInterface.js";
 import type { WebSocketMessage } from "../utils/interfaces.js";
 import type { SignalTracker } from "../analysis/signalTracker.js";
 import type { EnhancedMetrics } from "../infrastructure/metricsCollector.js";
+import { WorkerProxyLogger } from "./shared/workerProxylogger.js";
 
 export interface BinanceWorkerMetrics {
     connection: {
@@ -195,7 +196,8 @@ export class ThreadManager {
 
     constructor() {
         // Initialize message router
-        this.messageRouter = new WorkerMessageRouter();
+        const logger = new WorkerProxyLogger("threadManager");
+        this.messageRouter = new WorkerMessageRouter(logger);
         this.setupMessageRouterHandlers();
 
         this.loggerWorker = new Worker(

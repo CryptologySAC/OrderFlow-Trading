@@ -1,5 +1,6 @@
 // src/multithreading/shared/workerMessageRouter.ts
 import type { Worker } from "worker_threads";
+import type { ILogger } from "../../infrastructure/loggerInterface.js";
 
 /**
  * Message handler function type
@@ -28,6 +29,8 @@ export class WorkerMessageRouter {
         errorCount: 0,
         lastActivity: Date.now(),
     };
+
+    constructor(private readonly logger: ILogger) {}
     private messageQueue: Array<{
         msg: unknown;
         worker: Worker;
@@ -53,7 +56,10 @@ export class WorkerMessageRouter {
 
         if (!this.isValidMessage(msg)) {
             this.stats.errorCount++;
-            console.warn("Invalid message received by router:", msg);
+            this.logger.warn("Invalid message received by router", {
+                message: msg,
+                component: "WorkerMessageRouter",
+            });
             return;
         }
 
@@ -97,9 +103,10 @@ export class WorkerMessageRouter {
     private addToQueue(msg: unknown, worker: Worker): void {
         // Check queue size to prevent memory issues
         if (this.messageQueue.length >= this.maxQueueSize) {
-            console.warn(
-                `Message queue full (${this.maxQueueSize}), dropping oldest messages`
-            );
+            this.logger.warn("Message queue full, dropping oldest messages", {
+                queueSize: this.maxQueueSize,
+                component: "WorkerMessageRouter",
+            });
             this.messageQueue.splice(0, Math.floor(this.maxQueueSize / 2)); // Drop half
         }
 
@@ -133,7 +140,12 @@ export class WorkerMessageRouter {
                 this.processMessage(msg, worker);
             } catch (error) {
                 this.stats.errorCount++;
-                console.error("Error processing queued message:", error);
+                this.logger.error("Error processing queued message", {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                    component: "WorkerMessageRouter",
+                });
             }
         }
 
@@ -153,12 +165,19 @@ export class WorkerMessageRouter {
                 handler(msg, worker);
             } catch (error) {
                 this.stats.errorCount++;
-                console.error(`Error in handler for ${messageType}:`, error);
+                this.logger.error("Error in message handler", {
+                    messageType,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                    component: "WorkerMessageRouter",
+                });
             }
         } else {
-            console.warn(
-                `No handler registered for message type: ${messageType}`
-            );
+            this.logger.warn("No handler registered for message type", {
+                messageType,
+                component: "WorkerMessageRouter",
+            });
         }
     }
 

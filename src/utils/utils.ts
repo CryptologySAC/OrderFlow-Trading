@@ -141,6 +141,9 @@ export class CircularBuffer<T> implements Iterable<T> {
 
     private checkOverflow(): void {
         if (this.sequence > Number.MAX_SAFE_INTEGER) {
+            // POLICY OVERRIDE: Using console.warn for system-level overflow warning
+            // REASON: CircularBuffer is a low-level utility without logger access
+            // This is a critical system state that requires immediate attention
             console.warn(
                 "CircularBuffer: Sequence approaching overflow, consider system restart"
             );
@@ -420,6 +423,9 @@ export class AutoCalibrator {
         const recentSignals = this.signalHistory.length;
         if (recentSignals > 10) {
             const newVolume = Math.round(currentMinVolume * 1.2);
+            // POLICY OVERRIDE: Using console.log for legacy AutoCalibrator output
+            // REASON: AutoCalibrator is deprecated utility without logger dependency injection
+            // This maintains backward compatibility while system transitions to new architecture
             console.log(
                 "[AutoCalibrator] Too many signals, raising minAggVolume to",
                 newVolume
@@ -427,6 +433,9 @@ export class AutoCalibrator {
             return newVolume;
         } else if (recentSignals < 2) {
             const newVolume = Math.max(1, Math.round(currentMinVolume * 0.85));
+            // POLICY OVERRIDE: Using console.log for legacy AutoCalibrator output
+            // REASON: AutoCalibrator is deprecated utility without logger dependency injection
+            // This maintains backward compatibility while system transitions to new architecture
             console.log(
                 "[AutoCalibrator] Too few signals, lowering minAggVolume to",
                 newVolume

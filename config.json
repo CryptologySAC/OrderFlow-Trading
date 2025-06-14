@@ -29,8 +29,8 @@
         "LTCUSDT": {
             "accumulation": {
                 "maxActiveZones": 3,
-                "zoneTimeoutMs": 3600000,
-                "minZoneVolume": 1500,
+                "zoneTimeoutMs": 600000,
+                "minZoneVolume": 600,
                 "maxZoneWidth": 0.05,
                 "minZoneStrength": 0.78,
                 "completionThreshold": 0.78,
