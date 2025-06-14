@@ -2,7 +2,7 @@
 
 import { SpotWebsocketStreams } from "@binance/spot";
 import type { SpoofingDetectorConfig } from "../../services/spoofingDetector.js";
-import { CircularBuffer } from "../../utils/utils.js";
+import { CircularBuffer } from "../../utils/circularBuffer.js";
 import { EnrichedTradeEvent } from "../../types/marketEvents.js";
 
 /**

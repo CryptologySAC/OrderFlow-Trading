@@ -1,7 +1,7 @@
 // src/indicators/SpoofingDetector.ts
 // TODO If you want to score spoofing events, modify your SpoofingDetector to return the actual SpoofingEvent object (not just boolean).
 // TODO You could then emit a severity/confidence level proportional to the size and cancel/execution ratio.
-import { TimeAwareCache } from "../utils/utils.js";
+import { TimeAwareCache } from "../utils/timeAwareCache.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 
 export interface SpoofingDetectorConfig {

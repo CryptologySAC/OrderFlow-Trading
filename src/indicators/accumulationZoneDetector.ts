@@ -71,7 +71,7 @@ import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { DetectorUtils } from "./base/detectorUtils.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
 import { ObjectPool } from "../utils/objectPool.js";
-import { CircularBuffer } from "../utils/utils.js";
+import { CircularBuffer } from "../utils/circularBuffer.js";
 import {
     EnhancedZoneFormation,
     type InstitutionalSignals,

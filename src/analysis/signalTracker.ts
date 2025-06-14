@@ -3,7 +3,6 @@
 import { EventEmitter } from "events";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
-//import { ThreadManager } from "../multithreading/threadManager";
 import type { ConfirmedSignal, SignalType } from "../types/signalTypes.js";
 
 export interface MarketContext {

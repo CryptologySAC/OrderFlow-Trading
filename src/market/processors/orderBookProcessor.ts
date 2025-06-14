@@ -6,7 +6,7 @@ import type {
 import type { WebSocketMessage } from "../../utils/interfaces.js";
 import type { ILogger } from "../../infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
-import { CircularBuffer } from "../../utils/utils.js";
+import { CircularBuffer } from "../../utils/circularBuffer.js";
 
 export interface IOrderBookProcessor {
     onOrderBookUpdate(event: OrderBookSnapshot): WebSocketMessage;

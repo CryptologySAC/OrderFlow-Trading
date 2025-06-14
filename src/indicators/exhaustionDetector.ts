@@ -20,7 +20,7 @@ import type {
     ExhaustionFeatures,
 } from "./interfaces/detectorInterfaces.js";
 import { SignalType, ExhaustionSignalData } from "../types/signalTypes.js";
-import { DepthLevel } from "../utils/utils.js";
+import { DepthLevel } from "../utils/interfaces.js";
 
 export interface ExhaustionSettings extends BaseDetectorSettings {
     features?: ExhaustionFeatures;

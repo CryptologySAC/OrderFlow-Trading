@@ -10,12 +10,12 @@ import type { ILogger } from "../infrastructure/loggerInterface.js";
 export class AlertManager {
     private lastAlertTime = 0;
     private readonly cooldownMs: number;
-    private logger?: ILogger;
+    private readonly logger: ILogger;
 
     constructor(
         private readonly webhookUrl: string | undefined,
         cooldownMs = 300000, // 5 minutes default
-        logger?: ILogger
+        logger: ILogger
     ) {
         this.cooldownMs = cooldownMs;
         this.logger = logger;
@@ -37,7 +37,7 @@ export class AlertManager {
         const alert = this.formatAlert(signal);
 
         // Log trading alert
-        this.logger?.info("🚨 TRADING ALERT 🚨", {
+        this.logger.info("🚨 TRADING ALERT 🚨", {
             component: "AlertManager",
             operation: "sendAlert",
             alertType: alert.type,
@@ -54,7 +54,7 @@ export class AlertManager {
             try {
                 await this.sendWebhook(alert);
             } catch (error) {
-                console.error("[AlertManager] Webhook failed:", error);
+                this.logger.error("[AlertManager] Webhook failed:", { error });
             }
         }
 

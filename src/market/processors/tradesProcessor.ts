@@ -26,7 +26,7 @@ import type { EnrichedTradeEvent } from "../../types/marketEvents.js";
 import type { ILogger } from "../../infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
 import { ProductionUtils } from "../../utils/productionUtils.js";
-import { CircularBuffer } from "../../utils/utils.js";
+import { CircularBuffer } from "../../utils/circularBuffer.js";
 import { EventEmitter } from "events";
 import { ThreadManager } from "../../multithreading/threadManager.js";
 

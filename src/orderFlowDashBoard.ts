@@ -40,7 +40,7 @@ import { AnomalyDetector, AnomalyEvent } from "./services/anomalyDetector.js";
 
 // Indicator imports
 import { AbsorptionDetector } from "./indicators/absorptionDetector.js";
-//todo import { ExhaustionDetector } from "./indicators/exhaustionDetector.js";
+import { ExhaustionDetector } from "./indicators/exhaustionDetector.js";
 import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
 import { SupportResistanceDetector } from "./indicators/supportResistanceDetector.js";
 
@@ -55,7 +55,7 @@ import type {
 } from "./types/zoneTypes.js";
 
 // Utils imports
-import { TradeData } from "./utils/utils.js";
+import { TradeData } from "./utils/interfaces.js";
 
 // Types
 import type { Dependencies } from "./core/dependencies.js";
@@ -106,7 +106,7 @@ export class OrderFlowDashboard {
 
     // Event-based Detectors (keep as-is)
     private readonly absorptionDetector: AbsorptionDetector;
-    //TODO private readonly exhaustionDetector: ExhaustionDetector;
+    private readonly exhaustionDetector: ExhaustionDetector;
     private readonly supportResistanceDetector: SupportResistanceDetector;
 
     // Zone-based Detectors (new architecture)
@@ -232,15 +232,8 @@ export class OrderFlowDashboard {
             }
         );
 
-        // WebSocketManager handled by communication worker
-
         this.signalManager = dependencies.signalManager;
 
-        // DataStreamManager is handled by BinanceWorker in threaded mode
-        // No local DataStreamManager needed in main thread
-
-        // StatsBroadcaster not needed in threaded mode
-        // Stats are handled by the multithreading system
         DetectorFactory.initialize(dependencies);
 
         this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
@@ -259,20 +252,20 @@ export class OrderFlowDashboard {
             true
         );
 
-        //TODO this.exhaustionDetector = DetectorFactory.createExhaustionDetector(
-        //    (signal) => {
-        //        console.log("Exhaustion signal:", signal);
-        //    },
-        //    Config.EXHAUSTION_DETECTOR,
-        //    dependencies,
-        //    { id: "ltcusdt-exhaustion-main" }
-        //);
-        //this.signalCoordinator.registerDetector(
-        //    this.exhaustionDetector,
-        //    ["exhaustion"],
-        //    100,
-        //    true
-        //);
+        this.exhaustionDetector = DetectorFactory.createExhaustionDetector(
+            (signal) => {
+                this.logger.info("Exhaustion signal generated", { signal });
+            },
+            Config.EXHAUSTION_DETECTOR,
+            dependencies,
+            { id: "ltcusdt-exhaustion-main" }
+        );
+        this.signalCoordinator.registerDetector(
+            this.exhaustionDetector,
+            ["exhaustion"],
+            100,
+            true
+        );
 
         // Initialize other components
         this.deltaCVDConfirmation =
@@ -543,12 +536,6 @@ export class OrderFlowDashboard {
         }
     }
 
-    // Client connection handling is now managed by CommunicationWorker
-
-    // WebSocket handlers are now managed by CommunicationWorker
-
-    // WebSocket backlog requests are now handled by CommunicationWorker
-
     /**
      * Setup event handlers
      */
@@ -662,7 +649,7 @@ export class OrderFlowDashboard {
 
                     // Feed trade data to event-based detectors
                     this.absorptionDetector.onEnrichedTrade(enrichedTrade);
-                    // TODO this.exhaustionDetector.onEnrichedTrade(enrichedTrade);
+                    this.exhaustionDetector.onEnrichedTrade(enrichedTrade);
                     this.anomalyDetector.onEnrichedTrade(enrichedTrade);
                     this.deltaCVDConfirmation.onEnrichedTrade(enrichedTrade);
                     this.supportResistanceDetector.onEnrichedTrade(

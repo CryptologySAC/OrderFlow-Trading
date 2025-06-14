@@ -1,15 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
     parseBool,
-    CircularBuffer,
-    TimeAwareCache,
-    AdaptiveZoneCalculator,
-    PassiveVolumeTracker,
-    AutoCalibrator,
-    PriceConfirmationManager,
     isValidBacklogRequest,
     getAggressiveSide,
 } from "../src/utils/utils";
+
+import { CircularBuffer } from "../src/utils/circularBuffer";
+import { TimeAwareCache } from "../src/utils/timeAwareCache";
+import { AdaptiveZoneCalculator } from "../src/utils/adaptiveZoneCalculator";
+import { PassiveVolumeTracker } from "../src/utils/passiveVolumeTracker";
+import { AutoCalibrator } from "../src/utils/autoCalibrator";
+
 import {
     calculateProfitTarget,
     calculateBreakeven,
@@ -78,34 +79,6 @@ describe("utils/utils", () => {
         vi.advanceTimersByTime(16 * 60 * 1000);
         const result = auto.calibrate(100);
         expect(result).toBeLessThan(100);
-    });
-
-    it("PriceConfirmationManager confirms", () => {
-        const logger = { logEvent: vi.fn() } as unknown as ISignalLogger;
-        const mgr = new PriceConfirmationManager();
-        mgr.addPendingDetection({
-            time: Date.now(),
-            price: 100,
-            side: "buy",
-            zone: 1,
-            trades: [],
-            aggressive: 1,
-            passive: 1,
-            refilled: false,
-            confirmed: false,
-            id: "1",
-        });
-        const confirmed = mgr.processPendingConfirmations(
-            101,
-            2,
-            5,
-            10,
-            1000,
-            logger,
-            "SYM"
-        );
-        expect(confirmed.length).toBe(1);
-        expect(logger.logEvent).toHaveBeenCalled();
     });
 
     it("isValidBacklogRequest works", () => {
@@ -198,65 +171,6 @@ describe("utils/utils", () => {
         vi.advanceTimersByTime(16 * 60 * 1000);
         const result = auto.calibrate(50);
         expect(result).toBe(50);
-    });
-
-    it("PriceConfirmationManager invalidates by revisit", () => {
-        const logger = { logEvent: vi.fn() } as unknown as ISignalLogger;
-        const mgr = new PriceConfirmationManager();
-        mgr.addPendingDetection({
-            time: Date.now(),
-            price: 100,
-            side: "buy",
-            zone: 1,
-            trades: [],
-            aggressive: 1,
-            passive: 1,
-            refilled: false,
-            confirmed: false,
-            id: "1",
-        });
-        mgr.processPendingConfirmations(99.9, 2, 50, 5, 1000, logger, "SYM");
-        expect(logger.logEvent).toHaveBeenCalled();
-        expect(mgr.getPendingCount()).toBe(0);
-    });
-
-    it("PriceConfirmationManager keeps pending when idle", () => {
-        const mgr = new PriceConfirmationManager();
-        mgr.addPendingDetection({
-            time: Date.now(),
-            price: 100,
-            side: "buy",
-            zone: 1,
-            trades: [],
-            aggressive: 1,
-            passive: 1,
-            refilled: false,
-            confirmed: false,
-            id: "pending",
-        });
-        const res = mgr.processPendingConfirmations(100, 2, 5, 10, 1000);
-        expect(res.length).toBe(0);
-        expect(mgr.getPendingCount()).toBe(1);
-    });
-
-    it("PriceConfirmationManager invalidates by timeout", () => {
-        const logger = { logEvent: vi.fn() } as unknown as ISignalLogger;
-        const mgr = new PriceConfirmationManager();
-        mgr.addPendingDetection({
-            time: Date.now() - 2000,
-            price: 100,
-            side: "sell",
-            zone: 1,
-            trades: [],
-            aggressive: 1,
-            passive: 1,
-            refilled: false,
-            confirmed: false,
-            id: "2",
-        });
-        mgr.processPendingConfirmations(100, 2, 5, 10, 1000, logger, "SYM");
-        expect(logger.logEvent).toHaveBeenCalled();
-        expect(mgr.getPendingCount()).toBe(0);
     });
 
     it("profit and breakeven other sides", () => {

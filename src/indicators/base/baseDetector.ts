@@ -19,14 +19,12 @@ import type {
     AggressiveTrade,
 } from "../../types/marketEvents.js";
 
-import {
-    CircularBuffer,
-    TimeAwareCache,
-    AdaptiveZoneCalculator,
-    PassiveVolumeTracker,
-    AutoCalibrator,
-    DepthLevel,
-} from "../../utils/utils.js";
+import { DepthLevel } from "../../utils/interfaces.js";
+import { CircularBuffer } from "../../utils/circularBuffer.js";
+import { TimeAwareCache } from "../../utils/timeAwareCache.js";
+import { AdaptiveZoneCalculator } from "../../utils/adaptiveZoneCalculator.js";
+import { PassiveVolumeTracker } from "../../utils/passiveVolumeTracker.js";
+import { AutoCalibrator } from "../../utils/autoCalibrator.js";
 import { SpoofingDetector } from "../../services/spoofingDetector.js";
 import {
     AdaptiveThresholdCalculator,
