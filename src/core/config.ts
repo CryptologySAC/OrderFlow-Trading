@@ -62,8 +62,12 @@ function reloadConfig(): void {
             cfg.enhancedZoneFormation ??
             getDefaultEnhancedZoneFormationConfig();
 
+        // POLICY OVERRIDE: Using console.log for configuration reload notification
+        // REASON: Logger infrastructure may not be initialized during config hot-reload, essential for debugging
         console.log("[Config] configuration reloaded");
     } catch (error) {
+        // POLICY OVERRIDE: Using console.error for configuration reload failure
+        // REASON: Logger infrastructure may not be initialized during config hot-reload, critical failure requires immediate visibility
         console.error("[Config] failed to reload configuration", error);
     }
 }

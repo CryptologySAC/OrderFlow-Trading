@@ -4,6 +4,7 @@ import type { IBinanceDataFeed } from "../utils/binance.js";
 import type { ITradesProcessor } from "../market/processors/tradesProcessor.js";
 import { OrderBookProcessor } from "../market/processors/orderBookProcessor.js";
 import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 import { WorkerLogger } from "../multithreading/workerLogger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { RateLimiter } from "../infrastructure/rateLimiter.js";
@@ -37,7 +38,7 @@ export interface Dependencies {
     signalLogger: ISignalLogger;
 
     // Infrastructure
-    logger: WorkerLogger;
+    logger: ILogger;
     metricsCollector: MetricsCollector;
     rateLimiter: RateLimiter;
     circuitBreaker: CircuitBreaker;
@@ -169,6 +170,9 @@ export function createDependencies(threadManager: ThreadManager): Dependencies {
             threadManager,
         };
     } catch (error) {
+        // POLICY OVERRIDE: Using console.error for system panic during dependencies creation
+        // REASON: Logger infrastructure not yet available during startup, critical failure requires immediate visibility
+        // This is the only acceptable use of console methods - system panic before logging infrastructure is ready
         console.error("❌ CRITICAL: Failed to create dependencies:");
         console.error(
             "❌",

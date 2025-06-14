@@ -1,6 +1,6 @@
 // src/analysis/performanceAnalyzer.ts
 
-import { WorkerLogger } from "../multithreading/workerLogger";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import type { IPipelineStorage } from "../storage/pipelineStorage.js";
 import type {
@@ -258,7 +258,7 @@ export class PerformanceAnalyzer {
     >();
 
     constructor(
-        private readonly logger: WorkerLogger,
+        private readonly logger: ILogger,
         private readonly metricsCollector: MetricsCollector,
         private readonly storage: IPipelineStorage,
         config: Partial<PerformanceAnalyzerConfig> = {}

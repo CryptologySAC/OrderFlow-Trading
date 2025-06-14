@@ -13,7 +13,10 @@ class DummySpoof {
 
 describe("services/AnomalyDetector", () => {
     it("reports insufficient data for market health", () => {
-        const detector = new AnomalyDetector({ minHistory: 1 }, new WorkerLogger());
+        const detector = new AnomalyDetector(
+            { minHistory: 1 },
+            new WorkerLogger()
+        );
         const health = detector.getMarketHealth();
         expect(health.recommendation).toBe("insufficient_data");
     });

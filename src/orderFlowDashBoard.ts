@@ -245,7 +245,7 @@ export class OrderFlowDashboard {
 
         this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
             (signal) => {
-                console.log("Absorption signal:", signal);
+                this.logger.info("Absorption signal generated", { signal });
             },
             Config.ABSORPTION_DETECTOR,
             this.orderBook as OrderBookState,
@@ -278,7 +278,7 @@ export class OrderFlowDashboard {
         this.deltaCVDConfirmation =
             DetectorFactory.createDeltaCVDConfirmationDetector(
                 (signal) => {
-                    console.log("Delta CVD signal:", signal);
+                    this.logger.info("Delta CVD signal generated", { signal });
                 },
                 Config.DELTACVD_DETECTOR,
                 dependencies,
@@ -295,7 +295,9 @@ export class OrderFlowDashboard {
         this.supportResistanceDetector =
             DetectorFactory.createSupportResistanceDetector(
                 (signal) => {
-                    console.log("Support/Resistance level detected:", signal);
+                    this.logger.info("Support/Resistance level detected", {
+                        signal,
+                    });
                 },
                 Config.SUPPORT_RESISTANCE_DETECTOR,
                 dependencies,
@@ -312,7 +314,7 @@ export class OrderFlowDashboard {
         this.accumulationZoneDetector =
             DetectorFactory.createAccumulationDetector(
                 (signal) => {
-                    console.log("Accumulation zone detected:", signal);
+                    this.logger.info("Accumulation zone detected", { signal });
                 },
                 Config.ACCUMULATION_ZONE_DETECTOR,
                 dependencies,
@@ -329,7 +331,7 @@ export class OrderFlowDashboard {
         this.distributionZoneDetector =
             DetectorFactory.createDistributionDetector(
                 (signal) => {
-                    console.log("Distribution zone detected:", signal);
+                    this.logger.info("Distribution zone detected", { signal });
                 },
                 Config.DISTRIBUTION_ZONE_DETECTOR,
                 dependencies,
@@ -630,13 +632,21 @@ export class OrderFlowDashboard {
         this.signalManager.on(
             "criticalAnomalyDetected",
             ({ anomaly, recommendedAction }) => {
-                console.log(`CRITICAL: ${anomaly} - ${recommendedAction}`);
+                this.logger.error("CRITICAL ANOMALY DETECTED", {
+                    anomaly,
+                    recommendedAction,
+                    component: "SignalManager",
+                });
                 // Notify risk management, pause trading, etc.
             }
         );
 
         this.signalManager.on("emergencyPause", ({ reason, duration }) => {
-            console.log(`EMERGENCY PAUSE: ${reason} for ${duration}ms`);
+            this.logger.error("EMERGENCY PAUSE ACTIVATED", {
+                reason,
+                duration,
+                component: "SignalManager",
+            });
             // Halt all trading activity
         });
 

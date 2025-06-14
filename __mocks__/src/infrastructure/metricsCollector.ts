@@ -7,10 +7,10 @@ export class MetricsCollector {
     getMetrics = vi.fn().mockReturnValue({
         counters: {},
         histograms: {},
-        gauges: {}
+        gauges: {},
     });
     getHealthSummary = vi.fn().mockReturnValue("Healthy");
-    
+
     // Additional methods used by SignalManager
     incrementCounter = vi.fn();
     setGauge = vi.fn();

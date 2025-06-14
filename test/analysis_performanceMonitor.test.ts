@@ -57,7 +57,10 @@ const failureAnalyzer = {
     }),
 };
 
-const alertManager = new AlertManager(new WorkerLogger(), new MetricsCollector());
+const alertManager = new AlertManager(
+    new WorkerLogger(),
+    new MetricsCollector()
+);
 
 describe("analysis/PerformanceMonitor", () => {
     beforeEach(() => {

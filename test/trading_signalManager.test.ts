@@ -17,15 +17,15 @@ import { AlertManager } from "../src/alerts/alertManager";
 describe("trading/SignalManager", () => {
     it("processes signal and returns confirmation", () => {
         const ad = new AnomalyDetector({ minHistory: 1 }, new WorkerLogger());
-        
+
         // Manually spy on the getMarketHealth method to ensure it returns the expected value
-        vi.spyOn(ad, 'getMarketHealth').mockReturnValue({
+        vi.spyOn(ad, "getMarketHealth").mockReturnValue({
             isHealthy: true,
             recommendation: "continue",
             criticalIssues: [],
             recentAnomalyTypes: [],
             volatilityRatio: 1.0,
-            highestSeverity: "low"
+            highestSeverity: "low",
         });
 
         const manager = new SignalManager(
@@ -54,15 +54,15 @@ describe("trading/SignalManager", () => {
 
     it("throttles similar signals with underscore types", () => {
         const ad = new AnomalyDetector({ minHistory: 1 }, new WorkerLogger());
-        
+
         // Manually spy on the getMarketHealth method to ensure it returns the expected value
-        vi.spyOn(ad, 'getMarketHealth').mockReturnValue({
+        vi.spyOn(ad, "getMarketHealth").mockReturnValue({
             isHealthy: true,
             recommendation: "continue",
             criticalIssues: [],
             recentAnomalyTypes: [],
             volatilityRatio: 1.0,
-            highestSeverity: "low"
+            highestSeverity: "low",
         });
 
         const manager = new SignalManager(

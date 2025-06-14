@@ -2,7 +2,7 @@
 import { SpotWebsocketStreams } from "@binance/spot";
 import { BaseDetector, ZoneSample } from "./base/baseDetector.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
-import { WorkerLogger } from "../multithreading/workerLogger";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
@@ -101,7 +101,7 @@ export class AbsorptionDetector
         callback: DetectorCallback,
         settings: AbsorptionSettings = {},
         orderBook: OrderBookState,
-        logger: WorkerLogger,
+        logger: ILogger,
         spoofingDetector: SpoofingDetector,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger

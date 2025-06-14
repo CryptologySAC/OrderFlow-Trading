@@ -10,7 +10,7 @@ import type {
 } from "../types/signalTypes.js";
 import { AnomalyDetector } from "../services/anomalyDetector.js";
 import { AlertManager } from "../alerts/alertManager.js";
-import { WorkerLogger } from "../multithreading/workerLogger";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 import { ThreadManager } from "../multithreading/threadManager.js";
 import {
     MetricsCollector,
@@ -63,7 +63,7 @@ export class SignalManager extends EventEmitter {
     constructor(
         private readonly anomalyDetector: AnomalyDetector,
         private readonly alertManager: AlertManager,
-        private readonly logger: WorkerLogger,
+        private readonly logger: ILogger,
         private readonly metricsCollector: MetricsCollector,
         private readonly threadManager: ThreadManager,
         private readonly signalTracker?: SignalTracker,

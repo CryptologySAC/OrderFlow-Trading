@@ -1,6 +1,6 @@
 import { Detector } from "./detectorEnrichedTrade.js";
 import { EnrichedTradeEvent } from "../../types/marketEvents.js";
-import { WorkerLogger } from "../../multithreading/workerLogger";
+import type { ILogger } from "../../infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../../infrastructure/signalLoggerInterface.js";
 import { ZoneManager } from "../../trading/zoneManager.js";
@@ -18,7 +18,7 @@ export abstract class ZoneDetector extends Detector {
         id: string,
         config: Partial<ZoneDetectorConfig>,
         detectorType: "accumulation" | "distribution",
-        logger: WorkerLogger,
+        logger: ILogger,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger
     ) {

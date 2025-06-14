@@ -1,7 +1,7 @@
 // src/analysis/signalTracker.ts
 
 import { EventEmitter } from "events";
-import { WorkerLogger } from "../multithreading/workerLogger";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 //import { ThreadManager } from "../multithreading/threadManager";
 import type { ConfirmedSignal, SignalType } from "../types/signalTypes.js";
@@ -183,7 +183,7 @@ export class SignalTracker extends EventEmitter {
     private priceUpdateInterval?: NodeJS.Timeout;
 
     constructor(
-        private readonly logger: WorkerLogger,
+        private readonly logger: ILogger,
         private readonly metricsCollector: MetricsCollector,
         //private readonly threadManager: ThreadManager,
         config: Partial<SignalTrackerConfig> = {}
