@@ -1,4 +1,5 @@
 // src/utils/detectorFactory.ts
+import { randomUUID } from "crypto";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
@@ -557,56 +558,130 @@ export class DetectorFactory {
         id: string,
         maxAttempts: number = 3
     ): Promise<boolean> {
-        const detector = this.instances.get(id);
-        if (!detector) {
-            return false;
-        }
+        const correlationId = randomUUID();
 
-        const healthChecker = this.healthChecks.get(id);
-        if (!healthChecker) {
-            return false;
-        }
-
-        detector.logger.info(`[DetectorFactory] Restarting detector ${id}`);
-
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            try {
-                // Stop current instance
-                if (
-                    "cleanup" in detector &&
-                    typeof detector.cleanup === "function"
-                ) {
-                    detector.cleanup();
-                }
-
-                // Wait a bit before restart
-                await new Promise((resolve) =>
-                    setTimeout(resolve, 1000 * attempt)
+        try {
+            const detector = this.instances.get(id);
+            if (!detector) {
+                this.dependencies?.logger.warn(
+                    "Detector not found for restart",
+                    {
+                        component: "DetectorFactory",
+                        operation: "restartDetector",
+                        detectorId: id,
+                    },
+                    correlationId
                 );
+                return false;
+            }
 
-                // Health checker will handle the restart
-                healthChecker.triggerRestart();
-
-                detector.logger.info(
-                    `[DetectorFactory] Detector ${id} restarted successfully`
+            const healthChecker = this.healthChecks.get(id);
+            if (!healthChecker) {
+                detector.logger.warn(
+                    "Health checker not found for detector restart",
+                    {
+                        component: "DetectorFactory",
+                        operation: "restartDetector",
+                        detectorId: id,
+                    },
+                    correlationId
                 );
-                return true;
-            } catch (error) {
-                detector.logger.error(
-                    `[DetectorFactory] Restart attempt ${attempt} failed for ${id}`,
-                    { error }
-                );
+                return false;
+            }
 
-                if (attempt === maxAttempts) {
-                    detector.logger.error(
-                        `[DetectorFactory] Failed to restart detector ${id} after ${maxAttempts} attempts`
+            detector.logger.info(
+                "Starting detector restart",
+                {
+                    component: "DetectorFactory",
+                    operation: "restartDetector",
+                    detectorId: id,
+                    maxAttempts,
+                },
+                correlationId
+            );
+
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                    // Stop current instance
+                    if (
+                        "cleanup" in detector &&
+                        typeof detector.cleanup === "function"
+                    ) {
+                        detector.cleanup();
+                    }
+
+                    // Wait a bit before restart
+                    await new Promise((resolve) =>
+                        setTimeout(resolve, 1000 * attempt)
                     );
-                    return false;
+
+                    // Health checker will handle the restart
+                    healthChecker.triggerRestart();
+
+                    detector.logger.info(
+                        "Detector restarted successfully",
+                        {
+                            component: "DetectorFactory",
+                            operation: "restartDetector",
+                            detectorId: id,
+                            attempt,
+                        },
+                        correlationId
+                    );
+                    return true;
+                } catch (error) {
+                    detector.logger.error(
+                        "Restart attempt failed",
+                        {
+                            component: "DetectorFactory",
+                            operation: "restartDetector",
+                            detectorId: id,
+                            attempt,
+                            maxAttempts,
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                            stack:
+                                error instanceof Error
+                                    ? error.stack
+                                    : undefined,
+                        },
+                        correlationId
+                    );
+
+                    if (attempt === maxAttempts) {
+                        detector.logger.error(
+                            "Failed to restart detector after all attempts",
+                            {
+                                component: "DetectorFactory",
+                                operation: "restartDetector",
+                                detectorId: id,
+                                maxAttempts,
+                            },
+                            correlationId
+                        );
+                        return false;
+                    }
                 }
             }
-        }
 
-        return false;
+            return false;
+        } catch (error) {
+            this.dependencies?.logger.error(
+                "Error in detector restart process",
+                {
+                    component: "DetectorFactory",
+                    operation: "restartDetector",
+                    detectorId: id,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                },
+                correlationId
+            );
+            return false;
+        }
     }
 
     // Private methods

@@ -1,5 +1,6 @@
 import FastPriorityQueue from "fastpriorityqueue";
 import { ulid } from "ulid";
+import { randomUUID } from "crypto";
 import { EventEmitter } from "events";
 import {
     SignalCandidate,
@@ -226,45 +227,118 @@ export class SignalCoordinator extends EventEmitter {
     /* ---------------------------------------------------------------------- */
 
     public async start(): Promise<void> {
-        if (this.isRunning) return;
-        this.isRunning = true;
+        const correlationId = randomUUID();
 
-        /* restore any jobs left in the DB from a previous run */
-        const restoreQueuedJobs: ProcessingJob[] =
-            (await this.threadManager.callStorage(
-                "restoreQueuedJobs"
-            )) as ProcessingJob[];
-        for (const j of restoreQueuedJobs) {
-            this.queue.push(j);
+        try {
+            if (this.isRunning) return;
+            this.isRunning = true;
+
+            /* restore any jobs left in the DB from a previous run */
+            const restoreQueuedJobs: ProcessingJob[] =
+                (await this.threadManager.callStorage(
+                    "restoreQueuedJobs"
+                )) as ProcessingJob[];
+            for (const j of restoreQueuedJobs) {
+                this.queue.push(j);
+            }
+
+            this.processingTick = setInterval(
+                () => void this.processQueue(),
+                100
+            );
+
+            this.logger.info(
+                "SignalCoordinator started",
+                {
+                    component: "SignalCoordinator",
+                    operation: "start",
+                    restoredJobs: restoreQueuedJobs.length,
+                },
+                correlationId
+            );
+            this.emit("started");
+        } catch (error) {
+            this.isRunning = false;
+            this.logger.error(
+                "Failed to start SignalCoordinator",
+                {
+                    component: "SignalCoordinator",
+                    operation: "start",
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                },
+                correlationId
+            );
+            throw error;
         }
-
-        this.processingTick = setInterval(() => void this.processQueue(), 100);
-
-        this.logger.info("SignalCoordinator started");
-        this.emit("started");
     }
 
     public async stop(): Promise<void> {
-        if (!this.isRunning) return;
-        this.isRunning = false;
+        const correlationId = randomUUID();
 
-        if (this.processingTick) {
-            clearInterval(this.processingTick);
-            this.processingTick = null;
+        try {
+            if (!this.isRunning) return;
+            this.isRunning = false;
+
+            if (this.processingTick) {
+                clearInterval(this.processingTick);
+                this.processingTick = null;
+            }
+
+            /* wait for active jobs */
+            const waiters = [...this.active.values()].map((j) =>
+                this.waitForCompletion(j.id, 5_000)
+            );
+            const results = await Promise.allSettled([
+                ...waiters,
+                ...this.shutdownPromises,
+            ]);
+
+            // Log any failed shutdowns
+            const failures = results.filter(
+                (r) => r.status === "rejected"
+            ).length;
+            if (failures > 0) {
+                this.logger.warn(
+                    "Some shutdown operations failed",
+                    {
+                        component: "SignalCoordinator",
+                        operation: "stop",
+                        failedOperations: failures,
+                        totalOperations: results.length,
+                    },
+                    correlationId
+                );
+            }
+
+            /* cleanup */
+            this.active.clear();
+            this.queue.clear();
+
+            this.logger.info(
+                "SignalCoordinator stopped",
+                {
+                    component: "SignalCoordinator",
+                    operation: "stop",
+                },
+                correlationId
+            );
+            this.emit("stopped");
+        } catch (error) {
+            this.logger.error(
+                "Error during SignalCoordinator shutdown",
+                {
+                    component: "SignalCoordinator",
+                    operation: "stop",
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                },
+                correlationId
+            );
+            throw error;
         }
-
-        /* wait for active jobs */
-        const waiters = [...this.active.values()].map((j) =>
-            this.waitForCompletion(j.id, 5_000)
-        );
-        await Promise.allSettled([...waiters, ...this.shutdownPromises]);
-
-        /* cleanup */
-        this.active.clear();
-        this.queue.clear();
-
-        this.logger.info("SignalCoordinator stopped");
-        this.emit("stopped");
     }
 
     /* ---------------------------------------------------------------------- */
@@ -323,24 +397,65 @@ export class SignalCoordinator extends EventEmitter {
     }
 
     private async processQueue(): Promise<void> {
-        if (!this.isRunning) return;
-        const slots = this.cfg.maxConcurrentProcessing - this.active.size;
-        if (slots <= 0) return;
+        const correlationId = randomUUID();
 
-        /* if the in-memory queue is drained, refill from persistent storage */
-        if (this.queue.size === 0) {
-            for (const j of await this.threadManager.callStorage(
-                "dequeueJobs",
-                slots
-            ))
-                this.queue.push(j as ProcessingJob);
-        }
-        if (this.queue.size === 0) return;
+        try {
+            if (!this.isRunning) return;
+            const slots = this.cfg.maxConcurrentProcessing - this.active.size;
+            if (slots <= 0) return;
 
-        for (const job of this.queue.drain(slots)) {
-            void this.processJob(job);
+            /* if the in-memory queue is drained, refill from persistent storage */
+            if (this.queue.size === 0) {
+                try {
+                    const jobs = (await this.threadManager.callStorage(
+                        "dequeueJobs",
+                        slots
+                    )) as ProcessingJob[];
+                    for (const j of jobs) {
+                        this.queue.push(j);
+                    }
+                } catch (error) {
+                    this.logger.error(
+                        "Failed to dequeue jobs from storage",
+                        {
+                            component: "SignalCoordinator",
+                            operation: "processQueue",
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                            stack:
+                                error instanceof Error
+                                    ? error.stack
+                                    : undefined,
+                        },
+                        correlationId
+                    );
+                    return; // Skip processing this cycle if storage fails
+                }
+            }
+            if (this.queue.size === 0) return;
+
+            for (const job of this.queue.drain(slots)) {
+                void this.processJob(job);
+            }
+            this.metrics.setGauge(
+                "signal_coordinator_queue_size",
+                this.queue.size
+            );
+        } catch (error) {
+            this.logger.error(
+                "Error in processQueue",
+                {
+                    component: "SignalCoordinator",
+                    operation: "processQueue",
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                },
+                correlationId
+            );
         }
-        this.metrics.setGauge("signal_coordinator_queue_size", this.queue.size);
     }
 
     private async processJob(job: ProcessingJob): Promise<void> {

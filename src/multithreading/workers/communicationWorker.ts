@@ -1,4 +1,5 @@
 import { parentPort } from "worker_threads";
+import { randomUUID } from "crypto";
 import { WorkerProxyLogger } from "../shared/workerProxylogger.js";
 import { WorkerMetricsProxy } from "../shared/workerMetricsProxy.js";
 import { WorkerRateLimiterProxy } from "../shared/workerRateLimiterProxy.js";
@@ -579,8 +580,18 @@ process.on("unhandledRejection", (reason: unknown) => {
 });
 
 async function gracefulShutdown(exitCode: number = 0): Promise<void> {
+    const correlationId = randomUUID();
+
     try {
-        logger.info("Communication worker starting graceful shutdown");
+        logger.info(
+            "Communication worker starting graceful shutdown",
+            {
+                component: "CommunicationWorker",
+                operation: "gracefulShutdown",
+                exitCode,
+            },
+            correlationId
+        );
 
         // Stop monitoring interval
         try {
@@ -623,12 +634,28 @@ async function gracefulShutdown(exitCode: number = 0): Promise<void> {
             });
         }
 
-        logger.info("Communication worker shutdown complete");
+        logger.info(
+            "Communication worker shutdown complete",
+            {
+                component: "CommunicationWorker",
+                operation: "gracefulShutdown",
+                exitCode,
+            },
+            correlationId
+        );
         process.exit(exitCode);
     } catch (error) {
-        logger.error("Error during communication worker shutdown", {
-            error: error instanceof Error ? error.message : String(error),
-        });
+        logger.error(
+            "Error during communication worker shutdown",
+            {
+                component: "CommunicationWorker",
+                operation: "gracefulShutdown",
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+                exitCode,
+            },
+            correlationId
+        );
         process.exit(1);
     }
 }
