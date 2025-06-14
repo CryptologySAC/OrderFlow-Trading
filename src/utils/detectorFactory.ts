@@ -1105,9 +1105,9 @@ type DetectorConstructor<
 /*
 import { DetectorFactory } from './utils/detectorFactory.js';
 
-// Create dependencies
+// Create dependencies (use proper dependency injection)
 const dependencies = {
-    logger: new Logger(),
+    logger: injectedLogger, // ILogger interface from dependency injection
     metricsCollector: new MetricsCollector(),
     signalLogger: new SignalLogger(),
 };

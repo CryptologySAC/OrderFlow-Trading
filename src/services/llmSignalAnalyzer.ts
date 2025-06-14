@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { Config } from "../core/config.js";
-import { WorkerLogger } from "../multithreading/workerLogger";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { ProcessedSignal } from "../types/signalTypes.js";
 
 /**
@@ -8,7 +8,7 @@ import type { ProcessedSignal } from "../types/signalTypes.js";
  */
 export async function analyzeSignal(
     signal: ProcessedSignal,
-    logger: WorkerLogger
+    logger: ILogger
 ): Promise<string> {
     if (!Config.LLM_API_KEY) {
         const err = new Error("LLM_API_KEY not configured");

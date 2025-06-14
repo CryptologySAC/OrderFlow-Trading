@@ -8,7 +8,7 @@
 
 import { EventEmitter } from "events";
 import type { MarketAnomaly } from "../utils/types.js";
-import { WorkerLogger } from "../multithreading/workerLogger";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type {
     EnrichedTradeEvent,
     HybridTradeEvent,
@@ -129,7 +129,7 @@ export class AnomalyDetector extends EventEmitter {
     private readonly whaleCooldownMs: number;
     private readonly marketHealthWindowMs: number;
 
-    private readonly logger: WorkerLogger;
+    private readonly logger: ILogger;
     private lastTradeSymbol = "";
 
     // Properly track orderbook state
@@ -162,7 +162,7 @@ export class AnomalyDetector extends EventEmitter {
      * @param options AnomalyDetectorOptions (all fields optional)
      * @param logger Logger instance
      */
-    constructor(options: AnomalyDetectorOptions = {}, logger: WorkerLogger) {
+    constructor(options: AnomalyDetectorOptions = {}, logger: ILogger) {
         super();
         this.windowSize = options.windowSize ?? 9000;
         this.normalSpreadBps = options.normalSpreadBps ?? 10;

@@ -1,6 +1,6 @@
 // src/utils/retryHandler.ts
 import { ProductionUtils } from "./productionUtils.js";
-import { WorkerLogger } from "../multithreading/workerLogger";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 
 export interface RetryConfig {
@@ -16,7 +16,7 @@ export interface RetryContext {
     operation: string;
     component: string;
     correlationId?: string;
-    logger?: WorkerLogger;
+    logger?: ILogger;
     metricsCollector?: MetricsCollector;
 }
 
@@ -226,7 +226,7 @@ export class RetryHandler {
      */
     public static createComponentRetryHandler(
         component: string,
-        logger: WorkerLogger,
+        logger: ILogger,
         metricsCollector?: MetricsCollector
     ) {
         return {

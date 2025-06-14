@@ -244,7 +244,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
         try {
             // Validate input
             if (!this.isValidTrade(trade)) {
-                console.warn("Invalid trade received:", trade);
+                this.logger.warn("Invalid trade received", { trade });
                 return;
             }
 
@@ -294,7 +294,10 @@ export class AccumulationZoneDetector extends ZoneDetector {
             // Note: Volume tracking remains accurate since we track totalVolume/tradeCount separately.
             // Only the detailed trade history is managed by the circular buffer.
         } catch (error) {
-            console.error("Error updating candidates:", error);
+            this.logger.error("Error updating candidates", {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+            });
             // Graceful degradation
         }
     }
@@ -473,9 +476,12 @@ export class AccumulationZoneDetector extends ZoneDetector {
         const totalRatio = sellRatio + aggressiveBuyRatio;
         if (Math.abs(totalRatio - 1.0) > 0.01) {
             // Log warning but continue - minor floating point differences are acceptable
-            console.warn(
-                `Ratio inconsistency detected: sellRatio(${sellRatio}) + aggressiveBuyRatio(${aggressiveBuyRatio}) = ${totalRatio}`
-            );
+            this.logger.warn("Ratio inconsistency detected", {
+                sellRatio,
+                aggressiveBuyRatio,
+                totalRatio,
+                component: "AccumulationZoneDetector",
+            });
         }
 
         // Use enhanced zone formation scoring with correct parameters
@@ -493,7 +499,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
 
         // Optional: Log detailed scoring for debugging (remove in production)
         if (enhancedResult.score > 0.7) {
-            console.debug(`High accumulation score detected:`, {
+            this.logger.debug("High accumulation score detected", {
                 score: enhancedResult.score,
                 confidence: enhancedResult.confidence,
                 sellRatio: sellRatio.toFixed(3),
@@ -823,7 +829,10 @@ export class AccumulationZoneDetector extends ZoneDetector {
 
         // Log cleanup metrics
         if (cleanedCount > 0) {
-            console.debug(`Cleaned ${cleanedCount} old candidates`);
+            this.logger.debug("Cleaned old candidates", {
+                cleanedCount,
+                component: "AccumulationZoneDetector",
+            });
         }
     }
 

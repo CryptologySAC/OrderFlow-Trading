@@ -1,5 +1,5 @@
 // src/utils/errorHandler.ts
-import { WorkerLogger } from "../multithreading/workerLogger";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 
 export interface ErrorContext {
@@ -10,7 +10,7 @@ export interface ErrorContext {
 }
 
 export interface ErrorHandlerConfig {
-    logger: WorkerLogger;
+    logger: ILogger;
     metricsCollector?: MetricsCollector;
     throwOnError?: boolean;
     logLevel?: "error" | "warn" | "info";
@@ -128,7 +128,7 @@ export class ErrorHandler {
      */
     public static createComponentHandler(
         component: string,
-        logger: WorkerLogger,
+        logger: ILogger,
         metricsCollector?: MetricsCollector
     ) {
         return {
@@ -195,7 +195,7 @@ export class ErrorHandler {
     public static wrapMethod<T>(
         operation: string,
         component: string,
-        logger: WorkerLogger,
+        logger: ILogger,
         fn: () => T,
         metricsCollector?: MetricsCollector,
         correlationId?: string
@@ -213,7 +213,7 @@ export class ErrorHandler {
     public static async wrapAsyncMethod<T>(
         operation: string,
         component: string,
-        logger: WorkerLogger,
+        logger: ILogger,
         fn: () => Promise<T>,
         metricsCollector?: MetricsCollector,
         correlationId?: string

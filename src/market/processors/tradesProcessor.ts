@@ -23,7 +23,7 @@ import { SpotWebsocketAPI } from "@binance/spot";
 import type { WebSocketMessage } from "../../utils/interfaces.js";
 import type { PlotTrade } from "../../utils/types.js";
 import type { EnrichedTradeEvent } from "../../types/marketEvents.js";
-import { WorkerLogger } from "../../multithreading/workerLogger.js";
+import type { ILogger } from "../../infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
 import { ProductionUtils } from "../../utils/productionUtils.js";
 import { CircularBuffer } from "../../utils/utils.js";
@@ -131,7 +131,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     private readonly healthCheckInterval: number;
     private readonly bufferRetentionMs: number; // Time-based buffer retention
 
-    private readonly logger: WorkerLogger;
+    private readonly logger: ILogger;
     private readonly metricsCollector: MetricsCollector;
 
     // State management
@@ -178,7 +178,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     constructor(
         options: TradesProcessorOptions,
         //storage: Storage,
-        logger: WorkerLogger,
+        logger: ILogger,
         metricsCollector: MetricsCollector,
         binanceFeed: BinanceDataFeed,
         private readonly threadManager: ThreadManager

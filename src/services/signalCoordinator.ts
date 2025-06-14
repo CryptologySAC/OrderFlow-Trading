@@ -9,9 +9,9 @@ import {
 } from "../types/signalTypes.js";
 import { BaseDetector } from "../indicators/base/baseDetector.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 import { ProductionUtils } from "../utils/productionUtils.js";
 import { SignalManager } from "../trading/signalManager.js";
-import { WorkerLogger } from "../multithreading/workerLogger";
 import { ThreadManager } from "../multithreading/threadManager.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import type {
@@ -97,7 +97,7 @@ interface DetectorRegistration {
  * SignalCoordinator – central hub orchestrating detectors → queue → processor.
  */
 export class SignalCoordinator extends EventEmitter {
-    private readonly logger: WorkerLogger;
+    private readonly logger: ILogger;
     private readonly signalLogger: ISignalLogger;
     private readonly signalManager: SignalManager;
     private readonly threadManager: ThreadManager;
@@ -123,7 +123,7 @@ export class SignalCoordinator extends EventEmitter {
 
     constructor(
         partialCfg: Partial<SignalCoordinatorConfig>,
-        logger: WorkerLogger,
+        logger: ILogger,
         metricsCollector: MetricsCollector,
         signalLogger: ISignalLogger,
         signalManager: SignalManager,
