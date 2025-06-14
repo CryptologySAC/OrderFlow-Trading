@@ -47,7 +47,7 @@ import { ILogger } from "../infrastructure/loggerInterface.js";
 import {
     PipelineStorage,
     IPipelineStorage,
-} from "../storage/pipelineStorage.js";
+} from "../infrastructure/pipelineStorage.js";
 import {
     validateNumeric,
     validateInteger,
@@ -55,15 +55,15 @@ import {
     validateTimestamp,
     validateBoolean,
     validateDatabaseRow,
-} from "../storage/typeGuards.js";
+} from "../infrastructure/typeGuards.js";
 import {
     StorageResourceManager,
     registerDatabaseResource,
-} from "../storage/storageResourceManager.js";
+} from "../infrastructure/storageResourceManager.js";
 import {
     StorageHealthMonitor,
     createStorageHealthMonitor,
-} from "../storage/storageHealthMonitor.js";
+} from "../infrastructure/storageHealthMonitor.js";
 import type { ProcessingJob } from "../utils/types.js";
 import type { AnomalyEvent } from "../services/anomalyDetector.js";
 import type {

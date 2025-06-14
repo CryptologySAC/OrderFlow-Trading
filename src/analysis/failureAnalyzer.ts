@@ -2,7 +2,7 @@
 
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IWorkerMetricsCollector } from "../multithreading/shared/workerInterfaces.js";
-import type { IPipelineStorage } from "../storage/pipelineStorage.js";
+import type { IPipelineStorage } from "../infrastructure/pipelineStorage.js";
 import type {
     SignalOutcome,
     MarketContext,

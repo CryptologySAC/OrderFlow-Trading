@@ -25,13 +25,13 @@
 import { Database, Statement } from "better-sqlite3";
 import { ulid } from "ulid";
 import { EventEmitter } from "events";
-import { withBusyRetries } from "../infrastructure/sqliteUtils.js";
+import { withBusyRetries } from "./sqliteUtils.js";
 // Type guards imported for future use - validation will be added incrementally
 import {
     StorageResourceManager,
     registerStatementCleanup,
 } from "./storageResourceManager.js";
-import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { ILogger } from "./loggerInterface.js";
 
 import type { BaseDetector } from "../indicators/base/baseDetector.js";
 import type {

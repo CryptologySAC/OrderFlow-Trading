@@ -38,7 +38,7 @@ import {
     isWorkerCallMessage,
     isWorkerShutdownMessage,
     serializeError,
-} from "../../storage/typeGuards.js";
+} from "../../infrastructure/typeGuards.js";
 import type { IWorkerMetricsCollector } from "../shared/workerInterfaces.js";
 
 // Validate that we're running in a worker thread context

@@ -2,7 +2,7 @@
 
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
-import type { IPipelineStorage } from "../storage/pipelineStorage.js";
+import type { IPipelineStorage } from "../infrastructure/pipelineStorage.js";
 import type {
     SignalOutcome,
     MarketContext,

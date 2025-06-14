@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import Database from "better-sqlite3";
-import { PipelineStorage } from "../src/storage/pipelineStorage";
+import { PipelineStorage } from "../src/infrastructure/pipelineStorage";
 import type { ProcessingJob } from "../src/utils/types";
 
 vi.mock("../src/infrastructure/logger");
