@@ -20,10 +20,7 @@ import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
-import type {
-    DetectorCallback,
-    BaseDetectorSettings,
-} from "./interfaces/detectorInterfaces.js";
+import type { BaseDetectorSettings } from "./interfaces/detectorInterfaces.js";
 import { EnrichedTradeEvent } from "../types/marketEvents.js";
 
 /* ------------------------------------------------------------------ */
@@ -142,7 +139,6 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
     constructor(
         id: string,
-        callback: DetectorCallback,
         settings: DeltaCVDConfirmationSettings = {},
         logger: ILogger,
         spoofingDetector: SpoofingDetector,
@@ -151,7 +147,6 @@ export class DeltaCVDConfirmation extends BaseDetector {
     ) {
         super(
             id,
-            callback,
             settings,
             logger,
             spoofingDetector,

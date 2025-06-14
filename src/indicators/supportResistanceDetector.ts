@@ -7,7 +7,6 @@ import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterf
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
 import type {
-    DetectorCallback,
     BaseDetectorSettings,
     DetectorFeatures,
 } from "./interfaces/detectorInterfaces.js";
@@ -58,7 +57,6 @@ export class SupportResistanceDetector extends BaseDetector {
 
     constructor(
         id: string,
-        callback: DetectorCallback,
         settings: BaseDetectorSettings &
             Partial<SupportResistanceConfig> & { features?: DetectorFeatures },
         logger: ILogger,
@@ -68,7 +66,6 @@ export class SupportResistanceDetector extends BaseDetector {
     ) {
         super(
             id,
-            callback,
             settings,
             logger,
             spoofingDetector,
@@ -368,14 +365,12 @@ export class SupportResistanceDetector extends BaseDetector {
                         },
                     };
 
-                    // Use the callback to emit the signal
-                    this.callback(detectedSignal);
-
-                    // Also emit the event for WebSocket broadcasting
+                    // emit the event for WebSocket broadcasting
                     this.emit("supportResistanceLevel", {
                         type: "support_resistance_level",
                         data: level,
                         timestamp: new Date(),
+                        detectedSignal,
                     });
 
                     // Mark as emitted

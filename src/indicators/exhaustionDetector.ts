@@ -7,7 +7,7 @@ import { RollingWindow } from "../utils/rollingWindow.js";
 import { DetectorUtils } from "./base/detectorUtils.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
 import { SharedPools } from "../utils/objectPool.js";
-import { AdaptiveThresholds, MarketRegime } from "./marketRegimeDetector.js";
+import { AdaptiveThresholds } from "./marketRegimeDetector.js";
 
 import type {
     EnrichedTradeEvent,
@@ -15,7 +15,6 @@ import type {
 } from "../types/marketEvents.js";
 import type {
     IExhaustionDetector,
-    DetectorCallback,
     BaseDetectorSettings,
     ExhaustionFeatures,
 } from "./interfaces/detectorInterfaces.js";
@@ -90,7 +89,6 @@ export class ExhaustionDetector
 
     constructor(
         id: string,
-        callback: DetectorCallback,
         settings: ExhaustionSettings = {},
         logger: ILogger,
         spoofingDetector: SpoofingDetector,
@@ -99,7 +97,6 @@ export class ExhaustionDetector
     ) {
         super(
             id,
-            callback,
             settings,
             logger,
             spoofingDetector,
@@ -126,12 +123,6 @@ export class ExhaustionDetector
         //TODO debuG
         this.isCircuitOpen = false;
         this.errorCount = 0;
-
-        // Enable debug mode after data accumulates
-        setTimeout(() => {
-            this.logger.info(`[ExhaustionDetector] 🔧 FORCING DEBUG TEST`);
-            this.testExhaustionCalculation();
-        }, 10000);
     }
 
     protected getSignalType(): SignalType {
@@ -837,46 +828,6 @@ export class ExhaustionDetector
     }
 
     /**
-     * Record signal performance for learning
-     */
-    public recordSignalResult(signalId: string, profitable: boolean): void {
-        // Convert boolean to numerical performance score
-        const performance = profitable ? 1.0 : 0.0;
-        this.recordSignalPerformance(signalId, performance);
-    }
-
-    /**
-     * Get current threshold information for monitoring
-     */
-    public getThresholdStatus(): {
-        current: AdaptiveThresholds;
-        recentSignals: number;
-        lastUpdated: Date;
-        performanceByRegime: Map<string, number>;
-    } {
-        return {
-            current: this.getAdaptiveThresholds(),
-            recentSignals: this.recentSignalCount,
-            lastUpdated: new Date(this.lastThresholdUpdate),
-            performanceByRegime: new Map(this.performanceHistory),
-        };
-    }
-
-    /**
-     * Manually trigger threshold update (for testing or immediate adaptation)
-     */
-    public forceThresholdUpdate(): void {
-        this.updateThresholds();
-    }
-
-    /**
-     * Get current market regime (for debugging/monitoring)
-     */
-    public getCurrentMarketRegime(): MarketRegime {
-        return this.adaptiveThresholdCalculator.detectCurrentRegime();
-    }
-
-    /**
      * Validate input parameters
      */
     private validateInputs(
@@ -997,69 +948,6 @@ export class ExhaustionDetector
         if (sampleCount >= 1) return "low"; // Relaxed from 2 samples
 
         return "insufficient";
-    }
-
-    public testExhaustionCalculation(): void {
-        this.logger.info(
-            `[ExhaustionDetector] 🧪 TESTING EXHAUSTION CALCULATION`
-        );
-
-        // Test with zones that have actual data
-        let testCount = 0;
-        for (const [zone, bucket] of this.zoneAgg) {
-            if (bucket.trades.length > 0 && testCount < 3) {
-                const latestTrade = bucket.trades[bucket.trades.length - 1];
-                const price = +latestTrade.price.toFixed(this.pricePrecision);
-                const side = this.getTradeSide(latestTrade);
-
-                this.logger.info(
-                    `[ExhaustionDetector] 🧪 Testing zone ${zone}`,
-                    {
-                        price,
-                        side,
-                        tradesCount: bucket.trades.length,
-                    }
-                );
-
-                // Force the analysis to run with debug logging
-                this.analyzeZoneForExhaustion(
-                    zone,
-                    bucket.trades,
-                    latestTrade,
-                    this.getEffectiveZoneTicks()
-                );
-                testCount++;
-            }
-        }
-
-        if (testCount === 0) {
-            this.logger.info(
-                `[ExhaustionDetector] 🧪 No zones with trades to test`
-            );
-        }
-    }
-
-    public resetCircuitBreaker(): void {
-        this.isCircuitOpen = false;
-        this.errorCount = 0;
-        this.lastErrorTime = 0;
-
-        this.logger.info(`[ExhaustionDetector] 🔄 Circuit breaker reset`, {
-            errorCount: this.errorCount,
-            isCircuitOpen: this.isCircuitOpen,
-        });
-    }
-
-    public enableDebugMode(): void {
-        this.logger.info(`[ExhaustionDetector] 🐛 ENABLING DEBUG MODE`);
-
-        // Reset any blocking states
-        this.resetCircuitBreaker();
-
-        // Test the calculation immediately
-        setTimeout(() => {
-            this.testExhaustionCalculation();
-        }, 2000);
     }
 
     /**

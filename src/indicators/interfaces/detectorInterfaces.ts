@@ -4,16 +4,21 @@ import { SpotWebsocketStreams } from "@binance/spot";
 import type { SpoofingDetectorConfig } from "../../services/spoofingDetector.js";
 import { CircularBuffer } from "../../utils/circularBuffer.js";
 import { EnrichedTradeEvent } from "../../types/marketEvents.js";
+import { AggressiveTrade } from "../../types/marketEvents.js";
+import { MarketRegime } from "../../types/signalTypes.js";
+import { RollingWindow } from "../../utils/rollingWindow.js";
 
 /**
  * Base detector interface
  */
 export interface IDetector {
-    //onEnrichedTrade(event: EnrichedTradeEvent): void;
-    //addTrade(trade: SpotWebsocketStreams.AggTradeResponse): void;
-    //addDepth(update: SpotWebsocketStreams.DiffBookDepthResponse): void;
+    onEnrichedTrade(event: EnrichedTradeEvent): void;
+    addTrade(tradeData: AggressiveTrade): void;
     getStats(): DetectorStats;
     cleanup(): void;
+    markSignalConfirmed(zone: number, side: "buy" | "sell"): void;
+    getStatus(): string;
+    getId(): string;
 }
 
 /**
@@ -121,11 +126,6 @@ export interface DetectorFeatures {
     autoCalibrate?: boolean;
     spreadAdjustment?: boolean;
 }
-
-/**
- * Detector callback type
- */
-export type DetectorCallback = (data: Detected) => void;
 
 /**
  * Absorption-specific interface
@@ -240,7 +240,7 @@ export interface ImbalanceResult {
     dominantSide: "bid" | "ask" | "neutral";
 }
 
-interface ZoneCandidate {
+export interface ZoneCandidate {
     priceLevel: number;
     startTime: number;
     trades: CircularBuffer<EnrichedTradeEvent>;
@@ -259,4 +259,164 @@ export interface DistributionCandidate extends ZoneCandidate {
 
 export interface AccumulationCandidate extends ZoneCandidate {
     absorptionQuality?: number; // Quality of sell absorption patterns
+}
+
+export interface DetailedFlowState {
+    flowDirection: "accumulation" | "distribution";
+    zones: Array<{
+        zone: number;
+        duration: number;
+        ratio: number;
+        strength: number;
+        priceEffect: number;
+        velocity: number;
+        statisticalSignificance: number;
+        tradeCount: number;
+        isActive: boolean;
+        dominantSide: "buy" | "sell";
+        sideConfidence: number;
+    }>;
+    marketRegime: MarketRegime;
+    summary: {
+        totalZones: number;
+        activeZones: number;
+        strongZones: number;
+        avgConfidence: number;
+        avgRatio: number;
+    };
+    configuration: {
+        minRatio: number;
+        threshold: number;
+        minDurationMs: number;
+        strengthAnalysis: boolean;
+        velocityAnalysis: boolean;
+    };
+}
+
+export interface ZoneAnalysisResult {
+    zone: number;
+    exists: boolean;
+    analysis: SuperiorFlowConditions | null;
+    recommendation:
+        | "strong_flow"
+        | "weak_flow"
+        | "no_flow"
+        | "developing"
+        | "no_activity";
+    confidence: number;
+}
+
+export interface FlowSimulationParams {
+    aggressiveVolume: number;
+    passiveVolume: number;
+    duration: number;
+    strength?: number;
+    velocity?: number;
+    priceEffect?: number;
+    statisticalSignificance?: number;
+    volumeConcentration?: number;
+    tradeCount?: number;
+}
+
+export interface FlowSimulationResult {
+    score: number;
+    wouldSignal: boolean;
+    breakdown: Record<string, number>;
+    missingRequirements: string[];
+    conditions: SuperiorFlowConditions;
+}
+
+export interface SuperiorFlowConditions {
+    // Core metrics
+    ratio: number;
+    duration: number;
+    aggressiveVolume: number;
+    relevantPassive: number;
+    totalPassive: number;
+
+    // Enhanced analytics
+    strength: number;
+    velocity: number;
+    priceEffect: number;
+    statisticalSignificance: number;
+    volumeConcentration: number;
+
+    // Timing
+    recentActivity: number;
+    tradeCount: number;
+
+    // Validation flags
+    meetsMinDuration: boolean;
+    meetsMinRatio: boolean;
+    isRecentlyActive: boolean;
+
+    // Side analysis
+    dominantSide: "buy" | "sell";
+    sideConfidence: number;
+
+    // Market context
+    marketVolatility: number;
+    trendStrength: number;
+}
+
+export interface SignalCreationParams {
+    zone: number;
+    price: number;
+    side: "buy" | "sell";
+    score: number;
+    conditions: SuperiorFlowConditions;
+    volumes: {
+        aggressive: number;
+        passive: number;
+    };
+    zoneData: SuperiorZoneFlowData;
+    marketRegime: MarketRegime;
+}
+
+export interface SuperiorFlowSettings extends BaseDetectorSettings {
+    minDurationMs?: number;
+    minRatio?: number;
+    minRecentActivityMs?: number;
+    threshold?: number;
+    volumeConcentrationWeight?: number;
+    strengthAnalysis?: boolean;
+    velocityAnalysis?: boolean;
+    flowDirection?: "accumulation" | "distribution";
+    symbol?: string;
+}
+
+export interface SuperiorZoneFlowData {
+    // Core tracking (your approach)
+    aggressiveVolume: RollingWindow<number>;
+    timestamps: RollingWindow<number>;
+    sides: RollingWindow<"buy" | "sell">;
+
+    // Superior price statistics (your Welford's algorithm)
+    priceRollingMean: number;
+    priceRollingVar: number;
+    priceCount: number;
+
+    // Basic state
+    startTime: number;
+    lastUpdate: number;
+    tradeCount: number;
+
+    // Liquidity tracking (your approach)
+    currentPassiveBid: number;
+    currentPassiveAsk: number;
+
+    // Enhanced analytics
+    volumeProfile: Map<number, number>;
+    liquidityHistory: RollingWindow<number>;
+    strengthScore: number;
+    velocityScore: number;
+    priceEffectScore: number;
+
+    // Statistical validation
+    statisticalSignificance: number;
+    lastStatisticalUpdate: number;
+
+    // Side tracking
+    dominantSide: "buy" | "sell";
+    sideConfidence: number;
 }

@@ -22,7 +22,6 @@ import {
 } from "../indicators/supportResistanceDetector.js";
 
 import type {
-    DetectorCallback,
     BaseDetectorSettings,
     DetectorStats,
 } from "../indicators/interfaces/detectorInterfaces.js";
@@ -69,7 +68,6 @@ export class DetectorFactory {
      * Create production-ready absorption detector
      */
     public static createAbsorptionDetector(
-        callback: DetectorCallback,
         settings: AbsorptionSettings,
         orderBook: OrderBookState,
         dependencies: DetectorDependencies,
@@ -87,7 +85,6 @@ export class DetectorFactory {
 
         const detector = new AbsorptionDetector(
             id,
-            this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
             orderBook,
             dependencies.logger,
@@ -114,7 +111,6 @@ export class DetectorFactory {
      * Create production-ready exhaustion detector
      */
     public static createExhaustionDetector(
-        callback: DetectorCallback,
         settings: ExhaustionSettings,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
@@ -131,7 +127,6 @@ export class DetectorFactory {
 
         const detector = new ExhaustionDetector(
             id,
-            this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
             dependencies.logger,
             dependencies.spoofingDetector,
@@ -157,7 +152,6 @@ export class DetectorFactory {
      * Create production-ready accumulation detector
      */
     public static createAccumulationDetector(
-        callback: DetectorCallback,
         settings: ZoneDetectorConfig,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
@@ -197,7 +191,6 @@ export class DetectorFactory {
      * Create production-ready accumulation detector
      */
     public static createDistributionDetector(
-        callback: DetectorCallback,
         settings: ZoneDetectorConfig,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
@@ -237,7 +230,6 @@ export class DetectorFactory {
      * Create production-ready support/resistance detector
      */
     public static createSupportResistanceDetector(
-        callback: DetectorCallback,
         settings: Partial<SupportResistanceConfig>,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
@@ -258,7 +250,6 @@ export class DetectorFactory {
 
         const detector = new SupportResistanceDetector(
             id,
-            this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
             dependencies.logger,
             dependencies.spoofingDetector,
@@ -283,7 +274,6 @@ export class DetectorFactory {
      * Create production-ready accumulation detector
      */
     public static createDeltaCVDConfirmationDetector(
-        callback: DetectorCallback,
         settings: DeltaCVDConfirmationSettings,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
@@ -300,7 +290,6 @@ export class DetectorFactory {
 
         const detector = new DeltaCVDConfirmation(
             id,
-            this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
             dependencies.logger,
             dependencies.spoofingDetector,
@@ -394,53 +383,6 @@ export class DetectorFactory {
                 enabled: false,
             }
         );
-    }
-
-    /**
-     * Create generic detector with type safety
-     */
-    public static createDetector<
-        T extends
-            | BaseDetector
-            | AccumulationZoneDetector
-            | DistributionZoneDetector,
-    >(
-        DetectorClass: DetectorConstructor<T>,
-        callback: DetectorCallback,
-        settings: BaseDetectorSettings | ZoneDetectorConfig,
-        dependencies: DetectorDependencies,
-        options: DetectorFactoryOptions = {}
-    ): T {
-        const id =
-            options.id || `${DetectorClass.name.toLowerCase()}-${Date.now()}`;
-
-        this.validateCreationLimits();
-        this.validateProductionConfig(settings);
-
-        const productionSettings = this.applyProductionDefaults(
-            settings,
-            "generic"
-        );
-
-        const detector = new DetectorClass(
-            this.wrapCallback(callback, id, dependencies.logger),
-            productionSettings,
-            dependencies.logger,
-            dependencies.metricsCollector,
-            dependencies.signalLogger
-        );
-
-        this.registerDetector(id, detector, dependencies, options);
-
-        dependencies.logger.info(
-            `[DetectorFactory] Created ${DetectorClass.name}`,
-            {
-                id,
-                settings: productionSettings,
-            }
-        );
-
-        return detector;
     }
 
     /**
@@ -818,47 +760,6 @@ export class DetectorFactory {
         }
     }
 
-    private static wrapCallback(
-        originalCallback: DetectorCallback,
-        detectorId: string,
-        logger: ILogger
-    ): DetectorCallback {
-        return (signal) => {
-            try {
-                // Add factory metadata
-                const enhancedSignal = {
-                    ...signal,
-                    factoryId: detectorId,
-                    factoryTimestamp: Date.now(),
-                };
-
-                originalCallback(enhancedSignal);
-
-                // Record successful signal
-                logger.debug(
-                    `[DetectorFactory] Signal processed for ${detectorId}`,
-                    {
-                        signalId: signal.id,
-                        price: signal.price,
-                        side: signal.side,
-                    }
-                );
-            } catch (error) {
-                logger.error(
-                    `[DetectorFactory] Callback error for ${detectorId}`,
-                    {
-                        error:
-                            error instanceof Error
-                                ? error.message
-                                : String(error),
-                        stack: error instanceof Error ? error.stack : undefined,
-                    }
-                );
-                // Don't throw - just log the error to prevent detector crash
-            }
-        };
-    }
-
     private static registerDetector(
         id: string,
         detector:
@@ -1087,16 +988,3 @@ export interface FactoryStats {
     memoryUsageMB: number;
     uptime: number;
 }
-
-type DetectorConstructor<
-    T extends
-        | BaseDetector
-        | AccumulationZoneDetector
-        | DistributionZoneDetector,
-> = new (
-    callback: DetectorCallback,
-    settings: BaseDetectorSettings | ZoneDetectorConfig,
-    logger: ILogger,
-    metricsCollector: IMetricsCollector,
-    signalLogger?: ISignalLogger
-) => T;

@@ -237,9 +237,6 @@ export class OrderFlowDashboard {
         DetectorFactory.initialize(dependencies);
 
         this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
-            (signal) => {
-                this.logger.info("Absorption signal generated", { signal });
-            },
             Config.ABSORPTION_DETECTOR,
             this.orderBook as OrderBookState,
             dependencies,
@@ -253,9 +250,6 @@ export class OrderFlowDashboard {
         );
 
         this.exhaustionDetector = DetectorFactory.createExhaustionDetector(
-            (signal) => {
-                this.logger.info("Exhaustion signal generated", { signal });
-            },
             Config.EXHAUSTION_DETECTOR,
             dependencies,
             { id: "ltcusdt-exhaustion-main" }
@@ -270,9 +264,6 @@ export class OrderFlowDashboard {
         // Initialize other components
         this.deltaCVDConfirmation =
             DetectorFactory.createDeltaCVDConfirmationDetector(
-                (signal) => {
-                    this.logger.info("Delta CVD signal generated", { signal });
-                },
                 Config.DELTACVD_DETECTOR,
                 dependencies,
                 { id: "ltcusdt-cvdConfirmation-main" }
@@ -287,11 +278,6 @@ export class OrderFlowDashboard {
         // Support/Resistance Detector
         this.supportResistanceDetector =
             DetectorFactory.createSupportResistanceDetector(
-                (signal) => {
-                    this.logger.info("Support/Resistance level detected", {
-                        signal,
-                    });
-                },
                 Config.SUPPORT_RESISTANCE_DETECTOR,
                 dependencies,
                 { id: "ltcusdt-support-resistance-main" }
@@ -306,9 +292,6 @@ export class OrderFlowDashboard {
         // Initialize Zone-based Detectors
         this.accumulationZoneDetector =
             DetectorFactory.createAccumulationDetector(
-                (signal) => {
-                    this.logger.info("Accumulation zone detected", { signal });
-                },
                 Config.ACCUMULATION_ZONE_DETECTOR,
                 dependencies,
                 { id: "ltcusdt-accumulation-zone-main" }
@@ -323,9 +306,6 @@ export class OrderFlowDashboard {
         // Initialize Zone-based Detectors
         this.distributionZoneDetector =
             DetectorFactory.createDistributionDetector(
-                (signal) => {
-                    this.logger.info("Distribution zone detected", { signal });
-                },
                 Config.DISTRIBUTION_ZONE_DETECTOR,
                 dependencies,
                 { id: "ltcusdt-distribution-zone-main" }

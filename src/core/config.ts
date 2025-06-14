@@ -17,9 +17,11 @@ import type { ExhaustionSettings } from "../indicators/exhaustionDetector.js";
 import type { AbsorptionSettings } from "../indicators/absorptionDetector.js";
 import type { OrderflowPreprocessorOptions } from "../market/orderFlowPreprocessor.js";
 import type { DataStreamConfig } from "../trading/dataStreamManager.js";
-import type { AccumulationSettings } from "../indicators/interfaces/detectorInterfaces.js";
+import type {
+    AccumulationSettings,
+    SuperiorFlowSettings,
+} from "../indicators/interfaces/detectorInterfaces.js";
 import type { DeltaCVDConfirmationSettings } from "../indicators/deltaCVDConfirmation.js";
-import type { SuperiorFlowSettings } from "../indicators/base/flowDetectorBase.js";
 import type { SupportResistanceConfig } from "../indicators/supportResistanceDetector.js";
 import type { IndividualTradesManagerConfig } from "../data/individualTradesManager.js";
 import type { MicrostructureAnalyzerConfig } from "../data/microstructureAnalyzer.js";

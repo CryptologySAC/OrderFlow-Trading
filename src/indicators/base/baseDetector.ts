@@ -34,7 +34,6 @@ import type {
     DetectorStats,
     BaseDetectorSettings,
     DetectorFeatures,
-    DetectorCallback,
     ImbalanceResult,
     VolumeCalculationResult,
 } from "../interfaces/detectorInterfaces.js";
@@ -85,9 +84,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
     protected lastThresholdUpdate: number;
     protected readonly updateIntervalMs: number;
 
-    // Dependencies
-    protected readonly callback: DetectorCallback;
-
     // Abstract method for detector type
     protected abstract readonly detectorType: SignalType;
 
@@ -113,7 +109,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
 
     constructor(
         id: string,
-        callback: DetectorCallback,
         settings: BaseDetectorSettings & { features?: DetectorFeatures },
         logger: ILogger,
         spoofingDetector: SpoofingDetector,
@@ -126,7 +121,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
         this.validateSettings(settings);
 
         // Initialize configuration
-        this.callback = callback;
         this.windowMs = settings.windowMs ?? 90000;
         this.minAggVolume = settings.minAggVolume ?? 600;
         this.pricePrecision = settings.pricePrecision ?? 2;
@@ -560,72 +554,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
         this.removeAllListeners();
 
         this.logger.info(`[${this.constructor.name}] Cleanup completed`);
-    }
-
-    /**
-     * Add depth update
-     * (Now also push rolling passive total into the rolling window, for apples-to-apples comparison)
-     */
-    public addDepth(update: SpotWebsocketStreams.DiffBookDepthResponse): void {
-        try {
-            this.updateDepthLevel(
-                "bid",
-                (update.b as [string, string][]) || []
-            );
-            this.updateDepthLevel(
-                "ask",
-                (update.a as [string, string][]) || []
-            );
-
-            this.rollingPassiveVolume.push(this.totalPassive);
-        } catch (error) {
-            this.handleError(
-                error as Error,
-                `${this.constructor.name}.addDepth`
-            );
-        }
-    }
-
-    /**
-     * Update depth levels
-     */
-    protected updateDepthLevel(
-        side: "bid" | "ask",
-        updates: [string, string][]
-    ): void {
-        for (const [priceStr, qtyStr] of updates) {
-            const price = parseFloat(priceStr);
-            const qty = parseFloat(qtyStr);
-            if (isNaN(price) || isNaN(qty)) continue;
-
-            const prev = this.depth.get(price) || { bid: 0, ask: 0 };
-            const delta = side === "bid" ? qty - prev.bid : qty - prev.ask;
-
-            // update running sum once
-            this.totalPassive += delta;
-
-            // mutate level & cache
-            prev[side] = qty;
-            if (prev.bid === 0 && prev.ask === 0) {
-                this.depth.set(price, { bid: 0, ask: 0 });
-            } else {
-                this.depth.set(price, prev);
-            }
-
-            if (this.features.spoofingDetection)
-                this.spoofingDetector.trackPassiveChange(
-                    price,
-                    prev.bid,
-                    prev.ask
-                );
-
-            if (this.features.passiveHistory)
-                this.passiveVolumeTracker.updatePassiveVolume(
-                    price,
-                    prev.bid,
-                    prev.ask
-                );
-        }
     }
 
     protected checkPassiveImbalance(zone: number): ImbalanceResult {

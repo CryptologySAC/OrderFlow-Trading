@@ -1,4 +1,3 @@
-import { Detector } from "./detectorEnrichedTrade.js";
 import { EnrichedTradeEvent } from "../../types/marketEvents.js";
 import type { ILogger } from "../../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInterface.js";
@@ -9,6 +8,7 @@ import {
     ZoneDetectorConfig,
 } from "../../types/zoneTypes.js";
 import { Config } from "../../core/config.js";
+import { Detector } from "./detectorEnrichedTrade.js";
 
 export abstract class ZoneDetector extends Detector {
     protected readonly config: ZoneDetectorConfig;

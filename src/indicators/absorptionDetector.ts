@@ -6,10 +6,9 @@ import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
-import { AdaptiveThresholds, MarketRegime } from "./marketRegimeDetector.js";
+import { AdaptiveThresholds } from "./marketRegimeDetector.js";
 import type {
     IAbsorptionDetector,
-    DetectorCallback,
     BaseDetectorSettings,
     AbsorptionFeatures,
     MicrostructureInsights,
@@ -98,7 +97,6 @@ export class AbsorptionDetector
 
     constructor(
         id: string,
-        callback: DetectorCallback,
         settings: AbsorptionSettings = {},
         orderBook: OrderBookState,
         logger: ILogger,
@@ -108,7 +106,6 @@ export class AbsorptionDetector
     ) {
         super(
             id,
-            callback,
             settings,
             logger,
             spoofingDetector,
@@ -226,6 +223,22 @@ export class AbsorptionDetector
             this.lastTradeId = event.tradeId;
             this.addTrade(event);
         }
+    }
+
+    /**
+     * Absorption-specific trade handling (called by base class)
+     */
+    protected onEnrichedTradeSpecific(event: EnrichedTradeEvent): void {
+        // Track absorption events for advanced analysis
+        if (this.features.absorptionVelocity) {
+            this.trackAbsorptionEvent(event);
+        }
+
+        // Update liquidity layers for gradient analysis
+        if (this.features.liquidityGradient) {
+            this.updateLiquidityLayers(event);
+        }
+        void event;
     }
 
     private calculateAbsorptionScore(conditions: AbsorptionConditions): number {
@@ -602,13 +615,6 @@ export class AbsorptionDetector
         super.handleDetection(signal);
     }
 
-    // NEW: Add monitoring methods (same as exhaustion detector)
-    public recordSignalResult(signalId: string, profitable: boolean): void {
-        // Convert boolean to numerical performance score
-        const performance = profitable ? 1.0 : 0.0;
-        this.recordSignalPerformance(signalId, performance);
-    }
-
     /**
      * Override cleanup to properly clear interval timers and prevent memory leaks
      */
@@ -630,40 +636,6 @@ export class AbsorptionDetector
         this.logger.info(
             "[AbsorptionDetector] Cleanup completed - intervals cleared"
         );
-    }
-
-    public getThresholdStatus(): {
-        current: AdaptiveThresholds;
-        recentSignals: number;
-        lastUpdated: Date;
-        performanceByRegime: Map<string, number>;
-    } {
-        return {
-            current: this.getAdaptiveThresholds(),
-            recentSignals: this.recentSignalCount,
-            lastUpdated: new Date(this.lastThresholdUpdate),
-            performanceByRegime: new Map(this.performanceHistory),
-        };
-    }
-
-    public getCurrentMarketRegime(): MarketRegime {
-        return this.adaptiveThresholdCalculator.detectCurrentRegime();
-    }
-
-    /**
-     * Absorption-specific trade handling (called by base class)
-     */
-    protected onEnrichedTradeSpecific(event: EnrichedTradeEvent): void {
-        // Track absorption events for advanced analysis
-        if (this.features.absorptionVelocity) {
-            this.trackAbsorptionEvent(event);
-        }
-
-        // Update liquidity layers for gradient analysis
-        if (this.features.liquidityGradient) {
-            this.updateLiquidityLayers(event);
-        }
-        void event;
     }
 
     /**
