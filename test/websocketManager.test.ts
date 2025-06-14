@@ -1,16 +1,19 @@
-import { WebSocketManager } from "../src/websocket/websocketManager";
-import { Logger } from "../src/infrastructure/logger";
-import { MetricsCollector } from "../src/infrastructure/metricsCollector";
-import { RateLimiter } from "../src/infrastructure/rateLimiter";
-import ws from "ws";
+import { describe, it, expect, vi } from "vitest";
 
-vi.mock("../src/infrastructure/logger");
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
 vi.mock("../src/infrastructure/rateLimiter");
 vi.mock("ws");
 
+import { WebSocketManager } from "../src/websocket/websocketManager";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
+import { MetricsCollector } from "../src/infrastructure/metricsCollector";
+import { RateLimiter } from "../src/infrastructure/rateLimiter";
+import ws from "ws";
+
 const createManager = (handlers: Record<string, any> = {}) => {
-    const logger = new Logger();
+    const logger = new WorkerLogger();
     const metrics = new MetricsCollector();
     const limiter = new RateLimiter();
     limiter.isAllowed.mockReturnValue(true);

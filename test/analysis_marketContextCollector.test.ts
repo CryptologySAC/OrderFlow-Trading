@@ -1,12 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
+
 import { MarketContextCollector } from "../src/analysis/marketContextCollector";
-import { Logger } from "../src/infrastructure/logger";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 
 describe("analysis/MarketContextCollector", () => {
     it("returns empty metrics when no data", () => {
         const mcc = new MarketContextCollector(
-            new Logger(),
+            new WorkerLogger(),
             new MetricsCollector()
         );
         const metrics = mcc.calculateMarketMetrics();

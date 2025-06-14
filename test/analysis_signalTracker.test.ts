@@ -1,20 +1,19 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { SignalTracker } from "../src/analysis/signalTracker";
-import { Logger } from "../src/infrastructure/logger";
-import { MetricsCollector } from "../src/infrastructure/metricsCollector";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const storage = {
-    getSignalOutcomes: () => Promise.resolve([]),
-    getFailedSignalAnalyses: () => Promise.resolve([]),
-};
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
+vi.mock("../src/infrastructure/metricsCollector");
+
+import { SignalTracker } from "../src/analysis/signalTracker";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
+import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 
 describe("analysis/SignalTracker", () => {
     let tracker: SignalTracker;
     beforeEach(() => {
         tracker = new SignalTracker(
-            new Logger(),
+            new WorkerLogger(),
             new MetricsCollector(),
-            storage as any,
             {
                 successThreshold: 0.01,
                 failureThreshold: -0.01,

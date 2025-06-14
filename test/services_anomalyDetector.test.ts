@@ -1,8 +1,10 @@
-import { describe, it, expect } from "vitest";
-import { AnomalyDetector } from "../src/services/anomalyDetector";
-import { Logger } from "../src/infrastructure/logger";
+import { describe, it, expect, vi } from "vitest";
 
-vi.mock("../src/infrastructure/logger");
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
+
+import { AnomalyDetector } from "../src/services/anomalyDetector";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
 
 class DummySpoof {
     wasSpoofed = vi.fn().mockReturnValue(false);
@@ -11,7 +13,7 @@ class DummySpoof {
 
 describe("services/AnomalyDetector", () => {
     it("reports insufficient data for market health", () => {
-        const detector = new AnomalyDetector({ minHistory: 1 }, new Logger());
+        const detector = new AnomalyDetector({ minHistory: 1 }, new WorkerLogger());
         const health = detector.getMarketHealth();
         expect(health.recommendation).toBe("insufficient_data");
     });
@@ -20,7 +22,7 @@ describe("services/AnomalyDetector", () => {
         vi.useFakeTimers();
         const detector = new AnomalyDetector(
             { tickSize: 0.5, minHistory: 1, spreadThresholdBps: 200 },
-            new Logger()
+            new WorkerLogger()
         );
         detector.updateBestQuotes(100, 101);
 
@@ -58,7 +60,7 @@ describe("services/AnomalyDetector", () => {
     it("stores trade snapshots in history", () => {
         const detector: any = new AnomalyDetector(
             { minHistory: 1 },
-            new Logger()
+            new WorkerLogger()
         );
         detector.updateBestQuotes(100, 101);
         detector.onEnrichedTrade({
@@ -78,7 +80,7 @@ describe("services/AnomalyDetector", () => {
     });
 
     it("calculates mean and stddev", () => {
-        const detector: any = new AnomalyDetector({}, new Logger());
+        const detector: any = new AnomalyDetector({}, new WorkerLogger());
         const mean = detector.calculateMean([1, 2, 3]);
         const std = detector.calculateStdDev([1, 2, 3], mean);
         expect(mean).toBeCloseTo(2);

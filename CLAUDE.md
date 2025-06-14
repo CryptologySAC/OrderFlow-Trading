@@ -235,6 +235,10 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 - Uses Vitest with setup file at `test/vitest.setup.ts`
 - Extensive mocking in `__mocks__/` directory
 - Tests follow pattern: `componentName.test.ts` in `test/` directory
+- **MANDATORY: ALL tests MUST use proper mocks from `__mocks__/` directory**
+- **NEVER create inline mocks in test files - always use `__mocks__/` structure**
+- **Mock files MUST mirror the exact directory structure of `src/`**
+- **All mocks MUST use `vi.fn()` for proper vitest integration**
 
 ### Database
 

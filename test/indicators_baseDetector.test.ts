@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
+
 import { BaseDetector } from "../src/indicators/base/baseDetector";
-import { Logger } from "../src/infrastructure/logger";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { SpoofingDetector } from "../src/services/spoofingDetector";
 import type {
@@ -16,7 +20,7 @@ class TestDetector extends BaseDetector {
         [];
     protected detectorType = "test" as const;
     constructor() {
-        const logger = new Logger();
+        const logger = new WorkerLogger();
         const metrics = new MetricsCollector();
         const spoof = new SpoofingDetector({
             tickSize: 0.01,

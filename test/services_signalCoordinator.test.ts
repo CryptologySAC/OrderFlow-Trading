@@ -1,10 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
-import { SignalCoordinator } from "../src/services/signalCoordinator";
-import { Logger } from "../src/infrastructure/logger";
-import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 
-vi.mock("../src/infrastructure/logger");
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
+
+import { SignalCoordinator } from "../src/services/signalCoordinator";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
+import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 
 const storage = {
     enqueueJob: vi.fn(),
@@ -47,7 +49,7 @@ describe("services/SignalCoordinator", () => {
     it("queues signals from detectors", () => {
         const coordinator = new SignalCoordinator(
             {},
-            new Logger(),
+            new WorkerLogger(),
             new MetricsCollector(),
             { logProcessedSignal: vi.fn(), logProcessingError: vi.fn() } as any,
             { handleProcessedSignal: vi.fn() } as any,
@@ -71,7 +73,7 @@ describe("services/SignalCoordinator", () => {
     it("reports status correctly", async () => {
         const coordinator = new SignalCoordinator(
             {},
-            new Logger(),
+            new WorkerLogger(),
             new MetricsCollector(),
             { logProcessedSignal: vi.fn(), logProcessingError: vi.fn() } as any,
             { handleProcessedSignal: vi.fn() } as any,
