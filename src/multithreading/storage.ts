@@ -131,10 +131,10 @@ export class Storage implements IStorage {
         this.db = db;
         this.logger = logger;
 
-        this.pipelineStorage = new PipelineStorage(db, {});
+        this.pipelineStorage = new PipelineStorage(db, this.logger, {});
 
         // Initialize health monitoring
-        this.healthMonitor = createStorageHealthMonitor(db, {
+        this.healthMonitor = createStorageHealthMonitor(db, this.logger, {
             healthCheckIntervalMs: 30000, // 30 seconds
             failureThreshold: 3,
             operationTimeoutMs: 5000,
@@ -144,7 +144,7 @@ export class Storage implements IStorage {
         this.healthMonitor.startMonitoring();
 
         // Register database for centralized resource management (instead of duplicate signal handlers)
-        registerDatabaseResource(db, "MainStorage", 10); // High priority (low number)
+        registerDatabaseResource(db, "MainStorage", this.logger, 10); // High priority (low number)
 
         // DB schema (with NOT NULL for all columns except orderType, which is always set)
         this.db.exec(`

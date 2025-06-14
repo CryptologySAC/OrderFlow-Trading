@@ -7,6 +7,7 @@ import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import { WorkerLogger } from "../multithreading/workerLogger.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { RateLimiter } from "../infrastructure/rateLimiter.js";
 import { CircuitBreaker } from "../infrastructure/circuitBreaker.js";
 import { AlertManager } from "../alerts/alertManager.js";
@@ -39,7 +40,7 @@ export interface Dependencies {
 
     // Infrastructure
     logger: ILogger;
-    metricsCollector: MetricsCollector;
+    metricsCollector: IMetricsCollector;
     rateLimiter: RateLimiter;
     circuitBreaker: CircuitBreaker;
 

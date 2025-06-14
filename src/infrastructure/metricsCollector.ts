@@ -1,5 +1,7 @@
 // src/infrastructure/metricsCollector.ts
 
+import type { IMetricsCollector } from "./metricsCollectorInterface.js";
+
 /**
  * Enhanced metrics data structure with better organization
  */
@@ -238,7 +240,7 @@ export interface HealthSummary {
 /**
  * Enhanced metrics collector with production-ready features
  */
-export class MetricsCollector {
+export class MetricsCollector implements IMetricsCollector {
     private metrics: Metrics;
     private histograms = new Map<string, HistogramBucket>();
     private gauges = new Map<string, GaugeMetric>();

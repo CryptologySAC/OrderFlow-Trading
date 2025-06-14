@@ -9,7 +9,7 @@ import type {
 } from "../types/marketEvents.js";
 import { OrderBookState } from "./orderBookState.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { randomUUID } from "crypto";
 import { IndividualTradesManager } from "../data/individualTradesManager.js";
 import { MicrostructureAnalyzer } from "../data/microstructureAnalyzer.js";
@@ -45,7 +45,7 @@ export class OrderflowPreprocessor
     private readonly tickSize: number;
     private readonly emitDepthMetrics: boolean;
     private readonly logger: ILogger;
-    private readonly metricsCollector: MetricsCollector;
+    private readonly metricsCollector: IMetricsCollector;
     private readonly symbol; // Default symbol, can be made configurable
     private readonly enableIndividualTrades: boolean;
 
@@ -61,7 +61,7 @@ export class OrderflowPreprocessor
         opts: OrderflowPreprocessorOptions = {},
         orderBook: OrderBookState,
         logger: ILogger,
-        metricsCollector: MetricsCollector,
+        metricsCollector: IMetricsCollector,
         individualTradesManager?: IndividualTradesManager,
         microstructureAnalyzer?: MicrostructureAnalyzer
     ) {

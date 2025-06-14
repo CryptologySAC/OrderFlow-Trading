@@ -24,7 +24,7 @@ import type { WebSocketMessage } from "../../utils/interfaces.js";
 import type { PlotTrade } from "../../utils/types.js";
 import type { EnrichedTradeEvent } from "../../types/marketEvents.js";
 import type { ILogger } from "../../infrastructure/loggerInterface.js";
-import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInterface.js";
 import { ProductionUtils } from "../../utils/productionUtils.js";
 import { CircularBuffer } from "../../utils/circularBuffer.js";
 import { EventEmitter } from "events";
@@ -132,7 +132,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     private readonly bufferRetentionMs: number; // Time-based buffer retention
 
     private readonly logger: ILogger;
-    private readonly metricsCollector: MetricsCollector;
+    private readonly metricsCollector: IMetricsCollector;
 
     // State management
     private thresholdTime: number;
@@ -179,7 +179,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         options: TradesProcessorOptions,
         //storage: Storage,
         logger: ILogger,
-        metricsCollector: MetricsCollector,
+        metricsCollector: IMetricsCollector,
         binanceFeed: BinanceDataFeed,
         private readonly threadManager: ThreadManager
     ) {

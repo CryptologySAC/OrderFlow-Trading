@@ -1,7 +1,7 @@
 // src/utils/detectorFactory.ts
 import { randomUUID } from "crypto";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { BaseDetector } from "../indicators/base/baseDetector.js";
 import {
@@ -1039,7 +1039,7 @@ export interface DetectorSuite {
 export interface DetectorDependencies {
     logger: ILogger;
     spoofingDetector: SpoofingDetector;
-    metricsCollector: MetricsCollector;
+    metricsCollector: IMetricsCollector;
     signalLogger?: ISignalLogger;
 }
 
@@ -1050,7 +1050,7 @@ export interface DetectorFactoryOptions {
             | BaseDetector
             | AccumulationZoneDetector
             | DistributionZoneDetector,
-        metrics: MetricsCollector
+        metrics: IMetricsCollector
     ) => void;
 }
 
@@ -1097,6 +1097,6 @@ type DetectorConstructor<
     callback: DetectorCallback,
     settings: BaseDetectorSettings | ZoneDetectorConfig,
     logger: ILogger,
-    metricsCollector: MetricsCollector,
+    metricsCollector: IMetricsCollector,
     signalLogger?: ISignalLogger
 ) => T;

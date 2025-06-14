@@ -3,7 +3,7 @@ import { Detector } from "./detectorEnrichedTrade.js";
 import { SpotWebsocketStreams } from "@binance/spot";
 import { randomUUID } from "crypto";
 import type { ILogger } from "../../infrastructure/loggerInterface.js";
-import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../../infrastructure/signalLoggerInterface.js";
 import { RollingWindow } from "../../utils/rollingWindow.js";
 import { DetectorUtils } from "./detectorUtils.js";
@@ -117,7 +117,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
         settings: BaseDetectorSettings & { features?: DetectorFeatures },
         logger: ILogger,
         spoofingDetector: SpoofingDetector,
-        metricsCollector: MetricsCollector,
+        metricsCollector: IMetricsCollector,
         signalLogger?: ISignalLogger
     ) {
         super(id, logger, metricsCollector, signalLogger);

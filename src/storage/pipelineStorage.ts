@@ -31,6 +31,7 @@ import {
     StorageResourceManager,
     registerStatementCleanup,
 } from "./storageResourceManager.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 
 import type { BaseDetector } from "../indicators/base/baseDetector.js";
 import type {
@@ -150,6 +151,7 @@ export interface IPipelineStorage {
 /* ------------------------------------------------------------------ */
 export class PipelineStorage implements IPipelineStorage {
     private readonly db: Database;
+    private readonly logger: ILogger;
 
     /* prepared statements */
     private readonly insertQueue: Statement;
@@ -198,13 +200,18 @@ export class PipelineStorage implements IPipelineStorage {
     private readonly maxRows: number;
     private readonly maxAgeMin: number;
 
-    public constructor(db: Database, cfg: Partial<PipelineStorageConfig> = {}) {
+    public constructor(
+        db: Database,
+        logger: ILogger,
+        cfg: Partial<PipelineStorageConfig> = {}
+    ) {
         const { maxHistoryRows = 100_000, maxHistoryAgeMin = 24 * 60 } = cfg;
         this.maxRows = maxHistoryRows;
         this.maxAgeMin = maxHistoryAgeMin;
 
         /* ---------------- DB open & pragma ------------------------ */
         this.db = db;
+        this.logger = logger;
 
         /* ---------------- schema ------------------------------- */
         this.db.exec(`
@@ -586,6 +593,7 @@ export class PipelineStorage implements IPipelineStorage {
                 deleteOldFailedAnalyses: this.deleteOldFailedAnalyses,
             },
             "PipelineStorage",
+            this.logger,
             20
         ); // Medium priority cleanup
     }
@@ -730,8 +738,13 @@ export class PipelineStorage implements IPipelineStorage {
         const limited = rows.slice(0, limit);
 
         if (rows.length > limit) {
-            console.warn(
-                `getRecentSignals: Truncated ${rows.length} results to ${limit}`
+            this.logger.warn(
+                `getRecentSignals: Truncated ${rows.length} results to ${limit}`,
+                {
+                    component: "PipelineStorage",
+                    originalCount: rows.length,
+                    limitApplied: limit,
+                }
             );
         }
 
@@ -1217,9 +1230,14 @@ export class PipelineStorage implements IPipelineStorage {
         try {
             // Note: DB is closed by the main Storage class or resource manager
             // This method is mainly for explicit cleanup when needed
-            console.info("[PipelineStorage] Close requested");
+            this.logger.info("PipelineStorage close requested", {
+                component: "PipelineStorage",
+            });
         } catch (err) {
-            console.error("[PipelineStorage] Error during close:", err);
+            this.logger.error("PipelineStorage error during close", {
+                component: "PipelineStorage",
+                error: err instanceof Error ? err.message : String(err),
+            });
         }
     }
 }

@@ -10,7 +10,7 @@ import {
 } from "../types/zoneTypes.js";
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 
 export class ZoneManager extends EventEmitter {
     private activeZones = new Map<string, AccumulationZone>();
@@ -23,7 +23,7 @@ export class ZoneManager extends EventEmitter {
     constructor(
         config: Partial<ZoneDetectorConfig>,
         private logger: ILogger,
-        private metricsCollector: MetricsCollector
+        private metricsCollector: IMetricsCollector
     ) {
         super();
 

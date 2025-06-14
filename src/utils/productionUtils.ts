@@ -1,7 +1,7 @@
 // src/utils/productionUtils.ts - NEW UTILITY CLASS
 import type { BaseDetectorSettings } from "../indicators/interfaces/detectorInterfaces.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { CircuitBreaker } from "../infrastructure/circuitBreaker.js";
 
 export class ProductionUtils {
@@ -38,7 +38,7 @@ export class ProductionUtils {
      */
     public static measurePerformance<T>(
         operation: () => T,
-        metricsCollector: MetricsCollector,
+        metricsCollector: IMetricsCollector,
         operationName: string
     ): T {
         const startTime = Date.now();

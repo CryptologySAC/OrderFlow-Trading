@@ -1,6 +1,6 @@
 // src/utils/errorHandler.ts
 import type { ILogger } from "../infrastructure/loggerInterface.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 
 export interface ErrorContext {
     operation: string;
@@ -11,7 +11,7 @@ export interface ErrorContext {
 
 export interface ErrorHandlerConfig {
     logger: ILogger;
-    metricsCollector?: MetricsCollector;
+    metricsCollector?: IMetricsCollector;
     throwOnError?: boolean;
     logLevel?: "error" | "warn" | "info";
 }
@@ -129,7 +129,7 @@ export class ErrorHandler {
     public static createComponentHandler(
         component: string,
         logger: ILogger,
-        metricsCollector?: MetricsCollector
+        metricsCollector?: IMetricsCollector
     ) {
         return {
             handleSync: <T>(
@@ -197,7 +197,7 @@ export class ErrorHandler {
         component: string,
         logger: ILogger,
         fn: () => T,
-        metricsCollector?: MetricsCollector,
+        metricsCollector?: IMetricsCollector,
         correlationId?: string
     ): T | null {
         return this.handleError(
@@ -215,7 +215,7 @@ export class ErrorHandler {
         component: string,
         logger: ILogger,
         fn: () => Promise<T>,
-        metricsCollector?: MetricsCollector,
+        metricsCollector?: IMetricsCollector,
         correlationId?: string
     ): Promise<T | null> {
         return this.handleErrorAsync(

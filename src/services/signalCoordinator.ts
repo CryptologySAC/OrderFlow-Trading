@@ -13,7 +13,7 @@ import type { ILogger } from "../infrastructure/loggerInterface.js";
 import { ProductionUtils } from "../utils/productionUtils.js";
 import { SignalManager } from "../trading/signalManager.js";
 import { ThreadManager } from "../multithreading/threadManager.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type {
     DetectorErrorEvent,
     DetectorRegisteredEvent,
@@ -101,7 +101,7 @@ export class SignalCoordinator extends EventEmitter {
     private readonly signalLogger: ISignalLogger;
     private readonly signalManager: SignalManager;
     private readonly threadManager: ThreadManager;
-    private readonly metrics: MetricsCollector;
+    private readonly metrics: IMetricsCollector;
     private readonly cfg: SignalCoordinatorConfig;
 
     /* detector registry */
@@ -124,7 +124,7 @@ export class SignalCoordinator extends EventEmitter {
     constructor(
         partialCfg: Partial<SignalCoordinatorConfig>,
         logger: ILogger,
-        metricsCollector: MetricsCollector,
+        metricsCollector: IMetricsCollector,
         signalLogger: ISignalLogger,
         signalManager: SignalManager,
         threadManager: ThreadManager

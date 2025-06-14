@@ -3,10 +3,8 @@
 //import { SpotWebsocketStreams } from "@binance/spot";
 import { BaseDetector } from "./baseDetector.js";
 import type { ILogger } from "../../infrastructure/loggerInterface.js";
-import {
-    MetricsCollector,
-    type Metrics,
-} from "../../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInterface.js";
+import type { Metrics } from "../../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../../infrastructure/signalLoggerInterface.js";
 import { SpoofingDetector } from "../../services/spoofingDetector.js";
 import { RollingWindow } from "../../utils/rollingWindow.js";
@@ -77,7 +75,7 @@ export abstract class FlowDetectorBase extends BaseDetector {
         settings: SuperiorFlowSettings = {},
         logger: ILogger,
         spoofingDetector: SpoofingDetector,
-        metricsCollector: MetricsCollector,
+        metricsCollector: IMetricsCollector,
         signalLogger?: ISignalLogger
     ) {
         super(

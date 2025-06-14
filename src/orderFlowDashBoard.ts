@@ -18,7 +18,7 @@ import { Config } from "./core/config.js";
 import { SignalProcessingError } from "./core/errors.js";
 
 // Infrastructure imports
-import { MetricsCollector } from "./infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "./infrastructure/metricsCollectorInterface.js";
 
 import {
     RecoveryManager,
@@ -87,7 +87,7 @@ export class OrderFlowDashboard {
     // Infrastructure components
     private readonly httpServer = express();
     private readonly logger: ILogger;
-    private readonly metricsCollector: MetricsCollector;
+    private readonly metricsCollector: IMetricsCollector;
     private readonly recoveryManager: RecoveryManager;
 
     // Managers

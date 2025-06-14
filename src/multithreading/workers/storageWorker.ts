@@ -76,22 +76,22 @@ let storage: Storage;
 
 try {
     logger.info("StorageWorker: Initializing database connection", {
-        component: "StorageWorker"
+        component: "StorageWorker",
     });
     db = getDB();
 
     logger.info("StorageWorker: Setting WAL mode", {
-        component: "StorageWorker"
+        component: "StorageWorker",
     });
     db.pragma("journal_mode = WAL");
 
     logger.info("StorageWorker: Creating storage instance", {
-        component: "StorageWorker"
+        component: "StorageWorker",
     });
     storage = new Storage(db, logger);
 
     logger.info("StorageWorker: Database initialized successfully", {
-        component: "StorageWorker"
+        component: "StorageWorker",
     });
 } catch (error) {
     // POLICY OVERRIDE: Using console.error for system panic during database initialization
@@ -261,7 +261,7 @@ parentPort.on("message", (msg: unknown): void => {
         totalErrorCount++;
         logger.error("StorageWorker: Invalid message received", {
             message: msg,
-            component: "StorageWorker"
+            component: "StorageWorker",
         });
         return;
     }
@@ -272,7 +272,7 @@ parentPort.on("message", (msg: unknown): void => {
         totalErrorCount++;
         logger.error("StorageWorker: Message missing type", {
             message: msg,
-            component: "StorageWorker"
+            component: "StorageWorker",
         });
         return;
     }

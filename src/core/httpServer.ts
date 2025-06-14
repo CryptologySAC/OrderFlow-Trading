@@ -3,16 +3,16 @@ import * as path from "node:path";
 import { Config } from "./config.js";
 import { ILogger } from "../infrastructure/loggerInterface";
 import { randomUUID } from "crypto";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 
 export class HttpServer {
     private readonly port = Config.HTTP_PORT;
     private readonly httpServer = express();
 
     private readonly logger: ILogger;
-    private readonly metricsCollector: MetricsCollector;
+    private readonly metricsCollector: IMetricsCollector;
 
-    constructor(logger: ILogger, metricsCollector: MetricsCollector) {
+    constructor(logger: ILogger, metricsCollector: IMetricsCollector) {
         this.logger = logger;
         this.metricsCollector = metricsCollector;
     }

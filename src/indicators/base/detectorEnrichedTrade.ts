@@ -1,7 +1,7 @@
 // /src/indicators/base/detectorEnrichedTrade.ts
 import { EventEmitter } from "events";
 import type { ILogger } from "../../infrastructure/loggerInterface.js";
-import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../../infrastructure/signalLoggerInterface.js";
 import type { EnrichedTradeEvent } from "../../types/marketEvents.js";
 import type { SignalCandidate } from "../../types/signalTypes.js";
@@ -11,14 +11,14 @@ import type { SignalCandidate } from "../../types/signalTypes.js";
  */
 export abstract class Detector extends EventEmitter {
     public readonly logger: ILogger;
-    protected readonly metricsCollector: MetricsCollector;
+    protected readonly metricsCollector: IMetricsCollector;
     protected readonly signalLogger?: ISignalLogger;
     protected readonly id: string;
 
     constructor(
         id: string,
         logger: ILogger,
-        metricsCollector: MetricsCollector,
+        metricsCollector: IMetricsCollector,
         signalLogger?: ISignalLogger
     ) {
         super();

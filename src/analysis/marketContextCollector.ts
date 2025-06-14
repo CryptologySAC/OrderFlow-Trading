@@ -2,7 +2,7 @@
 
 import { EventEmitter } from "events";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type { HybridTradeEvent } from "../types/marketEvents.js";
 import type { MarketContext } from "./signalTracker.js";
 
@@ -127,7 +127,7 @@ export class MarketContextCollector extends EventEmitter {
 
     constructor(
         private readonly logger: ILogger,
-        private readonly metricsCollector: MetricsCollector,
+        private readonly metricsCollector: IMetricsCollector,
         config: Partial<MarketContextCollectorConfig> = {}
     ) {
         super();

@@ -3,7 +3,7 @@
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import { BaseDetector } from "./base/baseDetector.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
-import type { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
 import type {
@@ -63,7 +63,7 @@ export class SupportResistanceDetector extends BaseDetector {
             Partial<SupportResistanceConfig> & { features?: DetectorFeatures },
         logger: ILogger,
         spoofingDetector: SpoofingDetector,
-        metricsCollector: MetricsCollector,
+        metricsCollector: IMetricsCollector,
         signalLogger?: ISignalLogger
     ) {
         super(

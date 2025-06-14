@@ -442,7 +442,7 @@ export class ThreadManager {
             const errorMsg = msg as ErrorMessage;
             this.logger.error("Worker error received", {
                 message: errorMsg.message,
-                component: "ThreadManager"
+                component: "ThreadManager",
             });
         });
 
@@ -699,11 +699,14 @@ export class ThreadManager {
         if (this.backlogRequestHandler) {
             this.backlogRequestHandler(data.clientId, data.amount);
         } else {
-            this.logger.warn("Backlog request received but no handler registered", {
-                clientId: data.clientId,
-                amount: data.amount,
-                component: "ThreadManager"
-            });
+            this.logger.warn(
+                "Backlog request received but no handler registered",
+                {
+                    clientId: data.clientId,
+                    amount: data.amount,
+                    component: "ThreadManager",
+                }
+            );
         }
     }
 
@@ -711,11 +714,14 @@ export class ThreadManager {
         if (this.streamEventHandler) {
             this.streamEventHandler(eventType, data);
         } else {
-            this.logger.warn("Stream event received but no handler registered", {
-                eventType,
-                data,
-                component: "ThreadManager"
-            });
+            this.logger.warn(
+                "Stream event received but no handler registered",
+                {
+                    eventType,
+                    data,
+                    component: "ThreadManager",
+                }
+            );
         }
     }
 
@@ -726,7 +732,7 @@ export class ThreadManager {
             this.logger.warn("Stream data received but no handler registered", {
                 dataType,
                 data,
-                component: "ThreadManager"
+                component: "ThreadManager",
             });
         }
     }
@@ -846,7 +852,7 @@ export class ThreadManager {
             this.logger.error("Error during ThreadManager shutdown", {
                 error: error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined,
-                component: "ThreadManager"
+                component: "ThreadManager",
             });
         }
     }
@@ -857,7 +863,7 @@ export class ThreadManager {
                 error: error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined,
                 component: "ThreadManager",
-                worker: "logger"
+                worker: "logger",
             });
         });
 
@@ -866,7 +872,7 @@ export class ThreadManager {
                 error: error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined,
                 component: "ThreadManager",
-                worker: "binance"
+                worker: "binance",
             });
         });
 
@@ -875,7 +881,7 @@ export class ThreadManager {
                 error: error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined,
                 component: "ThreadManager",
-                worker: "communication"
+                worker: "communication",
             });
         });
 
@@ -884,7 +890,7 @@ export class ThreadManager {
                 error: error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined,
                 component: "ThreadManager",
-                worker: "storage"
+                worker: "storage",
             });
         });
 
@@ -894,7 +900,7 @@ export class ThreadManager {
                 this.logger.error("Logger worker exited unexpectedly", {
                     exitCode: code,
                     component: "ThreadManager",
-                    worker: "logger"
+                    worker: "logger",
                 });
             }
         });
@@ -919,7 +925,7 @@ export class ThreadManager {
                 this.logger.error("Communication worker exited unexpectedly", {
                     exitCode: code,
                     component: "ThreadManager",
-                    worker: "communication"
+                    worker: "communication",
                 });
             }
         });
@@ -929,7 +935,7 @@ export class ThreadManager {
                 this.logger.error("Storage worker exited unexpectedly", {
                     exitCode: code,
                     component: "ThreadManager",
-                    worker: "storage"
+                    worker: "storage",
                 });
             }
         });
@@ -942,10 +948,13 @@ export class ThreadManager {
     ): Promise<void> {
         return new Promise<void>((resolve) => {
             const timeout = setTimeout(() => {
-                this.logger.warn("Worker did not exit gracefully, terminating", {
-                    workerName: name,
-                    component: "ThreadManager"
-                });
+                this.logger.warn(
+                    "Worker did not exit gracefully, terminating",
+                    {
+                        workerName: name,
+                        component: "ThreadManager",
+                    }
+                );
                 try {
                     const terminatePromise = worker.terminate();
                     // Handle terminate result which may or may not be a Promise
@@ -953,9 +962,15 @@ export class ThreadManager {
                         .catch((err) => {
                             this.logger.error("Error terminating worker", {
                                 workerName: name,
-                                error: err instanceof Error ? err.message : String(err),
-                                stack: err instanceof Error ? err.stack : undefined,
-                                component: "ThreadManager"
+                                error:
+                                    err instanceof Error
+                                        ? err.message
+                                        : String(err),
+                                stack:
+                                    err instanceof Error
+                                        ? err.stack
+                                        : undefined,
+                                component: "ThreadManager",
                             });
                         })
                         .finally(() => resolve());
@@ -964,7 +979,7 @@ export class ThreadManager {
                         workerName: name,
                         error: err instanceof Error ? err.message : String(err),
                         stack: err instanceof Error ? err.stack : undefined,
-                        component: "ThreadManager"
+                        component: "ThreadManager",
                     });
                     resolve();
                 }

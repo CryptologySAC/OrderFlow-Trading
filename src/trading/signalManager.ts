@@ -12,10 +12,8 @@ import { AnomalyDetector } from "../services/anomalyDetector.js";
 import { AlertManager } from "../alerts/alertManager.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import { ThreadManager } from "../multithreading/threadManager.js";
-import {
-    MetricsCollector,
-    type EnhancedMetrics,
-} from "../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import type { EnhancedMetrics } from "../infrastructure/metricsCollector.js";
 import {
     calculateProfitTarget,
     calculateStopLoss,
@@ -64,7 +62,7 @@ export class SignalManager extends EventEmitter {
         private readonly anomalyDetector: AnomalyDetector,
         private readonly alertManager: AlertManager,
         private readonly logger: ILogger,
-        private readonly metricsCollector: MetricsCollector,
+        private readonly metricsCollector: IMetricsCollector,
         private readonly threadManager: ThreadManager,
         private readonly signalTracker?: SignalTracker,
         private readonly marketContextCollector?: MarketContextCollector,

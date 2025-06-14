@@ -4,7 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import type { RawData } from "ws";
 import { randomUUID } from "crypto";
 import { RateLimiter } from "../infrastructure/rateLimiter.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { WebSocketError } from "../core/errors.js";
 import type { WebSocketMessage } from "../utils/interfaces.js";
 import { ILogger } from "../infrastructure/loggerInterface.js";
@@ -32,7 +32,7 @@ export class WebSocketManager {
         port: number,
         private readonly logger: ILogger,
         private readonly rateLimiter: RateLimiter,
-        private readonly metricsCollector: MetricsCollector,
+        private readonly metricsCollector: IMetricsCollector,
         private readonly wsHandlers: Record<string, WSHandler>,
         private readonly onConnect?: (
             ws: ExtendedWebSocket

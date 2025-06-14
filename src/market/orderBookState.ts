@@ -2,7 +2,7 @@
 import { Mutex } from "async-mutex";
 import type { SpotWebsocketStreams } from "@binance/spot";
 import { type IBinanceDataFeed } from "../utils/binance.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type { PassiveLevel, OrderBookHealth } from "../types/marketEvents.js";
 import { ILogger } from "../infrastructure/loggerInterface.js";
 import { FinancialMath } from "../utils/financialMath.js";
@@ -50,7 +50,7 @@ export interface IOrderBookState {
 
 export class OrderBookState implements IOrderBookState {
     private readonly logger: ILogger;
-    private readonly metricsCollector: MetricsCollector;
+    private readonly metricsCollector: IMetricsCollector;
 
     private isInitialized = false;
     private readonly binanceFeed: IBinanceDataFeed;
@@ -98,7 +98,7 @@ export class OrderBookState implements IOrderBookState {
     constructor(
         options: OrderBookStateOptions,
         logger: ILogger,
-        metricsCollector: MetricsCollector,
+        metricsCollector: IMetricsCollector,
         binanceFeed: IBinanceDataFeed,
         private threadManager?: import("../multithreading/threadManager.js").ThreadManager
     ) {
@@ -128,7 +128,7 @@ export class OrderBookState implements IOrderBookState {
     public static async create(
         options: OrderBookStateOptions,
         logger: ILogger,
-        metricsCollector: MetricsCollector,
+        metricsCollector: IMetricsCollector,
         binanceFeed: IBinanceDataFeed,
         threadManager?: import("../multithreading/threadManager.js").ThreadManager
     ): Promise<OrderBookState> {

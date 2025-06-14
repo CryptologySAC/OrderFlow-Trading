@@ -2,7 +2,7 @@
 
 import { EventEmitter } from "events";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { AlertManager } from "../alerts/alertManager.js";
 import type { SignalTracker } from "./signalTracker.js";
 import type {
@@ -112,7 +112,7 @@ export class PerformanceMonitor extends EventEmitter {
         private readonly failureAnalyzer: FailureAnalyzer,
         private readonly alertManager: AlertManager,
         private readonly logger: ILogger,
-        private readonly metricsCollector: MetricsCollector,
+        private readonly metricsCollector: IMetricsCollector,
         config: Partial<PerformanceMonitorConfig> = {}
     ) {
         super();

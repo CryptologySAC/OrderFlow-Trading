@@ -3,7 +3,7 @@
 import { EventEmitter } from "events";
 import { spawn } from "child_process";
 import type { ILogger } from "./loggerInterface.js";
-import { MetricsCollector } from "./metricsCollector.js";
+import type { IMetricsCollector } from "./metricsCollectorInterface.js";
 import { ProductionUtils } from "../utils/productionUtils.js";
 
 export interface HardReloadEvent {
@@ -23,7 +23,7 @@ export interface RecoveryManagerConfig {
 
 export class RecoveryManager extends EventEmitter {
     private readonly logger: ILogger;
-    private readonly metricsCollector: MetricsCollector;
+    private readonly metricsCollector: IMetricsCollector;
     private readonly config: RecoveryManagerConfig;
 
     private hardReloadCount = 0;
@@ -33,7 +33,7 @@ export class RecoveryManager extends EventEmitter {
     constructor(
         config: RecoveryManagerConfig,
         logger: ILogger,
-        metricsCollector: MetricsCollector
+        metricsCollector: IMetricsCollector
     ) {
         super();
         this.config = config;

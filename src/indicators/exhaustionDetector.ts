@@ -1,7 +1,7 @@
 // src/indicators/exhaustionDetector.ts
 import { BaseDetector, ZoneSample } from "./base/baseDetector.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
 import { DetectorUtils } from "./base/detectorUtils.js";
@@ -94,7 +94,7 @@ export class ExhaustionDetector
         settings: ExhaustionSettings = {},
         logger: ILogger,
         spoofingDetector: SpoofingDetector,
-        metricsCollector: MetricsCollector,
+        metricsCollector: IMetricsCollector,
         signalLogger?: ISignalLogger
     ) {
         super(

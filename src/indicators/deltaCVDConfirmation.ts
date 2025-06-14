@@ -17,7 +17,7 @@ import type {
     SignalType,
 } from "../types/signalTypes.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
 import type {
@@ -146,7 +146,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
         settings: DeltaCVDConfirmationSettings = {},
         logger: ILogger,
         spoofingDetector: SpoofingDetector,
-        metricsCollector: MetricsCollector,
+        metricsCollector: IMetricsCollector,
         signalLogger?: ISignalLogger
     ) {
         super(

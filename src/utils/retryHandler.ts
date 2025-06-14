@@ -1,7 +1,7 @@
 // src/utils/retryHandler.ts
 import { ProductionUtils } from "./productionUtils.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 
 export interface RetryConfig {
     maxAttempts: number;
@@ -17,7 +17,7 @@ export interface RetryContext {
     component: string;
     correlationId?: string;
     logger?: ILogger;
-    metricsCollector?: MetricsCollector;
+    metricsCollector?: IMetricsCollector;
 }
 
 export class RetryError extends Error {
@@ -227,7 +227,7 @@ export class RetryHandler {
     public static createComponentRetryHandler(
         component: string,
         logger: ILogger,
-        metricsCollector?: MetricsCollector
+        metricsCollector?: IMetricsCollector
     ) {
         return {
             fast: async <T>(
