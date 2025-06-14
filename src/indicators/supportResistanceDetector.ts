@@ -2,7 +2,7 @@
 
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import { BaseDetector } from "./base/baseDetector.js";
-import { WorkerLogger } from "../multithreading/workerLogger";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
@@ -61,7 +61,7 @@ export class SupportResistanceDetector extends BaseDetector {
         callback: DetectorCallback,
         settings: BaseDetectorSettings &
             Partial<SupportResistanceConfig> & { features?: DetectorFeatures },
-        logger: WorkerLogger,
+        logger: ILogger,
         spoofingDetector: SpoofingDetector,
         metricsCollector: MetricsCollector,
         signalLogger?: ISignalLogger

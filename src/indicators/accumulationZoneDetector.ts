@@ -66,7 +66,7 @@ import {
     ZoneDetectorConfig,
 } from "../types/zoneTypes.js";
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
-import { WorkerLogger } from "../multithreading/workerLogger";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../infrastructure/metricsCollector.js";
 import { DetectorUtils } from "./base/detectorUtils.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
@@ -142,7 +142,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
         id: string,
         symbol: string,
         config: Partial<ZoneDetectorConfig>,
-        logger: WorkerLogger,
+        logger: ILogger,
         metricsCollector: MetricsCollector
     ) {
         super(id, config, "accumulation", logger, metricsCollector);

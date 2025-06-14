@@ -2,7 +2,7 @@
 
 import { EventEmitter } from "events";
 import { spawn } from "child_process";
-import { WorkerLogger } from "../multithreading/workerLogger";
+import type { ILogger } from "./loggerInterface.js";
 import { MetricsCollector } from "./metricsCollector.js";
 import { ProductionUtils } from "../utils/productionUtils.js";
 
@@ -22,7 +22,7 @@ export interface RecoveryManagerConfig {
 }
 
 export class RecoveryManager extends EventEmitter {
-    private readonly logger: WorkerLogger;
+    private readonly logger: ILogger;
     private readonly metricsCollector: MetricsCollector;
     private readonly config: RecoveryManagerConfig;
 
@@ -32,7 +32,7 @@ export class RecoveryManager extends EventEmitter {
 
     constructor(
         config: RecoveryManagerConfig,
-        logger: WorkerLogger,
+        logger: ILogger,
         metricsCollector: MetricsCollector
     ) {
         super();
