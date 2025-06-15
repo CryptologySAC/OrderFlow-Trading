@@ -146,7 +146,10 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     private lastTradeMonotonicTime = process.hrtime.bigint();
 
     // ✅ DUPLICATE DETECTION: Track processed trade IDs to prevent duplicates during reconnections
-    private processedTradeIds: Set<number> = new Set();
+    private processedTradeIds: CircularBuffer<{
+        id: number;
+        timestamp: number;
+    }>;
     private readonly maxTradeIdCacheSize: number;
     private readonly tradeIdCleanupInterval: number;
     private tradeIdCleanupTimer?: NodeJS.Timeout;
@@ -234,6 +237,10 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         this.recentTrades = new CircularBuffer<PlotTrade>(this.maxMemoryTrades);
         this.processingTimes = new CircularBuffer<number>(1000);
         this.errorWindow = new CircularBuffer<number>(this.maxErrorWindowSize);
+        this.processedTradeIds = new CircularBuffer<{
+            id: number;
+            timestamp: number;
+        }>(this.maxTradeIdCacheSize);
 
         // Start background tasks
         this.startSaveQueue();
@@ -1004,7 +1011,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             this.logger.info(
                 "[TradesProcessor] Maintaining trade ID cache through reconnection",
                 {
-                    cachedTradeIds: this.processedTradeIds.size,
+                    cachedTradeIds: this.processedTradeIds.length,
                     duplicatesDetectedSoFar: this.duplicatesDetected,
                 }
             );
@@ -1093,7 +1100,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             averageProcessingTime: avgTime,
             p99ProcessingTime: p99Time,
             duplicatesDetected: this.duplicatesDetected,
-            processedTradeIdsCount: this.processedTradeIds.size,
+            processedTradeIdsCount: this.processedTradeIds.length,
         };
     }
 
@@ -1200,23 +1207,20 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
      * ✅ DUPLICATE DETECTION: Check if a trade ID has already been processed
      */
     private isDuplicateTrade(tradeId: number): boolean {
-        return this.processedTradeIds.has(tradeId);
+        return this.processedTradeIds
+            .getAll()
+            .some((entry) => entry.id === tradeId);
     }
 
     /**
      * ✅ DUPLICATE DETECTION: Mark a trade ID as processed
      */
     private markTradeAsProcessed(tradeId: number): void {
-        this.processedTradeIds.add(tradeId);
-
-        // If cache is getting too large, trigger cleanup
-        if (this.processedTradeIds.size > this.maxTradeIdCacheSize * 1.1) {
-            this.cleanupOldTradeIds();
-        }
+        this.processedTradeIds.add({ id: tradeId, timestamp: Date.now() });
 
         this.metricsCollector.updateMetric(
             "processedTradeIdsCount",
-            this.processedTradeIds.size
+            this.processedTradeIds.length
         );
     }
 
@@ -1225,7 +1229,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
      */
     private startTradeIdCleanup(): void {
         this.tradeIdCleanupTimer = setInterval(() => {
-            this.cleanupOldTradeIds();
+            this.cleanupExpiredTradeIds();
         }, this.tradeIdCleanupInterval);
 
         this.logger.info("[TradesProcessor] Trade ID cleanup started", {
@@ -1277,53 +1281,42 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     }
 
     /**
-     * ✅ DUPLICATE DETECTION: Clean up old trade IDs to prevent memory growth
+     * ✅ PERFORMANCE FIX: Clean up expired trade IDs based on time
      *
-     * Strategy: Keep the most recent trade IDs based on timestamp ordering.
-     * Since trade IDs are generally sequential, we can use a simple approach.
+     * CircularBuffer automatically manages size limits, but we can also clean up
+     * trade IDs that are too old to be relevant for duplicate detection.
      */
-    private cleanupOldTradeIds(): void {
-        const initialSize = this.processedTradeIds.size;
+    private cleanupExpiredTradeIds(): void {
+        const cutoffTime = Date.now() - this.tradeIdCleanupInterval * 3; // Keep 3x cleanup interval
+        const allEntries = this.processedTradeIds.getAll();
+        const initialCount = allEntries.length;
 
-        if (initialSize <= this.maxTradeIdCacheSize) {
-            return; // No cleanup needed
-        }
+        // Filter out expired entries
+        const validEntries = allEntries.filter(
+            (entry) => entry.timestamp >= cutoffTime
+        );
+        const expiredCount = initialCount - validEntries.length;
 
-        try {
-            // Convert to sorted array (trade IDs are generally sequential)
-            const sortedIds = Array.from(this.processedTradeIds).sort(
-                (a, b) => a - b
+        if (expiredCount > 0) {
+            // Clear and rebuild buffer with only valid entries
+            this.processedTradeIds.clear();
+            validEntries.forEach((entry) => this.processedTradeIds.add(entry));
+
+            this.logger.debug(
+                "[TradesProcessor] Expired trade IDs cleaned up",
+                {
+                    initialCount,
+                    expiredCount,
+                    remainingCount: validEntries.length,
+                    cutoffTime: new Date(cutoffTime).toISOString(),
+                }
             );
-
-            // Keep only the most recent trade IDs
-            const idsToKeep = sortedIds.slice(-this.maxTradeIdCacheSize);
-
-            // Rebuild the set with only recent IDs
-            this.processedTradeIds = new Set(idsToKeep);
-
-            const finalSize = this.processedTradeIds.size;
-            const removedCount = initialSize - finalSize;
-
-            this.logger.info("[TradesProcessor] Trade ID cache cleaned up", {
-                initialSize,
-                finalSize,
-                removedCount,
-                maxCacheSize: this.maxTradeIdCacheSize,
-            });
 
             this.metricsCollector.updateMetric(
                 "processedTradeIdsCount",
-                finalSize
+                validEntries.length
             );
             this.metricsCollector.updateMetric("tradeIdCleanupOperations", 1);
-        } catch (error) {
-            this.logger.error(
-                "[TradesProcessor] Error during trade ID cleanup",
-                {
-                    error: (error as Error).message,
-                    cacheSize: initialSize,
-                }
-            );
         }
     }
 }
