@@ -261,7 +261,7 @@ export class OrderBookProcessor implements IOrderBookProcessor {
 
             // FIXED: Use symmetric binning to prevent bid/ask imbalance
             // Both bids and asks now use Math.round for consistent binning
-            
+
             // Bids
             if (level.bid > 0) {
                 const bidBinPrice = this.roundToTick(
