@@ -67,16 +67,19 @@ export class WebSocketManager {
             }
 
             ws.on("close", () => {
-                this.activeConnections.delete(ws);
-                this.metricsCollector.updateMetric(
-                    "connectionsActive",
-                    this.activeConnections.size
-                );
-                this.logger.info(
-                    "Client disconnected",
-                    { clientId },
-                    correlationId
-                );
+                // Defensive cleanup to prevent memory leaks
+                if (this.activeConnections.has(ws)) {
+                    this.activeConnections.delete(ws);
+                    this.metricsCollector.updateMetric(
+                        "connectionsActive",
+                        this.activeConnections.size
+                    );
+                    this.logger.info(
+                        "Client disconnected",
+                        { clientId },
+                        correlationId
+                    );
+                }
             });
 
             ws.on("message", (message) => this.handleWSMessage(ws, message));
@@ -86,6 +89,14 @@ export class WebSocketManager {
                     { error, clientId },
                     correlationId
                 );
+                // Ensure connection is cleaned up on error
+                if (this.activeConnections.has(ws)) {
+                    this.activeConnections.delete(ws);
+                    this.metricsCollector.updateMetric(
+                        "connectionsActive",
+                        this.activeConnections.size
+                    );
+                }
             });
         });
     }
@@ -218,17 +229,28 @@ export class WebSocketManager {
     }
 
     /**
-     * Gracefully shutdown WebSocket server
+     * Gracefully shutdown WebSocket server with proper resource cleanup
      */
     public shutdown(): void {
         this.isShuttingDown = true;
 
-        this.wsServer.close(() => {
-            this.logger.info("WebSocket server closed");
+        // Close all active connections with proper cleanup
+        this.activeConnections.forEach((ws) => {
+            try {
+                ws.close(1001, "Server shutting down");
+            } catch (error) {
+                this.logger.error("Error closing WebSocket connection", { error });
+            }
         });
 
-        this.activeConnections.forEach((ws) => {
-            ws.close(1001, "Server shutting down");
+        // Clear the connections set to prevent memory leaks
+        this.activeConnections.clear();
+
+        // Update metrics to reflect zero connections
+        this.metricsCollector.updateMetric("connectionsActive", 0);
+
+        this.wsServer.close(() => {
+            this.logger.info("WebSocket server closed");
         });
     }
 
