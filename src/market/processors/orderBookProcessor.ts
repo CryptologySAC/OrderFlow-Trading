@@ -211,14 +211,13 @@ export class OrderBookProcessor implements IOrderBookProcessor {
     private calculateBinConfig(midPrice: number): BinConfig {
         const binIncrement = this.tickSize * this.binSize;
 
-        // Calculate raw price boundaries
-        const halfRange = this.numLevels * binIncrement;
-        const rawMinPrice = midPrice - halfRange;
-        const rawMaxPrice = midPrice + halfRange;
+        // Find the bin that contains midPrice (aligned to tick boundaries)
+        const midBinPrice = Math.round(midPrice / binIncrement) * binIncrement;
 
-        // Align to bin boundaries
-        const minPrice = Math.floor(rawMinPrice / binIncrement) * binIncrement;
-        const maxPrice = Math.ceil(rawMaxPrice / binIncrement) * binIncrement;
+        // Create exactly numLevels bins on each side (not including middle bin)
+        // This creates 2*numLevels+1 total bins: numLevels below + 1 middle + numLevels above
+        const minPrice = midBinPrice - this.numLevels * binIncrement;
+        const maxPrice = midBinPrice + this.numLevels * binIncrement;
 
         return {
             minPrice: this.roundToTick(minPrice),
@@ -259,24 +258,18 @@ export class OrderBookProcessor implements IOrderBookProcessor {
             // Skip levels outside our range
             if (price < config.minPrice || price > config.maxPrice) continue;
 
-            // Bids
-            if (level.bid > 0) {
-                const bidBinPrice = this.roundToTick(
-                    Math.floor(price / binIncrement) * binIncrement
-                );
-                const bin = bins.get(bidBinPrice);
-                if (bin) {
+            // Use consistent binning for both bids and asks
+            const binPrice = this.roundToTick(
+                Math.round(price / binIncrement) * binIncrement
+            );
+            const bin = bins.get(binPrice);
+
+            if (bin) {
+                if (level.bid > 0) {
                     bin.bid += level.bid;
                     bin.bidCount!++;
                 }
-            }
-            // Asks
-            if (level.ask > 0) {
-                const askBinPrice = this.roundToTick(
-                    Math.ceil(price / binIncrement) * binIncrement
-                );
-                const bin = bins.get(askBinPrice);
-                if (bin) {
+                if (level.ask > 0) {
                     bin.ask += level.ask;
                     bin.askCount!++;
                 }

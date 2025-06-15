@@ -499,6 +499,7 @@ export class SignalCoordinator extends EventEmitter {
         );
 
         const { detector, candidate } = job;
+        this.logger.debug("processJob: ", { job });
         const detectorId = detector.getId();
         const start = Date.now();
 
