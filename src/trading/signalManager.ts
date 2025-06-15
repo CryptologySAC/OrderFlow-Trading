@@ -380,11 +380,11 @@ export class SignalManager extends EventEmitter {
         // For high load, use queued processing
         if (this.signalQueue.length > 0 || this.isProcessing) {
             this.signalQueue.push(signal);
-            this.metricsCollector.updateMetric(
+            this.metricsCollector.setGauge(
                 "signal_manager_queue_size",
                 this.signalQueue.length
             );
-            this.startProcessing();
+            void this.startProcessing();
             return null; // Async processing
         }
 
@@ -397,34 +397,40 @@ export class SignalManager extends EventEmitter {
      */
     private async startProcessing(): Promise<void> {
         if (this.isProcessing) return;
-        
+
         this.isProcessing = true;
-        
+
         while (this.signalQueue.length > 0) {
             // Process in batches to prevent blocking
-            const batch = this.signalQueue.splice(0, this.config.processingBatchSize);
-            
+            const batch = this.signalQueue.splice(
+                0,
+                this.config.processingBatchSize
+            );
+
             for (const signal of batch) {
                 try {
                     this.processSignalSync(signal);
                 } catch (error) {
                     this.logger.error("Failed to process signal", {
                         signalId: signal.id,
-                        error: error instanceof Error ? error.message : String(error),
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
                     });
                 }
             }
-            
+
             // Update queue metrics
-            this.metricsCollector.updateMetric(
+            this.metricsCollector.setGauge(
                 "signal_manager_queue_size",
                 this.signalQueue.length
             );
-            
+
             // Yield to event loop between batches
-            await new Promise(resolve => setImmediate(resolve));
+            await new Promise((resolve) => setImmediate(resolve));
         }
-        
+
         this.isProcessing = false;
     }
 
@@ -576,38 +582,48 @@ export class SignalManager extends EventEmitter {
      * Check if signal should be dropped due to backpressure.
      */
     private shouldDropSignal(signal: ProcessedSignal): boolean {
-        const queueUtilization = this.signalQueue.length / this.config.maxQueueSize;
-        
+        const queueUtilization =
+            this.signalQueue.length / this.config.maxQueueSize;
+
         // Activate backpressure if queue is getting full
         if (queueUtilization >= this.config.backpressureThreshold) {
             if (!this.backpressureActive) {
                 this.backpressureActive = true;
-                this.logger.warn("Backpressure activated - queue utilization high", {
-                    queueSize: this.signalQueue.length,
-                    maxSize: this.config.maxQueueSize,
-                    utilization: queueUtilization,
-                });
+                this.logger.warn(
+                    "Backpressure activated - queue utilization high",
+                    {
+                        queueSize: this.signalQueue.length,
+                        maxSize: this.config.maxQueueSize,
+                        utilization: queueUtilization,
+                    }
+                );
             }
-            
+
             // Drop lower confidence signals first during backpressure
             const confidenceThreshold = this.config.confidenceThreshold + 0.1; // Higher bar during pressure
             if (signal.confidence < confidenceThreshold) {
                 return true;
             }
-        } else if (this.backpressureActive && queueUtilization < this.config.backpressureThreshold * 0.5) {
+        } else if (
+            this.backpressureActive &&
+            queueUtilization < this.config.backpressureThreshold * 0.5
+        ) {
             // Deactivate backpressure when queue clears
             this.backpressureActive = false;
-            this.logger.info("Backpressure deactivated - queue utilization normalized", {
-                queueSize: this.signalQueue.length,
-                utilization: queueUtilization,
-            });
+            this.logger.info(
+                "Backpressure deactivated - queue utilization normalized",
+                {
+                    queueSize: this.signalQueue.length,
+                    utilization: queueUtilization,
+                }
+            );
         }
-        
+
         // Hard limit: drop signal if queue is full
         if (this.signalQueue.length >= this.config.maxQueueSize) {
             return true;
         }
-        
+
         return false;
     }
 
@@ -617,17 +633,19 @@ export class SignalManager extends EventEmitter {
     private recordDroppedSignal(signal: ProcessedSignal): void {
         const currentCount = this.droppedSignalCounts.get(signal.type) || 0;
         this.droppedSignalCounts.set(signal.type, currentCount + 1);
-        
+
         this.metricsCollector.incrementCounter(
             "signal_manager_signals_dropped_total",
             1,
             {
                 signal_type: signal.type,
                 detector_id: signal.detectorId,
-                drop_reason: this.backpressureActive ? "backpressure" : "queue_full",
+                drop_reason: this.backpressureActive
+                    ? "backpressure"
+                    : "queue_full",
             }
         );
-        
+
         this.logger.warn("Signal dropped due to backpressure", {
             signalId: signal.id,
             signalType: signal.type,
@@ -1609,8 +1627,9 @@ export class SignalManager extends EventEmitter {
             isTracking: boolean;
         };
     } {
-        const queueUtilization = this.signalQueue.length / this.config.maxQueueSize;
-        
+        const queueUtilization =
+            this.signalQueue.length / this.config.maxQueueSize;
+
         const status = {
             recentSignalsCount: this.recentSignals.size,
             correlationsCount: this.correlations.size,
@@ -1621,7 +1640,9 @@ export class SignalManager extends EventEmitter {
                 queueSize: this.signalQueue.length,
                 queueUtilization,
                 isActive: this.backpressureActive,
-                droppedSignalCounts: Object.fromEntries(this.droppedSignalCounts),
+                droppedSignalCounts: Object.fromEntries(
+                    this.droppedSignalCounts
+                ),
             },
             performanceTracking: {
                 activeSignalsCount: 0,
