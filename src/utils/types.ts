@@ -504,6 +504,15 @@ export interface ProcessingJob {
     priority: number;
 }
 
+export interface SerializableJobData {
+    jobId: string;
+    detectorId: string;
+    candidate: SignalCandidate;
+    startTime: number;
+    retryCount: number;
+    priority: number;
+}
+
 // Add these interfaces to your types file
 export interface DetectorRegisteredEvent {
     detectorId: string;

@@ -130,29 +130,6 @@ export class OrderflowPreprocessor
                 });
 
                 const depthMetrics = this.bookState.getDepthMetrics();
-
-                // DEBUG: Log post-update order book metrics
-                this.logger.debug(
-                    "[OrderflowPreprocessor] POST-UPDATE BOOK METRICS",
-                    {
-                        symbol: this.symbol,
-                        totalLevels: depthMetrics.totalLevels,
-                        bidLevels: depthMetrics.bidLevels,
-                        askLevels: depthMetrics.askLevels,
-                        bidAskLevelRatio: (
-                            depthMetrics.bidLevels /
-                            Math.max(depthMetrics.askLevels, 1)
-                        ).toFixed(2),
-                        totalBidVolume: depthMetrics.totalBidVolume.toFixed(4),
-                        totalAskVolume: depthMetrics.totalAskVolume.toFixed(4),
-                        volumeImbalance: depthMetrics.imbalance.toFixed(4),
-                        bestBid: this.bookState.getBestBid(),
-                        bestAsk: this.bookState.getBestAsk(),
-                        spread: this.bookState.getSpread(),
-                        midPrice: this.bookState.getMidPrice(),
-                    }
-                );
-
                 this.emit("orderbook_update", {
                     timestamp: Date.now(),
                     bestBid: this.bookState.getBestBid(),

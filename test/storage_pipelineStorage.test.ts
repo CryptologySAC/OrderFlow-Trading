@@ -1,17 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Database from "better-sqlite3";
 import { PipelineStorage } from "../src/infrastructure/pipelineStorage";
-import type { ProcessingJob } from "../src/utils/types";
+import type { SerializableJobData } from "../src/utils/types";
 import type { ILogger } from "../src/infrastructure/loggerInterface";
 
 vi.mock("../src/infrastructure/logger");
 vi.mock("../src/infrastructure/metricsCollector");
 
-const stubDetector = { getId: () => "det" } as any;
-
-const makeJob = (): ProcessingJob => ({
-    id: "job1",
-    detector: stubDetector,
+const makeJobData = (): SerializableJobData => ({
+    jobId: "job1",
+    detectorId: "det",
     candidate: { id: "c1", type: "test", confidence: 1, data: {} } as any,
     startTime: Date.now(),
     retryCount: 0,
@@ -39,12 +37,12 @@ describe("storage/PipelineStorage", () => {
     });
 
     it("queues and restores jobs", () => {
-        const job = makeJob();
-        storage.enqueueJob(job);
+        const jobData = makeJobData();
+        storage.enqueueJob(jobData);
         const dequeued = storage.dequeueJobs(1);
         expect(dequeued.length).toBe(1);
         expect(dequeued[0].candidate.id).toBe("c1");
-        storage.markJobCompleted(job.id);
+        storage.markJobCompleted(jobData.jobId);
     });
 
     it("persists active anomalies", () => {

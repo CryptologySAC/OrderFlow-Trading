@@ -64,7 +64,7 @@ import {
     StorageHealthMonitor,
     createStorageHealthMonitor,
 } from "../infrastructure/storageHealthMonitor.js";
-import type { ProcessingJob } from "../utils/types.js";
+import type { ProcessingJob, SerializableJobData } from "../utils/types.js";
 import type { AnomalyEvent } from "../services/anomalyDetector.js";
 import type {
     SignalOutcome,
@@ -662,8 +662,8 @@ export class Storage implements IStorage {
         }
     }
 
-    public enqueueJob(job: ProcessingJob): void {
-        this.pipelineStorage.enqueueJob(job);
+    public enqueueJob(data: SerializableJobData): void {
+        this.pipelineStorage.enqueueJob(data);
     }
 
     public dequeueJobs(limit: number): ProcessingJob[] {

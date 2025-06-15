@@ -18,6 +18,7 @@ import type {
     DetectorErrorEvent,
     DetectorRegisteredEvent,
     ProcessingJob,
+    SerializableJobData,
     SignalFailedEvent,
     SignalProcessedEvent,
     SignalQueuedEvent,
@@ -395,18 +396,18 @@ export class SignalCoordinator extends EventEmitter {
             priority: reg.priority,
         };
 
-        // ✅ FIXED: Create serializable job for worker storage
-        const serializableJob: ProcessingJob = {
-            id: job.id,
+        // Pass only the data we need to store, avoid complex objects
+        const storageData: SerializableJobData = {
+            jobId: job.id,
+            detectorId: detector.getId(),
             candidate: job.candidate,
-            detector: new DetectorStub(detector.getId()) as unknown as Detector,
             startTime: job.startTime,
             retryCount: job.retryCount,
             priority: job.priority,
         };
 
         this.queue.push(job);
-        void this.threadManager.callStorage("enqueueJob", serializableJob);
+        void this.threadManager.callStorage("enqueueJob", storageData);
         this.metrics.setGauge("signal_coordinator_queue_size", this.queue.size);
 
         this.emit("signalQueued", {

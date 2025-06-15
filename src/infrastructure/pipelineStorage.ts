@@ -40,7 +40,7 @@ import type {
     ConfirmedSignal,
     SignalType,
 } from "../types/signalTypes.js";
-import type { ProcessingJob } from "../utils/types.js";
+import type { ProcessingJob, SerializableJobData } from "../utils/types.js";
 import type { AnomalyEvent } from "../services/anomalyDetector.js";
 import type {
     SignalOutcome,
@@ -97,7 +97,7 @@ export interface PipelineStorageConfig {
 }
 
 export interface IPipelineStorage {
-    enqueueJob(job: ProcessingJob): void;
+    enqueueJob(data: SerializableJobData): void;
     dequeueJobs(limit: number): ProcessingJob[];
     markJobCompleted(jobId: string): void;
     restoreQueuedJobs(): ProcessingJob[];
@@ -605,13 +605,13 @@ export class PipelineStorage implements IPipelineStorage {
     /* ------------------------------------------------------------------ */
     /*  Queue                                                             */
     /* ------------------------------------------------------------------ */
-    public enqueueJob(job: ProcessingJob): void {
+    public enqueueJob(data: SerializableJobData): void {
         const row: QueueRow = {
-            jobId: job.id ?? ulid(),
-            detectorId: job.detector.getId(),
-            candidateJson: JSON.stringify(job.candidate),
-            priority: job.priority,
-            retryCount: job.retryCount,
+            jobId: data.jobId ?? ulid(),
+            detectorId: data.detectorId,
+            candidateJson: JSON.stringify(data.candidate),
+            priority: data.priority,
+            retryCount: data.retryCount,
             enqueuedAt: Date.now(),
         };
         this.runWithRetry(() => this.insertQueue.run(row));
