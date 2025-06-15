@@ -179,10 +179,6 @@ describe("OrderBook Threading Data Flow", () => {
     });
 
     it("should log warnings when stream data handler is not registered", async () => {
-        const consoleSpy = vi
-            .spyOn(console, "warn")
-            .mockImplementation(() => {});
-
         // Create ThreadManager but don't set stream data handler
         const tm = new ThreadManager();
         // After creating tm, we now have 8 workers total (4 from threadManager, 4 from tm)
@@ -192,6 +188,9 @@ describe("OrderBook Threading Data Flow", () => {
 
         // Verify no stream data handler is set initially
         expect((tm as any).streamDataHandler).toBeUndefined();
+
+        // Mock the logger.warn method
+        const loggerWarnSpy = vi.spyOn((tm as any).logger, 'warn');
 
         // Simulate depth data without handler
         const streamDataMessage = {
@@ -208,11 +207,16 @@ describe("OrderBook Threading Data Flow", () => {
         // Wait for message processing
         await new Promise((resolve) => setTimeout(resolve, 10));
 
-        expect(consoleSpy).toHaveBeenCalledWith(
-            "Stream data 'depth' received but no handler registered"
+        expect(loggerWarnSpy).toHaveBeenCalledWith(
+            "Stream data received but no handler registered",
+            {
+                dataType: "depth",
+                data: { test: "data" },
+                component: "ThreadManager",
+            }
         );
 
-        consoleSpy.mockRestore();
+        loggerWarnSpy.mockRestore();
     });
 
     it("should verify BinanceWorker forwards depth events properly", () => {

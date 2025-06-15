@@ -7,6 +7,11 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
+
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
+vi.mock("../src/infrastructure/metricsCollector");
+
 import { AbsorptionDetector } from "../src/indicators/absorptionDetector.js";
 import type {
     EnrichedTradeEvent,
@@ -28,24 +33,8 @@ describe("AbsorptionDetector - Passive Side Logic", () => {
 
     beforeEach(() => {
         mockCallback = vi.fn();
-        mockLogger = {
-            info: vi.fn(),
-            debug: vi.fn(),
-            warn: vi.fn(),
-            error: vi.fn(),
-        } as any;
-
-        mockMetrics = {
-            incrementCounter: vi.fn(),
-            incrementMetric: vi.fn(),
-            updateMetric: vi.fn(),
-            recordHistogram: vi.fn(),
-            recordGauge: vi.fn(),
-            setGauge: vi.fn(),
-            createCounter: vi.fn(),
-            createHistogram: vi.fn(),
-            createGauge: vi.fn(),
-        } as any;
+        mockLogger = new WorkerLogger();
+        mockMetrics = new MetricsCollector();
 
         mockSpoofing = {
             checkWallSpoofing: vi.fn().mockReturnValue(false),
@@ -61,7 +50,6 @@ describe("AbsorptionDetector - Passive Side Logic", () => {
 
         detector = new AbsorptionDetector(
             "test-absorption",
-            mockCallback,
             {
                 symbol: "LTCUSDT",
                 pricePrecision: 2,
@@ -81,6 +69,9 @@ describe("AbsorptionDetector - Passive Side Logic", () => {
             mockSpoofing,
             mockMetrics
         );
+
+        // Register callback manually since constructor doesn't take it anymore
+        detector.on("signal", mockCallback);
     });
 
     describe("buyerIsMaker Logic Validation", () => {

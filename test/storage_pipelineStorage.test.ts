@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Database from "better-sqlite3";
 import { PipelineStorage } from "../src/infrastructure/pipelineStorage";
 import type { ProcessingJob } from "../src/utils/types";
+import type { ILogger } from "../src/infrastructure/loggerInterface";
 
 vi.mock("../src/infrastructure/logger");
 vi.mock("../src/infrastructure/metricsCollector");
@@ -19,8 +20,19 @@ const makeJob = (): ProcessingJob => ({
 
 describe("storage/PipelineStorage", () => {
     let storage: PipelineStorage;
+    let mockLogger: ILogger;
+
     beforeEach(() => {
-        storage = new PipelineStorage(new Database(":memory:"));
+        mockLogger = {
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            debug: vi.fn(),
+            isDebugEnabled: vi.fn(() => false),
+            setCorrelationId: vi.fn(),
+            removeCorrelationId: vi.fn(),
+        };
+        storage = new PipelineStorage(new Database(":memory:"), mockLogger);
     });
     afterEach(() => {
         storage.close();

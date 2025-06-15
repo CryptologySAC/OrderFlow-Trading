@@ -221,8 +221,8 @@ describe("ThreadManager Resource Leak Fixes", () => {
         const [loggerWorker, binanceWorker, commWorker, storageWorker] =
             mockWorkerInstances;
 
-        // Mock console.warn to verify timeout warnings
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+        // Mock logger.warn to verify timeout warnings
+        const warnSpy = vi.spyOn((threadManager as any).logger, "warn");
 
         // Start shutdown but don't simulate worker exits (simulate hanging workers)
         const shutdownPromise = threadManager.shutdown();
@@ -234,7 +234,10 @@ describe("ThreadManager Resource Leak Fixes", () => {
 
         // Verify that timeout warnings were issued
         expect(warnSpy).toHaveBeenCalledWith(
-            expect.stringContaining("worker did not exit gracefully")
+            "Worker did not exit gracefully, terminating",
+            expect.objectContaining({
+                component: "ThreadManager",
+            })
         );
 
         warnSpy.mockRestore();
@@ -249,10 +252,8 @@ describe("ThreadManager Resource Leak Fixes", () => {
         const [loggerWorker, binanceWorker, commWorker, storageWorker] =
             mockWorkerInstances;
 
-        // Mock console.error to capture error handling
-        const errorSpy = vi
-            .spyOn(console, "error")
-            .mockImplementation(() => {});
+        // Mock logger.error to capture error handling
+        const errorSpy = vi.spyOn((threadManager as any).logger, "error");
 
         // Mock process.exit to prevent test from actually exiting
         const exitSpy = vi
@@ -268,21 +269,40 @@ describe("ThreadManager Resource Leak Fixes", () => {
 
         // Verify errors were logged
         expect(errorSpy).toHaveBeenCalledWith(
-            "Logger worker error:",
-            testError
+            "Logger worker error",
+            expect.objectContaining({
+                error: "Test worker error",
+                component: "ThreadManager",
+                worker: "logger",
+            })
         );
         expect(errorSpy).toHaveBeenCalledWith(
-            "Binance worker error:",
-            testError
+            "Binance worker error",
+            expect.objectContaining({
+                error: "Test worker error",
+                component: "ThreadManager",
+                worker: "binance",
+            })
         );
         expect(errorSpy).toHaveBeenCalledWith(
-            "Communication worker error:",
-            testError
+            "Communication worker error",
+            expect.objectContaining({
+                error: "Test worker error",
+                component: "ThreadManager",
+                worker: "communication",
+            })
         );
         expect(errorSpy).toHaveBeenCalledWith(
-            "Storage worker error:",
-            testError
+            "Storage worker error",
+            expect.objectContaining({
+                error: "Test worker error",
+                component: "ThreadManager",
+                worker: "storage",
+            })
         );
+
+        // Mock console.error for Binance worker (policy override case)
+        const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
         // Simulate unexpected worker exits
         loggerWorker.emit("exit", 1); // Non-zero exit code
@@ -290,18 +310,42 @@ describe("ThreadManager Resource Leak Fixes", () => {
         commWorker.emit("exit", 1);
         storageWorker.emit("exit", 1);
 
+        // Logger worker uses logger.error
         expect(errorSpy).toHaveBeenCalledWith(
-            "Logger worker exited with code 1"
+            "Logger worker exited unexpectedly",
+            expect.objectContaining({
+                exitCode: 1,
+                component: "ThreadManager",
+                worker: "logger",
+            })
         );
-        expect(errorSpy).toHaveBeenCalledWith(
+        
+        // Binance worker uses console.error (policy override)
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
             "❌ CRITICAL: Binance worker exited with code 1"
         );
+        
+        // Communication worker uses logger.error
         expect(errorSpy).toHaveBeenCalledWith(
-            "Communication worker exited with code 1"
+            "Communication worker exited unexpectedly",
+            expect.objectContaining({
+                exitCode: 1,
+                component: "ThreadManager",
+                worker: "communication",
+            })
         );
+        
+        // Storage worker uses logger.error
         expect(errorSpy).toHaveBeenCalledWith(
-            "Storage worker exited with code 1"
+            "Storage worker exited unexpectedly",
+            expect.objectContaining({
+                exitCode: 1,
+                component: "ThreadManager",
+                worker: "storage",
+            })
         );
+
+        consoleErrorSpy.mockRestore();
 
         // Verify process.exit was called when binance worker exited
         expect(exitSpy).toHaveBeenCalledWith(1);

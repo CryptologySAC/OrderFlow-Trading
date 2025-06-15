@@ -1,5 +1,10 @@
 // test/detectors_absorptionDetector_simple.test.ts
 import { describe, it, expect, beforeEach, vi, MockedFunction } from "vitest";
+
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
+vi.mock("../src/infrastructure/metricsCollector");
+
 import { AbsorptionDetector } from "../src/indicators/absorptionDetector.js";
 import { WorkerLogger } from "../src/multithreading/workerLogger.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
@@ -7,11 +12,12 @@ import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import { OrderBookState } from "../src/market/orderBookState.js";
 import { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import { Detected } from "../src/indicators/interfaces/detectorInterfaces.js";
+import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 
 describe("AbsorptionDetector - Simple Test", () => {
     let detector: AbsorptionDetector;
     let mockCallback: MockedFunction<(signal: Detected) => void>;
-    let mockLogger: WorkerLogger;
+    let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
     let mockSpoofing: SpoofingDetector;
     let mockOrderBook: OrderBookState;
@@ -21,23 +27,8 @@ describe("AbsorptionDetector - Simple Test", () => {
     beforeEach(() => {
         // Create mocks
         mockCallback = vi.fn();
-        mockLogger = {
-            info: vi.fn(),
-            warn: vi.fn(),
-            error: vi.fn(),
-            debug: vi.fn(),
-        } as any;
-        mockMetrics = {
-            incrementCounter: vi.fn(),
-            incrementMetric: vi.fn(),
-            updateMetric: vi.fn(),
-            recordHistogram: vi.fn(),
-            recordGauge: vi.fn(),
-            setGauge: vi.fn(),
-            createCounter: vi.fn(),
-            createHistogram: vi.fn(),
-            createGauge: vi.fn(),
-        } as any;
+        mockLogger = new WorkerLogger();
+        mockMetrics = new MetricsCollector();
         mockSpoofing = {
             checkWallSpoofing: vi.fn().mockReturnValue(false),
             getWallDetectionMetrics: vi.fn().mockReturnValue({}),
@@ -50,7 +41,6 @@ describe("AbsorptionDetector - Simple Test", () => {
         // Create detector with very permissive settings
         detector = new AbsorptionDetector(
             "test-absorption",
-            mockCallback,
             {
                 symbol: "BTCUSDT",
                 windowMs: 10000, // 10 seconds
@@ -74,6 +64,9 @@ describe("AbsorptionDetector - Simple Test", () => {
             mockSpoofing,
             mockMetrics
         );
+
+        // Register callback manually since constructor doesn't take it anymore
+        detector.on("signal", mockCallback);
     });
 
     it("should accept trades without crashing", () => {

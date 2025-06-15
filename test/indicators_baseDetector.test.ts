@@ -19,21 +19,27 @@ class TestDetector extends BaseDetector {
     public signals: { zone: number; aggressive: number; passive: number }[] =
         [];
     protected detectorType = "test" as const;
+    private mockCallback = vi.fn();
+    
     constructor() {
         const logger = new WorkerLogger();
         const metrics = new MetricsCollector();
-        const spoof = new SpoofingDetector({
-            tickSize: 0.01,
-            wallTicks: 1,
-            minWallSize: 1,
-        });
+        const spoof = {
+            checkWallSpoofing: vi.fn().mockReturnValue(false),
+            getWallDetectionMetrics: vi.fn().mockReturnValue({}),
+            wasSpoofed: vi.fn().mockReturnValue(false),
+            trackPassiveChange: vi.fn(),
+        } as any;
+        
         super(
             "1",
-            () => {},
             {
                 pricePrecision: 2,
                 zoneTicks: 2,
                 eventCooldownMs: 1000,
+                symbol: "BTCUSDT",
+                windowMs: 60000,
+                minAggVolume: 100,
                 features: {
                     multiZone: false,
                     adaptiveZone: false,
@@ -46,6 +52,9 @@ class TestDetector extends BaseDetector {
             spoof,
             metrics
         );
+        
+        // Register callback manually since constructor doesn't take it anymore
+        this.on("signal", this.mockCallback);
     }
     protected onEnrichedTradeSpecific(): void {}
     protected getSignalType() {

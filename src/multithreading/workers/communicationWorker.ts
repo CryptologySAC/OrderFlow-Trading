@@ -6,9 +6,9 @@ import { WorkerRateLimiterProxy } from "../shared/workerRateLimiterProxy.js";
 import type { EnhancedMetrics } from "../../infrastructure/metricsCollector.js";
 import type { IWorkerMetricsCollector } from "../shared/workerInterfaces.js";
 import {
-    WebSocketManager,
+    WorkerWebSocketManager,
     type ExtendedWebSocket,
-} from "../../websocket/websocketManager.js";
+} from "../shared/workerWebSocketManager.js";
 
 // Extend the WebSocket interface with client-specific state
 interface IsolatedWebSocket extends ExtendedWebSocket {
@@ -331,11 +331,11 @@ const onClientConnect = (ws: IsolatedWebSocket) => {
     });
 };
 
-const wsManager = new WebSocketManager(
+const wsManager = new WorkerWebSocketManager(
     Config.WS_PORT,
-    logger,
-    rateLimiter as unknown as import("../../infrastructure/rateLimiter.js").RateLimiter,
-    metrics as unknown as import("../../infrastructure/metricsCollector.js").MetricsCollector,
+    logger, // WorkerProxyLogger - no casting needed
+    rateLimiter, // WorkerRateLimiterProxy - no casting needed
+    metrics, // WorkerMetricsProxy - no casting needed
     wsHandlers,
     onClientConnect
 );
@@ -350,7 +350,7 @@ class EnhancedStatsBroadcaster {
     constructor(
         private readonly metrics: IWorkerMetricsCollector,
         private readonly dataStream: DataStreamProxy,
-        private readonly wsManager: WebSocketManager,
+        private readonly wsManager: WorkerWebSocketManager,
         private readonly logger: WorkerProxyLogger,
         private readonly intervalMs = 5000
     ) {}

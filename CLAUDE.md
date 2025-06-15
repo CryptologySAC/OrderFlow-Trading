@@ -617,6 +617,125 @@ interface IWorkerCircuitBreaker {
 4. Schedule immediate post-emergency review
 5. Create comprehensive rollback plan
 
+## 🌐 WEBSOCKET DEVELOPMENT GUIDELINES
+
+### Critical WebSocket Message Handling
+
+**IMPORTANT**: The Node.js `ws` library delivers WebSocket messages as `Buffer` objects, NOT strings, even when clients send JSON strings. This is normal behavior due to network protocol handling.
+
+#### Correct Buffer-to-String Pattern
+
+```typescript
+private handleMessage(ws: WebSocket, message: RawData): void {
+    // Convert Buffer to string safely
+    let messageStr: string;
+    if (typeof message === "string") {
+        messageStr = message;
+    } else if (Buffer.isBuffer(message)) {
+        messageStr = message.toString("utf8");
+    } else {
+        return; // Discard non-string, non-Buffer as potential attack
+    }
+
+    // Now parse and validate
+    try {
+        const parsed = JSON.parse(messageStr);
+        const validationResult = MessageSchema.safeParse(parsed);
+        // ... continue with validation
+    } catch (error) {
+        // Handle parsing errors
+    }
+}
+```
+
+#### WebSocket Security Patterns
+
+- **Always validate message types**: Use Zod or similar schema validation
+- **Reject unknown types**: Non-string, non-Buffer messages are potential attacks
+- **Rate limit clients**: Implement per-client rate limiting with cleanup
+- **UTF-8 encoding**: Always specify encoding when converting Buffers
+
+### WebSocket Debugging Checklist
+
+When WebSocket handlers aren't being called:
+
+1. **Check message type**: Are messages arriving as Buffers instead of strings?
+2. **Validate handler registration**: Are handlers properly registered in the handler map?
+3. **Message structure**: Does the message match the expected schema?
+4. **Rate limiting**: Is the client being rate-limited?
+5. **Worker thread isolation**: Are proper proxy classes being used?
+
+## 🧵 ENHANCED WORKER THREAD GUIDELINES
+
+### Type Casting Detection and Prevention
+
+**RED FLAGS - Immediate Violations:**
+
+```typescript
+// ❌ NEVER DO THIS - Breaks worker thread isolation
+const rateLimiter = workerRateLimiter as unknown as RateLimiter;
+const logger = workerLogger as unknown as Logger;
+
+// ✅ CORRECT - Use proper interfaces
+const rateLimiter: IWorkerRateLimiter = new WorkerRateLimiterProxy();
+const logger: ILogger = new WorkerProxyLogger("worker-name");
+```
+
+### Worker Thread Debugging Techniques
+
+**Silent Failure Symptoms:**
+
+- WebSocket messages not reaching handlers
+- No error logs but functionality doesn't work
+- Handlers exist but are never called
+
+**Debugging Steps:**
+
+1. **Add temporary logging** at message entry points
+2. **Check proxy class usage** - no direct infrastructure imports
+3. **Verify interface contracts** - ensure all dependencies use interfaces
+4. **Test message flow** - trace from WebSocket to handler
+
+### Common Worker Thread Patterns
+
+**Message Handling in Workers:**
+
+```typescript
+// ✅ CORRECT - Worker thread message handling
+parentPort?.on("message", (msg: WorkerMessage) => {
+    const logger: ILogger = new WorkerProxyLogger("worker-name");
+    const metrics: IWorkerMetricsCollector = new WorkerMetricsProxy(
+        "worker-name"
+    );
+
+    // Process message using only proxy classes
+    handleMessage(msg, logger, metrics);
+});
+```
+
+**WebSocket Management in Workers:**
+
+```typescript
+// ✅ CORRECT - Use worker-specific WebSocket manager
+const wsManager = new WorkerWebSocketManager(
+    port,
+    logger, // WorkerProxyLogger
+    rateLimiter, // WorkerRateLimiterProxy
+    metrics, // WorkerMetricsProxy
+    handlers
+);
+```
+
+### Worker Thread Troubleshooting
+
+**If worker thread communication fails:**
+
+1. **Check imports**: No direct infrastructure imports in worker files
+2. **Verify proxy usage**: All infrastructure accessed via proxy classes
+3. **Interface compliance**: All dependencies use proper TypeScript interfaces
+4. **Message validation**: Ensure proper message schema validation
+5. **Correlation IDs**: Include correlation IDs for request tracing
+
 ## 🎯 CLAUDE CODE OPERATIONAL GUIDELINES
 
 ### When Asked to Make Changes:

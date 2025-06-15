@@ -18,7 +18,13 @@ if (!parentPort) {
 }
 
 // Use shared proxy implementations instead of direct infrastructure imports
-function initializeComponents() {
+function initializeComponents(): {
+    logger: WorkerProxyLogger;
+    metricsCollector: WorkerMetricsProxy;
+    circuitBreaker: WorkerCircuitBreakerProxy;
+    binanceFeed: BinanceDataFeed;
+    manager: DataStreamManager;
+} {
     const logger = new WorkerProxyLogger("binance");
     const metricsCollector = new WorkerMetricsProxy("binance");
     const circuitBreaker = new WorkerCircuitBreakerProxy(

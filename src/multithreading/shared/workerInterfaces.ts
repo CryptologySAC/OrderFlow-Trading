@@ -87,11 +87,25 @@ export interface IWorkerCircuitBreaker {
 }
 
 /**
- * Minimal interface for rate limiter that workers need
+ * Enhanced interface for rate limiter that workers need
+ * Supports both global and client-specific rate limiting
  */
 export interface IWorkerRateLimiter {
+    // Client-specific rate limiting (compatible with RateLimiter interface)
+    isAllowed(clientId: string): boolean;
+
+    // Worker-global rate limiting (backward compatibility)
     isAllowed(): boolean;
-    getRemainingRequests(): number;
+
+    // Client management for WebSocket connections
+    addClient(clientId: string): void;
+    removeClient(clientId: string): void;
+
+    // Remaining requests tracking
+    getRemainingRequests(clientId?: string): number;
+
+    // Cleanup for memory management
+    cleanup(): void;
 }
 
 /**
