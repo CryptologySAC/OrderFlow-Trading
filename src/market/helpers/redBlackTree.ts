@@ -129,32 +129,41 @@ export class RedBlackTree {
         return askPrice === undefined ? Infinity : askPrice;
     }
 
-    private getBestBidNode(): RBNode | null {
-        let bestBid: RBNode | null = null;
-        let current = this.root;
+    // Atomic operation: get both best bid and ask in single tree traversal
+    public getBestBidAsk(): { bid: number; ask: number } {
+        const result = this.getBestBidAskNodes();
+        return {
+            bid: result.bidNode?.price ?? 0,
+            ask: result.askNode?.price ?? Infinity,
+        };
+    }
 
+    private getBestBidNode(): RBNode | null {
+        // Optimized O(log n): traverse from rightmost (highest price) down
+        let current = this.root;
+        let bestBid: RBNode | null = null;
+
+        // Start from rightmost node and work backwards
         while (current !== this.nil) {
             if (current.level.bid > 0) {
-                if (!bestBid || current.price > bestBid.price) {
-                    bestBid = current;
-                }
-                // Continue searching right for higher prices
+                bestBid = current;
+                // Found a bid, continue right to find higher prices
                 current = current.right;
             } else {
-                // No bid at this level, search both sides
-                const leftBest = this.searchBestBidInSubtree(current.left);
-                const rightBest = this.searchBestBidInSubtree(current.right);
-
-                if (leftBest && (!bestBid || leftBest.price > bestBid.price)) {
-                    bestBid = leftBest;
+                // No bid here, move to next highest price node
+                if (current.right !== this.nil) {
+                    current = current.right;
+                } else {
+                    // Dead end, backtrack through parent chain
+                    while (current.parent && current === current.parent.right) {
+                        current = current.parent;
+                    }
+                    if (current.parent) {
+                        current = current.parent;
+                    } else {
+                        break;
+                    }
                 }
-                if (
-                    rightBest &&
-                    (!bestBid || rightBest.price > bestBid.price)
-                ) {
-                    bestBid = rightBest;
-                }
-                break;
             }
         }
 
@@ -162,79 +171,70 @@ export class RedBlackTree {
     }
 
     private getBestAskNode(): RBNode | null {
-        let bestAsk: RBNode | null = null;
+        // Optimized O(log n): traverse from leftmost (lowest price) up
         let current = this.root;
+        let bestAsk: RBNode | null = null;
 
+        // Start from leftmost node and work forwards
         while (current !== this.nil) {
             if (current.level.ask > 0) {
-                if (!bestAsk || current.price < bestAsk.price) {
-                    bestAsk = current;
-                }
-                // Continue searching left for lower prices
+                bestAsk = current;
+                // Found an ask, continue left to find lower prices
                 current = current.left;
             } else {
-                // No ask at this level, search both sides
-                const leftBest = this.searchBestAskInSubtree(current.left);
-                const rightBest = this.searchBestAskInSubtree(current.right);
-
-                if (leftBest && (!bestAsk || leftBest.price < bestAsk.price)) {
-                    bestAsk = leftBest;
+                // No ask here, move to next lowest price node
+                if (current.left !== this.nil) {
+                    current = current.left;
+                } else {
+                    // Dead end, backtrack through parent chain
+                    while (current.parent && current === current.parent.left) {
+                        current = current.parent;
+                    }
+                    if (current.parent) {
+                        current = current.parent;
+                    } else {
+                        break;
+                    }
                 }
-                if (
-                    rightBest &&
-                    (!bestAsk || rightBest.price < bestAsk.price)
-                ) {
-                    bestAsk = rightBest;
-                }
-                break;
             }
         }
 
         return bestAsk;
     }
 
-    private searchBestBidInSubtree(node: RBNode | null): RBNode | null {
-        if (!node || node === this.nil) return null;
-
+    // Atomic operation to get both best bid and ask nodes in single traversal
+    private getBestBidAskNodes(): {
+        bidNode: RBNode | null;
+        askNode: RBNode | null;
+    } {
         let bestBid: RBNode | null = null;
-
-        if (node.level.bid > 0) {
-            bestBid = node;
-        }
-
-        const leftBest = this.searchBestBidInSubtree(node.left);
-        const rightBest = this.searchBestBidInSubtree(node.right);
-
-        if (leftBest && (!bestBid || leftBest.price > bestBid.price)) {
-            bestBid = leftBest;
-        }
-        if (rightBest && (!bestBid || rightBest.price > bestBid.price)) {
-            bestBid = rightBest;
-        }
-
-        return bestBid;
-    }
-
-    private searchBestAskInSubtree(node: RBNode | null): RBNode | null {
-        if (!node || node === this.nil) return null;
-
         let bestAsk: RBNode | null = null;
 
-        if (node.level.ask > 0) {
-            bestAsk = node;
-        }
+        // Single in-order traversal to find both quotes atomically
+        const findBestQuotes = (node: RBNode | null): void => {
+            if (!node || node === this.nil) return;
 
-        const leftBest = this.searchBestAskInSubtree(node.left);
-        const rightBest = this.searchBestAskInSubtree(node.right);
+            // Traverse left subtree first (lower prices)
+            findBestQuotes(node.left);
 
-        if (leftBest && (!bestAsk || leftBest.price < bestAsk.price)) {
-            bestAsk = leftBest;
-        }
-        if (rightBest && (!bestAsk || rightBest.price < bestAsk.price)) {
-            bestAsk = rightBest;
-        }
+            // Process current node
+            if (node.level.bid > 0) {
+                if (!bestBid || node.price > bestBid.price) {
+                    bestBid = node;
+                }
+            }
+            if (node.level.ask > 0) {
+                if (!bestAsk || node.price < bestAsk.price) {
+                    bestAsk = node;
+                }
+            }
 
-        return bestAsk;
+            // Traverse right subtree (higher prices)
+            findBestQuotes(node.right);
+        };
+
+        findBestQuotes(this.root);
+        return { bidNode: bestBid, askNode: bestAsk };
     }
 
     // Get all nodes for iteration

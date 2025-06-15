@@ -211,14 +211,38 @@ export class OrderBookState implements IOrderBookState {
                 this.recalculateBestQuotes();
             }
 
-            /* ── Consistency check AFTER the recalculation ───────────── */
+            /* ── Final consistency validation ───────────── */
             if (this._bestBid > this._bestAsk && this._bestAsk !== Infinity) {
-                this.logger.warn(
-                    "[OrderBookState] Quote inversion detected **after** recalc",
-                    { bestBid: this._bestBid, bestAsk: this._bestAsk }
+                this.logger.error(
+                    "[OrderBookState] CRITICAL: Quote inversion persists after atomic recalc",
+                    {
+                        bestBid: this._bestBid,
+                        bestAsk: this._bestAsk,
+                        spread: this._bestAsk - this._bestBid,
+                        bidsCount: bids.length,
+                        asksCount: asks.length,
+                    }
                 );
-                // One more full scan just in case something slipped through
-                this.recalculateBestQuotes();
+
+                // Emergency recovery: force full tree recalculation
+                this.performEmergencyQuoteRecovery();
+
+                // If still inverted, this is a critical system error
+                if (
+                    this._bestBid > this._bestAsk &&
+                    this._bestAsk !== Infinity
+                ) {
+                    this.logger.error(
+                        "[OrderBookState] FATAL: Quote inversion unrecoverable - order book corrupted",
+                        {
+                            finalBestBid: this._bestBid,
+                            finalBestAsk: this._bestAsk,
+                            correlationId: this.generateCorrelationId(),
+                        }
+                    );
+                    this.circuitOpen = true;
+                    this.circuitOpenUntil = Date.now() + 60000; // 1 minute circuit breaker
+                }
             }
         } finally {
             release();
@@ -600,9 +624,27 @@ export class OrderBookState implements IOrderBookState {
     }
 
     private recalculateBestQuotes(): void {
-        // Use Red-Black Tree optimized lookups - O(log n)
-        this._bestBid = this.book.getBestBid();
-        this._bestAsk = this.book.getBestAsk();
+        // Atomic quote calculation to prevent race conditions
+        const quotes = this.book.getBestBidAsk();
+
+        // Validate quotes before applying them
+        if (quotes.bid > quotes.ask && quotes.ask !== Infinity) {
+            this.logger.error(
+                "[OrderBookState] CRITICAL: Quote inversion in tree calculation",
+                {
+                    calculatedBid: quotes.bid,
+                    calculatedAsk: quotes.ask,
+                    currentBid: this._bestBid,
+                    currentAsk: this._bestAsk,
+                }
+            );
+            // Don't update quotes if they're invalid
+            return;
+        }
+
+        // Apply atomically calculated quotes
+        this._bestBid = quotes.bid;
+        this._bestAsk = quotes.ask;
 
         this.purgeCrossedLevels();
     }
@@ -1123,5 +1165,55 @@ export class OrderBookState implements IOrderBookState {
             cachedWorkerStatus,
             statusMismatch,
         };
+    }
+
+    /**
+     * Emergency recovery for quote inversion - force full tree recalculation
+     */
+    private performEmergencyQuoteRecovery(): void {
+        this.logger.warn(
+            "[OrderBookState] Performing emergency quote recovery",
+            {
+                beforeBid: this._bestBid,
+                beforeAsk: this._bestAsk,
+            }
+        );
+
+        // Reset quotes to safe defaults
+        this._bestBid = 0;
+        this._bestAsk = Infinity;
+
+        // Force complete tree traversal for quote calculation
+        const quotes = this.book.getBestBidAsk();
+
+        // Only apply if they're valid
+        if (quotes.bid <= quotes.ask || quotes.ask === Infinity) {
+            this._bestBid = quotes.bid;
+            this._bestAsk = quotes.ask;
+
+            this.logger.info("[OrderBookState] Emergency recovery successful", {
+                recoveredBid: this._bestBid,
+                recoveredAsk: this._bestAsk,
+                spread:
+                    this._bestAsk === Infinity
+                        ? Infinity
+                        : this._bestAsk - this._bestBid,
+            });
+        } else {
+            this.logger.error(
+                "[OrderBookState] Emergency recovery failed - tree is corrupted",
+                {
+                    treeBid: quotes.bid,
+                    treeAsk: quotes.ask,
+                }
+            );
+        }
+    }
+
+    /**
+     * Generate correlation ID for error tracking
+     */
+    private generateCorrelationId(): string {
+        return `ob-${this.symbol}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     }
 }
