@@ -259,10 +259,13 @@ export class OrderBookProcessor implements IOrderBookProcessor {
             // Skip levels outside our range
             if (price < config.minPrice || price > config.maxPrice) continue;
 
+            // FIXED: Use symmetric binning to prevent bid/ask imbalance
+            // Both bids and asks now use Math.round for consistent binning
+            
             // Bids
             if (level.bid > 0) {
                 const bidBinPrice = this.roundToTick(
-                    Math.floor(price / binIncrement) * binIncrement
+                    Math.round(price / binIncrement) * binIncrement
                 );
                 const bin = bins.get(bidBinPrice);
                 if (bin) {
@@ -273,7 +276,7 @@ export class OrderBookProcessor implements IOrderBookProcessor {
             // Asks
             if (level.ask > 0) {
                 const askBinPrice = this.roundToTick(
-                    Math.ceil(price / binIncrement) * binIncrement
+                    Math.round(price / binIncrement) * binIncrement
                 );
                 const bin = bins.get(askBinPrice);
                 if (bin) {
@@ -284,7 +287,6 @@ export class OrderBookProcessor implements IOrderBookProcessor {
         }
 
         // Keep all bins to maintain balanced orderbook display
-        // Don't filter empty bins - this ensures consistent bid/ask level counts
         return bins;
     }
 

@@ -46,6 +46,7 @@ export interface IOrderBookState {
     shutdown(): Promise<void>;
     recover(): Promise<void>;
     getHealth(): OrderBookHealth;
+    logDetailedBookAnalysis(): void; // DEBUG method for imbalance investigation
 }
 
 export class OrderBookState implements IOrderBookState {
@@ -61,6 +62,7 @@ export class OrderBookState implements IOrderBookState {
     private pruneTimer?: NodeJS.Timeout;
     private lastPruneTime = 0;
     protected lastUpdateTime = Date.now();
+    private maintenanceCycleCount = 0; // Track maintenance cycles for debugging
 
     // Stream connection awareness for health monitoring
     private isStreamConnected = true; // Assume connected initially
@@ -196,6 +198,47 @@ export class OrderBookState implements IOrderBookState {
         const release = await this.quoteMutex.acquire();
 
         try {
+            // DEBUG: Log update details before processing
+            const preUpdateMetrics = this.getDepthMetrics();
+            
+            // Count update types for deeper analysis
+            const bidUpdates = {
+                additions: bids.filter(([_, qty]) => parseFloat(qty) > 0).length,
+                removals: bids.filter(([_, qty]) => parseFloat(qty) === 0).length,
+                totalVolume: bids.filter(([_, qty]) => parseFloat(qty) > 0).reduce((sum, [_, qty]) => sum + parseFloat(qty), 0)
+            };
+            const askUpdates = {
+                additions: asks.filter(([_, qty]) => parseFloat(qty) > 0).length,
+                removals: asks.filter(([_, qty]) => parseFloat(qty) === 0).length,
+                totalVolume: asks.filter(([_, qty]) => parseFloat(qty) > 0).reduce((sum, [_, qty]) => sum + parseFloat(qty), 0)
+            };
+
+            this.logger.debug("[OrderBookState] ATOMIC UPDATE START", {
+                symbol: this.symbol,
+                updateStats: {
+                    bidsCount: bids.length,
+                    asksCount: asks.length,
+                    bidUpdates,
+                    askUpdates,
+                    updateAsymmetry: {
+                        countRatio: asks.length > 0 ? (bids.length / asks.length).toFixed(2) : "N/A",
+                        additionRatio: askUpdates.additions > 0 ? (bidUpdates.additions / askUpdates.additions).toFixed(2) : "N/A",
+                        removalRatio: askUpdates.removals > 0 ? (bidUpdates.removals / askUpdates.removals).toFixed(2) : "N/A",
+                        volumeRatio: askUpdates.totalVolume > 0 ? (bidUpdates.totalVolume / askUpdates.totalVolume).toFixed(2) : "N/A"
+                    }
+                },
+                preState: {
+                    bidLevels: preUpdateMetrics.bidLevels,
+                    askLevels: preUpdateMetrics.askLevels,
+                    bidAskRatio: (
+                        preUpdateMetrics.bidLevels /
+                        Math.max(preUpdateMetrics.askLevels, 1)
+                    ).toFixed(2),
+                    imbalance: preUpdateMetrics.imbalance.toFixed(4)
+                },
+                timestamp: Date.now(),
+            });
+
             // Track if best quotes might have changed
             let needsBestRecalc = false;
 
@@ -210,6 +253,29 @@ export class OrderBookState implements IOrderBookState {
             if (needsBestRecalc) {
                 this.recalculateBestQuotes();
             }
+
+            // DEBUG: Log final update metrics
+            const postUpdateMetrics = this.getDepthMetrics();
+
+            this.logger.debug("[OrderBookState] ATOMIC UPDATE COMPLETE", {
+                symbol: this.symbol,
+                postBidLevels: postUpdateMetrics.bidLevels,
+                postAskLevels: postUpdateMetrics.askLevels,
+                postBidAskRatio: (
+                    postUpdateMetrics.bidLevels /
+                    Math.max(postUpdateMetrics.askLevels, 1)
+                ).toFixed(2),
+                postImbalance: postUpdateMetrics.imbalance.toFixed(4),
+                bidLevelsDelta:
+                    postUpdateMetrics.bidLevels - preUpdateMetrics.bidLevels,
+                askLevelsDelta:
+                    postUpdateMetrics.askLevels - preUpdateMetrics.askLevels,
+                finalBestBid: this._bestBid,
+                finalBestAsk:
+                    this._bestAsk === Infinity ? "Infinity" : this._bestAsk,
+                finalSpread: this.getSpread(),
+                needsBestRecalc,
+            });
 
             /* ── Final consistency validation ───────────── */
             if (this._bestBid > this._bestAsk && this._bestAsk !== Infinity) {
@@ -386,8 +452,13 @@ export class OrderBookState implements IOrderBookState {
 
     private performMaintenance(): void {
         const startTime = Date.now();
+        // Track maintenance cycles for detailed analysis
+        this.maintenanceCycleCount = (this.maintenanceCycleCount || 0) + 1;
 
         try {
+            // Get metrics before maintenance for comparison
+            const beforeMetrics = this.getDepthMetrics();
+
             // Prune distant levels
             const beforeSize = this.book.size();
             this.pruneDistantLevels();
@@ -402,6 +473,9 @@ export class OrderBookState implements IOrderBookState {
             const duration = Date.now() - startTime;
             this.lastPruneTime = Date.now();
 
+            // Get metrics after maintenance
+            const afterMetrics = this.getDepthMetrics();
+
             this.metricsCollector.updateMetric(
                 "orderbookPruneDuration",
                 duration
@@ -410,6 +484,43 @@ export class OrderBookState implements IOrderBookState {
                 "orderbookPruneRemoved",
                 beforeSize - afterSize
             );
+
+            // DEBUG: Log periodic bid/ask imbalance monitoring
+            this.logger.info("[OrderBookState] PERIODIC IMBALANCE MONITORING", {
+                symbol: this.symbol,
+                maintenanceCycle: this.maintenanceCycleCount,
+                totalLevels: afterMetrics.totalLevels,
+                bidLevels: afterMetrics.bidLevels,
+                askLevels: afterMetrics.askLevels,
+                bidAskLevelRatio: (
+                    afterMetrics.bidLevels / Math.max(afterMetrics.askLevels, 1)
+                ).toFixed(2),
+                askBidLevelRatio: (
+                    afterMetrics.askLevels / Math.max(afterMetrics.bidLevels, 1)
+                ).toFixed(2),
+                levelImbalance: (
+                    (afterMetrics.bidLevels - afterMetrics.askLevels) /
+                    Math.max(afterMetrics.totalLevels, 1)
+                ).toFixed(4),
+                volumeImbalance: afterMetrics.imbalance.toFixed(4),
+                bestBid: this._bestBid,
+                bestAsk:
+                    this._bestAsk === Infinity ? "Infinity" : this._bestAsk,
+                spread: this.getSpread(),
+                midPrice: this.getMidPrice(),
+                bookSizeBefore: beforeSize,
+                bookSizeAfter: afterSize,
+                levelsPruned: beforeSize - afterSize,
+                isImbalanceSignificant:
+                    Math.abs(afterMetrics.bidLevels - afterMetrics.askLevels) >
+                    50,
+                timestamp: new Date().toISOString(),
+            });
+
+            // Every 10 maintenance cycles (roughly every 5 minutes), do detailed analysis
+            if (this.maintenanceCycleCount % 10 === 0) {
+                this.logDetailedBookAnalysis();
+            }
 
             if (afterSize > this.maxLevels * 0.8) {
                 this.logger.warn(
@@ -522,6 +633,13 @@ export class OrderBookState implements IOrderBookState {
         needsBestRecalc: boolean
     ): boolean {
         const now = Date.now();
+        let bidLevelsAdded = 0;
+        let bidLevelsRemoved = 0;
+        let bidVolumeAdded = 0;
+        let bidVolumeRemoved = 0;
+
+        // DEBUG: Count initial bid levels before processing
+        const initialMetrics = this.getDepthMetrics();
 
         for (const [priceStr, qtyStr] of bids) {
             const price = this.normalizePrice(parseFloat(priceStr));
@@ -529,7 +647,9 @@ export class OrderBookState implements IOrderBookState {
 
             if (qty === 0) {
                 const level = this.book.get(price);
-                if (level) {
+                if (level && level.bid > 0) {
+                    bidVolumeRemoved += level.bid;
+                    bidLevelsRemoved++;
                     level.bid = 0;
                     level.timestamp = now;
 
@@ -552,13 +672,21 @@ export class OrderBookState implements IOrderBookState {
                     addedAsk: 0,
                     addedBid: 0,
                 };
+                const previousBid = level.bid;
+
+                // Track if this is a new bid level
+                if (previousBid === 0 && qty > 0) {
+                    bidLevelsAdded++;
+                }
+
                 level.bid = qty;
                 level.timestamp = now;
                 this.book.insert(price, level);
 
-                const delta = qty - level.bid;
+                const delta = qty - previousBid;
                 if (delta > 0) {
                     level.addedBid = (level.addedBid ?? 0) + delta; // accumulation
+                    bidVolumeAdded += delta;
                 }
 
                 // Update best bid only if better
@@ -567,6 +695,30 @@ export class OrderBookState implements IOrderBookState {
                 }
             }
         }
+
+        // DEBUG: Log bid processing details
+        if (bids.length > 0) {
+            const finalMetrics = this.getDepthMetrics();
+            this.logger.debug("[OrderBookState] BID PROCESSING DEBUG", {
+                symbol: this.symbol,
+                bidUpdatesCount: bids.length,
+                bidLevelsAdded,
+                bidLevelsRemoved,
+                bidVolumeAdded: bidVolumeAdded.toFixed(4),
+                bidVolumeRemoved: bidVolumeRemoved.toFixed(4),
+                beforeBidLevels: initialMetrics.bidLevels,
+                afterBidLevels: finalMetrics.bidLevels,
+                beforeAskLevels: initialMetrics.askLevels,
+                afterAskLevels: finalMetrics.askLevels,
+                bidAskRatio: (
+                    finalMetrics.bidLevels / Math.max(finalMetrics.askLevels, 1)
+                ).toFixed(2),
+                bestBid: this._bestBid,
+                bestAsk:
+                    this._bestAsk === Infinity ? "Infinity" : this._bestAsk,
+            });
+        }
+
         return needsBestRecalc;
     }
 
@@ -575,6 +727,13 @@ export class OrderBookState implements IOrderBookState {
         needsBestRecalc: boolean
     ): boolean {
         const now = Date.now();
+        let askLevelsAdded = 0;
+        let askLevelsRemoved = 0;
+        let askVolumeAdded = 0;
+        let askVolumeRemoved = 0;
+
+        // DEBUG: Count initial ask levels before processing
+        const initialMetrics = this.getDepthMetrics();
 
         for (const [priceStr, qtyStr] of asks) {
             const price = this.normalizePrice(parseFloat(priceStr));
@@ -582,7 +741,9 @@ export class OrderBookState implements IOrderBookState {
 
             if (qty === 0) {
                 const level = this.book.get(price);
-                if (level) {
+                if (level && level.ask > 0) {
+                    askVolumeRemoved += level.ask;
+                    askLevelsRemoved++;
                     level.ask = 0;
                     level.timestamp = now;
 
@@ -605,13 +766,21 @@ export class OrderBookState implements IOrderBookState {
                     addedAsk: 0,
                     addedBid: 0,
                 };
+                const previousAsk = level.ask;
+
+                // Track if this is a new ask level
+                if (previousAsk === 0 && qty > 0) {
+                    askLevelsAdded++;
+                }
+
                 level.ask = qty;
                 level.timestamp = now;
                 this.book.insert(price, level);
 
-                const delta = qty - level.bid;
+                const delta = qty - previousAsk;
                 if (delta > 0) {
                     level.addedAsk = (level.addedAsk ?? 0) + delta; // accumulation
+                    askVolumeAdded += delta;
                 }
 
                 // Update best ask only if better
@@ -620,6 +789,30 @@ export class OrderBookState implements IOrderBookState {
                 }
             }
         }
+
+        // DEBUG: Log ask processing details
+        if (asks.length > 0) {
+            const finalMetrics = this.getDepthMetrics();
+            this.logger.debug("[OrderBookState] ASK PROCESSING DEBUG", {
+                symbol: this.symbol,
+                askUpdatesCount: asks.length,
+                askLevelsAdded,
+                askLevelsRemoved,
+                askVolumeAdded: askVolumeAdded.toFixed(4),
+                askVolumeRemoved: askVolumeRemoved.toFixed(4),
+                beforeBidLevels: initialMetrics.bidLevels,
+                afterBidLevels: finalMetrics.bidLevels,
+                beforeAskLevels: initialMetrics.askLevels,
+                afterAskLevels: finalMetrics.askLevels,
+                askBidRatio: (
+                    finalMetrics.askLevels / Math.max(finalMetrics.bidLevels, 1)
+                ).toFixed(2),
+                bestBid: this._bestBid,
+                bestAsk:
+                    this._bestAsk === Infinity ? "Infinity" : this._bestAsk,
+            });
+        }
+
         return needsBestRecalc;
     }
 
@@ -1215,5 +1408,171 @@ export class OrderBookState implements IOrderBookState {
      */
     private generateCorrelationId(): string {
         return `ob-${this.symbol}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    /**
+     * DEBUG: Detailed analysis of order book structure for imbalance investigation
+     */
+    public analyzeBookStructure(): {
+        overview: {
+            totalLevels: number;
+            bidLevels: number;
+            askLevels: number;
+            emptyLevels: number;
+        };
+        priceRanges: {
+            bidPriceRange: { min: number; max: number };
+            askPriceRange: { min: number; max: number };
+            priceGaps: number[];
+        };
+        volumeDistribution: {
+            topBidLevels: Array<{ price: number; volume: number }>;
+            topAskLevels: Array<{ price: number; volume: number }>;
+        };
+        potentialIssues: string[];
+    } {
+        const nodes = this.book.getAllNodes();
+        const metrics = this.getDepthMetrics();
+        const issues: string[] = [];
+
+        // Separate bid and ask levels
+        const bidLevels = nodes
+            .filter((n) => n.level.bid > 0)
+            .map((n) => ({ price: n.price, volume: n.level.bid }));
+        const askLevels = nodes
+            .filter((n) => n.level.ask > 0)
+            .map((n) => ({ price: n.price, volume: n.level.ask }));
+        const emptyLevels = nodes.filter(
+            (n) => n.level.bid === 0 && n.level.ask === 0
+        ).length;
+
+        // Sort levels by volume (descending)
+        bidLevels.sort((a, b) => b.volume - a.volume);
+        askLevels.sort((a, b) => b.volume - a.volume);
+
+        // Price ranges
+        const bidPrices = bidLevels.map((l) => l.price);
+        const askPrices = askLevels.map((l) => l.price);
+
+        const bidPriceRange = {
+            min: bidPrices.length > 0 ? Math.min(...bidPrices) : 0,
+            max: bidPrices.length > 0 ? Math.max(...bidPrices) : 0,
+        };
+
+        const askPriceRange = {
+            min: askPrices.length > 0 ? Math.min(...askPrices) : 0,
+            max: askPrices.length > 0 ? Math.max(...askPrices) : 0,
+        };
+
+        // Check for potential issues
+        const bidAskRatio = bidLevels.length / Math.max(askLevels.length, 1);
+        if (bidAskRatio > 2.0) {
+            issues.push(
+                `High bid/ask level ratio: ${bidAskRatio.toFixed(2)} (significantly more bids than asks)`
+            );
+        }
+        if (bidAskRatio < 0.5) {
+            issues.push(
+                `Low bid/ask level ratio: ${bidAskRatio.toFixed(2)} (significantly more asks than bids)`
+            );
+        }
+
+        if (emptyLevels > nodes.length * 0.1) {
+            issues.push(
+                `High empty level count: ${emptyLevels} (${((emptyLevels / nodes.length) * 100).toFixed(1)}% of total levels)`
+            );
+        }
+
+        if (this._bestBid > this._bestAsk && this._bestAsk !== Infinity) {
+            issues.push(
+                `Quote inversion: bestBid (${this._bestBid}) > bestAsk (${this._bestAsk})`
+            );
+        }
+
+        // Check for price overlaps (bids above best ask, asks below best bid)
+        const bidsAboveBestAsk = bidLevels.filter(
+            (l) => this._bestAsk !== Infinity && l.price >= this._bestAsk
+        ).length;
+        const asksBelowBestBid = askLevels.filter(
+            (l) => l.price <= this._bestBid
+        ).length;
+
+        if (bidsAboveBestAsk > 0) {
+            issues.push(`${bidsAboveBestAsk} bid levels above best ask`);
+        }
+        if (asksBelowBestBid > 0) {
+            issues.push(`${asksBelowBestBid} ask levels below best bid`);
+        }
+
+        // Calculate price gaps
+        const allPrices = [...bidPrices, ...askPrices].sort((a, b) => a - b);
+        const priceGaps: number[] = [];
+        for (let i = 1; i < allPrices.length; i++) {
+            const gap = allPrices[i] - allPrices[i - 1];
+            if (gap > this.tickSize * 2) {
+                // Significant gaps
+                priceGaps.push(gap);
+            }
+        }
+
+        if (priceGaps.length > allPrices.length * 0.1) {
+            issues.push(
+                `High price gap count: ${priceGaps.length} significant gaps detected`
+            );
+        }
+
+        return {
+            overview: {
+                totalLevels: nodes.length,
+                bidLevels: bidLevels.length,
+                askLevels: askLevels.length,
+                emptyLevels,
+            },
+            priceRanges: {
+                bidPriceRange,
+                askPriceRange,
+                priceGaps,
+            },
+            volumeDistribution: {
+                topBidLevels: bidLevels.slice(0, 10),
+                topAskLevels: askLevels.slice(0, 10),
+            },
+            potentialIssues: issues,
+        };
+    }
+
+    /**
+     * DEBUG: Log detailed book analysis - call this periodically to investigate imbalance
+     */
+    public logDetailedBookAnalysis(): void {
+        const analysis = this.analyzeBookStructure();
+
+        this.logger.info("[OrderBookState] DETAILED BOOK ANALYSIS", {
+            symbol: this.symbol,
+            ...analysis.overview,
+            bidAskLevelRatio: (
+                analysis.overview.bidLevels /
+                Math.max(analysis.overview.askLevels, 1)
+            ).toFixed(2),
+            askBidLevelRatio: (
+                analysis.overview.askLevels /
+                Math.max(analysis.overview.bidLevels, 1)
+            ).toFixed(2),
+            bidPriceRange: `${analysis.priceRanges.bidPriceRange.min} - ${analysis.priceRanges.bidPriceRange.max}`,
+            askPriceRange: `${analysis.priceRanges.askPriceRange.min} - ${analysis.priceRanges.askPriceRange.max}`,
+            priceGapCount: analysis.priceRanges.priceGaps.length,
+            topBidPrices: analysis.volumeDistribution.topBidLevels
+                .slice(0, 5)
+                .map((l) => l.price),
+            topAskPrices: analysis.volumeDistribution.topAskLevels
+                .slice(0, 5)
+                .map((l) => l.price),
+            potentialIssuesCount: analysis.potentialIssues.length,
+            potentialIssues: analysis.potentialIssues,
+            bestBid: this._bestBid,
+            bestAsk: this._bestAsk === Infinity ? "Infinity" : this._bestAsk,
+            currentSpread: this.getSpread(),
+            timestamp: new Date().toISOString(),
+        });
     }
 }
