@@ -102,6 +102,46 @@ export class OrderflowPreprocessor
     ): Promise<void> {
         try {
             if (this.bookState) {
+                // DEBUG: Log incoming depth update details
+                const bids = (update.b as [string, string][]) || [];
+                const asks = (update.a as [string, string][]) || [];
+
+                // Count non-zero bids and asks in the update
+                const nonZeroBids = bids.filter(
+                    ([_, qty]) => parseFloat(qty) > 0
+                ).length;
+                const nonZeroAsks = asks.filter(
+                    ([_, qty]) => parseFloat(qty) > 0
+                ).length;
+                const zeroBids = bids.filter(
+                    ([_, qty]) => parseFloat(qty) === 0
+                ).length;
+                const zeroAsks = asks.filter(
+                    ([_, qty]) => parseFloat(qty) === 0
+                ).length;
+
+                this.logger.debug(
+                    "[OrderflowPreprocessor] DEPTH UPDATE RECEIVED",
+                    {
+                        symbol: this.symbol,
+                        updateId: update.u,
+                        firstUpdateId: update.U,
+                        totalBidUpdates: bids.length,
+                        totalAskUpdates: asks.length,
+                        nonZeroBids,
+                        nonZeroAsks,
+                        zeroBids,
+                        zeroAsks,
+                        bidAskUpdateRatio:
+                            asks.length > 0
+                                ? (bids.length / asks.length).toFixed(2)
+                                : "N/A",
+                        bidSamplePrice: bids.length > 0 ? bids[0][0] : "none",
+                        askSamplePrice: asks.length > 0 ? asks[0][0] : "none",
+                        timestamp: Date.now(),
+                    }
+                );
+
                 await this.bookState.updateDepth(update);
                 this.processedDepthUpdates++;
 
@@ -130,6 +170,29 @@ export class OrderflowPreprocessor
                 });
 
                 const depthMetrics = this.bookState.getDepthMetrics();
+
+                // DEBUG: Log post-update order book metrics
+                this.logger.debug(
+                    "[OrderflowPreprocessor] POST-UPDATE BOOK METRICS",
+                    {
+                        symbol: this.symbol,
+                        totalLevels: depthMetrics.totalLevels,
+                        bidLevels: depthMetrics.bidLevels,
+                        askLevels: depthMetrics.askLevels,
+                        bidAskLevelRatio: (
+                            depthMetrics.bidLevels /
+                            Math.max(depthMetrics.askLevels, 1)
+                        ).toFixed(2),
+                        totalBidVolume: depthMetrics.totalBidVolume.toFixed(4),
+                        totalAskVolume: depthMetrics.totalAskVolume.toFixed(4),
+                        volumeImbalance: depthMetrics.imbalance.toFixed(4),
+                        bestBid: this.bookState.getBestBid(),
+                        bestAsk: this.bookState.getBestAsk(),
+                        spread: this.bookState.getSpread(),
+                        midPrice: this.bookState.getMidPrice(),
+                    }
+                );
+
                 this.emit("orderbook_update", {
                     timestamp: Date.now(),
                     bestBid: this.bookState.getBestBid(),

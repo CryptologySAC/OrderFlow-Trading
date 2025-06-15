@@ -23,6 +23,15 @@ import type {
     SignalQueuedEvent,
 } from "../utils/types.js";
 
+class DetectorStub extends EventEmitter {
+    constructor(private readonly id: string) {
+        super();
+    }
+    public getId(): string {
+        return this.id;
+    }
+}
+
 /**
  * Priority queue wrapper so we can expose size quickly while keeping the
  * FastPriorityQueue internals encapsulated.
@@ -362,7 +371,6 @@ export class SignalCoordinator extends EventEmitter {
                 priority: reg.priority.toString(),
             }
         );
-        // Also track per-type totals for easier stats aggregation
         this.metrics.incrementCounter(
             `signal_coordinator_signals_received_total_${candidate.type}`,
             1
@@ -377,6 +385,7 @@ export class SignalCoordinator extends EventEmitter {
             return;
         }
 
+        // ✅ FIXED: Create job with full detector for in-memory queue
         const job: ProcessingJob = {
             id: ulid(),
             candidate,
@@ -386,14 +395,37 @@ export class SignalCoordinator extends EventEmitter {
             priority: reg.priority,
         };
 
+        // ✅ FIXED: Create serializable job for worker storage
+        const serializableJob: ProcessingJob = {
+            id: job.id,
+            candidate: job.candidate,
+            detector: new DetectorStub(detector.getId()) as unknown as Detector,
+            startTime: job.startTime,
+            retryCount: job.retryCount,
+            priority: job.priority,
+        };
+
         this.queue.push(job);
-        void this.threadManager.callStorage("enqueueJob", job);
+        void this.threadManager.callStorage("enqueueJob", serializableJob);
         this.metrics.setGauge("signal_coordinator_queue_size", this.queue.size);
 
         this.emit("signalQueued", {
             job,
             queueSize: this.queue.size,
         } as SignalQueuedEvent);
+    }
+
+    private createSerializableJob(job: ProcessingJob): ProcessingJob {
+        return {
+            id: job.id,
+            candidate: job.candidate,
+            detector: new DetectorStub(
+                job.detector.getId()
+            ) as unknown as Detector,
+            startTime: job.startTime,
+            retryCount: job.retryCount,
+            priority: job.priority,
+        };
     }
 
     private async processQueue(): Promise<void> {
@@ -623,7 +655,10 @@ export class SignalCoordinator extends EventEmitter {
             setTimeout(
                 () => {
                     this.queue.push(retryJob);
-                    void this.threadManager.callStorage("enqueueJob", retryJob);
+                    void this.threadManager.callStorage(
+                        "enqueueJob",
+                        this.createSerializableJob(retryJob)
+                    );
                 },
                 this.cfg.retryDelayMs * 2 ** job.retryCount
             );
