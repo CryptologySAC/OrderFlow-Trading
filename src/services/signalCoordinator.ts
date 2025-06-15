@@ -500,13 +500,7 @@ export class SignalCoordinator extends EventEmitter {
 
         const { detector, candidate } = job;
         this.logger.debug("processJob: ", { job });
-
-        // Jobs restored from storage may include a minimal stub detector
-        // Replace with the registered detector instance if available
-        const reg = this.detectors.get(detector.getId());
-        const actualDetector = reg ? reg.detector : detector;
-
-        const detectorId = actualDetector.getId();
+        const detectorId = detector.getId();
         const start = Date.now();
 
         try {
@@ -523,7 +517,7 @@ export class SignalCoordinator extends EventEmitter {
             );
 
             const processed = await Promise.race([
-                this.processSignalCandidate(candidate, actualDetector),
+                this.processSignalCandidate(candidate, detector),
                 timeout,
             ]);
 
@@ -565,7 +559,7 @@ export class SignalCoordinator extends EventEmitter {
                     side = data.side;
                 }
 
-                actualDetector.markSignalConfirmed(zone, side);
+                detector.markSignalConfirmed(zone, side);
             }
 
             this.metrics.incrementCounter(
