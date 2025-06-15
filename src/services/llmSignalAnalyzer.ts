@@ -8,7 +8,10 @@ import type { ProcessedSignal } from "../types/signalTypes.js";
  * Secure API key validation schema
  * SECURITY-CRITICAL: Validates credential format without exposure
  */
-const ApiKeySchema = z.string().min(10).regex(/^[a-zA-Z0-9\-_.]+$/, "Invalid API key format");
+const ApiKeySchema = z
+    .string()
+    .min(10)
+    .regex(/^[a-zA-Z0-9\-_.]+$/, "Invalid API key format");
 
 /**
  * Send a processed trading signal to an LLM for additional analysis.
@@ -19,12 +22,12 @@ export async function analyzeSignal(
     logger: ILogger
 ): Promise<string> {
     const keyValidation = ApiKeySchema.safeParse(Config.LLM_API_KEY);
-    
+
     if (!keyValidation.success) {
         // SECURITY: Log error without exposing credential details
         logger.error("LLM credential validation failed", {
             component: "LLMSignalAnalyzer",
-            error: "API key missing or invalid format"
+            error: "API key missing or invalid format",
         });
         throw new Error("LLM_API_KEY not configured or invalid");
     }

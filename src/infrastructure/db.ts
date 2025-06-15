@@ -14,10 +14,10 @@ let isInitializing = false;
 
 /**
  * Get singleton database instance with thread-safe initialization
- * 
+ *
  * PRODUCTION-CRITICAL: This function is called from multiple worker threads
  * and must prevent race conditions that could create duplicate connections
- * 
+ *
  * @param dbPath - Path to SQLite database file
  * @returns Singleton Database instance
  */
@@ -32,17 +32,17 @@ export function getDB(dbPath = "./storage/trades.db"): Database {
             }
             return dbInstance!;
         }
-        
+
         // Set flag to prevent concurrent initialization
         isInitializing = true;
-        
+
         // Initialize database with production settings
         dbInstance = new BetterSqlite3(dbPath);
-        dbInstance.pragma("journal_mode = WAL");     // Write-Ahead Logging for performance
-        dbInstance.pragma("synchronous = NORMAL");   // Balance safety and performance
-        dbInstance.pragma("busy_timeout = 60000");   // Wait up to 60s on lock
-        dbInstance.pragma("foreign_keys = ON");      // Enforce referential integrity
-        
+        dbInstance.pragma("journal_mode = WAL"); // Write-Ahead Logging for performance
+        dbInstance.pragma("synchronous = NORMAL"); // Balance safety and performance
+        dbInstance.pragma("busy_timeout = 60000"); // Wait up to 60s on lock
+        dbInstance.pragma("foreign_keys = ON"); // Enforce referential integrity
+
         // Clear initialization flag
         isInitializing = false;
     }

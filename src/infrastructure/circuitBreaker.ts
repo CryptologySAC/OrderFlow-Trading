@@ -62,7 +62,10 @@ export class CircuitBreaker implements ICircuitBreaker {
             }
             this.logger.warn(
                 "[CircuitBreaker] Error count overflow detected, maintaining circuit state",
-                { originalCount: "MAX_SAFE_INTEGER+", newCount: Number(this.errorCount) }
+                {
+                    originalCount: "MAX_SAFE_INTEGER+",
+                    newCount: Number(this.errorCount),
+                }
             );
         }
 
@@ -78,7 +81,7 @@ export class CircuitBreaker implements ICircuitBreaker {
 
     public recordSuccess(): void {
         this.successCount++;
-        
+
         // Prevent successCount overflow in high-frequency scenarios
         const MAX_BIGINT_SAFE = 9007199254740991n;
         if (this.successCount > MAX_BIGINT_SAFE) {
@@ -121,9 +124,10 @@ export class CircuitBreaker implements ICircuitBreaker {
     } {
         // Safe BigInt to Number conversion with overflow protection
         const MAX_SAFE_INTEGER = 9007199254740991;
-        const errorCountNumber = this.errorCount > MAX_SAFE_INTEGER 
-            ? MAX_SAFE_INTEGER 
-            : Number(this.errorCount);
+        const errorCountNumber =
+            this.errorCount > MAX_SAFE_INTEGER
+                ? MAX_SAFE_INTEGER
+                : Number(this.errorCount);
 
         return {
             errorCount: errorCountNumber,

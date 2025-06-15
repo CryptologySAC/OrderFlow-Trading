@@ -20,7 +20,7 @@ class TestDetector extends BaseDetector {
         [];
     protected detectorType = "test" as const;
     private mockCallback = vi.fn();
-    
+
     constructor() {
         const logger = new WorkerLogger();
         const metrics = new MetricsCollector();
@@ -30,7 +30,7 @@ class TestDetector extends BaseDetector {
             wasSpoofed: vi.fn().mockReturnValue(false),
             trackPassiveChange: vi.fn(),
         } as any;
-        
+
         super(
             "1",
             {
@@ -52,7 +52,7 @@ class TestDetector extends BaseDetector {
             spoof,
             metrics
         );
-        
+
         // Register callback manually since constructor doesn't take it anymore
         this.on("signal", this.mockCallback);
     }

@@ -190,7 +190,7 @@ describe("OrderBook Threading Data Flow", () => {
         expect((tm as any).streamDataHandler).toBeUndefined();
 
         // Mock the logger.warn method
-        const loggerWarnSpy = vi.spyOn((tm as any).logger, 'warn');
+        const loggerWarnSpy = vi.spyOn((tm as any).logger, "warn");
 
         // Simulate depth data without handler
         const streamDataMessage = {

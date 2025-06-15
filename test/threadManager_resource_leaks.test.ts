@@ -302,7 +302,9 @@ describe("ThreadManager Resource Leak Fixes", () => {
         );
 
         // Mock console.error for Binance worker (policy override case)
-        const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleErrorSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
 
         // Simulate unexpected worker exits
         loggerWorker.emit("exit", 1); // Non-zero exit code
@@ -319,12 +321,12 @@ describe("ThreadManager Resource Leak Fixes", () => {
                 worker: "logger",
             })
         );
-        
+
         // Binance worker uses console.error (policy override)
         expect(consoleErrorSpy).toHaveBeenCalledWith(
             "❌ CRITICAL: Binance worker exited with code 1"
         );
-        
+
         // Communication worker uses logger.error
         expect(errorSpy).toHaveBeenCalledWith(
             "Communication worker exited unexpectedly",
@@ -334,7 +336,7 @@ describe("ThreadManager Resource Leak Fixes", () => {
                 worker: "communication",
             })
         );
-        
+
         // Storage worker uses logger.error
         expect(errorSpy).toHaveBeenCalledWith(
             "Storage worker exited unexpectedly",

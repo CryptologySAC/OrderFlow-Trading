@@ -12,7 +12,11 @@ describe("services/llmSignalAnalyzer", () => {
     const env = process.env;
     beforeEach(async () => {
         vi.resetModules();
-        process.env = { ...env, LLM_API_KEY: "test_api_key_1234567890", LLM_MODEL: "model" };
+        process.env = {
+            ...env,
+            LLM_API_KEY: "test_api_key_1234567890",
+            LLM_MODEL: "model",
+        };
         ({ create: openaiCreate } = await import("openai"));
         (openaiCreate as any).mockClear();
     });
@@ -62,7 +66,7 @@ describe("services/llmSignalAnalyzer", () => {
             "LLM credential validation failed",
             expect.objectContaining({
                 component: "LLMSignalAnalyzer",
-                error: "API key missing or invalid format"
+                error: "API key missing or invalid format",
             })
         );
     });
