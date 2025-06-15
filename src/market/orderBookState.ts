@@ -675,24 +675,20 @@ export class OrderBookState implements IOrderBookState {
         this.book.insert(price, level);
     }
 
-    public purgeCrossedLevelsForTest(): void {
-        this.purgeCrossedLevels();
-    }
-
     private purgeCrossedLevels(): void {
         const nodes = this.book.getAllNodes();
 
         for (const n of nodes) {
-            // 1️⃣ asks that sit below bestBid
-            if (n.level.ask > 0 && n.price < this._bestBid) {
+            // 1️⃣ asks that sit at or below bestBid
+            if (n.level.ask > 0 && n.price <= this._bestBid) {
                 if (n.level.bid === 0) this.book.delete(n.price);
                 else {
                     n.level.ask = 0;
                     this.book.insert(n.price, n.level);
                 }
             }
-            // 2️⃣ bids that sit above bestAsk
-            if (n.level.bid > 0 && n.price > this._bestAsk) {
+            // 2️⃣ bids that sit at or above bestAsk
+            if (n.level.bid > 0 && n.price >= this._bestAsk) {
                 if (n.level.ask === 0) this.book.delete(n.price);
                 else {
                     n.level.bid = 0;
