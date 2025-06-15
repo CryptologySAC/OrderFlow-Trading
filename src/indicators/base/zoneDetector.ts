@@ -60,5 +60,16 @@ export abstract class ZoneDetector extends Detector {
         this.analyze(event);
     }
 
+    public getStatus(): string {
+        return "unknown";
+    }
+
+    public markSignalConfirmed(zone: number, side: "buy" | "sell"): void {
+        // Zone detectors don't use cooldown tracking in the same way as BaseDetector
+        // This is a no-op for zone detectors
+        void zone;
+        void side;
+    }
+
     public abstract analyze(trade: EnrichedTradeEvent): ZoneAnalysisResult;
 }

@@ -297,7 +297,7 @@ export class OrderFlowDashboard {
                 { id: "ltcusdt-accumulation-zone-main" }
             );
         this.signalCoordinator.registerDetector(
-            this.supportResistanceDetector,
+            this.accumulationZoneDetector,
             ["accumulation"],
             40,
             true
@@ -311,7 +311,7 @@ export class OrderFlowDashboard {
                 { id: "ltcusdt-distribution-zone-main" }
             );
         this.signalCoordinator.registerDetector(
-            this.supportResistanceDetector,
+            this.distributionZoneDetector,
             ["distribution"],
             40,
             true

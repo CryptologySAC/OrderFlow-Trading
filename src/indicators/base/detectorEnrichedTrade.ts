@@ -34,6 +34,21 @@ export abstract class Detector extends EventEmitter {
      */
     public abstract onEnrichedTrade(event: EnrichedTradeEvent): void;
 
+    /**
+     * Get detector status.
+     * Must be implemented by subclasses.
+     */
+    public abstract getStatus(): string;
+
+    /**
+     * Mark a signal as confirmed to start cooldown.
+     * Must be implemented by subclasses.
+     */
+    public abstract markSignalConfirmed(
+        zone: number,
+        side: "buy" | "sell"
+    ): void;
+
     protected handleError(
         error: Error,
         context: string,

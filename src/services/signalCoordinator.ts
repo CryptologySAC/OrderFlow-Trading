@@ -7,7 +7,7 @@ import {
     ProcessedSignal,
     SignalType,
 } from "../types/signalTypes.js";
-import { BaseDetector } from "../indicators/base/baseDetector.js";
+import { Detector } from "../indicators/base/detectorEnrichedTrade.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import { ProductionUtils } from "../utils/productionUtils.js";
@@ -86,7 +86,7 @@ export interface SignalCoordinatorConfig {
 }
 
 interface DetectorRegistration {
-    detector: BaseDetector;
+    detector: Detector;
     signalTypes: SignalType[];
     priority: number;
     enabled: boolean;
@@ -161,7 +161,7 @@ export class SignalCoordinator extends EventEmitter {
     /* ---------------------------------------------------------------------- */
 
     public registerDetector(
-        detector: BaseDetector,
+        detector: Detector,
         signalTypes: SignalType[],
         priority = 5,
         enabled = true
@@ -347,7 +347,7 @@ export class SignalCoordinator extends EventEmitter {
 
     private onSignalCandidate(
         candidate: SignalCandidate,
-        detector: BaseDetector
+        detector: Detector
     ): void {
         const reg = this.detectors.get(detector.getId());
         if (!reg || !reg.enabled) return;
@@ -571,7 +571,7 @@ export class SignalCoordinator extends EventEmitter {
 
     private async processSignalCandidate(
         candidate: SignalCandidate,
-        detector: BaseDetector
+        detector: Detector
     ): Promise<ProcessedSignal> {
         await ProductionUtils.sleep(10); // TODO: real logic
         return {
@@ -649,7 +649,7 @@ export class SignalCoordinator extends EventEmitter {
         }
     }
 
-    private handleDetectorError(err: Error, detector: BaseDetector): void {
+    private handleDetectorError(err: Error, detector: Detector): void {
         const detectorId = detector.getId();
         this.logger.error("Detector error", { detectorId, err: err.message });
         this.metrics.incrementCounter("signal_coordinator_errors_total", 1, {
