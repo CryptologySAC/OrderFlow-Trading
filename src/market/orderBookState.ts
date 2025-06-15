@@ -566,13 +566,6 @@ export class OrderBookState implements IOrderBookState {
         needsBestRecalc: boolean
     ): boolean {
         const now = Date.now();
-        let bidLevelsAdded = 0;
-        let bidLevelsRemoved = 0;
-        let bidVolumeAdded = 0;
-        let bidVolumeRemoved = 0;
-
-        // DEBUG: Count initial bid levels before processing
-        const initialMetrics = this.getDepthMetrics();
 
         for (const [priceStr, qtyStr] of bids) {
             const price = this.normalizePrice(parseFloat(priceStr));
@@ -581,8 +574,6 @@ export class OrderBookState implements IOrderBookState {
             if (qty === 0) {
                 const level = this.book.get(price);
                 if (level && level.bid > 0) {
-                    bidVolumeRemoved += level.bid;
-                    bidLevelsRemoved++;
                     level.bid = 0;
                     level.timestamp = now;
 
@@ -609,7 +600,7 @@ export class OrderBookState implements IOrderBookState {
 
                 // Track if this is a new bid level
                 if (previousBid === 0 && qty > 0) {
-                    bidLevelsAdded++;
+                    needsBestRecalc = true;
                 }
 
                 level.bid = qty;
@@ -619,7 +610,6 @@ export class OrderBookState implements IOrderBookState {
                 const delta = qty - previousBid;
                 if (delta > 0) {
                     level.addedBid = (level.addedBid ?? 0) + delta; // accumulation
-                    bidVolumeAdded += delta;
                 }
 
                 // Update best bid only if better
@@ -627,29 +617,6 @@ export class OrderBookState implements IOrderBookState {
                     this._bestBid = price;
                 }
             }
-        }
-
-        // DEBUG: Log bid processing details
-        if (bids.length > 0) {
-            const finalMetrics = this.getDepthMetrics();
-            this.logger.debug("[OrderBookState] BID PROCESSING DEBUG", {
-                symbol: this.symbol,
-                bidUpdatesCount: bids.length,
-                bidLevelsAdded,
-                bidLevelsRemoved,
-                bidVolumeAdded: bidVolumeAdded.toFixed(4),
-                bidVolumeRemoved: bidVolumeRemoved.toFixed(4),
-                beforeBidLevels: initialMetrics.bidLevels,
-                afterBidLevels: finalMetrics.bidLevels,
-                beforeAskLevels: initialMetrics.askLevels,
-                afterAskLevels: finalMetrics.askLevels,
-                bidAskRatio: (
-                    finalMetrics.bidLevels / Math.max(finalMetrics.askLevels, 1)
-                ).toFixed(2),
-                bestBid: this._bestBid,
-                bestAsk:
-                    this._bestAsk === Infinity ? "Infinity" : this._bestAsk,
-            });
         }
 
         return needsBestRecalc;
@@ -660,13 +627,6 @@ export class OrderBookState implements IOrderBookState {
         needsBestRecalc: boolean
     ): boolean {
         const now = Date.now();
-        let askLevelsAdded = 0;
-        let askLevelsRemoved = 0;
-        let askVolumeAdded = 0;
-        let askVolumeRemoved = 0;
-
-        // DEBUG: Count initial ask levels before processing
-        const initialMetrics = this.getDepthMetrics();
 
         for (const [priceStr, qtyStr] of asks) {
             const price = this.normalizePrice(parseFloat(priceStr));
@@ -675,8 +635,6 @@ export class OrderBookState implements IOrderBookState {
             if (qty === 0) {
                 const level = this.book.get(price);
                 if (level && level.ask > 0) {
-                    askVolumeRemoved += level.ask;
-                    askLevelsRemoved++;
                     level.ask = 0;
                     level.timestamp = now;
 
@@ -703,7 +661,7 @@ export class OrderBookState implements IOrderBookState {
 
                 // Track if this is a new ask level
                 if (previousAsk === 0 && qty > 0) {
-                    askLevelsAdded++;
+                    needsBestRecalc = true;
                 }
 
                 level.ask = qty;
@@ -713,7 +671,6 @@ export class OrderBookState implements IOrderBookState {
                 const delta = qty - previousAsk;
                 if (delta > 0) {
                     level.addedAsk = (level.addedAsk ?? 0) + delta; // accumulation
-                    askVolumeAdded += delta;
                 }
 
                 // Update best ask only if better
@@ -721,29 +678,6 @@ export class OrderBookState implements IOrderBookState {
                     this._bestAsk = price;
                 }
             }
-        }
-
-        // DEBUG: Log ask processing details
-        if (asks.length > 0) {
-            const finalMetrics = this.getDepthMetrics();
-            this.logger.debug("[OrderBookState] ASK PROCESSING DEBUG", {
-                symbol: this.symbol,
-                askUpdatesCount: asks.length,
-                askLevelsAdded,
-                askLevelsRemoved,
-                askVolumeAdded: askVolumeAdded.toFixed(4),
-                askVolumeRemoved: askVolumeRemoved.toFixed(4),
-                beforeBidLevels: initialMetrics.bidLevels,
-                afterBidLevels: finalMetrics.bidLevels,
-                beforeAskLevels: initialMetrics.askLevels,
-                afterAskLevels: finalMetrics.askLevels,
-                askBidRatio: (
-                    finalMetrics.askLevels / Math.max(finalMetrics.bidLevels, 1)
-                ).toFixed(2),
-                bestBid: this._bestBid,
-                bestAsk:
-                    this._bestAsk === Infinity ? "Infinity" : this._bestAsk,
-            });
         }
 
         return needsBestRecalc;
