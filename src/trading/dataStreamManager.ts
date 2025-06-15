@@ -384,54 +384,6 @@ export class DataStreamManager extends EventEmitter {
 
         const timestamp = Date.now();
 
-        // DEBUG: Track depth message characteristics for imbalance investigation
-        const bids = (data.b as [string, string][]) || [];
-        const asks = (data.a as [string, string][]) || [];
-
-        // Count non-zero vs zero quantity updates
-        const nonZeroBids = bids.filter(
-            ([_, qty]) => parseFloat(qty) > 0
-        ).length;
-        const nonZeroAsks = asks.filter(
-            ([_, qty]) => parseFloat(qty) > 0
-        ).length;
-        const zeroBids = bids.filter(
-            ([_, qty]) => parseFloat(qty) === 0
-        ).length;
-        const zeroAsks = asks.filter(
-            ([_, qty]) => parseFloat(qty) === 0
-        ).length;
-
-        // Log every 50th depth message to avoid spam but maintain visibility
-        if (this.streamHealth.depthMessageCount % 50 === 0) {
-            this.logger.debug(
-                "[DataStreamManager] DEPTH MESSAGE SOURCE DEBUG",
-                {
-                    symbol: this.config.symbol,
-                    messageCount: this.streamHealth.depthMessageCount,
-                    updateId: data.u,
-                    firstUpdateId: data.U,
-                    totalBidUpdates: bids.length,
-                    totalAskUpdates: asks.length,
-                    nonZeroBids,
-                    nonZeroAsks,
-                    zeroBids,
-                    zeroAsks,
-                    bidUpdateRatio:
-                        asks.length > 0
-                            ? (bids.length / asks.length).toFixed(2)
-                            : "N/A",
-                    upstreamBidAskRatio:
-                        nonZeroAsks > 0
-                            ? (nonZeroBids / nonZeroAsks).toFixed(2)
-                            : "N/A",
-                    connectionState: this.connectionState,
-                    streamHealthy: this.streamHealth.isHealthy,
-                    timestamp,
-                }
-            );
-        }
-
         // Update stream health
         this.streamHealth.lastDepthMessage = timestamp;
         this.streamHealth.depthMessageCount++;

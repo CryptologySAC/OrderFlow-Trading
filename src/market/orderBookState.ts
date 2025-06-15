@@ -198,47 +198,6 @@ export class OrderBookState implements IOrderBookState {
         const release = await this.quoteMutex.acquire();
 
         try {
-            // DEBUG: Log update details before processing
-            const preUpdateMetrics = this.getDepthMetrics();
-            
-            // Count update types for deeper analysis
-            const bidUpdates = {
-                additions: bids.filter(([_, qty]) => parseFloat(qty) > 0).length,
-                removals: bids.filter(([_, qty]) => parseFloat(qty) === 0).length,
-                totalVolume: bids.filter(([_, qty]) => parseFloat(qty) > 0).reduce((sum, [_, qty]) => sum + parseFloat(qty), 0)
-            };
-            const askUpdates = {
-                additions: asks.filter(([_, qty]) => parseFloat(qty) > 0).length,
-                removals: asks.filter(([_, qty]) => parseFloat(qty) === 0).length,
-                totalVolume: asks.filter(([_, qty]) => parseFloat(qty) > 0).reduce((sum, [_, qty]) => sum + parseFloat(qty), 0)
-            };
-
-            this.logger.debug("[OrderBookState] ATOMIC UPDATE START", {
-                symbol: this.symbol,
-                updateStats: {
-                    bidsCount: bids.length,
-                    asksCount: asks.length,
-                    bidUpdates,
-                    askUpdates,
-                    updateAsymmetry: {
-                        countRatio: asks.length > 0 ? (bids.length / asks.length).toFixed(2) : "N/A",
-                        additionRatio: askUpdates.additions > 0 ? (bidUpdates.additions / askUpdates.additions).toFixed(2) : "N/A",
-                        removalRatio: askUpdates.removals > 0 ? (bidUpdates.removals / askUpdates.removals).toFixed(2) : "N/A",
-                        volumeRatio: askUpdates.totalVolume > 0 ? (bidUpdates.totalVolume / askUpdates.totalVolume).toFixed(2) : "N/A"
-                    }
-                },
-                preState: {
-                    bidLevels: preUpdateMetrics.bidLevels,
-                    askLevels: preUpdateMetrics.askLevels,
-                    bidAskRatio: (
-                        preUpdateMetrics.bidLevels /
-                        Math.max(preUpdateMetrics.askLevels, 1)
-                    ).toFixed(2),
-                    imbalance: preUpdateMetrics.imbalance.toFixed(4)
-                },
-                timestamp: Date.now(),
-            });
-
             // Track if best quotes might have changed
             let needsBestRecalc = false;
 
@@ -253,29 +212,6 @@ export class OrderBookState implements IOrderBookState {
             if (needsBestRecalc) {
                 this.recalculateBestQuotes();
             }
-
-            // DEBUG: Log final update metrics
-            const postUpdateMetrics = this.getDepthMetrics();
-
-            this.logger.debug("[OrderBookState] ATOMIC UPDATE COMPLETE", {
-                symbol: this.symbol,
-                postBidLevels: postUpdateMetrics.bidLevels,
-                postAskLevels: postUpdateMetrics.askLevels,
-                postBidAskRatio: (
-                    postUpdateMetrics.bidLevels /
-                    Math.max(postUpdateMetrics.askLevels, 1)
-                ).toFixed(2),
-                postImbalance: postUpdateMetrics.imbalance.toFixed(4),
-                bidLevelsDelta:
-                    postUpdateMetrics.bidLevels - preUpdateMetrics.bidLevels,
-                askLevelsDelta:
-                    postUpdateMetrics.askLevels - preUpdateMetrics.askLevels,
-                finalBestBid: this._bestBid,
-                finalBestAsk:
-                    this._bestAsk === Infinity ? "Infinity" : this._bestAsk,
-                finalSpread: this.getSpread(),
-                needsBestRecalc,
-            });
 
             /* ── Final consistency validation ───────────── */
             if (this._bestBid > this._bestAsk && this._bestAsk !== Infinity) {
@@ -456,9 +392,6 @@ export class OrderBookState implements IOrderBookState {
         this.maintenanceCycleCount = (this.maintenanceCycleCount || 0) + 1;
 
         try {
-            // Get metrics before maintenance for comparison
-            const beforeMetrics = this.getDepthMetrics();
-
             // Prune distant levels
             const beforeSize = this.book.size();
             this.pruneDistantLevels();
@@ -1432,7 +1365,6 @@ export class OrderBookState implements IOrderBookState {
         potentialIssues: string[];
     } {
         const nodes = this.book.getAllNodes();
-        const metrics = this.getDepthMetrics();
         const issues: string[] = [];
 
         // Separate bid and ask levels
