@@ -1,7 +1,7 @@
 // src/core/config.ts
 import dotenv from "dotenv";
 dotenv.config();
-import { readFileSync, watchFile } from "fs";
+import { readFileSync } from "fs";
 import { resolve } from "path";
 import { AnomalyDetectorOptions } from "../services/anomalyDetector.js";
 import { SpoofingDetectorConfig } from "../services/spoofingDetector.js";
@@ -45,38 +45,6 @@ let ZONE_CFG: ZoneDetectorSymbolConfig =
     cfg.zoneDetectors?.[CONFIG_SYMBOL] ?? ({} as ZoneDetectorSymbolConfig);
 let ENHANCED_ZONE_CFG: EnhancedZoneFormationConfig =
     cfg.enhancedZoneFormation ?? getDefaultEnhancedZoneFormationConfig();
-
-function reloadConfig(): void {
-    try {
-        cfg = JSON.parse(
-            readFileSync(resolve(process.cwd(), "config.json"), "utf-8")
-        ) as ConfigType;
-        ENV_SYMBOL = process.env.SYMBOL?.toUpperCase();
-        CONFIG_SYMBOL = (ENV_SYMBOL ?? cfg.symbol) as AllowedSymbols;
-        SYMBOL_CFG =
-            cfg.symbols[CONFIG_SYMBOL as keyof typeof cfg.symbols] ??
-            (cfg.symbols as Record<string, unknown>)[cfg.symbol];
-        DATASTREAM_CFG = SYMBOL_CFG?.dataStream ?? {};
-        ZONE_CFG =
-            cfg.zoneDetectors?.[CONFIG_SYMBOL] ??
-            ({} as ZoneDetectorSymbolConfig);
-        ENHANCED_ZONE_CFG =
-            cfg.enhancedZoneFormation ??
-            getDefaultEnhancedZoneFormationConfig();
-
-        // POLICY OVERRIDE: Using console.log for configuration reload notification
-        // REASON: Logger infrastructure may not be initialized during config hot-reload, essential for debugging
-        console.log("[Config] configuration reloaded");
-    } catch (error) {
-        // POLICY OVERRIDE: Using console.error for configuration reload failure
-        // REASON: Logger infrastructure may not be initialized during config hot-reload, critical failure requires immediate visibility
-        console.error("[Config] failed to reload configuration", error);
-    }
-}
-
-watchFile(resolve(process.cwd(), "config.json"), { interval: 1000 }, () => {
-    reloadConfig();
-});
 
 /**
  * Default enhanced zone formation configuration
