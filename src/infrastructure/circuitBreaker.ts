@@ -28,17 +28,16 @@ export class CircuitBreaker implements ICircuitBreaker {
     public canExecute(): boolean {
         const now = Date.now();
 
-        // Reset error count if enough time has passed
+        // Reset error count if enough time has passed (1 minute window)
         if (now - this.lastErrorTime > 60000) {
-            // 1 minute window
             this.errorCount = 0n;
         }
 
-        // Check if circuit breaker should be reset
+        // Check if circuit breaker should transition from OPEN to HALF_OPEN
         if (this.isOpen && now - this.lastTripTime > this.timeoutMs) {
             this.isOpen = false;
             this.state = CircuitState.HALF_OPEN;
-            this.errorCount = 0n;
+            this.errorCount = 0n; // Safe reset during state transition
             this.logger.info(
                 "[CircuitBreaker] Circuit breaker reset to half-open"
             );
@@ -52,9 +51,19 @@ export class CircuitBreaker implements ICircuitBreaker {
         this.errorCount++;
         this.lastErrorTime = now;
 
-        // Reset if approaching safe limits for serialization
-        if (this.errorCount > 9007199254740991n) {
-            this.errorCount = 0n;
+        // Proper BigInt overflow management for high-frequency trading
+        const MAX_BIGINT_SAFE = 9007199254740991n;
+        if (this.errorCount > MAX_BIGINT_SAFE) {
+            // Maintain circuit state integrity - don't reset to 0 if already tripped
+            if (this.isOpen) {
+                this.errorCount = BigInt(this.threshold) + 1n; // Keep above threshold
+            } else {
+                this.errorCount = BigInt(this.threshold); // Set to threshold to trigger
+            }
+            this.logger.warn(
+                "[CircuitBreaker] Error count overflow detected, maintaining circuit state",
+                { originalCount: "MAX_SAFE_INTEGER+", newCount: Number(this.errorCount) }
+            );
         }
 
         if (this.errorCount >= BigInt(this.threshold) && !this.isOpen) {
@@ -69,6 +78,13 @@ export class CircuitBreaker implements ICircuitBreaker {
 
     public recordSuccess(): void {
         this.successCount++;
+        
+        // Prevent successCount overflow in high-frequency scenarios
+        const MAX_BIGINT_SAFE = 9007199254740991n;
+        if (this.successCount > MAX_BIGINT_SAFE) {
+            this.successCount = 1n; // Reset to 1 to maintain success tracking
+        }
+
         if (this.state === CircuitState.HALF_OPEN) {
             this.state = CircuitState.CLOSED;
             this.isOpen = false;
@@ -103,8 +119,14 @@ export class CircuitBreaker implements ICircuitBreaker {
         isOpen: boolean;
         lastTripTime: number;
     } {
+        // Safe BigInt to Number conversion with overflow protection
+        const MAX_SAFE_INTEGER = 9007199254740991;
+        const errorCountNumber = this.errorCount > MAX_SAFE_INTEGER 
+            ? MAX_SAFE_INTEGER 
+            : Number(this.errorCount);
+
         return {
-            errorCount: Number(this.errorCount),
+            errorCount: errorCountNumber,
             isOpen: this.isOpen,
             lastTripTime: this.lastTripTime,
         };
