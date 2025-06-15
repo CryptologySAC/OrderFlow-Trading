@@ -211,14 +211,14 @@ export class OrderBookProcessor implements IOrderBookProcessor {
     private calculateBinConfig(midPrice: number): BinConfig {
         const binIncrement = this.tickSize * this.binSize;
 
-        // Align midPrice to bin boundary first
-        const alignedMidPrice =
-            Math.round(midPrice / binIncrement) * binIncrement;
+        // Calculate raw price boundaries
+        const halfRange = this.numLevels * binIncrement;
+        const rawMinPrice = midPrice - halfRange;
+        const rawMaxPrice = midPrice + halfRange;
 
-        // numLevels per side: create exactly numLevels bins below midPrice and numLevels above
-        // Start from first bin below midPrice and first bin above midPrice
-        const minPrice = alignedMidPrice - this.numLevels * binIncrement;
-        const maxPrice = alignedMidPrice + this.numLevels * binIncrement;
+        // Align to bin boundaries
+        const minPrice = Math.floor(rawMinPrice / binIncrement) * binIncrement;
+        const maxPrice = Math.ceil(rawMaxPrice / binIncrement) * binIncrement;
 
         return {
             minPrice: this.roundToTick(minPrice),
@@ -284,6 +284,7 @@ export class OrderBookProcessor implements IOrderBookProcessor {
         }
 
         // Keep all bins to maintain balanced orderbook display
+        // Don't filter empty bins - this ensures consistent bid/ask level counts
         return bins;
     }
 
