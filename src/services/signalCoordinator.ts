@@ -33,6 +33,22 @@ class DetectorStub extends EventEmitter {
     }
 }
 
+type DetectorLike = Detector | { id?: unknown; detectorId?: unknown };
+
+function extractDetectorId(detector: DetectorLike): string {
+    if (typeof (detector as Detector).getId === "function") {
+        return (detector as Detector).getId();
+    }
+    const det = detector as { id?: unknown; detectorId?: unknown };
+    if (typeof det.id === "string") {
+        return det.id;
+    }
+    if (typeof det.detectorId === "string") {
+        return det.detectorId;
+    }
+    throw new Error("Invalid detector object");
+}
+
 /**
  * Priority queue wrapper so we can expose size quickly while keeping the
  * FastPriorityQueue internals encapsulated.
@@ -500,7 +516,21 @@ export class SignalCoordinator extends EventEmitter {
 
         const { detector, candidate } = job;
         this.logger.debug("processJob: ", { job });
-        const detectorId = detector.getId();
+
+        // Jobs restored from storage may arrive without detector methods
+        const detectorId = extractDetectorId(detector);
+        const reg = this.detectors.get(detectorId);
+        if (!reg) {
+            this.logger.warn("Skipping job for unregistered detector", {
+                detectorId,
+                jobId: job.id,
+            });
+            await this.threadManager.callStorage("markJobCompleted", job.id);
+            this.active.delete(job.id);
+            return;
+        }
+        const actualDetector = reg.detector;
+
         const start = Date.now();
 
         try {
@@ -517,7 +547,7 @@ export class SignalCoordinator extends EventEmitter {
             );
 
             const processed = await Promise.race([
-                this.processSignalCandidate(candidate, detector),
+                this.processSignalCandidate(candidate, actualDetector),
                 timeout,
             ]);
 
@@ -559,7 +589,7 @@ export class SignalCoordinator extends EventEmitter {
                     side = data.side;
                 }
 
-                detector.markSignalConfirmed(zone, side);
+                actualDetector.markSignalConfirmed(zone, side);
             }
 
             this.metrics.incrementCounter(
@@ -629,7 +659,7 @@ export class SignalCoordinator extends EventEmitter {
 
     private handleProcessingError(job: ProcessingJob, err: Error): void {
         const { detector, candidate } = job;
-        const detectorId = detector.getId();
+        const detectorId = extractDetectorId(detector);
 
         if (this.signalLogger.logProcessingError) {
             this.signalLogger.logProcessingError(candidate, err, {
