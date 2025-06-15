@@ -8,6 +8,11 @@ import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterf
 import { WebSocketError } from "../core/errors.js";
 import type { WebSocketMessage } from "../utils/interfaces.js";
 import { ILogger } from "../infrastructure/loggerInterface.js";
+import {
+    ValidWebSocketRequestSchema,
+    WebSocketRequestSchema,
+    type ValidWebSocketRequest,
+} from "../multithreading/shared/messageSchemas.js";
 
 export interface ExtendedWebSocket extends WebSocket {
     clientId?: string;
@@ -124,17 +129,89 @@ export class WebSocketManager {
                 ws.clientId || "unknown",
                 correlationId
             );
-            const parsed: unknown = JSON.parse(raw);
+            // Security: Safe JSON parsing with size and depth limits
+            let parsed: unknown;
+            try {
+                // Basic protection against JSON bombs
+                if (raw.length > 100000) {
+                    // 100KB JSON limit
+                    throw new Error("JSON too large");
+                }
 
-            if (!this.isValidWSRequest(parsed)) {
+                parsed = JSON.parse(raw);
+
+                // Security: Check object depth to prevent stack overflow
+                const checkDepth = (obj: unknown, depth = 0): void => {
+                    if (depth > 10) {
+                        // Max 10 levels deep
+                        throw new Error("JSON too deeply nested");
+                    }
+                    if (obj && typeof obj === "object" && obj !== null) {
+                        if (Array.isArray(obj)) {
+                            obj.forEach((value) =>
+                                checkDepth(value, depth + 1)
+                            );
+                        } else {
+                            Object.values(obj).forEach((value) =>
+                                checkDepth(value, depth + 1)
+                            );
+                        }
+                    }
+                };
+
+                checkDepth(parsed);
+
+                // Security: Check for dangerous object properties (own properties only)
+                if (parsed && typeof parsed === "object" && parsed !== null) {
+                    const dangerousProps = [
+                        "__proto__",
+                        "constructor",
+                        "prototype",
+                    ];
+                    for (const prop of dangerousProps) {
+                        if (
+                            Object.prototype.hasOwnProperty.call(parsed, prop)
+                        ) {
+                            throw new Error(
+                                "Dangerous object property detected"
+                            );
+                        }
+                    }
+                }
+            } catch (jsonError) {
+                this.metricsCollector.incrementCounter(
+                    "websocket_json_parse_failures_total",
+                    1,
+                    { client_id: ws.clientId || "unknown" }
+                );
+
                 throw new WebSocketError(
-                    "Invalid message shape",
+                    `Invalid JSON: ${jsonError instanceof Error ? jsonError.message : "Parse error"}`,
                     ws.clientId || "unknown",
                     correlationId
                 );
             }
 
-            const { type, data } = parsed;
+            // Comprehensive Zod validation with security checks
+            const validation = this.validateWSRequest(parsed);
+            if (!validation.isValid) {
+                this.metricsCollector.incrementCounter(
+                    "websocket_validation_failures_total",
+                    1,
+                    {
+                        client_id: ws.clientId || "unknown",
+                        error_type: "validation_failed",
+                    }
+                );
+
+                throw new WebSocketError(
+                    validation.error || "Invalid message structure",
+                    ws.clientId || "unknown",
+                    correlationId
+                );
+            }
+
+            const { type, data } = validation.data!;
             const handler = this.wsHandlers[type];
 
             if (!handler) {
@@ -181,34 +258,116 @@ export class WebSocketManager {
     }
 
     /**
-     * Parse raw WebSocket message
+     * Parse raw WebSocket message with security checks
      */
     private parseMessage(
         message: RawData,
         clientId: string,
         correlationId: string
     ): string {
-        if (typeof message === "string") return message;
-        if (message instanceof Buffer) return message.toString();
-        throw new WebSocketError(
-            "Unexpected message format",
-            clientId,
-            correlationId
-        );
+        let messageStr: string;
+
+        if (typeof message === "string") {
+            messageStr = message;
+        } else if (Buffer.isBuffer(message)) {
+            // Security: Validate buffer size to prevent memory exhaustion
+            if (message.length > 1048576) {
+                // 1MB limit
+                throw new WebSocketError(
+                    "Message too large",
+                    clientId,
+                    correlationId
+                );
+            }
+            messageStr = message.toString("utf8");
+        } else {
+            throw new WebSocketError(
+                "Unexpected message format",
+                clientId,
+                correlationId
+            );
+        }
+
+        // Security: Validate string length and content
+        if (messageStr.length > 1048576) {
+            // 1MB limit
+            throw new WebSocketError(
+                "Message too large",
+                clientId,
+                correlationId
+            );
+        }
+
+        // Security: Basic check for potentially malicious patterns
+        if (messageStr.includes("\0") || messageStr.includes("\ufeff")) {
+            throw new WebSocketError(
+                "Message contains invalid characters",
+                clientId,
+                correlationId
+            );
+        }
+
+        return messageStr;
     }
 
     /**
-     * Validate WebSocket request structure
+     * Validate WebSocket request structure using Zod schemas
      */
-    private isValidWSRequest(
-        obj: unknown
-    ): obj is { type: string; data?: unknown } {
-        return (
-            typeof obj === "object" &&
-            obj !== null &&
-            "type" in obj &&
-            typeof (obj as { type: unknown }).type === "string"
-        );
+    private validateWSRequest(obj: unknown): {
+        isValid: boolean;
+        data?: ValidWebSocketRequest;
+        error?: string;
+    } {
+        // First try strict validation against known message types
+        const strictResult = ValidWebSocketRequestSchema.safeParse(obj);
+        if (strictResult.success) {
+            return { isValid: true, data: strictResult.data };
+        }
+
+        // Fallback to basic structure validation for extensibility
+        const basicResult = WebSocketRequestSchema.safeParse(obj);
+        if (basicResult.success) {
+            // Additional security checks for unknown message types
+            const msgType = basicResult.data.type;
+
+            // Block potentially dangerous message types
+            const dangerousTypes = [
+                "eval",
+                "exec",
+                "script",
+                "function",
+                "__proto__",
+                "constructor",
+            ];
+            if (dangerousTypes.includes(msgType.toLowerCase())) {
+                return {
+                    isValid: false,
+                    error: `Blocked dangerous message type: ${msgType}`,
+                };
+            }
+
+            // Warn about unknown message types for monitoring
+            this.logger.warn("Unknown WebSocket message type received", {
+                type: msgType,
+                component: "WebSocketManager",
+                security: "unknown_message_type",
+            });
+
+            return {
+                isValid: true,
+                data: basicResult.data as ValidWebSocketRequest,
+            };
+        }
+
+        // Return detailed validation error
+        const errorDetails = strictResult.error.issues
+            .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+            .join(", ");
+
+        return {
+            isValid: false,
+            error: `Invalid message structure: ${errorDetails}`,
+        };
     }
 
     /**
@@ -239,7 +398,9 @@ export class WebSocketManager {
             try {
                 ws.close(1001, "Server shutting down");
             } catch (error) {
-                this.logger.error("Error closing WebSocket connection", { error });
+                this.logger.error("Error closing WebSocket connection", {
+                    error,
+                });
             }
         });
 

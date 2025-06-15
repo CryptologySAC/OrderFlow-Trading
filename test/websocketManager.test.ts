@@ -66,13 +66,13 @@ describe("WebSocketManager", () => {
 
     it("processes valid request", () => {
         const handler = vi.fn();
-        const { server, limiter } = createManager({ test: handler });
+        const { server, limiter } = createManager({ ping: handler });
         const socket = new (ws as any).WebSocket();
         server.clients.add(socket);
         server.emit("connection", socket);
         socket.emit(
             "message",
-            JSON.stringify({ type: "test", data: { a: 1 } })
+            JSON.stringify({ type: "ping", data: { a: 1 } })
         );
         expect(socket.send).not.toHaveBeenCalled();
     });
@@ -128,7 +128,7 @@ describe("WebSocketManager", () => {
         server.emit("connection", socket);
         socket.emit("message", JSON.stringify({ bad: true }));
         const payload = JSON.parse(socket.send.mock.calls[0][0]);
-        expect(payload.message).toBe("Invalid message shape");
+        expect(payload.message).toContain("Invalid message structure");
     });
 
     it("handles unknown request types", () => {
@@ -143,14 +143,14 @@ describe("WebSocketManager", () => {
 
     it("reports handler errors", async () => {
         const handler = vi.fn().mockRejectedValue(new Error("fail"));
-        const { server, logger } = createManager({ bad: handler });
+        const { server, logger } = createManager({ ping: handler });
         const socket = new (ws as any).WebSocket();
         server.clients.add(socket);
         server.emit("connection", socket);
-        socket.emit("message", JSON.stringify({ type: "bad" }));
+        socket.emit("message", JSON.stringify({ type: "ping" }));
         await Promise.resolve();
         expect(logger.error).toHaveBeenCalledWith(
-            "Handler error for bad",
+            "Handler error for ping",
             { error: expect.any(Error) },
             expect.any(String)
         );
@@ -182,6 +182,28 @@ describe("WebSocketManager", () => {
         expect(logger.error).toHaveBeenCalledWith("Broadcast error", {
             error: expect.any(Error),
         });
+    });
+
+    it("blocks dangerous object properties", () => {
+        const { server, logger } = createManager();
+        const socket = new (ws as any).WebSocket();
+        server.clients.add(socket);
+        server.emit("connection", socket);
+        // Create a message with dangerous property manually (bypassing JSON.stringify)
+        const dangerousMessage =
+            '{"type":"ping","constructor":{"dangerous":true}}';
+        socket.emit("message", dangerousMessage);
+        expect(logger.error).toHaveBeenCalledWith(
+            "Message parse error",
+            expect.objectContaining({
+                error: expect.objectContaining({
+                    message: expect.stringContaining(
+                        "Dangerous object property detected"
+                    ),
+                }),
+            }),
+            expect.any(String)
+        );
     });
 
     it("shuts down and closes connections", () => {

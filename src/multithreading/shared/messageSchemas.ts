@@ -88,4 +88,43 @@ export type CircuitBreakerFailureMessage = z.infer<
 export type MetricsBatchMessage = z.infer<typeof MetricsBatchMessageSchema>;
 export type WorkerMessage = z.infer<typeof WorkerMessageSchema>;
 
+// WebSocket message validation schemas
+export const WebSocketPingSchema = z.object({
+    type: z.literal("ping"),
+    data: z.unknown().optional(), // Can include any additional data
+    correlationId: z.string().optional(),
+});
+
+export const WebSocketBacklogSchema = z.object({
+    type: z.literal("backlog"),
+    data: z
+        .object({
+            amount: z.union([z.string(), z.number()]).optional(),
+        })
+        .optional(),
+    correlationId: z.string().optional(),
+});
+
+// Generic WebSocket request for validation
+export const WebSocketRequestSchema = z.object({
+    type: z
+        .string()
+        .min(1)
+        .max(50)
+        .regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/), // Valid identifier
+    data: z.unknown().optional(),
+    correlationId: z.string().optional(),
+});
+
+// Discriminated union for all known WebSocket requests
+export const ValidWebSocketRequestSchema = z.discriminatedUnion("type", [
+    WebSocketPingSchema,
+    WebSocketBacklogSchema,
+]);
+
+export type WebSocketPing = z.infer<typeof WebSocketPingSchema>;
+export type WebSocketBacklog = z.infer<typeof WebSocketBacklogSchema>;
+export type WebSocketRequest = z.infer<typeof WebSocketRequestSchema>;
+export type ValidWebSocketRequest = z.infer<typeof ValidWebSocketRequestSchema>;
+
 // Updated WorkerProxyLogger with validation
