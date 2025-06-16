@@ -22,7 +22,7 @@ import {
 import { DetectorUtils } from "./base/detectorUtils.js";
 import { AbsorptionSignalData, SignalType } from "../types/signalTypes.js";
 import { SharedPools } from "../utils/objectPool.js";
-import { OrderBookState } from "../market/orderBookState.js";
+import { IOrderBookState } from "../market/orderBookState.js";
 
 export interface AbsorptionSettings extends BaseDetectorSettings {
     features?: AbsorptionFeatures;
@@ -86,7 +86,7 @@ export class AbsorptionDetector
     private readonly absorptionHistory = new Map<number, AbsorptionEvent[]>();
     private readonly liquidityLayers = new Map<number, LiquidityLayer[]>();
 
-    private readonly orderBook: OrderBookState;
+    private readonly orderBook: IOrderBookState;
 
     // Interval handles for proper cleanup
     private thresholdUpdateInterval?: NodeJS.Timeout;
@@ -98,7 +98,7 @@ export class AbsorptionDetector
     constructor(
         id: string,
         settings: AbsorptionSettings = {},
-        orderBook: OrderBookState,
+        orderBook: IOrderBookState,
         logger: ILogger,
         spoofingDetector: SpoofingDetector,
         metricsCollector: IMetricsCollector,

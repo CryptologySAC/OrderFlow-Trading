@@ -7,7 +7,7 @@ import type {
     HybridTradeEvent,
     OrderBookSnapshot,
 } from "../types/marketEvents.js";
-import { OrderBookState } from "./orderBookState.js";
+import { IOrderBookState } from "./orderBookState.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { randomUUID } from "crypto";
@@ -29,7 +29,7 @@ export interface IOrderflowPreprocessor {
     getStats(): {
         processedTrades: number;
         processedDepthUpdates: number;
-        bookMetrics: ReturnType<OrderBookState["getDepthMetrics"]>;
+        bookMetrics: ReturnType<IOrderBookState["getDepthMetrics"]>;
     };
 }
 
@@ -37,7 +37,7 @@ export class OrderflowPreprocessor
     extends EventEmitter
     implements IOrderflowPreprocessor
 {
-    private readonly bookState: OrderBookState;
+    private readonly bookState: IOrderBookState;
     private readonly pricePrecision: number;
     private readonly bandTicks: number;
     private readonly tickSize: number;
@@ -57,7 +57,7 @@ export class OrderflowPreprocessor
 
     constructor(
         opts: OrderflowPreprocessorOptions = {},
-        orderBook: OrderBookState,
+        orderBook: IOrderBookState,
         logger: ILogger,
         metricsCollector: IMetricsCollector,
         individualTradesManager?: IndividualTradesManager,
@@ -354,10 +354,10 @@ export class OrderflowPreprocessor
     public getStats(): {
         processedTrades: number;
         processedDepthUpdates: number;
-        bookMetrics: ReturnType<OrderBookState["getDepthMetrics"]>;
+        bookMetrics: ReturnType<IOrderBookState["getDepthMetrics"]>;
     } {
         if (!this.bookState) {
-            throw new Error("OrderBookState is not initialized");
+            throw new Error("OrderBook is not initialized");
         }
         return {
             processedTrades: this.processedTrades,

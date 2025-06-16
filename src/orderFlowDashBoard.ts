@@ -33,7 +33,8 @@ import type {
     OrderBookSnapshot,
 } from "./types/marketEvents.js";
 import { OrderflowPreprocessor } from "./market/orderFlowPreprocessor.js";
-import { OrderBookState } from "./market/orderBookState.js";
+import { RedBlackTreeOrderBook } from "./market/redBlackTreeOrderBook.js";
+import type { IOrderBookState } from "./market/orderBookState.js";
 import { SignalManager } from "./trading/signalManager.js";
 import { SignalCoordinator } from "./services/signalCoordinator.js";
 import { AnomalyDetector, AnomalyEvent } from "./services/anomalyDetector.js";
@@ -97,7 +98,7 @@ export class OrderFlowDashboard {
     // DataStreamManager is handled by BinanceWorker in threaded mode
 
     // Market
-    private orderBook: OrderBookState | null = null;
+    private orderBook: IOrderBookState | null = null;
     private preprocessor: OrderflowPreprocessor | null = null;
 
     // Coordinators
@@ -145,12 +146,13 @@ export class OrderFlowDashboard {
 
     private async initialize(dependencies: Dependencies): Promise<void> {
         try {
-            this.orderBook = await OrderBookState.create(
+            this.orderBook = new RedBlackTreeOrderBook(
                 Config.ORDERBOOK_STATE,
                 dependencies.logger,
                 dependencies.metricsCollector,
                 this.threadManager
             );
+            await this.orderBook.recover();
             this.preprocessor = new OrderflowPreprocessor(
                 Config.PREPROCESSOR,
                 this.orderBook,
@@ -245,7 +247,7 @@ export class OrderFlowDashboard {
 
         this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
             Config.ABSORPTION_DETECTOR,
-            this.orderBook as OrderBookState,
+            this.orderBook as IOrderBookState,
             dependencies,
             { id: "ltcusdt-absorption-main" }
         );

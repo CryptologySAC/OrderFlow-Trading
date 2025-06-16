@@ -42,6 +42,8 @@ export interface IOrderBookState {
     shutdown(): void;
     recover(): Promise<void>;
     getHealth(): OrderBookHealth;
+    onStreamConnected(): void;
+    onStreamDisconnected(reason?: string): void;
 }
 
 export class OrderBookState implements IOrderBookState {

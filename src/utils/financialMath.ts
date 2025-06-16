@@ -51,7 +51,11 @@ export class FinancialMath {
     /**
      * Calculate spread with perfect precision
      */
-    static calculateSpread(ask: number, bid: number, precision: number): number {
+    static calculateSpread(
+        ask: number,
+        bid: number,
+        precision: number
+    ): number {
         const askInt = this.priceToInt(ask);
         const bidInt = this.priceToInt(bid);
         const spreadInt = askInt - bidInt;

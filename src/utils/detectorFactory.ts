@@ -32,7 +32,7 @@ import { Config } from "../core/config.js";
 import { AccumulationZoneDetector } from "../indicators/accumulationZoneDetector.js";
 import { DistributionZoneDetector } from "../indicators/distributionZoneDetector.js";
 import { ZoneDetectorConfig } from "../types/zoneTypes.js";
-import { OrderBookState } from "../market/orderBookState";
+import { IOrderBookState } from "../market/orderBookState";
 
 /**
  * Production detector factory with monitoring, validation, and lifecycle management
@@ -69,7 +69,7 @@ export class DetectorFactory {
      */
     public static createAbsorptionDetector(
         settings: AbsorptionSettings,
-        orderBook: OrderBookState,
+        orderBook: IOrderBookState,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
     ): AbsorptionDetector {

@@ -7,10 +7,9 @@ import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { ThreadManager } from "../multithreading/threadManager.js";
 import { RedBlackTree } from "./helpers/redBlackTree.js";
 import { FinancialMath } from "../utils/financialMath.js";
-import { 
-    type IOrderBookState, 
+import {
+    type IOrderBookState,
     type OrderBookStateOptions,
-    OrderBookState 
 } from "./orderBookState.js";
 
 type SnapShot = Map<number, PassiveLevel>;
@@ -70,11 +69,11 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
         this.logger = logger;
         this.metricsCollector = metricsCollector;
         this.threadManager = threadManager;
-        
+
         this.pricePrecision = options.pricePrecision;
         this.tickSize = Math.pow(10, -this.pricePrecision);
         this.symbol = options.symbol;
-        
+
         // Configuration with defaults
         this.maxLevels = options.maxLevels ?? 1000;
         this.maxPriceDistance = options.maxPriceDistance ?? 0.1; // 10%
@@ -89,7 +88,7 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
             symbol: this.symbol,
             pricePrecision: this.pricePrecision,
             maxLevels: this.maxLevels,
-            component: "RedBlackTreeOrderBook"
+            component: "RedBlackTreeOrderBook",
         });
     }
 
@@ -97,7 +96,9 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
      * Update order book with depth changes
      * Core method that processes bid/ask updates using RedBlackTree
      */
-    public updateDepth(update: SpotWebsocketStreams.DiffBookDepthResponse): void {
+    public updateDepth(
+        update: SpotWebsocketStreams.DiffBookDepthResponse
+    ): void {
         try {
             if (this.circuitOpen && Date.now() < this.circuitOpenUntil) {
                 return; // Circuit breaker is open
@@ -109,7 +110,11 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
             }
 
             // Validate update sequence - ignore outdated updates
-            if (update.u && this.lastUpdateId && update.u <= this.lastUpdateId) {
+            if (
+                update.u &&
+                this.lastUpdateId &&
+                update.u <= this.lastUpdateId
+            ) {
                 return; // Skip duplicate/out-of-date update
             }
             this.lastUpdateId = update.u ?? this.lastUpdateId;
@@ -122,10 +127,14 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
             this.processAsksRedBlackTree(asks);
 
             this.lastUpdateTime = Date.now();
-            this.metricsCollector.incrementMetric("orderbook_updates_processed");
-
+            this.metricsCollector.incrementMetric(
+                "orderbook_updates_processed"
+            );
         } catch (error) {
-            this.handleError(error as Error, "RedBlackTreeOrderBook.updateDepth");
+            this.handleError(
+                error as Error,
+                "RedBlackTreeOrderBook.updateDepth"
+            );
         }
     }
 
@@ -159,11 +168,15 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
     public getSpread(): number {
         const bestBid = this.tree.getBestBid();
         const bestAsk = this.tree.getBestAsk();
-        
+
         if (bestBid === 0 || bestAsk === Infinity) return 0;
-        
+
         // Use FinancialMath for exact calculation
-        return FinancialMath.calculateSpread(bestAsk, bestBid, this.pricePrecision);
+        return FinancialMath.calculateSpread(
+            bestAsk,
+            bestBid,
+            this.pricePrecision
+        );
     }
 
     /**
@@ -173,11 +186,15 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
         const quotes = this.tree.getBestBidAsk();
         const bestBid = quotes.bid;
         const bestAsk = quotes.ask;
-        
+
         if (bestBid === 0 || bestAsk === Infinity) return 0;
-        
+
         // Use FinancialMath for exact calculation
-        return FinancialMath.calculateMidPrice(bestBid, bestAsk, this.pricePrecision);
+        return FinancialMath.calculateMidPrice(
+            bestBid,
+            bestAsk,
+            this.pricePrecision
+        );
     }
 
     /**
@@ -221,11 +238,11 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
     public snapshot(): SnapShot {
         const snap: SnapShot = new Map<number, PassiveLevel>();
         const nodes = this.tree.getAllNodes();
-        
+
         for (const node of nodes) {
             snap.set(node.price, { ...node.level });
         }
-        
+
         return snap;
     }
 
@@ -258,9 +275,10 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
         }
 
         const totalVolume = totalBidVolume + totalAskVolume;
-        const imbalance = totalVolume > 0 
-            ? (totalBidVolume - totalAskVolume) / totalVolume 
-            : 0;
+        const imbalance =
+            totalVolume > 0
+                ? (totalBidVolume - totalAskVolume) / totalVolume
+                : 0;
 
         return {
             totalLevels: this.cachedSize,
@@ -284,7 +302,7 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
 
         // Determine health status based on various factors
         let status: "healthy" | "degraded" | "unhealthy" = "healthy";
-        
+
         if (this.circuitOpen) {
             status = "unhealthy";
         } else if (this.errorCount > this.maxErrorRate / 2) {
@@ -321,14 +339,55 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
             clearInterval(this.pruneTimer);
             this.pruneTimer = undefined;
         }
-        
+
         this.tree.clear();
         this.cachedSize = 0;
-        
+
         this.logger.info("RedBlackTreeOrderBook shutdown complete", {
             symbol: this.symbol,
-            component: "RedBlackTreeOrderBook"
+            component: "RedBlackTreeOrderBook",
         });
+    }
+
+    /**
+     * Handle stream connection events
+     */
+    public onStreamConnected(): void {
+        const wasConnected = this.isStreamConnected;
+        this.isStreamConnected = true;
+        this.streamConnectionTime = Date.now();
+
+        if (!wasConnected) {
+            this.logger.info(
+                "RedBlackTreeOrderBook stream connection restored",
+                {
+                    symbol: this.symbol,
+                    connectionTime: new Date(
+                        this.streamConnectionTime
+                    ).toISOString(),
+                    component: "RedBlackTreeOrderBook",
+                }
+            );
+        }
+    }
+
+    /**
+     * Handle stream disconnection events
+     */
+    public onStreamDisconnected(reason?: string): void {
+        const wasConnected = this.isStreamConnected;
+        this.isStreamConnected = false;
+
+        if (wasConnected) {
+            this.logger.info(
+                "RedBlackTreeOrderBook stream disconnected, adjusting health monitoring",
+                {
+                    symbol: this.symbol,
+                    reason: reason || "unknown",
+                    component: "RedBlackTreeOrderBook",
+                }
+            );
+        }
     }
 
     /**
@@ -338,7 +397,7 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
         try {
             this.logger.info("Starting RedBlackTreeOrderBook recovery", {
                 symbol: this.symbol,
-                component: "RedBlackTreeOrderBook"
+                component: "RedBlackTreeOrderBook",
             });
 
             // Reset state
@@ -349,19 +408,18 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
 
             // Fetch initial snapshot
             await this.fetchInitialOrderBook();
-            
+
             // Process any buffered updates
             this.processBufferedUpdates();
-            
+
             this.isInitialized = true;
             this.lastUpdateTime = Date.now();
 
             this.logger.info("RedBlackTreeOrderBook recovery completed", {
                 symbol: this.symbol,
                 levels: this.cachedSize,
-                component: "RedBlackTreeOrderBook"
+                component: "RedBlackTreeOrderBook",
             });
-
         } catch (error) {
             this.handleError(error as Error, "RedBlackTreeOrderBook.recover");
             throw error;
@@ -371,8 +429,6 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
     // Private helper methods
 
     private processBidsRedBlackTree(bids: [string, string][]): void {
-        const now = Date.now();
-        
         for (const [priceStr, qtyStr] of bids) {
             const price = this.normalizePrice(parseFloat(priceStr));
             const qty = parseFloat(qtyStr);
@@ -402,8 +458,6 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
     }
 
     private processAsksRedBlackTree(asks: [string, string][]): void {
-        const now = Date.now();
-        
         for (const [priceStr, qtyStr] of asks) {
             const price = this.normalizePrice(parseFloat(priceStr));
             const qty = parseFloat(qtyStr);
@@ -450,14 +504,17 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
             this.pruneExcessLevels();
             this.lastPruneTime = Date.now();
         } catch (error) {
-            this.handleError(error as Error, "RedBlackTreeOrderBook.performMaintenance");
+            this.handleError(
+                error as Error,
+                "RedBlackTreeOrderBook.performMaintenance"
+            );
         }
     }
 
     private pruneStaleeLevels(): void {
         const now = Date.now();
         const nodes = this.tree.getAllNodes();
-        
+
         for (const node of nodes) {
             const level = node.level;
             if (
@@ -479,8 +536,10 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
         const scaledMid = Math.round(mid * scale);
         const scaledDistance = Math.round(this.maxPriceDistance * scale);
 
-        const minPrice = (scaledMid * (scale - scaledDistance)) / (scale * scale);
-        const maxPrice = (scaledMid * (scale + scaledDistance)) / (scale * scale);
+        const minPrice =
+            (scaledMid * (scale - scaledDistance)) / (scale * scale);
+        const maxPrice =
+            (scaledMid * (scale + scaledDistance)) / (scale * scale);
 
         const nodes = this.tree.getAllNodes();
         for (const node of nodes) {
@@ -496,12 +555,12 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
 
         const nodes = this.tree.getAllNodes();
         const excessCount = this.cachedSize - this.maxLevels;
-        
+
         // Remove levels with lowest volume first
         const sortedByVolume = nodes
-            .map(node => ({
+            .map((node) => ({
                 price: node.price,
-                totalVolume: node.level.bid + node.level.ask
+                totalVolume: node.level.bid + node.level.ask,
             }))
             .sort((a, b) => a.totalVolume - b.totalVolume)
             .slice(0, excessCount);
@@ -519,10 +578,13 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
             try {
                 this.updateDepth(update);
             } catch (error) {
-                this.handleError(error as Error, "RedBlackTreeOrderBook.processBufferedUpdates");
+                this.handleError(
+                    error as Error,
+                    "RedBlackTreeOrderBook.processBufferedUpdates"
+                );
             }
         }
-        
+
         this.snapshotBuffer = [];
     }
 
@@ -533,20 +595,24 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
                 1000
             );
 
-            if (!snapshot || !snapshot.lastUpdateId || !snapshot.bids || !snapshot.asks) {
+            if (
+                !snapshot ||
+                !snapshot.lastUpdateId ||
+                !snapshot.bids ||
+                !snapshot.asks
+            ) {
                 throw new Error("Failed to fetch order book snapshot");
             }
 
             // Initialize tree with snapshot data
             this.tree.clear();
             this.cachedSize = 0;
-            const now = Date.now();
 
             // Process bids
             for (const [priceStr, qtyStr] of snapshot.bids) {
                 const price = this.normalizePrice(parseFloat(priceStr));
                 const qty = parseFloat(qtyStr);
-                
+
                 if (qty > 0) {
                     this.tree.set(price, "bid", qty);
                     this.cachedSize++;
@@ -557,7 +623,7 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
             for (const [priceStr, qtyStr] of snapshot.asks) {
                 const price = this.normalizePrice(parseFloat(priceStr));
                 const qty = parseFloat(qtyStr);
-                
+
                 if (qty > 0) {
                     const existingLevel = this.tree.get(price);
                     if (!existingLevel) {
@@ -569,30 +635,31 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
 
             this.lastUpdateId = snapshot.lastUpdateId;
             this.isInitialized = true;
-
         } catch (error) {
-            throw new Error(`Failed to initialize order book: ${error}`);
+            throw new Error(
+                `Failed to initialize order book: ${error instanceof Error ? error.message : String(error)}`
+            );
         }
     }
 
     private handleError(error: Error, context: string): void {
         this.errorCount++;
         this.errorWindow.push(Date.now());
-        
+
         // Clean old errors from window
         const cutoff = Date.now() - this.errorWindowMs;
-        this.errorWindow = this.errorWindow.filter(time => time > cutoff);
-        
+        this.errorWindow = this.errorWindow.filter((time) => time > cutoff);
+
         // Check if circuit breaker should open
         if (this.errorWindow.length > this.maxErrorRate) {
             this.circuitOpen = true;
             this.circuitOpenUntil = Date.now() + 60000; // 1 minute
-            
+
             this.logger.error("Circuit breaker opened due to error rate", {
                 context,
                 errorCount: this.errorWindow.length,
                 maxErrorRate: this.maxErrorRate,
-                component: "RedBlackTreeOrderBook"
+                component: "RedBlackTreeOrderBook",
             });
         }
 
@@ -600,7 +667,7 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
             error: error.message,
             context,
             errorCount: this.errorCount,
-            component: "RedBlackTreeOrderBook"
+            component: "RedBlackTreeOrderBook",
         });
 
         this.metricsCollector.incrementMetric("orderbook_errors");
