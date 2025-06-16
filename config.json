@@ -118,8 +118,11 @@
     "symbols": {
         "LTCUSDT": {
             "pricePrecision": 2,
+            "quantityPrecision": 8,
             "windowMs": 75000,
             "bandTicks": 5,
+            "largeTradeThreshold": 100,
+            "maxEventListeners": 50,
             "orderBookState": {
                 "binSize": 0.01,
                 "numLevels": 150,

@@ -179,8 +179,11 @@ export class Config {
         return {
             symbol: Config.SYMBOL,
             pricePrecision: Config.PRICE_PRECISION,
+            quantityPrecision: SYMBOL_CFG?.quantityPrecision ?? 8, // Default 8 decimals for most crypto
             bandTicks: SYMBOL_CFG?.bandTicks ?? 5,
             tickSize: Config.TICK_SIZE,
+            largeTradeThreshold: SYMBOL_CFG?.largeTradeThreshold ?? 100,
+            maxEventListeners: SYMBOL_CFG?.maxEventListeners ?? 50,
         };
     }
 

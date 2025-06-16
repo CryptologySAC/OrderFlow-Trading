@@ -17,10 +17,13 @@ import { FinancialMath } from "../utils/financialMath.js";
 
 export interface OrderflowPreprocessorOptions {
     pricePrecision?: number;
+    quantityPrecision?: number;
     bandTicks?: number;
     tickSize?: number;
     symbol?: string;
     enableIndividualTrades?: boolean;
+    largeTradeThreshold?: number;
+    maxEventListeners?: number;
 }
 
 export interface IOrderflowPreprocessor {
@@ -39,12 +42,15 @@ export class OrderflowPreprocessor
 {
     private readonly bookState: IOrderBookState;
     private readonly pricePrecision: number;
+    private readonly quantityPrecision: number;
     private readonly bandTicks: number;
     private readonly tickSize: number;
     private readonly logger: ILogger;
     private readonly metricsCollector: IMetricsCollector;
-    private readonly symbol; // Default symbol, can be made configurable
+    private readonly symbol: string;
     private readonly enableIndividualTrades: boolean;
+    private readonly largeTradeThreshold: number;
+    private readonly maxEventListeners: number;
 
     // Individual trades components (optional)
     private readonly individualTradesManager?: IndividualTradesManager;
@@ -66,11 +72,17 @@ export class OrderflowPreprocessor
         this.logger = logger;
         this.metricsCollector = metricsCollector;
         this.pricePrecision = opts.pricePrecision ?? 2;
+        this.quantityPrecision = opts.quantityPrecision ?? 8; // Default 8 decimals for most crypto
         this.bandTicks = opts.bandTicks ?? 5;
         this.tickSize = opts.tickSize ?? 0.01;
         this.enableIndividualTrades = opts.enableIndividualTrades ?? false;
-        this.symbol = opts.symbol ?? "LTCUSDT"; // Default symbol, can be overridden
+        this.symbol = opts.symbol ?? "LTCUSDT";
+        this.largeTradeThreshold = opts.largeTradeThreshold ?? 100;
+        this.maxEventListeners = opts.maxEventListeners ?? 50;
         this.bookState = orderBook;
+
+        // Configure EventEmitter to prevent memory leaks
+        this.setMaxListeners(this.maxEventListeners);
 
         // Initialize individual trades components if enabled
         if (this.enableIndividualTrades) {
@@ -86,6 +98,10 @@ export class OrderflowPreprocessor
 
         this.logger.info("[OrderflowPreprocessor] Initialized", {
             symbol: this.symbol,
+            pricePrecision: this.pricePrecision,
+            quantityPrecision: this.quantityPrecision,
+            largeTradeThreshold: this.largeTradeThreshold,
+            maxEventListeners: this.maxEventListeners,
             enableIndividualTrades: this.enableIndividualTrades,
             hasIndividualTradesManager: !!this.individualTradesManager,
             hasMicrostructureAnalyzer: !!this.microstructureAnalyzer,
@@ -291,13 +307,20 @@ export class OrderflowPreprocessor
     }
 
     /**
-     * Normalize trade data
+     * Normalize trade data with enhanced validation and precision handling
      */
     protected normalizeTradeData(
         trade: SpotWebsocketStreams.AggTradeResponse
     ): AggressiveTrade {
         const price = FinancialMath.parsePrice(trade.p!);
         const quantity = FinancialMath.parseQuantity(trade.q!);
+
+        // Apply financial precision normalization to quantity using symbol-specific precision
+        const normalizedQuantity = FinancialMath.normalizeQuantity(
+            quantity,
+            this.quantityPrecision
+        );
+
         const normalizedPrice = FinancialMath.normalizePriceToTick(
             price,
             this.tickSize
@@ -305,7 +328,7 @@ export class OrderflowPreprocessor
 
         return {
             price: normalizedPrice,
-            quantity,
+            quantity: normalizedQuantity,
             timestamp: trade.T!,
             buyerIsMaker: !!trade.m,
             pair: trade.s ?? "",
@@ -314,9 +337,12 @@ export class OrderflowPreprocessor
         };
     }
 
+    /**
+     * Get the threshold for large trades that require full depth snapshot
+     * This is now configurable per symbol to account for different liquidity profiles
+     */
     private getLargeTradeThreshold(): number {
-        // Could be made configurable or dynamic
-        return 100; // Example: 100 units
+        return this.largeTradeThreshold;
     }
 
     protected handleError(

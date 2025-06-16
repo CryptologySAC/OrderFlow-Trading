@@ -31,8 +31,11 @@ export interface ConfigType {
 
 type SymbolConfig = {
     pricePrecision: number;
+    quantityPrecision?: number; // Quantity decimal places (XRP: 2, BNB: 3, ADA: 6, DOGE/SOL: 4-6, default: 8)
     windowMs: number;
     bandTicks: number;
+    largeTradeThreshold?: number; // Threshold for large trades requiring full depth snapshot
+    maxEventListeners?: number; // EventEmitter memory management
     dataStream?: DataStreamConfig;
     orderBookState: OrderBookStateConfig;
     tradesProcessor?: TradesProcessorConfig;
