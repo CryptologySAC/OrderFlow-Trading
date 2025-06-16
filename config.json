@@ -149,6 +149,7 @@
             "exhaustion": {
                 "minAggVolume": 300,
                 "threshold": 0.45,
+
                 "windowMs": 75000,
                 "zoneTicks": 3,
                 "eventCooldownMs": 15000,
