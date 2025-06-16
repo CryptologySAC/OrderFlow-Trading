@@ -19,7 +19,6 @@ export interface OrderflowPreprocessorOptions {
     pricePrecision?: number;
     bandTicks?: number;
     tickSize?: number;
-    emitDepthMetrics?: boolean;
     symbol?: string;
     enableIndividualTrades?: boolean;
 }
@@ -42,7 +41,6 @@ export class OrderflowPreprocessor
     private readonly pricePrecision: number;
     private readonly bandTicks: number;
     private readonly tickSize: number;
-    private readonly emitDepthMetrics: boolean;
     private readonly logger: ILogger;
     private readonly metricsCollector: IMetricsCollector;
     private readonly symbol; // Default symbol, can be made configurable
@@ -70,7 +68,6 @@ export class OrderflowPreprocessor
         this.pricePrecision = opts.pricePrecision ?? 2;
         this.bandTicks = opts.bandTicks ?? 5;
         this.tickSize = opts.tickSize ?? 0.01;
-        this.emitDepthMetrics = opts.emitDepthMetrics ?? false;
         this.enableIndividualTrades = opts.enableIndividualTrades ?? false;
         this.symbol = opts.symbol ?? "LTCUSDT"; // Default symbol, can be overridden
         this.bookState = orderBook;
@@ -104,37 +101,33 @@ export class OrderflowPreprocessor
                 this.bookState.updateDepth(update);
                 this.processedDepthUpdates++;
 
-                // Emit depth metrics if enabled
-                if (
-                    this.emitDepthMetrics &&
-                    this.processedDepthUpdates % 10 === 0
-                ) {
-                    const metrics = this.bookState.getDepthMetrics();
-                    this.emit("depth_metrics", {
-                        ...metrics,
-                        bestBid: this.bookState.getBestBid(),
-                        bestAsk: this.bookState.getBestAsk(),
-                        spread: this.bookState.getSpread(),
-                        midPrice: this.bookState.getMidPrice(),
-                        timestamp: Date.now(),
-                    });
-                }
+                const bestBid = this.bookState.getBestBid();
+                const bestAsk = this.bookState.getBestAsk();
+                const spread = this.bookState.getSpread();
+                const midPrice = this.bookState.getMidPrice();
+                const timestamp = Date.now();
+                const depthMetrics = this.bookState.getDepthMetrics();
 
                 // Update best quotes event
                 this.emit("best_quotes_update", {
-                    bestBid: this.bookState.getBestBid(),
-                    bestAsk: this.bookState.getBestAsk(),
-                    spread: this.bookState.getSpread(),
-                    timestamp: Date.now(),
+                    bestBid,
+                    bestAsk,
+                    spread,
+                    timestamp,
                 });
 
-                const depthMetrics = this.bookState.getDepthMetrics();
+                // CRITICAL: OrderBookProcessor depends on ALL fields for downstream processing
+                // - Core quotes (bestBid/Ask, spread, midPrice) for signal validation
+                // - depthSnapshot for full orderbook state analysis
+                // - passiveBidVolume/passiveAskVolume for liquidity analysis
+                // - imbalance for market regime classification and signal filtering
+                // Missing any field causes undefined values in trading signal pipeline
                 this.emit("orderbook_update", {
-                    timestamp: Date.now(),
-                    bestBid: this.bookState.getBestBid(),
-                    bestAsk: this.bookState.getBestAsk(),
-                    spread: this.bookState.getSpread(),
-                    midPrice: this.bookState.getMidPrice(),
+                    timestamp,
+                    bestBid,
+                    bestAsk,
+                    spread,
+                    midPrice,
                     depthSnapshot: this.bookState.snapshot(),
                     passiveBidVolume: depthMetrics.totalBidVolume,
                     passiveAskVolume: depthMetrics.totalAskVolume,

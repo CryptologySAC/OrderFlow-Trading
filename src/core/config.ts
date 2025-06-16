@@ -181,7 +181,6 @@ export class Config {
             pricePrecision: Config.PRICE_PRECISION,
             bandTicks: SYMBOL_CFG?.bandTicks ?? 5,
             tickSize: Config.TICK_SIZE,
-            emitDepthMetrics: SYMBOL_CFG?.emitDepthMetrics ?? false,
         };
     }
 
