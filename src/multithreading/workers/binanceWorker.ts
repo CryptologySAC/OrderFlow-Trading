@@ -5,6 +5,10 @@ import { WorkerCircuitBreakerProxy } from "../shared/workerCircuitBreakerProxy.j
 import { BinanceDataFeed } from "../../utils/binance.js";
 import { DataStreamManager } from "../../trading/dataStreamManager.js";
 import { Config } from "../../core/config.js";
+import {
+    DepthSnapshotRequestMessageSchema,
+    BinanceDepthSnapshotSchema,
+} from "../shared/messageSchemas.js";
 
 // Validate worker thread context
 if (!parentPort) {
@@ -364,6 +368,115 @@ parentPort?.on("message", (msg: unknown) => {
                     });
                 }
                 void gracefulShutdown(0);
+                break;
+
+            case "depth_snapshot_request":
+                void (async () => {
+                    try {
+                        const validationResult =
+                            DepthSnapshotRequestMessageSchema.safeParse(
+                                message
+                            );
+
+                        if (!validationResult.success) {
+                            logger.error(
+                                "Invalid depth snapshot request schema",
+                                {
+                                    errors: validationResult.error.errors,
+                                    message,
+                                }
+                            );
+                            parentPort?.postMessage({
+                                type: "depth_snapshot_response",
+                                correlationId: "unknown",
+                                success: false,
+                                error: "Invalid request schema",
+                            });
+                            return;
+                        }
+
+                        const requestMsg = validationResult.data;
+                        const { binanceFeed } = components;
+                        const rawSnapshot = await binanceFeed.getDepthSnapshot(
+                            requestMsg.symbol,
+                            requestMsg.limit
+                        );
+
+                        if (!rawSnapshot) {
+                            parentPort?.postMessage({
+                                type: "depth_snapshot_response",
+                                correlationId: requestMsg.correlationId,
+                                success: false,
+                                error: "Failed to fetch order book snapshot",
+                            });
+                            return;
+                        }
+
+                        // Validate and transform the snapshot data using Zod
+                        const snapshotValidation =
+                            BinanceDepthSnapshotSchema.safeParse(rawSnapshot);
+                        if (!snapshotValidation.success) {
+                            logger.error(
+                                "Invalid depth snapshot structure from Binance API",
+                                {
+                                    errors: snapshotValidation.error.errors,
+                                    rawSnapshot: JSON.stringify(
+                                        rawSnapshot
+                                    ).slice(0, 500), // Truncate for logging
+                                    correlationId: requestMsg.correlationId,
+                                }
+                            );
+                            parentPort?.postMessage({
+                                type: "depth_snapshot_response",
+                                correlationId: requestMsg.correlationId,
+                                success: false,
+                                error: `Invalid snapshot structure: ${snapshotValidation.error.message}`,
+                            });
+                            return;
+                        }
+
+                        const validatedSnapshot = snapshotValidation.data;
+
+                        parentPort?.postMessage({
+                            type: "depth_snapshot_response",
+                            correlationId: requestMsg.correlationId,
+                            success: true,
+                            data: {
+                                lastUpdateId: validatedSnapshot.lastUpdateId,
+                                bids: validatedSnapshot.bids,
+                                asks: validatedSnapshot.asks,
+                            },
+                        });
+
+                        logger.info("Depth snapshot request completed", {
+                            symbol: requestMsg.symbol,
+                            limit: requestMsg.limit,
+                            correlationId: requestMsg.correlationId,
+                            bidLevels: validatedSnapshot.bids?.length || 0,
+                            askLevels: validatedSnapshot.asks?.length || 0,
+                        });
+                    } catch (error) {
+                        logger.error("Error handling depth snapshot request", {
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                            stack:
+                                error instanceof Error
+                                    ? error.stack
+                                    : undefined,
+                        });
+                        parentPort?.postMessage({
+                            type: "depth_snapshot_response",
+                            correlationId: "unknown",
+                            success: false,
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                        });
+                    }
+                })();
                 break;
 
             default:

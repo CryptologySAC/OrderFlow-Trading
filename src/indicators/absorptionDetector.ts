@@ -22,7 +22,7 @@ import {
 import { DetectorUtils } from "./base/detectorUtils.js";
 import { AbsorptionSignalData, SignalType } from "../types/signalTypes.js";
 import { SharedPools } from "../utils/objectPool.js";
-import { OrderBookState } from "../market/orderBookState.js";
+import { IOrderBookState } from "../market/orderBookState.js";
 
 export interface AbsorptionSettings extends BaseDetectorSettings {
     features?: AbsorptionFeatures;
@@ -86,19 +86,16 @@ export class AbsorptionDetector
     private readonly absorptionHistory = new Map<number, AbsorptionEvent[]>();
     private readonly liquidityLayers = new Map<number, LiquidityLayer[]>();
 
-    private readonly orderBook: OrderBookState;
+    private readonly orderBook: IOrderBookState;
 
     // Interval handles for proper cleanup
     private thresholdUpdateInterval?: NodeJS.Timeout;
     private historyCleanupInterval?: NodeJS.Timeout;
 
-    // TODO DEBUG
-    private useOldScoringMethod = false;
-
     constructor(
         id: string,
         settings: AbsorptionSettings = {},
-        orderBook: OrderBookState,
+        orderBook: IOrderBookState,
         logger: ILogger,
         spoofingDetector: SpoofingDetector,
         metricsCollector: IMetricsCollector,
@@ -242,12 +239,6 @@ export class AbsorptionDetector
     }
 
     private calculateAbsorptionScore(conditions: AbsorptionConditions): number {
-        // NEW: Update thresholds if needed
-
-        // Legacy scoring method for backwards compatibility (currently disabled)
-        if (this.useOldScoringMethod) {
-            return this.calculateAbsorptionScoreOld(conditions);
-        }
         this.maybeUpdateThresholds();
 
         let score = 0;
@@ -753,21 +744,21 @@ export class AbsorptionDetector
         const zoneHistory = this.zonePassiveHistory.get(zone);
         if (!zoneHistory) return false;
 
-        //const lvl = this.orderBook.getLevel(price); // existing helper
+        const lvl = this.orderBook.getLevel(price); // existing helper
 
-        //const icebergLikely =
-        //    lvl &&
-        //    (side === "buy"
-        //       ? (lvl.addedAsk ?? 0) > (lvl.consumedAsk ?? 0) * 0.8
-        //        : (lvl.addedBid ?? 0) > (lvl.consumedBid ?? 0) * 0.8);
+        const icebergLikely =
+            lvl &&
+            (side === "buy"
+                ? (lvl.addedAsk ?? 0) > (lvl.consumedAsk ?? 0) * 0.8
+                : (lvl.addedBid ?? 0) > (lvl.consumedBid ?? 0) * 0.8);
 
-        //if (icebergLikely) {
-        //    this.logger.debug(
-        //        "Queue is constantly replenished – ignore absorption",
-        //        { price, side, level: lvl }
-        //    );
-        //    return false; // abort this zone / skip scoring
-        //}
+        if (icebergLikely) {
+            this.logger.debug(
+                "Queue is constantly replenished – ignore absorption",
+                { price, side, level: lvl }
+            );
+            return false; // abort this zone / skip scoring
+        }
 
         // Get the RELEVANT passive side
         // ✅ VERIFIED LOGIC: Aggressive flow hits opposite-side passive liquidity
@@ -1662,77 +1653,6 @@ export class AbsorptionDetector
             spread: 0.002, // ✅ Default small spread
             microstructure: undefined,
         };
-    }
-
-    /**
-     * Calculate sophisticated absorption score with integrated microstructure insights
-     */
-    private calculateAbsorptionScoreOld(
-        conditions: AbsorptionConditions
-    ): number {
-        let score = 0;
-
-        // Factor 1: Absorption ratio (lower = better absorption)
-        if (conditions.absorptionRatio < 0.1)
-            score += 0.25; // 10:1 passive advantage
-        else if (conditions.absorptionRatio < 0.2)
-            score += 0.2; // 5:1 advantage
-        else if (conditions.absorptionRatio < 0.5) score += 0.15; // 2:1 advantage
-
-        // Factor 2: Passive strength (maintained/growing liquidity)
-        if (conditions.passiveStrength > 1.3)
-            score += 0.2; // Growing
-        else if (conditions.passiveStrength > 1.0)
-            score += 0.15; // Maintained
-        else if (conditions.passiveStrength > 0.8)
-            score += 0.1; // Slightly depleted
-        else score -= 0.05; // Significantly depleted (not absorption)
-
-        // Factor 3: Refill behavior (iceberg/hidden orders)
-        if (conditions.hasRefill) score += 0.2;
-        else if (conditions.icebergSignal > 0.7) score += 0.15;
-        else if (conditions.icebergSignal > 0.4) score += 0.1;
-
-        // Factor 4: Liquidity gradient (deeper absorption zones)
-        if (this.features.liquidityGradient) {
-            if (conditions.liquidityGradient > 0.7) score += 0.1;
-            else if (conditions.liquidityGradient > 0.4) score += 0.05;
-        }
-
-        // Factor 5: Absorption velocity (sustained absorption)
-        if (
-            this.features.absorptionVelocity &&
-            conditions.absorptionVelocity > 0.5
-        ) {
-            score += 0.05;
-        }
-
-        // Factor 6: Volume significance
-        const volumeSignificance = Math.min(
-            1,
-            conditions.aggressiveVolume / this.minAggVolume
-        );
-        score += volumeSignificance * 0.05;
-
-        // Penalty for insufficient data
-        if (conditions.sampleCount < 5) {
-            score *= 0.8;
-        }
-
-        // Penalty for extreme imbalance (might indicate manipulation)
-        if (conditions.imbalance > 0.9) {
-            score *= 0.9;
-        }
-
-        // ✅ MICROSTRUCTURE INTEGRATION: Apply microstructure-based adjustments
-        if (conditions.microstructure) {
-            score = this.applyMicrostructureScoreAdjustments(
-                score,
-                conditions.microstructure
-            );
-        }
-
-        return Math.max(0, Math.min(1, score));
     }
 
     /**

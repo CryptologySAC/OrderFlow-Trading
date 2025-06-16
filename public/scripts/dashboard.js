@@ -919,26 +919,39 @@ const tradeWebsocket = new TradeWebSocket({
                         // Select levels symmetrically around mid price for balanced display
                         const maxLevels = 30;
                         const midPrice = orderBookData.midPrice || 0;
-                        
+
                         // Sort levels by price to ensure proper ordering
-                        const sortedLevels = orderBookData.priceLevels.sort((a, b) => a.price - b.price);
-                        
+                        const sortedLevels = orderBookData.priceLevels.sort(
+                            (a, b) => a.price - b.price
+                        );
+
                         // Find the index closest to midPrice
                         let midIndex = 0;
                         let minDiff = Infinity;
                         for (let i = 0; i < sortedLevels.length; i++) {
-                            const diff = Math.abs(sortedLevels[i].price - midPrice);
+                            const diff = Math.abs(
+                                sortedLevels[i].price - midPrice
+                            );
                             if (diff < minDiff) {
                                 minDiff = diff;
                                 midIndex = i;
                             }
                         }
-                        
+
                         // Select symmetric range around midPrice
                         const levelsPerSide = Math.floor(maxLevels / 2);
-                        const startIndex = Math.max(0, midIndex - levelsPerSide);
-                        const endIndex = Math.min(sortedLevels.length, startIndex + maxLevels);
-                        const levelsToShow = sortedLevels.slice(startIndex, endIndex);
+                        const startIndex = Math.max(
+                            0,
+                            midIndex - levelsPerSide
+                        );
+                        const endIndex = Math.min(
+                            sortedLevels.length,
+                            startIndex + maxLevels
+                        );
+                        const levelsToShow = sortedLevels.slice(
+                            startIndex,
+                            endIndex
+                        );
 
                         levelsToShow.forEach((level) => {
                             const priceStr = level.price

@@ -7,12 +7,13 @@ import type {
     HybridTradeEvent,
     OrderBookSnapshot,
 } from "../types/marketEvents.js";
-import { OrderBookState } from "./orderBookState.js";
+import { IOrderBookState } from "./orderBookState.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { randomUUID } from "crypto";
 import { IndividualTradesManager } from "../data/individualTradesManager.js";
 import { MicrostructureAnalyzer } from "../data/microstructureAnalyzer.js";
+import { FinancialMath } from "../utils/financialMath.js";
 
 export interface OrderflowPreprocessorOptions {
     pricePrecision?: number;
@@ -29,7 +30,7 @@ export interface IOrderflowPreprocessor {
     getStats(): {
         processedTrades: number;
         processedDepthUpdates: number;
-        bookMetrics: ReturnType<OrderBookState["getDepthMetrics"]>;
+        bookMetrics: ReturnType<IOrderBookState["getDepthMetrics"]>;
     };
 }
 
@@ -37,7 +38,7 @@ export class OrderflowPreprocessor
     extends EventEmitter
     implements IOrderflowPreprocessor
 {
-    private readonly bookState: OrderBookState;
+    private readonly bookState: IOrderBookState;
     private readonly pricePrecision: number;
     private readonly bandTicks: number;
     private readonly tickSize: number;
@@ -57,7 +58,7 @@ export class OrderflowPreprocessor
 
     constructor(
         opts: OrderflowPreprocessorOptions = {},
-        orderBook: OrderBookState,
+        orderBook: IOrderBookState,
         logger: ILogger,
         metricsCollector: IMetricsCollector,
         individualTradesManager?: IndividualTradesManager,
@@ -160,8 +161,11 @@ export class OrderflowPreprocessor
 
             const aggressive = this.normalizeTradeData(trade);
             const bookLevel = this.bookState.getLevel(aggressive.price);
-            const zone =
-                Math.round(aggressive.price / this.tickSize) * this.tickSize;
+            const zone = FinancialMath.priceToZone(
+                aggressive.price,
+                this.tickSize
+            );
+
             const band = this.bookState.sumBand(
                 zone,
                 this.bandTicks,
@@ -309,10 +313,9 @@ export class OrderflowPreprocessor
         trade: SpotWebsocketStreams.AggTradeResponse
     ): AggressiveTrade {
         const price = parseFloat(trade.p!);
-        const normalizedPrice = parseFloat(
-            (Math.round(price / this.tickSize) * this.tickSize).toFixed(
-                this.pricePrecision
-            )
+        const normalizedPrice = FinancialMath.normalizePriceToTick(
+            price,
+            this.tickSize
         );
 
         return {
@@ -354,10 +357,10 @@ export class OrderflowPreprocessor
     public getStats(): {
         processedTrades: number;
         processedDepthUpdates: number;
-        bookMetrics: ReturnType<OrderBookState["getDepthMetrics"]>;
+        bookMetrics: ReturnType<IOrderBookState["getDepthMetrics"]>;
     } {
         if (!this.bookState) {
-            throw new Error("OrderBookState is not initialized");
+            throw new Error("OrderBook is not initialized");
         }
         return {
             processedTrades: this.processedTrades,

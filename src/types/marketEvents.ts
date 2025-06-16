@@ -17,6 +17,11 @@ export interface PassiveLevel {
     bid: number;
     ask: number;
     timestamp: number;
+    // Optional tracking fields for advanced orderbook analytics
+    consumedAsk?: number;
+    consumedBid?: number;
+    addedAsk?: number;
+    addedBid?: number;
 }
 
 export interface EnrichedTradeEvent extends AggressiveTrade {

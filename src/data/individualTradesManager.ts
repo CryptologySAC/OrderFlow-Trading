@@ -179,23 +179,28 @@ export class IndividualTradesManager {
     ): Promise<IndividualTrade[]> {
         const rangeKey = `${firstTradeId}-${lastTradeId}`;
 
-        // Check if request is already pending
-        if (this.pendingRequests.has(rangeKey)) {
-            return await this.pendingRequests.get(rangeKey)!;
-        }
-
-        // Check cache first
-        const cachedTrades = this.getCachedTrades(firstTradeId, lastTradeId);
-        if (cachedTrades.length > 0) {
-            this.metricsCollector.incrementMetric("individualTrades.cacheHits");
-            return cachedTrades;
-        }
-
-        // Create and store pending request
-        const fetchPromise = this.performFetch(firstTradeId, lastTradeId);
-        this.pendingRequests.set(rangeKey, fetchPromise);
-
         try {
+            // Check if request is already pending
+            if (this.pendingRequests.has(rangeKey)) {
+                return await this.pendingRequests.get(rangeKey)!;
+            }
+
+            // Check cache first
+            const cachedTrades = this.getCachedTrades(
+                firstTradeId,
+                lastTradeId
+            );
+            if (cachedTrades.length > 0) {
+                this.metricsCollector.incrementMetric(
+                    "individualTrades.cacheHits"
+                );
+                return cachedTrades;
+            }
+
+            // Create and store pending request
+            const fetchPromise = this.performFetch(firstTradeId, lastTradeId);
+            this.pendingRequests.set(rangeKey, fetchPromise);
+
             const trades = await fetchPromise;
 
             // Cache the fetched trades

@@ -30,6 +30,12 @@ export class FinancialMath {
         return this.intToPrice(normalizedInt);
     }
 
+    static priceToZone(price: number, tickSize: number): number {
+        const normalizedInt = this.normalizePriceToTick(price, tickSize);
+        const zone = Math.round(normalizedInt);
+        return zone;
+    }
+
     /**
      * Calculate mid price with perfect precision
      */
@@ -42,6 +48,24 @@ export class FinancialMath {
         const askInt = this.priceToInt(ask);
         const midInt = (bidInt + askInt) / 2n;
         const result = this.intToPrice(midInt);
+
+        // Apply precision rounding as final step
+        const scale = Math.pow(10, precision);
+        return Math.round(result * scale) / scale;
+    }
+
+    /**
+     * Calculate spread with perfect precision
+     */
+    static calculateSpread(
+        ask: number,
+        bid: number,
+        precision: number
+    ): number {
+        const askInt = this.priceToInt(ask);
+        const bidInt = this.priceToInt(bid);
+        const spreadInt = askInt - bidInt;
+        const result = this.intToPrice(spreadInt);
 
         // Apply precision rounding as final step
         const scale = Math.pow(10, precision);
