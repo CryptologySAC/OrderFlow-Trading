@@ -49,6 +49,20 @@ export class FinancialMath {
     }
 
     /**
+     * Calculate spread with perfect precision
+     */
+    static calculateSpread(ask: number, bid: number, precision: number): number {
+        const askInt = this.priceToInt(ask);
+        const bidInt = this.priceToInt(bid);
+        const spreadInt = askInt - bidInt;
+        const result = this.intToPrice(spreadInt);
+
+        // Apply precision rounding as final step
+        const scale = Math.pow(10, precision);
+        return Math.round(result * scale) / scale;
+    }
+
+    /**
      * Safe quantity multiplication avoiding floating point errors
      */
     static multiplyQuantities(qty1: number, qty2: number): number {
