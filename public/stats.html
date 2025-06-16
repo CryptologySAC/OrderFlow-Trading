@@ -366,6 +366,51 @@
                         </tbody>
                     </table>
                 </div>
+
+                <!-- Worker Information -->
+                <div class="metric-card">
+                    <button
+                        class="reset-columns-btn"
+                        onclick="resetTableColumns('workersTable')"
+                        title="Reset column widths"
+                    >
+                        Reset
+                    </button>
+                    <h3 class="card-title">Multithreading Workers</h3>
+                    <table id="workersTable">
+                        <thead>
+                            <tr>
+                                <th>
+                                    Worker
+                                    <div class="resize-handle"></div>
+                                </th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Logger Worker</td>
+                                <td id="loggerWorkerStatus">--</td>
+                            </tr>
+                            <tr>
+                                <td>Binance Worker</td>
+                                <td id="binanceWorkerStatus">--</td>
+                            </tr>
+                            <tr>
+                                <td>Communication Worker</td>
+                                <td id="communicationWorkerStatus">--</td>
+                            </tr>
+                            <tr>
+                                <td>WebSocket Connections</td>
+                                <td id="wsConnections">--</td>
+                            </tr>
+                            <tr>
+                                <td>Stream Health</td>
+                                <td id="streamHealth">--</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
                 <div class="resize-handle" id="resize1"></div>
             </section>
 

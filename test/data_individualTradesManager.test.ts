@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { IndividualTradesManager } from "../src/data/individualTradesManager";
-import { Logger } from "../src/infrastructure/logger";
-import { MetricsCollector } from "../src/infrastructure/metricsCollector";
+import type { ILogger } from "../src/infrastructure/loggerInterface";
+import type { IWorkerMetricsCollector } from "../src/multithreading/shared/workerInterfaces";
 import type { IBinanceDataFeed } from "../src/utils/binance";
 import type {
     AggTradeEvent,
@@ -9,13 +9,10 @@ import type {
     IndividualTrade,
 } from "../src/types/marketEvents";
 
-vi.mock("../src/infrastructure/logger");
-vi.mock("../src/infrastructure/metricsCollector");
-
 describe("data/IndividualTradesManager", () => {
     let manager: IndividualTradesManager;
-    let logger: Logger;
-    let metricsCollector: MetricsCollector;
+    let logger: ILogger;
+    let metricsCollector: IWorkerMetricsCollector;
     const binanceFeed: IBinanceDataFeed = {
         connectToStreams: vi.fn(),
         tradesAggregate: vi.fn(),
@@ -45,8 +42,45 @@ describe("data/IndividualTradesManager", () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        logger = new Logger();
-        metricsCollector = new MetricsCollector();
+
+        // Create mock implementations of the interfaces
+        logger = {
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            debug: vi.fn(),
+            isDebugEnabled: vi.fn(() => false),
+            setCorrelationId: vi.fn(),
+            removeCorrelationId: vi.fn(),
+        };
+
+        metricsCollector = {
+            updateMetric: vi.fn(),
+            incrementMetric: vi.fn(),
+            incrementCounter: vi.fn(),
+            decrementCounter: vi.fn(),
+            recordGauge: vi.fn(),
+            recordHistogram: vi.fn(),
+            registerMetric: vi.fn(),
+            createCounter: vi.fn(),
+            createHistogram: vi.fn(),
+            createGauge: vi.fn(),
+            setGauge: vi.fn(),
+            getMetrics: vi.fn(() => ({})),
+            getHealthSummary: vi.fn(() => "Healthy"),
+            getHistogramPercentiles: vi.fn(() => ({})),
+            getCounterRate: vi.fn(() => 0),
+            getGaugeValue: vi.fn(() => 0),
+            getHistogramSummary: vi.fn(() => ({})),
+            getAverageLatency: vi.fn(() => 0),
+            getLatencyPercentiles: vi.fn(() => ({})),
+            exportPrometheus: vi.fn(() => ""),
+            exportJSON: vi.fn(() => ""),
+            reset: vi.fn(),
+            cleanup: vi.fn(),
+            destroy: vi.fn(),
+        };
+
         manager = new IndividualTradesManager(
             mockConfig,
             logger,

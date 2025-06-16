@@ -5,45 +5,56 @@ import {
     calculateBreakeven,
     calculateProfitTarget,
 } from "../utils/calculations.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 
 export class AlertManager {
     private lastAlertTime = 0;
     private readonly cooldownMs: number;
+    private readonly logger: ILogger;
 
     constructor(
         private readonly webhookUrl: string | undefined,
-        cooldownMs = 300000 // 5 minutes default
+        cooldownMs = 300000, // 5 minutes default
+        logger: ILogger
     ) {
         this.cooldownMs = cooldownMs;
+        this.logger = logger;
     }
 
     public async sendAlert(signal: Signal): Promise<void> {
         const now = Date.now();
 
         if (now - this.lastAlertTime < this.cooldownMs) {
-            console.log("[AlertManager] Alert skipped due to cooldown");
+            this.logger?.info("Alert skipped due to cooldown", {
+                component: "AlertManager",
+                operation: "sendAlert",
+                cooldownMs: this.cooldownMs,
+                timeSinceLastAlert: now - this.lastAlertTime,
+            });
             return;
         }
 
         const alert = this.formatAlert(signal);
 
-        // Console alert always
-        console.log("\n🚨 TRADING ALERT 🚨");
-        console.log(`Type: ${alert.type}`);
-        console.log(`Symbol: ${alert.symbol}`);
-        console.log(`Price: $${alert.price.toFixed(2)}`);
-        console.log(`Side: ${alert.side.toUpperCase()}`);
-        console.log(`Confidence: ${(alert.confidence * 100).toFixed(0)}%`);
-        console.log(`Targets:`, alert.targets);
-        console.log(`Reasoning:`, alert.reasoning.join(", "));
-        console.log("─".repeat(50));
+        // Log trading alert
+        this.logger.info("🚨 TRADING ALERT 🚨", {
+            component: "AlertManager",
+            operation: "sendAlert",
+            alertType: alert.type,
+            symbol: alert.symbol,
+            price: alert.price,
+            side: alert.side,
+            confidence: alert.confidence,
+            targets: alert.targets,
+            reasoning: alert.reasoning,
+        });
 
         // Webhook alert if configured
         if (this.webhookUrl) {
             try {
                 await this.sendWebhook(alert);
             } catch (error) {
-                console.error("[AlertManager] Webhook failed:", error);
+                this.logger.error("[AlertManager] Webhook failed:", { error });
             }
         }
 

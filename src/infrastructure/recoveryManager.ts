@@ -2,8 +2,9 @@
 
 import { EventEmitter } from "events";
 import { spawn } from "child_process";
-import { Logger } from "./logger.js";
-import { MetricsCollector } from "./metricsCollector.js";
+import type { ILogger } from "./loggerInterface.js";
+import type { IMetricsCollector } from "./metricsCollectorInterface.js";
+import { ProductionUtils } from "../utils/productionUtils.js";
 
 export interface HardReloadEvent {
     reason: string;
@@ -21,8 +22,8 @@ export interface RecoveryManagerConfig {
 }
 
 export class RecoveryManager extends EventEmitter {
-    private readonly logger: Logger;
-    private readonly metricsCollector: MetricsCollector;
+    private readonly logger: ILogger;
+    private readonly metricsCollector: IMetricsCollector;
     private readonly config: RecoveryManagerConfig;
 
     private hardReloadCount = 0;
@@ -31,8 +32,8 @@ export class RecoveryManager extends EventEmitter {
 
     constructor(
         config: RecoveryManagerConfig,
-        logger: Logger,
-        metricsCollector: MetricsCollector
+        logger: ILogger,
+        metricsCollector: IMetricsCollector
     ) {
         super();
         this.config = config;
@@ -142,7 +143,7 @@ export class RecoveryManager extends EventEmitter {
         });
 
         // Give components time to clean up
-        await this.delay(2000);
+        await ProductionUtils.sleep(2000);
 
         try {
             if (this.config.hardReloadRestartCommand === "process.exit") {
@@ -256,9 +257,5 @@ export class RecoveryManager extends EventEmitter {
         this.hardReloadCount = 0;
         this.lastHardReloadTime = 0;
         this.logger.info("[RecoveryManager] Hard reload counter reset");
-    }
-
-    private delay(ms: number): Promise<void> {
-        return new Promise((resolve) => setTimeout(resolve, ms));
     }
 }

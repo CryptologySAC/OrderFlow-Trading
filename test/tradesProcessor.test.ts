@@ -1,61 +1,84 @@
-import { TradesProcessor } from "../src/clients/tradesProcessor";
-import { Logger } from "../src/infrastructure/logger";
+import { TradesProcessor } from "../src/market/processors/tradesProcessor";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents";
 import type { SpotWebsocketAPI } from "@binance/spot";
 
-vi.mock("../src/infrastructure/logger");
+vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
 vi.mock("../src/utils/binance");
 
 describe("TradesProcessor", () => {
-    let logger: Logger;
+    let logger: WorkerLogger;
     let metrics: MetricsCollector;
     let storage: any;
     let processor: TradesProcessor;
+    let mockBinanceFeed: any;
 
     beforeEach(() => {
         vi.useFakeTimers();
-        logger = new Logger();
+        tradeIdCounter = 1; // Reset counter for each test
+        logger = {
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            debug: vi.fn(),
+        } as any;
         metrics = new MetricsCollector();
         storage = {
             saveAggregatedTradesBulk: vi.fn(),
             getLatestAggregatedTrades: vi.fn().mockReturnValue([]),
+            getLastTradeTimestamp: vi.fn().mockReturnValue(null),
+            detectGaps: vi.fn().mockReturnValue([]),
         };
+        mockBinanceFeed = {
+            disconnect: vi.fn().mockResolvedValue(undefined),
+            fetchAggTradesByTime: vi.fn().mockResolvedValue([]),
+        };
+        const mockThreadManager = {
+            callStorage: vi.fn().mockResolvedValue([]),
+        } as any;
+
         processor = new TradesProcessor(
             { symbol: "TEST", healthCheckInterval: 1000000, saveQueueSize: 10 },
-            storage,
             logger,
-            metrics
+            metrics,
+            mockBinanceFeed,
+            mockThreadManager
         );
     });
 
     afterEach(async () => {
         vi.useRealTimers();
-        await processor.shutdown();
+        if (processor) {
+            await processor.shutdown();
+        }
     });
 
-    const createEvent = (): EnrichedTradeEvent => {
+    let tradeIdCounter = 1;
+
+    const createEvent = (customTradeId?: number): EnrichedTradeEvent => {
+        const tradeId = customTradeId ?? tradeIdCounter++;
         const originalTrade: SpotWebsocketAPI.TradesAggregateResponseResultInner =
             {
                 e: "aggTrade",
                 s: "TEST",
-                a: 1,
+                a: tradeId,
                 p: "100",
                 q: "2",
-                f: 1,
-                l: 1,
-                T: Date.now(),
+                f: tradeId,
+                l: tradeId,
+                T: Date.now() + tradeId, // Ensure unique timestamps too
                 m: false,
                 M: true,
             } as any;
         return {
             price: 100,
             quantity: 2,
-            timestamp: Date.now(),
+            timestamp: Date.now() + tradeId,
             buyerIsMaker: false,
             pair: "TEST",
-            tradeId: "1",
+            tradeId: tradeId.toString(),
             originalTrade,
             passiveBidVolume: 0,
             passiveAskVolume: 0,
@@ -64,17 +87,17 @@ describe("TradesProcessor", () => {
         };
     };
 
-    it("processes enriched trade and queues save", () => {
+    it("processes enriched trade and queues save", async () => {
         const event = createEvent();
 
         const msg = processor.onEnrichedTrade(event);
         expect(msg.type).toBe("trade");
         expect(metrics.incrementMetric).toHaveBeenCalledWith("tradesProcessed");
-        const backlog = processor.requestBacklog(1);
+        const backlog = await processor.requestBacklog(1);
         expect(backlog[0].price).toBe(100);
     });
 
-    it("requests backlog from storage when memory empty", () => {
+    it("requests backlog from storage when memory empty", async () => {
         const storedTrade: SpotWebsocketAPI.TradesAggregateResponseResultInner =
             {
                 e: "aggTrade",
@@ -88,10 +111,14 @@ describe("TradesProcessor", () => {
                 m: false,
                 M: true,
             } as any;
-        storage.getLatestAggregatedTrades.mockReturnValue([storedTrade]);
 
-        const trades = processor.requestBacklog(1);
-        expect(storage.getLatestAggregatedTrades).toHaveBeenCalledWith(
+        // Mock threadManager to return the stored trade
+        const mockThreadManager = (processor as any).threadManager;
+        mockThreadManager.callStorage.mockResolvedValue([storedTrade]);
+
+        const trades = await processor.requestBacklog(1);
+        expect(mockThreadManager.callStorage).toHaveBeenCalledWith(
+            "getLatestAggregatedTrades",
             1,
             "TEST"
         );

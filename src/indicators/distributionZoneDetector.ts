@@ -65,12 +65,12 @@ import {
     ZoneDetectorConfig,
 } from "../types/zoneTypes.js";
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
-import { Logger } from "../infrastructure/logger.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { DetectorUtils } from "./base/detectorUtils.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
 import { ObjectPool } from "../utils/objectPool.js";
-import { CircularBuffer } from "../utils/utils.js";
+import { CircularBuffer } from "../utils/circularBuffer.js";
 import {
     EnhancedZoneFormation,
     type InstitutionalSignals,
@@ -144,8 +144,8 @@ export class DistributionZoneDetector extends ZoneDetector {
         id: string,
         symbol: string,
         config: Partial<ZoneDetectorConfig>,
-        logger: Logger,
-        metricsCollector: MetricsCollector
+        logger: ILogger,
+        metricsCollector: IMetricsCollector
     ) {
         super(id, config, "distribution", logger, metricsCollector);
 
@@ -248,14 +248,17 @@ export class DistributionZoneDetector extends ZoneDetector {
         try {
             // Validate input
             if (!this.isValidTrade(trade)) {
-                console.warn("Invalid trade received:", trade);
+                this.logger.warn("Invalid trade received", { trade });
                 return;
             }
 
             const priceLevel = this.getPriceLevel(trade.price);
 
             if (!isFinite(priceLevel) || priceLevel <= 0) {
-                console.warn("Invalid price level calculated:", priceLevel);
+                this.logger.warn("Invalid price level calculated", {
+                    priceLevel,
+                    tradePrice: trade.price,
+                });
                 return;
             }
             const isSellTrade = trade.buyerIsMaker; // ✅ CORRECT: Aggressive sell
@@ -300,7 +303,10 @@ export class DistributionZoneDetector extends ZoneDetector {
             // Note: Volume tracking remains accurate since we track totalVolume/tradeCount separately.
             // Only the detailed trade history is managed by the circular buffer.
         } catch (error) {
-            console.error("Error updating candidates:", error);
+            this.logger.error("Error updating candidates", {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+            });
             // Graceful degradation
         }
     }
@@ -436,9 +442,12 @@ export class DistributionZoneDetector extends ZoneDetector {
         // VALIDATION: Ensure ratios are consistent
         const totalRatio = sellRatio + buyRatio;
         if (Math.abs(totalRatio - 1.0) > 0.01) {
-            console.warn(
-                `Distribution ratio inconsistency: sellRatio(${sellRatio}) + buyRatio(${buyRatio}) = ${totalRatio}`
-            );
+            this.logger.warn("Distribution ratio inconsistency detected", {
+                sellRatio,
+                buyRatio,
+                totalRatio,
+                component: "DistributionZoneDetector",
+            });
         }
 
         // Use distribution-specific scoring
@@ -456,7 +465,7 @@ export class DistributionZoneDetector extends ZoneDetector {
 
         // Optional: Log detailed scoring for debugging (remove in production)
         if (enhancedResult.score > 0.6) {
-            console.debug(`High distribution score detected:`, {
+            this.logger.debug("High distribution score detected", {
                 score: enhancedResult.score,
                 confidence: enhancedResult.confidence,
                 sellRatio: sellRatio.toFixed(3),
@@ -825,7 +834,10 @@ export class DistributionZoneDetector extends ZoneDetector {
 
         // Log cleanup metrics
         if (cleanedCount > 0) {
-            console.debug(`Cleaned ${cleanedCount} old candidates`);
+            this.logger.debug("Cleaned old candidates", {
+                cleanedCount,
+                component: "DistributionZoneDetector",
+            });
         }
     }
 

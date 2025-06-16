@@ -2,9 +2,9 @@
 
 import type { SpotWebsocketStreams } from "@binance/spot";
 import { BinanceDataFeed } from "../utils/binance.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type { PassiveLevel, OrderBookHealth } from "../types/marketEvents.js";
-import { Logger } from "../infrastructure/logger.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 
 type SnapShot = Map<number, PassiveLevel>;
 
@@ -45,8 +45,8 @@ export interface IOrderBookState {
 }
 
 export class OrderBookState implements IOrderBookState {
-    private readonly logger: Logger;
-    private readonly metricsCollector: MetricsCollector;
+    private readonly logger: ILogger;
+    private readonly metricsCollector: IMetricsCollector;
 
     private isInitialized = false;
     private readonly binanceFeed = new BinanceDataFeed();
@@ -79,10 +79,14 @@ export class OrderBookState implements IOrderBookState {
     private circuitOpen: boolean = false;
     private circuitOpenUntil: number = 0;
 
+    // Stream connection awareness for health monitoring
+    private isStreamConnected = true; // Assume connected initially
+    private streamConnectionTime = Date.now();
+
     constructor(
         options: OrderBookStateOptions,
-        logger: Logger,
-        metricsCollector: MetricsCollector
+        logger: ILogger,
+        metricsCollector: IMetricsCollector
     ) {
         this.pricePrecision = options.pricePrecision;
         this.tickSize = Math.pow(10, -this.pricePrecision);
@@ -98,10 +102,47 @@ export class OrderBookState implements IOrderBookState {
         setInterval(() => this.connectionHealthCheck(), 10000);
     }
 
+    /**
+     * Handle stream connection events
+     */
+    public onStreamConnected(): void {
+        const wasConnected = this.isStreamConnected;
+        this.isStreamConnected = true;
+        this.streamConnectionTime = Date.now();
+
+        if (!wasConnected) {
+            this.logger.info("[OrderBookState] Stream connection restored", {
+                symbol: this.symbol,
+                connectionTime: new Date(
+                    this.streamConnectionTime
+                ).toISOString(),
+            });
+        }
+    }
+
+    /**
+     * Handle stream disconnection events
+     */
+    public onStreamDisconnected(reason?: string): void {
+        const wasConnected = this.isStreamConnected;
+        this.isStreamConnected = false;
+
+        if (wasConnected) {
+            this.logger.info(
+                "[OrderBookState] Stream disconnected, adjusting health monitoring",
+                {
+                    symbol: this.symbol,
+                    reason: reason || "unknown",
+                    lastUpdateAge: Date.now() - this.lastUpdateTime,
+                }
+            );
+        }
+    }
+
     public static async create(
         options: OrderBookStateOptions,
-        logger: Logger,
-        metricsCollector: MetricsCollector
+        logger: ILogger,
+        metricsCollector: IMetricsCollector
     ): Promise<OrderBookState> {
         const instance = new OrderBookState(options, logger, metricsCollector);
         await instance.initialize();

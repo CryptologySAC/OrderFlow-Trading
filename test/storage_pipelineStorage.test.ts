@@ -1,16 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Database from "better-sqlite3";
-import { PipelineStorage } from "../src/storage/pipelineStorage";
-import type { ProcessingJob } from "../src/utils/types";
+import { PipelineStorage } from "../src/infrastructure/pipelineStorage";
+import type { SerializableJobData } from "../src/utils/types";
+import type { ILogger } from "../src/infrastructure/loggerInterface";
 
 vi.mock("../src/infrastructure/logger");
 vi.mock("../src/infrastructure/metricsCollector");
 
-const stubDetector = { getId: () => "det" } as any;
-
-const makeJob = (): ProcessingJob => ({
-    id: "job1",
-    detector: stubDetector,
+const makeJobData = (): SerializableJobData => ({
+    jobId: "job1",
+    detectorId: "det",
     candidate: { id: "c1", type: "test", confidence: 1, data: {} } as any,
     startTime: Date.now(),
     retryCount: 0,
@@ -19,20 +18,31 @@ const makeJob = (): ProcessingJob => ({
 
 describe("storage/PipelineStorage", () => {
     let storage: PipelineStorage;
+    let mockLogger: ILogger;
+
     beforeEach(() => {
-        storage = new PipelineStorage(new Database(":memory:"));
+        mockLogger = {
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            debug: vi.fn(),
+            isDebugEnabled: vi.fn(() => false),
+            setCorrelationId: vi.fn(),
+            removeCorrelationId: vi.fn(),
+        };
+        storage = new PipelineStorage(new Database(":memory:"), mockLogger);
     });
     afterEach(() => {
         storage.close();
     });
 
     it("queues and restores jobs", () => {
-        const job = makeJob();
-        storage.enqueueJob(job);
+        const jobData = makeJobData();
+        storage.enqueueJob(jobData);
         const dequeued = storage.dequeueJobs(1);
         expect(dequeued.length).toBe(1);
         expect(dequeued[0].candidate.id).toBe("c1");
-        storage.markJobCompleted(job.id);
+        storage.markJobCompleted(jobData.jobId);
     });
 
     it("persists active anomalies", () => {

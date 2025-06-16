@@ -1,14 +1,14 @@
-import { Detector } from "./detectorEnrichedTrade.js";
 import { EnrichedTradeEvent } from "../../types/marketEvents.js";
-import { Logger } from "../../infrastructure/logger.js";
-import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
-import { ISignalLogger } from "../../services/signalLogger.js";
+import type { ILogger } from "../../infrastructure/loggerInterface.js";
+import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInterface.js";
+import { ISignalLogger } from "../../infrastructure/signalLoggerInterface.js";
 import { ZoneManager } from "../../trading/zoneManager.js";
 import {
     ZoneAnalysisResult,
     ZoneDetectorConfig,
 } from "../../types/zoneTypes.js";
-import { Config } from "../../orderFlowDashBoard.js";
+import { Config } from "../../core/config.js";
+import { Detector } from "./detectorEnrichedTrade.js";
 
 export abstract class ZoneDetector extends Detector {
     protected readonly config: ZoneDetectorConfig;
@@ -18,8 +18,8 @@ export abstract class ZoneDetector extends Detector {
         id: string,
         config: Partial<ZoneDetectorConfig>,
         detectorType: "accumulation" | "distribution",
-        logger: Logger,
-        metricsCollector: MetricsCollector,
+        logger: ILogger,
+        metricsCollector: IMetricsCollector,
         signalLogger?: ISignalLogger
     ) {
         super(id, logger, metricsCollector, signalLogger);
@@ -58,6 +58,17 @@ export abstract class ZoneDetector extends Detector {
 
     public onEnrichedTrade(event: EnrichedTradeEvent): void {
         this.analyze(event);
+    }
+
+    public getStatus(): string {
+        return "unknown";
+    }
+
+    public markSignalConfirmed(zone: number, side: "buy" | "sell"): void {
+        // Zone detectors don't use cooldown tracking in the same way as BaseDetector
+        // This is a no-op for zone detectors
+        void zone;
+        void side;
     }
 
     public abstract analyze(trade: EnrichedTradeEvent): ZoneAnalysisResult;

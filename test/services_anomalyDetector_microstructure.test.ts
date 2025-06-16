@@ -1,24 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
+
 import { AnomalyDetector } from "../src/services/anomalyDetector";
-import { Logger } from "../src/infrastructure/logger";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
 import type {
     HybridTradeEvent,
     MicrostructureMetrics,
     CoordinationSignal,
 } from "../src/types/marketEvents";
 
-vi.mock("../src/infrastructure/logger");
-
 describe("services/AnomalyDetector - Microstructure Analysis", () => {
     let detector: AnomalyDetector;
-    let logger: Logger;
+    let logger: WorkerLogger;
     let emittedAnomalies: any[] = [];
 
     beforeEach(() => {
         vi.clearAllMocks();
         emittedAnomalies = [];
 
-        logger = new Logger();
+        logger = new WorkerLogger();
         detector = new AnomalyDetector(
             {
                 windowSize: 100,

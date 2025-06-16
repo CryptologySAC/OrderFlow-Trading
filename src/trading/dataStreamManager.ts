@@ -1,9 +1,9 @@
 import { SpotWebsocketStreams } from "@binance/spot";
 import { EventEmitter } from "events";
 import { randomUUID } from "crypto";
-import { Logger } from "../infrastructure/logger.js";
-import { CircuitBreaker } from "../infrastructure/circuitBreaker.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import { ILogger } from "../infrastructure/loggerInterface.js";
+import { ICircuitBreaker } from "../infrastructure/circuitBreakerInterface.js";
+import type { IWorkerMetricsCollector } from "../multithreading/shared/workerInterfaces.js";
 import { ConnectionError } from "../core/errors.js";
 import type { IBinanceDataFeed } from "../utils/binance.js";
 import {
@@ -108,9 +108,9 @@ export class DataStreamManager extends EventEmitter {
     constructor(
         private readonly config: DataStreamConfig,
         private readonly binanceFeed: IBinanceDataFeed,
-        private readonly circuitBreaker: CircuitBreaker,
-        private readonly logger: Logger,
-        private readonly metricsCollector: MetricsCollector
+        private readonly circuitBreaker: ICircuitBreaker,
+        private readonly logger: ILogger,
+        private readonly metricsCollector: IWorkerMetricsCollector
     ) {
         super();
         this.reconnectDelay = config.reconnectDelay || 5000;
@@ -201,9 +201,8 @@ export class DataStreamManager extends EventEmitter {
             );
 
             // Use circuit breaker for all connection attempts
-            this.connection = await this.circuitBreaker.execute(
-                () => this.binanceFeed.connectToStreams(),
-                correlationId
+            this.connection = await this.circuitBreaker.execute(() =>
+                this.binanceFeed.connectToStreams()
             );
 
             this.setupConnectionHandlers();
@@ -689,59 +688,131 @@ export class DataStreamManager extends EventEmitter {
     }
 
     private async cleanup(): Promise<void> {
-        this.logger.debug("Cleaning up connection resources", {
-            symbol: this.config.symbol,
-            state: this.connectionState,
-        });
+        const correlationId = randomUUID();
 
-        // Set disconnected state first to prevent race conditions
-        const wasConnected = this.connectionState === ConnectionState.CONNECTED;
-        if (wasConnected) {
-            this.setConnectionState(ConnectionState.DISCONNECTED);
-        }
-
-        this.stopAllTimers();
-
-        // Clean up streams
-        if (this.tradeStream) {
-            this.tradeStream.removeAllListeners?.();
-            this.tradeStream = undefined;
-        }
-
-        if (this.depthStream) {
-            this.depthStream.removeAllListeners?.();
-            this.depthStream = undefined;
-        }
-
-        // Clean up connection
-        if (this.connection) {
-            try {
-                await this.connection.disconnect();
-                this.logger.debug("Connection disconnected successfully", {
+        try {
+            this.logger.debug(
+                "Cleaning up connection resources",
+                {
                     symbol: this.config.symbol,
-                });
-            } catch (error) {
-                this.logger.error("Error disconnecting connection", {
-                    error,
-                    symbol: this.config.symbol,
-                });
+                    state: this.connectionState,
+                },
+                correlationId
+            );
+
+            // Set disconnected state first to prevent race conditions
+            const wasConnected =
+                this.connectionState === ConnectionState.CONNECTED;
+            if (wasConnected) {
+                this.setConnectionState(ConnectionState.DISCONNECTED);
             }
-            this.connection = undefined;
-        }
 
-        this.connectedAt = undefined;
+            this.stopAllTimers();
+
+            // Clean up streams
+            if (this.tradeStream) {
+                this.tradeStream.removeAllListeners?.();
+                this.tradeStream = undefined;
+            }
+
+            if (this.depthStream) {
+                this.depthStream.removeAllListeners?.();
+                this.depthStream = undefined;
+            }
+
+            // Clean up connection
+            if (this.connection) {
+                try {
+                    await this.connection.disconnect();
+                    this.logger.debug(
+                        "Connection disconnected successfully",
+                        {
+                            symbol: this.config.symbol,
+                        },
+                        correlationId
+                    );
+                } catch (error) {
+                    this.logger.error(
+                        "Error disconnecting connection",
+                        {
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                            stack:
+                                error instanceof Error
+                                    ? error.stack
+                                    : undefined,
+                            symbol: this.config.symbol,
+                        },
+                        correlationId
+                    );
+                }
+                this.connection = undefined;
+            }
+
+            this.connectedAt = undefined;
+        } catch (error) {
+            this.logger.error(
+                "Error during connection cleanup",
+                {
+                    component: "DataStreamManager",
+                    operation: "cleanup",
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                    symbol: this.config.symbol,
+                    state: this.connectionState,
+                },
+                correlationId
+            );
+            throw error;
+        }
     }
 
     public async disconnect(): Promise<void> {
-        this.logger.info("Manual disconnect requested", {
-            symbol: this.config.symbol,
-            state: this.connectionState,
-        });
+        const correlationId = randomUUID();
 
-        this.setConnectionState(ConnectionState.SHUTTING_DOWN);
-        await this.cleanup();
-        this.reconnectAttempts = 0n; // Reset for future connections
-        this.emit("disconnected", "manual_disconnect");
+        try {
+            this.logger.info(
+                "Manual disconnect requested",
+                {
+                    symbol: this.config.symbol,
+                    state: this.connectionState,
+                },
+                correlationId
+            );
+
+            this.setConnectionState(ConnectionState.SHUTTING_DOWN);
+            await this.cleanup();
+            this.reconnectAttempts = 0n; // Reset for future connections
+            this.emit("disconnected", "manual_disconnect");
+
+            this.logger.info(
+                "Manual disconnect completed",
+                {
+                    component: "DataStreamManager",
+                    operation: "disconnect",
+                    symbol: this.config.symbol,
+                },
+                correlationId
+            );
+        } catch (error) {
+            this.logger.error(
+                "Error during manual disconnect",
+                {
+                    component: "DataStreamManager",
+                    operation: "disconnect",
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                    symbol: this.config.symbol,
+                    state: this.connectionState,
+                },
+                correlationId
+            );
+            throw error;
+        }
     }
 
     private getUptime(): number | undefined {

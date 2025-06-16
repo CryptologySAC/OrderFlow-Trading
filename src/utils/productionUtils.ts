@@ -1,17 +1,24 @@
 // src/utils/productionUtils.ts - NEW UTILITY CLASS
 import type { BaseDetectorSettings } from "../indicators/interfaces/detectorInterfaces.js";
-import { Logger } from "../infrastructure/logger.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { CircuitBreaker } from "../infrastructure/circuitBreaker.js";
 
 export class ProductionUtils {
+    /**
+     * Async sleep utility - consolidates duplicate sleep implementations
+     */
+    public static sleep(ms: number): Promise<void> {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
     /**
      * Circuit breaker for detector error handling
      */
     public static createCircuitBreaker(
         errorThreshold: number,
         timeoutMs: number,
-        logger: Logger
+        logger: ILogger
     ): CircuitBreaker {
         return new CircuitBreaker(errorThreshold, timeoutMs, logger);
     }
@@ -31,7 +38,7 @@ export class ProductionUtils {
      */
     public static measurePerformance<T>(
         operation: () => T,
-        metricsCollector: MetricsCollector,
+        metricsCollector: IMetricsCollector,
         operationName: string
     ): T {
         const startTime = Date.now();

@@ -1,8 +1,8 @@
 // src/analysis/performanceAnalyzer.ts
 
-import { Logger } from "../infrastructure/logger.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
-import type { IPipelineStorage } from "../storage/pipelineStorage.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import type { IPipelineStorage } from "../infrastructure/pipelineStorage.js";
 import type {
     SignalOutcome,
     MarketContext,
@@ -258,8 +258,8 @@ export class PerformanceAnalyzer {
     >();
 
     constructor(
-        private readonly logger: Logger,
-        private readonly metricsCollector: MetricsCollector,
+        private readonly logger: ILogger,
+        private readonly metricsCollector: IMetricsCollector,
         private readonly storage: IPipelineStorage,
         config: Partial<PerformanceAnalyzerConfig> = {}
     ) {

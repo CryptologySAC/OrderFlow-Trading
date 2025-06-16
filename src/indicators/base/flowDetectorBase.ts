@@ -2,13 +2,20 @@
 
 //import { SpotWebsocketStreams } from "@binance/spot";
 import { BaseDetector } from "./baseDetector.js";
-import { DetectorUtils } from "./detectorUtils.js";
-import { Logger } from "../../infrastructure/logger.js";
 import {
-    MetricsCollector,
-    type Metrics,
-} from "../../infrastructure/metricsCollector.js";
-import { ISignalLogger } from "../../services/signalLogger.js";
+    DetailedFlowState,
+    SuperiorZoneFlowData,
+    SuperiorFlowSettings,
+    SuperiorFlowConditions,
+    SignalCreationParams,
+    ZoneAnalysisResult,
+    FlowSimulationParams,
+    FlowSimulationResult,
+} from "../interfaces/detectorInterfaces.js";
+import type { ILogger } from "../../infrastructure/loggerInterface.js";
+import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInterface.js";
+import type { Metrics } from "../../infrastructure/metricsCollector.js";
+import { ISignalLogger } from "../../infrastructure/signalLoggerInterface.js";
 import { SpoofingDetector } from "../../services/spoofingDetector.js";
 import { RollingWindow } from "../../utils/rollingWindow.js";
 
@@ -16,16 +23,8 @@ import type {
     EnrichedTradeEvent,
     AggressiveTrade,
 } from "../../types/marketEvents.js";
-import type {
-    DetectorCallback,
-    BaseDetectorSettings,
-} from "../interfaces/detectorInterfaces.js";
 
-import {
-    SignalType,
-    DistributionResult,
-    MarketRegime,
-} from "../../types/signalTypes.js";
+import { SignalType, DistributionResult } from "../../types/signalTypes.js";
 
 /**
  * Superior FlowDetectorBase - Production-grade base class for Accumulation & Distribution
@@ -74,16 +73,14 @@ export abstract class FlowDetectorBase extends BaseDetector {
 
     constructor(
         id: string,
-        callback: DetectorCallback,
         settings: SuperiorFlowSettings = {},
-        logger: Logger,
+        logger: ILogger,
         spoofingDetector: SpoofingDetector,
-        metricsCollector: MetricsCollector,
+        metricsCollector: IMetricsCollector,
         signalLogger?: ISignalLogger
     ) {
         super(
             id,
-            callback,
             settings,
             logger,
             spoofingDetector,
@@ -1043,7 +1040,7 @@ export abstract class FlowDetectorBase extends BaseDetector {
     /**
      * Advanced analytics and debugging
      */
-    public getDetailedFlowState(): DetailedFlowState {
+    protected getDetailedFlowState(): DetailedFlowState {
         const now = Date.now();
         const zones = Array.from(this.zoneData.entries()).map(
             ([zone, data]) => ({
@@ -1096,7 +1093,7 @@ export abstract class FlowDetectorBase extends BaseDetector {
         };
     }
 
-    public analyzeZoneAtPrice(price: number): ZoneAnalysisResult {
+    protected analyzeZoneAtPrice(price: number): ZoneAnalysisResult {
         const zone = this.calculateZone(price);
         const zoneData = this.zoneData.get(zone);
 
@@ -1137,7 +1134,7 @@ export abstract class FlowDetectorBase extends BaseDetector {
         };
     }
 
-    public simulateFlow(params: FlowSimulationParams): FlowSimulationResult {
+    protected simulateFlow(params: FlowSimulationParams): FlowSimulationResult {
         // Create mock conditions for simulation
         const conditions: SuperiorFlowConditions = {
             ratio: this.calculateDirectionalRatio(
@@ -1198,39 +1195,6 @@ export abstract class FlowDetectorBase extends BaseDetector {
         };
     }
 
-    /**
-     * BaseDetector API Implementation
-     */
-    public getId(): string {
-        return this.id || `${this.flowDirection}Detector`;
-    }
-
-    public start(): void {
-        this.logger.info(`Superior ${this.flowDirection} detector started`, {
-            detector: this.getId(),
-            minRatio: this.minRatio,
-            threshold: this.threshold,
-            features: {
-                strengthAnalysis: this.strengthAnalysisEnabled,
-                velocityAnalysis: this.velocityAnalysisEnabled,
-            },
-        });
-    }
-
-    public stop(): void {
-        this.logger.info(`Superior ${this.flowDirection} detector stopped`, {
-            detector: this.getId(),
-        });
-    }
-
-    public enable(): void {
-        this.logger.info(`Superior ${this.flowDirection} detector enabled`);
-    }
-
-    public disable(): void {
-        this.logger.info(`Superior ${this.flowDirection} detector disabled`);
-    }
-
     public getStatus(): string {
         const state = this.getDetailedFlowState();
         const stats = {
@@ -1243,356 +1207,4 @@ export abstract class FlowDetectorBase extends BaseDetector {
 
         return `Superior ${this.flowDirection} Detector: ${JSON.stringify(stats)}`;
     }
-}
-
-// ============================================================================
-// CONCRETE IMPLEMENTATIONS
-// ============================================================================
-
-/**
- * Superior Accumulation Detector V2
- */
-export class AccumulationDetectorV2 extends FlowDetectorBase {
-    protected readonly detectorType = "accumulation" as const;
-    protected readonly flowDirection = "accumulation" as const;
-
-    protected getDefaultMinRatio(): number {
-        return 1.5; // Your proven threshold
-    }
-
-    protected getDefaultThreshold(): number {
-        return 0.6; // Your proven threshold
-    }
-
-    protected getRequiredTradeSide(): "buy" | "sell" {
-        return "buy"; // Accumulation requires aggressive buying
-    }
-
-    protected getRelevantPassiveSide(event: EnrichedTradeEvent): number {
-        return event.zonePassiveAskVolume || 0; // For accumulation, buyers hit asks
-    }
-
-    protected calculateDirectionalRatio(
-        aggressive: number,
-        relevantPassive: number
-    ): number {
-        // Your superior approach: passive/aggressive for accumulation
-        return aggressive > 0 ? relevantPassive / aggressive : 0;
-    }
-
-    protected calculatePriceEffect(zoneData: SuperiorZoneFlowData): number {
-        // For accumulation: price should show strength (hold up during buying pressure)
-        if (zoneData.priceCount < 2) return 0;
-
-        const priceVariance = DetectorUtils.safeDivide(
-            zoneData.priceRollingVar,
-            zoneData.priceCount - 1,
-            0
-        );
-        const priceStd = Math.sqrt(priceVariance);
-
-        // Lower variance during accumulation = price strength
-        // Higher price stability during buying pressure = accumulation
-        const stabilityScore = priceStd > 0 ? Math.min(1, 0.01 / priceStd) : 1;
-
-        // Check if price trend is positive or stable during accumulation
-        const avgPriceChange = zoneData.priceRollingMean;
-        const trendScore =
-            avgPriceChange >= 0 ? 1 : Math.max(0, 1 + avgPriceChange * 100);
-
-        return stabilityScore * 0.6 + trendScore * 0.4;
-    }
-
-    protected validateFlowSpecificConditions(
-        conditions: SuperiorFlowConditions
-    ): boolean {
-        // Accumulation must show price strength
-        return conditions.priceEffect > 0.3;
-    }
-
-    protected getSignalSide(): "buy" | "sell" {
-        return "buy"; // Accumulation signals are bullish
-    }
-
-    protected getSignalType() {
-        return this.detectorType;
-    }
-
-    protected createFlowSignal(params: SignalCreationParams) {
-        return {
-            duration: params.conditions.duration,
-            zone: params.zone,
-            ratio: params.conditions.ratio,
-            strength: params.conditions.strength,
-            isAccumulating: params.conditions.isRecentlyActive,
-            price: params.price,
-            side: params.side,
-            confidence: params.score,
-            metadata: {
-                accumulationScore: params.score,
-                conditions: params.conditions,
-                marketRegime: params.marketRegime,
-                statisticalSignificance:
-                    params.conditions.statisticalSignificance,
-                volumeConcentration: params.conditions.volumeConcentration,
-                detectorVersion: "2.0-superior",
-            },
-        };
-    }
-}
-
-/**
- * Superior Distribution Detector V2
- */
-export class DistributionDetectorV2 extends FlowDetectorBase {
-    protected readonly detectorType = "distribution" as const;
-    protected readonly flowDirection = "distribution" as const;
-
-    protected getDefaultMinRatio(): number {
-        return 1.8; // Higher threshold for distribution
-    }
-
-    protected getDefaultThreshold(): number {
-        return 0.65; // Higher confidence threshold for distribution
-    }
-
-    protected getRequiredTradeSide(): "buy" | "sell" {
-        return "sell"; // Distribution requires aggressive selling
-    }
-
-    protected getRelevantPassiveSide(event: EnrichedTradeEvent): number {
-        return event.zonePassiveBidVolume || 0; // For distribution, sellers hit bids
-    }
-
-    protected calculateDirectionalRatio(
-        aggressive: number,
-        relevantPassive: number
-    ): number {
-        // For distribution: aggressive sells vs relevant passive bids
-        return relevantPassive > 0 ? aggressive / relevantPassive : 0;
-    }
-
-    protected calculatePriceEffect(zoneData: SuperiorZoneFlowData): number {
-        // For distribution: price should show weakness despite buying interest
-        if (zoneData.priceCount < 2) return 0;
-
-        // Calculate price weakness - negative mean change indicates weakness
-        const avgPriceChange = zoneData.priceRollingMean;
-        const weaknessFromTrend =
-            avgPriceChange <= 0 ? Math.abs(avgPriceChange) * 100 : 0;
-
-        // High variance during distribution can also indicate weakness/uncertainty
-        const priceVariance = DetectorUtils.safeDivide(
-            zoneData.priceRollingVar,
-            zoneData.priceCount - 1,
-            0
-        );
-        const instabilityScore = Math.min(1, Math.sqrt(priceVariance) * 10);
-
-        return Math.min(1, weaknessFromTrend * 0.7 + instabilityScore * 0.3);
-    }
-
-    protected validateFlowSpecificConditions(
-        conditions: SuperiorFlowConditions
-    ): boolean {
-        // Distribution must show price weakness
-        return conditions.priceEffect > 0.3;
-    }
-
-    protected getSignalSide(): "buy" | "sell" {
-        return "sell"; // Distribution signals are bearish
-    }
-
-    protected getSignalType() {
-        return this.detectorType;
-    }
-
-    protected createFlowSignal(
-        params: SignalCreationParams
-    ): DistributionResult {
-        return {
-            duration: params.conditions.duration,
-            zone: params.zone,
-            sellRatio: params.conditions.ratio,
-            strength: params.conditions.strength,
-            priceWeakness: params.conditions.priceEffect,
-            isDistributing: params.conditions.isRecentlyActive,
-            price: params.price,
-            side: params.side,
-            confidence: params.score,
-            metadata: {
-                distributionScore: params.score,
-                conditions: params.conditions,
-                marketRegime: params.marketRegime,
-                statisticalSignificance:
-                    params.conditions.statisticalSignificance,
-                volumeConcentration: params.conditions.volumeConcentration,
-                detectorVersion: "2.0-superior",
-            },
-        };
-    }
-}
-
-// ============================================================================
-// TYPE DEFINITIONS
-// ============================================================================
-
-export interface SuperiorFlowSettings extends BaseDetectorSettings {
-    minDurationMs?: number;
-    minRatio?: number;
-    minRecentActivityMs?: number;
-    threshold?: number;
-    volumeConcentrationWeight?: number;
-    strengthAnalysis?: boolean;
-    velocityAnalysis?: boolean;
-    flowDirection?: "accumulation" | "distribution";
-    symbol?: string;
-}
-
-export interface SuperiorZoneFlowData {
-    // Core tracking (your approach)
-    aggressiveVolume: RollingWindow<number>;
-    timestamps: RollingWindow<number>;
-    sides: RollingWindow<"buy" | "sell">;
-
-    // Superior price statistics (your Welford's algorithm)
-    priceRollingMean: number;
-    priceRollingVar: number;
-    priceCount: number;
-
-    // Basic state
-    startTime: number;
-    lastUpdate: number;
-    tradeCount: number;
-
-    // Liquidity tracking (your approach)
-    currentPassiveBid: number;
-    currentPassiveAsk: number;
-
-    // Enhanced analytics
-    volumeProfile: Map<number, number>;
-    liquidityHistory: RollingWindow<number>;
-    strengthScore: number;
-    velocityScore: number;
-    priceEffectScore: number;
-
-    // Statistical validation
-    statisticalSignificance: number;
-    lastStatisticalUpdate: number;
-
-    // Side tracking
-    dominantSide: "buy" | "sell";
-    sideConfidence: number;
-}
-
-export interface SuperiorFlowConditions {
-    // Core metrics
-    ratio: number;
-    duration: number;
-    aggressiveVolume: number;
-    relevantPassive: number;
-    totalPassive: number;
-
-    // Enhanced analytics
-    strength: number;
-    velocity: number;
-    priceEffect: number;
-    statisticalSignificance: number;
-    volumeConcentration: number;
-
-    // Timing
-    recentActivity: number;
-    tradeCount: number;
-
-    // Validation flags
-    meetsMinDuration: boolean;
-    meetsMinRatio: boolean;
-    isRecentlyActive: boolean;
-
-    // Side analysis
-    dominantSide: "buy" | "sell";
-    sideConfidence: number;
-
-    // Market context
-    marketVolatility: number;
-    trendStrength: number;
-}
-
-export interface SignalCreationParams {
-    zone: number;
-    price: number;
-    side: "buy" | "sell";
-    score: number;
-    conditions: SuperiorFlowConditions;
-    volumes: {
-        aggressive: number;
-        passive: number;
-    };
-    zoneData: SuperiorZoneFlowData;
-    marketRegime: MarketRegime;
-}
-
-interface DetailedFlowState {
-    flowDirection: "accumulation" | "distribution";
-    zones: Array<{
-        zone: number;
-        duration: number;
-        ratio: number;
-        strength: number;
-        priceEffect: number;
-        velocity: number;
-        statisticalSignificance: number;
-        tradeCount: number;
-        isActive: boolean;
-        dominantSide: "buy" | "sell";
-        sideConfidence: number;
-    }>;
-    marketRegime: MarketRegime;
-    summary: {
-        totalZones: number;
-        activeZones: number;
-        strongZones: number;
-        avgConfidence: number;
-        avgRatio: number;
-    };
-    configuration: {
-        minRatio: number;
-        threshold: number;
-        minDurationMs: number;
-        strengthAnalysis: boolean;
-        velocityAnalysis: boolean;
-    };
-}
-
-interface ZoneAnalysisResult {
-    zone: number;
-    exists: boolean;
-    analysis: SuperiorFlowConditions | null;
-    recommendation:
-        | "strong_flow"
-        | "weak_flow"
-        | "no_flow"
-        | "developing"
-        | "no_activity";
-    confidence: number;
-}
-
-interface FlowSimulationParams {
-    aggressiveVolume: number;
-    passiveVolume: number;
-    duration: number;
-    strength?: number;
-    velocity?: number;
-    priceEffect?: number;
-    statisticalSignificance?: number;
-    volumeConcentration?: number;
-    tradeCount?: number;
-}
-
-interface FlowSimulationResult {
-    score: number;
-    wouldSignal: boolean;
-    breakdown: Record<string, number>;
-    missingRequirements: string[];
-    conditions: SuperiorFlowConditions;
 }

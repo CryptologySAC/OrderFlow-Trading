@@ -1,16 +1,22 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { Logger } from "../src/infrastructure/logger";
+
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
+vi.mock("openai");
+
+import { WorkerLogger } from "../src/multithreading/workerLogger";
 
 let openaiCreate: any;
-
-vi.mock("openai");
-vi.mock("../src/infrastructure/logger");
 
 describe("services/llmSignalAnalyzer", () => {
     const env = process.env;
     beforeEach(async () => {
         vi.resetModules();
-        process.env = { ...env, LLM_API_KEY: "k", LLM_MODEL: "model" };
+        process.env = {
+            ...env,
+            LLM_API_KEY: "test_api_key_1234567890",
+            LLM_MODEL: "model",
+        };
         ({ create: openaiCreate } = await import("openai"));
         (openaiCreate as any).mockClear();
     });
@@ -22,7 +28,7 @@ describe("services/llmSignalAnalyzer", () => {
         (openaiCreate as any).mockResolvedValue({
             choices: [{ message: { content: "ok" } }],
         });
-        const logger = new Logger();
+        const logger = new WorkerLogger();
         const { analyzeSignal } = await import(
             "../src/services/llmSignalAnalyzer"
         );
@@ -36,7 +42,7 @@ describe("services/llmSignalAnalyzer", () => {
 
     it("logs errors", async () => {
         (openaiCreate as any).mockRejectedValue(new Error("fail"));
-        const logger = new Logger();
+        const logger = new WorkerLogger();
         const { analyzeSignal } = await import(
             "../src/services/llmSignalAnalyzer"
         );
@@ -44,5 +50,24 @@ describe("services/llmSignalAnalyzer", () => {
             "fail"
         );
         expect(logger.error).toHaveBeenCalled();
+    });
+
+    it("validates API key format and rejects invalid keys", async () => {
+        // Test with invalid API key (too short)
+        process.env.LLM_API_KEY = "short";
+        const logger = new WorkerLogger();
+        const { analyzeSignal } = await import(
+            "../src/services/llmSignalAnalyzer"
+        );
+        await expect(analyzeSignal({ id: "1" } as any, logger)).rejects.toThrow(
+            "LLM_API_KEY not configured or invalid"
+        );
+        expect(logger.error).toHaveBeenCalledWith(
+            "LLM credential validation failed",
+            expect.objectContaining({
+                component: "LLMSignalAnalyzer",
+                error: "API key missing or invalid format",
+            })
+        );
     });
 });

@@ -1,5 +1,6 @@
 import { AlertManager } from "../src/alerts/alertManager";
 import type { Signal, SwingSignalData } from "../src/types/signalTypes";
+import type { ILogger } from "../src/infrastructure/loggerInterface";
 import {
     calculateBreakeven,
     calculateProfitTarget,
@@ -46,8 +47,19 @@ const sampleSignal = (): Signal => {
 };
 
 describe("AlertManager", () => {
+    let mockLogger: ILogger;
+
     beforeEach(() => {
         vi.clearAllMocks();
+        mockLogger = {
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            debug: vi.fn(),
+            isDebugEnabled: vi.fn(() => false),
+            setCorrelationId: vi.fn(),
+            removeCorrelationId: vi.fn(),
+        };
         (calculateBreakeven as any).mockReturnValue(0);
         (calculateProfitTarget as any).mockReturnValue({
             price: 0,
@@ -57,7 +69,7 @@ describe("AlertManager", () => {
     });
 
     it("formats and sends webhook alert", async () => {
-        const manager = new AlertManager("http://example.com", 0);
+        const manager = new AlertManager("http://example.com", 0, mockLogger);
         (global as any).fetch = vi.fn(async () => ({ ok: true }));
 
         (calculateBreakeven as any).mockReturnValue(101);
@@ -90,7 +102,11 @@ describe("AlertManager", () => {
     });
 
     it("honors cooldown between alerts", async () => {
-        const manager = new AlertManager("http://example.com", 10000);
+        const manager = new AlertManager(
+            "http://example.com",
+            10000,
+            mockLogger
+        );
         (global as any).fetch = vi.fn(async () => ({ ok: true }));
 
         await manager.sendAlert(sampleSignal());
@@ -100,7 +116,7 @@ describe("AlertManager", () => {
     });
 
     it("throws when webhook response not ok", async () => {
-        const manager = new AlertManager("http://bad.com");
+        const manager = new AlertManager("http://bad.com", 0, mockLogger);
         (global as any).fetch = vi.fn(async () => ({
             ok: false,
             statusText: "Bad",

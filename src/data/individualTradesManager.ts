@@ -9,8 +9,8 @@ import type {
     IndividualTrade,
     FetchReason,
 } from "../types/marketEvents.js";
-import { Logger } from "../infrastructure/logger.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IWorkerMetricsCollector } from "../multithreading/shared/workerInterfaces.js";
 import { RateLimiter } from "../infrastructure/rateLimiter.js";
 import { CircuitBreaker } from "../infrastructure/circuitBreaker.js";
 import type { IBinanceDataFeed } from "../utils/binance.js";
@@ -58,8 +58,8 @@ interface BinanceIndividualTradeResponse {
 }
 
 export class IndividualTradesManager {
-    private readonly logger: Logger;
-    private readonly metricsCollector: MetricsCollector;
+    private readonly logger: ILogger;
+    private readonly metricsCollector: IWorkerMetricsCollector;
     private readonly rateLimiter: RateLimiter;
     private readonly circuitBreaker: CircuitBreaker;
     private readonly config: IndividualTradesManagerConfig;
@@ -83,8 +83,8 @@ export class IndividualTradesManager {
 
     constructor(
         config: IndividualTradesManagerConfig,
-        logger: Logger,
-        metricsCollector: MetricsCollector,
+        logger: ILogger,
+        metricsCollector: IWorkerMetricsCollector,
         binanceFeed: IBinanceDataFeed
     ) {
         this.config = config;

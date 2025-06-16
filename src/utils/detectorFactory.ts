@@ -1,7 +1,8 @@
 // src/utils/detectorFactory.ts
-import { Logger } from "../infrastructure/logger.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
-import { ISignalLogger } from "../services/signalLogger.js";
+import { randomUUID } from "crypto";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { BaseDetector } from "../indicators/base/baseDetector.js";
 import {
     AbsorptionDetector,
@@ -21,7 +22,6 @@ import {
 } from "../indicators/supportResistanceDetector.js";
 
 import type {
-    DetectorCallback,
     BaseDetectorSettings,
     DetectorStats,
 } from "../indicators/interfaces/detectorInterfaces.js";
@@ -32,6 +32,7 @@ import { Config } from "../core/config.js";
 import { AccumulationZoneDetector } from "../indicators/accumulationZoneDetector.js";
 import { DistributionZoneDetector } from "../indicators/distributionZoneDetector.js";
 import { ZoneDetectorConfig } from "../types/zoneTypes.js";
+import { OrderBookState } from "../market/orderBookState";
 
 /**
  * Production detector factory with monitoring, validation, and lifecycle management
@@ -67,8 +68,8 @@ export class DetectorFactory {
      * Create production-ready absorption detector
      */
     public static createAbsorptionDetector(
-        callback: DetectorCallback,
         settings: AbsorptionSettings,
+        orderBook: OrderBookState,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
     ): AbsorptionDetector {
@@ -84,8 +85,8 @@ export class DetectorFactory {
 
         const detector = new AbsorptionDetector(
             id,
-            this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
+            orderBook,
             dependencies.logger,
             dependencies.spoofingDetector,
             dependencies.metricsCollector,
@@ -110,7 +111,6 @@ export class DetectorFactory {
      * Create production-ready exhaustion detector
      */
     public static createExhaustionDetector(
-        callback: DetectorCallback,
         settings: ExhaustionSettings,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
@@ -127,7 +127,6 @@ export class DetectorFactory {
 
         const detector = new ExhaustionDetector(
             id,
-            this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
             dependencies.logger,
             dependencies.spoofingDetector,
@@ -153,7 +152,6 @@ export class DetectorFactory {
      * Create production-ready accumulation detector
      */
     public static createAccumulationDetector(
-        callback: DetectorCallback,
         settings: ZoneDetectorConfig,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
@@ -193,7 +191,6 @@ export class DetectorFactory {
      * Create production-ready accumulation detector
      */
     public static createDistributionDetector(
-        callback: DetectorCallback,
         settings: ZoneDetectorConfig,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
@@ -233,7 +230,6 @@ export class DetectorFactory {
      * Create production-ready support/resistance detector
      */
     public static createSupportResistanceDetector(
-        callback: DetectorCallback,
         settings: Partial<SupportResistanceConfig>,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
@@ -254,7 +250,6 @@ export class DetectorFactory {
 
         const detector = new SupportResistanceDetector(
             id,
-            this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
             dependencies.logger,
             dependencies.spoofingDetector,
@@ -279,7 +274,6 @@ export class DetectorFactory {
      * Create production-ready accumulation detector
      */
     public static createDeltaCVDConfirmationDetector(
-        callback: DetectorCallback,
         settings: DeltaCVDConfirmationSettings,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
@@ -296,7 +290,6 @@ export class DetectorFactory {
 
         const detector = new DeltaCVDConfirmation(
             id,
-            this.wrapCallback(callback, id, dependencies.logger),
             productionSettings,
             dependencies.logger,
             dependencies.spoofingDetector,
@@ -333,68 +326,6 @@ export class DetectorFactory {
             { type: "cvd_confirmation", config: {} },
             { type: "support_resistance", config: {} },
         ];
-    }
-
-    /**
-     * Create a detector instance by type (for SignalCoordinator)
-     */
-    public static create(
-        type: string,
-        config: Record<string, unknown>
-    ): BaseDetector | AccumulationZoneDetector | DistributionZoneDetector {
-        if (!this.dependencies) {
-            throw new Error(
-                "DetectorFactory not initialized. Call DetectorFactory.initialize() first."
-            );
-        }
-
-        const callback: DetectorCallback = (signal) => {
-            // Default callback - will be overridden by coordinator
-            void signal;
-        };
-
-        const baseSettings = config as BaseDetectorSettings;
-
-        switch (type) {
-            case "absorption":
-                return this.createAbsorptionDetector(
-                    callback,
-                    baseSettings as AbsorptionSettings,
-                    this.dependencies
-                );
-            case "exhaustion":
-                return this.createExhaustionDetector(
-                    callback,
-                    baseSettings as ExhaustionSettings,
-                    this.dependencies
-                );
-            case "accumulation":
-                return this.createAccumulationDetector(
-                    callback,
-                    baseSettings as ZoneDetectorConfig,
-                    this.dependencies
-                );
-            case "distribution":
-                return this.createDistributionDetector(
-                    callback,
-                    baseSettings as ZoneDetectorConfig,
-                    this.dependencies
-                );
-            case "cvd_confirmation":
-                return this.createDeltaCVDConfirmationDetector(
-                    callback,
-                    baseSettings as DeltaCVDConfirmationSettings,
-                    this.dependencies
-                );
-            case "support_resistance":
-                return this.createSupportResistanceDetector(
-                    callback,
-                    baseSettings as Partial<SupportResistanceConfig>,
-                    this.dependencies
-                );
-            default:
-                throw new Error(`Unknown detector type: ${type}`);
-        }
     }
 
     /**
@@ -452,53 +383,6 @@ export class DetectorFactory {
                 enabled: false,
             }
         );
-    }
-
-    /**
-     * Create generic detector with type safety
-     */
-    public static createDetector<
-        T extends
-            | BaseDetector
-            | AccumulationZoneDetector
-            | DistributionZoneDetector,
-    >(
-        DetectorClass: DetectorConstructor<T>,
-        callback: DetectorCallback,
-        settings: BaseDetectorSettings | ZoneDetectorConfig,
-        dependencies: DetectorDependencies,
-        options: DetectorFactoryOptions = {}
-    ): T {
-        const id =
-            options.id || `${DetectorClass.name.toLowerCase()}-${Date.now()}`;
-
-        this.validateCreationLimits();
-        this.validateProductionConfig(settings);
-
-        const productionSettings = this.applyProductionDefaults(
-            settings,
-            "generic"
-        );
-
-        const detector = new DetectorClass(
-            this.wrapCallback(callback, id, dependencies.logger),
-            productionSettings,
-            dependencies.logger,
-            dependencies.metricsCollector,
-            dependencies.signalLogger
-        );
-
-        this.registerDetector(id, detector, dependencies, options);
-
-        dependencies.logger.info(
-            `[DetectorFactory] Created ${DetectorClass.name}`,
-            {
-                id,
-                settings: productionSettings,
-            }
-        );
-
-        return detector;
     }
 
     /**
@@ -616,56 +500,130 @@ export class DetectorFactory {
         id: string,
         maxAttempts: number = 3
     ): Promise<boolean> {
-        const detector = this.instances.get(id);
-        if (!detector) {
-            return false;
-        }
+        const correlationId = randomUUID();
 
-        const healthChecker = this.healthChecks.get(id);
-        if (!healthChecker) {
-            return false;
-        }
-
-        detector.logger.info(`[DetectorFactory] Restarting detector ${id}`);
-
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            try {
-                // Stop current instance
-                if (
-                    "cleanup" in detector &&
-                    typeof detector.cleanup === "function"
-                ) {
-                    detector.cleanup();
-                }
-
-                // Wait a bit before restart
-                await new Promise((resolve) =>
-                    setTimeout(resolve, 1000 * attempt)
+        try {
+            const detector = this.instances.get(id);
+            if (!detector) {
+                this.dependencies?.logger.warn(
+                    "Detector not found for restart",
+                    {
+                        component: "DetectorFactory",
+                        operation: "restartDetector",
+                        detectorId: id,
+                    },
+                    correlationId
                 );
+                return false;
+            }
 
-                // Health checker will handle the restart
-                healthChecker.triggerRestart();
-
-                detector.logger.info(
-                    `[DetectorFactory] Detector ${id} restarted successfully`
+            const healthChecker = this.healthChecks.get(id);
+            if (!healthChecker) {
+                detector.logger.warn(
+                    "Health checker not found for detector restart",
+                    {
+                        component: "DetectorFactory",
+                        operation: "restartDetector",
+                        detectorId: id,
+                    },
+                    correlationId
                 );
-                return true;
-            } catch (error) {
-                detector.logger.error(
-                    `[DetectorFactory] Restart attempt ${attempt} failed for ${id}`,
-                    { error }
-                );
+                return false;
+            }
 
-                if (attempt === maxAttempts) {
-                    detector.logger.error(
-                        `[DetectorFactory] Failed to restart detector ${id} after ${maxAttempts} attempts`
+            detector.logger.info(
+                "Starting detector restart",
+                {
+                    component: "DetectorFactory",
+                    operation: "restartDetector",
+                    detectorId: id,
+                    maxAttempts,
+                },
+                correlationId
+            );
+
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                    // Stop current instance
+                    if (
+                        "cleanup" in detector &&
+                        typeof detector.cleanup === "function"
+                    ) {
+                        detector.cleanup();
+                    }
+
+                    // Wait a bit before restart
+                    await new Promise((resolve) =>
+                        setTimeout(resolve, 1000 * attempt)
                     );
-                    return false;
+
+                    // Health checker will handle the restart
+                    healthChecker.triggerRestart();
+
+                    detector.logger.info(
+                        "Detector restarted successfully",
+                        {
+                            component: "DetectorFactory",
+                            operation: "restartDetector",
+                            detectorId: id,
+                            attempt,
+                        },
+                        correlationId
+                    );
+                    return true;
+                } catch (error) {
+                    detector.logger.error(
+                        "Restart attempt failed",
+                        {
+                            component: "DetectorFactory",
+                            operation: "restartDetector",
+                            detectorId: id,
+                            attempt,
+                            maxAttempts,
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                            stack:
+                                error instanceof Error
+                                    ? error.stack
+                                    : undefined,
+                        },
+                        correlationId
+                    );
+
+                    if (attempt === maxAttempts) {
+                        detector.logger.error(
+                            "Failed to restart detector after all attempts",
+                            {
+                                component: "DetectorFactory",
+                                operation: "restartDetector",
+                                detectorId: id,
+                                maxAttempts,
+                            },
+                            correlationId
+                        );
+                        return false;
+                    }
                 }
             }
-        }
 
-        return false;
+            return false;
+        } catch (error) {
+            this.dependencies?.logger.error(
+                "Error in detector restart process",
+                {
+                    component: "DetectorFactory",
+                    operation: "restartDetector",
+                    detectorId: id,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                },
+                correlationId
+            );
+            return false;
+        }
     }
 
     // Private methods
@@ -800,41 +758,6 @@ export class DetectorFactory {
                 ...settings,
             } as ZoneDetectorConfig;
         }
-    }
-
-    private static wrapCallback(
-        originalCallback: DetectorCallback,
-        detectorId: string,
-        logger: Logger
-    ): DetectorCallback {
-        return (signal) => {
-            try {
-                // Add factory metadata
-                const enhancedSignal = {
-                    ...signal,
-                    factoryId: detectorId,
-                    factoryTimestamp: Date.now(),
-                };
-
-                originalCallback(enhancedSignal);
-
-                // Record successful signal
-                logger.debug(
-                    `[DetectorFactory] Signal processed for ${detectorId}`,
-                    {
-                        signalId: signal.id,
-                        price: signal.price,
-                        side: signal.side,
-                    }
-                );
-            } catch (error) {
-                logger.error(
-                    `[DetectorFactory] Callback error for ${detectorId}`,
-                    { error }
-                );
-                // Don't throw - just log the error to prevent detector crash
-            }
-        };
     }
 
     private static registerDetector(
@@ -1015,9 +938,9 @@ export interface DetectorSuite {
 }
 
 export interface DetectorDependencies {
-    logger: Logger;
+    logger: ILogger;
     spoofingDetector: SpoofingDetector;
-    metricsCollector: MetricsCollector;
+    metricsCollector: IMetricsCollector;
     signalLogger?: ISignalLogger;
 }
 
@@ -1028,7 +951,7 @@ export interface DetectorFactoryOptions {
             | BaseDetector
             | AccumulationZoneDetector
             | DistributionZoneDetector,
-        metrics: MetricsCollector
+        metrics: IMetricsCollector
     ) => void;
 }
 
@@ -1065,78 +988,3 @@ export interface FactoryStats {
     memoryUsageMB: number;
     uptime: number;
 }
-
-type DetectorConstructor<
-    T extends
-        | BaseDetector
-        | AccumulationZoneDetector
-        | DistributionZoneDetector,
-> = new (
-    callback: DetectorCallback,
-    settings: BaseDetectorSettings | ZoneDetectorConfig,
-    logger: Logger,
-    metricsCollector: MetricsCollector,
-    signalLogger?: ISignalLogger
-) => T;
-
-// Usage example:
-/*
-import { DetectorFactory } from './utils/detectorFactory.js';
-
-// Create dependencies
-const dependencies = {
-    logger: new Logger(),
-    metricsCollector: new MetricsCollector(),
-    signalLogger: new SignalLogger(),
-};
-
-// Create absorption detector
-const absorptionDetector = DetectorFactory.createAbsorptionDetector(
-    (signal) => {
-        console.log('Absorption signal:', signal);
-    },
-    {
-        symbol: 'BTCUSDT',
-        windowMs: 90000,
-        minAggVolume: 1000,
-        absorptionThreshold: 0.75,
-        features: {
-            icebergDetection: true,
-            liquidityGradient: true,
-        },
-    },
-    dependencies,
-    { id: 'btc-absorption-main' }
-);
-
-// Create exhaustion detector
-const exhaustionDetector = DetectorFactory.createExhaustionDetector(
-    (signal) => {
-        console.log('Exhaustion signal:', signal);
-    },
-    {
-        symbol: 'BTCUSDT',
-        windowMs: 90000,
-        minAggVolume: 1000,
-        exhaustionThreshold: 0.7,
-        features: {
-            depletionTracking: true,
-            spreadAdjustment: true,
-        },
-    },
-    dependencies,
-    { id: 'btc-exhaustion-main' }
-);
-
-// Monitor factory health
-setInterval(() => {
-    const stats = DetectorFactory.getFactoryStats();
-    console.log('Factory stats:', stats);
-}, 60000);
-
-// Cleanup on exit
-process.on('SIGINT', () => {
-    DetectorFactory.destroyAll();
-    process.exit(0);
-});
-*/

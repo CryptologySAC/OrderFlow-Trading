@@ -1,8 +1,8 @@
 // /src/indicators/base/detectorEnrichedTrade.ts
 import { EventEmitter } from "events";
-import { Logger } from "../../infrastructure/logger.js";
-import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
-import { ISignalLogger } from "../../services/signalLogger.js";
+import type { ILogger } from "../../infrastructure/loggerInterface.js";
+import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInterface.js";
+import { ISignalLogger } from "../../infrastructure/signalLoggerInterface.js";
 import type { EnrichedTradeEvent } from "../../types/marketEvents.js";
 import type { SignalCandidate } from "../../types/signalTypes.js";
 
@@ -10,15 +10,15 @@ import type { SignalCandidate } from "../../types/signalTypes.js";
  * Abstract base for all detectors (handles logging/metrics/signalLogger).
  */
 export abstract class Detector extends EventEmitter {
-    public readonly logger: Logger;
-    protected readonly metricsCollector: MetricsCollector;
+    public readonly logger: ILogger;
+    protected readonly metricsCollector: IMetricsCollector;
     protected readonly signalLogger?: ISignalLogger;
     protected readonly id: string;
 
     constructor(
         id: string,
-        logger: Logger,
-        metricsCollector: MetricsCollector,
+        logger: ILogger,
+        metricsCollector: IMetricsCollector,
         signalLogger?: ISignalLogger
     ) {
         super();
@@ -33,6 +33,21 @@ export abstract class Detector extends EventEmitter {
      * Must be implemented by subclasses.
      */
     public abstract onEnrichedTrade(event: EnrichedTradeEvent): void;
+
+    /**
+     * Get detector status.
+     * Must be implemented by subclasses.
+     */
+    public abstract getStatus(): string;
+
+    /**
+     * Mark a signal as confirmed to start cooldown.
+     * Must be implemented by subclasses.
+     */
+    public abstract markSignalConfirmed(
+        zone: number,
+        side: "buy" | "sell"
+    ): void;
 
     protected handleError(
         error: Error,

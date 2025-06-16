@@ -1,7 +1,7 @@
 // src/core/config.ts
 import dotenv from "dotenv";
 dotenv.config();
-import { readFileSync, watchFile } from "fs";
+import { readFileSync } from "fs";
 import { resolve } from "path";
 import { AnomalyDetectorOptions } from "../services/anomalyDetector.js";
 import { SpoofingDetectorConfig } from "../services/spoofingDetector.js";
@@ -17,16 +17,18 @@ import type { ExhaustionSettings } from "../indicators/exhaustionDetector.js";
 import type { AbsorptionSettings } from "../indicators/absorptionDetector.js";
 import type { OrderflowPreprocessorOptions } from "../market/orderFlowPreprocessor.js";
 import type { DataStreamConfig } from "../trading/dataStreamManager.js";
-import type { AccumulationSettings } from "../indicators/interfaces/detectorInterfaces.js";
+import type {
+    AccumulationSettings,
+    SuperiorFlowSettings,
+} from "../indicators/interfaces/detectorInterfaces.js";
 import type { DeltaCVDConfirmationSettings } from "../indicators/deltaCVDConfirmation.js";
-import type { SuperiorFlowSettings } from "../indicators/base/flowDetectorBase.js";
 import type { SupportResistanceConfig } from "../indicators/supportResistanceDetector.js";
 import type { IndividualTradesManagerConfig } from "../data/individualTradesManager.js";
 import type { MicrostructureAnalyzerConfig } from "../data/microstructureAnalyzer.js";
-import type { TradesProcessorOptions } from "../clients/tradesProcessor.js";
+import type { TradesProcessorOptions } from "../market/processors/tradesProcessor.js";
 import type { SignalManagerConfig } from "../trading/signalManager.js";
 import type { SignalCoordinatorConfig } from "../services/signalCoordinator.js";
-import type { OrderBookProcessorOptions } from "../clients/orderBookProcessor.js";
+import type { OrderBookProcessorOptions } from "../market/processors/orderBookProcessor.js";
 import type { MQTTConfig } from "../types/configTypes.js";
 let cfg: ConfigType = JSON.parse(
     readFileSync(resolve(process.cwd(), "config.json"), "utf-8")
@@ -43,34 +45,6 @@ let ZONE_CFG: ZoneDetectorSymbolConfig =
     cfg.zoneDetectors?.[CONFIG_SYMBOL] ?? ({} as ZoneDetectorSymbolConfig);
 let ENHANCED_ZONE_CFG: EnhancedZoneFormationConfig =
     cfg.enhancedZoneFormation ?? getDefaultEnhancedZoneFormationConfig();
-
-function reloadConfig(): void {
-    try {
-        cfg = JSON.parse(
-            readFileSync(resolve(process.cwd(), "config.json"), "utf-8")
-        ) as ConfigType;
-        ENV_SYMBOL = process.env.SYMBOL?.toUpperCase();
-        CONFIG_SYMBOL = (ENV_SYMBOL ?? cfg.symbol) as AllowedSymbols;
-        SYMBOL_CFG =
-            cfg.symbols[CONFIG_SYMBOL as keyof typeof cfg.symbols] ??
-            (cfg.symbols as Record<string, unknown>)[cfg.symbol];
-        DATASTREAM_CFG = SYMBOL_CFG?.dataStream ?? {};
-        ZONE_CFG =
-            cfg.zoneDetectors?.[CONFIG_SYMBOL] ??
-            ({} as ZoneDetectorSymbolConfig);
-        ENHANCED_ZONE_CFG =
-            cfg.enhancedZoneFormation ??
-            getDefaultEnhancedZoneFormationConfig();
-
-        console.log("[Config] configuration reloaded");
-    } catch (error) {
-        console.error("[Config] failed to reload configuration", error);
-    }
-}
-
-watchFile(resolve(process.cwd(), "config.json"), { interval: 1000 }, () => {
-    reloadConfig();
-});
 
 /**
  * Default enhanced zone formation configuration

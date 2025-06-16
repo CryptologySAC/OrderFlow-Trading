@@ -15,19 +15,16 @@ import { SpotWebsocketStreams } from "@binance/spot";
 
 // Core imports
 import { Config } from "./core/config.js";
-import { SignalProcessingError, WebSocketError } from "./core/errors.js";
+import { SignalProcessingError } from "./core/errors.js";
 
 // Infrastructure imports
-import { Logger } from "./infrastructure/logger.js";
-import { MetricsCollector } from "./infrastructure/metricsCollector.js";
-import { RateLimiter } from "./infrastructure/rateLimiter.js";
-import { CircuitBreaker } from "./infrastructure/circuitBreaker.js";
+import type { IMetricsCollector } from "./infrastructure/metricsCollectorInterface.js";
+
 import {
     RecoveryManager,
     type HardReloadEvent,
 } from "./infrastructure/recoveryManager.js";
-import { MicrostructureAnalyzer } from "./data/microstructureAnalyzer.js";
-import { IndividualTradesManager } from "./data/individualTradesManager.js";
+import { ThreadManager } from "./multithreading/threadManager.js";
 
 // Service imports
 import { DetectorFactory } from "./utils/detectorFactory.js";
@@ -37,20 +34,13 @@ import type {
 } from "./types/marketEvents.js";
 import { OrderflowPreprocessor } from "./market/orderFlowPreprocessor.js";
 import { OrderBookState } from "./market/orderBookState.js";
-import {
-    WebSocketManager,
-    type ExtendedWebSocket,
-} from "./websocket/websocketManager.js";
 import { SignalManager } from "./trading/signalManager.js";
-import { DataStreamManager } from "./trading/dataStreamManager.js";
 import { SignalCoordinator } from "./services/signalCoordinator.js";
 import { AnomalyDetector, AnomalyEvent } from "./services/anomalyDetector.js";
-import { AlertManager } from "./alerts/alertManager.js";
 
 // Indicator imports
 import { AbsorptionDetector } from "./indicators/absorptionDetector.js";
 import { ExhaustionDetector } from "./indicators/exhaustionDetector.js";
-// Legacy detectors removed - using zone-based architecture
 import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
 import { SupportResistanceDetector } from "./indicators/supportResistanceDetector.js";
 
@@ -65,10 +55,10 @@ import type {
 } from "./types/zoneTypes.js";
 
 // Utils imports
-import { TradeData } from "./utils/utils.js";
+import { TradeData } from "./utils/interfaces.js";
 
 // Types
-import type { Dependencies } from "./types/dependencies.js";
+import type { Dependencies } from "./core/dependencies.js";
 import type { Signal, ConfirmedSignal } from "./types/signalTypes.js";
 import type { ConnectivityIssue } from "./infrastructure/apiConnectivityMonitor.js";
 import type {
@@ -81,19 +71,11 @@ import type {
 } from "./utils/types.js";
 
 // Storage and processors
-import { getDB } from "./infrastructure/db.js";
-import { runMigrations } from "./infrastructure/migrate.js";
-import { Storage } from "./storage/storage.js";
-import { PipelineStorage } from "./storage/pipelineStorage.js";
-import { BinanceDataFeed } from "./utils/binance.js";
-import { SignalTracker } from "./analysis/signalTracker.js";
-import { MarketContextCollector } from "./analysis/marketContextCollector.js";
-import { TradesProcessor } from "./clients/tradesProcessor.js";
-import { OrderBookProcessor } from "./clients/orderBookProcessor.js";
-import { SignalLogger } from "./services/signalLogger.js";
+
+import { ProductionUtils } from "./utils/productionUtils.js";
+
 import type { WebSocketMessage } from "./utils/interfaces.js";
-import { SpoofingDetector } from "./services/spoofingDetector.js";
-import { StatsBroadcaster } from "./services/statsBroadcaster.js";
+import { ILogger } from "./infrastructure/loggerInterface.js";
 
 EventEmitter.defaultMaxListeners = 20;
 
@@ -104,14 +86,15 @@ EventEmitter.defaultMaxListeners = 20;
 export class OrderFlowDashboard {
     // Infrastructure components
     private readonly httpServer = express();
-    private readonly logger: Logger;
-    private readonly metricsCollector: MetricsCollector;
+    private readonly logger: ILogger;
+    private readonly metricsCollector: IMetricsCollector;
     private readonly recoveryManager: RecoveryManager;
 
     // Managers
-    private readonly wsManager: WebSocketManager;
+    // WebSocketManager handled by communication worker
+    private readonly threadManager: ThreadManager;
     private readonly signalManager: SignalManager;
-    private readonly dataStreamManager: DataStreamManager;
+    // DataStreamManager is handled by BinanceWorker in threaded mode
 
     // Market
     private orderBook: OrderBookState | null = null;
@@ -147,7 +130,8 @@ export class OrderFlowDashboard {
     private isShuttingDown = false;
     private readonly purgeIntervalMs = 10 * 60 * 1000; // 10 minutes
     private purgeIntervalId?: NodeJS.Timeout;
-    private statsBroadcaster: StatsBroadcaster;
+    // StatsBroadcaster handled by communication worker
+    private broadcastMessage: (msg: WebSocketMessage) => void = () => {};
     private lastTradePrice = 0; // Track last trade price for anomaly context
 
     public static async create(
@@ -164,6 +148,8 @@ export class OrderFlowDashboard {
             Config.ORDERBOOK_STATE,
             dependencies.logger,
             dependencies.metricsCollector
+            //dependencies.mainThreadBinanceFeed,
+            //this.threadManager
         );
         this.preprocessor = new OrderflowPreprocessor(
             Config.PREPROCESSOR,
@@ -179,6 +165,7 @@ export class OrderFlowDashboard {
         this.setupEventHandlers();
         this.setupHttpServer();
         this.setupGracefulShutdown();
+        this.setupConnectionStatusMonitoring();
     }
 
     constructor(
@@ -194,6 +181,7 @@ export class OrderFlowDashboard {
         // Initialize infrastructure
         this.logger = dependencies.logger;
         this.metricsCollector = dependencies.metricsCollector;
+        this.threadManager = dependencies.threadManager;
 
         // Initialize recovery manager
         this.recoveryManager = new RecoveryManager(
@@ -206,7 +194,7 @@ export class OrderFlowDashboard {
                     Config.DATASTREAM.hardReloadRestartCommand ??
                     "process.exit",
             },
-            this.logger,
+            dependencies.logger,
             this.metricsCollector
         );
 
@@ -215,39 +203,42 @@ export class OrderFlowDashboard {
         this.anomalyDetector = dependencies.anomalyDetector;
 
         // Initialize managers
-        this.wsManager = new WebSocketManager(
-            Config.WS_PORT,
-            this.logger,
-            dependencies.rateLimiter,
-            this.metricsCollector,
-            this.createWSHandlers(),
-            (ws) => this.onClientConnected(ws)
+        this.broadcastMessage = (msg: WebSocketMessage): void => {
+            this.threadManager.broadcast(msg);
+        };
+
+        // Set up backlog request handler for multithreaded mode
+        this.threadManager.setBacklogRequestHandler(
+            (clientId: string, amount: number) => {
+                void this.handleBacklogRequest(clientId, amount);
+            }
+        );
+
+        // Set up stream event handler for multithreaded mode
+        this.threadManager.setStreamEventHandler(
+            (eventType: string, data: unknown) => {
+                this.handleWorkerStreamEvent(eventType, data);
+            }
+        );
+
+        // Set up stream data handler for multithreaded mode
+        this.threadManager.setStreamDataHandler(
+            (dataType: string, data: unknown) => {
+                this.handleWorkerStreamData(dataType, data).catch((err) =>
+                    this.logger.error("threadManager.setStreamDataHandler", {
+                        err,
+                    })
+                );
+            }
         );
 
         this.signalManager = dependencies.signalManager;
 
-        this.dataStreamManager = new DataStreamManager(
-            Config.DATASTREAM,
-            dependencies.binanceFeed,
-            dependencies.circuitBreaker,
-            this.logger,
-            this.metricsCollector
-        );
-
-        this.statsBroadcaster = new StatsBroadcaster(
-            this.metricsCollector,
-            this.dataStreamManager,
-            this.wsManager,
-            this.logger,
-            dependencies.signalTracker
-        );
         DetectorFactory.initialize(dependencies);
 
         this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
-            (signal) => {
-                console.log("Absorption signal:", signal);
-            },
             Config.ABSORPTION_DETECTOR,
+            this.orderBook as OrderBookState,
             dependencies,
             { id: "ltcusdt-absorption-main" }
         );
@@ -259,9 +250,6 @@ export class OrderFlowDashboard {
         );
 
         this.exhaustionDetector = DetectorFactory.createExhaustionDetector(
-            (signal) => {
-                console.log("Exhaustion signal:", signal);
-            },
             Config.EXHAUSTION_DETECTOR,
             dependencies,
             { id: "ltcusdt-exhaustion-main" }
@@ -273,15 +261,9 @@ export class OrderFlowDashboard {
             true
         );
 
-        // Legacy accumulation/distribution detectors removed
-        // Replaced by zone-based AccumulationZoneDetector and DistributionZoneDetector
-
         // Initialize other components
         this.deltaCVDConfirmation =
             DetectorFactory.createDeltaCVDConfirmationDetector(
-                (signal) => {
-                    console.log("Delta CVD signal:", signal);
-                },
                 Config.DELTACVD_DETECTOR,
                 dependencies,
                 { id: "ltcusdt-cvdConfirmation-main" }
@@ -296,9 +278,6 @@ export class OrderFlowDashboard {
         // Support/Resistance Detector
         this.supportResistanceDetector =
             DetectorFactory.createSupportResistanceDetector(
-                (signal) => {
-                    console.log("Support/Resistance level detected:", signal);
-                },
                 Config.SUPPORT_RESISTANCE_DETECTOR,
                 dependencies,
                 { id: "ltcusdt-support-resistance-main" }
@@ -313,15 +292,12 @@ export class OrderFlowDashboard {
         // Initialize Zone-based Detectors
         this.accumulationZoneDetector =
             DetectorFactory.createAccumulationDetector(
-                (signal) => {
-                    console.log("Accumulation zone detected:", signal);
-                },
                 Config.ACCUMULATION_ZONE_DETECTOR,
                 dependencies,
                 { id: "ltcusdt-accumulation-zone-main" }
             );
         this.signalCoordinator.registerDetector(
-            this.supportResistanceDetector,
+            this.accumulationZoneDetector,
             ["accumulation"],
             40,
             true
@@ -330,21 +306,18 @@ export class OrderFlowDashboard {
         // Initialize Zone-based Detectors
         this.distributionZoneDetector =
             DetectorFactory.createDistributionDetector(
-                (signal) => {
-                    console.log("Distribution zone detected:", signal);
-                },
                 Config.DISTRIBUTION_ZONE_DETECTOR,
                 dependencies,
                 { id: "ltcusdt-distribution-zone-main" }
             );
         this.signalCoordinator.registerDetector(
-            this.supportResistanceDetector,
+            this.distributionZoneDetector,
             ["distribution"],
             40,
             true
         );
 
-        this.signalCoordinator.start();
+        void this.signalCoordinator.start();
         this.logger.info("SignalCoordinator started");
         this.logger.info("Status:", this.signalCoordinator.getStatus());
         const signalCoordinatorInfo = this.signalCoordinator.getDetectorInfo();
@@ -370,209 +343,176 @@ export class OrderFlowDashboard {
         void event; //todo
     };
 
-    private onClientConnected(ws: ExtendedWebSocket): void {
+    private async handleBacklogRequest(
+        clientId: string,
+        amount: number
+    ): Promise<void> {
         try {
-            const backlogAmount =
-                Config.TRADES_PROCESSOR.backlogBatchSize ?? 1000;
-            let backlog =
-                this.dependencies.tradesProcessor.requestBacklog(backlogAmount);
-            backlog = backlog.reverse();
-            ws.send(
-                JSON.stringify({
-                    type: "backlog",
-                    data: backlog,
-                    now: Date.now(),
-                })
+            this.logger.info(
+                `Handling backlog request for client ${clientId}`,
+                { amount }
             );
 
-            // Extended signal backlog for better client experience
-            const maxSignalBacklogAge = 90 * 60 * 1000; // 90 minutes (matches chart range)
+            // Get backlog data
+            let backlog =
+                await this.dependencies.tradesProcessor.requestBacklog(amount);
+            backlog = backlog.reverse();
+
+            // Get signal backlog
+            const maxSignalBacklogAge = 90 * 60 * 1000; // 90 minutes
             const since = Math.max(
                 backlog.length > 0 ? backlog[0].time : Date.now(),
                 Date.now() - maxSignalBacklogAge
             );
 
-            // Get more comprehensive signals and deduplicate
-            const signals =
-                this.dependencies.pipelineStore.getRecentConfirmedSignals(
-                    since,
-                    100 // Increased from 30 to 100 for better coverage
-                );
+            const signals = (await this.dependencies.threadManager.callStorage(
+                "getRecentConfirmedSignals",
+                since,
+                100
+            )) as ConfirmedSignal[];
             const deduplicatedSignals = this.deduplicateSignals(signals);
 
-            if (deduplicatedSignals.length > 0) {
-                this.logger.info(
-                    `Sending ${deduplicatedSignals.length} signals in backlog to client`,
-                    {
-                        clientId: ws.clientId,
-                        originalCount: signals.length,
-                        deduplicatedCount: deduplicatedSignals.length,
-                        timeWindow: `${maxSignalBacklogAge / 60000} minutes`,
-                    }
-                );
+            this.logger.info(`Sending backlog to client ${clientId}`, {
+                backlogCount: backlog.length,
+                signalsCount: deduplicatedSignals.length,
+            });
 
-                ws.send(
-                    JSON.stringify({
-                        type: "signal_backlog",
-                        data: deduplicatedSignals,
-                        now: Date.now(),
-                    })
-                );
-            }
-
-            // Send current active zones to new client
-            const accumulationZones =
-                this.accumulationZoneDetector.getActiveZones();
-            const distributionZones =
-                this.distributionZoneDetector.getActiveZones();
-            const allActiveZones = [...accumulationZones, ...distributionZones];
-
-            if (allActiveZones.length > 0) {
-                this.logger.info(
-                    `Sending ${allActiveZones.length} active zones to client`,
-                    {
-                        clientId: ws.clientId,
-                        accumulation: accumulationZones.length,
-                        distribution: distributionZones.length,
-                    }
-                );
-
-                for (const zone of allActiveZones) {
-                    ws.send(
-                        JSON.stringify({
-                            type: "zoneUpdate",
-                            data: {
-                                updateType: "zone_created",
-                                zone: {
-                                    id: zone.id,
-                                    type: zone.type,
-                                    priceRange: zone.priceRange,
-                                    strength: zone.strength,
-                                    completion: zone.completion,
-                                    confidence: zone.confidence,
-                                    significance: zone.significance,
-                                    totalVolume: zone.totalVolume,
-                                    timeInZone: zone.timeInZone,
-                                },
-                                significance: zone.significance,
-                                timestamp: Date.now(),
-                            },
-                            now: Date.now(),
-                        })
-                    );
-                }
-            }
-
-            // Send current support/resistance levels to new client
-            const currentLevels = this.supportResistanceDetector.getLevels();
-            if (currentLevels.length > 0) {
-                this.logger.info(
-                    `Sending ${currentLevels.length} support/resistance levels to client`,
-                    {
-                        clientId: ws.clientId,
-                        levels: currentLevels.map((l) => ({
-                            id: l.id,
-                            price: l.price,
-                            type: l.type,
-                            strength: l.strength,
-                        })),
-                    }
-                );
-
-                // Send each level as individual supportResistanceLevel messages
-                currentLevels.forEach((level) => {
-                    ws.send(
-                        JSON.stringify({
-                            type: "supportResistanceLevel",
-                            data: level,
-                            now: Date.now(),
-                        })
-                    );
-                });
-            }
+            // Send backlog to communication worker with client ID for isolation
+            this.threadManager.sendBacklogToSpecificClient(
+                clientId,
+                backlog,
+                deduplicatedSignals
+            );
         } catch (error) {
-            this.handleError(error as Error, "on_connect_send");
+            this.logger.error(
+                `Error handling backlog request for client ${clientId}`,
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
         }
     }
 
     /**
-     * Create WebSocket handlers
+     * Handle stream events from worker thread
      */
-    private createWSHandlers(): Record<
-        string,
-        (ws: ExtendedWebSocket, data: unknown, correlationId?: string) => void
-    > {
-        return {
-            ping: (ws, _, correlationId) => {
-                ws.send(
-                    JSON.stringify({
-                        type: "pong",
-                        now: Date.now(),
-                        correlationId,
-                    })
-                );
-            },
-            backlog: (ws, data, correlationId) => {
-                this.handleBacklogRequest(ws, data, correlationId);
-            },
-        };
+    private handleWorkerStreamEvent(eventType: string, data: unknown): void {
+        try {
+            switch (eventType) {
+                case "connected":
+                    this.logger.info(
+                        "[OrderFlowDashboard] Data stream connected via worker"
+                    );
+                    this.dependencies.tradesProcessor.emit("stream_connected");
+
+                    // Notify OrderBookState of stream connection
+                    if (this.orderBook) {
+                        this.orderBook.onStreamConnected();
+                    }
+                    break;
+                case "disconnected":
+                    const disconnectData = data as { reason: string };
+                    this.logger.warn(
+                        "[OrderFlowDashboard] Data stream disconnected via worker",
+                        {
+                            reason: disconnectData.reason,
+                        }
+                    );
+                    this.dependencies.tradesProcessor.emit(
+                        "stream_disconnected",
+                        disconnectData
+                    );
+
+                    // Notify OrderBookState of stream disconnection
+                    if (this.orderBook) {
+                        this.orderBook.onStreamDisconnected(
+                            disconnectData.reason
+                        );
+                    }
+                    break;
+                case "error":
+                    const errorData = data as {
+                        message: string;
+                        stack?: string;
+                    };
+                    this.handleError(
+                        new Error(errorData.message),
+                        "worker_stream_error"
+                    );
+                    break;
+                case "healthy":
+                    this.logger.info(
+                        "[OrderFlowDashboard] Data stream health restored via worker"
+                    );
+                    break;
+                case "unhealthy":
+                    this.logger.warn(
+                        "[OrderFlowDashboard] Data stream health degraded via worker"
+                    );
+                    break;
+                case "reconnecting":
+                    const reconnectData = data as {
+                        attempt: number;
+                        delay: number;
+                        maxAttempts: number;
+                    };
+                    this.logger.info(
+                        "[OrderFlowDashboard] Data stream reconnecting via worker",
+                        reconnectData
+                    );
+                    break;
+                case "hardReloadRequired":
+                    this.logger.error(
+                        "[OrderFlowDashboard] Hard reload required via worker",
+                        { data }
+                    );
+                    break;
+                case "connectivityIssue":
+                    if (this.lastTradePrice > 0) {
+                        const issueData = data as { issue: ConnectivityIssue };
+                        this.anomalyDetector.onConnectivityIssue(
+                            issueData.issue,
+                            this.lastTradePrice
+                        );
+                    }
+                    break;
+                default:
+                    this.logger.warn(
+                        `[OrderFlowDashboard] Unknown stream event type: ${eventType}`
+                    );
+            }
+        } catch (error) {
+            this.handleError(error as Error, "worker_stream_event_handler");
+        }
     }
 
     /**
-     * Handle backlog request
+     * Handle stream data from worker thread
      */
-    private handleBacklogRequest(
-        ws: ExtendedWebSocket,
-        data: unknown,
-        correlationId?: string
-    ): void {
-        const startTime = Date.now();
+    private async handleWorkerStreamData(
+        dataType: string,
+        data: unknown
+    ): Promise<void> {
         try {
-            let amount = 1000;
-            if (data && typeof data === "object" && "amount" in data) {
-                const rawAmount = (data as { amount?: string | number }).amount;
-                amount = parseInt(rawAmount as string, 10);
-                if (
-                    !Number.isInteger(amount) ||
-                    amount <= 0 ||
-                    amount > 100000
-                ) {
-                    throw new WebSocketError(
-                        "Invalid backlog amount",
-                        ws.clientId || "unknown",
-                        correlationId
+            switch (dataType) {
+                case "trade":
+                    await this.processTrade(
+                        data as SpotWebsocketStreams.AggTradeResponse
                     );
-                }
+                    break;
+                case "depth":
+                    this.processDepth(
+                        data as SpotWebsocketStreams.DiffBookDepthResponse
+                    );
+                    break;
+                default:
+                    this.logger.warn(
+                        `[OrderFlowDashboard] Unknown stream data type: ${dataType}`
+                    );
             }
-
-            let backlog =
-                this.dependencies.tradesProcessor.requestBacklog(amount);
-            backlog = backlog.reverse();
-
-            ws.send(
-                JSON.stringify({
-                    type: "backlog",
-                    data: backlog,
-                    now: Date.now(),
-                    correlationId,
-                })
-            );
-
-            const processingTime = Date.now() - startTime;
-            this.metricsCollector.updateMetric(
-                "processingLatency",
-                processingTime
-            );
         } catch (error) {
-            this.metricsCollector.incrementMetric("errorsCount");
-            this.handleError(error as Error, "backlog_handler", correlationId);
-            ws.send(
-                JSON.stringify({
-                    type: "error",
-                    message: (error as Error).message,
-                    correlationId,
-                })
-            );
+            this.handleError(error as Error, "worker_stream_data_handler");
         }
     }
 
@@ -630,161 +570,10 @@ export class OrderFlowDashboard {
             }
         );
 
-        // Handle data stream events
-        if (!this.dataStreamManager) {
-            throw new Error("Data stream manager is not initialized");
-        }
-
-        this.logger.info(
-            "[OrderFlowDashboard] Setting up data stream event handlers..."
-        );
-        this.dataStreamManager.on(
-            "trade",
-            (data: SpotWebsocketStreams.AggTradeResponse) => {
-                this.processTrade(data);
-            }
-        );
-
-        this.dataStreamManager.on(
-            "depth",
-            (data: SpotWebsocketStreams.DiffBookDepthResponse) => {
-                this.processDepth(data);
-            }
-        );
-
-        this.dataStreamManager.on("error", (error: Error) => {
-            this.handleError(error, "data_stream");
-        });
-
-        // Handle hard reload requests from data stream manager
-        this.dataStreamManager.on(
-            "hardReloadRequired",
-            (event: HardReloadEvent) => {
-                this.handleHardReloadRequest(event);
-            }
-        );
-
-        // Handle recovery manager events
-        this.recoveryManager.on(
-            "hardReloadStarting",
-            (event: HardReloadEvent) => {
-                this.logger.error(
-                    "[OrderFlowDashboard] Hard reload starting, initiating graceful shutdown",
-                    {
-                        reason: event.reason,
-                        component: event.component,
-                    }
-                );
-                void this.gracefulShutdown();
-            }
-        );
-
-        this.recoveryManager.on(
-            "hardReloadLimitExceeded",
-            (event: HardReloadEvent) => {
-                this.logger.error(
-                    "[OrderFlowDashboard] Hard reload limit exceeded, system needs manual intervention",
-                    {
-                        reason: event.reason,
-                        component: event.component,
-                        hardReloadCount: (
-                            event as HardReloadEvent & {
-                                hardReloadCount: number;
-                            }
-                        ).hardReloadCount,
-                    }
-                );
-                // Could emit alert to external monitoring system here
-            }
-        );
-
-        this.dataStreamManager.on("disconnected", (reason: string) => {
-            this.logger.warn("[OrderFlowDashboard] Data stream disconnected", {
-                reason,
-            });
-            // Notify components that data stream is down
-            this.dependencies.tradesProcessor.emit("stream_disconnected", {
-                reason,
-            });
-        });
-
-        this.dataStreamManager.on("connected", () => {
-            this.logger.info(
-                "[OrderFlowDashboard] Data stream reconnected successfully"
-            );
-            // Notify components that data stream is back up
-            this.dependencies.tradesProcessor.emit("stream_connected");
-            void this.dependencies.tradesProcessor
-                .fillBacklog()
-                .catch((error) => {
-                    this.logger.error(
-                        "[OrderFlowDashboard] Failed to load missed trades",
-                        { error }
-                    );
-                });
-            if (this.orderBook) {
-                void this.orderBook.recover().catch((error) => {
-                    this.logger.error(
-                        "[OrderFlowDashboard] OrderBook recovery failed after reconnection",
-                        { error }
-                    );
-                });
-            }
-        });
-
-        this.dataStreamManager.on(
-            "reconnecting",
-            ({ attempt, delay, maxAttempts }) => {
-                this.logger.info(
-                    "[OrderFlowDashboard] Data stream reconnecting",
-                    {
-                        attempt,
-                        delay,
-                        maxAttempts,
-                    }
-                );
-            }
-        );
-
-        this.dataStreamManager.on("unhealthy", () => {
-            this.logger.warn(
-                "[OrderFlowDashboard] Data stream health degraded"
-            );
-        });
-
-        this.dataStreamManager.on("healthy", () => {
-            this.logger.info(
-                "[OrderFlowDashboard] Data stream health restored"
-            );
-        });
-
-        // Handle API connectivity issues
-        this.dataStreamManager.on(
-            "connectivityIssue",
-            (issue: ConnectivityIssue) => {
-                // Get current price for anomaly context - use last trade price or skip if no trades yet
-                if (this.lastTradePrice === 0) {
-                    this.logger.debug(
-                        "Skipping connectivity anomaly - no trades received yet"
-                    );
-                    return;
-                }
-                const currentPrice = this.lastTradePrice;
-
-                this.logger.warn("API connectivity issue detected", {
-                    type: issue.type,
-                    severity: issue.severity,
-                    description: issue.description,
-                    suggestedAction: issue.suggestedAction,
-                });
-
-                // Report to anomaly detector
-                this.anomalyDetector.onConnectivityIssue(issue, currentPrice);
-            }
-        );
+        // In threaded mode, stream events come from BinanceWorker via ThreadManager
+        // No local DataStreamManager event handlers needed
 
         // Handle signal events
-        // Handle data stream events
         if (!this.signalManager) {
             throw new Error("Signal Manager is not initialized");
         }
@@ -810,13 +599,21 @@ export class OrderFlowDashboard {
         this.signalManager.on(
             "criticalAnomalyDetected",
             ({ anomaly, recommendedAction }) => {
-                console.log(`CRITICAL: ${anomaly} - ${recommendedAction}`);
+                this.logger.error("CRITICAL ANOMALY DETECTED", {
+                    anomaly,
+                    recommendedAction,
+                    component: "SignalManager",
+                });
                 // Notify risk management, pause trading, etc.
             }
         );
 
         this.signalManager.on("emergencyPause", ({ reason, duration }) => {
-            console.log(`EMERGENCY PAUSE: ${reason} for ${duration}ms`);
+            this.logger.error("EMERGENCY PAUSE ACTIVATED", {
+                reason,
+                duration,
+                component: "SignalManager",
+            });
             // Halt all trading activity
         });
 
@@ -832,8 +629,8 @@ export class OrderFlowDashboard {
 
                     // Feed trade data to event-based detectors
                     this.absorptionDetector.onEnrichedTrade(enrichedTrade);
-                    this.anomalyDetector.onEnrichedTrade(enrichedTrade);
                     this.exhaustionDetector.onEnrichedTrade(enrichedTrade);
+                    this.anomalyDetector.onEnrichedTrade(enrichedTrade);
                     this.deltaCVDConfirmation.onEnrichedTrade(enrichedTrade);
                     this.supportResistanceDetector.onEnrichedTrade(
                         enrichedTrade
@@ -856,7 +653,7 @@ export class OrderFlowDashboard {
                             enrichedTrade
                         );
                     if (aggTradeMessage) {
-                        this.wsManager.broadcast(aggTradeMessage);
+                        this.broadcastMessage(aggTradeMessage);
                     }
                 }
             );
@@ -867,8 +664,9 @@ export class OrderFlowDashboard {
                         this.dependencies.orderBookProcessor.onOrderBookUpdate(
                             orderBookUpdate
                         );
-                    if (orderBookMessage)
-                        this.wsManager.broadcast(orderBookMessage);
+                    if (orderBookMessage) {
+                        this.broadcastMessage(orderBookMessage);
+                    }
                 }
             );
         }
@@ -885,7 +683,7 @@ export class OrderFlowDashboard {
                     data: { ...event, details: event.details },
                     now: Date.now(),
                 };
-                this.wsManager.broadcast(message);
+                this.broadcastMessage(message);
             });
         }
 
@@ -905,7 +703,7 @@ export class OrderFlowDashboard {
                         data: event.data,
                         now: Date.now(),
                     };
-                    this.wsManager.broadcast(message);
+                    this.broadcastMessage(message);
                     this.logger.info(
                         "Support/Resistance level broadcasted via WebSocket",
                         {
@@ -984,7 +782,7 @@ export class OrderFlowDashboard {
             now: Date.now(),
         };
 
-        this.wsManager.broadcast(message);
+        this.broadcastMessage(message);
     }
 
     /**
@@ -1031,7 +829,7 @@ export class OrderFlowDashboard {
             now: Date.now(),
         };
 
-        this.wsManager.broadcast(message);
+        this.broadcastMessage(message);
     }
 
     /**
@@ -1105,11 +903,10 @@ export class OrderFlowDashboard {
                     status: "healthy",
                     timestamp: new Date().toISOString(),
                     uptime: process.uptime(),
-                    connections: this.wsManager.getConnectionCount(),
+                    connections: 0, // WebSocketManager handled by communication worker
                     circuitBreakerState:
                         this.dependencies.circuitBreaker.getState(),
-                    dataStreamState:
-                        this.dataStreamManager?.getStatus()?.state ?? "unknown",
+                    dataStreamState: "threaded", // DataStreamManager handled by BinanceWorker
                     recovery: this.recoveryManager.getStats(),
                     metrics: {
                         signalsGenerated: metrics.legacy.signalsGenerated,
@@ -1141,7 +938,7 @@ export class OrderFlowDashboard {
                 const stats = {
                     metrics: this.metricsCollector.getMetrics(),
                     health: this.metricsCollector.getHealthSummary(),
-                    dataStream: this.dataStreamManager.getDetailedMetrics(),
+                    dataStream: null, // DataStreamManager handled by BinanceWorker
                     correlationId,
                 };
                 res.json(stats);
@@ -1164,11 +961,37 @@ export class OrderFlowDashboard {
     /**
      * Process incoming trade data
      */
-    private processTrade(data: SpotWebsocketStreams.AggTradeResponse): void {
+    private async processTrade(
+        data: SpotWebsocketStreams.AggTradeResponse
+    ): Promise<void> {
         const correlationId = randomUUID();
         const startTime = Date.now();
 
         try {
+            // Store stream data to database (CRITICAL: prevents gaps on reload)
+            await this.threadManager.callStorage(
+                "saveAggregatedTrade",
+                data,
+                data.s || "LTCUSDT"
+            );
+
+            // Create simple trade object for broadcasting to WebSocket clients
+            const tradeMessage = {
+                type: "trade" as const,
+                now: Date.now(),
+                data: {
+                    time: data.T || Date.now(),
+                    price: parseFloat(data.p || "0"),
+                    quantity: parseFloat(data.q || "0"),
+                    orderType: data.m ? "SELL" : "BUY",
+                    symbol: data.s || "LTCUSDT",
+                    tradeId: data.a || 0,
+                },
+            };
+
+            // Broadcast to WebSocket clients
+            this.broadcastMessage(tradeMessage);
+
             // Update detectors
             if (this.preprocessor) void this.preprocessor.handleAggTrade(data);
 
@@ -1177,11 +1000,11 @@ export class OrderFlowDashboard {
                 "processingLatency",
                 processingTime
             );
-        } catch {
+        } catch (error) {
             this.handleError(
                 new SignalProcessingError(
                     "Error processing trade data",
-                    { data },
+                    { data, error: (error as Error).message },
                     correlationId
                 ),
                 "trade_processing",
@@ -1201,7 +1024,9 @@ export class OrderFlowDashboard {
 
         try {
             // Update preprocessor
-            if (this.preprocessor) this.preprocessor.handleDepth(data);
+            if (this.preprocessor) {
+                this.preprocessor.handleDepth(data);
+            }
 
             const processingTime = Date.now() - startTime;
             this.metricsCollector.updateMetric(
@@ -1263,7 +1088,7 @@ export class OrderFlowDashboard {
             }
 
             // Broadcast to WebSocket clients
-            this.wsManager.broadcast({
+            this.broadcastMessage({
                 type: "signal",
                 data: signal,
                 now: Date.now(),
@@ -1311,7 +1136,7 @@ export class OrderFlowDashboard {
                     { webhookUrl },
                     correlationId
                 );
-            }, correlationId);
+            });
         } catch (error) {
             this.handleError(error as Error, "webhook_send", correlationId);
         }
@@ -1336,10 +1161,7 @@ export class OrderFlowDashboard {
             correlationId: correlationId || randomUUID(),
         };
 
-        if (
-            error instanceof SignalProcessingError ||
-            error instanceof WebSocketError
-        ) {
+        if (error instanceof SignalProcessingError) {
             errorContext.correlationId = error.correlationId ?? randomUUID();
         }
 
@@ -1378,35 +1200,17 @@ export class OrderFlowDashboard {
     /**
      * Graceful shutdown before hard reload
      */
-    private async gracefulShutdown(): Promise<void> {
+    private gracefulShutdown(): void {
         this.logger.info(
             "[OrderFlowDashboard] Starting graceful shutdown for hard reload"
         );
 
         try {
-            // Stop accepting new connections
-            if (this.wsManager) {
-                this.wsManager.shutdown();
-            }
-
-            // Disconnect data streams
-            if (this.dataStreamManager) {
-                await this.dataStreamManager.disconnect();
-            }
-
             // Stop signal processing
             if (this.signalCoordinator) {
                 // Signal coordinator doesn't have a stop method, but we can let pending signals finish
                 this.logger.info(
                     "[OrderFlowDashboard] Allowing signal coordinator to finish pending signals"
-                );
-            }
-
-            // Clean up storage connections
-            if (this.dependencies?.storage) {
-                // Most storage implementations don't need explicit cleanup
-                this.logger.info(
-                    "[OrderFlowDashboard] Storage cleanup completed"
                 );
             }
 
@@ -1425,16 +1229,53 @@ export class OrderFlowDashboard {
     }
 
     /**
-     * Preload historical data
+     * Start stream connection for live data (runs parallel with backlog fill)
      */
-    private async preloadData(): Promise<void> {
+    private async startStreamConnection(): Promise<void> {
         const correlationId = randomUUID();
 
         try {
-            // TODO Preload trades
-            await this.dependencies.circuitBreaker.execute(
-                () => this.dependencies.tradesProcessor.fillBacklog(),
+            this.logger.info(
+                "Starting live stream connection in parallel with backlog fill",
+                {},
                 correlationId
+            );
+
+            // Start BinanceWorker for live stream data
+            this.threadManager.startBinance();
+
+            // Wait a moment for the connection to establish
+            await ProductionUtils.sleep(1000);
+
+            this.logger.info(
+                "Live stream connection initiated successfully",
+                {},
+                correlationId
+            );
+        } catch (error) {
+            this.handleError(
+                error as Error,
+                "stream_connection",
+                correlationId
+            );
+            throw error;
+        }
+    }
+
+    /**
+     * Preload historical data
+     */
+    public async preloadHistoricalData(): Promise<void> {
+        const correlationId = randomUUID();
+        try {
+            // 🚨 CRITICAL: Clear trade data first to eliminate gaps
+            await this.dependencies.circuitBreaker.execute(() =>
+                this.dependencies.tradesProcessor.clearTradeDataOnStartup()
+            );
+
+            // Load fresh 90 minutes of trade data
+            await this.dependencies.circuitBreaker.execute(() =>
+                this.dependencies.tradesProcessor.fillBacklog()
             );
 
             this.logger.info(
@@ -1443,6 +1284,7 @@ export class OrderFlowDashboard {
                 correlationId
             );
         } catch (error) {
+            this.logger.error("WRONG!", { error });
             this.handleError(error as Error, "preload_data", correlationId);
             throw error;
         }
@@ -1453,11 +1295,24 @@ export class OrderFlowDashboard {
      */
     private startPeriodicTasks(): void {
         // Update circuit breaker metrics
-        this.statsBroadcaster.start();
+        // StatsBroadcaster started by communication worker
         setInterval(() => {
             const state = this.dependencies.circuitBreaker.getState();
             this.metricsCollector.updateMetric("circuitBreakerState", state);
         }, 30000);
+
+        // Send main thread metrics to communication worker
+        setInterval(() => {
+            try {
+                const mainMetrics = this.metricsCollector.getMetrics();
+                this.threadManager.updateMainThreadMetrics(mainMetrics);
+            } catch (error) {
+                this.logger.error("Error sending main thread metrics", {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                });
+            }
+        }, 5000); // Send every 5 seconds
 
         // Database purge
         this.purgeIntervalId = setInterval(() => {
@@ -1466,20 +1321,16 @@ export class OrderFlowDashboard {
             const correlationId = randomUUID();
             this.logger.info("Starting scheduled purge", {}, correlationId);
 
-            try {
-                this.dependencies.storage.purgeOldEntries();
-                this.logger.info(
-                    "Scheduled purge completed successfully",
-                    {},
-                    correlationId
-                );
-            } catch (error) {
-                this.handleError(
-                    error as Error,
-                    "database_purge",
-                    correlationId
-                );
-            }
+            this.threadManager
+                .callStorage("purgeOldEntries")
+                .then()
+                .catch((error) => {
+                    this.handleError(
+                        error as Error,
+                        "database_purge",
+                        correlationId
+                    );
+                });
         }, this.purgeIntervalMs);
     }
 
@@ -1498,10 +1349,63 @@ export class OrderFlowDashboard {
     }
 
     /**
+     * Setup connection status monitoring
+     */
+    private setupConnectionStatusMonitoring(): void {
+        // Monitor connection status every 30 seconds
+        setInterval(() => {
+            if (this.isShuttingDown || !this.orderBook) return;
+
+            //try {
+            //const diagnostics = this.orderBook.getConnectionDiagnostics();
+
+            // Log status if there's a mismatch
+            //if (diagnostics.statusMismatch) {
+            //    this.logger.warn(
+            //        "[OrderFlowDashboard] Connection status mismatch detected",
+            //        {
+            //            orderBookStatus: diagnostics.orderBookStatus,
+            //            workerStatus: diagnostics.cachedWorkerStatus,
+            //        }
+            //    );
+            //}
+
+            // Optionally broadcast connection status to dashboard
+            //this.broadcastMessage({
+            //    type: "connection_status",
+            //    now: Date.now(),
+            //    data: {
+            //        orderBookConnected:
+            //            diagnostics.orderBookStatus.isStreamConnected,
+            //        workerConnected:
+            //            diagnostics.cachedWorkerStatus?.isConnected,
+            //        connectionState:
+            //            diagnostics.cachedWorkerStatus?.connectionState,
+            //        streamHealth:
+            //            diagnostics.cachedWorkerStatus?.streamHealth,
+            //        statusMismatch: diagnostics.statusMismatch,
+            //        cacheAge: diagnostics.cachedWorkerStatus?.cacheAge,
+            //    },
+            //});
+            //} catch (error) {
+            //    this.logger.debug(
+            //        "[OrderFlowDashboard] Error monitoring connection status",
+            //        {
+            //            error:
+            //                error instanceof Error
+            //                    ? error.message
+            //                    : String(error),
+            //        }
+            //    );
+            //}
+        }, 30000); // Every 30 seconds
+    }
+
+    /**
      * Setup graceful shutdown
      */
     private setupGracefulShutdown(): void {
-        const shutdown = async (signal: string): Promise<void> => {
+        const shutdown = (signal: string): void => {
             this.logger.info(`Received ${signal}, starting graceful shutdown`);
             this.isShuttingDown = true;
 
@@ -1511,11 +1415,11 @@ export class OrderFlowDashboard {
             }
 
             // Shutdown components
-            this.wsManager.shutdown();
-            await this.dataStreamManager.disconnect();
+            // WebSocketManager shutdown handled by communication worker
+            // DataStreamManager disconnect handled by BinanceWorker
 
             // Give time for cleanup
-            this.statsBroadcaster.stop();
+            // StatsBroadcaster stopped by communication worker
             setTimeout(() => {
                 this.logger.info("Graceful shutdown completed");
                 process.exit(0);
@@ -1539,11 +1443,19 @@ export class OrderFlowDashboard {
                 correlationId
             );
 
-            // Start components in parallel
-            await Promise.all([this.startHttpServer(), this.preloadData()]);
+            // 🚨 CRITICAL FIX: Parallel execution to prevent data gaps
+            // Stream and backfill MUST run simultaneously as per CLAUDE.md architecture
+            this.logger.info(
+                "Starting parallel data loading: live stream + 90min backfill",
+                {},
+                correlationId
+            );
 
-            // Connect to data streams
-            await this.dataStreamManager.connect();
+            await Promise.all([
+                this.startStreamConnection(), // Live data stream
+                this.preloadHistoricalData(), // 90-minute backfill
+            ]);
+            await this.startHttpServer();
 
             // Start periodic tasks
             this.startPeriodicTasks();
@@ -1626,112 +1538,3 @@ export class OrderFlowDashboard {
         return deduplicated.sort((a, b) => b.confirmedAt - a.confirmedAt);
     }
 }
-
-/**
- * Factory function to create dependencies
- */
-export function createDependencies(): Dependencies {
-    const logger = new Logger(process.env.NODE_ENV === "development");
-    const metricsCollector = new MetricsCollector();
-    const signalLogger = new SignalLogger("./storage/signals.csv");
-    const rateLimiter = new RateLimiter(60000, 100);
-    const circuitBreaker = new CircuitBreaker(5, 60000, logger);
-    const db = getDB("./storage/trades.db");
-    runMigrations(db);
-    const pipelineStore = new PipelineStorage(db, {});
-    const storage = new Storage(db);
-    const spoofingDetector = new SpoofingDetector(Config.SPOOFING_DETECTOR);
-    const binanceFeed = new BinanceDataFeed();
-    const individualTradesManager = new IndividualTradesManager(
-        Config.INDIVIDUAL_TRADES_MANAGER,
-        logger,
-        metricsCollector,
-        binanceFeed
-    );
-    const microstructureAnalyzer = new MicrostructureAnalyzer(
-        Config.MICROSTRUCTURE_ANALYZER,
-        logger,
-        metricsCollector
-    );
-
-    const orderBookProcessor = new OrderBookProcessor(
-        Config.ORDERBOOK_PROCESSOR,
-        logger,
-        metricsCollector
-    );
-
-    const tradesProcessor = new TradesProcessor(
-        Config.TRADES_PROCESSOR,
-        storage,
-        logger,
-        metricsCollector
-    );
-
-    const anomalyDetector = new AnomalyDetector(
-        Config.ANOMALY_DETECTOR,
-        logger
-    );
-
-    const alertManager = new AlertManager(
-        process.env.ALERT_WEBHOOK_URL,
-        parseInt(process.env.ALERT_COOLDOWN_MS || "300000", 10)
-    );
-
-    // Create SignalTracker and MarketContextCollector for performance analysis
-    const signalTracker = new SignalTracker(
-        logger,
-        metricsCollector,
-        pipelineStore
-    );
-
-    const marketContextCollector = new MarketContextCollector(
-        logger,
-        metricsCollector
-    );
-
-    const signalManager = new SignalManager(
-        anomalyDetector,
-        alertManager,
-        logger,
-        metricsCollector,
-        pipelineStore,
-        signalTracker,
-        marketContextCollector,
-        Config.SIGNAL_MANAGER
-    );
-
-    const signalCoordinator = new SignalCoordinator(
-        Config.SIGNAL_COORDINATOR,
-        logger,
-        metricsCollector,
-        signalLogger,
-        signalManager,
-        pipelineStore
-    );
-
-    return {
-        storage,
-        pipelineStore,
-        tradesProcessor,
-        orderBookProcessor,
-        signalLogger,
-        logger,
-        metricsCollector,
-        rateLimiter,
-        circuitBreaker,
-        alertManager,
-        signalCoordinator,
-        anomalyDetector,
-        signalManager,
-        spoofingDetector,
-        individualTradesManager,
-        microstructureAnalyzer,
-        binanceFeed,
-        signalTracker,
-        marketContextCollector,
-    };
-}
-
-// Export for use
-export { Config } from "./core/config.js";
-export type { Dependencies } from "./types/dependencies.js";

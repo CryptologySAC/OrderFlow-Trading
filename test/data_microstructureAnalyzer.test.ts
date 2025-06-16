@@ -1,19 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MicrostructureAnalyzer } from "../src/data/microstructureAnalyzer";
-import { Logger } from "../src/infrastructure/logger";
-import { MetricsCollector } from "../src/infrastructure/metricsCollector";
+import type { ILogger } from "../src/infrastructure/loggerInterface";
+import type { IWorkerMetricsCollector } from "../src/multithreading/shared/workerInterfaces";
 import type {
     IndividualTrade,
     MicrostructureMetrics,
 } from "../src/types/marketEvents";
 
-vi.mock("../src/infrastructure/logger");
-vi.mock("../src/infrastructure/metricsCollector");
-
 describe("data/MicrostructureAnalyzer", () => {
     let analyzer: MicrostructureAnalyzer;
-    let logger: Logger;
-    let metricsCollector: MetricsCollector;
+    let logger: ILogger;
+    let metricsCollector: IWorkerMetricsCollector;
 
     const mockConfig = {
         burstThresholdMs: 100,
@@ -27,8 +24,44 @@ describe("data/MicrostructureAnalyzer", () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        logger = new Logger();
-        metricsCollector = new MetricsCollector();
+
+        logger = {
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            debug: vi.fn(),
+            isDebugEnabled: vi.fn(() => false),
+            setCorrelationId: vi.fn(),
+            removeCorrelationId: vi.fn(),
+        };
+
+        metricsCollector = {
+            updateMetric: vi.fn(),
+            incrementMetric: vi.fn(),
+            incrementCounter: vi.fn(),
+            decrementCounter: vi.fn(),
+            recordGauge: vi.fn(),
+            recordHistogram: vi.fn(),
+            registerMetric: vi.fn(),
+            createCounter: vi.fn(),
+            createHistogram: vi.fn(),
+            createGauge: vi.fn(),
+            setGauge: vi.fn(),
+            getMetrics: vi.fn(() => ({})),
+            getHealthSummary: vi.fn(() => "Healthy"),
+            getHistogramPercentiles: vi.fn(() => ({})),
+            getCounterRate: vi.fn(() => 0),
+            getGaugeValue: vi.fn(() => 0),
+            getHistogramSummary: vi.fn(() => ({})),
+            getAverageLatency: vi.fn(() => 0),
+            getLatencyPercentiles: vi.fn(() => ({})),
+            exportPrometheus: vi.fn(() => ""),
+            exportJSON: vi.fn(() => ""),
+            reset: vi.fn(),
+            cleanup: vi.fn(),
+            destroy: vi.fn(),
+        };
+
         analyzer = new MicrostructureAnalyzer(
             mockConfig,
             logger,
@@ -93,7 +126,7 @@ describe("data/MicrostructureAnalyzer", () => {
                 "burst",
                 "coordinated",
             ]);
-            expect(result.avgTimeBetweenTrades).toBeCloseTo(1000, 0);
+            expect(result.avgTimeBetweenTrades).toBeCloseTo(1000, 1);
             expect(result.suspectedAlgoType).toBeOneOf([
                 "market_making",
                 "iceberg",

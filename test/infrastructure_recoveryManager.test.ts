@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
+
 import { RecoveryManager } from "../src/infrastructure/recoveryManager";
-import { Logger } from "../src/infrastructure/logger";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 
 const event = { reason: "test", component: "unit", attempts: 0, timestamp: 0 };
@@ -15,7 +19,7 @@ describe("infrastructure/RecoveryManager", () => {
                 maxHardReloads: 2,
                 hardReloadRestartCommand: "echo",
             },
-            new Logger(),
+            new WorkerLogger(),
             new MetricsCollector()
         );
         vi.spyOn(rm as any, "executeHardReload").mockResolvedValue();
@@ -28,7 +32,7 @@ describe("infrastructure/RecoveryManager", () => {
                 maxHardReloads: 1,
                 hardReloadRestartCommand: "echo",
             },
-            new Logger(),
+            new WorkerLogger(),
             new MetricsCollector()
         );
         expect(disabled.requestHardReload(event)).toBe(false);

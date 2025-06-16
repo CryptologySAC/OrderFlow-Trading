@@ -2,12 +2,11 @@
 
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import { BaseDetector } from "./base/baseDetector.js";
-import type { Logger } from "../infrastructure/logger.js";
-import type { MetricsCollector } from "../infrastructure/metricsCollector.js";
-import type { ISignalLogger } from "../services/signalLogger.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
 import type {
-    DetectorCallback,
     BaseDetectorSettings,
     DetectorFeatures,
 } from "./interfaces/detectorInterfaces.js";
@@ -58,17 +57,15 @@ export class SupportResistanceDetector extends BaseDetector {
 
     constructor(
         id: string,
-        callback: DetectorCallback,
         settings: BaseDetectorSettings &
             Partial<SupportResistanceConfig> & { features?: DetectorFeatures },
-        logger: Logger,
+        logger: ILogger,
         spoofingDetector: SpoofingDetector,
-        metricsCollector: MetricsCollector,
+        metricsCollector: IMetricsCollector,
         signalLogger?: ISignalLogger
     ) {
         super(
             id,
-            callback,
             settings,
             logger,
             spoofingDetector,
@@ -368,14 +365,12 @@ export class SupportResistanceDetector extends BaseDetector {
                         },
                     };
 
-                    // Use the callback to emit the signal
-                    this.callback(detectedSignal);
-
-                    // Also emit the event for WebSocket broadcasting
+                    // emit the event for WebSocket broadcasting
                     this.emit("supportResistanceLevel", {
                         type: "support_resistance_level",
                         data: level,
                         timestamp: new Date(),
+                        detectedSignal,
                     });
 
                     // Mark as emitted

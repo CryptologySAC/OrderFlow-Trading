@@ -2,9 +2,9 @@
 import { Detector } from "./detectorEnrichedTrade.js";
 import { SpotWebsocketStreams } from "@binance/spot";
 import { randomUUID } from "crypto";
-import { Logger } from "../../infrastructure/logger.js";
-import { MetricsCollector } from "../../infrastructure/metricsCollector.js";
-import { ISignalLogger } from "../../services/signalLogger.js";
+import type { ILogger } from "../../infrastructure/loggerInterface.js";
+import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInterface.js";
+import { ISignalLogger } from "../../infrastructure/signalLoggerInterface.js";
 import { RollingWindow } from "../../utils/rollingWindow.js";
 import { DetectorUtils } from "./detectorUtils.js";
 import { SharedPools } from "../../utils/objectPool.js";
@@ -19,24 +19,25 @@ import type {
     AggressiveTrade,
 } from "../../types/marketEvents.js";
 
-import {
-    CircularBuffer,
-    TimeAwareCache,
-    AdaptiveZoneCalculator,
-    PassiveVolumeTracker,
-    AutoCalibrator,
-    DepthLevel,
-} from "../../utils/utils.js";
+import { DepthLevel } from "../../utils/interfaces.js";
+import { CircularBuffer } from "../../utils/circularBuffer.js";
+import { TimeAwareCache } from "../../utils/timeAwareCache.js";
+import { AdaptiveZoneCalculator } from "../../utils/adaptiveZoneCalculator.js";
+import { PassiveVolumeTracker } from "../../utils/passiveVolumeTracker.js";
 import { SpoofingDetector } from "../../services/spoofingDetector.js";
+import {
+    AdaptiveThresholdCalculator,
+    AdaptiveThresholds,
+} from "../marketRegimeDetector.js";
 import type {
     IDetector,
     DetectorStats,
     BaseDetectorSettings,
     DetectorFeatures,
-    DetectorCallback,
     ImbalanceResult,
     VolumeCalculationResult,
 } from "../interfaces/detectorInterfaces.js";
+import { EWMA } from "../../utils/ewma.js";
 
 export type ZoneSample = {
     bid: number;
@@ -74,10 +75,14 @@ export abstract class BaseDetector extends Detector implements IDetector {
     protected readonly spoofingDetector: SpoofingDetector;
     protected readonly adaptiveZoneCalculator: AdaptiveZoneCalculator;
     protected readonly passiveVolumeTracker: PassiveVolumeTracker;
-    protected readonly autoCalibrator: AutoCalibrator;
 
-    // Dependencies
-    protected readonly callback: DetectorCallback;
+    // Adaptive threshold system (shared across detectors)
+    protected readonly adaptiveThresholdCalculator: AdaptiveThresholdCalculator;
+    protected currentThresholds: AdaptiveThresholds;
+    protected readonly performanceHistory: Map<string, number>;
+    protected recentSignalCount: number;
+    protected lastThresholdUpdate: number;
+    protected readonly updateIntervalMs: number;
 
     // Abstract method for detector type
     protected abstract readonly detectorType: SignalType;
@@ -97,13 +102,17 @@ export abstract class BaseDetector extends Detector implements IDetector {
         RollingWindow<ZoneSample>
     > = new Map();
 
+    protected readonly passiveEWMA = new EWMA(15_000);
+    protected readonly aggressiveEWMA = new EWMA(15_000);
+    protected readonly aggrBuyEWMA: EWMA = new EWMA(15_000);
+    protected readonly aggrSellEWMA: EWMA = new EWMA(15_000);
+
     constructor(
         id: string,
-        callback: DetectorCallback,
         settings: BaseDetectorSettings & { features?: DetectorFeatures },
-        logger: Logger,
+        logger: ILogger,
         spoofingDetector: SpoofingDetector,
-        metricsCollector: MetricsCollector,
+        metricsCollector: IMetricsCollector,
         signalLogger?: ISignalLogger
     ) {
         super(id, logger, metricsCollector, signalLogger);
@@ -112,7 +121,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
         this.validateSettings(settings);
 
         // Initialize configuration
-        this.callback = callback;
         this.windowMs = settings.windowMs ?? 90000;
         this.minAggVolume = settings.minAggVolume ?? 600;
         this.pricePrecision = settings.pricePrecision ?? 2;
@@ -137,7 +145,18 @@ export abstract class BaseDetector extends Detector implements IDetector {
         this.spoofingDetector = spoofingDetector;
         this.adaptiveZoneCalculator = new AdaptiveZoneCalculator();
         this.passiveVolumeTracker = new PassiveVolumeTracker();
-        this.autoCalibrator = new AutoCalibrator();
+
+        // Initialize adaptive threshold system
+        this.adaptiveThresholdCalculator = new AdaptiveThresholdCalculator();
+        this.performanceHistory = new Map<string, number>();
+        this.recentSignalCount = 0;
+        this.lastThresholdUpdate = 0;
+        this.updateIntervalMs = settings.updateIntervalMs ?? 300000; // 5 minutes default
+        this.currentThresholds =
+            this.adaptiveThresholdCalculator.calculateAdaptiveThresholds(
+                this.performanceHistory,
+                this.recentSignalCount
+            );
 
         // NEW: initialize rolling window for passive volume, window size based on windowMs (1 sample per second)
         const rollingWindowSize = Math.max(Math.ceil(this.windowMs / 1000), 10);
@@ -239,16 +258,9 @@ export abstract class BaseDetector extends Detector implements IDetector {
     public addTrade(tradeData: AggressiveTrade): void {
         try {
             this.trades.add(tradeData);
-            const zone = this.calculateZone(tradeData.price);
+            this.aggressiveEWMA.push(tradeData.quantity);
 
-            this.logger.info(`[${this.constructor.name}] Trade added`, {
-                price: tradeData.price,
-                quantity: tradeData.quantity,
-                side: this.getTradeSide(tradeData),
-                zone,
-                totalTradesInBuffer: this.trades.length,
-                timestamp: new Date(tradeData.timestamp).toISOString(),
-            });
+            const zone = this.calculateZone(tradeData.price);
 
             // Copy-on-write: create new bucket instead of mutating
             const currentBucket = this.zoneAgg.get(zone);
@@ -259,22 +271,17 @@ export abstract class BaseDetector extends Detector implements IDetector {
 
             this.zoneAgg.set(zone, newBucket);
 
-            this.logger.info(`[${this.constructor.name}] Zone updated`, {
-                zone,
-                tradesInZone: newBucket.trades.length,
-                volumeInZone: newBucket.vol,
-                activeZones: this.zoneAgg.size,
-            });
-
             if (this.features.adaptiveZone) {
                 this.adaptiveZoneCalculator.updatePrice(tradeData.price);
             }
 
-            this.checkForSignal(tradeData);
-
-            if (this.features.autoCalibrate) {
-                this.performAutoCalibration();
+            if (tradeData.buyerIsMaker) {
+                this.aggrSellEWMA.push(tradeData.quantity);
+            } else {
+                this.aggrBuyEWMA.push(tradeData.quantity);
             }
+
+            this.checkForSignal(tradeData);
         } catch (error) {
             this.handleError(
                 error as Error,
@@ -508,10 +515,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
 
         this.emitSignalCandidate(detection);
 
-        if (this.features.autoCalibrate) {
-            this.autoCalibrator.recordSignal();
-        }
-
         // Emit metrics
         this.metricsCollector.incrementCounter(
             `detector_${this.detectorType}Signals`
@@ -551,72 +554,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
         this.removeAllListeners();
 
         this.logger.info(`[${this.constructor.name}] Cleanup completed`);
-    }
-
-    /**
-     * Add depth update
-     * (Now also push rolling passive total into the rolling window, for apples-to-apples comparison)
-     */
-    public addDepth(update: SpotWebsocketStreams.DiffBookDepthResponse): void {
-        try {
-            this.updateDepthLevel(
-                "bid",
-                (update.b as [string, string][]) || []
-            );
-            this.updateDepthLevel(
-                "ask",
-                (update.a as [string, string][]) || []
-            );
-
-            this.rollingPassiveVolume.push(this.totalPassive);
-        } catch (error) {
-            this.handleError(
-                error as Error,
-                `${this.constructor.name}.addDepth`
-            );
-        }
-    }
-
-    /**
-     * Update depth levels
-     */
-    protected updateDepthLevel(
-        side: "bid" | "ask",
-        updates: [string, string][]
-    ): void {
-        for (const [priceStr, qtyStr] of updates) {
-            const price = parseFloat(priceStr);
-            const qty = parseFloat(qtyStr);
-            if (isNaN(price) || isNaN(qty)) continue;
-
-            const prev = this.depth.get(price) || { bid: 0, ask: 0 };
-            const delta = side === "bid" ? qty - prev.bid : qty - prev.ask;
-
-            // update running sum once
-            this.totalPassive += delta;
-
-            // mutate level & cache
-            prev[side] = qty;
-            if (prev.bid === 0 && prev.ask === 0) {
-                this.depth.set(price, { bid: 0, ask: 0 });
-            } else {
-                this.depth.set(price, prev);
-            }
-
-            if (this.features.spoofingDetection)
-                this.spoofingDetector.trackPassiveChange(
-                    price,
-                    prev.bid,
-                    prev.ask
-                );
-
-            if (this.features.passiveHistory)
-                this.passiveVolumeTracker.updatePassiveVolume(
-                    price,
-                    prev.bid,
-                    prev.ask
-                );
-        }
     }
 
     protected checkPassiveImbalance(zone: number): ImbalanceResult {
@@ -683,24 +620,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
             );
         }
         return this.zoneTicks;
-    }
-
-    /**
-     * Perform auto calibration
-     */
-    protected performAutoCalibration(): void {
-        if (this.features.autoCalibrate) {
-            const newMinVolume = this.autoCalibrator.calibrate(
-                this.minAggVolume
-            );
-            if (newMinVolume !== this.minAggVolume) {
-                this.logger.info(
-                    `[${this.constructor.name}] Auto-calibrated minAggVolume`,
-                    { old: this.minAggVolume, new: newMinVolume }
-                );
-                this.minAggVolume = newMinVolume;
-            }
-        }
     }
 
     /**
@@ -1174,6 +1093,77 @@ export abstract class BaseDetector extends Detector implements IDetector {
         });
 
         this.emit("statusChange", newStatus);
+    }
+
+    /**
+     * Update adaptive thresholds based on performance history
+     */
+    protected updateAdaptiveThresholds(): void {
+        const now = Date.now();
+        if (now - this.lastThresholdUpdate < this.updateIntervalMs) {
+            return; // Skip update if not enough time has passed
+        }
+
+        this.currentThresholds =
+            this.adaptiveThresholdCalculator.calculateAdaptiveThresholds(
+                this.performanceHistory,
+                this.recentSignalCount
+            );
+
+        this.lastThresholdUpdate = now;
+
+        this.logger.debug(
+            `[${this.constructor.name}] Updated adaptive thresholds`,
+            {
+                detectorId: this.id,
+                signalCount: this.recentSignalCount,
+                thresholds: this.currentThresholds,
+            }
+        );
+    }
+
+    /**
+     * Record signal performance for adaptive threshold calculation
+     */
+    protected recordSignalPerformance(
+        signalId: string,
+        performance: number
+    ): void {
+        this.performanceHistory.set(signalId, performance);
+        this.recentSignalCount++;
+
+        // Clean up old performance history (keep last 100 entries)
+        if (this.performanceHistory.size > 100) {
+            const entries = Array.from(this.performanceHistory.entries());
+            const toDelete = entries.slice(0, entries.length - 100);
+            toDelete.forEach(([key]) => this.performanceHistory.delete(key));
+        }
+    }
+
+    /**
+     * Get current adaptive thresholds (readonly access for child detectors)
+     */
+    protected getAdaptiveThresholds(): Readonly<AdaptiveThresholds> {
+        return Object.freeze({ ...this.currentThresholds });
+    }
+
+    /**
+     * Reset adaptive threshold performance tracking
+     */
+    protected resetAdaptiveThresholds(): void {
+        this.performanceHistory.clear();
+        this.recentSignalCount = 0;
+        this.lastThresholdUpdate = 0;
+        this.currentThresholds =
+            this.adaptiveThresholdCalculator.calculateAdaptiveThresholds(
+                this.performanceHistory,
+                this.recentSignalCount
+            );
+
+        this.logger.info(
+            `[${this.constructor.name}] Reset adaptive thresholds`,
+            { detectorId: this.id }
+        );
     }
 
     /**

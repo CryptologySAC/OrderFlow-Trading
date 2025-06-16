@@ -1,25 +1,53 @@
 import FastPriorityQueue from "fastpriorityqueue";
 import { ulid } from "ulid";
+import { randomUUID } from "crypto";
 import { EventEmitter } from "events";
 import {
     SignalCandidate,
     ProcessedSignal,
     SignalType,
 } from "../types/signalTypes.js";
-import { BaseDetector } from "../indicators/base/baseDetector.js";
-import { SignalLogger } from "./signalLogger.js";
+import { Detector } from "../indicators/base/detectorEnrichedTrade.js";
+import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import { ProductionUtils } from "../utils/productionUtils.js";
 import { SignalManager } from "../trading/signalManager.js";
-import { Logger } from "../infrastructure/logger.js";
-import { IPipelineStorage } from "../storage/pipelineStorage.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
+import { ThreadManager } from "../multithreading/threadManager.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type {
     DetectorErrorEvent,
     DetectorRegisteredEvent,
     ProcessingJob,
+    SerializableJobData,
     SignalFailedEvent,
     SignalProcessedEvent,
     SignalQueuedEvent,
 } from "../utils/types.js";
+
+class DetectorStub extends EventEmitter {
+    constructor(private readonly id: string) {
+        super();
+    }
+    public getId(): string {
+        return this.id;
+    }
+}
+
+type DetectorLike = Detector | { id?: unknown; detectorId?: unknown };
+
+function extractDetectorId(detector: DetectorLike): string {
+    if (typeof (detector as Detector).getId === "function") {
+        return (detector as Detector).getId();
+    }
+    const det = detector as { id?: unknown; detectorId?: unknown };
+    if (typeof det.id === "string") {
+        return det.id;
+    }
+    if (typeof det.detectorId === "string") {
+        return det.detectorId;
+    }
+    throw new Error("Invalid detector object");
+}
 
 /**
  * Priority queue wrapper so we can expose size quickly while keeping the
@@ -84,7 +112,7 @@ export interface SignalCoordinatorConfig {
 }
 
 interface DetectorRegistration {
-    detector: BaseDetector;
+    detector: Detector;
     signalTypes: SignalType[];
     priority: number;
     enabled: boolean;
@@ -95,11 +123,11 @@ interface DetectorRegistration {
  * SignalCoordinator – central hub orchestrating detectors → queue → processor.
  */
 export class SignalCoordinator extends EventEmitter {
-    private readonly logger: Logger;
-    private readonly signalLogger: SignalLogger;
+    private readonly logger: ILogger;
+    private readonly signalLogger: ISignalLogger;
     private readonly signalManager: SignalManager;
-    private readonly storage: IPipelineStorage;
-    private readonly metrics: MetricsCollector;
+    private readonly threadManager: ThreadManager;
+    private readonly metrics: IMetricsCollector;
     private readonly cfg: SignalCoordinatorConfig;
 
     /* detector registry */
@@ -121,11 +149,11 @@ export class SignalCoordinator extends EventEmitter {
 
     constructor(
         partialCfg: Partial<SignalCoordinatorConfig>,
-        logger: Logger,
-        metricsCollector: MetricsCollector,
-        signalLogger: SignalLogger,
+        logger: ILogger,
+        metricsCollector: IMetricsCollector,
+        signalLogger: ISignalLogger,
         signalManager: SignalManager,
-        storage: IPipelineStorage
+        threadManager: ThreadManager
     ) {
         super();
 
@@ -143,7 +171,7 @@ export class SignalCoordinator extends EventEmitter {
         this.metrics = metricsCollector;
         this.signalLogger = signalLogger;
         this.signalManager = signalManager;
-        this.storage = storage;
+        this.threadManager = threadManager;
 
         this.setupEventHandlers();
         this.initializeMetrics();
@@ -159,7 +187,7 @@ export class SignalCoordinator extends EventEmitter {
     /* ---------------------------------------------------------------------- */
 
     public registerDetector(
-        detector: BaseDetector,
+        detector: Detector,
         signalTypes: SignalType[],
         priority = 5,
         enabled = true
@@ -224,42 +252,119 @@ export class SignalCoordinator extends EventEmitter {
     /*  LIFECYCLE                                                             */
     /* ---------------------------------------------------------------------- */
 
-    public start(): void {
-        if (this.isRunning) return;
-        this.isRunning = true;
+    public async start(): Promise<void> {
+        const correlationId = randomUUID();
 
-        /* restore any jobs left in the DB from a previous run */
-        for (const j of this.storage.restoreQueuedJobs()) {
-            this.queue.push(j);
+        try {
+            if (this.isRunning) return;
+            this.isRunning = true;
+
+            /* restore any jobs left in the DB from a previous run */
+            const restoreQueuedJobs: ProcessingJob[] =
+                (await this.threadManager.callStorage(
+                    "restoreQueuedJobs"
+                )) as ProcessingJob[];
+            for (const j of restoreQueuedJobs) {
+                this.queue.push(j);
+            }
+
+            this.processingTick = setInterval(
+                () => void this.processQueue(),
+                100
+            );
+
+            this.logger.info(
+                "SignalCoordinator started",
+                {
+                    component: "SignalCoordinator",
+                    operation: "start",
+                    restoredJobs: restoreQueuedJobs.length,
+                },
+                correlationId
+            );
+            this.emit("started");
+        } catch (error) {
+            this.isRunning = false;
+            this.logger.error(
+                "Failed to start SignalCoordinator",
+                {
+                    component: "SignalCoordinator",
+                    operation: "start",
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                },
+                correlationId
+            );
+            throw error;
         }
-
-        this.processingTick = setInterval(() => this.processQueue(), 100);
-
-        this.logger.info("SignalCoordinator started");
-        this.emit("started");
     }
 
     public async stop(): Promise<void> {
-        if (!this.isRunning) return;
-        this.isRunning = false;
+        const correlationId = randomUUID();
 
-        if (this.processingTick) {
-            clearInterval(this.processingTick);
-            this.processingTick = null;
+        try {
+            if (!this.isRunning) return;
+            this.isRunning = false;
+
+            if (this.processingTick) {
+                clearInterval(this.processingTick);
+                this.processingTick = null;
+            }
+
+            /* wait for active jobs */
+            const waiters = [...this.active.values()].map((j) =>
+                this.waitForCompletion(j.id, 5_000)
+            );
+            const results = await Promise.allSettled([
+                ...waiters,
+                ...this.shutdownPromises,
+            ]);
+
+            // Log any failed shutdowns
+            const failures = results.filter(
+                (r) => r.status === "rejected"
+            ).length;
+            if (failures > 0) {
+                this.logger.warn(
+                    "Some shutdown operations failed",
+                    {
+                        component: "SignalCoordinator",
+                        operation: "stop",
+                        failedOperations: failures,
+                        totalOperations: results.length,
+                    },
+                    correlationId
+                );
+            }
+
+            /* cleanup */
+            this.active.clear();
+            this.queue.clear();
+
+            this.logger.info(
+                "SignalCoordinator stopped",
+                {
+                    component: "SignalCoordinator",
+                    operation: "stop",
+                },
+                correlationId
+            );
+            this.emit("stopped");
+        } catch (error) {
+            this.logger.error(
+                "Error during SignalCoordinator shutdown",
+                {
+                    component: "SignalCoordinator",
+                    operation: "stop",
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                },
+                correlationId
+            );
+            throw error;
         }
-
-        /* wait for active jobs */
-        const waiters = [...this.active.values()].map((j) =>
-            this.waitForCompletion(j.id, 5_000)
-        );
-        await Promise.allSettled([...waiters, ...this.shutdownPromises]);
-
-        /* cleanup */
-        this.active.clear();
-        this.queue.clear();
-
-        this.logger.info("SignalCoordinator stopped");
-        this.emit("stopped");
     }
 
     /* ---------------------------------------------------------------------- */
@@ -268,7 +373,7 @@ export class SignalCoordinator extends EventEmitter {
 
     private onSignalCandidate(
         candidate: SignalCandidate,
-        detector: BaseDetector
+        detector: Detector
     ): void {
         const reg = this.detectors.get(detector.getId());
         if (!reg || !reg.enabled) return;
@@ -283,7 +388,6 @@ export class SignalCoordinator extends EventEmitter {
                 priority: reg.priority.toString(),
             }
         );
-        // Also track per-type totals for easier stats aggregation
         this.metrics.incrementCounter(
             `signal_coordinator_signals_received_total_${candidate.type}`,
             1
@@ -298,6 +402,7 @@ export class SignalCoordinator extends EventEmitter {
             return;
         }
 
+        // ✅ FIXED: Create job with full detector for in-memory queue
         const job: ProcessingJob = {
             id: ulid(),
             candidate,
@@ -307,8 +412,18 @@ export class SignalCoordinator extends EventEmitter {
             priority: reg.priority,
         };
 
+        // Pass only the data we need to store, avoid complex objects
+        const storageData: SerializableJobData = {
+            jobId: job.id,
+            detectorId: detector.getId(),
+            candidate: job.candidate,
+            startTime: job.startTime,
+            retryCount: job.retryCount,
+            priority: job.priority,
+        };
+
         this.queue.push(job);
-        this.storage.enqueueJob(job);
+        void this.threadManager.callStorage("enqueueJob", storageData);
         this.metrics.setGauge("signal_coordinator_queue_size", this.queue.size);
 
         this.emit("signalQueued", {
@@ -317,21 +432,79 @@ export class SignalCoordinator extends EventEmitter {
         } as SignalQueuedEvent);
     }
 
-    private processQueue(): void {
-        if (!this.isRunning) return;
-        const slots = this.cfg.maxConcurrentProcessing - this.active.size;
-        if (slots <= 0) return;
+    private createSerializableJob(job: ProcessingJob): ProcessingJob {
+        return {
+            id: job.id,
+            candidate: job.candidate,
+            detector: new DetectorStub(
+                job.detector.getId()
+            ) as unknown as Detector,
+            startTime: job.startTime,
+            retryCount: job.retryCount,
+            priority: job.priority,
+        };
+    }
 
-        /* if the in-memory queue is drained, refill from persistent storage */
-        if (this.queue.size === 0) {
-            for (const j of this.storage.dequeueJobs(slots)) this.queue.push(j);
-        }
-        if (this.queue.size === 0) return;
+    private async processQueue(): Promise<void> {
+        const correlationId = randomUUID();
 
-        for (const job of this.queue.drain(slots)) {
-            void this.processJob(job);
+        try {
+            if (!this.isRunning) return;
+            const slots = this.cfg.maxConcurrentProcessing - this.active.size;
+            if (slots <= 0) return;
+
+            /* if the in-memory queue is drained, refill from persistent storage */
+            if (this.queue.size === 0) {
+                try {
+                    const jobs = (await this.threadManager.callStorage(
+                        "dequeueJobs",
+                        slots
+                    )) as ProcessingJob[];
+                    for (const j of jobs) {
+                        this.queue.push(j);
+                    }
+                } catch (error) {
+                    this.logger.error(
+                        "Failed to dequeue jobs from storage",
+                        {
+                            component: "SignalCoordinator",
+                            operation: "processQueue",
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                            stack:
+                                error instanceof Error
+                                    ? error.stack
+                                    : undefined,
+                        },
+                        correlationId
+                    );
+                    return; // Skip processing this cycle if storage fails
+                }
+            }
+            if (this.queue.size === 0) return;
+
+            for (const job of this.queue.drain(slots)) {
+                void this.processJob(job);
+            }
+            this.metrics.setGauge(
+                "signal_coordinator_queue_size",
+                this.queue.size
+            );
+        } catch (error) {
+            this.logger.error(
+                "Error in processQueue",
+                {
+                    component: "SignalCoordinator",
+                    operation: "processQueue",
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                },
+                correlationId
+            );
         }
-        this.metrics.setGauge("signal_coordinator_queue_size", this.queue.size);
     }
 
     private async processJob(job: ProcessingJob): Promise<void> {
@@ -342,7 +515,26 @@ export class SignalCoordinator extends EventEmitter {
         );
 
         const { detector, candidate } = job;
-        const detectorId = detector.getId();
+        this.logger.debug("processJob: ", {
+            jobId: job.id,
+            candidateId: job.candidate.id,
+            detectorId: extractDetectorId(job.detector),
+        });
+
+        // Jobs restored from storage may arrive without detector methods
+        const detectorId = extractDetectorId(detector);
+        const reg = this.detectors.get(detectorId);
+        if (!reg) {
+            this.logger.warn("Skipping job for unregistered detector", {
+                detectorId,
+                jobId: job.id,
+            });
+            await this.threadManager.callStorage("markJobCompleted", job.id);
+            this.active.delete(job.id);
+            return;
+        }
+        const actualDetector = reg.detector;
+
         const start = Date.now();
 
         try {
@@ -359,16 +551,18 @@ export class SignalCoordinator extends EventEmitter {
             );
 
             const processed = await Promise.race([
-                this.processSignalCandidate(candidate, detector),
+                this.processSignalCandidate(candidate, actualDetector),
                 timeout,
             ]);
 
-            this.signalLogger.logProcessedSignal(processed, {
-                detectorId,
-                jobId: job.id,
-                processingMs: Date.now() - start,
-                retry: job.retryCount,
-            });
+            if (this.signalLogger.logProcessedSignal) {
+                this.signalLogger.logProcessedSignal(processed, {
+                    detectorId,
+                    jobId: job.id,
+                    processingMs: Date.now() - start,
+                    retry: job.retryCount,
+                });
+            }
             const confirmed =
                 this.signalManager.handleProcessedSignal(processed);
 
@@ -399,7 +593,7 @@ export class SignalCoordinator extends EventEmitter {
                     side = data.side;
                 }
 
-                detector.markSignalConfirmed(zone, side);
+                actualDetector.markSignalConfirmed(zone, side);
             }
 
             this.metrics.incrementCounter(
@@ -431,7 +625,7 @@ export class SignalCoordinator extends EventEmitter {
             this.handleProcessingError(job, err as Error);
         } finally {
             this.active.delete(job.id);
-            this.storage.markJobCompleted(job.id);
+            await this.threadManager.callStorage("markJobCompleted", job.id);
             this.metrics.setGauge(
                 "signal_coordinator_active_jobs",
                 this.active.size
@@ -445,9 +639,9 @@ export class SignalCoordinator extends EventEmitter {
 
     private async processSignalCandidate(
         candidate: SignalCandidate,
-        detector: BaseDetector
+        detector: Detector
     ): Promise<ProcessedSignal> {
-        await new Promise((r) => setTimeout(r, 10)); // TODO: real logic
+        await ProductionUtils.sleep(10); // TODO: real logic
         return {
             id: `proc_${ulid()}`,
             originalCandidate: candidate,
@@ -469,13 +663,15 @@ export class SignalCoordinator extends EventEmitter {
 
     private handleProcessingError(job: ProcessingJob, err: Error): void {
         const { detector, candidate } = job;
-        const detectorId = detector.getId();
+        const detectorId = extractDetectorId(detector);
 
-        this.signalLogger.logProcessingError(candidate, err, {
-            detectorId,
-            jobId: job.id,
-            retry: job.retryCount,
-        });
+        if (this.signalLogger.logProcessingError) {
+            this.signalLogger.logProcessingError(candidate, err, {
+                detectorId,
+                jobId: job.id,
+                retry: job.retryCount,
+            });
+        }
 
         const metricsLabels = {
             detector_id: detectorId,
@@ -495,7 +691,10 @@ export class SignalCoordinator extends EventEmitter {
             setTimeout(
                 () => {
                     this.queue.push(retryJob);
-                    this.storage.enqueueJob(retryJob);
+                    void this.threadManager.callStorage(
+                        "enqueueJob",
+                        this.createSerializableJob(retryJob)
+                    );
                 },
                 this.cfg.retryDelayMs * 2 ** job.retryCount
             );
@@ -521,7 +720,7 @@ export class SignalCoordinator extends EventEmitter {
         }
     }
 
-    private handleDetectorError(err: Error, detector: BaseDetector): void {
+    private handleDetectorError(err: Error, detector: Detector): void {
         const detectorId = detector.getId();
         this.logger.error("Detector error", { detectorId, err: err.message });
         this.metrics.incrementCounter("signal_coordinator_errors_total", 1, {

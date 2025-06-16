@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
+
 import { OrderflowPreprocessor } from "../src/market/orderFlowPreprocessor";
 import { OrderBookState } from "../src/market/orderBookState";
-import { Logger } from "../src/infrastructure/logger";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { IndividualTradesManager } from "../src/data/individualTradesManager";
 import { MicrostructureAnalyzer } from "../src/data/microstructureAnalyzer";
@@ -53,7 +57,7 @@ describe("market/OrderflowPreprocessor - Individual Trades Integration", () => {
         vi.clearAllMocks();
         emittedTrades = [];
 
-        logger = new Logger();
+        logger = new WorkerLogger();
         metricsCollector = new MetricsCollector();
         orderBookState = new OrderBookState(
             {} as any,

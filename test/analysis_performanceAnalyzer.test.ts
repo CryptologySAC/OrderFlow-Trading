@@ -1,6 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
+
 import { PerformanceAnalyzer } from "../src/analysis/performanceAnalyzer";
-import { Logger } from "../src/infrastructure/logger";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 
 const storage = {
@@ -10,7 +14,7 @@ const storage = {
 
 describe("analysis/PerformanceAnalyzer", () => {
     const pa = new PerformanceAnalyzer(
-        new Logger(),
+        new WorkerLogger(),
         new MetricsCollector(),
         storage as any
     );

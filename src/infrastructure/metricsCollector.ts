@@ -1,5 +1,7 @@
 // src/infrastructure/metricsCollector.ts
 
+import type { IMetricsCollector } from "./metricsCollectorInterface.js";
+
 /**
  * Enhanced metrics data structure with better organization
  */
@@ -12,6 +14,9 @@ export interface Metrics {
     circuitBreakerState: string;
     uptime: number;
 
+    // Server Metrics
+    connections_active?: number;
+
     // Trade processing metrics
     tradeMessages?: number;
     depthMessages?: number;
@@ -23,6 +28,11 @@ export interface Metrics {
     invalidTrades?: number;
     hybridTradesProcessed?: number;
     individualTradesEnhancementErrors?: number;
+
+    // Duplicate detection metrics
+    duplicateTradesDetected?: number;
+    processedTradeIdsCount?: number;
+    tradeIdCleanupOperations?: number;
 
     // Individual trades metrics
     "individualTrades.cacheHits"?: number;
@@ -230,7 +240,7 @@ export interface HealthSummary {
 /**
  * Enhanced metrics collector with production-ready features
  */
-export class MetricsCollector {
+export class MetricsCollector implements IMetricsCollector {
     private metrics: Metrics;
     private histograms = new Map<string, HistogramBucket>();
     private gauges = new Map<string, GaugeMetric>();
@@ -813,10 +823,16 @@ export class MetricsCollector {
      */
     public createCounter(
         name: string,
-        help: string,
-        labelNames: string[] = []
+        description?: string,
+        labels?: string[]
     ): void {
-        this.registerMetric(name, "counter", help, undefined, labelNames);
+        this.registerMetric(
+            name,
+            "counter",
+            description || "",
+            undefined,
+            labels || []
+        );
     }
 
     /**
@@ -824,11 +840,17 @@ export class MetricsCollector {
      */
     public createHistogram(
         name: string,
-        help: string,
-        labelNames: string[] = [],
-        buckets: number[] = []
+        description?: string,
+        labels?: string[],
+        buckets?: number[]
     ): void {
-        this.registerMetric(name, "histogram", help, "ms", labelNames);
+        this.registerMetric(
+            name,
+            "histogram",
+            description || "",
+            "ms",
+            labels || []
+        );
         // Initialize histogram if not exists
         if (!this.histograms.has(name)) {
             this.histograms.set(name, {
@@ -838,7 +860,7 @@ export class MetricsCollector {
                 timestamps: [],
                 values: [],
                 bounds:
-                    buckets.length > 0
+                    buckets && buckets.length > 0
                         ? [...buckets].sort((a, b) => a - b)
                         : undefined,
             });
@@ -850,10 +872,16 @@ export class MetricsCollector {
      */
     public createGauge(
         name: string,
-        help: string,
-        labelNames: string[] = []
+        description?: string,
+        labels?: string[]
     ): void {
-        this.registerMetric(name, "gauge", help, undefined, labelNames);
+        this.registerMetric(
+            name,
+            "gauge",
+            description || "",
+            undefined,
+            labels || []
+        );
     }
 
     /**

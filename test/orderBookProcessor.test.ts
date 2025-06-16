@@ -1,21 +1,24 @@
-import { OrderBookProcessor } from "../src/clients/orderBookProcessor";
-import { Logger } from "../src/infrastructure/logger";
+import { describe, it, expect, vi } from "vitest";
+
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
+vi.mock("../src/infrastructure/metricsCollector");
+
+import { OrderBookProcessor } from "../src/market/processors/orderBookProcessor";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import type {
     OrderBookSnapshot,
     PassiveLevel,
 } from "../src/types/marketEvents";
 
-vi.mock("../src/infrastructure/logger");
-vi.mock("../src/infrastructure/metricsCollector");
-
 describe("OrderBookProcessor", () => {
-    let logger: Logger;
+    let logger: WorkerLogger;
     let metrics: MetricsCollector;
     let processor: OrderBookProcessor;
 
     beforeEach(() => {
-        logger = new Logger();
+        logger = new WorkerLogger();
         metrics = new MetricsCollector();
         processor = new OrderBookProcessor({}, logger, metrics);
     });

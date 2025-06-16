@@ -8,7 +8,7 @@ import {
     SignalType,
 } from "../types/signalTypes.js";
 
-import { BaseDetector } from "../indicators/base/baseDetector.js";
+import { Detector } from "../indicators/base/detectorEnrichedTrade.js";
 /* ===========================
    BINANCE SPECIFIC TYPES
    =========================== */
@@ -498,7 +498,16 @@ export interface TradeRecord {
 export interface ProcessingJob {
     id: string;
     candidate: SignalCandidate;
-    detector: BaseDetector;
+    detector: Detector;
+    startTime: number;
+    retryCount: number;
+    priority: number;
+}
+
+export interface SerializableJobData {
+    jobId: string;
+    detectorId: string;
+    candidate: SignalCandidate;
     startTime: number;
     retryCount: number;
     priority: number;

@@ -1,5 +1,6 @@
 // src/infrastructure/circuitBreaker.ts
-import { Logger } from "./logger.js";
+import { ILogger } from "./loggerInterface";
+import { ICircuitBreaker } from "./circuitBreakerInterface";
 
 export enum CircuitState {
     CLOSED = "CLOSED",
@@ -10,7 +11,7 @@ export enum CircuitState {
 /**
  * Circuit breaker for error handling
  */
-export class CircuitBreaker {
+export class CircuitBreaker implements ICircuitBreaker {
     private errorCount = 0n;
     private successCount = 0n;
     private lastErrorTime = 0;
@@ -21,23 +22,25 @@ export class CircuitBreaker {
     constructor(
         private readonly threshold: number,
         private readonly timeoutMs: number,
-        private readonly logger: Logger
+        private readonly logger: ILogger
     ) {}
 
     public canExecute(): boolean {
         const now = Date.now();
 
-        // Reset error count if enough time has passed
+        // Reset error count if enough time has passed (1 minute window)
         if (now - this.lastErrorTime > 60000) {
-            // 1 minute window
             this.errorCount = 0n;
         }
 
-        // Check if circuit breaker should be reset
+        // Check if circuit breaker should transition from OPEN to HALF_OPEN
         if (this.isOpen && now - this.lastTripTime > this.timeoutMs) {
             this.isOpen = false;
-            this.errorCount = 0n;
-            this.logger.info("[CircuitBreaker] Circuit breaker reset");
+            this.state = CircuitState.HALF_OPEN;
+            this.errorCount = 0n; // Safe reset during state transition
+            this.logger.info(
+                "[CircuitBreaker] Circuit breaker reset to half-open"
+            );
         }
 
         return !this.isOpen;
@@ -48,17 +51,65 @@ export class CircuitBreaker {
         this.errorCount++;
         this.lastErrorTime = now;
 
-        // Reset if approaching safe limits for serialization
-        if (this.errorCount > 9007199254740991n) {
-            this.errorCount = 0n;
+        // Proper BigInt overflow management for high-frequency trading
+        const MAX_BIGINT_SAFE = 9007199254740991n;
+        if (this.errorCount > MAX_BIGINT_SAFE) {
+            // Maintain circuit state integrity - don't reset to 0 if already tripped
+            if (this.isOpen) {
+                this.errorCount = BigInt(this.threshold) + 1n; // Keep above threshold
+            } else {
+                this.errorCount = BigInt(this.threshold); // Set to threshold to trigger
+            }
+            this.logger.warn(
+                "[CircuitBreaker] Error count overflow detected, maintaining circuit state",
+                {
+                    originalCount: "MAX_SAFE_INTEGER+",
+                    newCount: Number(this.errorCount),
+                }
+            );
         }
 
         if (this.errorCount >= BigInt(this.threshold) && !this.isOpen) {
             this.isOpen = true;
+            this.state = CircuitState.OPEN;
             this.lastTripTime = now;
             this.logger.error(
                 `[CircuitBreaker] Circuit breaker tripped after ${this.errorCount} errors`
             );
+        }
+    }
+
+    public recordSuccess(): void {
+        this.successCount++;
+
+        // Prevent successCount overflow in high-frequency scenarios
+        const MAX_BIGINT_SAFE = 9007199254740991n;
+        if (this.successCount > MAX_BIGINT_SAFE) {
+            this.successCount = 1n; // Reset to 1 to maintain success tracking
+        }
+
+        if (this.state === CircuitState.HALF_OPEN) {
+            this.state = CircuitState.CLOSED;
+            this.isOpen = false;
+            this.errorCount = 0n;
+            this.logger.info(
+                "[CircuitBreaker] Circuit breaker closed after successful operation"
+            );
+        }
+    }
+
+    public async execute<T>(operation: () => Promise<T>): Promise<T> {
+        if (!this.canExecute()) {
+            throw new Error(`Circuit breaker is ${this.state.toLowerCase()}`);
+        }
+
+        try {
+            const result = await operation();
+            this.recordSuccess();
+            return result;
+        } catch (error) {
+            this.recordError();
+            throw error;
         }
     }
 
@@ -71,69 +122,21 @@ export class CircuitBreaker {
         isOpen: boolean;
         lastTripTime: number;
     } {
+        // Safe BigInt to Number conversion with overflow protection
+        const MAX_SAFE_INTEGER = 9007199254740991;
+        const errorCountNumber =
+            this.errorCount > MAX_SAFE_INTEGER
+                ? MAX_SAFE_INTEGER
+                : Number(this.errorCount);
+
         return {
-            errorCount: Number(this.errorCount),
+            errorCount: errorCountNumber,
             isOpen: this.isOpen,
             lastTripTime: this.lastTripTime,
         };
     }
 
-    getState(): CircuitState {
+    getState(): string {
         return this.state;
-    }
-
-    private onSuccess(): void {
-        this.errorCount = 0n;
-        if (this.state === CircuitState.HALF_OPEN) {
-            this.successCount++;
-
-            // Reset if approaching safe limits for serialization
-            if (this.successCount > 9007199254740991n) {
-                this.successCount = 0n;
-            }
-
-            if (this.successCount >= 3n) {
-                this.state = CircuitState.CLOSED;
-            }
-        }
-    }
-
-    private onFailure(): void {
-        this.errorCount++;
-        this.lastErrorTime = Date.now();
-
-        // Reset if approaching safe limits for serialization
-        if (this.errorCount > 9007199254740991n) {
-            this.errorCount = 0n;
-        }
-
-        if (this.errorCount >= BigInt(this.threshold)) {
-            this.state = CircuitState.OPEN;
-        }
-    }
-
-    async execute<T>(
-        operation: () => Promise<T>,
-        correlationId?: string
-    ): Promise<T> {
-        if (this.state === CircuitState.OPEN) {
-            if (Date.now() - this.lastErrorTime > this.timeoutMs) {
-                this.state = CircuitState.HALF_OPEN;
-                this.successCount = 0n;
-            } else {
-                throw new Error(
-                    `Circuit breaker is OPEN. Correlation ID: ${correlationId}`
-                );
-            }
-        }
-
-        try {
-            const result = await operation();
-            this.onSuccess();
-            return result;
-        } catch (error) {
-            this.onFailure();
-            throw error;
-        }
     }
 }

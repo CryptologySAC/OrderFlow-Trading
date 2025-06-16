@@ -7,33 +7,49 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
+
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
+vi.mock("../src/infrastructure/metricsCollector");
+
 import { AbsorptionDetector } from "../src/indicators/absorptionDetector.js";
 import type {
     EnrichedTradeEvent,
     AggressiveTrade,
 } from "../src/types/marketEvents.js";
-import { Logger } from "../src/infrastructure/logger.js";
+import { WorkerLogger } from "../src/multithreading/workerLogger.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
+import { SpoofingDetector } from "../src/services/spoofingDetector.js";
+import { OrderBookState } from "../src/market/orderBookState.js";
+import { Detected } from "../src/indicators/interfaces/detectorInterfaces.js";
 
 describe("AbsorptionDetector - Passive Side Logic", () => {
     let detector: AbsorptionDetector;
-    let mockLogger: Logger;
+    let mockCallback: vi.MockedFunction<(signal: Detected) => void>;
+    let mockLogger: WorkerLogger;
     let mockMetrics: MetricsCollector;
+    let mockSpoofing: SpoofingDetector;
+    let mockOrderBook: OrderBookState;
 
     beforeEach(() => {
-        mockLogger = {
-            info: vi.fn(),
-            debug: vi.fn(),
-            warn: vi.fn(),
-            error: vi.fn(),
+        mockCallback = vi.fn();
+        mockLogger = new WorkerLogger();
+        mockMetrics = new MetricsCollector();
+
+        mockSpoofing = {
+            checkWallSpoofing: vi.fn().mockReturnValue(false),
+            getWallDetectionMetrics: vi.fn().mockReturnValue({}),
+            wasSpoofed: vi.fn().mockReturnValue(false),
+            trackPassiveChange: vi.fn(),
         } as any;
 
-        mockMetrics = {
-            incrementMetric: vi.fn(),
-            updateMetric: vi.fn(),
+        mockOrderBook = {
+            getLevel: vi.fn().mockReturnValue({ bid: 100, ask: 100 }),
+            getCurrentSpread: vi.fn().mockReturnValue({ spread: 0.01 }),
         } as any;
 
         detector = new AbsorptionDetector(
+            "test-absorption",
             {
                 symbol: "LTCUSDT",
                 pricePrecision: 2,
@@ -41,10 +57,21 @@ describe("AbsorptionDetector - Passive Side Logic", () => {
                 absorptionThreshold: 0.75,
                 windowMs: 90000,
                 zoneTicks: 3,
+                features: {
+                    spoofingDetection: false,
+                    icebergDetection: false,
+                    liquidityGradient: false,
+                    absorptionVelocity: false,
+                },
             },
+            mockOrderBook,
             mockLogger,
+            mockSpoofing,
             mockMetrics
         );
+
+        // Register callback manually since constructor doesn't take it anymore
+        detector.on("signal", mockCallback);
     });
 
     describe("buyerIsMaker Logic Validation", () => {

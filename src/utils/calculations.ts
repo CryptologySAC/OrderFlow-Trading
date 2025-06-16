@@ -10,22 +10,32 @@ export function calculateProfitTarget(
     targetPercent = 0.015,
     commissionRate = 0.001
 ): ProfitTarget {
-    // Use integer arithmetic for financial precision (8 decimal places)
-    const scale = 100000000;
-    const scaledEntryPrice = Math.round(entryPrice * scale);
-    const scaledTargetPercent = Math.round(targetPercent * scale);
-    const scaledCommissionRate = Math.round(commissionRate * scale);
+    // Use BigInt arithmetic for precise financial calculations (12 decimal places)
+    const SCALE = 1000000000000n; // 10^12 for high precision
 
-    const grossTarget = scaledTargetPercent + scaledCommissionRate * 2;
+    // Convert to BigInt with proper precision
+    const scaledEntryPrice = BigInt(Math.round(entryPrice * Number(SCALE)));
+    const scaledTargetPercent = BigInt(
+        Math.round(targetPercent * Number(SCALE))
+    );
+    const scaledCommissionRate = BigInt(
+        Math.round(commissionRate * Number(SCALE))
+    );
 
+    // Calculate gross target including double commission
+    const grossTarget = scaledTargetPercent + scaledCommissionRate * 2n;
+
+    // Calculate target price with precise BigInt arithmetic
     const scaledPrice =
         side === "buy"
-            ? Math.round((scaledEntryPrice * (scale + grossTarget)) / scale)
-            : Math.round((scaledEntryPrice * (scale - grossTarget)) / scale);
+            ? (scaledEntryPrice * (SCALE + grossTarget)) / SCALE
+            : (scaledEntryPrice * (SCALE - grossTarget)) / SCALE;
 
-    const price = scaledPrice / scale;
+    // Convert back to number with precision preservation
+    const price = Number(scaledPrice) / Number(SCALE);
     const percentGain = targetPercent;
-    const netGain = (scaledTargetPercent - scaledCommissionRate * 2) / scale;
+    const netGain =
+        Number(scaledTargetPercent - scaledCommissionRate * 2n) / Number(SCALE);
 
     return { price, percentGain, netGain };
 }
@@ -35,20 +45,24 @@ export function calculateBreakeven(
     side: "buy" | "sell",
     commissionRate = 0.001
 ): number {
-    // Use integer arithmetic for financial precision (8 decimal places)
-    const scale = 100000000;
-    const scaledEntryPrice = Math.round(entryPrice * scale);
-    const scaledCommissionRate = Math.round(commissionRate * scale);
-    const totalCommission = scaledCommissionRate * 2;
+    // Use BigInt arithmetic for precise financial calculations (12 decimal places)
+    const SCALE = 1000000000000n; // 10^12 for high precision
 
+    // Convert to BigInt with proper precision
+    const scaledEntryPrice = BigInt(Math.round(entryPrice * Number(SCALE)));
+    const scaledCommissionRate = BigInt(
+        Math.round(commissionRate * Number(SCALE))
+    );
+    const totalCommission = scaledCommissionRate * 2n;
+
+    // Calculate breakeven with precise BigInt arithmetic
     const scaledResult =
         side === "buy"
-            ? Math.round((scaledEntryPrice * (scale + totalCommission)) / scale)
-            : Math.round(
-                  (scaledEntryPrice * (scale - totalCommission)) / scale
-              );
+            ? (scaledEntryPrice * (SCALE + totalCommission)) / SCALE
+            : (scaledEntryPrice * (SCALE - totalCommission)) / SCALE;
 
-    return scaledResult / scale;
+    // Convert back to number with precision preservation
+    return Number(scaledResult) / Number(SCALE);
 }
 
 export function calculatePositionSize(
@@ -56,19 +70,24 @@ export function calculatePositionSize(
     signalStrength: number, // 0-1
     maxRiskPercent = 0.02
 ): number {
-    // Use integer arithmetic for financial precision (8 decimal places)
-    const scale = 100000000;
-    const scaledCapital = Math.round(capital * scale);
-    const scaledMaxRiskPercent = Math.round(maxRiskPercent * scale);
-    const scaledSignalStrength = Math.round(signalStrength * scale);
+    // Use BigInt arithmetic for precise financial calculations (12 decimal places)
+    const SCALE = 1000000000000n; // 10^12 for high precision
 
-    // Scale position size based on signal strength
-    const riskAdjusted = Math.round(
-        (scaledMaxRiskPercent * scaledSignalStrength) / scale
+    // Convert to BigInt with proper precision
+    const scaledCapital = BigInt(Math.round(capital * Number(SCALE)));
+    const scaledMaxRiskPercent = BigInt(
+        Math.round(maxRiskPercent * Number(SCALE))
     );
-    const scaledResult = Math.round((scaledCapital * riskAdjusted) / scale);
+    const scaledSignalStrength = BigInt(
+        Math.round(signalStrength * Number(SCALE))
+    );
 
-    return scaledResult / scale;
+    // Scale position size based on signal strength with precise arithmetic
+    const riskAdjusted = (scaledMaxRiskPercent * scaledSignalStrength) / SCALE;
+    const scaledResult = (scaledCapital * riskAdjusted) / SCALE;
+
+    // Convert back to number with precision preservation
+    return Number(scaledResult) / Number(SCALE);
 }
 
 export function calculateStopLoss(
@@ -76,19 +95,19 @@ export function calculateStopLoss(
     side: "buy" | "sell",
     stopPercent = 0.02
 ): number {
-    // Use integer arithmetic for financial precision (8 decimal places)
-    const scale = 100000000;
-    const scaledEntryPrice = Math.round(entryPrice * scale);
-    const scaledStopPercent = Math.round(stopPercent * scale);
+    // Use BigInt arithmetic for precise financial calculations (12 decimal places)
+    const SCALE = 1000000000000n; // 10^12 for high precision
 
+    // Convert to BigInt with proper precision
+    const scaledEntryPrice = BigInt(Math.round(entryPrice * Number(SCALE)));
+    const scaledStopPercent = BigInt(Math.round(stopPercent * Number(SCALE)));
+
+    // Calculate stop loss with precise BigInt arithmetic
     const scaledResult =
         side === "buy"
-            ? Math.round(
-                  (scaledEntryPrice * (scale - scaledStopPercent)) / scale
-              )
-            : Math.round(
-                  (scaledEntryPrice * (scale + scaledStopPercent)) / scale
-              );
+            ? (scaledEntryPrice * (SCALE - scaledStopPercent)) / SCALE
+            : (scaledEntryPrice * (SCALE + scaledStopPercent)) / SCALE;
 
-    return scaledResult / scale;
+    // Convert back to number with precision preservation
+    return Number(scaledResult) / Number(SCALE);
 }

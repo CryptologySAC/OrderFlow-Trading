@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
+
 import { PerformanceMonitor } from "../src/analysis/performanceMonitor";
-import { Logger } from "../src/infrastructure/logger";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { AlertManager } from "../src/alerts/alertManager";
 
@@ -53,7 +57,10 @@ const failureAnalyzer = {
     }),
 };
 
-const alertManager = new AlertManager(new Logger(), new MetricsCollector());
+const alertManager = new AlertManager(
+    new WorkerLogger(),
+    new MetricsCollector()
+);
 
 describe("analysis/PerformanceMonitor", () => {
     beforeEach(() => {
@@ -68,7 +75,7 @@ describe("analysis/PerformanceMonitor", () => {
             performanceAnalyzer as any,
             failureAnalyzer as any,
             alertManager,
-            new Logger(),
+            new WorkerLogger(),
             new MetricsCollector()
         );
         expect(pm.getStatus().isMonitoring).toBe(false);

@@ -1,16 +1,18 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { OrderflowPreprocessor } from "../src/market/orderFlowPreprocessor";
-import { Logger } from "../src/infrastructure/logger";
-import { MetricsCollector } from "../src/infrastructure/metricsCollector";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
-vi.mock("../src/infrastructure/logger");
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
+
+import { OrderflowPreprocessor } from "../src/market/orderFlowPreprocessor";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
+import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 
 describe("market/OrderflowPreprocessor", () => {
     let pre: OrderflowPreprocessor;
     let book: any;
     beforeEach(() => {
-        const logger = new Logger();
+        const logger = new WorkerLogger();
         const metrics = new MetricsCollector();
         book = {
             updateDepth: vi.fn(),

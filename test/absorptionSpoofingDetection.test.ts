@@ -1,24 +1,42 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
+vi.mock("../src/infrastructure/metricsCollector");
+
 import { AbsorptionDetector } from "../src/indicators/absorptionDetector";
-import { Logger } from "../src/infrastructure/logger";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { SpoofingDetector } from "../src/services/spoofingDetector";
+import { OrderBookState } from "../src/market/orderBookState";
 import type { AggressiveTrade } from "../src/types/marketEvents";
+import type { ILogger } from "../src/infrastructure/loggerInterface";
 
 describe("AbsorptionDetector - Spoofing Detection", () => {
     let detector: AbsorptionDetector;
-    let logger: Logger;
+    let logger: ILogger;
     let metrics: MetricsCollector;
     let spoofingDetector: SpoofingDetector;
+    let orderBook: OrderBookState;
+    let mockCallback: vi.MockedFunction<any>;
 
     beforeEach(() => {
-        logger = new Logger();
+        mockCallback = vi.fn();
+        logger = new WorkerLogger();
         metrics = new MetricsCollector();
-        spoofingDetector = new SpoofingDetector(logger, metrics);
+        spoofingDetector = {
+            checkWallSpoofing: vi.fn().mockReturnValue(false),
+            getWallDetectionMetrics: vi.fn().mockReturnValue({}),
+            wasSpoofed: vi.fn().mockReturnValue(false),
+            trackPassiveChange: vi.fn(),
+        } as any;
+        orderBook = {
+            getLevel: vi.fn().mockReturnValue({ bid: 100, ask: 100 }),
+            getCurrentSpread: vi.fn().mockReturnValue({ spread: 0.01 }),
+        } as any;
 
         detector = new AbsorptionDetector(
             "test-absorption",
-            () => {},
             {
                 windowMs: 60000,
                 minAggVolume: 100,
@@ -28,10 +46,14 @@ describe("AbsorptionDetector - Spoofing Detection", () => {
                     spoofingDetection: true,
                 },
             },
+            orderBook,
             logger,
             spoofingDetector,
             metrics
         );
+
+        // Register callback manually since constructor doesn't take it anymore
+        detector.on("signal", mockCallback);
     });
 
     it("should detect absorption spoofing patterns", () => {

@@ -1,15 +1,17 @@
 import { describe, it, expect, vi } from "vitest";
+
+// Mock the WorkerLogger before importing
+vi.mock("../src/multithreading/workerLogger");
+vi.mock("../src/infrastructure/metricsCollector");
+
 import { ProductionUtils } from "../src/utils/productionUtils";
 import { CircuitBreaker } from "../src/infrastructure/circuitBreaker";
-import { Logger } from "../src/infrastructure/logger";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
-
-vi.mock("../src/infrastructure/logger");
-vi.mock("../src/infrastructure/metricsCollector");
 
 describe("utils/productionUtils", () => {
     it("creates circuit breaker", () => {
-        const logger = new Logger();
+        const logger = new WorkerLogger();
         const cb = ProductionUtils.createCircuitBreaker(1, 1000, logger);
         expect(cb).toBeInstanceOf(CircuitBreaker);
     });

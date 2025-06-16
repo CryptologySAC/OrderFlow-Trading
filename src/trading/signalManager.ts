@@ -10,12 +10,10 @@ import type {
 } from "../types/signalTypes.js";
 import { AnomalyDetector } from "../services/anomalyDetector.js";
 import { AlertManager } from "../alerts/alertManager.js";
-import { Logger } from "../infrastructure/logger.js";
-import type { IPipelineStorage } from "../storage/pipelineStorage.js";
-import {
-    MetricsCollector,
-    type EnhancedMetrics,
-} from "../infrastructure/metricsCollector.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import { ThreadManager } from "../multithreading/threadManager.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import type { EnhancedMetrics } from "../infrastructure/metricsCollector.js";
 import {
     calculateProfitTarget,
     calculateStopLoss,
@@ -31,6 +29,9 @@ export interface SignalManagerConfig {
     signalTimeout?: number;
     enableMarketHealthCheck?: boolean;
     enableAlerts?: boolean;
+    maxQueueSize?: number;
+    processingBatchSize?: number;
+    backpressureThreshold?: number;
 }
 
 interface SignalCorrelation {
@@ -43,6 +44,7 @@ interface SignalCorrelation {
 /**
  * Simplified SignalManager focused on signal coordination and market health gatekeeper.
  * Uses AnomalyDetector only for market health checks, not signal enhancement.
+ * Implements backpressure management for high-frequency signal processing.
  */
 export class SignalManager extends EventEmitter {
     private readonly config: Required<SignalManagerConfig>;
@@ -60,12 +62,18 @@ export class SignalManager extends EventEmitter {
     private readonly signalThrottleMs = 30000; // 30 seconds minimum between similar signals
     private readonly priceTolerancePercent = 0.02; // 0.02% price tolerance for duplicates - very tight for precise deduplication
 
+    // Backpressure management for high-frequency signal processing
+    private readonly signalQueue: ProcessedSignal[] = [];
+    private readonly droppedSignalCounts = new Map<string, number>(); // type -> count
+    private isProcessing = false;
+    private backpressureActive = false;
+
     constructor(
         private readonly anomalyDetector: AnomalyDetector,
         private readonly alertManager: AlertManager,
-        private readonly logger: Logger,
-        private readonly metricsCollector: MetricsCollector,
-        private readonly storage: IPipelineStorage,
+        private readonly logger: ILogger,
+        private readonly metricsCollector: IMetricsCollector,
+        private readonly threadManager: ThreadManager,
         private readonly signalTracker?: SignalTracker,
         private readonly marketContextCollector?: MarketContextCollector,
         config: Partial<SignalManagerConfig> = {}
@@ -77,6 +85,9 @@ export class SignalManager extends EventEmitter {
             signalTimeout: config.signalTimeout ?? 300000,
             enableMarketHealthCheck: config.enableMarketHealthCheck ?? true,
             enableAlerts: config.enableAlerts ?? true,
+            maxQueueSize: config.maxQueueSize ?? 1000,
+            processingBatchSize: config.processingBatchSize ?? 10,
+            backpressureThreshold: config.backpressureThreshold ?? 0.8,
         };
 
         this.logger.info(
@@ -94,8 +105,8 @@ export class SignalManager extends EventEmitter {
         // Clean up old signals periodically
         setInterval(() => {
             this.cleanupOldSignals();
-            this.storage.purgeSignalHistory();
-            this.storage.purgeConfirmedSignals();
+            void this.threadManager.callStorage("purgeSignalHistory");
+            void this.threadManager.callStorage("purgeConfirmedSignals");
         }, 60000); // Every minute
     }
 
@@ -276,8 +287,11 @@ export class SignalManager extends EventEmitter {
         };
 
         // Ensure signals are persisted before emitting to prevent backlog issues
-        this.storage.saveSignalHistory(signal);
-        this.storage.saveConfirmedSignal(confirmedSignal);
+        void this.threadManager.callStorage("saveSignalHistory", signal);
+        void this.threadManager.callStorage(
+            "saveConfirmedSignal",
+            confirmedSignal
+        );
 
         // Track signal performance if tracker is available
         if (this.signalTracker && this.marketContextCollector) {
@@ -352,15 +366,83 @@ export class SignalManager extends EventEmitter {
     /**
      * Handle processed signal from SignalCoordinator.
      * This is the main entry point for signals from the coordinator.
+     * Implements backpressure management for high-frequency scenarios.
      */
     public handleProcessedSignal(
         signal: ProcessedSignal
     ): ConfirmedSignal | null {
+        // Check backpressure before processing
+        if (this.shouldDropSignal(signal)) {
+            this.recordDroppedSignal(signal);
+            return null;
+        }
+
+        // For high load, use queued processing
+        if (this.signalQueue.length > 0 || this.isProcessing) {
+            this.signalQueue.push(signal);
+            this.metricsCollector.setGauge(
+                "signal_manager_queue_size",
+                this.signalQueue.length
+            );
+            void this.startProcessing();
+            return null; // Async processing
+        }
+
+        // For normal load, process synchronously (backward compatibility)
+        return this.processSignalSync(signal);
+    }
+
+    /**
+     * Process signals from queue with backpressure management.
+     */
+    private async startProcessing(): Promise<void> {
+        if (this.isProcessing) return;
+
+        this.isProcessing = true;
+
+        while (this.signalQueue.length > 0) {
+            // Process in batches to prevent blocking
+            const batch = this.signalQueue.splice(
+                0,
+                this.config.processingBatchSize
+            );
+
+            for (const signal of batch) {
+                try {
+                    this.processSignalSync(signal);
+                } catch (error) {
+                    this.logger.error("Failed to process signal", {
+                        signalId: signal.id,
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
+                }
+            }
+
+            // Update queue metrics
+            this.metricsCollector.setGauge(
+                "signal_manager_queue_size",
+                this.signalQueue.length
+            );
+
+            // Yield to event loop between batches
+            await new Promise((resolve) => setImmediate(resolve));
+        }
+
+        this.isProcessing = false;
+    }
+
+    /**
+     * Synchronous signal processing for backward compatibility.
+     */
+    private processSignalSync(signal: ProcessedSignal): ConfirmedSignal | null {
         let confirmedSignal: ConfirmedSignal | null = null;
         try {
-            this.logger.info("Handling processed signal", {
+            this.logger.info("Processing signal", {
                 component: "SignalManager",
-                operation: "handleProcessedSignal",
+                operation: "processSignalSync",
                 signalId: signal.id,
                 signalType: signal.type,
                 detectorId: signal.detectorId,
@@ -493,9 +575,84 @@ export class SignalManager extends EventEmitter {
             throw error;
         }
 
-        const result = confirmedSignal;
+        return confirmedSignal;
+    }
 
-        return result;
+    /**
+     * Check if signal should be dropped due to backpressure.
+     */
+    private shouldDropSignal(signal: ProcessedSignal): boolean {
+        const queueUtilization =
+            this.signalQueue.length / this.config.maxQueueSize;
+
+        // Activate backpressure if queue is getting full
+        if (queueUtilization >= this.config.backpressureThreshold) {
+            if (!this.backpressureActive) {
+                this.backpressureActive = true;
+                this.logger.warn(
+                    "Backpressure activated - queue utilization high",
+                    {
+                        queueSize: this.signalQueue.length,
+                        maxSize: this.config.maxQueueSize,
+                        utilization: queueUtilization,
+                    }
+                );
+            }
+
+            // Drop lower confidence signals first during backpressure
+            const confidenceThreshold = this.config.confidenceThreshold + 0.1; // Higher bar during pressure
+            if (signal.confidence < confidenceThreshold) {
+                return true;
+            }
+        } else if (
+            this.backpressureActive &&
+            queueUtilization < this.config.backpressureThreshold * 0.5
+        ) {
+            // Deactivate backpressure when queue clears
+            this.backpressureActive = false;
+            this.logger.info(
+                "Backpressure deactivated - queue utilization normalized",
+                {
+                    queueSize: this.signalQueue.length,
+                    utilization: queueUtilization,
+                }
+            );
+        }
+
+        // Hard limit: drop signal if queue is full
+        if (this.signalQueue.length >= this.config.maxQueueSize) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Record metrics for dropped signals.
+     */
+    private recordDroppedSignal(signal: ProcessedSignal): void {
+        const currentCount = this.droppedSignalCounts.get(signal.type) || 0;
+        this.droppedSignalCounts.set(signal.type, currentCount + 1);
+
+        this.metricsCollector.incrementCounter(
+            "signal_manager_signals_dropped_total",
+            1,
+            {
+                signal_type: signal.type,
+                detector_id: signal.detectorId,
+                drop_reason: this.backpressureActive
+                    ? "backpressure"
+                    : "queue_full",
+            }
+        );
+
+        this.logger.warn("Signal dropped due to backpressure", {
+            signalId: signal.id,
+            signalType: signal.type,
+            confidence: signal.confidence,
+            queueSize: this.signalQueue.length,
+            backpressureActive: this.backpressureActive,
+        });
     }
 
     /**
@@ -1418,9 +1575,28 @@ export class SignalManager extends EventEmitter {
                 [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
             );
 
+            // Backpressure and queue management metrics
+            this.metricsCollector.createGauge(
+                "signal_manager_queue_size",
+                "Current signal queue size"
+            );
+
+            this.metricsCollector.createCounter(
+                "signal_manager_signals_dropped_total",
+                "Total signals dropped due to backpressure",
+                ["signal_type", "detector_id", "drop_reason"]
+            );
+
+            this.metricsCollector.createHistogram(
+                "signal_manager_queue_utilization",
+                "Signal queue utilization percentage",
+                [],
+                [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+            );
+
             this.logger.debug("Enhanced signal metrics initialized", {
                 component: "SignalManager",
-                metricsCount: "legacy + detailed tracking",
+                metricsCount: "legacy + detailed tracking + backpressure",
             });
         } catch (error) {
             this.logger.error("Failed to initialize metrics", {
@@ -1439,18 +1615,35 @@ export class SignalManager extends EventEmitter {
         historySize: number;
         marketHealth: MarketHealthContext;
         config: SignalManagerConfig;
+        backpressure: {
+            queueSize: number;
+            queueUtilization: number;
+            isActive: boolean;
+            droppedSignalCounts: Record<string, number>;
+        };
         performanceTracking?: {
             activeSignalsCount: number;
             completedSignalsCount: number;
             isTracking: boolean;
         };
     } {
+        const queueUtilization =
+            this.signalQueue.length / this.config.maxQueueSize;
+
         const status = {
             recentSignalsCount: this.recentSignals.size,
             correlationsCount: this.correlations.size,
             historySize: this.signalHistory.length,
             marketHealth: this.getMarketHealthContext(),
             config: this.config,
+            backpressure: {
+                queueSize: this.signalQueue.length,
+                queueUtilization,
+                isActive: this.backpressureActive,
+                droppedSignalCounts: Object.fromEntries(
+                    this.droppedSignalCounts
+                ),
+            },
             performanceTracking: {
                 activeSignalsCount: 0,
                 completedSignalsCount: 0,
