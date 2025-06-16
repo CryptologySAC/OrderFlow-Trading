@@ -176,7 +176,7 @@
                 }
             },
             "absorption": {
-                "minAggVolume": 500,
+                "minAggVolume": 400,
                 "threshold": 0.5,
                 "windowMs": 75000,
                 "zoneTicks": 3,

@@ -290,7 +290,8 @@ describe("market/OrderflowPreprocessor - Individual Trades Integration", () => {
 
             expect(logger.warn).toHaveBeenCalledWith(
                 expect.stringContaining("Individual trades enhancement failed"),
-                expect.any(Object)
+                expect.any(Object),
+                expect.any(String) // correlation ID
             );
             expect(metricsCollector.incrementMetric).toHaveBeenCalledWith(
                 "individualTradesEnhancementErrors"

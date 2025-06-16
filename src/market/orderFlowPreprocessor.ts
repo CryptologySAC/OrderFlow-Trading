@@ -138,6 +138,7 @@ export class OrderflowPreprocessor
     public handleDepth(
         update: SpotWebsocketStreams.DiffBookDepthResponse
     ): void {
+        const correlationId = randomUUID();
         try {
             if (this.bookState) {
                 this.bookState.updateDepth(update);
@@ -175,7 +176,8 @@ export class OrderflowPreprocessor
         } catch (error) {
             this.handleError(
                 error as Error,
-                "OrderflowPreprocessor.handleDepth"
+                "OrderflowPreprocessor.handleDepth",
+                correlationId
             );
         }
     }
@@ -184,6 +186,7 @@ export class OrderflowPreprocessor
     public async handleAggTrade(
         trade: SpotWebsocketStreams.AggTradeResponse
     ): Promise<void> {
+        const correlationId = randomUUID();
         try {
             // Basic structure validation only
             if (
@@ -196,7 +199,9 @@ export class OrderflowPreprocessor
                 )
             ) {
                 this.metricsCollector.incrementMetric("invalidTrades");
-                throw new Error("Invalid trade structure");
+                throw new Error(
+                    `Invalid trade structure - correlationId: ${correlationId}`
+                );
             }
 
             const aggressive = this.normalizeTradeData(trade);
@@ -269,7 +274,8 @@ export class OrderflowPreprocessor
                                                 ? analysisError.message
                                                 : String(analysisError),
                                         tradeId: aggressive.tradeId,
-                                    }
+                                    },
+                                    correlationId
                                 );
                                 // Continue without microstructure data
                             }
@@ -292,7 +298,8 @@ export class OrderflowPreprocessor
                         {
                             error: (error as Error).message,
                             tradeId: aggressive.tradeId,
-                        }
+                        },
+                        correlationId
                     );
 
                     // Fallback to basic enriched trade
@@ -323,7 +330,8 @@ export class OrderflowPreprocessor
         } catch (error) {
             this.handleError(
                 error as Error,
-                "OrderflowPreprocessor.handleAggTrade"
+                "OrderflowPreprocessor.handleAggTrade",
+                correlationId
             );
         }
     }
@@ -388,6 +396,7 @@ export class OrderflowPreprocessor
      * Emit dashboard-specific orderbook update with full snapshot
      */
     private emitDashboardUpdate(): void {
+        const correlationId = randomUUID();
         try {
             const timestamp = Date.now();
             const depthMetrics = this.bookState.getDepthMetrics();
@@ -422,7 +431,8 @@ export class OrderflowPreprocessor
         } catch (error) {
             this.handleError(
                 error as Error,
-                "OrderflowPreprocessor.emitDashboardUpdate"
+                "OrderflowPreprocessor.emitDashboardUpdate",
+                correlationId
             );
         }
     }
