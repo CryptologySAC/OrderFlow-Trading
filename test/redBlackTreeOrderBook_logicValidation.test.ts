@@ -35,7 +35,7 @@ const mockThreadManager: ThreadManager = {
 describe("RedBlackTreeOrderBook - Logic Validation Tests", () => {
     let rbtOrderBook: RedBlackTreeOrderBook;
     let mapOrderBook: OrderBookState;
-    
+
     const options: OrderBookStateOptions = {
         pricePrecision: 2,
         symbol: "BTCUSDT",
@@ -47,9 +47,19 @@ describe("RedBlackTreeOrderBook - Logic Validation Tests", () => {
     };
 
     beforeEach(async () => {
-        rbtOrderBook = new RedBlackTreeOrderBook(options, mockLogger, mockMetrics, mockThreadManager);
-        mapOrderBook = new OrderBookState(options, mockLogger, mockMetrics, mockThreadManager);
-        
+        rbtOrderBook = new RedBlackTreeOrderBook(
+            options,
+            mockLogger,
+            mockMetrics,
+            mockThreadManager
+        );
+        mapOrderBook = new OrderBookState(
+            options,
+            mockLogger,
+            mockMetrics,
+            mockThreadManager
+        );
+
         // Initialize both implementations
         await rbtOrderBook.recover();
         await mapOrderBook.recover();
@@ -87,13 +97,20 @@ describe("RedBlackTreeOrderBook - Logic Validation Tests", () => {
                 s: "BTCUSDT",
                 U: 1001,
                 u: 1001,
-                b: [["49.0", "100"], ["48.0", "200"]],
-                a: [["51.0", "150"], ["52.0", "250"]],
+                b: [
+                    ["49.0", "100"],
+                    ["48.0", "200"],
+                ],
+                a: [
+                    ["51.0", "150"],
+                    ["52.0", "250"],
+                ],
             };
 
             rbtOrderBook.updateDepth(initialUpdate);
             const initialMetrics = rbtOrderBook.getDepthMetrics();
-            const initialTotalVolume = initialMetrics.totalBidVolume + initialMetrics.totalAskVolume;
+            const initialTotalVolume =
+                initialMetrics.totalBidVolume + initialMetrics.totalAskVolume;
 
             // Update that modifies volumes
             const volumeUpdate: SpotWebsocketStreams.DiffBookDepthResponse = {
@@ -108,12 +125,13 @@ describe("RedBlackTreeOrderBook - Logic Validation Tests", () => {
 
             rbtOrderBook.updateDepth(volumeUpdate);
             const updatedMetrics = rbtOrderBook.getDepthMetrics();
-            const updatedTotalVolume = updatedMetrics.totalBidVolume + updatedMetrics.totalAskVolume;
+            const updatedTotalVolume =
+                updatedMetrics.totalBidVolume + updatedMetrics.totalAskVolume;
 
             // Volume change should equal the net change in updates
-            const expectedVolumeChange = (150 - 100) + (100 - 150); // +50 - 50 = 0
+            const expectedVolumeChange = 150 - 100 + (100 - 150); // +50 - 50 = 0
             const actualVolumeChange = updatedTotalVolume - initialTotalVolume;
-            
+
             expect(actualVolumeChange).toBe(expectedVolumeChange);
         });
 
@@ -121,24 +139,44 @@ describe("RedBlackTreeOrderBook - Logic Validation Tests", () => {
             // Add multiple levels
             const updates: SpotWebsocketStreams.DiffBookDepthResponse[] = [
                 {
-                    e: "depthUpdate", E: Date.now(), s: "BTCUSDT", U: 1001, u: 1001,
-                    b: [["45.0", "100"]], a: []
+                    e: "depthUpdate",
+                    E: Date.now(),
+                    s: "BTCUSDT",
+                    U: 1001,
+                    u: 1001,
+                    b: [["45.0", "100"]],
+                    a: [],
                 },
                 {
-                    e: "depthUpdate", E: Date.now(), s: "BTCUSDT", U: 1002, u: 1002,
-                    b: [["47.0", "200"]], a: []
+                    e: "depthUpdate",
+                    E: Date.now(),
+                    s: "BTCUSDT",
+                    U: 1002,
+                    u: 1002,
+                    b: [["47.0", "200"]],
+                    a: [],
                 },
                 {
-                    e: "depthUpdate", E: Date.now(), s: "BTCUSDT", U: 1003, u: 1003,
-                    b: [], a: [["53.0", "150"]]
+                    e: "depthUpdate",
+                    E: Date.now(),
+                    s: "BTCUSDT",
+                    U: 1003,
+                    u: 1003,
+                    b: [],
+                    a: [["53.0", "150"]],
                 },
                 {
-                    e: "depthUpdate", E: Date.now(), s: "BTCUSDT", U: 1004, u: 1004,
-                    b: [], a: [["55.0", "250"]]
+                    e: "depthUpdate",
+                    E: Date.now(),
+                    s: "BTCUSDT",
+                    U: 1004,
+                    u: 1004,
+                    b: [],
+                    a: [["55.0", "250"]],
                 },
             ];
 
-            updates.forEach(update => rbtOrderBook.updateDepth(update));
+            updates.forEach((update) => rbtOrderBook.updateDepth(update));
 
             // Get all price levels in snapshot
             const snapshot = rbtOrderBook.snapshot();
@@ -152,49 +190,61 @@ describe("RedBlackTreeOrderBook - Logic Validation Tests", () => {
 
         it("should correctly calculate best bid as maximum price with bid > 0", () => {
             const update: SpotWebsocketStreams.DiffBookDepthResponse = {
-                e: "depthUpdate", E: Date.now(), s: "BTCUSDT", U: 1001, u: 1001,
+                e: "depthUpdate",
+                E: Date.now(),
+                s: "BTCUSDT",
+                U: 1001,
+                u: 1001,
                 b: [
-                    ["48.50", "100"], 
-                    ["49.25", "200"], 
-                    ["48.75", "150"], 
-                    ["49.00", "300"]
+                    ["48.50", "100"],
+                    ["49.25", "200"],
+                    ["48.75", "150"],
+                    ["49.00", "300"],
                 ],
-                a: []
+                a: [],
             };
 
             rbtOrderBook.updateDepth(update);
             const bestBid = rbtOrderBook.getBestBid();
 
             // Mathematical verification: best bid should be max price among all bids
-            const expectedBestBid = Math.max(48.50, 49.25, 48.75, 49.00);
+            const expectedBestBid = Math.max(48.5, 49.25, 48.75, 49.0);
             expect(bestBid).toBe(expectedBestBid);
         });
 
         it("should correctly calculate best ask as minimum price with ask > 0", () => {
             const update: SpotWebsocketStreams.DiffBookDepthResponse = {
-                e: "depthUpdate", E: Date.now(), s: "BTCUSDT", U: 1001, u: 1001,
+                e: "depthUpdate",
+                E: Date.now(),
+                s: "BTCUSDT",
+                U: 1001,
+                u: 1001,
                 b: [],
                 a: [
-                    ["51.50", "100"], 
-                    ["50.75", "200"], 
-                    ["51.25", "150"], 
-                    ["51.00", "300"]
-                ]
+                    ["51.50", "100"],
+                    ["50.75", "200"],
+                    ["51.25", "150"],
+                    ["51.00", "300"],
+                ],
             };
 
             rbtOrderBook.updateDepth(update);
             const bestAsk = rbtOrderBook.getBestAsk();
 
             // Mathematical verification: best ask should be min price among all asks
-            const expectedBestAsk = Math.min(51.50, 50.75, 51.25, 51.00);
+            const expectedBestAsk = Math.min(51.5, 50.75, 51.25, 51.0);
             expect(bestAsk).toBe(expectedBestAsk);
         });
 
         it("should maintain spread invariant: spread >= 0", () => {
             const update: SpotWebsocketStreams.DiffBookDepthResponse = {
-                e: "depthUpdate", E: Date.now(), s: "BTCUSDT", U: 1001, u: 1001,
+                e: "depthUpdate",
+                E: Date.now(),
+                s: "BTCUSDT",
+                U: 1001,
+                u: 1001,
                 b: [["49.50", "100"]],
-                a: [["50.50", "200"]]
+                a: [["50.50", "200"]],
             };
 
             rbtOrderBook.updateDepth(update);
@@ -206,13 +256,17 @@ describe("RedBlackTreeOrderBook - Logic Validation Tests", () => {
 
         it("should maintain mid-price calculation invariant", () => {
             const update: SpotWebsocketStreams.DiffBookDepthResponse = {
-                e: "depthUpdate", E: Date.now(), s: "BTCUSDT", U: 1001, u: 1001,
+                e: "depthUpdate",
+                E: Date.now(),
+                s: "BTCUSDT",
+                U: 1001,
+                u: 1001,
                 b: [["49.50", "100"]],
-                a: [["50.50", "200"]]
+                a: [["50.50", "200"]],
             };
 
             rbtOrderBook.updateDepth(update);
-            
+
             const bestBid = rbtOrderBook.getBestBid();
             const bestAsk = rbtOrderBook.getBestAsk();
             const midPrice = rbtOrderBook.getMidPrice();
@@ -232,9 +286,13 @@ describe("RedBlackTreeOrderBook - Logic Validation Tests", () => {
         it("should handle zero quantity updates correctly", () => {
             // Set initial levels
             const initialUpdate: SpotWebsocketStreams.DiffBookDepthResponse = {
-                e: "depthUpdate", E: Date.now(), s: "BTCUSDT", U: 1001, u: 1001,
+                e: "depthUpdate",
+                E: Date.now(),
+                s: "BTCUSDT",
+                U: 1001,
+                u: 1001,
                 b: [["49.0", "100"]],
-                a: [["51.0", "200"]]
+                a: [["51.0", "200"]],
             };
 
             rbtOrderBook.updateDepth(initialUpdate);
@@ -245,9 +303,13 @@ describe("RedBlackTreeOrderBook - Logic Validation Tests", () => {
 
             // Remove bid with zero quantity
             const removeUpdate: SpotWebsocketStreams.DiffBookDepthResponse = {
-                e: "depthUpdate", E: Date.now(), s: "BTCUSDT", U: 1002, u: 1002,
+                e: "depthUpdate",
+                E: Date.now(),
+                s: "BTCUSDT",
+                U: 1002,
+                u: 1002,
                 b: [["49.0", "0"]], // Remove bid
-                a: []
+                a: [],
             };
 
             rbtOrderBook.updateDepth(removeUpdate);
@@ -262,9 +324,13 @@ describe("RedBlackTreeOrderBook - Logic Validation Tests", () => {
 
         it("should handle price precision correctly", () => {
             const update: SpotWebsocketStreams.DiffBookDepthResponse = {
-                e: "depthUpdate", E: Date.now(), s: "BTCUSDT", U: 1001, u: 1001,
+                e: "depthUpdate",
+                E: Date.now(),
+                s: "BTCUSDT",
+                U: 1001,
+                u: 1001,
                 b: [["49.123456", "100"]], // More precision than configured
-                a: []
+                a: [],
             };
 
             rbtOrderBook.updateDepth(update);
@@ -279,18 +345,28 @@ describe("RedBlackTreeOrderBook - Logic Validation Tests", () => {
 
         it("should handle duplicate update IDs correctly", () => {
             const update1: SpotWebsocketStreams.DiffBookDepthResponse = {
-                e: "depthUpdate", E: Date.now(), s: "BTCUSDT", U: 1001, u: 1001,
-                b: [["49.0", "100"]], a: []
+                e: "depthUpdate",
+                E: Date.now(),
+                s: "BTCUSDT",
+                U: 1001,
+                u: 1001,
+                b: [["49.0", "100"]],
+                a: [],
             };
 
             const update2: SpotWebsocketStreams.DiffBookDepthResponse = {
-                e: "depthUpdate", E: Date.now(), s: "BTCUSDT", U: 1001, u: 1001,
-                b: [["49.0", "200"]], a: [] // Different quantity, same update ID
+                e: "depthUpdate",
+                E: Date.now(),
+                s: "BTCUSDT",
+                U: 1001,
+                u: 1001,
+                b: [["49.0", "200"]],
+                a: [], // Different quantity, same update ID
             };
 
             rbtOrderBook.updateDepth(update1);
             const initialLevel = rbtOrderBook.getLevel(49.0);
-            
+
             rbtOrderBook.updateDepth(update2); // Should be ignored
             const finalLevel = rbtOrderBook.getLevel(49.0);
 
@@ -302,17 +378,21 @@ describe("RedBlackTreeOrderBook - Logic Validation Tests", () => {
     describe("sumBand Logic Validation", () => {
         it("should correctly calculate band sums within specified range", () => {
             const update: SpotWebsocketStreams.DiffBookDepthResponse = {
-                e: "depthUpdate", E: Date.now(), s: "BTCUSDT", U: 1001, u: 1001,
+                e: "depthUpdate",
+                E: Date.now(),
+                s: "BTCUSDT",
+                U: 1001,
+                u: 1001,
                 b: [
                     ["49.0", "100"], // Within band
-                    ["49.5", "200"], // Within band  
+                    ["49.5", "200"], // Within band
                     ["48.0", "150"], // Outside band
                 ],
                 a: [
                     ["51.0", "300"], // Within band
                     ["51.5", "250"], // Within band
                     ["52.5", "400"], // Outside band
-                ]
+                ],
             };
 
             rbtOrderBook.updateDepth(update);
@@ -335,16 +415,20 @@ describe("RedBlackTreeOrderBook - Logic Validation Tests", () => {
     describe("Depth Metrics Accuracy", () => {
         it("should accurately count bid and ask levels", () => {
             const update: SpotWebsocketStreams.DiffBookDepthResponse = {
-                e: "depthUpdate", E: Date.now(), s: "BTCUSDT", U: 1001, u: 1001,
+                e: "depthUpdate",
+                E: Date.now(),
+                s: "BTCUSDT",
+                U: 1001,
+                u: 1001,
                 b: [
-                    ["49.0", "100"], 
-                    ["48.5", "200"], 
-                    ["48.0", "0"]  // Zero quantity - should not count
+                    ["49.0", "100"],
+                    ["48.5", "200"],
+                    ["48.0", "0"], // Zero quantity - should not count
                 ],
                 a: [
-                    ["51.0", "150"], 
-                    ["51.5", "250"]
-                ]
+                    ["51.0", "150"],
+                    ["51.5", "250"],
+                ],
             };
 
             rbtOrderBook.updateDepth(update);
@@ -380,9 +464,13 @@ describe("RedBlackTreeOrderBook - Logic Validation Tests", () => {
 
         it("should handle single-level orderbook correctly", () => {
             const update: SpotWebsocketStreams.DiffBookDepthResponse = {
-                e: "depthUpdate", E: Date.now(), s: "BTCUSDT", U: 1001, u: 1001,
+                e: "depthUpdate",
+                E: Date.now(),
+                s: "BTCUSDT",
+                U: 1001,
+                u: 1001,
                 b: [["50.0", "100"]],
-                a: []
+                a: [],
             };
 
             rbtOrderBook.updateDepth(update);
@@ -400,21 +488,25 @@ describe("RedBlackTreeOrderBook - Logic Validation Tests", () => {
         it("should handle realistic LTCUSDT price ranges correctly", () => {
             // Use realistic LTCUSDT prices (precision: 2, typical range: $60-120)
             const update: SpotWebsocketStreams.DiffBookDepthResponse = {
-                e: "depthUpdate", E: Date.now(), s: "LTCUSDT", U: 1001, u: 1001,
-                b: [["89.50", "100"]],  // Realistic LTCUSDT bid
-                a: [["89.52", "200"]]   // Realistic LTCUSDT ask with 2-tick spread
+                e: "depthUpdate",
+                E: Date.now(),
+                s: "LTCUSDT",
+                U: 1001,
+                u: 1001,
+                b: [["89.50", "100"]], // Realistic LTCUSDT bid
+                a: [["89.52", "200"]], // Realistic LTCUSDT ask with 2-tick spread
             };
 
             rbtOrderBook.updateDepth(update);
 
             // Prices should be preserved exactly as entered
-            expect(rbtOrderBook.getBestBid()).toBe(89.50);
+            expect(rbtOrderBook.getBestBid()).toBe(89.5);
             expect(rbtOrderBook.getBestAsk()).toBe(89.52);
-            
+
             // Verify spread calculation is precise for realistic numbers
             const spread = rbtOrderBook.getSpread();
             expect(spread).toBe(0.02); // Should be exact for realistic price levels
-            
+
             const midPrice = rbtOrderBook.getMidPrice();
             expect(midPrice).toBe(89.51); // Should be exact: (89.50 + 89.52) / 2
         });
