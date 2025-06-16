@@ -154,9 +154,18 @@ export class OrderflowPreprocessor
         trade: SpotWebsocketStreams.AggTradeResponse
     ): Promise<void> {
         try {
-            if (!this.isValidTrade(trade)) {
+            // Basic structure validation only
+            if (
+                !(
+                    trade.e === "aggTrade" &&
+                    trade.T &&
+                    trade.p &&
+                    trade.q &&
+                    trade.s
+                )
+            ) {
                 this.metricsCollector.incrementMetric("invalidTrades");
-                throw new Error("Invalid trade data received");
+                throw new Error("Invalid trade structure");
             }
 
             const aggressive = this.normalizeTradeData(trade);
@@ -289,30 +298,13 @@ export class OrderflowPreprocessor
     }
 
     /**
-     * Check if trade data is valid
-     */
-    protected isValidTrade(
-        trade: SpotWebsocketStreams.AggTradeResponse
-    ): boolean {
-        return !!(
-            trade.e &&
-            trade.e === "aggTrade" &&
-            trade.T &&
-            trade.p &&
-            trade.q &&
-            trade.s &&
-            parseFloat(trade.p) > 0 &&
-            parseFloat(trade.q) > 0
-        );
-    }
-
-    /**
      * Normalize trade data
      */
     protected normalizeTradeData(
         trade: SpotWebsocketStreams.AggTradeResponse
     ): AggressiveTrade {
-        const price = parseFloat(trade.p!);
+        const price = FinancialMath.parsePrice(trade.p!);
+        const quantity = FinancialMath.parseQuantity(trade.q!);
         const normalizedPrice = FinancialMath.normalizePriceToTick(
             price,
             this.tickSize
@@ -320,7 +312,7 @@ export class OrderflowPreprocessor
 
         return {
             price: normalizedPrice,
-            quantity: parseFloat(trade.q!),
+            quantity,
             timestamp: trade.T!,
             buyerIsMaker: !!trade.m,
             pair: trade.s ?? "",

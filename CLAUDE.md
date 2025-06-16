@@ -49,6 +49,48 @@ This is a **PRODUCTION TRADING SYSTEM** handling real financial data and trading
 5. **Rollback Plan**: Define immediate rollback procedure
 6. **User Approval**: Get explicit approval for business-critical changes
 
+#### 🚫 STRICTLY FORBIDDEN: LIVE DATA CACHING
+
+**CRITICAL PROHIBITION**: Caching of live market data is **STRICTLY FORBIDDEN** in this production trading system.
+
+**RATIONALE:**
+
+- **Financial Risk**: Stale cached data can lead to incorrect trading signals
+- **Market Impact**: Outdated prices/volumes cause wrong signal timing
+- **Real-time Requirement**: Trading algorithms depend on millisecond-fresh data
+- **Data Integrity**: Cache invalidation failures create systematic trading errors
+
+**PROHIBITED PATTERNS:**
+
+```typescript
+// ❌ NEVER: Cache live market data
+const cachedOrderBookState = this.cache.get('orderbook');
+const cachedBestBid = this.priceCache[symbol];
+const cachedTradeData = this.memoize(getTrade);
+
+// ❌ NEVER: Store live data in variables for reuse
+private lastBestBid: number; // DON'T cache live quotes
+private cachedSpread: number; // DON'T cache live calculations
+private bufferedTrades: Trade[]; // DON'T cache live trades
+```
+
+**ALLOWED PATTERNS:**
+
+```typescript
+// ✅ CORRECT: Always fetch fresh data
+const bestBid = this.orderBook.getBestBid();
+const spread = this.orderBook.getSpread();
+const trade = this.getCurrentTrade();
+
+// ✅ CORRECT: Single-use calculation within method scope
+const bestBid = this.orderBook.getBestBid();
+const bestAsk = this.orderBook.getBestAsk();
+const spread = bestAsk - bestBid; // Only within same method call
+```
+
+**VIOLATIONS DETECTION:**
+Any implementation of caching mechanisms on live market data will be **IMMEDIATELY REJECTED** and flagged as a critical trading system violation.
+
 ## Development Commands
 
 ### Core Development
