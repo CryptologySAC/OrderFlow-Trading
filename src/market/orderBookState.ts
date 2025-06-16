@@ -49,21 +49,21 @@ export interface IOrderBookState {
 /**
  * @deprecated This class is deprecated and will be removed in a future version.
  * Use RedBlackTreeOrderBook instead for better performance with O(log n) operations.
- * 
+ *
  * Legacy Map-based OrderBook implementation. This implementation uses Map data structures
  * which provide O(n) performance for best bid/ask operations. For better performance,
  * especially with large orderbooks, use RedBlackTreeOrderBook which provides O(log n) operations.
- * 
+ *
  * Migration path:
  * ```typescript
  * // Old usage:
  * const orderBook = await OrderBookState.create(options, logger, metrics, threadManager);
- * 
+ *
  * // New usage:
  * const orderBook = new RedBlackTreeOrderBook(options, logger, metrics, threadManager);
  * await orderBook.recover();
  * ```
- * 
+ *
  * @see RedBlackTreeOrderBook - Recommended replacement with O(log n) performance
  */
 export class OrderBookState implements IOrderBookState {

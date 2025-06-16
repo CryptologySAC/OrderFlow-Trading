@@ -13,6 +13,7 @@ import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterf
 import { randomUUID } from "crypto";
 import { IndividualTradesManager } from "../data/individualTradesManager.js";
 import { MicrostructureAnalyzer } from "../data/microstructureAnalyzer.js";
+import { FinancialMath } from "../utils/financialMath.js";
 
 export interface OrderflowPreprocessorOptions {
     pricePrecision?: number;
@@ -160,8 +161,11 @@ export class OrderflowPreprocessor
 
             const aggressive = this.normalizeTradeData(trade);
             const bookLevel = this.bookState.getLevel(aggressive.price);
-            const zone =
-                Math.round(aggressive.price / this.tickSize) * this.tickSize;
+            const zone = FinancialMath.priceToZone(
+                aggressive.price,
+                this.tickSize
+            );
+
             const band = this.bookState.sumBand(
                 zone,
                 this.bandTicks,
@@ -309,10 +313,9 @@ export class OrderflowPreprocessor
         trade: SpotWebsocketStreams.AggTradeResponse
     ): AggressiveTrade {
         const price = parseFloat(trade.p!);
-        const normalizedPrice = parseFloat(
-            (Math.round(price / this.tickSize) * this.tickSize).toFixed(
-                this.pricePrecision
-            )
+        const normalizedPrice = FinancialMath.normalizePriceToTick(
+            price,
+            this.tickSize
         );
 
         return {

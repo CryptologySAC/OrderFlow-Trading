@@ -30,6 +30,12 @@ export class FinancialMath {
         return this.intToPrice(normalizedInt);
     }
 
+    static priceToZone(price: number, tickSize: number): number {
+        const normalizedInt = this.normalizePriceToTick(price, tickSize);
+        const zone = Math.round(normalizedInt);
+        return zone;
+    }
+
     /**
      * Calculate mid price with perfect precision
      */
