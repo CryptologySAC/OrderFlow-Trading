@@ -5,6 +5,7 @@ import type {
     AggressiveTrade,
     EnrichedTradeEvent,
     HybridTradeEvent,
+    OrderBookUpdate,
     OrderBookSnapshot,
 } from "../types/marketEvents.js";
 import { IOrderBookState } from "./orderBookState.js";
@@ -24,6 +25,10 @@ export interface OrderflowPreprocessorOptions {
     enableIndividualTrades?: boolean;
     largeTradeThreshold?: number;
     maxEventListeners?: number;
+    // Dashboard update configuration
+    dashboardUpdateInterval?: number;
+    maxDashboardInterval?: number;
+    significantChangeThreshold?: number;
 }
 
 export interface IOrderflowPreprocessor {
@@ -52,6 +57,16 @@ export class OrderflowPreprocessor
     private readonly largeTradeThreshold: number;
     private readonly maxEventListeners: number;
 
+    // Dashboard update configuration
+    private readonly dashboardUpdateInterval: number;
+    private readonly maxDashboardInterval: number;
+    private readonly significantChangeThreshold: number;
+
+    // Dashboard update state
+    private dashboardUpdateTimer?: NodeJS.Timeout;
+    private lastDashboardUpdate = 0;
+    private lastDashboardMidPrice = 0;
+
     // Individual trades components (optional)
     private readonly individualTradesManager?: IndividualTradesManager;
     private readonly microstructureAnalyzer?: MicrostructureAnalyzer;
@@ -79,6 +94,13 @@ export class OrderflowPreprocessor
         this.symbol = opts.symbol ?? "LTCUSDT";
         this.largeTradeThreshold = opts.largeTradeThreshold ?? 100;
         this.maxEventListeners = opts.maxEventListeners ?? 50;
+
+        // Dashboard update configuration
+        this.dashboardUpdateInterval = opts.dashboardUpdateInterval ?? 200; // 200ms = 5 FPS
+        this.maxDashboardInterval = opts.maxDashboardInterval ?? 1000; // Max 1 second between updates
+        this.significantChangeThreshold =
+            opts.significantChangeThreshold ?? 0.001; // 0.1% price change
+
         this.bookState = orderBook;
 
         // Configure EventEmitter to prevent memory leaks
@@ -102,10 +124,14 @@ export class OrderflowPreprocessor
             quantityPrecision: this.quantityPrecision,
             largeTradeThreshold: this.largeTradeThreshold,
             maxEventListeners: this.maxEventListeners,
+            dashboardUpdateInterval: this.dashboardUpdateInterval,
             enableIndividualTrades: this.enableIndividualTrades,
             hasIndividualTradesManager: !!this.individualTradesManager,
             hasMicrostructureAnalyzer: !!this.microstructureAnalyzer,
         });
+
+        // Initialize dashboard update timer
+        this.initializeDashboardTimer();
     }
 
     // Should be called on every depth update
@@ -132,23 +158,19 @@ export class OrderflowPreprocessor
                     timestamp,
                 });
 
-                // CRITICAL: OrderBookProcessor depends on ALL fields for downstream processing
-                // - Core quotes (bestBid/Ask, spread, midPrice) for signal validation
-                // - depthSnapshot for full orderbook state analysis
-                // - passiveBidVolume/passiveAskVolume for liquidity analysis
-                // - imbalance for market regime classification and signal filtering
-                // Missing any field causes undefined values in trading signal pipeline
+                // OPTIMIZED: orderbook_update now focuses on trading signals (NO expensive snapshot)
+                // Core quotes and metrics for signal validation and processing
+                // Dashboard visualization uses separate dedicated event stream
                 this.emit("orderbook_update", {
                     timestamp,
                     bestBid,
                     bestAsk,
                     spread,
                     midPrice,
-                    depthSnapshot: this.bookState.snapshot(),
                     passiveBidVolume: depthMetrics.totalBidVolume,
                     passiveAskVolume: depthMetrics.totalAskVolume,
                     imbalance: depthMetrics.imbalance,
-                } as OrderBookSnapshot);
+                } as OrderBookUpdate);
             }
         } catch (error) {
             this.handleError(
@@ -343,6 +365,109 @@ export class OrderflowPreprocessor
      */
     private getLargeTradeThreshold(): number {
         return this.largeTradeThreshold;
+    }
+
+    /**
+     * Initialize dashboard update timer for periodic snapshot generation
+     */
+    private initializeDashboardTimer(): void {
+        this.dashboardUpdateTimer = setInterval(() => {
+            this.emitDashboardUpdate();
+        }, this.dashboardUpdateInterval);
+
+        this.logger.info(
+            "[OrderflowPreprocessor] Dashboard timer initialized",
+            {
+                interval: this.dashboardUpdateInterval,
+                maxInterval: this.maxDashboardInterval,
+            }
+        );
+    }
+
+    /**
+     * Emit dashboard-specific orderbook update with full snapshot
+     */
+    private emitDashboardUpdate(): void {
+        try {
+            const timestamp = Date.now();
+            const depthMetrics = this.bookState.getDepthMetrics();
+            const bestBid = this.bookState.getBestBid();
+            const bestAsk = this.bookState.getBestAsk();
+            const spread = this.bookState.getSpread();
+            const midPrice = this.bookState.getMidPrice();
+
+            // Check if we should skip this update
+            if (!this.shouldUpdateDashboard(midPrice, timestamp)) {
+                return;
+            }
+
+            // Create snapshot for dashboard visualization
+            const snapshot = this.bookState.snapshot();
+
+            this.emit("dashboard_orderbook_update", {
+                timestamp,
+                bestBid,
+                bestAsk,
+                spread,
+                midPrice,
+                depthSnapshot: snapshot,
+                passiveBidVolume: depthMetrics.totalBidVolume,
+                passiveAskVolume: depthMetrics.totalAskVolume,
+                imbalance: depthMetrics.imbalance,
+            } as OrderBookSnapshot);
+
+            // Update dashboard state
+            this.lastDashboardUpdate = timestamp;
+            this.lastDashboardMidPrice = midPrice;
+        } catch (error) {
+            this.handleError(
+                error as Error,
+                "OrderflowPreprocessor.emitDashboardUpdate"
+            );
+        }
+    }
+
+    /**
+     * Determine if dashboard should be updated based on time and price movement
+     */
+    private shouldUpdateDashboard(
+        currentMidPrice: number,
+        now: number
+    ): boolean {
+        const timeSinceLastUpdate = now - this.lastDashboardUpdate;
+
+        // Always respect minimum interval
+        if (timeSinceLastUpdate < this.dashboardUpdateInterval) {
+            return false;
+        }
+
+        // Force update if max interval exceeded
+        if (timeSinceLastUpdate >= this.maxDashboardInterval) {
+            return true;
+        }
+
+        // Update on significant price change
+        if (this.lastDashboardMidPrice > 0) {
+            const changePercent =
+                Math.abs(currentMidPrice - this.lastDashboardMidPrice) /
+                this.lastDashboardMidPrice;
+            if (changePercent > this.significantChangeThreshold) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Cleanup dashboard timer on shutdown
+     */
+    public shutdown(): void {
+        if (this.dashboardUpdateTimer) {
+            clearInterval(this.dashboardUpdateTimer);
+            this.dashboardUpdateTimer = undefined;
+            this.logger.info("[OrderflowPreprocessor] Dashboard timer cleared");
+        }
     }
 
     protected handleError(

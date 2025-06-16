@@ -119,14 +119,17 @@ export interface OrderBookHealth {
     };
 }
 
-export interface OrderBookSnapshot {
+export interface OrderBookUpdate {
     timestamp: number;
     bestBid: number;
     bestAsk: number;
     spread: number;
     midPrice: number;
-    depthSnapshot: Map<number, PassiveLevel>;
     passiveBidVolume: number;
     passiveAskVolume: number;
     imbalance: number;
+}
+
+export interface OrderBookSnapshot extends OrderBookUpdate {
+    depthSnapshot: Map<number, PassiveLevel>;
 }

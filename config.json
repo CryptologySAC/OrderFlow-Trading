@@ -123,6 +123,9 @@
             "bandTicks": 5,
             "largeTradeThreshold": 100,
             "maxEventListeners": 50,
+            "dashboardUpdateInterval": 200,
+            "maxDashboardInterval": 1000,
+            "significantChangeThreshold": 0.001,
             "orderBookState": {
                 "binSize": 0.01,
                 "numLevels": 150,

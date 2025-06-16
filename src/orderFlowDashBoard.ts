@@ -666,12 +666,13 @@ export class OrderFlowDashboard {
                     }
                 }
             );
+            // Dashboard-specific orderbook updates with full snapshot for visualization
             this.preprocessor?.on(
-                "orderbook_update",
-                (orderBookUpdate: OrderBookSnapshot) => {
+                "dashboard_orderbook_update",
+                (dashboardUpdate: OrderBookSnapshot) => {
                     const orderBookMessage: WebSocketMessage =
                         this.dependencies.orderBookProcessor.onOrderBookUpdate(
-                            orderBookUpdate
+                            dashboardUpdate
                         );
                     if (orderBookMessage) {
                         this.broadcastMessage(orderBookMessage);

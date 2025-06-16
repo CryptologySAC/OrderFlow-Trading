@@ -184,6 +184,11 @@ export class Config {
             tickSize: Config.TICK_SIZE,
             largeTradeThreshold: SYMBOL_CFG?.largeTradeThreshold ?? 100,
             maxEventListeners: SYMBOL_CFG?.maxEventListeners ?? 50,
+            // Dashboard update configuration
+            dashboardUpdateInterval: SYMBOL_CFG?.dashboardUpdateInterval ?? 200, // 200ms = 5 FPS
+            maxDashboardInterval: SYMBOL_CFG?.maxDashboardInterval ?? 1000, // Max 1s between updates
+            significantChangeThreshold:
+                SYMBOL_CFG?.significantChangeThreshold ?? 0.001, // 0.1% price change
         };
     }
 

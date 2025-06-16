@@ -36,6 +36,10 @@ type SymbolConfig = {
     bandTicks: number;
     largeTradeThreshold?: number; // Threshold for large trades requiring full depth snapshot
     maxEventListeners?: number; // EventEmitter memory management
+    // Dashboard update configuration for performance optimization
+    dashboardUpdateInterval?: number; // Dashboard update frequency in ms (default: 200ms = 5 FPS)
+    maxDashboardInterval?: number; // Maximum time between dashboard updates (default: 1000ms)
+    significantChangeThreshold?: number; // Price change threshold for immediate updates (default: 0.001 = 0.1%)
     dataStream?: DataStreamConfig;
     orderBookState: OrderBookStateConfig;
     tradesProcessor?: TradesProcessorConfig;
