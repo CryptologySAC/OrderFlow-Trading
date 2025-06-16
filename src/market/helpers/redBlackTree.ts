@@ -1,4 +1,27 @@
+import { z } from "zod";
 import type { PassiveLevel } from "../../types/marketEvents.js";
+
+// Zod schemas for input validation
+const PriceSchema = z
+    .number()
+    .finite()
+    .nonnegative("Price must be non-negative");
+const QuantitySchema = z
+    .number()
+    .finite()
+    .nonnegative("Quantity must be non-negative");
+const PassiveLevelSchema = z.object({
+    price: PriceSchema,
+    bid: QuantitySchema,
+    ask: QuantitySchema,
+    timestamp: z.number().finite().nonnegative(),
+    // Optional fields for tracking
+    consumedAsk: QuantitySchema.optional(),
+    consumedBid: QuantitySchema.optional(),
+    addedAsk: QuantitySchema.optional(),
+    addedBid: QuantitySchema.optional(),
+});
+const SideSchema = z.enum(["bid", "ask"]);
 
 // Red-Black Tree Implementation for O(log n) OrderBook operations
 export class RedBlackTree {
@@ -6,7 +29,7 @@ export class RedBlackTree {
     private nil: RBNode;
 
     constructor() {
-        // Create NIL node (sentinel)
+        // Create NIL node (sentinel) - temporarily create with placeholder
         this.nil = new RBNode(
             0,
             {
@@ -19,16 +42,21 @@ export class RedBlackTree {
                 //addedAsk: 0,
                 //addedBid: 0,
             },
-            "black"
+            "black",
+            {} as RBNode // temporary placeholder, will be self-assigned
         );
+        // Make NIL self-referential for proper sentinel behavior
+        this.nil.left = this.nil;
+        this.nil.right = this.nil;
         this.root = this.nil;
     }
 
     // Insert a price level with bid/ask separation enforcement
     public insert(price: number, level: PassiveLevel): void {
-        const newNode = new RBNode(price, level);
-        newNode.left = this.nil;
-        newNode.right = this.nil;
+        // Zod validation for production safety
+        PriceSchema.parse(price);
+        PassiveLevelSchema.parse(level);
+        const newNode = new RBNode(price, level, "red", this.nil);
 
         let parent = null;
         let current = this.root;
@@ -65,6 +93,10 @@ export class RedBlackTree {
 
     // Set bid/ask with automatic separation enforcement
     public set(price: number, side: "bid" | "ask", quantity: number): void {
+        // Zod validation for production safety
+        PriceSchema.parse(price);
+        SideSchema.parse(side);
+        QuantitySchema.parse(quantity);
         const existingNode = this.search(price);
 
         if (existingNode === this.nil) {
@@ -74,29 +106,29 @@ export class RedBlackTree {
                 bid: side === "bid" ? quantity : 0,
                 ask: side === "ask" ? quantity : 0,
                 timestamp: Date.now(),
-                //consumedAsk: 0,
-                //consumedBid: 0,
-                //addedAsk: side === "ask" ? quantity : 0,
-                //addedBid: side === "bid" ? quantity : 0,
+                consumedAsk: 0,
+                consumedBid: 0,
+                addedAsk: side === "ask" ? quantity : 0,
+                addedBid: side === "bid" ? quantity : 0,
             };
             this.insert(price, level);
         } else {
             // Update existing level with separation enforcement
             if (side === "bid") {
                 existingNode.level.bid = quantity;
-                //existingNode.level.addedBid = quantity;
+                existingNode.level.addedBid = quantity;
                 // Clear conflicting ask if setting bid > 0
                 if (quantity > 0) {
                     existingNode.level.ask = 0;
-                    //existingNode.level.addedAsk = 0;
+                    existingNode.level.addedAsk = 0;
                 }
             } else {
                 existingNode.level.ask = quantity;
-                //existingNode.level.addedAsk = quantity;
+                existingNode.level.addedAsk = quantity;
                 // Clear conflicting bid if setting ask > 0
                 if (quantity > 0) {
                     existingNode.level.bid = 0;
-                    // existingNode.level.addedBid = 0;
+                    existingNode.level.addedBid = 0;
                 }
             }
             existingNode.level.timestamp = Date.now();
@@ -113,29 +145,31 @@ export class RedBlackTree {
         // If incoming has bid data, clear any existing ask and update bid
         if (incoming.bid > 0) {
             result.bid = incoming.bid;
-            //result.addedBid = incoming.addedBid;
+            result.addedBid = incoming.addedBid || 0;
             result.ask = 0;
-            //result.addedAsk = 0;
+            result.addedAsk = 0;
         }
 
         // If incoming has ask data, clear any existing bid and update ask
         if (incoming.ask > 0) {
             result.ask = incoming.ask;
-            //result.addedAsk = incoming.addedAsk;
+            result.addedAsk = incoming.addedAsk || 0;
             result.bid = 0;
-            //result.addedBid = 0;
+            result.addedBid = 0;
         }
 
         // Update other fields
         result.timestamp = incoming.timestamp;
-        //result.consumedBid = incoming.consumedBid;
-        //result.consumedAsk = incoming.consumedAsk;
+        result.consumedBid = incoming.consumedBid || 0;
+        result.consumedAsk = incoming.consumedAsk || 0;
 
         return result;
     }
 
     // Delete a price level
     public delete(price: number): void {
+        // Zod validation for production safety
+        PriceSchema.parse(price);
         const nodeToDelete = this.search(price);
         if (nodeToDelete === this.nil) return;
 
@@ -188,6 +222,8 @@ export class RedBlackTree {
 
     // Get price level
     public get(price: number): PassiveLevel | undefined {
+        // Zod validation for production safety
+        PriceSchema.parse(price);
         const node = this.search(price);
         return node === this.nil ? undefined : node.level;
     }
@@ -213,52 +249,48 @@ export class RedBlackTree {
     }
 
     private getBestBidNode(): RBNode | null {
-        // Simple in-order traversal to find highest price with bid > 0
+        // Find highest price with bid > 0 by traversing all nodes
         let bestBid: RBNode | null = null;
 
-        const findBestBid = (node: RBNode | null): void => {
+        const findHighestBid = (node: RBNode | null): void => {
             if (!node || node === this.nil) return;
 
-            // Traverse left subtree
-            findBestBid(node.left);
-
-            // Process current node
+            // Check current node
             if (node.level.bid > 0) {
                 if (!bestBid || node.price > bestBid.price) {
                     bestBid = node;
                 }
             }
 
-            // Traverse right subtree
-            findBestBid(node.right);
+            // Recursively search both subtrees
+            findHighestBid(node.left);
+            findHighestBid(node.right);
         };
 
-        findBestBid(this.root);
+        findHighestBid(this.root);
         return bestBid;
     }
 
     private getBestAskNode(): RBNode | null {
-        // Simple in-order traversal to find lowest price with ask > 0
+        // Find lowest price with ask > 0 by traversing all nodes
         let bestAsk: RBNode | null = null;
 
-        const findBestAsk = (node: RBNode | null): void => {
+        const findLowestAsk = (node: RBNode | null): void => {
             if (!node || node === this.nil) return;
 
-            // Traverse left subtree
-            findBestAsk(node.left);
-
-            // Process current node
+            // Check current node
             if (node.level.ask > 0) {
                 if (!bestAsk || node.price < bestAsk.price) {
                     bestAsk = node;
                 }
             }
 
-            // Traverse right subtree
-            findBestAsk(node.right);
+            // Recursively search both subtrees
+            findLowestAsk(node.left);
+            findLowestAsk(node.right);
         };
 
-        findBestAsk(this.root);
+        findLowestAsk(this.root);
         return bestAsk;
     }
 
@@ -267,11 +299,31 @@ export class RedBlackTree {
         bidNode: RBNode | null;
         askNode: RBNode | null;
     } {
-        // Use the individual optimized methods to ensure separation
-        return {
-            bidNode: this.getBestBidNode(),
-            askNode: this.getBestAskNode(),
+        let bestBid: RBNode | null = null;
+        let bestAsk: RBNode | null = null;
+
+        const findBestBidAsk = (node: RBNode | null): void => {
+            if (!node || node === this.nil) return;
+
+            // Process current node
+            if (node.level.bid > 0) {
+                if (!bestBid || node.price > bestBid.price) {
+                    bestBid = node;
+                }
+            }
+            if (node.level.ask > 0) {
+                if (!bestAsk || node.price < bestAsk.price) {
+                    bestAsk = node;
+                }
+            }
+
+            // Search both subtrees
+            findBestBidAsk(node.left);
+            findBestBidAsk(node.right);
         };
+
+        findBestBidAsk(this.root);
+        return { bidNode: bestBid, askNode: bestAsk };
     }
 
     // Get all nodes for iteration
@@ -480,7 +532,7 @@ class RBNode {
         price: number,
         level: PassiveLevel,
         color: Color = "red",
-        nil?: RBNode // pass the sentinel so we can point to it immediately
+        nil: RBNode // required sentinel to prevent memory leaks
     ) {
         this.price = price;
         this.level = level;
@@ -488,8 +540,8 @@ class RBNode {
         // during construction we don’t yet know the real children;
         // if `nil` is supplied we hook both sides to it, otherwise
         // they’ll be patched by the tree logic.
-        this.left = nil ?? (this as unknown as RBNode);
-        this.right = nil ?? (this as unknown as RBNode);
+        this.left = nil;
+        this.right = nil;
         this.parent = null;
     }
 }
