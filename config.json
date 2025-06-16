@@ -42,7 +42,7 @@
                 "minCandidateDuration": 90000,
                 "minSellRatio": 0.55,
                 "maxPriceDeviation": 0.012,
-                "minTradeCount": 5
+                "minTradeCount": 10
             }
         }
     },
@@ -170,12 +170,12 @@
                 }
             },
             "absorption": {
-                "minAggVolume": 250,
+                "minAggVolume": 500,
                 "threshold": 0.5,
                 "windowMs": 75000,
                 "zoneTicks": 3,
                 "eventCooldownMs": 20000,
-                "signalCooldownMs": 120000,
+                "signalCooldownMs": 180000,
                 "minPassiveMultiplier": 2.2,
                 "maxAbsorptionRatio": 0.85,
                 "icebergDetectionSensitivity": 0.65,

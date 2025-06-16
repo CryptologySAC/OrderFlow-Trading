@@ -81,4 +81,17 @@ export class FinancialMath {
         const resultInt = (qty1Int * qty2Int) / BigInt(this.QUANTITY_SCALE);
         return Number(resultInt) / this.QUANTITY_SCALE;
     }
+
+    /**
+     * Safe quantity division avoiding floating point errors
+     */
+    static divideQuantities(qty1: number, qty2: number): number {
+        if (qty2 === 0 || isNaN(qty1) || isNaN(qty2)) {
+            return 0;
+        }
+        const qty1Int = BigInt(Math.round(qty1 * this.QUANTITY_SCALE));
+        const qty2Int = BigInt(Math.round(qty2 * this.QUANTITY_SCALE));
+        const resultInt = qty1Int / qty2Int / BigInt(this.QUANTITY_SCALE);
+        return Number(resultInt) / this.QUANTITY_SCALE;
+    }
 }

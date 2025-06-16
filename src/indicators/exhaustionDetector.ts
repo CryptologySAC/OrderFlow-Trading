@@ -120,7 +120,6 @@ export class ExhaustionDetector
         // NEW: Set up periodic threshold updates
         setInterval(() => this.updateThresholds(), this.updateIntervalMs);
 
-        //TODO debuG
         this.isCircuitOpen = false;
         this.errorCount = 0;
     }
@@ -133,18 +132,6 @@ export class ExhaustionDetector
     /*  Incoming enriched trade                                           */
     /* ------------------------------------------------------------------ */
     public onEnrichedTrade(event: EnrichedTradeEvent): void {
-        // Debug: Log every trade to verify detector is receiving data
-        if (Math.random() < 0.01) {
-            // Log 1% of trades to avoid spam
-            this.logger?.info(`[ExhaustionDetector] 🔍 RECEIVING TRADE`, {
-                price: event.price,
-                quantity: event.quantity,
-                side: event.buyerIsMaker ? "sell" : "buy",
-                timestamp: new Date(event.timestamp).toISOString(),
-                totalTradesReceived: this.trades.length + 1,
-            });
-        }
-
         const zone = this.calculateZone(event.price);
 
         // create window if absent
@@ -277,19 +264,7 @@ export class ExhaustionDetector
      * Update adaptive thresholds
      */
     private updateThresholds(): void {
-        const oldThresholds = this.getAdaptiveThresholds();
-
         this.updateAdaptiveThresholds(); // Use BaseDetector method
-
-        // Log significant threshold changes
-        const newThresholds = this.getAdaptiveThresholds();
-        if (this.hasSignificantChange(oldThresholds, newThresholds)) {
-            this.logger?.info("[ExhaustionDetector] Thresholds adapted", {
-                old: oldThresholds,
-                new: newThresholds,
-                timestamp: new Date().toISOString(),
-            });
-        }
     }
 
     /**
@@ -327,15 +302,6 @@ export class ExhaustionDetector
      * Main detection loop for exhaustion patterns
      */
     protected checkForSignal(triggerTrade: AggressiveTrade): void {
-        // Debug: Log every signal check to verify method is being called
-        this.logger?.info(`[ExhaustionDetector] 🔍 SIGNAL CHECK TRIGGERED`, {
-            triggerPrice: triggerTrade.price,
-            triggerSide: this.getTradeSide(triggerTrade),
-            tradesInBuffer: this.trades.length,
-            zoneAggregations: this.zoneAgg.size,
-            timestamp: new Date(triggerTrade.timestamp).toISOString(),
-        });
-
         const now = Date.now();
         const zoneTicks = this.getEffectiveZoneTicks();
 
@@ -391,58 +357,16 @@ export class ExhaustionDetector
         const price = +latestTrade.price.toFixed(this.pricePrecision);
         const side = this.getTradeSide(latestTrade);
 
-        // 🔍 DEBUG: Log analysis start
-        this.logger.info(`[ExhaustionDetector] Zone analysis started`, {
-            zone,
-            price,
-            side,
-            tradesCount: tradesAtZone.length,
-            latestTradeTime: new Date(latestTrade.timestamp).toISOString(),
-            circuitBreakerOpen: this.isCircuitOpen,
-            errorCount: this.errorCount,
-        });
-
         // Get current book level
         const bookLevel = this.getBookLevel(price, zone, side);
         if (!bookLevel) {
-            this.logger.info(
-                `[ExhaustionDetector] No passive volume data for zone`,
-                {
-                    zone,
-                    price,
-                    side,
-                    zoneHistorySize:
-                        this.zonePassiveHistory.get(zone)?.count() || 0,
-                }
-            );
             return;
         }
-
-        this.logger.info(`[ExhaustionDetector] ✅ FOUND BOOK LEVEL DATA`, {
-            zone,
-            price,
-            side,
-            bookLevel: { bid: bookLevel.bid, ask: bookLevel.ask },
-        });
 
         // Check cooldown to prevent spam (update after confirmation)
         if (!this.checkCooldown(zone, side, false)) {
-            this.logger.info(`[ExhaustionDetector] Cooldown active`, {
-                zone,
-                price,
-                side,
-            });
             return;
         }
-
-        // 🔍 DEBUG: Log before conditions analysis
-        this.logger.info(`[ExhaustionDetector] Starting conditions analysis`, {
-            zone,
-            price,
-            side,
-            zoneHistorySize: this.zonePassiveHistory.get(zone)?.count() || 0,
-            windowMs: this.windowMs,
-        });
 
         // Analyze exhaustion conditions
         const conditionsResult = this.analyzeExhaustionConditionsSafe(
@@ -451,25 +375,9 @@ export class ExhaustionDetector
             zone
         );
 
-        // 🔍 DEBUG: Log conditions result
         if (!conditionsResult.success) {
-            this.logger.info(
-                `[ExhaustionDetector] ❌ CONDITIONS ANALYSIS FAILED`,
-                {
-                    zone,
-                    price,
-                    side,
-                    error: conditionsResult.error.message,
-                    fallbackSafe: conditionsResult.fallbackSafe,
-                    errorType: conditionsResult.error.constructor.name,
-                }
-            );
-
             // Handle error appropriately based on type
             if (conditionsResult.fallbackSafe) {
-                this.logger.debug(
-                    `[ExhaustionDetector] Skipping analysis: ${conditionsResult.error.message}`
-                );
                 return;
             } else {
                 this.pauseDetectorTemporarily(conditionsResult.error);
@@ -478,81 +386,13 @@ export class ExhaustionDetector
         }
 
         const conditions = conditionsResult.data;
-
-        // 🔍 DEBUG: Log successful conditions
-        this.logger.info(
-            `[ExhaustionDetector] ✅ CONDITIONS ANALYSIS SUCCESS`,
-            {
-                zone,
-                price,
-                side,
-                conditions: {
-                    depletionRatio: conditions.depletionRatio,
-                    passiveRatio: conditions.passiveRatio,
-                    aggressiveVolume: conditions.aggressiveVolume,
-                    avgPassive: conditions.avgPassive,
-                    consistency: conditions.consistency,
-                    velocityIncrease: conditions.velocityIncrease,
-                    sampleCount: conditions.sampleCount,
-                    confidence: conditions.confidence,
-                    dataQuality: conditions.dataQuality,
-                    isValid: conditions.isValid,
-                },
-            }
-        );
         if (conditions.dataQuality === "insufficient") {
-            // 🔧 FIX: Only reject if confidence is extremely low
-            if (conditions.confidence < 0.1) {
-                this.logger.info(`[ExhaustionDetector] Data quality too low`, {
-                    quality: conditions.dataQuality,
-                    confidence: conditions.confidence,
-                    zone,
-                    price,
-                    side,
-                });
-                return;
-            } else {
-                this.logger.info(
-                    `[ExhaustionDetector] ⚠️ Low data quality but proceeding due to reasonable confidence`,
-                    {
-                        quality: conditions.dataQuality,
-                        confidence: conditions.confidence,
-                    }
-                );
-            }
+            return;
         }
-
-        // 🔍 DEBUG: Log before score calculation
-        this.logger.info(`[ExhaustionDetector] 📊 STARTING SCORE CALCULATION`, {
-            zone,
-            price,
-            side,
-            currentThresholds: this.getAdaptiveThresholds(),
-        });
 
         // Calculate score with confidence adjustment
         const baseScore = this.calculateExhaustionScore(conditions);
         const adjustedScore = baseScore * conditions.confidence;
-
-        this.logger.info(`[ExhaustionDetector] Conditions analyzed`, {
-            zone,
-            price,
-            side,
-            baseScore,
-            adjustedScore,
-            threshold: this.exhaustionThreshold,
-            conditions: {
-                depletionRatio: conditions.depletionRatio,
-                passiveRatio: conditions.passiveRatio,
-                aggressiveVolume: conditions.aggressiveVolume,
-                avgPassive: conditions.avgPassive,
-                consistency: conditions.consistency,
-                velocityIncrease: conditions.velocityIncrease,
-                sampleCount: conditions.sampleCount,
-                confidence: conditions.confidence,
-                dataQuality: conditions.dataQuality,
-            },
-        });
 
         // Apply stricter threshold for low-quality data
         const effectiveThreshold =
@@ -561,20 +401,6 @@ export class ExhaustionDetector
                 : this.exhaustionThreshold;
 
         if (adjustedScore < effectiveThreshold) {
-            this.logger.info(
-                `[ExhaustionDetector] Signal rejected - score below threshold`,
-                {
-                    zone,
-                    price,
-                    side,
-                    adjustedScore,
-                    effectiveThreshold,
-                    baseScore,
-                    confidence: conditions.confidence,
-                    dataQuality: conditions.dataQuality,
-                    deficit: effectiveThreshold - adjustedScore,
-                }
-            );
             return;
         }
 
@@ -585,29 +411,8 @@ export class ExhaustionDetector
             zoneTicks
         );
 
-        this.logger.info(`[ExhaustionDetector] Volume analysis`, {
-            zone,
-            price,
-            side,
-            aggressive: volumes.aggressive,
-            passive: volumes.passive,
-            minRequired: this.minAggVolume,
-            passesVolumeCheck: volumes.aggressive >= this.minAggVolume,
-        });
-
         // Skip if insufficient volume
         if (volumes.aggressive < this.minAggVolume) {
-            this.logger.info(
-                `[ExhaustionDetector] Signal rejected - insufficient volume`,
-                {
-                    zone,
-                    price,
-                    side,
-                    aggressive: volumes.aggressive,
-                    required: this.minAggVolume,
-                    deficit: this.minAggVolume - volumes.aggressive,
-                }
-            );
             return;
         }
 
@@ -617,14 +422,6 @@ export class ExhaustionDetector
             (this.isSpoofed(price, side, triggerTrade.timestamp) ||
                 this.detectLayeringAttack(price, side, triggerTrade.timestamp))
         ) {
-            this.logger.info(
-                `[ExhaustionDetector] Signal rejected - spoofing detected`,
-                {
-                    zone,
-                    price,
-                    side,
-                }
-            );
             this.metricsCollector.incrementMetric("exhaustionSpoofingRejected");
             return;
         }
@@ -634,15 +431,6 @@ export class ExhaustionDetector
         const refilled = this.checkRefill(price, side, oppositeQty);
 
         if (refilled) {
-            this.logger.info(
-                `[ExhaustionDetector] Signal rejected - refill detected`,
-                {
-                    zone,
-                    price,
-                    side,
-                    oppositeQty,
-                }
-            );
             this.metricsCollector.incrementMetric("exhaustionRefillRejected");
             return;
         }
@@ -762,43 +550,26 @@ export class ExhaustionDetector
         zone: number,
         side: "buy" | "sell"
     ): { bid: number; ask: number } | null {
+        //todo
+        void side;
+
         // Method 1: Try this.depth (if it gets populated later)
         let bookLevel = this.depth.get(price);
         if (bookLevel && (bookLevel.bid > 0 || bookLevel.ask > 0)) {
-            this.logger.debug(
-                `[ExhaustionDetector] Book level from depth map`,
-                { price, bookLevel }
-            );
             return bookLevel;
         }
 
         // Method 2: Use zone passive history (current working data)
         bookLevel = this.getBookLevelFromZoneHistory(zone);
         if (bookLevel && (bookLevel.bid > 0 || bookLevel.ask > 0)) {
-            this.logger.debug(
-                `[ExhaustionDetector] Book level from zone history`,
-                { zone, bookLevel }
-            );
             return bookLevel;
         }
 
         // Method 3: Try recent enriched trade data
         bookLevel = this.getBookLevelFromRecentTrade(zone);
         if (bookLevel && (bookLevel.bid > 0 || bookLevel.ask > 0)) {
-            this.logger.debug(
-                `[ExhaustionDetector] Book level from recent trade`,
-                { zone, bookLevel }
-            );
             return bookLevel;
         }
-
-        // No book level data available
-        this.logger.debug(`[ExhaustionDetector] No book level data available`, {
-            price,
-            zone,
-            side,
-            zoneHistorySize: this.zonePassiveHistory.get(zone)?.count() || 0,
-        });
 
         return null;
     }
@@ -915,12 +686,6 @@ export class ExhaustionDetector
         avgLiquidity: number,
         recentAggressive: number
     ): "high" | "medium" | "low" | "insufficient" {
-        this.logger.info(`[ExhaustionDetector] 📊 Assessing data quality`, {
-            samplesCount: samples.length,
-            avgLiquidity,
-            recentAggressive,
-        });
-
         // 🔧 FIX: Be less strict about "insufficient"
         if (samples.length === 0) return "insufficient";
 
@@ -936,12 +701,7 @@ export class ExhaustionDetector
             samples.length > 0 ? Date.now() - samples[0].timestamp : Infinity;
         const sampleCount = samples.length;
 
-        this.logger.info(`[ExhaustionDetector] 📊 Data quality factors`, {
-            sampleCount,
-            dataAge,
-            dataAgeSeconds: dataAge / 1000,
-        });
-
+        //TODO
         // 🔧 FIX: More lenient thresholds
         if (sampleCount >= 8 && dataAge < 45000) return "high"; // Relaxed from 10 samples & 30s
         if (sampleCount >= 3 && dataAge < 90000) return "medium"; // Relaxed from 5 samples & 60s
@@ -1178,18 +938,6 @@ export class ExhaustionDetector
         side: "buy" | "sell",
         zone: number
     ): DetectorResult<ExhaustionConditions> {
-        this.logger.info(
-            `[ExhaustionDetector] 🔬 SAFE CONDITIONS ANALYSIS START`,
-            {
-                price,
-                side,
-                zone,
-                circuitBreakerOpen: this.isCircuitOpen,
-                errorCount: this.errorCount,
-                lastErrorTime: new Date(this.lastErrorTime).toISOString(),
-            }
-        );
-
         try {
             // Check circuit breaker
             if (this.isCircuitOpen) {
@@ -1223,8 +971,6 @@ export class ExhaustionDetector
                 };
             }
 
-            this.logger.info(`[ExhaustionDetector] ✅ Input validation passed`);
-
             // Get historical data with validation
             const dataResult = this.getValidatedHistoricalData(
                 price,
@@ -1245,39 +991,12 @@ export class ExhaustionDetector
             const { avgLiquidity, spreadInfo, recentAggressive, samples } =
                 dataResult.data;
 
-            this.logger.info(
-                `[ExhaustionDetector] ✅ Historical data obtained`,
-                {
-                    avgLiquidity,
-                    recentAggressive,
-                    samplesCount: samples.length,
-                    spreadInfo,
-                }
-            );
-
             // Validate data quality (LOOSEN THIS)
             const quality = this.assessDataQuality(
                 samples,
                 avgLiquidity,
                 recentAggressive
             );
-
-            // 🔧 FIX: Don't reject for insufficient quality - just flag it
-            this.logger.info(
-                `[ExhaustionDetector] 📊 Data quality assessment`,
-                {
-                    quality,
-                    samplesCount: samples.length,
-                    avgLiquidity,
-                    recentAggressive,
-                    decision:
-                        quality === "insufficient"
-                            ? "PROCEEDING_ANYWAY"
-                            : "ACCEPTABLE",
-                }
-            );
-
-            // Continue with calculation regardless of quality (we'll adjust confidence instead)
 
             // Calculate all metrics with bounds checking
             const currentPassive =
@@ -1290,15 +1009,6 @@ export class ExhaustionDetector
                     ? Math.min(...samples.map((s) => s.total))
                     : 0;
 
-            this.logger.info(
-                `[ExhaustionDetector] 📊 Basic metrics calculated`,
-                {
-                    currentPassive,
-                    avgPassive,
-                    minPassive,
-                }
-            );
-
             // Safe ratio calculations with bounds
             const passiveRatio = this.calculateSafeRatio(
                 currentPassive,
@@ -1309,11 +1019,6 @@ export class ExhaustionDetector
                 avgPassive
             );
 
-            this.logger.info(`[ExhaustionDetector] 📊 Ratios calculated`, {
-                passiveRatio,
-                depletionRatio,
-            });
-
             // Calculate velocity with validation
             const passiveVelocity = this.calculateSafeVelocity(samples);
 
@@ -1322,15 +1027,6 @@ export class ExhaustionDetector
             const imbalance = imbalanceResult.success
                 ? Math.abs(imbalanceResult.data.imbalance)
                 : 0;
-
-            this.logger.info(
-                `[ExhaustionDetector] 📊 Advanced metrics calculated`,
-                {
-                    passiveVelocity,
-                    imbalance,
-                    imbalanceSuccess: imbalanceResult.success,
-                }
-            );
 
             // Calculate confidence based on data quality and completeness (ADJUSTED)
             let confidence = this.calculateDataConfidence(
@@ -1371,16 +1067,6 @@ export class ExhaustionDetector
                 avgLiquidity
             );
 
-            this.logger.info(`[ExhaustionDetector] 📊 All metrics calculated`, {
-                maxPassive,
-                consistency,
-                velocityIncrease,
-                dominantSide,
-                hasRefill,
-                icebergSignal,
-                liquidityGradient,
-            });
-
             const conditions: ExhaustionConditions = {
                 aggressiveVolume: recentAggressive,
                 currentPassive,
@@ -1411,24 +1097,6 @@ export class ExhaustionDetector
                 icebergSignal,
                 liquidityGradient,
             };
-
-            this.logger.info(
-                `[ExhaustionDetector] ✅ CONDITIONS FULLY CALCULATED`,
-                {
-                    zone,
-                    price,
-                    side,
-                    finalConditions: {
-                        depletionRatio: conditions.depletionRatio,
-                        passiveRatio: conditions.passiveRatio,
-                        confidence: conditions.confidence,
-                        dataQuality: conditions.dataQuality,
-                        sampleCount: conditions.sampleCount,
-                        aggressiveVolume: conditions.aggressiveVolume,
-                        avgPassive: conditions.avgPassive,
-                    },
-                }
-            );
 
             return { success: true, data: conditions };
         } catch (error) {

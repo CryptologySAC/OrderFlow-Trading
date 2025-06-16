@@ -178,8 +178,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
      */
     protected cleanupOldZoneData(): void {
         const cutoff = Date.now() - this.windowMs * 2;
-        let cleanedCount = 0;
-        let cleanedSamples = 0;
         const sharedPools = SharedPools.getInstance();
 
         for (const [zone, window] of this.zonePassiveHistory) {
@@ -190,11 +188,9 @@ export abstract class BaseDetector extends Detector implements IDetector {
                 // Return all zone sample objects to pool before deletion
                 for (const sample of samples) {
                     sharedPools.zoneSamples.release(sample);
-                    cleanedSamples++;
                 }
 
                 this.zonePassiveHistory.delete(zone);
-                cleanedCount++;
             } else {
                 // Clean up individual old samples within the window
                 const validSamples: ZoneSample[] = [];
@@ -204,7 +200,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
                     } else {
                         // Release old sample back to pool
                         sharedPools.zoneSamples.release(sample);
-                        cleanedSamples++;
                     }
                 }
 
@@ -216,12 +211,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
                     }
                 }
             }
-        }
-
-        if (cleanedCount > 0 || cleanedSamples > 0) {
-            this.logger.debug(
-                `[${this.constructor.name}] Cleaned ${cleanedCount} old zones, ${cleanedSamples} old samples`
-            );
         }
     }
 
@@ -769,18 +758,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
         const trades: SpotWebsocketStreams.AggTradeResponse[] = [];
         const now = Date.now();
 
-        // Log multizone band for debugging
-        this.logger.debug(
-            `[${this.constructor.name}] MultiZone band analysis`,
-            {
-                center,
-                bandTicks,
-                tickSize,
-                rangeMin: center - bandTicks * tickSize,
-                rangeMax: center + bandTicks * tickSize,
-            }
-        );
-
         for (let offset = -bandTicks; offset <= bandTicks; offset++) {
             const price = +(center + offset * tickSize).toFixed(
                 this.pricePrecision
@@ -828,14 +805,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
                 }
             }
         }
-
-        this.logger.debug(`[${this.constructor.name}] MultiZone results`, {
-            center,
-            bandTicks,
-            aggressive,
-            passive,
-            tradesCount: trades.length,
-        });
 
         return { aggressive, passive, trades };
     }
@@ -1055,14 +1024,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
      * Emit a signal candidate when a pattern is detected
      */
     protected emitSignalCandidate(signalCandidate: SignalCandidate): void {
-        this.logger.debug(`Signal candidate emitted`, {
-            component: this.constructor.name,
-            signalId: signalCandidate.id,
-            type: signalCandidate.type,
-            price: signalCandidate.data.price,
-            confidence: signalCandidate.confidence,
-        });
-
         // Emit for SignalCoordinator to pick up
         this.emit("signalCandidate", signalCandidate);
     }
@@ -1111,15 +1072,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
             );
 
         this.lastThresholdUpdate = now;
-
-        this.logger.debug(
-            `[${this.constructor.name}] Updated adaptive thresholds`,
-            {
-                detectorId: this.id,
-                signalCount: this.recentSignalCount,
-                thresholds: this.currentThresholds,
-            }
-        );
     }
 
     /**
