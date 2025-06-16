@@ -144,27 +144,35 @@ export class OrderFlowDashboard {
     }
 
     private async initialize(dependencies: Dependencies): Promise<void> {
-        this.orderBook = await OrderBookState.create(
-            Config.ORDERBOOK_STATE,
-            dependencies.logger,
-            dependencies.metricsCollector,
-            this.threadManager
-        );
-        this.preprocessor = new OrderflowPreprocessor(
-            Config.PREPROCESSOR,
-            this.orderBook,
-            dependencies.logger,
-            dependencies.metricsCollector,
-            dependencies.individualTradesManager,
-            dependencies.microstructureAnalyzer
-        );
-        this.logger.info(
-            "[OrderFlowDashboard] Orderflow preprocessor initialized"
-        );
-        this.setupEventHandlers();
-        this.setupHttpServer();
-        this.setupGracefulShutdown();
-        this.setupConnectionStatusMonitoring();
+        try {
+            this.orderBook = await OrderBookState.create(
+                Config.ORDERBOOK_STATE,
+                dependencies.logger,
+                dependencies.metricsCollector,
+                this.threadManager
+            );
+            this.preprocessor = new OrderflowPreprocessor(
+                Config.PREPROCESSOR,
+                this.orderBook,
+                dependencies.logger,
+                dependencies.metricsCollector,
+                dependencies.individualTradesManager,
+                dependencies.microstructureAnalyzer
+            );
+            this.logger.info(
+                "[OrderFlowDashboard] Orderflow preprocessor initialized"
+            );
+            this.setupEventHandlers();
+            this.setupHttpServer();
+            this.setupGracefulShutdown();
+            this.setupConnectionStatusMonitoring();
+        } catch (error) {
+            this.logger.error("[OrderFlowDashboard] Failed to initialize", {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+            });
+            throw error; // Re-throw to allow caller to handle initialization failure
+        }
     }
 
     constructor(

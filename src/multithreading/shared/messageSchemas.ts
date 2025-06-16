@@ -49,6 +49,29 @@ export const DepthSnapshotRequestMessageSchema = z.object({
     correlationId: z.string(),
 });
 
+// Schema for validating raw Binance API depth snapshot response
+export const BinanceDepthSnapshotSchema = z.object({
+    lastUpdateId: z.number(),
+    bids: z.array(z.array(z.string())).transform((bids) =>
+        bids.map((bid) => {
+            if (bid.length < 2)
+                throw new Error(
+                    `Invalid bid format: expected [price, quantity], got ${JSON.stringify(bid)}`
+                );
+            return [bid[0], bid[1]] as [string, string];
+        })
+    ),
+    asks: z.array(z.array(z.string())).transform((asks) =>
+        asks.map((ask) => {
+            if (ask.length < 2)
+                throw new Error(
+                    `Invalid ask format: expected [price, quantity], got ${JSON.stringify(ask)}`
+                );
+            return [ask[0], ask[1]] as [string, string];
+        })
+    ),
+});
+
 export const DepthSnapshotResponseMessageSchema = z.object({
     type: z.literal("depth_snapshot_response"),
     correlationId: z.string(),

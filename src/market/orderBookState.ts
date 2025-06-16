@@ -158,12 +158,21 @@ export class OrderBookState implements IOrderBookState {
     }
 
     private async initialize(): Promise<void> {
-        // Need to fetch initial orderbook snapshot from REST API
-        await this.fetchInitialOrderBook();
-        this.isInitialized = true;
+        try {
+            // Need to fetch initial orderbook snapshot from REST API
+            await this.fetchInitialOrderBook();
+            this.isInitialized = true;
 
-        // Process any buffered updates
-        this.processBufferedUpdates();
+            // Process any buffered updates
+            this.processBufferedUpdates();
+        } catch (error) {
+            this.logger.error("[OrderBookState] Failed to initialize", {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+                symbol: this.symbol,
+            });
+            throw error; // Re-throw to allow caller to handle initialization failure
+        }
     }
 
     public updateDepth(

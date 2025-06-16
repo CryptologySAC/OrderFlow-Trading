@@ -5,7 +5,10 @@ import { WorkerCircuitBreakerProxy } from "../shared/workerCircuitBreakerProxy.j
 import { BinanceDataFeed } from "../../utils/binance.js";
 import { DataStreamManager } from "../../trading/dataStreamManager.js";
 import { Config } from "../../core/config.js";
-import { DepthSnapshotRequestMessageSchema } from "../shared/messageSchemas.js";
+import {
+    DepthSnapshotRequestMessageSchema,
+    BinanceDepthSnapshotSchema,
+} from "../shared/messageSchemas.js";
 
 // Validate worker thread context
 if (!parentPort) {
@@ -394,17 +397,12 @@ parentPort?.on("message", (msg: unknown) => {
 
                         const requestMsg = validationResult.data;
                         const { binanceFeed } = components;
-                        const snapshot = await binanceFeed.getDepthSnapshot(
+                        const rawSnapshot = await binanceFeed.getDepthSnapshot(
                             requestMsg.symbol,
                             requestMsg.limit
                         );
 
-                        if (
-                            !snapshot ||
-                            !snapshot.lastUpdateId ||
-                            !snapshot.bids ||
-                            !snapshot.asks
-                        ) {
+                        if (!rawSnapshot) {
                             parentPort?.postMessage({
                                 type: "depth_snapshot_response",
                                 correlationId: requestMsg.correlationId,
@@ -414,14 +412,39 @@ parentPort?.on("message", (msg: unknown) => {
                             return;
                         }
 
+                        // Validate and transform the snapshot data using Zod
+                        const snapshotValidation =
+                            BinanceDepthSnapshotSchema.safeParse(rawSnapshot);
+                        if (!snapshotValidation.success) {
+                            logger.error(
+                                "Invalid depth snapshot structure from Binance API",
+                                {
+                                    errors: snapshotValidation.error.errors,
+                                    rawSnapshot: JSON.stringify(
+                                        rawSnapshot
+                                    ).slice(0, 500), // Truncate for logging
+                                    correlationId: requestMsg.correlationId,
+                                }
+                            );
+                            parentPort?.postMessage({
+                                type: "depth_snapshot_response",
+                                correlationId: requestMsg.correlationId,
+                                success: false,
+                                error: `Invalid snapshot structure: ${snapshotValidation.error.message}`,
+                            });
+                            return;
+                        }
+
+                        const validatedSnapshot = snapshotValidation.data;
+
                         parentPort?.postMessage({
                             type: "depth_snapshot_response",
                             correlationId: requestMsg.correlationId,
                             success: true,
                             data: {
-                                lastUpdateId: snapshot.lastUpdateId,
-                                bids: snapshot.bids as [string, string][],
-                                asks: snapshot.asks as [string, string][],
+                                lastUpdateId: validatedSnapshot.lastUpdateId,
+                                bids: validatedSnapshot.bids,
+                                asks: validatedSnapshot.asks,
                             },
                         });
 
@@ -429,8 +452,8 @@ parentPort?.on("message", (msg: unknown) => {
                             symbol: requestMsg.symbol,
                             limit: requestMsg.limit,
                             correlationId: requestMsg.correlationId,
-                            bidLevels: snapshot.bids?.length || 0,
-                            askLevels: snapshot.asks?.length || 0,
+                            bidLevels: validatedSnapshot.bids?.length || 0,
+                            askLevels: validatedSnapshot.asks?.length || 0,
                         });
                     } catch (error) {
                         logger.error("Error handling depth snapshot request", {
