@@ -1,10 +1,10 @@
 // src/market/orderBookState.ts
 
 import type { SpotWebsocketStreams } from "@binance/spot";
-import { BinanceDataFeed } from "../utils/binance.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type { PassiveLevel, OrderBookHealth } from "../types/marketEvents.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { ThreadManager } from "../multithreading/threadManager.js";
 
 type SnapShot = Map<number, PassiveLevel>;
 
@@ -39,7 +39,7 @@ export interface IOrderBookState {
         totalAskVolume: number;
         imbalance: number;
     };
-    shutdown(): Promise<void>;
+    shutdown(): void;
     recover(): Promise<void>;
     getHealth(): OrderBookHealth;
 }
@@ -47,9 +47,9 @@ export interface IOrderBookState {
 export class OrderBookState implements IOrderBookState {
     private readonly logger: ILogger;
     private readonly metricsCollector: IMetricsCollector;
+    private readonly threadManager: ThreadManager;
 
     private isInitialized = false;
-    private readonly binanceFeed = new BinanceDataFeed();
     private snapshotBuffer: SpotWebsocketStreams.DiffBookDepthResponse[] = [];
     private expectedUpdateId?: number;
 
@@ -86,13 +86,15 @@ export class OrderBookState implements IOrderBookState {
     constructor(
         options: OrderBookStateOptions,
         logger: ILogger,
-        metricsCollector: IMetricsCollector
+        metricsCollector: IMetricsCollector,
+        threadManager: ThreadManager
     ) {
         this.pricePrecision = options.pricePrecision;
         this.tickSize = Math.pow(10, -this.pricePrecision);
         this.symbol = options.symbol;
         this.logger = logger;
         this.metricsCollector = metricsCollector;
+        this.threadManager = threadManager;
         this.maxLevels = options.maxLevels ?? this.maxLevels;
         this.maxPriceDistance =
             options.maxPriceDistance ?? this.maxPriceDistance;
@@ -142,9 +144,15 @@ export class OrderBookState implements IOrderBookState {
     public static async create(
         options: OrderBookStateOptions,
         logger: ILogger,
-        metricsCollector: IMetricsCollector
+        metricsCollector: IMetricsCollector,
+        threadManager: ThreadManager
     ): Promise<OrderBookState> {
-        const instance = new OrderBookState(options, logger, metricsCollector);
+        const instance = new OrderBookState(
+            options,
+            logger,
+            metricsCollector,
+            threadManager
+        );
         await instance.initialize();
         return instance;
     }
@@ -567,7 +575,7 @@ export class OrderBookState implements IOrderBookState {
 
     private async fetchInitialOrderBook(): Promise<void> {
         try {
-            const snapshot = await this.binanceFeed.getDepthSnapshot(
+            const snapshot = await this.threadManager.requestDepthSnapshot(
                 this.symbol,
                 1000
             );
@@ -581,8 +589,8 @@ export class OrderBookState implements IOrderBookState {
                 throw new Error("Failed to fetch order book snapshot");
             }
 
-            const bids = (snapshot.bids as [string, string][]) || [];
-            const asks = (snapshot.asks as [string, string][]) || [];
+            const bids = snapshot.bids || [];
+            const asks = snapshot.asks || [];
 
             // Track if we need to recalculate best bid/ask
             let needsBestRecalc = false;
@@ -661,7 +669,7 @@ export class OrderBookState implements IOrderBookState {
     }
 
     // Add these methods
-    public async shutdown(): Promise<void> {
+    public shutdown(): void {
         this.logger.info("[OrderBookState] Shutting down");
 
         // Stop timers
@@ -673,8 +681,7 @@ export class OrderBookState implements IOrderBookState {
         // Save state
         //TODO await this.saveState();
 
-        // Disconnect feed
-        await this.binanceFeed.disconnect();
+        // Note: BinanceWorker handles connection lifecycle, no disconnect needed here
 
         // Clear book
         this.book.clear();

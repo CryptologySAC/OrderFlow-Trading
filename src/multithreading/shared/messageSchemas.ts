@@ -42,6 +42,27 @@ export const CircuitBreakerFailureMessageSchema = z.object({
     correlationId: z.string().optional(),
 });
 
+export const DepthSnapshotRequestMessageSchema = z.object({
+    type: z.literal("depth_snapshot_request"),
+    symbol: z.string(),
+    limit: z.number(),
+    correlationId: z.string(),
+});
+
+export const DepthSnapshotResponseMessageSchema = z.object({
+    type: z.literal("depth_snapshot_response"),
+    correlationId: z.string(),
+    success: z.boolean(),
+    data: z
+        .object({
+            lastUpdateId: z.number(),
+            bids: z.array(z.tuple([z.string(), z.string()])),
+            asks: z.array(z.tuple([z.string(), z.string()])),
+        })
+        .optional(),
+    error: z.string().optional(),
+});
+
 export const MetricsBatchMessageSchema = z.object({
     type: z.literal("metrics_batch"),
     updates: z.array(

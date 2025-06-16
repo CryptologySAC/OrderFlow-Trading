@@ -4,6 +4,7 @@ import { WorkerMessageRouter } from "./shared/workerMessageRouter.js";
 import {
     MetricsBatchMessageSchema,
     type MetricsBatchMessage,
+    DepthSnapshotResponseMessageSchema,
 } from "./shared/messageSchemas.js";
 
 import type { SignalEvent } from "../infrastructure/signalLoggerInterface.js";
@@ -531,6 +532,73 @@ export class ThreadManager {
                 });
             }
         );
+    }
+
+    /**
+     * Request depth snapshot from BinanceWorker to maintain data source consistency
+     */
+    public async requestDepthSnapshot(
+        symbol: string,
+        limit: number,
+        timeoutMs = 10000
+    ): Promise<{
+        lastUpdateId: number;
+        bids: [string, string][];
+        asks: [string, string][];
+    }> {
+        if (this.isShuttingDown) {
+            throw new Error("ThreadManager is shutting down");
+        }
+
+        const correlationId = randomUUID();
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(
+                    new Error(
+                        `Depth snapshot request timeout after ${timeoutMs}ms`
+                    )
+                );
+            }, timeoutMs);
+
+            const messageHandler = (message: unknown) => {
+                try {
+                    const validationResult =
+                        DepthSnapshotResponseMessageSchema.safeParse(message);
+
+                    if (!validationResult.success) {
+                        return; // Not a depth snapshot response or invalid format
+                    }
+
+                    const response = validationResult.data;
+
+                    if (response.correlationId === correlationId) {
+                        clearTimeout(timeout);
+                        this.binanceWorker.off("message", messageHandler);
+
+                        if (response.success && response.data) {
+                            resolve(response.data);
+                        } else {
+                            reject(
+                                new Error(
+                                    response.error ||
+                                        "Unknown error in depth snapshot"
+                                )
+                            );
+                        }
+                    }
+                } catch {
+                    // Ignore validation errors for other message types
+                }
+            };
+
+            this.binanceWorker.on("message", messageHandler);
+            this.binanceWorker.postMessage({
+                type: "depth_snapshot_request",
+                symbol,
+                limit,
+                correlationId,
+            });
+        });
     }
 
     public log(

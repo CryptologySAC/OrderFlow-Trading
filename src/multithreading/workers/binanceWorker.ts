@@ -5,6 +5,7 @@ import { WorkerCircuitBreakerProxy } from "../shared/workerCircuitBreakerProxy.j
 import { BinanceDataFeed } from "../../utils/binance.js";
 import { DataStreamManager } from "../../trading/dataStreamManager.js";
 import { Config } from "../../core/config.js";
+import { DepthSnapshotRequestMessageSchema } from "../shared/messageSchemas.js";
 
 // Validate worker thread context
 if (!parentPort) {
@@ -364,6 +365,95 @@ parentPort?.on("message", (msg: unknown) => {
                     });
                 }
                 void gracefulShutdown(0);
+                break;
+
+            case "depth_snapshot_request":
+                void (async () => {
+                    try {
+                        const validationResult =
+                            DepthSnapshotRequestMessageSchema.safeParse(
+                                message
+                            );
+
+                        if (!validationResult.success) {
+                            logger.error(
+                                "Invalid depth snapshot request schema",
+                                {
+                                    errors: validationResult.error.errors,
+                                    message,
+                                }
+                            );
+                            parentPort?.postMessage({
+                                type: "depth_snapshot_response",
+                                correlationId: "unknown",
+                                success: false,
+                                error: "Invalid request schema",
+                            });
+                            return;
+                        }
+
+                        const requestMsg = validationResult.data;
+                        const { binanceFeed } = components;
+                        const snapshot = await binanceFeed.getDepthSnapshot(
+                            requestMsg.symbol,
+                            requestMsg.limit
+                        );
+
+                        if (
+                            !snapshot ||
+                            !snapshot.lastUpdateId ||
+                            !snapshot.bids ||
+                            !snapshot.asks
+                        ) {
+                            parentPort?.postMessage({
+                                type: "depth_snapshot_response",
+                                correlationId: requestMsg.correlationId,
+                                success: false,
+                                error: "Failed to fetch order book snapshot",
+                            });
+                            return;
+                        }
+
+                        parentPort?.postMessage({
+                            type: "depth_snapshot_response",
+                            correlationId: requestMsg.correlationId,
+                            success: true,
+                            data: {
+                                lastUpdateId: snapshot.lastUpdateId,
+                                bids: snapshot.bids as [string, string][],
+                                asks: snapshot.asks as [string, string][],
+                            },
+                        });
+
+                        logger.info("Depth snapshot request completed", {
+                            symbol: requestMsg.symbol,
+                            limit: requestMsg.limit,
+                            correlationId: requestMsg.correlationId,
+                            bidLevels: snapshot.bids?.length || 0,
+                            askLevels: snapshot.asks?.length || 0,
+                        });
+                    } catch (error) {
+                        logger.error("Error handling depth snapshot request", {
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                            stack:
+                                error instanceof Error
+                                    ? error.stack
+                                    : undefined,
+                        });
+                        parentPort?.postMessage({
+                            type: "depth_snapshot_response",
+                            correlationId: "unknown",
+                            success: false,
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                        });
+                    }
+                })();
                 break;
 
             default:

@@ -147,9 +147,8 @@ export class OrderFlowDashboard {
         this.orderBook = await OrderBookState.create(
             Config.ORDERBOOK_STATE,
             dependencies.logger,
-            dependencies.metricsCollector
-            //dependencies.mainThreadBinanceFeed,
-            //this.threadManager
+            dependencies.metricsCollector,
+            this.threadManager
         );
         this.preprocessor = new OrderflowPreprocessor(
             Config.PREPROCESSOR,
