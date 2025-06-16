@@ -515,7 +515,11 @@ export class SignalCoordinator extends EventEmitter {
         );
 
         const { detector, candidate } = job;
-        this.logger.debug("processJob: ", { job });
+        this.logger.debug("processJob: ", {
+            jobId: job.id,
+            candidateId: job.candidate.id,
+            detectorId: extractDetectorId(job.detector),
+        });
 
         // Jobs restored from storage may arrive without detector methods
         const detectorId = extractDetectorId(detector);

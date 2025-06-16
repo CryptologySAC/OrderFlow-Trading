@@ -753,21 +753,21 @@ export class AbsorptionDetector
         const zoneHistory = this.zonePassiveHistory.get(zone);
         if (!zoneHistory) return false;
 
-        const lvl = this.orderBook.getLevel(price); // existing helper
+        //const lvl = this.orderBook.getLevel(price); // existing helper
 
-        const icebergLikely =
-            lvl &&
-            (side === "buy"
-                ? (lvl.addedAsk ?? 0) > (lvl.consumedAsk ?? 0) * 0.8
-                : (lvl.addedBid ?? 0) > (lvl.consumedBid ?? 0) * 0.8);
+        //const icebergLikely =
+        //    lvl &&
+        //    (side === "buy"
+        //       ? (lvl.addedAsk ?? 0) > (lvl.consumedAsk ?? 0) * 0.8
+        //        : (lvl.addedBid ?? 0) > (lvl.consumedBid ?? 0) * 0.8);
 
-        if (icebergLikely) {
-            this.logger.debug(
-                "Queue is constantly replenished – ignore absorption",
-                { price, side, level: lvl }
-            );
-            return false; // abort this zone / skip scoring
-        }
+        //if (icebergLikely) {
+        //    this.logger.debug(
+        //        "Queue is constantly replenished – ignore absorption",
+        //        { price, side, level: lvl }
+        //    );
+        //    return false; // abort this zone / skip scoring
+        //}
 
         // Get the RELEVANT passive side
         // ✅ VERIFIED LOGIC: Aggressive flow hits opposite-side passive liquidity

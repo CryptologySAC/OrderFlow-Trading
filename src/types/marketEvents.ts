@@ -17,10 +17,6 @@ export interface PassiveLevel {
     bid: number;
     ask: number;
     timestamp: number;
-    consumedBid: number;
-    consumedAsk: number;
-    addedBid: number;
-    addedAsk: number;
 }
 
 export interface EnrichedTradeEvent extends AggressiveTrade {
@@ -115,10 +111,6 @@ export interface OrderBookHealth {
         totalAskVolume: number;
         staleLevels: number;
         memoryUsageMB: number;
-        // Stream connection status
-        isStreamConnected: boolean;
-        streamConnectionTime: number;
-        timeoutThreshold: number;
     };
 }
 

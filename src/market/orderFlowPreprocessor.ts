@@ -24,9 +24,7 @@ export interface OrderflowPreprocessorOptions {
 }
 
 export interface IOrderflowPreprocessor {
-    handleDepth(
-        update: SpotWebsocketStreams.DiffBookDepthResponse
-    ): Promise<void>;
+    handleDepth(update: SpotWebsocketStreams.DiffBookDepthResponse): void;
     handleAggTrade(trade: SpotWebsocketStreams.AggTradeResponse): Promise<void>;
     getStats(): {
         processedTrades: number;
@@ -97,12 +95,12 @@ export class OrderflowPreprocessor
     }
 
     // Should be called on every depth update
-    public async handleDepth(
+    public handleDepth(
         update: SpotWebsocketStreams.DiffBookDepthResponse
-    ): Promise<void> {
+    ): void {
         try {
             if (this.bookState) {
-                await this.bookState.updateDepth(update);
+                this.bookState.updateDepth(update);
                 this.processedDepthUpdates++;
 
                 // Emit depth metrics if enabled
@@ -266,12 +264,6 @@ export class OrderflowPreprocessor
                 }
             }
 
-            // Iceberg detection in OrderBook
-            const side = finalTrade.buyerIsMaker ? "sell" : "buy";
-            const price = finalTrade.price;
-            const qty = finalTrade.quantity;
-
-            this.bookState.registerTradeImpact(price, qty, side);
             this.processedTrades++;
             this.emit("enriched_trade", finalTrade);
 

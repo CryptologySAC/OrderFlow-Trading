@@ -14,17 +14,17 @@ export class RedBlackTree {
                 bid: 0,
                 ask: 0,
                 timestamp: 0,
-                consumedAsk: 0,
-                consumedBid: 0,
-                addedAsk: 0,
-                addedBid: 0,
+                //consumedAsk: 0,
+                //consumedBid: 0,
+                //addedAsk: 0,
+                //addedBid: 0,
             },
             "black"
         );
         this.root = this.nil;
     }
 
-    // Insert a price level
+    // Insert a price level with bid/ask separation enforcement
     public insert(price: number, level: PassiveLevel): void {
         const newNode = new RBNode(price, level);
         newNode.left = this.nil;
@@ -41,8 +41,11 @@ export class RedBlackTree {
             } else if (price > current.price) {
                 current = current.right;
             } else {
-                // Price already exists, update level
-                current.level = level;
+                // Price already exists, update level with separation enforcement
+                current.level = this.enforceBidAskSeparation(
+                    current.level,
+                    level
+                );
                 return;
             }
         }
@@ -58,6 +61,77 @@ export class RedBlackTree {
 
         // Fix Red-Black Tree properties
         this.insertFixup(newNode);
+    }
+
+    // Set bid/ask with automatic separation enforcement
+    public set(price: number, side: "bid" | "ask", quantity: number): void {
+        const existingNode = this.search(price);
+
+        if (existingNode === this.nil) {
+            // No existing level, create new one
+            const level: PassiveLevel = {
+                price,
+                bid: side === "bid" ? quantity : 0,
+                ask: side === "ask" ? quantity : 0,
+                timestamp: Date.now(),
+                //consumedAsk: 0,
+                //consumedBid: 0,
+                //addedAsk: side === "ask" ? quantity : 0,
+                //addedBid: side === "bid" ? quantity : 0,
+            };
+            this.insert(price, level);
+        } else {
+            // Update existing level with separation enforcement
+            if (side === "bid") {
+                existingNode.level.bid = quantity;
+                //existingNode.level.addedBid = quantity;
+                // Clear conflicting ask if setting bid > 0
+                if (quantity > 0) {
+                    existingNode.level.ask = 0;
+                    //existingNode.level.addedAsk = 0;
+                }
+            } else {
+                existingNode.level.ask = quantity;
+                //existingNode.level.addedAsk = quantity;
+                // Clear conflicting bid if setting ask > 0
+                if (quantity > 0) {
+                    existingNode.level.bid = 0;
+                    // existingNode.level.addedBid = 0;
+                }
+            }
+            existingNode.level.timestamp = Date.now();
+        }
+    }
+
+    // Enforce bid/ask separation when merging levels
+    private enforceBidAskSeparation(
+        existing: PassiveLevel,
+        incoming: PassiveLevel
+    ): PassiveLevel {
+        const result = { ...existing };
+
+        // If incoming has bid data, clear any existing ask and update bid
+        if (incoming.bid > 0) {
+            result.bid = incoming.bid;
+            //result.addedBid = incoming.addedBid;
+            result.ask = 0;
+            //result.addedAsk = 0;
+        }
+
+        // If incoming has ask data, clear any existing bid and update ask
+        if (incoming.ask > 0) {
+            result.ask = incoming.ask;
+            //result.addedAsk = incoming.addedAsk;
+            result.bid = 0;
+            //result.addedBid = 0;
+        }
+
+        // Update other fields
+        result.timestamp = incoming.timestamp;
+        //result.consumedBid = incoming.consumedBid;
+        //result.consumedAsk = incoming.consumedAsk;
+
+        return result;
     }
 
     // Delete a price level
@@ -139,66 +213,52 @@ export class RedBlackTree {
     }
 
     private getBestBidNode(): RBNode | null {
-        // Optimized O(log n): traverse from rightmost (highest price) down
-        let current = this.root;
+        // Simple in-order traversal to find highest price with bid > 0
         let bestBid: RBNode | null = null;
 
-        // Start from rightmost node and work backwards
-        while (current !== this.nil) {
-            if (current.level.bid > 0) {
-                bestBid = current;
-                // Found a bid, continue right to find higher prices
-                current = current.right;
-            } else {
-                // No bid here, move to next highest price node
-                if (current.right !== this.nil) {
-                    current = current.right;
-                } else {
-                    // Dead end, backtrack through parent chain
-                    while (current.parent && current === current.parent.right) {
-                        current = current.parent;
-                    }
-                    if (current.parent) {
-                        current = current.parent;
-                    } else {
-                        break;
-                    }
+        const findBestBid = (node: RBNode | null): void => {
+            if (!node || node === this.nil) return;
+
+            // Traverse left subtree
+            findBestBid(node.left);
+
+            // Process current node
+            if (node.level.bid > 0) {
+                if (!bestBid || node.price > bestBid.price) {
+                    bestBid = node;
                 }
             }
-        }
 
+            // Traverse right subtree
+            findBestBid(node.right);
+        };
+
+        findBestBid(this.root);
         return bestBid;
     }
 
     private getBestAskNode(): RBNode | null {
-        // Optimized O(log n): traverse from leftmost (lowest price) up
-        let current = this.root;
+        // Simple in-order traversal to find lowest price with ask > 0
         let bestAsk: RBNode | null = null;
 
-        // Start from leftmost node and work forwards
-        while (current !== this.nil) {
-            if (current.level.ask > 0) {
-                bestAsk = current;
-                // Found an ask, continue left to find lower prices
-                current = current.left;
-            } else {
-                // No ask here, move to next lowest price node
-                if (current.left !== this.nil) {
-                    current = current.left;
-                } else {
-                    // Dead end, backtrack through parent chain
-                    while (current.parent && current === current.parent.left) {
-                        current = current.parent;
-                    }
-                    if (current.parent) {
-                        current = current.parent;
-                    } else {
-                        break;
-                    }
+        const findBestAsk = (node: RBNode | null): void => {
+            if (!node || node === this.nil) return;
+
+            // Traverse left subtree
+            findBestAsk(node.left);
+
+            // Process current node
+            if (node.level.ask > 0) {
+                if (!bestAsk || node.price < bestAsk.price) {
+                    bestAsk = node;
                 }
             }
-        }
 
+            // Traverse right subtree
+            findBestAsk(node.right);
+        };
+
+        findBestAsk(this.root);
         return bestAsk;
     }
 
@@ -207,34 +267,11 @@ export class RedBlackTree {
         bidNode: RBNode | null;
         askNode: RBNode | null;
     } {
-        let bestBid: RBNode | null = null;
-        let bestAsk: RBNode | null = null;
-
-        // Single in-order traversal to find both quotes atomically
-        const findBestQuotes = (node: RBNode | null): void => {
-            if (!node || node === this.nil) return;
-
-            // Traverse left subtree first (lower prices)
-            findBestQuotes(node.left);
-
-            // Process current node
-            if (node.level.bid > 0) {
-                if (!bestBid || node.price > bestBid.price) {
-                    bestBid = node;
-                }
-            }
-            if (node.level.ask > 0) {
-                if (!bestAsk || node.price < bestAsk.price) {
-                    bestAsk = node;
-                }
-            }
-
-            // Traverse right subtree (higher prices)
-            findBestQuotes(node.right);
+        // Use the individual optimized methods to ensure separation
+        return {
+            bidNode: this.getBestBidNode(),
+            askNode: this.getBestAskNode(),
         };
-
-        findBestQuotes(this.root);
-        return { bidNode: bestBid, askNode: bestAsk };
     }
 
     // Get all nodes for iteration

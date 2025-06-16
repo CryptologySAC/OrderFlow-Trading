@@ -147,9 +147,9 @@ export class OrderFlowDashboard {
         this.orderBook = await OrderBookState.create(
             Config.ORDERBOOK_STATE,
             dependencies.logger,
-            dependencies.metricsCollector,
-            dependencies.mainThreadBinanceFeed,
-            this.threadManager
+            dependencies.metricsCollector
+            //dependencies.mainThreadBinanceFeed,
+            //this.threadManager
         );
         this.preprocessor = new OrderflowPreprocessor(
             Config.PREPROCESSOR,
@@ -502,7 +502,7 @@ export class OrderFlowDashboard {
                     );
                     break;
                 case "depth":
-                    await this.processDepth(
+                    this.processDepth(
                         data as SpotWebsocketStreams.DiffBookDepthResponse
                     );
                     break;
@@ -1016,16 +1016,16 @@ export class OrderFlowDashboard {
     /**
      * Process incoming depth data
      */
-    private async processDepth(
+    private processDepth(
         data: SpotWebsocketStreams.DiffBookDepthResponse
-    ): Promise<void> {
+    ): void {
         const correlationId = randomUUID();
         const startTime = Date.now();
 
         try {
             // Update preprocessor
             if (this.preprocessor) {
-                await this.preprocessor.handleDepth(data);
+                this.preprocessor.handleDepth(data);
             }
 
             const processingTime = Date.now() - startTime;
@@ -1356,48 +1356,48 @@ export class OrderFlowDashboard {
         setInterval(() => {
             if (this.isShuttingDown || !this.orderBook) return;
 
-            try {
-                const diagnostics = this.orderBook.getConnectionDiagnostics();
+            //try {
+            //const diagnostics = this.orderBook.getConnectionDiagnostics();
 
-                // Log status if there's a mismatch
-                if (diagnostics.statusMismatch) {
-                    this.logger.warn(
-                        "[OrderFlowDashboard] Connection status mismatch detected",
-                        {
-                            orderBookStatus: diagnostics.orderBookStatus,
-                            workerStatus: diagnostics.cachedWorkerStatus,
-                        }
-                    );
-                }
+            // Log status if there's a mismatch
+            //if (diagnostics.statusMismatch) {
+            //    this.logger.warn(
+            //        "[OrderFlowDashboard] Connection status mismatch detected",
+            //        {
+            //            orderBookStatus: diagnostics.orderBookStatus,
+            //            workerStatus: diagnostics.cachedWorkerStatus,
+            //        }
+            //    );
+            //}
 
-                // Optionally broadcast connection status to dashboard
-                this.broadcastMessage({
-                    type: "connection_status",
-                    now: Date.now(),
-                    data: {
-                        orderBookConnected:
-                            diagnostics.orderBookStatus.isStreamConnected,
-                        workerConnected:
-                            diagnostics.cachedWorkerStatus?.isConnected,
-                        connectionState:
-                            diagnostics.cachedWorkerStatus?.connectionState,
-                        streamHealth:
-                            diagnostics.cachedWorkerStatus?.streamHealth,
-                        statusMismatch: diagnostics.statusMismatch,
-                        cacheAge: diagnostics.cachedWorkerStatus?.cacheAge,
-                    },
-                });
-            } catch (error) {
-                this.logger.debug(
-                    "[OrderFlowDashboard] Error monitoring connection status",
-                    {
-                        error:
-                            error instanceof Error
-                                ? error.message
-                                : String(error),
-                    }
-                );
-            }
+            // Optionally broadcast connection status to dashboard
+            //this.broadcastMessage({
+            //    type: "connection_status",
+            //    now: Date.now(),
+            //    data: {
+            //        orderBookConnected:
+            //            diagnostics.orderBookStatus.isStreamConnected,
+            //        workerConnected:
+            //            diagnostics.cachedWorkerStatus?.isConnected,
+            //        connectionState:
+            //            diagnostics.cachedWorkerStatus?.connectionState,
+            //        streamHealth:
+            //            diagnostics.cachedWorkerStatus?.streamHealth,
+            //        statusMismatch: diagnostics.statusMismatch,
+            //        cacheAge: diagnostics.cachedWorkerStatus?.cacheAge,
+            //    },
+            //});
+            //} catch (error) {
+            //    this.logger.debug(
+            //        "[OrderFlowDashboard] Error monitoring connection status",
+            //        {
+            //            error:
+            //                error instanceof Error
+            //                    ? error.message
+            //                    : String(error),
+            //        }
+            //    );
+            //}
         }, 30000); // Every 30 seconds
     }
 
