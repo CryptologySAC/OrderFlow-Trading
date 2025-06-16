@@ -127,9 +127,7 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
             this.processAsksRedBlackTree(asks);
 
             this.lastUpdateTime = Date.now();
-            this.metricsCollector.incrementMetric(
-                "orderbook_updates_processed"
-            );
+            this.metricsCollector.incrementMetric("orderbookUpdatesProcessed");
         } catch (error) {
             this.handleError(
                 error as Error,
@@ -670,6 +668,6 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
             component: "RedBlackTreeOrderBook",
         });
 
-        this.metricsCollector.incrementMetric("orderbook_errors");
+        this.metricsCollector.incrementMetric("orderBookStateErrors");
     }
 }
