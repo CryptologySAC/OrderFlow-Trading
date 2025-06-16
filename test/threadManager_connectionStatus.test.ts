@@ -74,6 +74,10 @@ const createMockWorker = () => {
 // Mock the Worker constructor
 vi.mock("worker_threads", () => ({
     Worker: vi.fn().mockImplementation(() => createMockWorker()),
+    parentPort: {
+        postMessage: vi.fn(),
+        on: vi.fn(),
+    },
 }));
 
 describe("ThreadManager Connection Status", () => {

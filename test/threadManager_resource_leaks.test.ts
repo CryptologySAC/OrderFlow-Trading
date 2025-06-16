@@ -4,6 +4,10 @@ import { Worker } from "worker_threads";
 // Mock Worker to test resource management without actual worker threads
 vi.mock("worker_threads", () => ({
     Worker: vi.fn(),
+    parentPort: {
+        postMessage: vi.fn(),
+        on: vi.fn(),
+    },
 }));
 
 const MockedWorker = vi.mocked(Worker);
