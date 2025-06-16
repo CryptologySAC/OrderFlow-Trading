@@ -32,36 +32,47 @@ describe("OrderBookState - Bid/Ask Separation", () => {
         };
 
         orderBookState = new OrderBookState(
-            "BTCUSDT",
+            {
+                pricePrecision: 2,
+                symbol: "BTCUSDT",
+                maxLevels: 1000,
+                maxPriceDistance: 0.1,
+                pruneIntervalMs: 30000,
+                maxErrorRate: 5,
+                staleThresholdMs: 300000,
+            },
             mockLogger,
             mockMetrics,
-            {
-                tickSize: 0.01,
-                precision: 2,
-                maxLevels: 1000,
-                pruneIntervalMs: 30000,
-                maxAge: 300000,
-                maxDistanceFromMid: 1000,
-            }
+            {} as any // mock ThreadManager
         );
     });
 
     it("should prevent quote inversions by enforcing bid/ask separation", () => {
         // Set up initial orderbook with proper separation
-        const bids = [["50.00", "100"]]; // Bid at 50.00
-        const asks = [["50.10", "200"]]; // Ask at 50.10
-
-        orderBookState.processSnapshot({ b: bids, a: asks });
+        orderBookState.updateDepth({
+            e: "depthUpdate",
+            E: Date.now(),
+            s: "BTCUSDT",
+            U: 1,
+            u: 1,
+            b: [["50.00", "100"]], // Bid at 50.00
+            a: [["50.10", "200"]]  // Ask at 50.10
+        });
 
         // Verify proper separation
         expect(orderBookState.getBestBid()).toBe(50.0);
         expect(orderBookState.getBestAsk()).toBe(50.1);
-        1;
-        // Now try to create a quote inversion by setting bid at ask price
-        const newBids = [["50.10", "150"]]; // Bid tries to move to ask price
-        const newAsks = [["50.10", "0"]]; // Clear the ask
 
-        orderBookState.update(newBids, newAsks);
+        // Now try to create a quote inversion by setting bid at ask price
+        orderBookState.updateDepth({
+            e: "depthUpdate",
+            E: Date.now(),
+            s: "BTCUSDT",
+            U: 2,
+            u: 2,
+            b: [["50.10", "150"]], // Bid tries to move to ask price
+            a: [["50.10", "0"]]    // Clear the ask
+        });
 
         // The bid should be set at 50.10, and ask should be automatically cleared
         expect(orderBookState.getBestBid()).toBe(50.1);
@@ -70,10 +81,15 @@ describe("OrderBookState - Bid/Ask Separation", () => {
 
     it("should handle overlapping bid/ask updates correctly", () => {
         // Create scenario where bid and ask try to occupy same price
-        const bids = [["50.05", "100"]];
-        const asks = [["50.05", "200"]]; // Same price as bid
-
-        orderBookState.update(bids, asks);
+        orderBookState.updateDepth({
+            e: "depthUpdate",
+            E: Date.now(),
+            s: "BTCUSDT",
+            U: 1,
+            u: 1,
+            b: [["50.05", "100"]],
+            a: [["50.05", "200"]] // Same price as bid
+        });
 
         // Only one side should exist at that price level
         const snapshot = orderBookState.snapshot();
@@ -87,25 +103,35 @@ describe("OrderBookState - Bid/Ask Separation", () => {
 
     it("should maintain proper spread after separation enforcement", () => {
         // Set up orderbook
-        const bids = [
-            ["49.95", "100"],
-            ["49.90", "150"],
-        ];
-        const asks = [
-            ["50.05", "200"],
-            ["50.10", "250"],
-        ];
-
-        orderBookState.update(bids, asks);
+        orderBookState.updateDepth({
+            e: "depthUpdate",
+            E: Date.now(),
+            s: "BTCUSDT",
+            U: 1,
+            u: 1,
+            b: [
+                ["49.95", "100"],
+                ["49.90", "150"],
+            ],
+            a: [
+                ["50.05", "200"],
+                ["50.10", "250"],
+            ]
+        });
 
         const initialSpread = orderBookState.getSpread();
         expect(initialSpread).toBe(0.1); // 50.05 - 49.95
 
         // Try to create crossing quotes
-        const crossingBids = [["50.05", "300"]]; // Bid at ask price
-        const clearAsks = [["50.05", "0"]]; // Clear the conflicting ask
-
-        orderBookState.update(crossingBids, clearAsks);
+        orderBookState.updateDepth({
+            e: "depthUpdate",
+            E: Date.now(),
+            s: "BTCUSDT",
+            U: 2,
+            u: 2,
+            b: [["50.05", "300"]], // Bid at ask price
+            a: [["50.05", "0"]]    // Clear the conflicting ask
+        });
 
         // Should maintain valid spread (no negative spreads)
         const newSpread = orderBookState.getSpread();
@@ -118,18 +144,23 @@ describe("OrderBookState - Bid/Ask Separation", () => {
 
     it("should properly count bid and ask levels after separation", () => {
         // Set up symmetric orderbook
-        const bids = [
-            ["49.95", "100"],
-            ["49.90", "150"],
-            ["49.85", "200"],
-        ];
-        const asks = [
-            ["50.05", "100"],
-            ["50.10", "150"],
-            ["50.15", "200"],
-        ];
-
-        orderBookState.update(bids, asks);
+        orderBookState.updateDepth({
+            e: "depthUpdate",
+            E: Date.now(),
+            s: "BTCUSDT",
+            U: 1,
+            u: 1,
+            b: [
+                ["49.95", "100"],
+                ["49.90", "150"],
+                ["49.85", "200"],
+            ],
+            a: [
+                ["50.05", "100"],
+                ["50.10", "150"],
+                ["50.15", "200"],
+            ]
+        });
 
         const metrics = orderBookState.getDepthMetrics();
 
