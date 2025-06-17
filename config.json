@@ -145,7 +145,7 @@
                 "enableAlerts": true
             },
             "signalCoordinator": {
-                "maxConcurrentProcessing": 10,
+                "maxConcurrentProcessing": 20,
                 "processingTimeoutMs": 5000,
                 "retryAttempts": 2,
                 "retryDelayMs": 1000,
