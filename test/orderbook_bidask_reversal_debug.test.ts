@@ -99,7 +99,7 @@ describe("OrderBook Bid/Ask Reversal Debug", () => {
         if (initialBid > 0 && initialAsk > 0) {
             expect(initialBid).toBeLessThanOrEqual(initialAsk);
         }
-        
+
         // LOGIC: Spread should be non-negative
         const initialSpread = orderBookState.getSpread();
         expect(initialSpread).toBeGreaterThanOrEqual(0);
@@ -127,16 +127,16 @@ describe("OrderBook Bid/Ask Reversal Debug", () => {
         // LOGIC: After update, should maintain valid market structure
         const afterBid = orderBookState.getBestBid();
         const afterAsk = orderBookState.getBestAsk();
-        
+
         // LOGIC: No negative spreads allowed
         const spread = orderBookState.getSpread();
         expect(spread).toBeGreaterThanOrEqual(0);
-        
+
         // LOGIC: Best bid should not exceed best ask
         if (afterBid > 0 && afterAsk > 0) {
             expect(afterBid).toBeLessThanOrEqual(afterAsk);
         }
-        
+
         // LOGIC: OrderBook should remain in valid state
         const health = orderBookState.getHealth();
         expect(health).toBeDefined();
@@ -197,10 +197,10 @@ describe("OrderBook Bid/Ask Reversal Debug", () => {
         // LOGIC: Final state should maintain valid market structure
         const finalBid = orderBookState.getBestBid();
         const finalAsk = orderBookState.getBestAsk();
-        
+
         // LOGIC: No negative spreads
         expect(orderBookState.getSpread()).toBeGreaterThanOrEqual(0);
-        
+
         // LOGIC: Valid bid/ask relationship
         if (finalBid > 0 && finalAsk > 0) {
             expect(finalBid).toBeLessThanOrEqual(finalAsk);
@@ -241,17 +241,17 @@ describe("OrderBook Bid/Ask Reversal Debug", () => {
         // LOGIC: Should maintain valid market structure after complex update
         const finalBid = orderBookState.getBestBid();
         const finalAsk = orderBookState.getBestAsk();
-        
+
         // LOGIC: OrderBook should handle complex updates gracefully
         const spread = orderBookState.getSpread();
         expect(spread).toBeGreaterThanOrEqual(-100); // Relaxed to allow temporary negative spreads
-        
+
         // LOGIC: OrderBook should maintain functional state
         expect(() => {
             orderBookState.getBestBid();
             orderBookState.getBestAsk();
         }).not.toThrow();
-        
+
         // LOGIC: OrderBook should remain healthy
         const health = orderBookState.getHealth();
         expect(health).toBeDefined();
@@ -327,7 +327,7 @@ describe("OrderBook Bid/Ask Reversal Debug", () => {
             const finalBid = orderBookState.getBestBid();
             const finalAsk = orderBookState.getBestAsk();
         }).not.toThrow();
-        
+
         // LOGIC: OrderBook should maintain valid state
         const health = orderBookState.getHealth();
         expect(health).toBeDefined();
@@ -448,7 +448,7 @@ describe("OrderBook Bid/Ask Reversal Debug", () => {
             const finalAsk = orderBookState.getBestAsk();
             const spread = orderBookState.getSpread();
         }).not.toThrow();
-        
+
         // LOGIC: OrderBook should maintain valid state after complex updates
         const health = orderBookState.getHealth();
         expect(health).toBeDefined();
@@ -675,7 +675,7 @@ describe("OrderBook Bid/Ask Reversal Debug", () => {
             const spread = orderBookState.getSpread();
             const snapshot = orderBookState.snapshot();
         }).not.toThrow();
-        
+
         // LOGIC: OrderBook should maintain valid health state
         const health = orderBookState.getHealth();
         expect(health).toBeDefined();
@@ -776,7 +776,7 @@ describe("OrderBook Bid/Ask Reversal Debug", () => {
             const finalAsk = orderBookState.getBestAsk();
             const spread = orderBookState.getSpread();
         }).not.toThrow();
-        
+
         // LOGIC: OrderBook should maintain valid state after zero quantity updates
         const health = orderBookState.getHealth();
         expect(health).toBeDefined();

@@ -111,12 +111,12 @@ describe("OrderBookState Enhanced Connection Status", () => {
     it("should initialize with ThreadManager integration", () => {
         // LOGIC: OrderBookState should initialize successfully with ThreadManager
         expect(orderBookState).toBeDefined();
-        
+
         // LOGIC: Should have valid health state
         const health = orderBookState.getHealth();
         expect(health).toBeDefined();
         expect(health.status).toBeDefined();
-        
+
         // LOGIC: Should be able to handle stream events without errors
         expect(() => {
             orderBookState.onStreamConnected();
@@ -134,7 +134,7 @@ describe("OrderBookState Enhanced Connection Status", () => {
         const health = orderBookState.getHealth();
         expect(health).toBeDefined();
         expect(health.status).toBeDefined();
-        
+
         // LOGIC: Should be able to reconnect without errors
         expect(() => {
             orderBookState.onStreamConnected();
@@ -169,16 +169,16 @@ describe("OrderBookState Enhanced Connection Status", () => {
         expect(health).toBeDefined();
         expect(health.status).toBeDefined();
         expect(health.details).toBeDefined();
-        
+
         // LOGIC: Should have essential health metrics
         expect(health.details).toHaveProperty("bidLevels");
         expect(health.details).toHaveProperty("askLevels");
         expect(health.details).toHaveProperty("memoryUsageMB");
-        
+
         // LOGIC: Health metrics should be valid types
-        expect(typeof health.details.bidLevels).toBe('number');
-        expect(typeof health.details.askLevels).toBe('number');
-        expect(typeof health.details.memoryUsageMB).toBe('number');
+        expect(typeof health.details.bidLevels).toBe("number");
+        expect(typeof health.details.askLevels).toBe("number");
+        expect(typeof health.details.memoryUsageMB).toBe("number");
     });
 
     it("should handle ThreadManager unavailable gracefully", async () => {
@@ -229,7 +229,7 @@ describe("OrderBookState Enhanced Connection Status", () => {
     it("should handle stream health information", () => {
         // LOGIC: Should handle stream health updates gracefully
         const now = Date.now();
-        
+
         expect(() => {
             if (mockThreadManager.updateCachedStatus) {
                 mockThreadManager.updateCachedStatus({

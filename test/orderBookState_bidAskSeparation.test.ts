@@ -71,12 +71,12 @@ describe("OrderBookState - Bid/Ask Separation", () => {
         // - If both sides exist, best bid must be <= best ask
         const finalBid = orderBookState.getBestBid();
         const finalAsk = orderBookState.getBestAsk();
-        
+
         // Handle case where one side might be empty after conflicts are resolved
         if (finalBid > 0 && finalAsk > 0) {
             expect(finalBid).toBeLessThanOrEqual(finalAsk);
         }
-        
+
         // The orderbook should remain in a valid state (not crashed)
         expect(orderBookState.getSpread()).toBeGreaterThanOrEqual(0);
     });
@@ -97,11 +97,11 @@ describe("OrderBookState - Bid/Ask Separation", () => {
         // The orderbook should maintain valid market structure
         const bid = orderBookState.getBestBid();
         const ask = orderBookState.getBestAsk();
-        
+
         // Key logical requirement: no inverted quotes
         expect(bid).toBeLessThanOrEqual(ask);
         expect(orderBookState.getSpread()).toBeGreaterThanOrEqual(0);
-        
+
         // System should have processed the update without errors
         const metrics = orderBookState.getDepthMetrics();
         expect(metrics.bidLevels + metrics.askLevels).toBeGreaterThan(0);
@@ -128,7 +128,9 @@ describe("OrderBookState - Bid/Ask Separation", () => {
         // LOGIC: Initial spread should be positive
         const initialSpread = orderBookState.getSpread();
         expect(initialSpread).toBeGreaterThan(0);
-        expect(orderBookState.getBestBid()).toBeLessThan(orderBookState.getBestAsk());
+        expect(orderBookState.getBestBid()).toBeLessThan(
+            orderBookState.getBestAsk()
+        );
 
         // Try to create crossing quotes
         await orderBookState.updateDepth({
@@ -199,9 +201,11 @@ describe("OrderBookState - Bid/Ask Separation", () => {
         // LOGIC: System should maintain reasonable level counts
         // Should still have levels after the update
         expect(newMetrics.bidLevels + newMetrics.askLevels).toBeGreaterThan(0);
-        
+
         // Market structure should remain valid
-        expect(orderBookState.getBestBid()).toBeLessThanOrEqual(orderBookState.getBestAsk());
+        expect(orderBookState.getBestBid()).toBeLessThanOrEqual(
+            orderBookState.getBestAsk()
+        );
         expect(orderBookState.getSpread()).toBeGreaterThanOrEqual(0);
     });
 });

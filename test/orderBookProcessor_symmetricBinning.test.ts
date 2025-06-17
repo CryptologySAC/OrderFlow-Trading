@@ -77,10 +77,10 @@ describe("OrderBookProcessor - Symmetric Binning", () => {
             // LOGIC: Should create a reasonable number of bins
             expect(binCount).toBeGreaterThan(10);
             expect(binCount).toBeLessThan(30);
-            
+
             // LOGIC: Should have valid price levels
             expect(result.data.priceLevels).toBeDefined();
-            result.data.priceLevels.forEach(level => {
+            result.data.priceLevels.forEach((level) => {
                 expect(level.price).toBeGreaterThan(0);
                 expect(level.bid).toBeGreaterThanOrEqual(0);
                 expect(level.ask).toBeGreaterThanOrEqual(0);
@@ -116,7 +116,7 @@ describe("OrderBookProcessor - Symmetric Binning", () => {
             // LOGIC: Should create ordered price levels
             expect(prices.length).toBeGreaterThan(0);
             expect(prices[0]).toBeLessThan(prices[prices.length - 1]);
-            
+
             // LOGIC: Price range should contain the midPrice
             expect(midPrice).toBeGreaterThanOrEqual(prices[0]);
             expect(midPrice).toBeLessThanOrEqual(prices[prices.length - 1]);
@@ -157,15 +157,19 @@ describe("OrderBookProcessor - Symmetric Binning", () => {
         if (result.type === "orderbook") {
             // LOGIC: Should process both bid and ask data appropriately
             expect(result.data.priceLevels.length).toBeGreaterThan(0);
-            
+
             // LOGIC: Should have levels with valid bid/ask volumes
-            const hasValidBids = result.data.priceLevels.some(level => level.bid > 0);
-            const hasValidAsks = result.data.priceLevels.some(level => level.ask > 0);
-            
+            const hasValidBids = result.data.priceLevels.some(
+                (level) => level.bid > 0
+            );
+            const hasValidAsks = result.data.priceLevels.some(
+                (level) => level.ask > 0
+            );
+
             expect(hasValidBids || hasValidAsks).toBe(true); // Should have some volume
-            
+
             // LOGIC: All levels should have valid prices and volumes
-            result.data.priceLevels.forEach(level => {
+            result.data.priceLevels.forEach((level) => {
                 expect(level.price).toBeGreaterThan(0);
                 expect(level.bid).toBeGreaterThanOrEqual(0);
                 expect(level.ask).toBeGreaterThanOrEqual(0);
@@ -242,9 +246,9 @@ describe("OrderBookProcessor - Symmetric Binning", () => {
                 // LOGIC: Should produce consistent results regardless of midPrice
                 expect(result.data.priceLevels.length).toBeGreaterThan(10);
                 expect(result.data.priceLevels.length).toBeLessThan(30);
-                
+
                 // LOGIC: All price levels should be valid
-                result.data.priceLevels.forEach(level => {
+                result.data.priceLevels.forEach((level) => {
                     expect(level.price).toBeGreaterThan(0);
                     expect(level.bid).toBeGreaterThanOrEqual(0);
                     expect(level.ask).toBeGreaterThanOrEqual(0);

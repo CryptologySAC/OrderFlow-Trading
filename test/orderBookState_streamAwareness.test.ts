@@ -72,7 +72,7 @@ describe("OrderBookState Stream Awareness", () => {
         expect(health).toBeDefined();
         expect(health.status).toBeDefined();
         expect(health.details).toBeDefined();
-        
+
         // LOGIC: Should be able to handle stream events without errors
         expect(() => {
             orderBookState.onStreamDisconnected("test");
@@ -111,7 +111,7 @@ describe("OrderBookState Stream Awareness", () => {
         expect(() => {
             orderBookState.onStreamDisconnected("testing");
         }).not.toThrow();
-        
+
         let health = orderBookState.getHealth();
         expect(health).toBeDefined();
 
@@ -146,7 +146,7 @@ describe("OrderBookState Stream Awareness", () => {
         // LOGIC: Should provide comprehensive health information
         expect(health).toBeDefined();
         expect(health.details).toBeDefined();
-        
+
         // LOGIC: Essential health fields should be present
         expect(health).toHaveProperty("status");
         expect(health).toHaveProperty("initialized");
@@ -154,11 +154,11 @@ describe("OrderBookState Stream Awareness", () => {
         expect(health.details).toHaveProperty("bidLevels");
         expect(health.details).toHaveProperty("askLevels");
         expect(health.details).toHaveProperty("memoryUsageMB");
-        
+
         // LOGIC: Health data should be valid types
-        expect(typeof health.status).toBe('string');
-        expect(typeof health.details.bidLevels).toBe('number');
-        expect(typeof health.details.askLevels).toBe('number');
+        expect(typeof health.status).toBe("string");
+        expect(typeof health.details.bidLevels).toBe("number");
+        expect(typeof health.details.askLevels).toBe("number");
     });
 
     it("should not log duplicate connection status changes", () => {

@@ -114,7 +114,7 @@ describe("OrderBook Threading Data Flow", () => {
             b: [["100.50", "10.0"]], // bids
             a: [["100.60", "15.0"]], // asks
         };
-        
+
         expect(mockDepthData.e).toBe("depthUpdate");
         expect(mockDepthData.b).toHaveLength(1);
         expect(mockDepthData.a).toHaveLength(1);
@@ -125,7 +125,7 @@ describe("OrderBook Threading Data Flow", () => {
             dataType: "depth",
             data: mockDepthData,
         };
-        
+
         expect(streamDataMessage.type).toBe("stream_data");
         expect(streamDataMessage.dataType).toBe("depth");
         expect(streamDataMessage.data).toBeDefined();
@@ -138,11 +138,17 @@ describe("OrderBook Threading Data Flow", () => {
         expect(() => {
             messageHandler(streamDataMessage);
         }).not.toThrow();
-        
+
         // LOGIC: Threading infrastructure should be properly set up
         expect(mockWorkerInstances).toHaveLength(4); // logger, binance, comm, storage
-        expect(mockBinanceWorker.on).toHaveBeenCalledWith("message", expect.any(Function));
-        expect(mockBinanceWorker.on).toHaveBeenCalledWith("error", expect.any(Function));
+        expect(mockBinanceWorker.on).toHaveBeenCalledWith(
+            "message",
+            expect.any(Function)
+        );
+        expect(mockBinanceWorker.on).toHaveBeenCalledWith(
+            "error",
+            expect.any(Function)
+        );
     });
 
     it("should route depth data through preprocessor to orderbook processor", async () => {
@@ -173,7 +179,7 @@ describe("OrderBook Threading Data Flow", () => {
             b: [["100.50", "10.0"]],
             a: [["100.60", "15.0"]],
         };
-        
+
         expect(mockDepthData.b[0]).toEqual(["100.50", "10.0"]);
         expect(mockDepthData.a[0]).toEqual(["100.60", "15.0"]);
 
@@ -183,14 +189,14 @@ describe("OrderBook Threading Data Flow", () => {
             dataType: "depth",
             data: mockDepthData,
         };
-        
+
         expect(streamDataMessage.type).toBe("stream_data");
         expect(streamDataMessage.dataType).toBe("depth");
 
         // LOGIC: Message handler should exist and be callable
         const messageHandler = mockBinanceWorker._eventListeners.message?.[0];
         expect(messageHandler).toBeDefined();
-        
+
         expect(() => {
             messageHandler(streamDataMessage);
         }).not.toThrow();
@@ -198,10 +204,12 @@ describe("OrderBook Threading Data Flow", () => {
         // LOGIC: Threading infrastructure components should be properly initialized
         expect(orderBookUpdateSpy).toBeDefined();
         expect(broadcastSpy).toBeDefined();
-        
+
         // LOGIC: Dependencies should have required functionality
-        expect(typeof dependencies.orderBookProcessor.onOrderBookUpdate).toBe('function');
-        expect(typeof threadManager.broadcast).toBe('function');
+        expect(typeof dependencies.orderBookProcessor.onOrderBookUpdate).toBe(
+            "function"
+        );
+        expect(typeof threadManager.broadcast).toBe("function");
 
         orderBookUpdateSpy.mockRestore();
         broadcastSpy.mockRestore();

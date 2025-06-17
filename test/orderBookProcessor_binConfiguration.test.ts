@@ -66,11 +66,11 @@ describe("OrderBookProcessor Bin Configuration", () => {
         expect(binConfig.minPrice).toBeLessThan(binConfig.maxPrice);
         expect(binConfig.binSize).toBeGreaterThan(0);
         expect(binConfig.numLevels).toBeGreaterThan(0);
-        
+
         // LOGIC: The midPrice should fall within the calculated range
         expect(midPrice).toBeGreaterThanOrEqual(binConfig.minPrice);
         expect(midPrice).toBeLessThanOrEqual(binConfig.maxPrice);
-        
+
         // LOGIC: Range should be symmetric around the aligned midPrice
         const range = binConfig.maxPrice - binConfig.minPrice;
         expect(range).toBeGreaterThan(0);
@@ -81,16 +81,16 @@ describe("OrderBookProcessor Bin Configuration", () => {
 
         testCases.forEach((midPrice) => {
             const binConfig = (processor as any).calculateBinConfig(midPrice);
-            
+
             // LOGIC: Each midPrice should produce valid bin configuration
             expect(binConfig.minPrice).toBeLessThan(binConfig.maxPrice);
             expect(binConfig.binSize).toBeGreaterThan(0);
             expect(binConfig.numLevels).toBeGreaterThan(0);
-            
+
             // LOGIC: MidPrice should fall within the range
             expect(midPrice).toBeGreaterThanOrEqual(binConfig.minPrice);
             expect(midPrice).toBeLessThanOrEqual(binConfig.maxPrice);
-            
+
             // LOGIC: Configuration should be consistent across different prices
             expect(binConfig.binSize).toBe(0.05); // Should use configured bin size
             expect(binConfig.numLevels).toBe(10); // Should use configured numLevels

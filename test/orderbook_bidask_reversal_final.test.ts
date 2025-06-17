@@ -159,7 +159,7 @@ describe("OrderBook Bid/Ask Final Issue Reproduction", () => {
             const finalAsk = orderBookState.getBestAsk();
             const spread = orderBookState.getSpread();
         }).not.toThrow();
-        
+
         // LOGIC: OrderBook should maintain valid state
         const health = orderBookState.getHealth();
         expect(health).toBeDefined();
@@ -243,7 +243,7 @@ describe("OrderBook Bid/Ask Final Issue Reproduction", () => {
             const finalAsk = orderBookState.getBestAsk();
             const spread = orderBookState.getSpread();
         }).not.toThrow();
-        
+
         // LOGIC: OrderBook should maintain valid state after purge operations
         const health = orderBookState.getHealth();
         expect(health).toBeDefined();
@@ -310,7 +310,7 @@ describe("OrderBook Bid/Ask Final Issue Reproduction", () => {
             const finalAsk = orderBookState.getBestAsk();
             const spread = orderBookState.getSpread();
         }).not.toThrow();
-        
+
         // LOGIC: OrderBook should maintain valid state after separation operations
         const health = orderBookState.getHealth();
         expect(health).toBeDefined();
@@ -368,7 +368,7 @@ describe("OrderBook Bid/Ask Final Issue Reproduction", () => {
             const finalAsk = orderBookState.getBestAsk();
             const spread = orderBookState.getSpread();
         }).not.toThrow();
-        
+
         // LOGIC: OrderBook should maintain valid state
         const health = orderBookState.getHealth();
         expect(health).toBeDefined();

@@ -185,7 +185,7 @@ describe("OrderBook Bid/Ask Reversal Reproduction", () => {
             const finalAsk = orderBookState.getBestAsk();
             const spread = orderBookState.getSpread();
         }).not.toThrow();
-        
+
         // LOGIC: OrderBook should maintain valid state
         const health = orderBookState.getHealth();
         expect(health).toBeDefined();
@@ -274,7 +274,7 @@ describe("OrderBook Bid/Ask Reversal Reproduction", () => {
             const finalAsk = orderBookState.getBestAsk();
             const spread = orderBookState.getSpread();
         }).not.toThrow();
-        
+
         // LOGIC: OrderBook should maintain valid state
         const health = orderBookState.getHealth();
         expect(health).toBeDefined();
@@ -353,7 +353,7 @@ describe("OrderBook Bid/Ask Reversal Reproduction", () => {
             const finalAsk = orderBookState.getBestAsk();
             const spread = orderBookState.getSpread();
         }).not.toThrow();
-        
+
         // LOGIC: OrderBook should maintain valid state
         const health = orderBookState.getHealth();
         expect(health).toBeDefined();
