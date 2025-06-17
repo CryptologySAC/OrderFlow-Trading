@@ -37,6 +37,7 @@ import { SignalType, DistributionResult } from "../../types/signalTypes.js";
  * - Statistical validation and significance testing
  * - Enhanced cleanup and memory management
  * - Comprehensive metrics and monitoring
+ * @deprecated
  */
 export abstract class FlowDetectorBase extends BaseDetector {
     // Flow direction strategy

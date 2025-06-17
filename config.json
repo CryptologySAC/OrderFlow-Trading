@@ -177,7 +177,7 @@
             },
             "absorption": {
                 "minAggVolume": 250,
-                "threshold": 0.55,
+                "threshold": 0.70,
                 "windowMs": 75000,
                 "zoneTicks": 3,
                 "eventCooldownMs": 20000,
@@ -194,8 +194,7 @@
                     "adaptiveZone": true,
                     "passiveHistory": true,
                     "multiZone": false,
-                    "autoCalibrate": false,
-                    "icebergDetection": false,
+                    "icebergDetection": true,
                     "liquidityGradient": false,
                     "spreadAdjustment": false,
                     "absorptionVelocity": false
