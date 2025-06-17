@@ -137,7 +137,9 @@ describe("OrderBook Threading Data Flow", () => {
         } catch (error) {
             // If processDepth doesn't exist, check that the message was handled
             expect(messageHandler).toBeDefined();
-            console.log("processDepth spy not called - verifying message handler exists");
+            console.log(
+                "processDepth spy not called - verifying message handler exists"
+            );
         }
 
         processDepthSpy.mockRestore();
@@ -186,7 +188,9 @@ describe("OrderBook Threading Data Flow", () => {
         } catch (error) {
             // If the spy wasn't called, verify the basic data flow setup
             expect(messageHandler).toBeDefined();
-            console.log("orderBookUpdateSpy not called - verifying message handler exists");
+            console.log(
+                "orderBookUpdateSpy not called - verifying message handler exists"
+            );
         }
 
         orderBookUpdateSpy.mockRestore();
