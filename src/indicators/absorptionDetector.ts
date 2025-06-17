@@ -566,7 +566,8 @@ export class AbsorptionDetector
      */
     private trackAbsorptionEvent(event: EnrichedTradeEvent): void {
         const zone = this.calculateZone(event.price);
-        const side = this.getTradeSide(event);
+        // Use absorbing side for consistent absorption tracking
+        const side = this.getAbsorbingSide(event);
 
         if (!this.absorptionHistory.has(zone)) {
             this.absorptionHistory.set(zone, []);
@@ -586,6 +587,257 @@ export class AbsorptionDetector
             zone,
             events.filter((e) => e.timestamp > cutoff)
         );
+    }
+
+    /**
+     * Get absorbing (passive) side for absorption signals - LEGACY METHOD
+     *
+     * @deprecated Use getAbsorbingSideForZone() for proper flow analysis
+     * @param trade The aggressive trade hitting passive liquidity
+     * @returns The side that is providing passive liquidity (absorbing)
+     */
+    private getAbsorbingSide(trade: AggressiveTrade): "buy" | "sell" {
+        // For absorption, we want the PASSIVE side that's absorbing the aggressive flow
+        // - Aggressive buy (buyerIsMaker=false) hits ask → sellers are absorbing → "sell"
+        // - Aggressive sell (buyerIsMaker=true) hits bid → buyers are absorbing → "buy"
+        return trade.buyerIsMaker ? "buy" : "sell";
+    }
+
+    /**
+     * Determine the dominant aggressive side in recent trades for proper absorption detection
+     *
+     * CRITICAL FIX: Absorption should be based on dominant flow patterns, not individual trades
+     *
+     * @param trades Recent trades in the zone
+     * @returns The dominant aggressive side based on volume analysis
+     */
+    private getDominantAggressiveSide(
+        trades: AggressiveTrade[]
+    ): "buy" | "sell" {
+        const recentTrades = trades.slice(-10); // Last 10 trades for pattern analysis
+
+        let buyVolume = 0;
+        let sellVolume = 0;
+
+        for (const trade of recentTrades) {
+            if (trade.buyerIsMaker) {
+                // buyerIsMaker = true → aggressive sell hitting bid
+                sellVolume += trade.quantity;
+            } else {
+                // buyerIsMaker = false → aggressive buy hitting ask
+                buyVolume += trade.quantity;
+            }
+        }
+
+        return buyVolume > sellVolume ? "buy" : "sell";
+    }
+
+    /**
+     * Get absorbing side based on dominant flow analysis and absorption conditions
+     *
+     * ENHANCED ABSORPTION LOGIC: This method properly determines which side is absorbing
+     * by analyzing both absorption conditions and dominant flow patterns
+     *
+     * @param tradesAtZone Recent trades in the zone
+     * @param zone Zone number
+     * @param price Current price level
+     * @returns The absorbing side or null if no clear absorption
+     */
+    private getAbsorbingSideForZone(
+        tradesAtZone: AggressiveTrade[],
+        zone: number,
+        price: number
+    ): "buy" | "sell" | null {
+        // Method 1: Check absorption conditions for both sides
+        const buyAbsorption = this.checkAbsorptionConditions(
+            price,
+            "buy",
+            zone
+        );
+        const sellAbsorption = this.checkAbsorptionConditions(
+            price,
+            "sell",
+            zone
+        );
+
+        if (buyAbsorption && !sellAbsorption) {
+            return "buy"; // Buyers absorbing aggressive sells
+        } else if (sellAbsorption && !buyAbsorption) {
+            return "sell"; // Sellers absorbing aggressive buys
+        } else if (buyAbsorption && sellAbsorption) {
+            // Both sides show absorption - use zone analysis to resolve conflict
+            return this.resolveConflictingAbsorption(zone);
+        }
+
+        // Method 2: Fallback to dominant flow analysis
+        const dominantAggressiveSide =
+            this.getDominantAggressiveSide(tradesAtZone);
+
+        // The absorbing side is opposite to the dominant aggressive flow
+        return dominantAggressiveSide === "buy" ? "sell" : "buy";
+    }
+
+    /**
+     * Resolve conflicting absorption signals using zone passive strength analysis
+     *
+     * When both buy and sell sides show absorption, determine which is stronger
+     * based on recent passive liquidity strength trends
+     *
+     * @param zone Zone number
+     * @returns The side with stronger absorption based on passive strength
+     */
+    private resolveConflictingAbsorption(zone: number): "buy" | "sell" {
+        const zoneHistory = this.zonePassiveHistory.get(zone);
+        if (!zoneHistory || zoneHistory.count() < 6) {
+            return "buy"; // Default to buy if insufficient data
+        }
+
+        const snapshots = zoneHistory.toArray();
+        const recentBidStrength = this.calculatePassiveStrength(
+            snapshots,
+            "bid"
+        );
+        const recentAskStrength = this.calculatePassiveStrength(
+            snapshots,
+            "ask"
+        );
+
+        // Return the side with stronger passive liquidity growth
+        return recentBidStrength > recentAskStrength ? "buy" : "sell";
+    }
+
+    /**
+     * Calculate passive strength growth for bid or ask side
+     *
+     * @param snapshots Zone passive history snapshots
+     * @param side "bid" or "ask" side to analyze
+     * @returns Strength ratio (>1 means growing, <1 means declining)
+     */
+    private calculatePassiveStrength(
+        snapshots: ZoneSample[],
+        side: "bid" | "ask"
+    ): number {
+        if (snapshots.length < 3) return 1; // Neutral if insufficient data
+
+        const values = snapshots.map((s) => s[side]);
+        const recent = values.slice(-3); // Last 3 snapshots
+        const earlier = values.slice(-6, -3); // Previous 3 snapshots
+
+        if (earlier.length === 0) return 1;
+
+        const recentAvg = DetectorUtils.calculateMean(recent);
+        const earlierAvg = DetectorUtils.calculateMean(earlier);
+
+        // Return growth ratio (>1 means growing passive liquidity = stronger absorption)
+        return earlierAvg > 0 ? recentAvg / earlierAvg : 1;
+    }
+
+    /**
+     * Determine which method was used to identify absorption for metadata
+     *
+     * @param zone Zone number
+     * @param price Current price level
+     * @param side Determined absorption side
+     * @returns Method used to determine absorption
+     */
+    private determineAbsorptionMethod(zone: number, price: number): string {
+        const buyAbsorption = this.checkAbsorptionConditions(
+            price,
+            "buy",
+            zone
+        );
+        const sellAbsorption = this.checkAbsorptionConditions(
+            price,
+            "sell",
+            zone
+        );
+
+        if (buyAbsorption && sellAbsorption) {
+            return "zone-strength-resolution"; // Both sides showed absorption, resolved by passive strength
+        } else if (buyAbsorption || sellAbsorption) {
+            return "condition-based"; // Clear absorption condition detected
+        } else {
+            return "flow-based"; // Fallback to dominant flow analysis
+        }
+    }
+
+    /**
+     * Calculate absorption context based on market structure for enhanced signal quality
+     *
+     * @param price Current price level
+     * @param side Absorbing side (buy/sell)
+     * @returns Context analysis including reversal potential and price position
+     */
+    private calculateAbsorptionContext(
+        price: number,
+        side: "buy" | "sell"
+    ): {
+        isReversal: boolean;
+        strength: number;
+        priceContext: "high" | "low" | "middle";
+        contextConfidence: number;
+    } {
+        // Get recent price range for context analysis
+        const recentPrices = this.getRecentPriceRange();
+        const pricePercentile = this.calculatePricePercentile(
+            price,
+            recentPrices
+        );
+
+        const priceContext =
+            pricePercentile > 0.8
+                ? "high"
+                : pricePercentile < 0.2
+                  ? "low"
+                  : "middle";
+
+        // At highs + seller absorption = likely reversal down (strong absorption signal)
+        // At lows + buyer absorption = likely reversal up (strong absorption signal)
+        const isLogicalReversal =
+            (side === "sell" && pricePercentile > 0.8) || // Sellers absorbing at highs
+            (side === "buy" && pricePercentile < 0.2); // Buyers absorbing at lows
+
+        // Strength increases at price extremes
+        const strength = isLogicalReversal
+            ? Math.abs(pricePercentile - 0.5) * 2
+            : 0.5;
+
+        // Context confidence based on how extreme the price is
+        const contextConfidence = Math.abs(pricePercentile - 0.5) * 2;
+
+        return {
+            isReversal: isLogicalReversal,
+            strength,
+            priceContext,
+            contextConfidence,
+        };
+    }
+
+    /**
+     * Get recent price range for context analysis
+     */
+    private getRecentPriceRange(): number[] {
+        const windowMs = 300000; // 5 minutes
+        const now = Date.now();
+
+        return this.trades
+            .filter((t) => now - t.timestamp < windowMs)
+            .map((t) => t.price);
+    }
+
+    /**
+     * Calculate price percentile within recent range
+     */
+    private calculatePricePercentile(
+        price: number,
+        recentPrices: number[]
+    ): number {
+        if (recentPrices.length < 10) return 0.5; // Neutral if insufficient data
+
+        const sortedPrices = [...recentPrices].sort((a, b) => a - b);
+        const below = sortedPrices.filter((p) => p < price).length;
+
+        return below / sortedPrices.length;
     }
 
     /**
@@ -650,7 +902,14 @@ export class AbsorptionDetector
     ): void {
         const latestTrade = tradesAtZone[tradesAtZone.length - 1];
         const price = +latestTrade.price.toFixed(this.pricePrecision);
-        const side = this.getTradeSide(latestTrade);
+
+        // ✅ ENHANCED: Use proper absorption detection logic based on dominant flow
+        const side = this.getAbsorbingSideForZone(tradesAtZone, zone, price);
+
+        if (!side) {
+            // No clear absorption detected - exit early
+            return;
+        }
 
         // Get book data (with fallback to zone history)
         let bookLevel = this.depth.get(price);
@@ -810,9 +1069,29 @@ export class AbsorptionDetector
             return;
         }
 
+        // ✅ ENHANCED: Apply context-aware absorption logic for market structure
+        const absorptionContext = this.calculateAbsorptionContext(price, side);
+
         // ✅ ENHANCED: Apply microstructure confidence and urgency adjustments
         let finalConfidence = score;
         let signalUrgency = "medium" as "low" | "medium" | "high";
+
+        // Apply context-aware confidence adjustments
+        if (absorptionContext.isReversal) {
+            // Boost confidence for logical reversal scenarios
+            finalConfidence *= 1 + absorptionContext.strength * 0.3; // Up to 30% boost
+            this.logger.info(
+                `[AbsorptionDetector] Context-enhanced absorption at ${absorptionContext.priceContext}`,
+                {
+                    zone,
+                    price,
+                    side,
+                    priceContext: absorptionContext.priceContext,
+                    reversalStrength: absorptionContext.strength,
+                    confidenceBoost: absorptionContext.strength * 0.3,
+                }
+            );
+        }
 
         if (conditions.microstructure) {
             finalConfidence *= conditions.microstructure.confidenceBoost;
@@ -824,6 +1103,21 @@ export class AbsorptionDetector
                 signalUrgency = "low";
             }
         }
+
+        // Context-based urgency adjustments
+        if (absorptionContext.isReversal && absorptionContext.strength > 0.7) {
+            signalUrgency = "high"; // High urgency for strong reversal signals
+        }
+
+        // ✅ ENHANCED: Calculate flow analysis for comprehensive debugging
+        const dominantAggressiveSide =
+            this.getDominantAggressiveSide(tradesAtZone);
+        const buyVolume = tradesAtZone
+            .filter((t) => !t.buyerIsMaker)
+            .reduce((s, t) => s + t.quantity, 0);
+        const sellVolume = tradesAtZone
+            .filter((t) => t.buyerIsMaker)
+            .reduce((s, t) => s + t.quantity, 0);
 
         this.logger.info(`[AbsorptionDetector] 🎯 SIGNAL GENERATED!`, {
             zone,
@@ -837,6 +1131,27 @@ export class AbsorptionDetector
                 absorptionRatio: conditions.absorptionRatio,
                 hasRefill: conditions.hasRefill,
                 icebergSignal: conditions.icebergSignal,
+            },
+            // ✅ NEW: Enhanced debug information for flow analysis
+            debugInfo: {
+                dominantAggressiveFlow: dominantAggressiveSide,
+                absorbingSide: side,
+                priceContext: absorptionContext.priceContext,
+                interpretation:
+                    side === "buy"
+                        ? "Buyers absorbing sell pressure - potential support/bounce"
+                        : "Sellers absorbing buy pressure - potential resistance/reversal",
+                tradeCount: tradesAtZone.length,
+                latestTradeWasMaker: latestTrade.buyerIsMaker,
+                flowAnalysis: {
+                    buyVolume,
+                    sellVolume,
+                    volumeRatio:
+                        sellVolume > 0 ? buyVolume / sellVolume : buyVolume,
+                    dominantFlowConfidence:
+                        Math.abs(buyVolume - sellVolume) /
+                        (buyVolume + sellVolume),
+                },
             },
         });
 
@@ -854,7 +1169,34 @@ export class AbsorptionDetector
                 icebergDetected: conditions.icebergSignal,
                 liquidityGradient: conditions.liquidityGradient,
                 conditions,
-                detectorVersion: "3.0-microstructure", // Updated version
+                detectorVersion: "5.0-enhanced-flow-analysis", // Updated version for enhanced flow-based absorption
+                // ✅ ENHANCED: Add comprehensive flow analysis metadata
+                absorbingSide: side,
+                aggressiveSide: this.getTradeSide(latestTrade),
+                dominantFlow: dominantAggressiveSide,
+                signalInterpretation:
+                    side === "buy"
+                        ? "buyers_absorbing_aggressive_sells"
+                        : "sellers_absorbing_aggressive_buys",
+                absorptionMethod: this.determineAbsorptionMethod(zone, price),
+                flowAnalysis: {
+                    buyVolume,
+                    sellVolume,
+                    tradeCount: tradesAtZone.length,
+                    dominantSide: dominantAggressiveSide,
+                    volumeRatio:
+                        sellVolume > 0 ? buyVolume / sellVolume : buyVolume,
+                    confidenceScore:
+                        Math.abs(buyVolume - sellVolume) /
+                        Math.max(buyVolume + sellVolume, 1),
+                },
+                // ✅ NEW: Include context-aware analysis
+                absorptionContext: {
+                    isReversal: absorptionContext.isReversal,
+                    priceContext: absorptionContext.priceContext,
+                    contextStrength: absorptionContext.strength,
+                    contextConfidence: absorptionContext.contextConfidence,
+                },
                 // ✅ NEW: Include microstructure insights in signal
                 microstructureInsights: conditions.microstructure
                     ? {
