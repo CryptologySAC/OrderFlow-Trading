@@ -31,6 +31,7 @@ export interface AbsorptionSettings extends BaseDetectorSettings {
     absorptionThreshold?: number; // Minimum absorption score (0-1)
     minPassiveMultiplier?: number; // Min passive/aggressive ratio for absorption
     icebergDetectionSensitivity?: number; // Sensitivity for iceberg detection (0-1)
+    icebergConfidenceMultiplier?: number; // Confidence multiplier when iceberg detected (1.0-2.0)
     maxAbsorptionRatio?: number; // Max aggressive/passive ratio for absorption
 }
 
@@ -81,6 +82,7 @@ export class AbsorptionDetector
     private readonly absorptionThreshold: number;
     private readonly minPassiveMultiplier: number;
     private readonly icebergDetectionSensitivity: number;
+    private readonly icebergConfidenceMultiplier: number;
     private readonly maxAbsorptionRatio: number;
 
     // Advanced tracking
@@ -124,6 +126,8 @@ export class AbsorptionDetector
         this.minPassiveMultiplier = settings.minPassiveMultiplier ?? 1.5;
         this.icebergDetectionSensitivity =
             settings.icebergDetectionSensitivity ?? 0.8;
+        this.icebergConfidenceMultiplier =
+            settings.icebergConfidenceMultiplier ?? 1.2;
         this.maxAbsorptionRatio = settings.maxAbsorptionRatio ?? 0.5;
 
         // Merge absorption-specific features
@@ -472,20 +476,25 @@ export class AbsorptionDetector
             return false; // Skip iceberg detection, continue with basic absorption logic
         }
 
-        const lvl = this.orderBook.getLevel(price); // existing helper
+        // 🚨 CRITICAL FIX: Iceberg detection should ENHANCE absorption confidence, not abort
+        let icebergConfidenceFactor = 1.0;
 
-        const icebergLikely =
-            lvl &&
-            (side === "buy"
-                ? (lvl.addedAsk ?? 0) > (lvl.consumedAsk ?? 0) * 0.8
-                : (lvl.addedBid ?? 0) > (lvl.consumedBid ?? 0) * 0.8);
+        if (this.features.icebergDetection) {
+            const lvl = this.orderBook.getLevel(price);
+            const icebergLikely =
+                lvl &&
+                (side === "buy"
+                    ? (lvl.addedAsk ?? 0) >
+                      (lvl.consumedAsk ?? 0) * this.icebergDetectionSensitivity
+                    : (lvl.addedBid ?? 0) >
+                      (lvl.consumedBid ?? 0) *
+                          this.icebergDetectionSensitivity);
 
-        if (icebergLikely) {
-            this.logger.warn(
-                "Queue is constantly replenished – ignore absorption",
-                { price, side, level: lvl }
-            );
-            return false; // abort this zone / skip scoring
+            if (icebergLikely) {
+                // Iceberg orders represent significant institutional absorption
+                // Use configured multiplier to enhance absorption confidence
+                icebergConfidenceFactor = this.icebergConfidenceMultiplier;
+            }
         }
 
         // Get the RELEVANT passive side
@@ -512,18 +521,17 @@ export class AbsorptionDetector
                 ? this.aggrBuyEWMA.get() // “buy” absorption: compare to buy aggression
                 : this.aggrSellEWMA.get(); // “sell” absorption: compare to sell aggression
 
-        // Absorption checks:
-        // 1. Current passive exceeds aggressive (classic absorption)
-        const classicAbsorption = currentPassive > recentAggressive * 0.8;
-
-        // 2. Passive maintained despite hits (sponge effect)
+        // Sophisticated absorption checks (enhanced with iceberg confidence factor):
+        // 1. Passive maintained despite hits (liquidity resilience under pressure)
         const maintainedPassive =
-            minPassive > avgPassive * 0.7 && recentAggressive > avgPassive;
+            minPassive > avgPassive * (0.7 / icebergConfidenceFactor) &&
+            recentAggressive > avgPassive;
 
-        // 3. Passive growing (iceberg/refill)
-        const growingPassive = currentPassive > avgPassive * 1.2;
+        // 2. Passive growing (iceberg/refill - active liquidity replenishment)
+        const growingPassive =
+            currentPassive > avgPassive * (1.2 / icebergConfidenceFactor);
 
-        return classicAbsorption || maintainedPassive || growingPassive;
+        return maintainedPassive || growingPassive;
     }
 
     /**

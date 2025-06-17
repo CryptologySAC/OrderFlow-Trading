@@ -177,7 +177,7 @@
             },
             "absorption": {
                 "minAggVolume": 250,
-                "threshold": 0.70,
+                "threshold": 0.7,
                 "windowMs": 75000,
                 "zoneTicks": 3,
                 "eventCooldownMs": 20000,
@@ -185,6 +185,7 @@
                 "minPassiveMultiplier": 2.2,
                 "maxAbsorptionRatio": 0.85,
                 "icebergDetectionSensitivity": 0.65,
+                "icebergConfidenceMultiplier": 1.4,
                 "pricePrecision": 2,
                 "moveTicks": 5,
                 "confirmationTimeout": 30000,

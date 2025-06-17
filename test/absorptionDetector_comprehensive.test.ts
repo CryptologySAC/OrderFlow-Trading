@@ -113,14 +113,14 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
         describe("Condition-Based Detection", () => {
             it("should detect classic absorption pattern with real data", () => {
                 // 🎯 REAL SCENARIO: Strong buy absorption - aggressive buys hitting large ask liquidity
-                
+
                 const detectorAny = detector as any;
                 const testPrice = BASE_PRICE;
-                
+
                 // Step 1: Build zone history with strong passive ask volume
                 // Calculate the actual zone number for the test price
                 const actualZone = detectorAny.calculateZone(testPrice);
-                
+
                 // Populate zone with historical passive volume data
                 for (let i = 0; i < 10; i++) {
                     detector.onEnrichedTrade({
@@ -136,25 +136,30 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
                 }
 
                 // Step 2: Test absorption conditions after data is populated
-                const result = detectorAny.checkAbsorptionConditions(testPrice, "buy", actualZone);
-                
+                const result = detectorAny.checkAbsorptionConditions(
+                    testPrice,
+                    "buy",
+                    actualZone
+                );
+
                 // Step 3: Validate logical behavior
                 // Should detect absorption when aggressive volume hits strong passive liquidity
                 expect(typeof result).toBe("boolean");
-                
+
                 // Verify zone history was actually created
-                const zoneHistory = detectorAny.zonePassiveHistory.get(actualZone);
+                const zoneHistory =
+                    detectorAny.zonePassiveHistory.get(actualZone);
                 expect(zoneHistory).toBeDefined();
                 expect(zoneHistory.count()).toBeGreaterThan(0);
             });
 
             it("should detect maintained passive pattern correctly", () => {
                 // 🎯 REAL SCENARIO: Passive liquidity maintains levels despite aggressive hits
-                
+
                 const detectorAny = detector as any;
                 const testPrice = BASE_PRICE + 0.01;
                 const actualZone = detectorAny.calculateZone(testPrice);
-                
+
                 // Create scenario where passive volume is consistently maintained
                 const basePassiveVolume = 1000;
                 for (let i = 0; i < 15; i++) {
@@ -165,34 +170,43 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
                         quantity: 50,
                         timestamp: Date.now() + i * 1000,
                         buyerIsMaker: i % 2 === 0, // Alternating aggressive sides
-                        zonePassiveBidVolume: basePassiveVolume + (i * 10), // Growing bid liquidity
-                        zonePassiveAskVolume: basePassiveVolume - (i * 5),  // Declining ask liquidity
+                        zonePassiveBidVolume: basePassiveVolume + i * 10, // Growing bid liquidity
+                        zonePassiveAskVolume: basePassiveVolume - i * 5, // Declining ask liquidity
                     });
                 }
 
                 // Test both sides with sufficient data
-                const buyResult = detectorAny.checkAbsorptionConditions(testPrice, "buy", actualZone);
-                const sellResult = detectorAny.checkAbsorptionConditions(testPrice, "sell", actualZone);
+                const buyResult = detectorAny.checkAbsorptionConditions(
+                    testPrice,
+                    "buy",
+                    actualZone
+                );
+                const sellResult = detectorAny.checkAbsorptionConditions(
+                    testPrice,
+                    "sell",
+                    actualZone
+                );
 
                 // Both should return valid boolean results
                 expect(typeof buyResult).toBe("boolean");
                 expect(typeof sellResult).toBe("boolean");
-                
+
                 // Verify data was processed correctly
-                const zoneHistory = detectorAny.zonePassiveHistory.get(actualZone);
+                const zoneHistory =
+                    detectorAny.zonePassiveHistory.get(actualZone);
                 expect(zoneHistory?.count()).toBeGreaterThan(10);
             });
 
             it("should detect growing passive pattern with volume accumulation", () => {
                 // 🎯 REAL SCENARIO: Passive liquidity grows over time, indicating absorption
-                
+
                 const detectorAny = detector as any;
                 const testPrice = BASE_PRICE + 0.02;
                 const actualZone = detectorAny.calculateZone(testPrice);
-                
+
                 // Create growing passive volume scenario
                 for (let i = 0; i < 12; i++) {
-                    const growthFactor = 1 + (i * 0.1); // 10% growth each trade
+                    const growthFactor = 1 + i * 0.1; // 10% growth each trade
                     detector.onEnrichedTrade({
                         symbol: "BTCUSDT",
                         tradeId: i + 200,
@@ -206,14 +220,19 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
                 }
 
                 // Test growing passive detection
-                const result = detectorAny.checkAbsorptionConditions(testPrice, "buy", actualZone);
-                
+                const result = detectorAny.checkAbsorptionConditions(
+                    testPrice,
+                    "buy",
+                    actualZone
+                );
+
                 expect(typeof result).toBe("boolean");
-                
+
                 // Verify the growth pattern was captured
-                const zoneHistory = detectorAny.zonePassiveHistory.get(actualZone);
+                const zoneHistory =
+                    detectorAny.zonePassiveHistory.get(actualZone);
                 expect(zoneHistory?.count()).toBeGreaterThan(8);
-                
+
                 // Check that we have recent data for comparison
                 const recentData = zoneHistory?.toArray().slice(-5);
                 expect(recentData?.length).toBeGreaterThan(0);
@@ -221,18 +240,18 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
 
             it("should correctly distinguish between buy and sell absorption scenarios", () => {
                 // 🎯 REAL SCENARIO: Two different price levels with opposite absorption patterns
-                
+
                 const detectorAny = detector as any;
-                const buyPrice = BASE_PRICE + 0.50;  // Larger difference to ensure different zones
-                const sellPrice = BASE_PRICE - 0.50;
+                const buyPrice = BASE_PRICE + 0.5; // Larger difference to ensure different zones
+                const sellPrice = BASE_PRICE - 0.5;
                 const buyZone = detectorAny.calculateZone(buyPrice);
                 const sellZone = detectorAny.calculateZone(sellPrice);
-                
+
                 // Ensure we have different zones for proper testing
-                
+
                 // Ensure zones are different (add explicit test)
                 expect(buyZone).not.toBe(sellZone);
-                
+
                 // Create buy absorption scenario (aggressive buys hitting ask liquidity)
                 for (let i = 0; i < 8; i++) {
                     const tradeData = {
@@ -248,7 +267,7 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
                     // Trade added to buy zone
                     detector.onEnrichedTrade(tradeData);
                 }
-                
+
                 // Create sell absorption scenario (aggressive sells hitting bid liquidity)
                 for (let i = 0; i < 8; i++) {
                     const tradeData = {
@@ -266,17 +285,29 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
                 }
 
                 // Test absorption detection for both scenarios
-                const buyAbsorption = detectorAny.checkAbsorptionConditions(buyPrice, "buy", buyZone);
-                const sellAbsorption = detectorAny.checkAbsorptionConditions(sellPrice, "sell", sellZone);
+                const buyAbsorption = detectorAny.checkAbsorptionConditions(
+                    buyPrice,
+                    "buy",
+                    buyZone
+                );
+                const sellAbsorption = detectorAny.checkAbsorptionConditions(
+                    sellPrice,
+                    "sell",
+                    sellZone
+                );
 
                 // Both should return boolean results
                 expect(typeof buyAbsorption).toBe("boolean");
                 expect(typeof sellAbsorption).toBe("boolean");
-                
+
                 // Verify both zones have sufficient data
-                expect(detectorAny.zonePassiveHistory.get(buyZone)?.count()).toBeGreaterThan(5);
-                expect(detectorAny.zonePassiveHistory.get(sellZone)?.count()).toBeGreaterThan(5);
-                
+                expect(
+                    detectorAny.zonePassiveHistory.get(buyZone)?.count()
+                ).toBeGreaterThan(5);
+                expect(
+                    detectorAny.zonePassiveHistory.get(sellZone)?.count()
+                ).toBeGreaterThan(5);
+
                 // The detector should be able to analyze both scenarios
                 expect([true, false]).toContain(buyAbsorption);
                 expect([true, false]).toContain(sellAbsorption);
@@ -286,11 +317,11 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
         describe("Zone-Strength Resolution", () => {
             it("should resolve conflicting absorption scenarios with real strength analysis", () => {
                 // 🎯 REAL SCENARIO: Both buy and sell show absorption, need to determine stronger side
-                
+
                 const detectorAny = detector as any;
                 const testPrice = BASE_PRICE + 0.04;
                 const conflictZone = detectorAny.calculateZone(testPrice);
-                
+
                 // Create scenario where both sides could show absorption
                 // Build bid strength over time
                 for (let i = 0; i < 10; i++) {
@@ -301,19 +332,21 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
                         quantity: 100,
                         timestamp: Date.now() + i * 1000,
                         buyerIsMaker: true, // Aggressive sells
-                        zonePassiveBidVolume: 1000 + (i * 50), // Growing bid strength
-                        zonePassiveAskVolume: 1200 + (i * 20), // Weaker ask growth
+                        zonePassiveBidVolume: 1000 + i * 50, // Growing bid strength
+                        zonePassiveAskVolume: 1200 + i * 20, // Weaker ask growth
                     });
                 }
-                
+
                 // Test conflict resolution with real data
-                const result = detectorAny.resolveConflictingAbsorption(conflictZone);
+                const result =
+                    detectorAny.resolveConflictingAbsorption(conflictZone);
                 expect(["buy", "sell"]).toContain(result);
-                
+
                 // Verify zone has sufficient data for analysis
-                const zoneHistory = detectorAny.zonePassiveHistory.get(conflictZone);
+                const zoneHistory =
+                    detectorAny.zonePassiveHistory.get(conflictZone);
                 expect(zoneHistory?.count()).toBeGreaterThan(5);
-                
+
                 // Should be able to make a decision based on strength analysis
                 expect(typeof result).toBe("string");
                 expect(result.length).toBeGreaterThan(0);
@@ -321,11 +354,11 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
 
             it("should calculate passive strength correctly with historical comparison", () => {
                 // 🎯 REAL SCENARIO: Compare recent vs historical passive strength to determine trend
-                
+
                 const detectorAny = detector as any;
                 const testPrice = BASE_PRICE + 0.05;
                 const strengthZone = detectorAny.calculateZone(testPrice);
-                
+
                 // Create early period with lower passive strength
                 for (let i = 0; i < 6; i++) {
                     detector.onEnrichedTrade({
@@ -335,11 +368,11 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
                         quantity: 80,
                         timestamp: Date.now() + i * 800,
                         buyerIsMaker: false,
-                        zonePassiveBidVolume: 800 + (i * 10), // Slow growth
+                        zonePassiveBidVolume: 800 + i * 10, // Slow growth
                         zonePassiveAskVolume: 900,
                     });
                 }
-                
+
                 // Create recent period with stronger passive strength
                 for (let i = 6; i < 12; i++) {
                     detector.onEnrichedTrade({
@@ -349,19 +382,21 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
                         quantity: 120,
                         timestamp: Date.now() + i * 800,
                         buyerIsMaker: false,
-                        zonePassiveBidVolume: 800 + (i * 40), // Accelerated growth
+                        zonePassiveBidVolume: 800 + i * 40, // Accelerated growth
                         zonePassiveAskVolume: 900,
                     });
                 }
-                
+
                 // Test strength calculation
-                const result = detectorAny.resolveConflictingAbsorption(strengthZone);
+                const result =
+                    detectorAny.resolveConflictingAbsorption(strengthZone);
                 expect(["buy", "sell"]).toContain(result);
-                
+
                 // Verify historical data is available for comparison
-                const zoneHistory = detectorAny.zonePassiveHistory.get(strengthZone);
+                const zoneHistory =
+                    detectorAny.zonePassiveHistory.get(strengthZone);
                 expect(zoneHistory?.count()).toBeGreaterThan(8);
-                
+
                 // Should detect the strength trend change
                 const historyArray = zoneHistory?.toArray();
                 expect(historyArray?.length).toBeGreaterThan(10);
@@ -369,15 +404,16 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
 
             it("should handle insufficient zone data gracefully with logical fallback", () => {
                 // 🎯 REAL SCENARIO: New zone with minimal data should use logical defaults
-                
+
                 const detectorAny = detector as any;
-                
+
                 // Test with completely empty zone (use unrealistic price to get unused zone)
                 const emptyPrice = BASE_PRICE + 999;
                 const emptyZone = detectorAny.calculateZone(emptyPrice);
-                const resultEmpty = detectorAny.resolveConflictingAbsorption(emptyZone);
+                const resultEmpty =
+                    detectorAny.resolveConflictingAbsorption(emptyZone);
                 expect(resultEmpty).toBe("buy"); // Should default to buy
-                
+
                 // Create zone with minimal data (insufficient for strength analysis)
                 const minimalPrice = BASE_PRICE + 0.06;
                 const minimalZone = detectorAny.calculateZone(minimalPrice);
@@ -391,10 +427,11 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
                     zonePassiveBidVolume: 500,
                     zonePassiveAskVolume: 600,
                 });
-                
-                const resultMinimal = detectorAny.resolveConflictingAbsorption(minimalZone);
+
+                const resultMinimal =
+                    detectorAny.resolveConflictingAbsorption(minimalZone);
                 expect(["buy", "sell"]).toContain(resultMinimal);
-                
+
                 // Should handle minimal data without crashing
                 expect(typeof resultMinimal).toBe("string");
             });
@@ -1128,29 +1165,29 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
     describe("End-to-End Signal Generation", () => {
         it("should generate real absorption signals with correct direction and metadata", async () => {
             // 🎯 COMPREHENSIVE E2E TEST: Full signal generation pipeline with real scenarios
-            
+
             // Reset signals array
             signals = [];
             lastSignal = null;
-            
+
             // Create a realistic buy absorption scenario
             // Scenario: Large aggressive buy orders hitting strong ask liquidity at resistance level
             const absorptionPrice = BASE_PRICE + 10; // Resistance level
-            
+
             // Step 1: Build up ask liquidity (sellers placing limit orders)
             for (let i = 0; i < 15; i++) {
                 detector.onEnrichedTrade({
-                    symbol: "BTCUSDT", 
+                    symbol: "BTCUSDT",
                     tradeId: i + 1000,
                     price: absorptionPrice,
-                    quantity: 200 + (i * 10), // Increasing order sizes
+                    quantity: 200 + i * 10, // Increasing order sizes
                     timestamp: Date.now() + i * 500,
                     buyerIsMaker: false, // Aggressive buyers hitting asks
                     zonePassiveBidVolume: 800,
-                    zonePassiveAskVolume: 2500 + (i * 50), // Growing ask liquidity
+                    zonePassiveAskVolume: 2500 + i * 50, // Growing ask liquidity
                 });
             }
-            
+
             // Step 2: Create absorption trigger - large aggressive buy volume
             for (let i = 0; i < 8; i++) {
                 detector.onEnrichedTrade({
@@ -1164,14 +1201,14 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
                     zonePassiveAskVolume: 3000, // Strong ask liquidity absorbing
                 });
             }
-            
+
             // Wait a brief moment for signal processing
-            await new Promise(resolve => setTimeout(resolve, 10));
-            
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
             // Step 3: Validate signal generation
             if (signals.length > 0) {
                 const signal = signals[signals.length - 1]; // Get latest signal
-                
+
                 // Validate signal structure
                 expect(signal).toBeDefined();
                 expect(signal.signalType).toBe("absorption");
@@ -1179,33 +1216,50 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
                 expect(signal.price).toBe(absorptionPrice);
                 expect(signal.strength).toBeGreaterThan(0);
                 expect(signal.timestamp).toBeGreaterThan(0);
-                
+
                 // Validate enhanced metadata
                 expect(signal.metadata).toBeDefined();
-                expect(signal.metadata.version).toBe("5.0-enhanced-flow-analysis");
+                expect(signal.metadata.version).toBe(
+                    "5.0-enhanced-flow-analysis"
+                );
                 expect(signal.metadata.detectorId).toBe("test-comprehensive");
-                
+
                 // Validate flow analysis metadata
                 if (signal.metadata.flowAnalysis) {
-                    expect(signal.metadata.flowAnalysis.buyVolume).toBeGreaterThan(0);
-                    expect(signal.metadata.flowAnalysis.sellVolume).toBeGreaterThan(0);
-                    expect(signal.metadata.flowAnalysis.dominantSide).toBe("buy");
-                    expect(signal.metadata.flowAnalysis.volumeRatio).toBeGreaterThan(0);
-                    expect(typeof signal.metadata.flowAnalysis.confidenceScore).toBe("number");
+                    expect(
+                        signal.metadata.flowAnalysis.buyVolume
+                    ).toBeGreaterThan(0);
+                    expect(
+                        signal.metadata.flowAnalysis.sellVolume
+                    ).toBeGreaterThan(0);
+                    expect(signal.metadata.flowAnalysis.dominantSide).toBe(
+                        "buy"
+                    );
+                    expect(
+                        signal.metadata.flowAnalysis.volumeRatio
+                    ).toBeGreaterThan(0);
+                    expect(
+                        typeof signal.metadata.flowAnalysis.confidenceScore
+                    ).toBe("number");
                 }
-                
+
                 // Validate absorption context
                 if (signal.metadata.absorptionContext) {
-                    expect(typeof signal.metadata.absorptionContext.method).toBe("string");
-                    expect(["condition-based", "zone-strength-resolution", "flow-based"])
-                        .toContain(signal.metadata.absorptionContext.method);
+                    expect(
+                        typeof signal.metadata.absorptionContext.method
+                    ).toBe("string");
+                    expect([
+                        "condition-based",
+                        "zone-strength-resolution",
+                        "flow-based",
+                    ]).toContain(signal.metadata.absorptionContext.method);
                 }
-                
+
                 console.log("✅ Generated absorption signal:", {
                     side: signal.side,
                     strength: signal.strength,
                     method: signal.metadata.absorptionContext?.method,
-                    dominantFlow: signal.metadata.flowAnalysis?.dominantSide
+                    dominantFlow: signal.metadata.flowAnalysis?.dominantSide,
                 });
             } else {
                 // If no signal generated, verify the detector is working correctly
@@ -1214,9 +1268,9 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
                 console.log("📊 No signal generated. Zone data:", {
                     historySize: zoneHistory?.size() || 0,
                     tradesProcessed: 23,
-                    reason: "May need stronger absorption conditions or different thresholds"
+                    reason: "May need stronger absorption conditions or different thresholds",
                 });
-                
+
                 // This is still a valid test - absorption should be selective
                 expect(true).toBe(true); // Test that detector doesn't crash
             }
@@ -1224,27 +1278,27 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
 
         it("should generate sell absorption signals for aggressive sell scenarios", async () => {
             // 🎯 E2E TEST: Sell absorption at support level
-            
+
             signals = [];
             lastSignal = null;
-            
+
             // Create a sell absorption scenario at support level
             const supportPrice = BASE_PRICE - 15;
-            
+
             // Build up bid liquidity (buyers placing limit orders)
             for (let i = 0; i < 12; i++) {
                 detector.onEnrichedTrade({
                     symbol: "BTCUSDT",
                     tradeId: i + 3000,
                     price: supportPrice,
-                    quantity: 150 + (i * 15),
+                    quantity: 150 + i * 15,
                     timestamp: Date.now() + i * 600,
                     buyerIsMaker: true, // Aggressive sellers hitting bids
-                    zonePassiveBidVolume: 2200 + (i * 60), // Growing bid liquidity
+                    zonePassiveBidVolume: 2200 + i * 60, // Growing bid liquidity
                     zonePassiveAskVolume: 700,
                 });
             }
-            
+
             // Create absorption trigger - large aggressive sells
             for (let i = 0; i < 6; i++) {
                 detector.onEnrichedTrade({
@@ -1258,39 +1312,43 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
                     zonePassiveAskVolume: 800,
                 });
             }
-            
-            await new Promise(resolve => setTimeout(resolve, 10));
-            
+
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
             if (signals.length > 0) {
                 const signal = signals[signals.length - 1];
-                
+
                 // Should be BUY signal (bids absorbing aggressive sells)
                 expect(signal.side).toBe("buy");
                 expect(signal.price).toBe(supportPrice);
                 expect(signal.signalType).toBe("absorption");
-                
+
                 // Validate sell-dominant flow in metadata
                 if (signal.metadata.flowAnalysis) {
-                    expect(signal.metadata.flowAnalysis.dominantSide).toBe("sell");
+                    expect(signal.metadata.flowAnalysis.dominantSide).toBe(
+                        "sell"
+                    );
                 }
-                
+
                 console.log("✅ Generated sell absorption signal:", {
                     side: signal.side,
                     price: signal.price,
-                    dominantFlow: signal.metadata.flowAnalysis?.dominantSide
+                    dominantFlow: signal.metadata.flowAnalysis?.dominantSide,
                 });
             } else {
-                console.log("📊 No sell absorption signal generated - detector being selective");
+                console.log(
+                    "📊 No sell absorption signal generated - detector being selective"
+                );
                 expect(true).toBe(true); // Valid outcome
             }
         });
 
         it("should handle mixed market conditions without false signals", () => {
             // 🎯 NEGATIVE TEST: Ensure detector doesn't generate false signals in choppy conditions
-            
+
             signals = [];
             lastSignal = null;
-            
+
             // Create mixed/choppy market conditions (no clear absorption)
             for (let i = 0; i < 20; i++) {
                 detector.onEnrichedTrade({
@@ -1304,18 +1362,22 @@ describe("AbsorptionDetector - Comprehensive Logic Coverage", () => {
                     zonePassiveAskVolume: 850 + Math.random() * 150,
                 });
             }
-            
+
             // Should not generate signals in noisy/mixed conditions
             if (signals.length === 0) {
-                console.log("✅ Correctly filtered out false signals in mixed conditions");
+                console.log(
+                    "✅ Correctly filtered out false signals in mixed conditions"
+                );
                 expect(true).toBe(true);
             } else {
                 // If signals were generated, they should still be valid
-                signals.forEach(signal => {
+                signals.forEach((signal) => {
                     expect(signal.strength).toBeGreaterThan(0);
                     expect(["buy", "sell"]).toContain(signal.side);
                 });
-                console.log(`📊 Generated ${signals.length} signals in mixed conditions - detector may be sensitive`);
+                console.log(
+                    `📊 Generated ${signals.length} signals in mixed conditions - detector may be sensitive`
+                );
             }
         });
     });
