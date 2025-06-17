@@ -75,6 +75,13 @@ export class DetectorFactory {
     ): AbsorptionDetector {
         const id = options.id || `absorption-${Date.now()}`;
 
+        // 🚨 CRITICAL FIX: Validate orderBook since it should be initialized by now
+        if (!orderBook) {
+            throw new Error(
+                `DetectorFactory.createAbsorptionDetector: orderBook is unexpectedly null for detector ${id}. This indicates an initialization order bug.`
+            );
+        }
+
         this.validateCreationLimits();
         this.validateProductionConfig(settings);
 

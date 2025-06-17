@@ -98,26 +98,26 @@ export class OrderFlowDashboard {
     // DataStreamManager is handled by BinanceWorker in threaded mode
 
     // Market
-    private orderBook: IOrderBookState | null = null;
+    private orderBook!: IOrderBookState; // Initialized in initialize() method
     private preprocessor: OrderflowPreprocessor | null = null;
 
     // Coordinators
     private readonly signalCoordinator: SignalCoordinator;
     private readonly anomalyDetector: AnomalyDetector;
 
-    // Event-based Detectors (keep as-is)
-    private readonly absorptionDetector: AbsorptionDetector;
-    private readonly exhaustionDetector: ExhaustionDetector;
-    private readonly supportResistanceDetector: SupportResistanceDetector;
+    // Event-based Detectors (initialized in initializeDetectors)
+    private absorptionDetector!: AbsorptionDetector;
+    private exhaustionDetector!: ExhaustionDetector;
+    private supportResistanceDetector!: SupportResistanceDetector;
 
-    // Zone-based Detectors (new architecture)
-    private readonly accumulationZoneDetector: AccumulationZoneDetector;
-    private readonly distributionZoneDetector: DistributionZoneDetector;
+    // Zone-based Detectors (initialized in initializeDetectors)
+    private accumulationZoneDetector!: AccumulationZoneDetector;
+    private distributionZoneDetector!: DistributionZoneDetector;
 
     // Legacy detectors removed - replaced by zone-based architecture
 
-    // Indicators
-    private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
+    // Indicators (initialized in initializeDetectors)
+    private deltaCVDConfirmation!: DeltaCVDConfirmation;
 
     // Time context
     private timeContext: TimeContext = {
@@ -164,6 +164,10 @@ export class OrderFlowDashboard {
             this.logger.info(
                 "[OrderFlowDashboard] Orderflow preprocessor initialized"
             );
+
+            // 🚨 CRITICAL FIX: Initialize detectors AFTER orderBook is ready
+            this.initializeDetectors(dependencies);
+
             this.setupEventHandlers();
             this.setupHttpServer();
             this.setupGracefulShutdown();
@@ -243,11 +247,22 @@ export class OrderFlowDashboard {
 
         this.signalManager = dependencies.signalManager;
 
+        // Note: All detector initialization moved to initialize() method
+        // to ensure proper dependency order (after orderBook is ready)
+    }
+
+    /**
+     * Initialize all detectors after orderBook is ready
+     */
+    private initializeDetectors(dependencies: Dependencies): void {
+        this.logger.info("[OrderFlowDashboard] Initializing detectors...");
+
         DetectorFactory.initialize(dependencies);
 
+        // Absorption Detector - REQUIRES orderBook
         this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
             Config.ABSORPTION_DETECTOR,
-            this.orderBook as IOrderBookState,
+            this.orderBook, // Now guaranteed to be initialized
             dependencies,
             { id: "ltcusdt-absorption-main" }
         );
@@ -258,6 +273,7 @@ export class OrderFlowDashboard {
             true
         );
 
+        // Exhaustion Detector
         this.exhaustionDetector = DetectorFactory.createExhaustionDetector(
             Config.EXHAUSTION_DETECTOR,
             dependencies,
@@ -270,7 +286,7 @@ export class OrderFlowDashboard {
             true
         );
 
-        // Initialize other components
+        // Delta CVD Confirmation Detector
         this.deltaCVDConfirmation =
             DetectorFactory.createDeltaCVDConfirmationDetector(
                 Config.DELTACVD_DETECTOR,
@@ -298,7 +314,7 @@ export class OrderFlowDashboard {
             true
         );
 
-        // Initialize Zone-based Detectors
+        // Accumulation Zone Detector
         this.accumulationZoneDetector =
             DetectorFactory.createAccumulationDetector(
                 Config.ACCUMULATION_ZONE_DETECTOR,
@@ -312,7 +328,7 @@ export class OrderFlowDashboard {
             true
         );
 
-        // Initialize Zone-based Detectors
+        // Distribution Zone Detector
         this.distributionZoneDetector =
             DetectorFactory.createDistributionDetector(
                 Config.DISTRIBUTION_ZONE_DETECTOR,
@@ -326,12 +342,14 @@ export class OrderFlowDashboard {
             true
         );
 
+        // Start signal coordinator
         void this.signalCoordinator.start();
-        this.logger.info("SignalCoordinator started");
-        this.logger.info("Status:", this.signalCoordinator.getStatus());
-        const signalCoordinatorInfo = this.signalCoordinator.getDetectorInfo();
-        this.logger.info("Detectors:", { signalCoordinatorInfo });
 
+        this.logger.info(
+            "[OrderFlowDashboard] All detectors initialized successfully"
+        );
+
+        // Log detector status periodically
         setInterval(() => {
             const stats = DetectorFactory.getFactoryStats();
             this.logger.info("Factory stats:", { stats });
@@ -340,7 +358,7 @@ export class OrderFlowDashboard {
             this.logger.info("Detectors:", { signalCoordinatorInfo });
         }, 60000);
 
-        // Cleanup on exit
+        // Setup cleanup on exit
         process.on("SIGINT", () => {
             DetectorFactory.destroyAll();
             void this.signalCoordinator.stop();

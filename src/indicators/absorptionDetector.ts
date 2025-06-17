@@ -111,6 +111,12 @@ export class AbsorptionDetector
             signalLogger
         );
 
+        // 🚨 CRITICAL FIX: OrderBook should now be guaranteed to be initialized
+        if (!orderBook) {
+            throw new Error(
+                `AbsorptionDetector[${id}]: orderBook is unexpectedly null. This indicates an initialization order bug.`
+            );
+        }
         this.orderBook = orderBook;
 
         // Initialize absorption-specific settings
@@ -454,6 +460,17 @@ export class AbsorptionDetector
         //Check for Iceberg first
         const zoneHistory = this.zonePassiveHistory.get(zone);
         if (!zoneHistory) return false;
+
+        // 🚨 CRITICAL FIX: Add null safety guard for orderBook
+        if (!this.orderBook) {
+            this.logger.warn("OrderBook unavailable for absorption analysis", {
+                price,
+                side,
+                zone,
+                detectorId: this.id,
+            });
+            return false; // Skip iceberg detection, continue with basic absorption logic
+        }
 
         const lvl = this.orderBook.getLevel(price); // existing helper
 
