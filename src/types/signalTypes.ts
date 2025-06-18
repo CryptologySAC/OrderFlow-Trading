@@ -141,7 +141,7 @@ export interface DeltaCVDConfirmationResult {
 export interface SignalCandidate {
     id: string;
     type: SignalType;
-    side: "buy" | "sell";
+    side: "buy" | "sell" | "neutral";
     confidence: number;
     timestamp: number;
     data: DetectorResultType;
