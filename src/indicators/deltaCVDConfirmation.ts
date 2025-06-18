@@ -1,6 +1,9 @@
 /* --------------------------------------------------------------------------
    Enhanced DeltaCVDConfirmation – Advanced multi-window CVD-slope detector
    --------------------------------------------------------------------------
+
+   🔒 PRODUCTION-CRITICAL FILE (NO MODIFICATIONS WITHOUT EXPLICIT APPROVAL)
+
    Features:
    • Sophisticated confidence scoring based on signal strength and alignment
    • Price/volume correlation validation to reduce false signals
@@ -375,11 +378,6 @@ export class DeltaCVDConfirmation extends BaseDetector {
         // Update CVD profile
         const currentCVD = state.cvdProfile.get(roundedPrice) || 0;
         state.cvdProfile.set(roundedPrice, currentCVD + cvdDelta);
-
-        if (state.cvdProfile.size > 500) {
-            // Lower threshold
-            this.cleanupCVDProfiles(state);
-        }
 
         // Update flow profiles by side
         if (event.buyerIsMaker) {
@@ -849,7 +847,6 @@ export class DeltaCVDConfirmation extends BaseDetector {
         const delta = slope - state.rollingMean;
         state.count += 1;
         if (state.count === 1) {
-            //TODO check if right spot
             state.rollingVar = 0; // Initialize
         }
         state.rollingMean += DetectorUtils.safeDivide(delta, state.count, 0);
@@ -1123,9 +1120,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
     ): DeltaCVDConfirmationResult {
         // CRITICAL FIX: Direction should be based on actual CVD slope, not z-score sign
         // Z-score tells us if momentum is unusual, slope tells us the direction
-        const buyPressure = slopes[this.windows[0]] > 0;
-        const unusualMomentum = Math.abs(zScores[this.windows[0]]) > this.minZ;
-        const side = buyPressure && !unusualMomentum ? "buy" : "sell"; // TODO check if this is correct
+        const side = Math.sign(slopes[this.windows[0]]) > 0 ? "buy" : "sell";
         const shortestWindowState = this.states.get(this.windows[0])!;
         const lastTrade =
             shortestWindowState.trades[shortestWindowState.trades.length - 1];

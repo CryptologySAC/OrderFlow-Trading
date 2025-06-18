@@ -123,7 +123,7 @@
             "bandTicks": 5,
             "largeTradeThreshold": 100,
             "maxEventListeners": 50,
-            "dashboardUpdateInterval": 200,
+            "dashboardUpdateInterval": 500,
             "maxDashboardInterval": 1000,
             "significantChangeThreshold": 0.001,
             "orderBookState": {
@@ -176,8 +176,8 @@
                 }
             },
             "absorption": {
-                "minAggVolume": 250,
-                "threshold": 0.7,
+                "minAggVolume": 100,
+                "threshold": 0.5,
                 "windowMs": 75000,
                 "zoneTicks": 3,
                 "eventCooldownMs": 20000,
