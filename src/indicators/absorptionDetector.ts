@@ -226,11 +226,6 @@ export class AbsorptionDetector
             event.quantity,
             spread
         );
-
-        if (this.lastTradeId !== event.tradeId) {
-            this.lastTradeId = event.tradeId;
-            this.addTrade(event);
-        }
     }
 
     /**
@@ -1031,6 +1026,7 @@ export class AbsorptionDetector
             SharedPools.getInstance().absorptionConditions.release(
                 conditionsToRelease
             );
+            SharedPools.getInstance().volumeResults.release(volumes);
             return;
         }
 
@@ -1043,6 +1039,7 @@ export class AbsorptionDetector
             SharedPools.getInstance().absorptionConditions.release(
                 conditionsToRelease
             );
+            SharedPools.getInstance().volumeResults.release(volumes);
             return;
         }
 
@@ -1069,6 +1066,7 @@ export class AbsorptionDetector
             SharedPools.getInstance().absorptionConditions.release(
                 conditionsToRelease
             );
+            SharedPools.getInstance().volumeResults.release(volumes);
             return;
         }
 
@@ -1091,6 +1089,7 @@ export class AbsorptionDetector
             SharedPools.getInstance().absorptionConditions.release(
                 conditionsToRelease
             );
+            SharedPools.getInstance().volumeResults.release(volumes);
             return;
         }
 
@@ -1119,6 +1118,12 @@ export class AbsorptionDetector
         }
 
         if (conditions.microstructure) {
+            // Incorporate risk and sustainability into scoring
+            finalConfidence = this.applyMicrostructureScoreAdjustments(
+                finalConfidence,
+                conditions.microstructure
+            );
+
             finalConfidence *= conditions.microstructure.confidenceBoost;
 
             // Adjust urgency based on microstructure insights
@@ -1266,6 +1271,7 @@ export class AbsorptionDetector
         );
 
         // Release pooled conditions object back to pool
+        SharedPools.getInstance().volumeResults.release(volumes);
         SharedPools.getInstance().absorptionConditions.release(
             conditionsToRelease
         );
@@ -1361,6 +1367,7 @@ export class AbsorptionDetector
             const zoneHistory = this.zonePassiveHistory.get(zone);
             if (!zoneHistory || zoneHistory.count() === 0) {
                 // Return safe defaults for empty zone history
+                sharedPools.absorptionConditions.release(conditions);
                 return this.getDefaultConditions();
             }
 
@@ -1370,6 +1377,7 @@ export class AbsorptionDetector
                 .filter((s) => now - s.timestamp < this.windowMs);
 
             if (snapshots.length === 0) {
+                sharedPools.absorptionConditions.release(conditions);
                 return this.getDefaultConditions();
             }
 

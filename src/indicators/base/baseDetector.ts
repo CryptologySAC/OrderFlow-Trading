@@ -161,6 +161,8 @@ export abstract class BaseDetector extends Detector implements IDetector {
         // NEW: initialize rolling window for passive volume, window size based on windowMs (1 sample per second)
         const rollingWindowSize = Math.max(Math.ceil(this.windowMs / 1000), 10);
         this.rollingPassiveVolume = new RollingWindow(rollingWindowSize);
+
+        this.setupZoneCleanup();
     }
 
     /**
