@@ -22,22 +22,22 @@ describe("AccumulationZoneDetector - Debug Zone Creation", () => {
             error: vi.fn(),
             debug: vi.fn(),
         } as ILogger;
-        
+
         mockMetrics = new MetricsCollector();
-        
+
         // Use minimal config to help zone creation
         const config: Partial<ZoneDetectorConfig> = {
             minCandidateDuration: 10000, // Start with 10 seconds
-            minZoneVolume: 50,           // Lower threshold
-            minTradeCount: 3,            // Lower threshold
-            maxPriceDeviation: 0.1,      // Higher tolerance
-            minZoneStrength: 0.1,        // Lower threshold
+            minZoneVolume: 50, // Lower threshold
+            minTradeCount: 3, // Lower threshold
+            maxPriceDeviation: 0.1, // Higher tolerance
+            minZoneStrength: 0.1, // Lower threshold
             strengthChangeThreshold: 0.05, // Lower threshold
         };
 
         detector = new AccumulationZoneDetector(
             "debug-accumulation",
-            "BTCUSDT", 
+            "BTCUSDT",
             config,
             mockLogger,
             mockMetrics
@@ -47,9 +47,9 @@ describe("AccumulationZoneDetector - Debug Zone Creation", () => {
     it("should debug why zones aren't being created", () => {
         const baseTime = Date.now();
         const basePrice = 50000;
-        
+
         console.log("🔍 DEBUG: Starting zone creation test");
-        
+
         // Create high-volume, high-sell-pressure trades with institutional size
         const trades: EnrichedTradeEvent[] = [];
         for (let i = 0; i < 20; i++) {
@@ -68,22 +68,32 @@ describe("AccumulationZoneDetector - Debug Zone Creation", () => {
             };
             trades.push(trade);
         }
-        
+
         console.log(`🔍 DEBUG: Created ${trades.length} trades`);
-        console.log(`🔍 DEBUG: Total volume: ${trades.reduce((sum, t) => sum + t.quantity, 0)}`);
-        console.log(`🔍 DEBUG: Sell ratio: ${trades.filter(t => t.buyerIsMaker).length / trades.length}`);
-        
+        console.log(
+            `🔍 DEBUG: Total volume: ${trades.reduce((sum, t) => sum + t.quantity, 0)}`
+        );
+        console.log(
+            `🔍 DEBUG: Sell ratio: ${trades.filter((t) => t.buyerIsMaker).length / trades.length}`
+        );
+
         // Process trades
         trades.forEach((trade, i) => {
             const result = detector.analyze(trade);
             if (i === 0 || i === 10 || i === 19) {
-                console.log(`🔍 DEBUG: Trade ${i}: updates=${result.updates.length}, signals=${result.signals.length}`);
+                console.log(
+                    `🔍 DEBUG: Trade ${i}: updates=${result.updates.length}, signals=${result.signals.length}`
+                );
             }
         });
-        
-        console.log(`🔍 DEBUG: Candidates after trades: ${detector.getCandidateCount()}`);
-        console.log(`🔍 DEBUG: Active zones after trades: ${detector.getActiveZones().length}`);
-        
+
+        console.log(
+            `🔍 DEBUG: Candidates after trades: ${detector.getCandidateCount()}`
+        );
+        console.log(
+            `🔍 DEBUG: Active zones after trades: ${detector.getActiveZones().length}`
+        );
+
         // Try to trigger zone formation after minimum duration
         const formationTrade: EnrichedTradeEvent = {
             price: basePrice + 0.1,
@@ -98,14 +108,20 @@ describe("AccumulationZoneDetector - Debug Zone Creation", () => {
             zonePassiveBidVolume: 0,
             zonePassiveAskVolume: 0,
         };
-        
+
         console.log("🔍 DEBUG: Triggering zone formation...");
         const formationResult = detector.analyze(formationTrade);
-        
-        console.log(`🔍 DEBUG: Formation result: updates=${formationResult.updates.length}, signals=${formationResult.signals.length}`);
-        console.log(`🔍 DEBUG: Final candidates: ${detector.getCandidateCount()}`);
-        console.log(`🔍 DEBUG: Final zones: ${detector.getActiveZones().length}`);
-        
+
+        console.log(
+            `🔍 DEBUG: Formation result: updates=${formationResult.updates.length}, signals=${formationResult.signals.length}`
+        );
+        console.log(
+            `🔍 DEBUG: Final candidates: ${detector.getCandidateCount()}`
+        );
+        console.log(
+            `🔍 DEBUG: Final zones: ${detector.getActiveZones().length}`
+        );
+
         // Log candidate details
         const candidates = detector.getCandidates();
         candidates.forEach((candidate, i) => {
@@ -119,7 +135,7 @@ describe("AccumulationZoneDetector - Debug Zone Creation", () => {
                 priceStability: candidate.priceStability,
             });
         });
-        
+
         // At least we should have candidates
         expect(detector.getCandidateCount()).toBeGreaterThan(0);
     });

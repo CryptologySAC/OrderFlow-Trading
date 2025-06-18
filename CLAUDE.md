@@ -285,6 +285,7 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 ### 🧪 UNIT TESTING STANDARDS (MANDATORY - ZERO TOLERANCE)
 
 #### Test Integrity Requirements
+
 - **Tests MUST detect errors in code** - Never adjust tests to pass buggy implementations
 - **Tests MUST validate real-world logic** - Test against correct behavior, not current broken code
 - **Tests MUST fail when bugs are present** - If logic is wrong, tests should fail
@@ -292,6 +293,7 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 - **NO lowering test standards to make tests pass** - Tests guide proper implementation
 
 #### Error Detection Validation
+
 - Every test must validate the CORRECT implementation of the feature
 - Tests must be written based on requirements/specifications, not current code behavior
 - When tests fail due to bugs, fix the bugs, never lower the test standards
@@ -299,6 +301,7 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 - **CRITICAL: If a test passes when it should fail, the test is broken, not the code**
 
 #### Prohibited Test Practices
+
 - ❌ Adjusting expectations to match broken code (`expect(0).toBeGreaterThan(0)` → `expect(0).toBeGreaterThanOrEqual(0)`)
 - ❌ Adding randomness workarounds to mask detection failures
 - ❌ Lowering validation thresholds to hide logic bugs
@@ -306,6 +309,7 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 - ❌ Writing tests that validate current behavior instead of correct behavior
 
 #### Required Test Practices
+
 - ✅ Test the CORRECT logic implementation based on specifications
 - ✅ Validate exact method behavior against requirements
 - ✅ Ensure tests fail when known bugs are present

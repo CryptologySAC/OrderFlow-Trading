@@ -17,21 +17,33 @@ describe("AccumulationZoneDetector - Production Requirements Validation", () => 
 
     beforeEach(() => {
         mockLogger = {
-            info: vi.fn().mockImplementation((...args) => console.log("INFO:", ...args)),
-            warn: vi.fn().mockImplementation((...args) => console.log("WARN:", ...args)),
-            error: vi.fn().mockImplementation((...args) => console.log("ERROR:", ...args)),
-            debug: vi.fn().mockImplementation((...args) => console.log("DEBUG:", ...args)),
+            info: vi
+                .fn()
+                .mockImplementation((...args) => console.log("INFO:", ...args)),
+            warn: vi
+                .fn()
+                .mockImplementation((...args) => console.log("WARN:", ...args)),
+            error: vi
+                .fn()
+                .mockImplementation((...args) =>
+                    console.log("ERROR:", ...args)
+                ),
+            debug: vi
+                .fn()
+                .mockImplementation((...args) =>
+                    console.log("DEBUG:", ...args)
+                ),
         } as ILogger;
-        
+
         mockMetrics = new MetricsCollector();
-        
+
         // Use production-matching config to test real requirements
         const config: Partial<ZoneDetectorConfig> = {
             minCandidateDuration: 120000, // 2 minutes - STRICT enforcement
-            minZoneVolume: 200,           // Production requirement
-            minTradeCount: 6,             // Production requirement
-            maxPriceDeviation: 0.02,      // 2%
-            minZoneStrength: 0.45,        
+            minZoneVolume: 200, // Production requirement
+            minTradeCount: 6, // Production requirement
+            maxPriceDeviation: 0.02, // 2%
+            minZoneStrength: 0.45,
             strengthChangeThreshold: 0.15,
         };
 
@@ -82,13 +94,19 @@ describe("AccumulationZoneDetector - Production Requirements Validation", () => 
                 totalVolume += quantity;
             }
 
-            console.log(`🔧 Created ${accumTrades.length} trades with total volume: ${totalVolume}`);
-            console.log(`🔧 Sell pressure: ${accumTrades.filter(t => t.buyerIsMaker).length / accumTrades.length}`);
+            console.log(
+                `🔧 Created ${accumTrades.length} trades with total volume: ${totalVolume}`
+            );
+            console.log(
+                `🔧 Sell pressure: ${accumTrades.filter((t) => t.buyerIsMaker).length / accumTrades.length}`
+            );
 
             // Process all trades
             accumTrades.forEach((trade, i) => {
                 const result = detector.analyze(trade);
-                console.log(`🔧 Trade ${i}: candidates=${detector.getCandidateCount()}, zones=${detector.getActiveZones().length}`);
+                console.log(
+                    `🔧 Trade ${i}: candidates=${detector.getCandidateCount()}, zones=${detector.getActiveZones().length}`
+                );
             });
 
             // Wait for minimum duration requirement (2 minutes)
@@ -109,37 +127,49 @@ describe("AccumulationZoneDetector - Production Requirements Validation", () => 
             console.log("🔧 Triggering zone formation after 2+ minutes...");
             const formationResult = detector.analyze(formationTrade);
 
-            console.log(`🔧 Formation result: updates=${formationResult.updates.length}`);
+            console.log(
+                `🔧 Formation result: updates=${formationResult.updates.length}`
+            );
             console.log(`🔧 Final zones: ${detector.getActiveZones().length}`);
 
             // Analyze candidate state for debugging
             const candidates = detector.getCandidates();
             if (candidates.length > 0) {
-                const mainCandidate = candidates.find(c => c.priceLevel === basePrice) || candidates[0];
+                const mainCandidate =
+                    candidates.find((c) => c.priceLevel === basePrice) ||
+                    candidates[0];
                 console.log("🔧 Main candidate analysis:", {
                     priceLevel: mainCandidate.priceLevel,
                     totalVolume: mainCandidate.totalVolume,
                     tradeCount: mainCandidate.tradeCount,
                     sellVolume: mainCandidate.sellVolume,
                     buyVolume: mainCandidate.buyVolume,
-                    sellRatio: mainCandidate.sellVolume / mainCandidate.totalVolume,
-                    duration: formationTrade.timestamp - mainCandidate.startTime,
+                    sellRatio:
+                        mainCandidate.sellVolume / mainCandidate.totalVolume,
+                    duration:
+                        formationTrade.timestamp - mainCandidate.startTime,
                     priceStability: mainCandidate.priceStability,
                 });
 
                 // This is what production requires - let's validate systematically
                 expect(mainCandidate.tradeCount).toBeGreaterThanOrEqual(6); // ✅ minTradeCount
                 expect(mainCandidate.totalVolume).toBeGreaterThanOrEqual(200); // ✅ minZoneVolume
-                expect(formationTrade.timestamp - mainCandidate.startTime).toBeGreaterThanOrEqual(120000); // ✅ minCandidateDuration
-                expect(mainCandidate.sellVolume / mainCandidate.totalVolume).toBeGreaterThan(0.5); // ✅ Accumulation pattern
+                expect(
+                    formationTrade.timestamp - mainCandidate.startTime
+                ).toBeGreaterThanOrEqual(120000); // ✅ minCandidateDuration
+                expect(
+                    mainCandidate.sellVolume / mainCandidate.totalVolume
+                ).toBeGreaterThan(0.5); // ✅ Accumulation pattern
             }
 
             // If all requirements are met, a zone SHOULD be created OR merged
             // The zone formation can result in either creation or merge with existing zones
             expect(formationResult.updates.length).toBeGreaterThanOrEqual(1);
             // Accept either zone_created or zone_updated (for merge scenarios)
-            const hasZoneUpdate = formationResult.updates.some(update => 
-                update.updateType === "zone_created" || update.updateType === "zone_updated"
+            const hasZoneUpdate = formationResult.updates.some(
+                (update) =>
+                    update.updateType === "zone_created" ||
+                    update.updateType === "zone_updated"
             );
             expect(hasZoneUpdate).toBe(true);
             expect(detector.getActiveZones()).toHaveLength(1);
@@ -151,13 +181,12 @@ describe("AccumulationZoneDetector - Production Requirements Validation", () => 
                 totalVolume: createdZone.totalVolume,
                 priceRange: createdZone.priceRange,
                 strength: createdZone.strength,
-                completion: createdZone.completion
+                completion: createdZone.completion,
             });
             expect(createdZone.type).toBe("accumulation");
             // Zone should have meaningful volume (may be from initial creation or accumulated)
             expect(createdZone.totalVolume).toBeGreaterThan(0);
         });
-
     });
 });
 
@@ -167,7 +196,7 @@ function createValidAccumulationSequence(
     startTime: number
 ): EnrichedTradeEvent[] {
     const trades: EnrichedTradeEvent[] = [];
-    
+
     // Create 7 trades at exact same price (meets minTradeCount: 6)
     for (let i = 0; i < 7; i++) {
         const quantity = 45 + Math.random() * 15; // 45-60 each = institutional size (threshold: 40)
@@ -179,7 +208,7 @@ function createValidAccumulationSequence(
         );
         trades.push(trade);
     }
-    
+
     return trades;
 }
 
