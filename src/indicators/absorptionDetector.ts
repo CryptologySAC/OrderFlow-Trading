@@ -1493,14 +1493,41 @@ export class AbsorptionDetector
      * ✅ FIX: Proper consistency calculation with safety checks
      */
     private calculateAbsorptionConsistency(passiveValues: number[]): number {
-        if (passiveValues.length < 3) {
-            return 0.7; // Default reasonable consistency for small samples
+        if (passiveValues.length < 2) {
+            // For insufficient data, calculate consistency from current EWMA state
+            const passiveEWMA = this.passiveEWMA.get();
+            const aggressiveEWMA = this.aggressiveEWMA.get();
+
+            if (passiveEWMA > 0 && aggressiveEWMA > 0) {
+                // Use ratio stability as consistency proxy
+                const ratio =
+                    Math.min(passiveEWMA, aggressiveEWMA) /
+                    Math.max(passiveEWMA, aggressiveEWMA);
+                return Math.max(0.1, Math.min(0.9, ratio)); // Scale to reasonable consistency range
+            }
+
+            // Last resort: use spread tightness as consistency indicator
+            const spreadInfo = this.getCurrentSpread();
+            if (spreadInfo?.spread) {
+                // Tighter spreads = higher consistency (inverted relationship)
+                const normalizedSpread = Math.min(spreadInfo.spread * 100, 1); // Cap at 1%
+                return Math.max(0.1, 1 - normalizedSpread);
+            }
+
+            return 0.5; // True fallback when no market data available
         }
 
         try {
             // Check how consistently passive liquidity is maintained
             const avgPassive = DetectorUtils.calculateMean(passiveValues);
-            if (avgPassive === 0) return 0.5; // Neutral consistency if no passive volume
+            if (avgPassive === 0) {
+                // Calculate consistency from value distribution instead
+                const nonZeroValues = passiveValues.filter((v) => v > 0);
+                if (nonZeroValues.length === 0) return 0.5;
+
+                // Measure how consistently values are non-zero
+                return nonZeroValues.length / passiveValues.length;
+            }
 
             let consistentPeriods = 0;
             for (const value of passiveValues) {
@@ -1519,7 +1546,13 @@ export class AbsorptionDetector
             this.logger.warn(
                 `[AbsorptionDetector] Error calculating consistency: ${(error as Error).message}`
             );
-            return 0.5; // Safe default
+            // Calculate from market spread as fallback
+            const spreadInfo = this.getCurrentSpread();
+            if (spreadInfo?.spread) {
+                const normalizedSpread = Math.min(spreadInfo.spread * 100, 1);
+                return Math.max(0.1, 1 - normalizedSpread);
+            }
+            return 0.5;
         }
     }
 
@@ -1531,8 +1564,30 @@ export class AbsorptionDetector
         side: "buy" | "sell",
         snapshots: ZoneSample[]
     ): number {
-        if (snapshots.length < 5) {
-            return 1.0; // Neutral velocity for insufficient data
+        if (snapshots.length < 3) {
+            // Calculate velocity from current EWMA momentum instead of hardcoded default
+            const currentAggressive =
+                side === "buy"
+                    ? this.aggrBuyEWMA.get()
+                    : this.aggrSellEWMA.get();
+            const currentPassive = this.passiveEWMA.get();
+
+            if (currentAggressive > 0 && currentPassive > 0) {
+                // Use current aggression vs passive ratio as velocity proxy
+                const ratio = currentAggressive / currentPassive;
+                // Scale ratio to velocity increase factor (0.5 to 2.0 range)
+                return Math.max(0.5, Math.min(2.0, ratio));
+            }
+
+            // Use market spread momentum as velocity indicator
+            const spreadInfo = this.getCurrentSpread();
+            if (spreadInfo?.spread) {
+                // Wider spreads = higher velocity (more volatility)
+                const spreadFactor = Math.min(spreadInfo.spread * 50, 1); // Scale spread to factor
+                return 1.0 + spreadFactor; // 1.0 to 2.0 range
+            }
+
+            return 1.0; // True neutral when no market data
         }
 
         try {
@@ -1541,7 +1596,18 @@ export class AbsorptionDetector
             const earlier = snapshots.slice(-6, -3); // Previous 3 snapshots
 
             if (recent.length < 2 || earlier.length < 2) {
-                return 1.0; // Neutral velocity
+                // Calculate from current momentum instead of hardcoded neutral
+                const currentAggressive =
+                    side === "buy"
+                        ? this.aggrBuyEWMA.get()
+                        : this.aggrSellEWMA.get();
+                const currentPassive = this.passiveEWMA.get();
+
+                if (currentAggressive > 0 && currentPassive > 0) {
+                    const momentumRatio = currentAggressive / currentPassive;
+                    return Math.max(0.5, Math.min(2.0, momentumRatio));
+                }
+                return 1.0; // True neutral only when no data available
             }
 
             // Calculate velocity for recent period
@@ -1549,18 +1615,40 @@ export class AbsorptionDetector
             const earlierVelocity = this.calculatePeriodVelocity(earlier, side);
 
             // Return velocity increase ratio with safety checks
-            if (earlierVelocity <= 0) return 1.0; // Avoid division by zero
+            if (earlierVelocity <= 0) {
+                // Use recent velocity as increase indicator instead of hardcoded 1.0
+                return recentVelocity > 0
+                    ? Math.max(1.0, Math.min(2.0, recentVelocity))
+                    : 1.0;
+            }
 
             const velocityRatio = recentVelocity / earlierVelocity;
 
             // Safety checks and bounds
-            if (!isFinite(velocityRatio)) return 1.0;
+            if (!isFinite(velocityRatio)) {
+                // Calculate from recent velocity instead of hardcoded 1.0
+                return recentVelocity > 0
+                    ? Math.max(1.0, Math.min(2.0, recentVelocity))
+                    : 1.0;
+            }
             return Math.max(0.1, Math.min(10, velocityRatio)); // Reasonable bounds
         } catch (error) {
             this.logger.warn(
                 `[AbsorptionDetector] Error calculating velocity increase: ${(error as Error).message}`
             );
-            return 1.0; // Safe default
+            // Calculate fallback from current market state instead of hardcoded 1.0
+            const currentAggressive =
+                side === "buy"
+                    ? this.aggrBuyEWMA.get()
+                    : this.aggrSellEWMA.get();
+            const currentPassive = this.passiveEWMA.get();
+
+            if (currentAggressive > 0 && currentPassive > 0) {
+                const ratio = currentAggressive / currentPassive;
+                return Math.max(0.5, Math.min(2.0, ratio));
+            }
+
+            return 1.0; // True safe default when no market data
         }
     }
 
@@ -1615,24 +1703,66 @@ export class AbsorptionDetector
      * ✅ FIX: Enhanced default conditions with all required fields
      */
     private getDefaultConditions(): AbsorptionConditions {
+        // Calculate real-time defaults from current market state instead of hardcoded values
+        const currentPassive = this.passiveEWMA.get();
+        const currentAggressive = this.aggressiveEWMA.get();
+        const spreadInfo = this.getCurrentSpread();
+
+        // Calculate consistency from EWMA stability
+        let calculatedConsistency = 0.5;
+        if (currentPassive > 0 && currentAggressive > 0) {
+            const ratio =
+                Math.min(currentPassive, currentAggressive) /
+                Math.max(currentPassive, currentAggressive);
+            calculatedConsistency = Math.max(0.1, Math.min(0.9, ratio));
+        } else if (spreadInfo?.spread) {
+            const normalizedSpread = Math.min(spreadInfo.spread * 100, 1);
+            calculatedConsistency = Math.max(0.1, 1 - normalizedSpread);
+        }
+
+        // Calculate velocity from current momentum
+        let calculatedVelocity = 1.0;
+        if (currentAggressive > 0 && currentPassive > 0) {
+            const momentumRatio = currentAggressive / currentPassive;
+            calculatedVelocity = Math.max(0.5, Math.min(2.0, momentumRatio));
+        } else if (spreadInfo?.spread) {
+            const spreadFactor = Math.min(spreadInfo.spread * 50, 1);
+            calculatedVelocity = 1.0 + spreadFactor;
+        }
+
+        // Use real spread or calculate reasonable estimate
+        const calculatedSpread =
+            spreadInfo?.spread ??
+            (currentPassive > 0 ? Math.min(0.01, 100 / currentPassive) : 0.002);
+
         return {
-            absorptionRatio: 1,
+            absorptionRatio:
+                currentPassive > 0 ? currentAggressive / currentPassive : 1,
             passiveStrength: 0,
             hasRefill: false,
             icebergSignal: 0,
             liquidityGradient: 0,
             absorptionVelocity: 0,
-            currentPassive: 0,
-            avgPassive: 0,
-            maxPassive: 0,
-            minPassive: 0,
-            aggressiveVolume: 0,
-            imbalance: 0,
+            currentPassive: currentPassive,
+            avgPassive: currentPassive,
+            maxPassive: currentPassive,
+            minPassive: currentPassive,
+            aggressiveVolume: currentAggressive,
+            imbalance:
+                currentPassive > 0 && currentAggressive > 0
+                    ? Math.abs(currentAggressive - currentPassive) /
+                      (currentAggressive + currentPassive)
+                    : 0,
             sampleCount: 0,
-            dominantSide: "neutral",
-            consistency: 0.5, // ✅ Default reasonable consistency
-            velocityIncrease: 1.0, // ✅ Default neutral velocity
-            spread: 0.002, // ✅ Default small spread
+            dominantSide:
+                currentAggressive > currentPassive
+                    ? "buy"
+                    : currentPassive > currentAggressive
+                      ? "sell"
+                      : "neutral",
+            consistency: calculatedConsistency,
+            velocityIncrease: calculatedVelocity,
+            spread: calculatedSpread,
             microstructure: undefined,
         };
     }
