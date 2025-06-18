@@ -87,6 +87,9 @@ export class ExhaustionDetector
     private readonly maxPassiveRatio: number;
     private readonly minDepletionFactor: number;
 
+    // Interval handle for periodic threshold updates
+    private thresholdUpdateInterval?: NodeJS.Timeout;
+
     constructor(
         id: string,
         settings: ExhaustionSettings = {},
@@ -118,7 +121,10 @@ export class ExhaustionDetector
         };
 
         // NEW: Set up periodic threshold updates
-        setInterval(() => this.updateThresholds(), this.updateIntervalMs);
+        this.thresholdUpdateInterval = setInterval(
+            () => this.updateThresholds(),
+            this.updateIntervalMs
+        );
 
         this.isCircuitOpen = false;
         this.errorCount = 0;
@@ -360,6 +366,12 @@ export class ExhaustionDetector
         // Get current book level
         const bookLevel = this.getBookLevel(price, zone, side);
         if (!bookLevel) {
+            this.logger.warn(`[ExhaustionDetector] No book data available`, {
+                zone,
+                price,
+                side,
+                hasZoneHistory: this.zonePassiveHistory.has(zone),
+            });
             return;
         }
 
@@ -550,22 +562,31 @@ export class ExhaustionDetector
         zone: number,
         side: "buy" | "sell"
     ): { bid: number; ask: number } | null {
-        //todo
-        void side;
+        const opposite = side === "buy" ? "ask" : "bid";
 
-        // Method 1: Try this.depth (if it gets populated later)
+        // Method 1: Use depth data at the given price or nearest levels
         let bookLevel = this.depth.get(price);
+        if (!bookLevel || bookLevel[opposite] === 0) {
+            const nearestPrices = this.findNearestPriceLevels(price, 3);
+            for (const p of nearestPrices) {
+                const level = this.depth.get(p);
+                if (level && level[opposite] > 0) {
+                    bookLevel = level;
+                    break;
+                }
+            }
+        }
         if (bookLevel && (bookLevel.bid > 0 || bookLevel.ask > 0)) {
             return bookLevel;
         }
 
-        // Method 2: Use zone passive history (current working data)
+        // Method 2: Use zone passive history
         bookLevel = this.getBookLevelFromZoneHistory(zone);
         if (bookLevel && (bookLevel.bid > 0 || bookLevel.ask > 0)) {
             return bookLevel;
         }
 
-        // Method 3: Try recent enriched trade data
+        // Method 3: Fallback to recent trade data
         bookLevel = this.getBookLevelFromRecentTrade(zone);
         if (bookLevel && (bookLevel.bid > 0 || bookLevel.ask > 0)) {
             return bookLevel;
@@ -596,6 +617,18 @@ export class ExhaustionDetector
 
         // Call parent handleDetection
         super.handleDetection(signal);
+    }
+
+    /**
+     * Override cleanup to clear interval timers
+     */
+    public cleanup(): void {
+        if (this.thresholdUpdateInterval) {
+            clearInterval(this.thresholdUpdateInterval);
+            this.thresholdUpdateInterval = undefined;
+        }
+
+        super.cleanup();
     }
 
     /**
