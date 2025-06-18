@@ -618,7 +618,8 @@ export class DeltaCVDConfirmation extends BaseDetector {
             }
 
             // Compute CVD series and slope
-            const { cvdSeries, slope } = this.computeCVDSlope(state);
+            const cvdResult: CVDCalculationResult = this.computeCVDSlope(state);
+            const { cvdSeries, slope } = cvdResult;
 
             // Calculate price correlation for this window
             const priceCorrelation = this.calculatePriceCorrelation(
@@ -636,6 +637,9 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
             slopes[w] = slope;
             zScores[w] = zScore;
+
+            // Release the pooled result object for reuse
+            this.cvdResultPool.release(cvdResult);
 
             // Store for later use
             //this.logger.debug(`Window ${w}s analysis`, {
