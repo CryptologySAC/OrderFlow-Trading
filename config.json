@@ -204,7 +204,7 @@
             "deltaCvdConfirmation": {
                 "windowSec": [60, 240, 720],
                 "minTradesPerSec": 0.4,
-                "minVolPerSec": 8,
+                "minVolPerSec": 5,
                 "minZ": 2.0,
                 "pricePrecision": 2,
                 "volatilityLookbackSec": 3600,
@@ -214,7 +214,7 @@
                 "maxDivergenceAllowed": 0.75,
                 "stateCleanupIntervalSec": 300,
                 "dynamicThresholds": true,
-                "logDebug": true
+                "logDebug": false
             }
         }
     }

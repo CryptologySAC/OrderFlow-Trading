@@ -61,7 +61,6 @@ export type AnomalyType =
     | "extreme_volatility" // Market Health: Sudden volatility spike
     | "orderbook_imbalance" // Market Structure: Passive volume asymmetry
     | "flow_imbalance" // Market Structure: Aggressive flow asymmetry
-    | "whale_activity" // Market Structure: Large order impact
     | "coordinated_activity" // Microstructure: Coordinated execution patterns
     | "algorithmic_activity" // Microstructure: Detected algorithmic trading
     | "toxic_flow"; // Microstructure: High toxicity/informed flow
@@ -313,11 +312,9 @@ export class AnomalyDetector extends EventEmitter {
         // Infrastructure issues (most critical)
         this.checkFlashCrash(snapshot);
         this.checkLiquidityVoid(snapshot, spreadBps);
-        // API connectivity issues are now handled separately via onConnectivityIssue()
 
         // Market health issues
         this.checkExtremeVolatility(snapshot);
-        this.checkWhaleActivity(snapshot);
 
         // Market structure issues (informational)
         this.checkOrderbookImbalance(snapshot);
@@ -564,68 +561,6 @@ export class AnomalyDetector extends EventEmitter {
                     normalVolatility: allReturnsStdDev,
                     volatilityRatio: recentStdDev / allReturnsStdDev,
                     rationale: "Sudden volatility spike detected",
-                },
-            });
-        }
-    }
-
-    /**
-     * Detects whale activity via outlier order sizes.
-     * Market structure issue indicating large player activity.
-     */
-    private checkWhaleActivity(snapshot: MarketSnapshot): void {
-        const now = Date.now();
-        const recentSizes = this.orderSizeHistory
-            .toArray()
-            .filter((o) => now - o.time < this.orderSizeWindowMs)
-            .map((o) => o.size);
-
-        if (recentSizes.length < 100) return; // Need sufficient sample
-
-        recentSizes.sort((a, b) => a - b);
-        const p995 = recentSizes[Math.floor(recentSizes.length * 0.995)];
-        const p9995 = recentSizes[Math.floor(recentSizes.length * 0.9955)];
-        const candidateSize = snapshot.aggressiveVolume;
-
-        let confidence = 0;
-        let whaleLevel = 0;
-
-        if (candidateSize >= p9995) {
-            confidence = 0.9;
-            whaleLevel = 9995;
-        } else if (candidateSize >= p995) {
-            confidence = 0.7;
-            whaleLevel = 995;
-        }
-
-        // Check for whale clustering
-        const recentLarge = this.orderSizeHistory
-            .toArray()
-            .filter(
-                (o) => now - o.time < this.whaleCooldownMs && o.size >= p995
-            ).length;
-
-        if (recentLarge > 3) confidence += 0.1; // Boost for clustering
-
-        if (confidence >= 0.7) {
-            this.emitAnomaly({
-                type: "whale_activity",
-                detectedAt: snapshot.timestamp,
-                severity: confidence > 0.85 ? "high" : "medium",
-                affectedPriceRange: {
-                    min: snapshot.price * 0.997,
-                    max: snapshot.price * 1.003,
-                },
-                recommendedAction: "monitor",
-                details: {
-                    confidence,
-                    whaleLevel,
-                    orderSize: candidateSize,
-                    p995,
-                    p9995,
-                    recentLargeOrders: recentLarge,
-                    rationale:
-                        "Large order detected affecting market structure",
                 },
             });
         }
