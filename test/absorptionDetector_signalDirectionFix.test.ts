@@ -251,8 +251,8 @@ describe("AbsorptionDetector - Signal Direction Fix", () => {
                 BASE_PRICE
             );
 
-            // With dominant buy flow, absorbing side should be sell
-            expect(absorbingSide).toBe("sell");
+            // With dominant buy flow, absorbing side should be ask (corrected logic)
+            expect(absorbingSide).toBe("ask");
 
             // Test signal interpretation logic with enhanced metadata
             const expectedInterpretation =

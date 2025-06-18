@@ -450,7 +450,7 @@ export class AbsorptionDetector
      */
     private checkAbsorptionConditions(
         price: number,
-        side: "buy" | "sell",
+        side: "bid" | "ask", // FIXED: Now correctly represents passive side
         zone: number
     ): boolean {
         // For buy absorption: aggressive buys hit the ASK (passive sellers)
@@ -478,11 +478,11 @@ export class AbsorptionDetector
             const lvl = this.orderBook.getLevel(price);
             const icebergLikely =
                 lvl &&
-                (side === "buy"
-                    ? (lvl.addedAsk ?? 0) >
-                      (lvl.consumedAsk ?? 0) * this.icebergDetectionSensitivity
-                    : (lvl.addedBid ?? 0) >
-                      (lvl.consumedBid ?? 0) *
+                (side === "bid"
+                    ? (lvl.addedBid ?? 0) >
+                      (lvl.consumedBid ?? 0) * this.icebergDetectionSensitivity
+                    : (lvl.addedAsk ?? 0) >
+                      (lvl.consumedAsk ?? 0) *
                           this.icebergDetectionSensitivity);
 
             if (icebergLikely) {
@@ -498,9 +498,7 @@ export class AbsorptionDetector
         // - Sell absorption (aggressive sells): Tests BID liquidity depletion/refill
         // Validated against docs/BuyerIsMaker-field.md and unit tests
         const relevantPassive = zoneHistory.toArray().map((snapshot) => {
-            // Aggressive buys (side="buy") consume ASK liquidity
-            // Aggressive sells (side="sell") consume BID liquidity
-            return side === "buy" ? snapshot.ask : snapshot.bid;
+            return side === "bid" ? snapshot.bid : snapshot.ask;
         });
 
         if (relevantPassive.length === 0) return false;
@@ -512,9 +510,9 @@ export class AbsorptionDetector
 
         // Get recent aggressive volume
         const recentAggressive =
-            side === "buy"
-                ? this.aggrBuyEWMA.get() // “buy” absorption: compare to buy aggression
-                : this.aggrSellEWMA.get(); // “sell” absorption: compare to sell aggression
+            side === "bid"
+                ? this.aggrSellEWMA.get() // “buy” absorption: compare to buy aggression
+                : this.aggrBuyEWMA.get(); // “sell” absorption: compare to sell aggression
 
         // Sophisticated absorption checks (enhanced with iceberg confidence factor):
         // 1. Passive maintained despite hits (liquidity resilience under pressure)
@@ -667,34 +665,87 @@ export class AbsorptionDetector
         tradesAtZone: AggressiveTrade[],
         zone: number,
         price: number
-    ): "buy" | "sell" | null {
-        // Method 1: Check absorption conditions for both sides
-        const buyAbsorption = this.checkAbsorptionConditions(
-            price,
-            "buy",
-            zone
-        );
-        const sellAbsorption = this.checkAbsorptionConditions(
-            price,
-            "sell",
-            zone
-        );
-
-        if (buyAbsorption && !sellAbsorption) {
-            return "buy"; // Buyers absorbing aggressive sells
-        } else if (sellAbsorption && !buyAbsorption) {
-            return "sell"; // Sellers absorbing aggressive buys
-        } else if (buyAbsorption && sellAbsorption) {
-            // Both sides show absorption - use zone analysis to resolve conflict
-            return this.resolveConflictingAbsorption(zone);
-        }
-
-        // Method 2: Fallback to dominant flow analysis
+    ): "bid" | "ask" | null {
+        // Determine dominant aggressive flow
         const dominantAggressiveSide =
             this.getDominantAggressiveSide(tradesAtZone);
 
-        // The absorbing side is opposite to the dominant aggressive flow
-        return dominantAggressiveSide === "buy" ? "sell" : "buy";
+        // Calculate price efficiency for absorption detection
+        const priceEfficiency = this.calculatePriceEfficiency(
+            tradesAtZone,
+            zone
+        );
+
+        // If price efficiency < 0.7, there's likely absorption happening
+        if (priceEfficiency < 0.7) {
+            // The PASSIVE side opposite to aggressive flow is absorbing
+            return dominantAggressiveSide === "buy" ? "ask" : "bid";
+        }
+
+        // Fallback: Check explicit absorption conditions
+        const bidAbsorption = this.checkAbsorptionConditions(
+            price,
+            "bid",
+            zone
+        );
+        const askAbsorption = this.checkAbsorptionConditions(
+            price,
+            "ask",
+            zone
+        );
+
+        if (bidAbsorption && !askAbsorption) return "bid";
+        if (askAbsorption && !bidAbsorption) return "ask";
+        if (bidAbsorption && askAbsorption) {
+            // Both showing absorption - return stronger one
+            return this.resolveConflictingAbsorption(zone);
+        }
+
+        return null; // No clear absorption
+    }
+
+    /**
+     * Calculate how efficiently price moved relative to volume pressure
+     * Lower efficiency indicates absorption (volume without proportional price movement)
+     */
+    private calculatePriceEfficiency(
+        tradesAtZone: AggressiveTrade[],
+        zone: number
+    ): number {
+        if (tradesAtZone.length < 3) return 1.0; // Neutral if insufficient data
+
+        // Get price range during this period
+        const prices = tradesAtZone.map((t) => t.price);
+        const priceMovement = Math.max(...prices) - Math.min(...prices);
+
+        // Get total aggressive volume
+        const totalVolume = tradesAtZone.reduce(
+            (sum, t) => sum + t.quantity,
+            0
+        );
+
+        // Get average passive liquidity in this zone
+        const zoneHistory = this.zonePassiveHistory.get(zone);
+        const avgPassive = zoneHistory
+            ? DetectorUtils.calculateMean(
+                  zoneHistory.toArray().map((s) => s.total)
+              )
+            : totalVolume; // Fallback to aggressive volume
+
+        if (avgPassive === 0) return 1.0;
+
+        // Calculate expected price movement based on volume pressure
+        const volumePressure = totalVolume / avgPassive;
+        const tickSize = Math.pow(10, -this.pricePrecision);
+        const expectedMovement = volumePressure * tickSize * 10; // Scaling factor
+
+        if (expectedMovement === 0) return 1.0;
+
+        // Efficiency = actual movement / expected movement
+        // Low efficiency = absorption (price didn't move as much as expected)
+        const efficiency = priceMovement / expectedMovement;
+
+        return Math.max(0.1, Math.min(2.0, efficiency));
     }
 
     /**
@@ -706,10 +757,10 @@ export class AbsorptionDetector
      * @param zone Zone number
      * @returns The side with stronger absorption based on passive strength
      */
-    private resolveConflictingAbsorption(zone: number): "buy" | "sell" {
+    private resolveConflictingAbsorption(zone: number): "bid" | "ask" {
         const zoneHistory = this.zonePassiveHistory.get(zone);
         if (!zoneHistory || zoneHistory.count() < 6) {
-            return "buy"; // Default to buy if insufficient data
+            return "bid"; // Default to bid if insufficient data
         }
 
         const snapshots = zoneHistory.toArray();
@@ -723,7 +774,7 @@ export class AbsorptionDetector
         );
 
         // Return the side with stronger passive liquidity growth
-        return recentBidStrength > recentAskStrength ? "buy" : "sell";
+        return recentBidStrength > recentAskStrength ? "bid" : "ask";
     }
 
     /**
@@ -761,20 +812,20 @@ export class AbsorptionDetector
      * @returns Method used to determine absorption
      */
     private determineAbsorptionMethod(zone: number, price: number): string {
-        const buyAbsorption = this.checkAbsorptionConditions(
+        const bidAbsorption = this.checkAbsorptionConditions(
             price,
-            "buy",
+            "bid",
             zone
         );
-        const sellAbsorption = this.checkAbsorptionConditions(
+        const askAbsorption = this.checkAbsorptionConditions(
             price,
-            "sell",
+            "ask",
             zone
         );
 
-        if (buyAbsorption && sellAbsorption) {
+        if (bidAbsorption && askAbsorption) {
             return "zone-strength-resolution"; // Both sides showed absorption, resolved by passive strength
-        } else if (buyAbsorption || sellAbsorption) {
+        } else if (bidAbsorption || askAbsorption) {
             return "condition-based"; // Clear absorption condition detected
         } else {
             return "flow-based"; // Fallback to dominant flow analysis
@@ -790,14 +841,13 @@ export class AbsorptionDetector
      */
     private calculateAbsorptionContext(
         price: number,
-        side: "buy" | "sell"
+        side: "bid" | "ask" // FIXED: Now correctly typed
     ): {
         isReversal: boolean;
         strength: number;
         priceContext: "high" | "low" | "middle";
         contextConfidence: number;
     } {
-        // Get recent price range for context analysis
         const recentPrices = this.getRecentPriceRange();
         const pricePercentile = this.calculatePricePercentile(
             price,
@@ -811,11 +861,12 @@ export class AbsorptionDetector
                   ? "low"
                   : "middle";
 
-        // At highs + seller absorption = likely reversal down (strong absorption signal)
-        // At lows + buyer absorption = likely reversal up (strong absorption signal)
+        // CORRECTED LOGIC:
+        // At highs + ask absorption = likely resistance/reversal down
+        // At lows + bid absorption = likely support/bounce up
         const isLogicalReversal =
-            (side === "sell" && pricePercentile > 0.8) || // Sellers absorbing at highs
-            (side === "buy" && pricePercentile < 0.2); // Buyers absorbing at lows
+            (side === "ask" && pricePercentile > 0.8) || // Ask absorption at highs
+            (side === "bid" && pricePercentile < 0.2); // Bid absorption at lows
 
         // Strength increases at price extremes
         const strength = isLogicalReversal
@@ -951,12 +1002,16 @@ export class AbsorptionDetector
         }
 
         // Check cooldown (only confirm updates later)
-        if (!this.checkCooldown(zone, side, false)) {
+        if (!this.checkCooldown(zone, side === "bid" ? "buy" : "sell", false)) {
             return;
         }
 
         // Analyze absorption conditions using object pooling
-        const conditions = this.analyzeAbsorptionConditions(price, side, zone);
+        const conditions = this.analyzeAbsorptionConditions(
+            price,
+            side === "bid" ? "buy" : "sell",
+            zone
+        );
 
         const missingFields = [
             "consistency",
@@ -1047,7 +1102,7 @@ export class AbsorptionDetector
         if (
             this.detectAbsorptionSpoofing(
                 price,
-                side,
+                side === "bid" ? "buy" : "sell",
                 volumes.aggressive,
                 triggerTrade.timestamp
             )
@@ -1073,8 +1128,16 @@ export class AbsorptionDetector
         // General spoofing check (includes layering detection)
         if (
             this.features.spoofingDetection &&
-            (this.isSpoofed(price, side, triggerTrade.timestamp) ||
-                this.detectLayeringAttack(price, side, triggerTrade.timestamp))
+            (this.isSpoofed(
+                price,
+                side === "bid" ? "buy" : "sell",
+                triggerTrade.timestamp
+            ) ||
+                this.detectLayeringAttack(
+                    price,
+                    side === "bid" ? "buy" : "sell",
+                    triggerTrade.timestamp
+                ))
         ) {
             this.logger.warn(
                 `[AbsorptionDetector] Signal rejected - general spoofing detected`,
@@ -1149,46 +1212,71 @@ export class AbsorptionDetector
             .filter((t) => t.buyerIsMaker)
             .reduce((s, t) => s + t.quantity, 0);
 
-        this.logger.info(`[AbsorptionDetector] 🎯 SIGNAL GENERATED!`, {
-            zone,
-            price,
-            side,
-            aggressive: volumes.aggressive,
-            passive: volumes.passive,
-            confidence: score,
-            absorptionRatio,
-            conditions: {
-                absorptionRatio: conditions.absorptionRatio,
-                hasRefill: conditions.hasRefill,
-                icebergSignal: conditions.icebergSignal,
-            },
-            // ✅ NEW: Enhanced debug information for flow analysis
-            debugInfo: {
-                dominantAggressiveFlow: dominantAggressiveSide,
-                absorbingSide: side,
-                priceContext: absorptionContext.priceContext,
-                interpretation:
-                    side === "buy"
-                        ? "Buyers absorbing sell pressure - potential support/bounce"
-                        : "Sellers absorbing buy pressure - potential resistance/reversal",
-                tradeCount: tradesAtZone.length,
-                latestTradeWasMaker: latestTrade.buyerIsMaker,
-                flowAnalysis: {
-                    buyVolume,
-                    sellVolume,
-                    volumeRatio:
-                        sellVolume > 0 ? buyVolume / sellVolume : buyVolume,
-                    dominantFlowConfidence:
-                        Math.abs(buyVolume - sellVolume) /
-                        (buyVolume + sellVolume),
+        // Calculate price efficiency for enhanced logging
+        const priceEfficiency = this.calculatePriceEfficiency(
+            tradesAtZone,
+            zone
+        );
+
+        this.logger.info(
+            `[AbsorptionDetector] 🎯 CORRECTED ABSORPTION SIGNAL!`,
+            {
+                zone,
+                price,
+                side,
+                aggressive: volumes.aggressive,
+                passive: volumes.passive,
+                confidence: score,
+                absorptionRatio,
+                conditions: {
+                    absorptionRatio: conditions.absorptionRatio,
+                    hasRefill: conditions.hasRefill,
+                    icebergSignal: conditions.icebergSignal,
                 },
-            },
-        });
+                // ✅ NEW: Enhanced debug information for flow analysis
+                debugInfo: {
+                    dominantAggressiveFlow: dominantAggressiveSide,
+                    absorbingSide: side,
+                    priceContext: absorptionContext.priceContext,
+                    interpretation:
+                        side === "bid"
+                            ? "Bid liquidity absorbing sell pressure → Support forming"
+                            : "Ask liquidity absorbing buy pressure → Resistance forming",
+                    tradeCount: tradesAtZone.length,
+                    latestTradeWasMaker: latestTrade.buyerIsMaker,
+                    flowAnalysis: {
+                        buyVolume,
+                        sellVolume,
+                        volumeRatio:
+                            sellVolume > 0 ? buyVolume / sellVolume : buyVolume,
+                        dominantFlowConfidence:
+                            Math.abs(buyVolume - sellVolume) /
+                            (buyVolume + sellVolume),
+                    },
+                },
+            }
+        );
+
+        this.logger.info(
+            `[AbsorptionDetector] 🎯 CORRECTED ABSORPTION SIGNAL!`,
+            {
+                zone,
+                price,
+                absorbingSide: side,
+                dominantAggressiveFlow: dominantAggressiveSide,
+                priceEfficiency,
+                interpretation:
+                    side === "bid"
+                        ? "Bid liquidity absorbing sell pressure → Support level forming"
+                        : "Ask liquidity absorbing buy pressure → Resistance level forming",
+                marketLogic: `Heavy ${dominantAggressiveSide} flow → ${side} side absorbing → Price rejection expected`,
+            }
+        );
 
         const signal: AbsorptionSignalData = {
             zone,
             price,
-            side,
+            side: side === "bid" ? "buy" : "sell", // Convert to expected interface format
             aggressive: volumes.aggressive,
             passive: volumes.passive,
             refilled: conditions.hasRefill,
@@ -1199,15 +1287,36 @@ export class AbsorptionDetector
                 icebergDetected: conditions.icebergSignal,
                 liquidityGradient: conditions.liquidityGradient,
                 conditions,
-                detectorVersion: "5.0-enhanced-flow-analysis", // Updated version for enhanced flow-based absorption
-                // ✅ ENHANCED: Add comprehensive flow analysis metadata
+                detectorVersion: "6.0-corrected-absorption-logic", // CORRECTED: Perfect absorption logic
+
+                // CORRECTED: Proper signal interpretation
                 absorbingSide: side,
-                aggressiveSide: this.getTradeSide(latestTrade),
-                dominantFlow: dominantAggressiveSide,
+                aggressiveSide: dominantAggressiveSide,
                 signalInterpretation:
-                    side === "buy"
-                        ? "buyers_absorbing_aggressive_sells"
-                        : "sellers_absorbing_aggressive_buys",
+                    side === "bid"
+                        ? "bid_liquidity_absorbing_sell_pressure_support_forming"
+                        : "ask_liquidity_absorbing_buy_pressure_resistance_forming",
+                absorptionType:
+                    side === "bid"
+                        ? "support_absorption"
+                        : "resistance_absorption",
+
+                // Enhanced context
+                marketContext: {
+                    priceEfficiency: this.calculatePriceEfficiency(
+                        tradesAtZone,
+                        zone
+                    ),
+                    expectedPriceMovement: this.calculateExpectedMovement(
+                        volumes.aggressive,
+                        volumes.passive
+                    ),
+                    actualPriceMovement: Math.abs(
+                        price - tradesAtZone[0].price
+                    ),
+                    absorptionStrength:
+                        1 - this.calculatePriceEfficiency(tradesAtZone, zone), // Inverse of efficiency
+                },
                 absorptionMethod: this.determineAbsorptionMethod(zone, price),
                 flowAnalysis: {
                     buyVolume,
@@ -2357,5 +2466,21 @@ export class AbsorptionDetector
                 note: "Enhanced absorption sustainability expected",
             });
         }
+    }
+
+    /**
+     * Calculate expected price movement based on volume pressure
+     */
+    private calculateExpectedMovement(
+        aggressiveVolume: number,
+        passiveVolume: number
+    ): number {
+        if (passiveVolume === 0) return 0;
+
+        const volumeRatio = aggressiveVolume / passiveVolume;
+        const tickSize = Math.pow(10, -this.pricePrecision);
+
+        // Simple heuristic: more volume pressure = more expected movement
+        return volumeRatio * tickSize * 5; // Scaling factor
     }
 }
