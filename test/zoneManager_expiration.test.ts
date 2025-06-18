@@ -56,7 +56,9 @@ describe("ZoneManager expiration", () => {
         expect(manager.getActiveZones("BTCUSDT")).toHaveLength(1);
 
         vi.advanceTimersByTime(1500);
-        (manager as unknown as { cleanupExpiredZones: () => void }).cleanupExpiredZones();
+        (
+            manager as unknown as { cleanupExpiredZones: () => void }
+        ).cleanupExpiredZones();
         expect(manager.getActiveZones("BTCUSDT")).toHaveLength(0);
     });
 });

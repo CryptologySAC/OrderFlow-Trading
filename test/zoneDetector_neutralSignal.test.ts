@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { AccumulationZoneDetector } from "../src/indicators/accumulationZoneDetector";
 import { MetricsCollector } from "../__mocks__/src/infrastructure/metricsCollector";
-import type { AccumulationZone, ZoneUpdate, ZoneSignal } from "../src/types/zoneTypes";
+import type {
+    AccumulationZone,
+    ZoneUpdate,
+    ZoneSignal,
+} from "../src/types/zoneTypes";
 
 const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
 
@@ -57,7 +61,9 @@ describe("AccumulationZoneDetector neutral signal", () => {
         };
 
         const signals = (
-            detector as unknown as { generateZoneSignals(u: ZoneUpdate): ZoneSignal[] }
+            detector as unknown as {
+                generateZoneSignals(u: ZoneUpdate): ZoneSignal[];
+            }
         ).generateZoneSignals(update);
 
         expect(signals).toHaveLength(1);
