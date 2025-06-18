@@ -618,6 +618,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
             }
 
             // Compute CVD series and slope
+
             const cvdResult: CVDCalculationResult = this.computeCVDSlope(state);
             const { cvdSeries, slope } = cvdResult;
 
@@ -627,6 +628,9 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 cvdSeries
             );
             priceCorrelations[w] = priceCorrelation;
+
+            // Recycle pooled object
+            this.cvdResultPool.release(pooled);
 
             // Update slope statistics using Welford's algorithm
             this.updateSlopeStatistics(state, slope);
