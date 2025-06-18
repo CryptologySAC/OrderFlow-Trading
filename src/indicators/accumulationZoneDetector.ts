@@ -112,6 +112,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
             consecutiveTrades: 0,
             priceStability: 1.0,
             tradeCount: 0,
+            absorptionQuality: 0,
         }),
         (candidate) => {
             candidate.priceLevel = 0;
@@ -125,6 +126,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
             candidate.consecutiveTrades = 0;
             candidate.priceStability = 1.0;
             candidate.tradeCount = 0;
+            candidate.absorptionQuality = 0;
         }
     );
 
