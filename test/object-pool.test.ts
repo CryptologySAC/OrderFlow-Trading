@@ -197,5 +197,14 @@ describe("Object Pooling", () => {
             expect(arr2[0]).toBe(undefined); // Contents cleared
             expect(arr2[1]).toBe(undefined); // Contents cleared
         });
+        it("clearAll resets pool sizes", () => {
+            const pools = SharedPools.getInstance();
+            const obj = pools.zoneSamples.acquire();
+            pools.zoneSamples.release(obj);
+            pools.clearAll();
+            const stats = pools.getStats();
+            expect(stats.zoneSamples).toBe(0);
+            expect(stats.arrays.totalArrays).toBe(0);
+        });
     });
 });
