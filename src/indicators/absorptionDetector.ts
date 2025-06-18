@@ -1756,9 +1756,9 @@ export class AbsorptionDetector
             sampleCount: 0,
             dominantSide:
                 currentAggressive > currentPassive
-                    ? "buy"
+                    ? "ask"
                     : currentPassive > currentAggressive
-                      ? "sell"
+                      ? "bid"
                       : "neutral",
             consistency: calculatedConsistency,
             velocityIncrease: calculatedVelocity,
