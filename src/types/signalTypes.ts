@@ -127,7 +127,7 @@ export interface BaseSignalEvent {
 
 export interface DeltaCVDConfirmationResult {
     price: number;
-    side: "buy" | "sell";
+    side: "buy" | "sell" | "neutral";
     rateOfChange: number;
     windowVolume: number;
     tradesInWindow: number;

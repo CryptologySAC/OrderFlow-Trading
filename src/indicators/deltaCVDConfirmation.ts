@@ -629,8 +629,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
             );
             priceCorrelations[w] = priceCorrelation;
 
-            // Recycle pooled object
-            this.cvdResultPool.release(pooled);
+            // Note: cvdResult will be released after all windows are processed
 
             // Update slope statistics using Welford's algorithm
             this.updateSlopeStatistics(state, slope);
@@ -1128,7 +1127,8 @@ export class DeltaCVDConfirmation extends BaseDetector {
     ): DeltaCVDConfirmationResult {
         // CRITICAL FIX: Direction should be based on actual CVD slope, not z-score sign
         // Z-score tells us if momentum is unusual, slope tells us the direction
-        const side = Math.sign(slopes[this.windows[0]]) > 0 ? "buy" : "sell";
+        const slope = slopes[this.windows[0]];
+        const side = slope > 0 ? "buy" : slope < 0 ? "sell" : "neutral";
         const shortestWindowState = this.states.get(this.windows[0])!;
         const lastTrade =
             shortestWindowState.trades[shortestWindowState.trades.length - 1];

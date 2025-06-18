@@ -266,18 +266,34 @@ export class AccumulationZoneDetector extends ZoneDetector {
             // Update candidate with new trade
             // ✅ PERFORMANCE FIX: CircularBuffer.add() is O(1) vs Array.push() + Array.shift()
             candidate.trades.add(trade);
-            candidate.totalVolume += trade.quantity;
             candidate.lastUpdate = trade.timestamp;
-            // ✅ PERFORMANCE FIX: Incremental average order size calculation
-            candidate.tradeCount++;
-            candidate.averageOrderSize =
-                candidate.totalVolume / candidate.tradeCount;
 
-            // CRITICAL FIX: Proper accumulation pattern detection
+            // ✅ CRITICAL FIX: Calculate volume from actual CircularBuffer contents
+            // to avoid double counting when buffer overwrites old trades
+            const currentTrades = candidate.trades.getAll();
+            candidate.totalVolume = currentTrades.reduce(
+                (sum, t) => sum + t.quantity,
+                0
+            );
+            candidate.tradeCount = currentTrades.length;
+            candidate.averageOrderSize =
+                candidate.tradeCount > 0
+                    ? candidate.totalVolume / candidate.tradeCount
+                    : 0;
+
+            // ✅ CRITICAL FIX: Calculate side-specific volumes from actual CircularBuffer contents
+            // to avoid double counting when buffer overwrites old trades
+            candidate.buyVolume = currentTrades
+                .filter((t) => !t.buyerIsMaker)
+                .reduce((sum, t) => sum + t.quantity, 0);
+            candidate.sellVolume = currentTrades
+                .filter((t) => t.buyerIsMaker)
+                .reduce((sum, t) => sum + t.quantity, 0);
+
+            // Update consecutive trades counter based on current trade
             if (trade.buyerIsMaker) {
                 // ✅ CORRECT: Seller was aggressive - selling pressure being absorbed
                 // This is POSITIVE for accumulation (institutions absorbing retail sells)
-                candidate.sellVolume += trade.quantity;
                 candidate.consecutiveTrades = 0; // Reset buy counter
 
                 // Track absorption pattern (sells hitting strong bids)
@@ -285,7 +301,6 @@ export class AccumulationZoneDetector extends ZoneDetector {
             } else {
                 // ✅ CORRECT: Buyer was aggressive - retail chasing/FOMO
                 // This is NEGATIVE for accumulation (not institutional behavior)
-                candidate.buyVolume += trade.quantity;
                 candidate.consecutiveTrades++;
             }
 
@@ -361,11 +376,17 @@ export class AccumulationZoneDetector extends ZoneDetector {
             const duration = now - candidate.startTime;
 
             // Must meet minimum duration requirement
-            if (duration < this.config.minCandidateDuration) continue;
+            if (duration < this.config.minCandidateDuration) {
+                continue;
+            }
 
             // Must have minimum volume and trade count
-            if (candidate.totalVolume < this.config.minZoneVolume) continue;
-            if (candidate.trades.length < this.config.minTradeCount) continue;
+            if (candidate.totalVolume < this.config.minZoneVolume) {
+                continue;
+            }
+            if (candidate.trades.length < this.config.minTradeCount) {
+                continue;
+            }
 
             // CRITICAL FIX: Must show ABSORPTION pattern (high sell ratio being absorbed)
             const sellRatio = DetectorUtils.safeDivide(
@@ -376,15 +397,20 @@ export class AccumulationZoneDetector extends ZoneDetector {
             const minAbsorptionRatio =
                 Config.ENHANCED_ZONE_FORMATION.detectorThresholds.accumulation
                     .minAbsorptionRatio;
-            if (sellRatio < minAbsorptionRatio) continue;
+            // ✅ FIXED: For accumulation, we WANT high sell ratios (sells being absorbed)
+            // The minAbsorptionRatio (0.55) means we need at least 55% sell pressure to detect absorption
+            if (sellRatio < minAbsorptionRatio) {
+                continue;
+            }
 
             // Must have institutional-grade price stability during absorption
             if (
                 candidate.priceStability <
                 Config.ENHANCED_ZONE_FORMATION.detectorThresholds.accumulation
                     .minPriceStability
-            )
+            ) {
                 continue;
+            }
 
             // Must show minimal aggressive buying (avoid retail FOMO patterns)
             const aggressiveBuyRatio = DetectorUtils.safeDivide(
@@ -396,8 +422,9 @@ export class AccumulationZoneDetector extends ZoneDetector {
                 aggressiveBuyRatio >
                 Config.ENHANCED_ZONE_FORMATION.detectorThresholds.accumulation
                     .maxAggressiveRatio
-            )
+            ) {
                 continue;
+            }
 
             // Enhanced scoring with institutional factors
             const institutionalSignals =
@@ -408,11 +435,18 @@ export class AccumulationZoneDetector extends ZoneDetector {
                 this.calculateInstitutionalScore(institutionalSignals);
 
             // Require minimum institutional activity for accumulation
-            if (institutionalScore < 0.4) continue;
+            const minInstitutionalScore =
+                Config.ENHANCED_ZONE_FORMATION.detectorThresholds.accumulation
+                    .minInstitutionalScore;
+
+            if (institutionalScore < minInstitutionalScore) {
+                continue;
+            }
 
             const score = this.scoreEnhancedCandidateForZone(
                 candidate,
-                institutionalSignals
+                institutionalSignals,
+                trade.timestamp
             );
 
             if (
@@ -427,9 +461,36 @@ export class AccumulationZoneDetector extends ZoneDetector {
             }
         }
 
-        if (!bestCandidate) return null;
+        if (!bestCandidate) {
+            return null;
+        }
 
-        // Create zone from best candidate
+        // ✅ CRITICAL FIX: Check for existing zones near this price level before creating new one
+        const candidatePrice = bestCandidate.priceLevel;
+        const proximityTolerance = candidatePrice * 0.01; // 1% proximity tolerance
+        const nearbyZones = this.zoneManager.getZonesNearPrice(
+            this.symbol,
+            candidatePrice,
+            proximityTolerance
+        );
+
+        // If nearby zones exist, merge with strongest existing zone instead of creating new one
+        if (nearbyZones.length > 0) {
+            const strongestZone = nearbyZones.reduce((strongest, zone) =>
+                zone.strength > strongest.strength ? zone : strongest
+            );
+
+            // Merge candidate data into existing zone
+            this.mergeWithExistingZone(strongestZone, bestCandidate, trade);
+
+            // Remove candidate as it's been merged
+            this.candidates.delete(bestCandidate.priceLevel);
+            this.candidatePool.release(bestCandidate);
+
+            return strongestZone; // Return updated existing zone
+        }
+
+        // Create new zone only if no conflicts
         const zoneDetection = this.createZoneDetectionData(bestCandidate);
         const zone = this.zoneManager.createZone(
             "accumulation",
@@ -446,12 +507,50 @@ export class AccumulationZoneDetector extends ZoneDetector {
     }
 
     /**
+     * ✅ NEW METHOD: Merge candidate data with existing zone to resolve conflicts
+     */
+    private mergeWithExistingZone(
+        existingZone: AccumulationZone,
+        candidate: AccumulationCandidate,
+        trade: EnrichedTradeEvent
+    ): void {
+        try {
+            // Update zone with new candidate data through zone manager
+            const candidateTrades = candidate.trades.getAll();
+
+            // Add candidate trades to existing zone
+            for (const candidateTrade of candidateTrades) {
+                this.zoneManager.updateZone(existingZone.id, candidateTrade);
+            }
+
+            // Also update zone with the current trade that triggered the merge
+            this.zoneManager.updateZone(existingZone.id, trade);
+
+            // Log merge operation for monitoring
+            this.logger.debug("Merged candidate with existing zone", {
+                component: "AccumulationZoneDetector",
+                existingZoneId: existingZone.id,
+                candidatePrice: candidate.priceLevel,
+                candidateVolume: candidate.totalVolume,
+                mergedTrades: candidateTrades.length,
+            });
+        } catch (error) {
+            this.logger.error("Failed to merge candidate with existing zone", {
+                error: error instanceof Error ? error.message : String(error),
+                existingZoneId: existingZone.id,
+                candidatePrice: candidate.priceLevel,
+            });
+        }
+    }
+
+    /**
      * Enhanced scoring with institutional factors
      * FIXED: Now properly calculates all required ratios and uses correct accumulation scoring
      */
     private scoreEnhancedCandidateForZone(
         candidate: AccumulationCandidate,
-        institutionalSignals: InstitutionalSignals
+        institutionalSignals: InstitutionalSignals,
+        currentTradeTimestamp: number
     ): number {
         // Calculate all required ratios with safe division
         const sellRatio = DetectorUtils.safeDivide(
@@ -467,7 +566,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
             0
         );
 
-        const duration = Date.now() - candidate.startTime;
+        const duration = currentTradeTimestamp - candidate.startTime;
 
         // Determine market regime for adaptive scoring
         const marketRegime = this.analyzeMarketRegime(
@@ -499,26 +598,16 @@ export class AccumulationZoneDetector extends ZoneDetector {
                 marketRegime
             );
 
-        // Optional: Log detailed scoring for debugging (remove in production)
-        if (enhancedResult.score > 0.7) {
-            this.logger.debug("High accumulation score detected", {
-                score: enhancedResult.score,
-                confidence: enhancedResult.confidence,
-                sellRatio: sellRatio.toFixed(3),
-                aggressiveBuyRatio: aggressiveBuyRatio.toFixed(3),
-                priceStability: candidate.priceStability.toFixed(3),
-                volume: candidate.totalVolume,
-                reasons: enhancedResult.reasons,
-            });
-        }
-
         return enhancedResult.score;
     }
 
     /**
      * PATCH: Replace scoreCandidateForZone method with corrected logic
      */
-    private scoreCandidateForZone(candidate: AccumulationCandidate): number {
+    private scoreCandidateForZone(
+        candidate: AccumulationCandidate,
+        currentTradeTimestamp: number
+    ): number {
         // CRITICAL FIX: Score based on absorption, not aggressive buying
         const totalVolume = candidate.totalVolume;
         if (totalVolume === 0) return 0;
@@ -540,7 +629,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
         const buyPenalty = Math.min(aggressiveBuyRatio * 2, 1); // Penalize aggressive buying
 
         // 3. Duration and volume significance
-        const duration = Date.now() - candidate.startTime;
+        const duration = currentTradeTimestamp - candidate.startTime;
         const volumeScore = Math.min(totalVolume / 300, 1.0);
         const durationScore = Math.min(duration / 600000, 1.0); // 10 minutes
         const orderSizeScore = Math.min(candidate.averageOrderSize / 50, 1.0);
@@ -648,7 +737,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
             },
             totalVolume: candidate.totalVolume,
             averageOrderSize: candidate.averageOrderSize,
-            initialStrength: this.scoreCandidateForZone(candidate),
+            initialStrength: this.scoreCandidateForZone(candidate, Date.now()),
             confidence: Math.min(sellRatio * 1.5, 1.0), // Higher confidence for strong sell dominance
             supportingFactors: {
                 volumeConcentration: Math.min(candidate.totalVolume / 300, 1.0),
