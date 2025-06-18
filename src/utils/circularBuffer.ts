@@ -59,6 +59,7 @@ export class CircularBuffer<T> implements Iterable<T> {
     clear(): void {
         this.size = 0;
         this.head = 0;
+        this.tail = 0; // 🔧 CRITICAL FIX: Reset tail pointer to prevent data corruption
     }
 
     get length(): number {
