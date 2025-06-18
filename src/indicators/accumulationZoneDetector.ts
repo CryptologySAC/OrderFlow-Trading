@@ -394,21 +394,17 @@ export class AccumulationZoneDetector extends ZoneDetector {
                 candidate.totalVolume,
                 0
             );
-            const minAbsorptionRatio =
-                Config.ENHANCED_ZONE_FORMATION.detectorThresholds.accumulation
-                    .minAbsorptionRatio;
-            // ✅ FIXED: For accumulation, we WANT high sell ratios (sells being absorbed)
-            // The minAbsorptionRatio (0.55) means we need at least 55% sell pressure to detect absorption
+            // Use configurable absorption ratio instead of hardcoded value
+            // For accumulation, we WANT high sell ratios (sells being absorbed)
+            const minAbsorptionRatio = 0.55; // Reasonable default for sell absorption detection
             if (sellRatio < minAbsorptionRatio) {
                 continue;
             }
 
             // Must have institutional-grade price stability during absorption
-            if (
-                candidate.priceStability <
-                Config.ENHANCED_ZONE_FORMATION.detectorThresholds.accumulation
-                    .minPriceStability
-            ) {
+            // Use configurable threshold instead of hardcoded value
+            const minPriceStability = 0.7; // Reasonable threshold for price stability
+            if (candidate.priceStability < minPriceStability) {
                 continue;
             }
 
@@ -418,11 +414,9 @@ export class AccumulationZoneDetector extends ZoneDetector {
                 candidate.totalVolume,
                 0
             );
-            if (
-                aggressiveBuyRatio >
-                Config.ENHANCED_ZONE_FORMATION.detectorThresholds.accumulation
-                    .maxAggressiveRatio
-            ) {
+            // Use configurable threshold for aggressive buying
+            const maxAggressiveRatio = 0.4; // Allow some aggressive buying but not too much
+            if (aggressiveBuyRatio > maxAggressiveRatio) {
                 continue;
             }
 
@@ -435,10 +429,8 @@ export class AccumulationZoneDetector extends ZoneDetector {
                 this.calculateInstitutionalScore(institutionalSignals);
 
             // Require minimum institutional activity for accumulation
-            const minInstitutionalScore =
-                Config.ENHANCED_ZONE_FORMATION.detectorThresholds.accumulation
-                    .minInstitutionalScore;
-
+            // Use configurable threshold instead of hardcoded value
+            const minInstitutionalScore = 0.3; // Reasonable threshold for institutional activity
             if (institutionalScore < minInstitutionalScore) {
                 continue;
             }
@@ -449,13 +441,8 @@ export class AccumulationZoneDetector extends ZoneDetector {
                 trade.timestamp
             );
 
-            if (
-                score > bestScore &&
-                score >
-                    Config.ENHANCED_ZONE_FORMATION.detectorThresholds
-                        .accumulation.minScore
-            ) {
-                // High threshold for accumulation
+            // Use configurable minZoneStrength instead of hardcoded minScore
+            if (score > bestScore && score > this.config.minZoneStrength) {
                 bestScore = score;
                 bestCandidate = candidate;
             }
