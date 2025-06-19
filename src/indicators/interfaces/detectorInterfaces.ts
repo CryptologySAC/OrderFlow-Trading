@@ -254,7 +254,7 @@ export interface ZoneCandidate {
     tradeCount: number;
 }
 export interface DistributionCandidate extends ZoneCandidate {
-    volumeDistribution: number; // How distributed the selling is
+    absorptionQuality?: number; // Quality of institutional selling patterns (mirrors accumulation)
 }
 
 export interface AccumulationCandidate extends ZoneCandidate {

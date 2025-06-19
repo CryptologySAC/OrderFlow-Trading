@@ -980,7 +980,38 @@ export class AbsorptionDetector
         if (!side) {
             // No clear absorption detected - exit early
             return;
+        } else if (side) {
+            const opposingSide = side === "bid" ? "ask" : "bid";
+            const opposingAbsorption = this.checkAbsorptionConditions(
+                price,
+                opposingSide,
+                zone
+            );
+
+            if (opposingAbsorption) {
+                // Both sides showing absorption - use stronger one only
+                const stronger = this.resolveConflictingAbsorption(zone);
+                if (stronger !== side) {
+                    return; // Skip this signal, opposing side is stronger
+                }
+            }
         }
+
+        // Only signal at price extremes for "true tops"
+        //const pricePercentile = this.calculatePricePercentile(
+        //    price,
+        //    this.getRecentPriceRange()
+        //);
+
+        // For resistance (SELL signals): Only trigger near highs
+        //if (side === "ask" && pricePercentile < 0.8) {
+        //    return; // Not high enough for true top
+        // }
+
+        // For support (BUY signals): Only trigger near lows
+        //if (side === "bid" && pricePercentile > 0.2) {
+        //    return; // Not low enough for true bottom
+        //}
 
         // Get book data (with fallback to zone history)
         let bookLevel = this.depth.get(price);

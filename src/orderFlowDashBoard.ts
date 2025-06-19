@@ -43,7 +43,8 @@ import { AnomalyDetector, AnomalyEvent } from "./services/anomalyDetector.js";
 import { AbsorptionDetector } from "./indicators/absorptionDetector.js";
 import { ExhaustionDetector } from "./indicators/exhaustionDetector.js";
 import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
-import { SupportResistanceDetector } from "./indicators/supportResistanceDetector.js";
+// Support/Resistance detector import removed - detector disabled
+// import { SupportResistanceDetector } from "./indicators/supportResistanceDetector.js";
 
 // Zone-based Detector imports
 import { AccumulationZoneDetector } from "./indicators/accumulationZoneDetector.js";
@@ -108,7 +109,8 @@ export class OrderFlowDashboard {
     // Event-based Detectors (initialized in initializeDetectors)
     private absorptionDetector!: AbsorptionDetector;
     private exhaustionDetector!: ExhaustionDetector;
-    private supportResistanceDetector!: SupportResistanceDetector;
+    // Support/Resistance detector disabled - generating too many useless signals
+    // private supportResistanceDetector!: SupportResistanceDetector;
 
     // Zone-based Detectors (initialized in initializeDetectors)
     private accumulationZoneDetector!: AccumulationZoneDetector;
@@ -300,19 +302,19 @@ export class OrderFlowDashboard {
             true
         );
 
-        // Support/Resistance Detector
-        this.supportResistanceDetector =
-            DetectorFactory.createSupportResistanceDetector(
-                Config.SUPPORT_RESISTANCE_DETECTOR,
-                dependencies,
-                { id: "ltcusdt-support-resistance-main" }
-            );
-        this.signalCoordinator.registerDetector(
-            this.supportResistanceDetector,
-            ["support_resistance_level"],
-            10,
-            true
-        );
+        // Support/Resistance Detector - DISABLED: Generating too many useless signals
+        // this.supportResistanceDetector =
+        //     DetectorFactory.createSupportResistanceDetector(
+        //         Config.SUPPORT_RESISTANCE_DETECTOR,
+        //         dependencies,
+        //         { id: "ltcusdt-support-resistance-main" }
+        //     );
+        // this.signalCoordinator.registerDetector(
+        //     this.supportResistanceDetector,
+        //     ["support_resistance_level"],
+        //     10,
+        //     true
+        // );
 
         // Accumulation Zone Detector
         this.accumulationZoneDetector =
@@ -659,9 +661,10 @@ export class OrderFlowDashboard {
                     this.exhaustionDetector.onEnrichedTrade(enrichedTrade);
                     this.anomalyDetector.onEnrichedTrade(enrichedTrade);
                     this.deltaCVDConfirmation.onEnrichedTrade(enrichedTrade);
-                    this.supportResistanceDetector.onEnrichedTrade(
-                        enrichedTrade
-                    );
+                    // Support/Resistance detector disabled
+                    // this.supportResistanceDetector.onEnrichedTrade(
+                    //     enrichedTrade
+                    // );
 
                     // Legacy detectors removed - replaced by zone-based architecture
 
@@ -715,34 +718,35 @@ export class OrderFlowDashboard {
             });
         }
 
-        if (this.supportResistanceDetector) {
-            this.logger.info(
-                "[OrderFlowDashboard] Setting up support/resistance detector event handlers..."
-            );
-            this.supportResistanceDetector.on(
-                "supportResistanceLevel",
-                (event: {
-                    type: string;
-                    data: Record<string, unknown>;
-                    timestamp: Date;
-                }) => {
-                    const message: WebSocketMessage = {
-                        type: "supportResistanceLevel",
-                        data: event.data,
-                        now: Date.now(),
-                    };
-                    this.broadcastMessage(message);
-                    this.logger.info(
-                        "Support/Resistance level broadcasted via WebSocket",
-                        {
-                            levelId: event.data.id,
-                            price: event.data.price,
-                            type: event.data.type,
-                        }
-                    );
-                }
-            );
-        }
+        // Support/Resistance detector event handlers disabled
+        // if (this.supportResistanceDetector) {
+        //     this.logger.info(
+        //         "[OrderFlowDashboard] Setting up support/resistance detector event handlers..."
+        //     );
+        //     this.supportResistanceDetector.on(
+        //         "supportResistanceLevel",
+        //         (event: {
+        //             type: string;
+        //             data: Record<string, unknown>;
+        //             timestamp: Date;
+        //         }) => {
+        //             const message: WebSocketMessage = {
+        //                 type: "supportResistanceLevel",
+        //                 data: event.data,
+        //                 now: Date.now(),
+        //             };
+        //             this.broadcastMessage(message);
+        //             this.logger.info(
+        //                 "Support/Resistance level broadcasted via WebSocket",
+        //                 {
+        //                     levelId: event.data.id,
+        //                     price: event.data.price,
+        //                     type: event.data.type,
+        //                 }
+        //             );
+        //         }
+        //     );
+        // }
 
         // Setup zone-based detector event handlers
         this.setupZoneEventHandlers();

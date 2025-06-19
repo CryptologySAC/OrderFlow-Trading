@@ -96,7 +96,6 @@ describe("AccumulationZoneDetector - Zone Merge Validation", () => {
             expect(activeZones).toHaveLength(1);
             const firstZone = activeZones[0];
 
-
             // Validate first zone state
             expect(firstZone).toBeDefined();
             expect(firstZone.type).toBe("accumulation");

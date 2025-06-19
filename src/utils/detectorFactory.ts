@@ -379,7 +379,7 @@ export class DetectorFactory {
             support_resistance: {
                 supportedSignalTypes: ["support_resistance_level"],
                 priority: 40,
-                enabled: true,
+                enabled: false,
             },
         };
 
