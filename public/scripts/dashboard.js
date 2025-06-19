@@ -515,46 +515,23 @@ function scheduleOrderBookUpdate() {
  * Updates Y-axis bounds based on visible trades
  */
 function updateYAxisBounds() {
-    if (!tradesChart && !orderBookChart) return;
+    if (!tradesChart || trades.length === 0) return;
 
-    let yMin = Infinity;
-    let yMax = -Infinity;
+    const xMin = tradesChart.options.scales.x.min;
+    const xMax = tradesChart.options.scales.x.max;
 
-    if (tradesChart && trades.length > 0) {
-        const xMin = tradesChart.options.scales.x.min;
-        const xMax = tradesChart.options.scales.x.max;
-        const visibleTrades = trades.filter((t) =>
-            (xMin === undefined || t.x >= xMin) &&
-            (xMax === undefined || t.x <= xMax)
-        );
-        if (visibleTrades.length > 0) {
-            const prices = visibleTrades.map((t) => t.y);
-            yMin = Math.min(yMin, ...prices);
-            yMax = Math.max(yMax, ...prices);
-        }
-    }
+    const visibleTrades = trades.filter((t) => t.x >= xMin && t.x <= xMax);
 
-    if (orderBookData && Array.isArray(orderBookData.priceLevels)) {
-        const obPrices = orderBookData.priceLevels.map((l) => l.price);
-        if (obPrices.length > 0) {
-            yMin = Math.min(yMin, ...obPrices);
-            yMax = Math.max(yMax, ...obPrices);
-        }
-    }
+    if (visibleTrades.length === 0) return;
 
-    if (!isFinite(yMin) || !isFinite(yMax)) return;
+    const prices = visibleTrades.map((t) => t.y);
+    const yMin = Math.min(...prices);
+    const yMax = Math.max(...prices);
 
-    const padding = (yMax - yMin) * 0.05;
-
-    if (tradesChart) {
-        tradesChart.options.scales.y.min = yMin - padding;
-        tradesChart.options.scales.y.max = yMax + padding;
-    }
-
-    if (orderBookChart) {
-        orderBookChart.options.scales.y.min = yMin - padding;
-        orderBookChart.options.scales.y.max = yMax + padding;
-    }
+    tradesChart.options.scales.y.suggestedMin = yMin - (yMax - yMin) * 0.05;
+    tradesChart.options.scales.y.suggestedMax = yMax + (yMax - yMin) * 0.05;
+    delete tradesChart.options.scales.y.min;
+    delete tradesChart.options.scales.y.max;
 }
 
 /**
@@ -934,48 +911,76 @@ const tradeWebsocket = new TradeWebSocket({
 
                     orderBookData = message.data;
                     if (window.orderBookChart) {
+                        // Update chart data with new structure
+                        const labels = [];
                         const askData = [];
                         const bidData = [];
 
+                        // Select levels symmetrically around mid price for balanced display
                         const maxLevels = 30;
                         const midPrice = orderBookData.midPrice || 0;
 
+                        // Sort levels by price to ensure proper ordering
                         const sortedLevels = orderBookData.priceLevels.sort(
                             (a, b) => a.price - b.price
                         );
 
+                        // Find the index closest to midPrice
                         let midIndex = 0;
                         let minDiff = Infinity;
                         for (let i = 0; i < sortedLevels.length; i++) {
-                            const diff = Math.abs(sortedLevels[i].price - midPrice);
+                            const diff = Math.abs(
+                                sortedLevels[i].price - midPrice
+                            );
                             if (diff < minDiff) {
                                 minDiff = diff;
                                 midIndex = i;
                             }
                         }
 
+                        // Select symmetric range around midPrice
                         const levelsPerSide = Math.floor(maxLevels / 2);
-                        const startIndex = Math.max(0, midIndex - levelsPerSide);
+                        const startIndex = Math.max(
+                            0,
+                            midIndex - levelsPerSide
+                        );
                         const endIndex = Math.min(
                             sortedLevels.length,
                             startIndex + maxLevels
                         );
-                        const levelsToShow = sortedLevels.slice(startIndex, endIndex);
+                        const levelsToShow = sortedLevels.slice(
+                            startIndex,
+                            endIndex
+                        );
 
                         levelsToShow.forEach((level) => {
-                            askData.push({ x: level.ask || 0, y: level.price });
-                            bidData.push({ x: level.bid || 0, y: level.price });
+                            const priceStr = level.price
+                                ? level.price.toFixed(2)
+                                : "0.00";
+
+                            // Add ask position
+                            labels.push(`${priceStr}_ask`);
+                            askData.push(level.ask || 0);
+                            bidData.push(null);
+
+                            // Add bid position
+                            labels.push(`${priceStr}_bid`);
+                            askData.push(null);
+                            bidData.push(level.bid || 0);
                         });
 
+                        orderBookChart.data.labels = labels;
                         orderBookChart.data.datasets[0].data = askData;
                         orderBookChart.data.datasets[1].data = bidData;
 
+                        // Update colors based on current theme
                         const currentTheme = getCurrentTheme();
                         const actualTheme =
-                            currentTheme === "system" ? getSystemTheme() : currentTheme;
+                            currentTheme === "system"
+                                ? getSystemTheme()
+                                : currentTheme;
                         updateOrderBookBarColors(actualTheme);
 
-                        updateYAxisBounds();
                         scheduleOrderBookUpdate();
                     } else {
                         console.warn(
@@ -1176,40 +1181,53 @@ function initializeOrderBookChart(ctx) {
         throw new Error("Chart.js is not loaded");
     }
 
-    const askData = orderBookData.priceLevels.map((level) => ({
-        x: level.ask,
-        y: level.price,
-    }));
-    const bidData = orderBookData.priceLevels.map((level) => ({
-        x: level.bid,
-        y: level.price,
-    }));
+    // Create labels for both bid and ask positions for each price level
+    const labels = [];
+    const askData = [];
+    const bidData = [];
+    const askColors = [];
+    const bidColors = [];
 
-    const askColors = orderBookData.priceLevels.map(() => "rgba(255, 0, 0, 0.5)");
-    const bidColors = orderBookData.priceLevels.map(() => "rgba(0, 128, 0, 0.5)");
+    orderBookData.priceLevels.forEach((level) => {
+        const basePrice = level.price;
+        const priceStr = basePrice.toFixed(2);
+
+        // Add ask position (upper part of price tick)
+        labels.push(`${priceStr}_ask`);
+        askData.push(level.ask);
+        bidData.push(null);
+        askColors.push("rgba(255, 0, 0, 0.5)"); // Placeholder, will be updated by theme
+        bidColors.push("rgba(0, 0, 0, 0)");
+
+        // Add bid position (lower part of price tick)
+        labels.push(`${priceStr}_bid`);
+        askData.push(null);
+        bidData.push(level.bid);
+        askColors.push("rgba(0, 0, 0, 0)");
+        bidColors.push("rgba(0, 128, 0, 0.5)"); // Placeholder, will be updated by theme
+    });
 
     return new Chart(ctx, {
         type: "bar",
         data: {
+            labels: labels,
             datasets: [
                 {
                     label: "Asks",
-                    parsing: { xAxisKey: "x", yAxisKey: "y" },
                     data: askData,
                     backgroundColor: askColors,
                     borderColor: "rgba(255, 0, 0, 0.5)",
                     borderWidth: 1,
-                    barPercentage: 0.45,
+                    barPercentage: 0.9,
                     categoryPercentage: 1.0,
                 },
                 {
                     label: "Bids",
-                    parsing: { xAxisKey: "x", yAxisKey: "y" },
                     data: bidData,
                     backgroundColor: bidColors,
                     borderColor: "rgba(0, 128, 0, 0.5)",
                     borderWidth: 1,
-                    barPercentage: 0.45,
+                    barPercentage: 0.9,
                     categoryPercentage: 1.0,
                 },
             ],
@@ -1225,9 +1243,24 @@ function initializeOrderBookChart(ctx) {
                     ticks: { callback: (value) => Math.abs(value) },
                 },
                 y: {
-                    type: "linear",
                     title: { display: true, text: "Price (USDT)" },
+                    offset: true,
                     reverse: true,
+                    ticks: {
+                        callback: function (value, index) {
+                            const label = this.getLabelForValue(index);
+                            if (label && label.includes("_ask")) {
+                                return label.split("_")[0]; // Only show price for ask positions
+                            }
+                            return "";
+                        },
+                    },
+                },
+            },
+            datasets: {
+                bar: {
+                    barPercentage: 0.45,
+                    categoryPercentage: 1.0,
                 },
             },
             plugins: {
@@ -1245,18 +1278,30 @@ function initializeOrderBookChart(ctx) {
                 tooltip: {
                     callbacks: {
                         label: function (context) {
-                            const price = context.parsed.y;
-                            const volume = context.parsed.x;
-                            if (context.datasetIndex === 0 && volume > 0) {
-                                return `Ask: ${volume} LTC at $${price.toFixed(2)}`;
-                            } else if (context.datasetIndex === 1 && volume > 0) {
-                                return `Bid: ${volume} LTC at $${price.toFixed(2)}`;
+                            const label = context.label;
+                            const isAsk = label.includes("_ask");
+                            const isBid = label.includes("_bid");
+                            const priceStr = label.split("_")[0];
+                            const price = parseFloat(priceStr);
+
+                            // Find the corresponding price level
+                            const level = orderBookData.priceLevels.find(
+                                (l) => Math.abs(l.price - price) < 0.001
+                            );
+
+                            if (!level) return "";
+
+                            if (isAsk && level.ask > 0) {
+                                return `Ask: ${level.ask} LTC at $${price.toFixed(2)}`;
+                            } else if (isBid && level.bid > 0) {
+                                return `Bid: ${level.bid} LTC at $${price.toFixed(2)}`;
                             }
                             return "";
                         },
                         title: function (context) {
-                            const price = context[0].parsed.y;
-                            return `Price: $${price.toFixed(2)}`;
+                            const label = context[0].label;
+                            const priceStr = label.split("_")[0];
+                            return `Price: $${priceStr}`;
                         },
                     },
                 },
@@ -1846,31 +1891,37 @@ function updateOrderBookBarColors(theme) {
     const bidColors = [];
 
     orderBookData.priceLevels.forEach((level) => {
+        // Ask colors (red) - enhanced opacity for dark mode
         const askOpacity =
             theme === "dark"
-                ? Math.min(level.ask / 1500, 0.9)
+                ? Math.min(level.ask / 1500, 0.9) // Higher max opacity in dark mode
                 : Math.min(level.ask / 2000, 1);
 
+        const askColor = level.ask
+            ? theme === "dark"
+                ? `rgba(255, 80, 80, ${Math.max(askOpacity, 0.3)})` // Brighter red with min opacity
+                : `rgba(255, 0, 0, ${askOpacity})`
+            : "rgba(0, 0, 0, 0)";
+
+        // Bid colors (green) - enhanced opacity for dark mode
         const bidOpacity =
             theme === "dark"
-                ? Math.min(level.bid / 1500, 0.9)
+                ? Math.min(level.bid / 1500, 0.9) // Higher max opacity in dark mode
                 : Math.min(level.bid / 2000, 1);
 
-        askColors.push(
-            level.ask
-                ? theme === "dark"
-                    ? `rgba(255, 80, 80, ${Math.max(askOpacity, 0.3)})`
-                    : `rgba(255, 0, 0, ${askOpacity})`
-                : "rgba(0, 0, 0, 0)"
-        );
+        const bidColor = level.bid
+            ? theme === "dark"
+                ? `rgba(80, 255, 80, ${Math.max(bidOpacity, 0.3)})` // Brighter green with min opacity
+                : `rgba(0, 128, 0, ${bidOpacity})`
+            : "rgba(0, 0, 0, 0)";
 
-        bidColors.push(
-            level.bid
-                ? theme === "dark"
-                    ? `rgba(80, 255, 80, ${Math.max(bidOpacity, 0.3)})`
-                    : `rgba(0, 128, 0, ${bidOpacity})`
-                : "rgba(0, 0, 0, 0)"
-        );
+        // Add ask position
+        askColors.push(askColor);
+        bidColors.push("rgba(0, 0, 0, 0)");
+
+        // Add bid position
+        askColors.push("rgba(0, 0, 0, 0)");
+        bidColors.push(bidColor);
     });
 
     // Update the chart datasets
