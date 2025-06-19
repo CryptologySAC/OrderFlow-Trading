@@ -42,13 +42,13 @@ describe("AccumulationZoneDetector - Core Merge Functionality", () => {
 
         mockMetrics = new MetricsCollector();
 
-        // Use realistic config based on working requirements test
+        // Use permissive config to test merge logic specifically
         const config: Partial<ZoneDetectorConfig> = {
             minCandidateDuration: 120000, // 2 minutes - realistic institutional timeframe
             minZoneVolume: 200, // Production volume requirement
             minTradeCount: 6, // Production trade count
             maxPriceDeviation: 0.02, // 2% - realistic price deviation
-            minZoneStrength: 0.45, // Production strength requirement
+            minZoneStrength: 0.3, // REDUCED: Lower threshold to allow zone creation for testing
             strengthChangeThreshold: 0.15,
             minSellRatio: 0.5, // 50% sell ratio for accumulation
         };

@@ -698,7 +698,11 @@ export class AbsorptionDetector
         if (askAbsorption && !bidAbsorption) return "ask";
         if (bidAbsorption && askAbsorption) {
             // Both showing absorption - return stronger one
-            return this.resolveConflictingAbsorption(zone);
+            const stronger = this.resolveConflictingAbsorption(zone);
+            // Convert trading direction back to order book side:
+            // - "buy" absorption → "bid" side is absorbing
+            // - "sell" absorption → "ask" side is absorbing
+            return stronger === "buy" ? "bid" : "ask";
         }
 
         return null; // No clear absorption
@@ -757,10 +761,10 @@ export class AbsorptionDetector
      * @param zone Zone number
      * @returns The side with stronger absorption based on passive strength
      */
-    private resolveConflictingAbsorption(zone: number): "bid" | "ask" {
+    private resolveConflictingAbsorption(zone: number): "buy" | "sell" {
         const zoneHistory = this.zonePassiveHistory.get(zone);
         if (!zoneHistory || zoneHistory.count() < 6) {
-            return "bid"; // Default to bid if insufficient data
+            return "buy"; // Default to buy if insufficient data
         }
 
         const snapshots = zoneHistory.toArray();
@@ -773,8 +777,10 @@ export class AbsorptionDetector
             "ask"
         );
 
-        // Return the side with stronger passive liquidity growth
-        return recentBidStrength > recentAskStrength ? "bid" : "ask";
+        // Return the trading direction being absorbed:
+        // - Strong bid side → buy orders being absorbed → "buy" absorption
+        // - Strong ask side → sell orders being absorbed → "sell" absorption
+        return recentBidStrength > recentAskStrength ? "buy" : "sell";
     }
 
     /**
@@ -991,7 +997,11 @@ export class AbsorptionDetector
             if (opposingAbsorption) {
                 // Both sides showing absorption - use stronger one only
                 const stronger = this.resolveConflictingAbsorption(zone);
-                if (stronger !== side) {
+                // Convert trading direction to order book side for comparison:
+                // - "buy" absorption → "bid" side is absorbing
+                // - "sell" absorption → "ask" side is absorbing
+                const strongerSide = stronger === "buy" ? "bid" : "ask";
+                if (strongerSide !== side) {
                     return; // Skip this signal, opposing side is stronger
                 }
             }
