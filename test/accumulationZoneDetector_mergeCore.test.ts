@@ -77,9 +77,10 @@ describe("AccumulationZoneDetector - Core Merge Functionality", () => {
             firstZoneTrades.forEach((trade) => detector.analyze(trade));
 
             // Trigger first zone formation - wait 2+ minutes for realistic timing
+            // Trade sequence spans 36 seconds (12 trades * 3s), so trigger at 125 seconds total
             const zone1Trigger = createTrade(
                 basePrice,
-                baseTime + 125000, // 2+ minutes for production requirements
+                baseTime + 125000, // 125 seconds > 120 second requirement
                 true,
                 100
             );
@@ -112,9 +113,10 @@ describe("AccumulationZoneDetector - Core Merge Functionality", () => {
             const triggerVolume = 80;
 
             // Trigger merge by trying to form overlapping zone
+            // Second candidate started at +130000, needs 120s duration, so trigger at +250000
             const mergeTrigger = createTrade(
                 overlappingPrice,
-                baseTime + 255000, // Another 2+ minutes later
+                baseTime + 255000, // 255s gives second candidate 125s duration
                 true,
                 triggerVolume
             );
@@ -160,7 +162,7 @@ describe("AccumulationZoneDetector - Core Merge Functionality", () => {
 
             const zone1Trigger = createTrade(
                 basePrice,
-                baseTime + 125000,
+                baseTime + 125000, // 125 seconds > 120 second requirement
                 true,
                 100
             );
@@ -203,7 +205,7 @@ describe("AccumulationZoneDetector - Core Merge Functionality", () => {
 
             const zone2Trigger = createTrade(
                 distantPrice,
-                baseTime + 255000,
+                baseTime + 255000, // 255s gives second candidate sufficient duration
                 true,
                 100
             );
@@ -249,7 +251,7 @@ describe("AccumulationZoneDetector - Core Merge Functionality", () => {
 
             const zone1Trigger = createTrade(
                 basePrice,
-                baseTime + 125000,
+                baseTime + 125000, // 125 seconds > 120 second requirement
                 true,
                 100
             );
@@ -272,9 +274,10 @@ describe("AccumulationZoneDetector - Core Merge Functionality", () => {
             overlappingTrades.forEach((trade) => detector.analyze(trade));
 
             // Trigger merge (should fail gracefully)
+            // Second candidate started at +130000, needs 120s duration, so trigger at +255000
             const mergeTrigger = createTrade(
                 basePrice + 200,
-                baseTime + 255000,
+                baseTime + 255000, // 255s gives second candidate 125s duration
                 true,
                 80
             );
@@ -336,7 +339,7 @@ describe("AccumulationZoneDetector - Core Merge Functionality", () => {
             const triggerVolume = 90;
             const mergeTrigger = createTrade(
                 basePrice + 150,
-                baseTime + 255000,
+                baseTime + 255000, // 255s gives second candidate sufficient duration
                 true,
                 triggerVolume
             );

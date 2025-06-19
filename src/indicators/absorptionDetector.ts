@@ -1002,7 +1002,8 @@ export class AbsorptionDetector
         }
 
         // Check cooldown (only confirm updates later)
-        if (!this.checkCooldown(zone, side === "bid" ? "sell" : "buy", false)) { // IMPORTANT: This is the correct order SELL/BUY
+        if (!this.checkCooldown(zone, side === "bid" ? "sell" : "buy", false)) {
+            // IMPORTANT: This is the correct order SELL/BUY
             return;
         }
 

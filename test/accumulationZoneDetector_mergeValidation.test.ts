@@ -77,10 +77,11 @@ describe("AccumulationZoneDetector - Zone Merge Validation", () => {
             // Process trades to build first candidate
             zone1Trades.forEach((trade) => detector.analyze(trade));
 
-            // Advance time to meet minimum duration (6 seconds)
+            // Advance time to meet minimum duration (120+ seconds)
+            // Trade sequence spans 45 seconds, so trigger at 125 seconds total
             const zone1FormingTrade = createTrade(
                 basePrice + 0.1,
-                baseTime + 6000,
+                baseTime + 125000, // 125 seconds > 120 second requirement
                 true,
                 80
             );
@@ -89,7 +90,12 @@ describe("AccumulationZoneDetector - Zone Merge Validation", () => {
             // Verify first zone was created
             expect(result1.updates).toHaveLength(1);
             expect(result1.updates[0].updateType).toBe("zone_created");
-            const firstZone = result1.updates[0].zone;
+
+            // Get the actual zone from active zones (more reliable than update object)
+            const activeZones = detector.getActiveZones();
+            expect(activeZones).toHaveLength(1);
+            const firstZone = activeZones[0];
+
 
             // Validate first zone state
             expect(firstZone).toBeDefined();
@@ -168,7 +174,7 @@ describe("AccumulationZoneDetector - Zone Merge Validation", () => {
 
             const zone1FormingTrade = createTrade(
                 basePrice + 0.5,
-                baseTime + 15000,
+                baseTime + 125000, // 125 seconds > 120 second requirement
                 true,
                 100
             );
@@ -179,11 +185,11 @@ describe("AccumulationZoneDetector - Zone Merge Validation", () => {
 
             // Create overlapping candidate with known volume
             const overlappingTrades = [
-                createTrade(basePrice + 200, baseTime + 20000, true, 50),
-                createTrade(basePrice + 200, baseTime + 21000, true, 75),
-                createTrade(basePrice + 200, baseTime + 22000, false, 25), // Buy aggression (low)
-                createTrade(basePrice + 200, baseTime + 23000, true, 60),
-                createTrade(basePrice + 200, baseTime + 24000, true, 40),
+                createTrade(basePrice + 200, baseTime + 130000, true, 50),
+                createTrade(basePrice + 200, baseTime + 133000, true, 75),
+                createTrade(basePrice + 200, baseTime + 136000, false, 25), // Buy aggression (low)
+                createTrade(basePrice + 200, baseTime + 139000, true, 60),
+                createTrade(basePrice + 200, baseTime + 142000, true, 40),
             ];
 
             overlappingTrades.forEach((trade) => detector.analyze(trade));
@@ -198,7 +204,7 @@ describe("AccumulationZoneDetector - Zone Merge Validation", () => {
             // Trigger merge
             const mergeTrigger = createTrade(
                 basePrice + 200,
-                baseTime + 35000,
+                baseTime + 265000, // After 125s + 120s for second candidate duration
                 true,
                 triggerTradeVolume
             );
@@ -233,16 +239,16 @@ describe("AccumulationZoneDetector - Zone Merge Validation", () => {
 
             highSellRatioTrades.forEach((trade) => detector.analyze(trade));
             detector.analyze(
-                createTrade(basePrice, baseTime + 15000, true, 50)
+                createTrade(basePrice, baseTime + 125000, true, 50)
             );
 
             // Create overlapping candidate with similar characteristics
             const overlappingHighSellTrades = [
-                createTrade(basePrice + 100, baseTime + 20000, true, 80),
-                createTrade(basePrice + 100, baseTime + 21000, true, 70),
-                createTrade(basePrice + 100, baseTime + 22000, true, 90),
-                createTrade(basePrice + 100, baseTime + 23000, false, 15), // Low buy aggression
-                createTrade(basePrice + 100, baseTime + 24000, true, 85),
+                createTrade(basePrice + 100, baseTime + 130000, true, 80),
+                createTrade(basePrice + 100, baseTime + 133000, true, 70),
+                createTrade(basePrice + 100, baseTime + 136000, true, 90),
+                createTrade(basePrice + 100, baseTime + 139000, false, 15), // Low buy aggression
+                createTrade(basePrice + 100, baseTime + 142000, true, 85),
             ];
 
             overlappingHighSellTrades.forEach((trade) =>
@@ -251,7 +257,7 @@ describe("AccumulationZoneDetector - Zone Merge Validation", () => {
 
             // Trigger merge
             detector.analyze(
-                createTrade(basePrice + 100, baseTime + 35000, true, 60)
+                createTrade(basePrice + 100, baseTime + 265000, true, 60)
             );
 
             const mergedZone = detector.getActiveZones()[0];
@@ -281,7 +287,7 @@ describe("AccumulationZoneDetector - Zone Merge Validation", () => {
             );
             initialTrades.forEach((trade) => detector.analyze(trade));
             detector.analyze(
-                createTrade(basePrice, baseTime + 15000, true, 50)
+                createTrade(basePrice, baseTime + 125000, true, 50)
             );
 
             const initialZoneCount = detector.getActiveZones().length;
@@ -297,7 +303,7 @@ describe("AccumulationZoneDetector - Zone Merge Validation", () => {
             // Create overlapping candidate
             const overlappingTrades = createTradeSequence(
                 basePrice + 200,
-                baseTime + 20000,
+                baseTime + 130000,
                 8,
                 true
             );
@@ -306,7 +312,7 @@ describe("AccumulationZoneDetector - Zone Merge Validation", () => {
             // Trigger merge (should fail gracefully)
             const mergeTrigger = createTrade(
                 basePrice + 200,
-                baseTime + 35000,
+                baseTime + 255000, // After second candidate has sufficient duration
                 true,
                 60
             );
@@ -339,20 +345,20 @@ describe("AccumulationZoneDetector - Zone Merge Validation", () => {
             ); // Lower sell ratio
             weakZoneTrades.forEach((trade) => detector.analyze(trade));
             detector.analyze(
-                createTrade(basePrice, baseTime + 15000, true, 40)
+                createTrade(basePrice, baseTime + 125000, true, 40)
             );
 
             // Create second zone nearby (stronger)
             const strongZoneTrades = createTradeSequence(
                 basePrice + 300,
-                baseTime + 20000,
+                baseTime + 130000,
                 12,
                 true,
                 0.85
             ); // Higher sell ratio
             strongZoneTrades.forEach((trade) => detector.analyze(trade));
             detector.analyze(
-                createTrade(basePrice + 300, baseTime + 35000, true, 80)
+                createTrade(basePrice + 300, baseTime + 265000, true, 80)
             );
 
             const zonesBeforeMerge = detector.getActiveZones();
@@ -367,7 +373,7 @@ describe("AccumulationZoneDetector - Zone Merge Validation", () => {
             const middlePrice = basePrice + 150; // Between the two zones
             const overlappingTrades = createTradeSequence(
                 middlePrice,
-                baseTime + 40000,
+                baseTime + 270000,
                 10,
                 true
             );
@@ -375,7 +381,7 @@ describe("AccumulationZoneDetector - Zone Merge Validation", () => {
 
             // Trigger merge
             detector.analyze(
-                createTrade(middlePrice, baseTime + 55000, true, 70)
+                createTrade(middlePrice, baseTime + 400000, true, 70)
             );
 
             const zonesAfterMerge = detector.getActiveZones();
