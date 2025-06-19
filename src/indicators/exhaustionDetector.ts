@@ -703,9 +703,8 @@ export class ExhaustionDetector
         // 🔧 FIX: Lighter signal metadata - keep only essential information
         signal.meta = {
             detectorVersion: "2.1-safe",
-            dataQuality: signal.meta?.conditions?.dataQuality || "unknown",
-            originalConfidence:
-                signal.meta?.originalConfidence || signal.confidence,
+            dataQuality: "unknown", // Simplified for type safety
+            originalConfidence: signal.confidence,
             // Remove large objects, add summaries instead
         };
 
@@ -1325,7 +1324,7 @@ export class ExhaustionDetector
             this.handleDetectorError(error as Error);
 
             // 🔧 FIX: Enhanced error handling with recovery strategy
-            this.metricsCollector.incrementMetric("exhaustion.analysis.errors");
+            this.metricsCollector.incrementMetric("exhaustionDetectionErrors");
 
             // Trigger zone memory cleanup on critical errors
             if (!this.circuitBreakerState.isOpen) {
