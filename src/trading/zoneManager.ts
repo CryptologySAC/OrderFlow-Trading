@@ -526,12 +526,42 @@ export class ZoneManager extends EventEmitter {
         price: number,
         tolerance: number = 0.01
     ): AccumulationZone[] {
-        return this.getActiveZones(symbol).filter((zone) => {
+        const activeZones = this.getActiveZones(symbol);
+
+        this.logger.debug("DEBUG: getZonesNearPrice called", {
+            component: "ZoneManager",
+            symbol,
+            price,
+            tolerance,
+            activeZoneCount: activeZones.length,
+            activeZones: activeZones.map((z) => ({
+                id: z.id,
+                center: z.priceRange.center,
+                min: z.priceRange.min,
+                max: z.priceRange.max,
+            })),
+        });
+
+        return activeZones.filter((zone) => {
             const priceDistance =
                 price > 0
                     ? Math.abs(price - zone.priceRange.center) / price
                     : 0;
-            return priceDistance <= tolerance;
+
+            const isNearby = priceDistance <= tolerance;
+
+            this.logger.debug("DEBUG: Zone proximity check", {
+                component: "ZoneManager",
+                zoneId: zone.id,
+                zoneCenter: zone.priceRange.center,
+                candidatePrice: price,
+                absoluteDistance: Math.abs(price - zone.priceRange.center),
+                priceDistance,
+                tolerance,
+                isNearby,
+            });
+
+            return isNearby;
         });
     }
 

@@ -117,13 +117,15 @@ export class AccumulationZoneDetector extends ZoneDetector {
         (candidate) => {
             candidate.priceLevel = 0;
             candidate.startTime = 0;
-            
+
             // 🔧 CRITICAL: Clear buffer and validate it's actually cleared
             candidate.trades.clear();
             if (candidate.trades.length !== 0) {
-                throw new Error(`CRITICAL: CircularBuffer.clear() failed - buffer still contains ${candidate.trades.length} items`);
+                throw new Error(
+                    `CRITICAL: CircularBuffer.clear() failed - buffer still contains ${candidate.trades.length} items`
+                );
             }
-            
+
             candidate.buyVolume = 0;
             candidate.sellVolume = 0;
             candidate.totalVolume = 0;
@@ -279,16 +281,21 @@ export class AccumulationZoneDetector extends ZoneDetector {
             // 🔧 PRODUCTION SAFETY: Validate data integrity before adding new trade
             const existingTrades = candidate.trades.getAll();
             if (existingTrades.length > 0) {
-                const existingPriceLevel = this.getPriceLevel(existingTrades[0].price);
+                const existingPriceLevel = this.getPriceLevel(
+                    existingTrades[0].price
+                );
                 if (Math.abs(existingPriceLevel - priceLevel) > 0.01) {
-                    this.logger.error("CRITICAL: Trade data corruption detected", {
-                        component: "AccumulationZoneDetector",
-                        candidatePrice: priceLevel,
-                        existingTradePrice: existingTrades[0].price,
-                        existingPriceLevel,
-                        corruptionType: "cross_price_contamination",
-                        existingTradeCount: existingTrades.length
-                    });
+                    this.logger.error(
+                        "CRITICAL: Trade data corruption detected",
+                        {
+                            component: "AccumulationZoneDetector",
+                            candidatePrice: priceLevel,
+                            existingTradePrice: existingTrades[0].price,
+                            existingPriceLevel,
+                            corruptionType: "cross_price_contamination",
+                            existingTradeCount: existingTrades.length,
+                        }
+                    );
                     // Clear corrupted data and restart candidate
                     candidate.trades.clear();
                     candidate.totalVolume = 0;

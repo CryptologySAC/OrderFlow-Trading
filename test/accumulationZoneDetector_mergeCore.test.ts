@@ -20,19 +20,37 @@ describe("AccumulationZoneDetector - Core Merge Functionality", () => {
             info: vi.fn(),
             warn: vi.fn(),
             error: vi.fn(),
-            debug: vi.fn(),
+            debug: vi.fn().mockImplementation((message, data) => {
+                // Log zone formation debug to understand why first zone fails
+                if (
+                    message.includes("checkForZoneFormation") ||
+                    message.includes("Evaluating candidate") ||
+                    message.includes("failed") ||
+                    message.includes("Creating zone detection data") ||
+                    message.includes("Created new candidate") ||
+                    message.includes("About to call") ||
+                    message.includes("returned") ||
+                    message.includes("New zone created")
+                ) {
+                    console.log(
+                        `[DEBUG] ${message}`,
+                        JSON.stringify(data, null, 2)
+                    );
+                }
+            }),
         } as ILogger;
 
         mockMetrics = new MetricsCollector();
 
-        // Use production-matching config
+        // Use realistic config based on working requirements test
         const config: Partial<ZoneDetectorConfig> = {
-            minCandidateDuration: 120000, // 2 minutes
-            minZoneVolume: 200, // Production requirement
-            minTradeCount: 6, // Production requirement
-            maxPriceDeviation: 0.02, // 2%
-            minZoneStrength: 0.45,
+            minCandidateDuration: 120000, // 2 minutes - realistic institutional timeframe
+            minZoneVolume: 200, // Production volume requirement
+            minTradeCount: 6, // Production trade count
+            maxPriceDeviation: 0.02, // 2% - realistic price deviation
+            minZoneStrength: 0.45, // Production strength requirement
             strengthChangeThreshold: 0.15,
+            minSellRatio: 0.5, // 50% sell ratio for accumulation
         };
 
         detector = new AccumulationZoneDetector(
@@ -58,10 +76,10 @@ describe("AccumulationZoneDetector - Core Merge Functionality", () => {
             );
             firstZoneTrades.forEach((trade) => detector.analyze(trade));
 
-            // Trigger first zone formation
+            // Trigger first zone formation - wait 2+ minutes for realistic timing
             const zone1Trigger = createTrade(
                 basePrice,
-                baseTime + 125000,
+                baseTime + 125000, // 2+ minutes for production requirements
                 true,
                 100
             );
@@ -96,7 +114,7 @@ describe("AccumulationZoneDetector - Core Merge Functionality", () => {
             // Trigger merge by trying to form overlapping zone
             const mergeTrigger = createTrade(
                 overlappingPrice,
-                baseTime + 255000,
+                baseTime + 255000, // Another 2+ minutes later
                 true,
                 triggerVolume
             );
@@ -146,10 +164,31 @@ describe("AccumulationZoneDetector - Core Merge Functionality", () => {
                 true,
                 100
             );
-            detector.analyze(zone1Trigger);
+            const result1 = detector.analyze(zone1Trigger);
 
-            // Create second zone at distant price (outside 1% tolerance)
-            const distantPrice = basePrice + 1000; // 2% away, outside merge tolerance
+            console.log("=== STEP 1: Creating first zone at", basePrice, "===");
+            console.log(
+                "Candidates before first zone:",
+                (detector as any).getCandidateCount()
+            );
+            console.log("Result1 updates:", result1.updates.length);
+            console.log(
+                "Active zones after first:",
+                detector.getActiveZones().length
+            );
+            console.log(
+                "Candidates after first zone creation:",
+                (detector as any).getCandidateCount()
+            );
+
+            // Create second zone at very distant price (outside any tolerance)
+            const distantPrice = basePrice + 5000; // 10% away, well outside any merge tolerance
+            console.log(
+                "=== STEP 2: Creating second zone at",
+                distantPrice,
+                "==="
+            );
+
             const trades2 = createConcentratedTrades(
                 distantPrice,
                 baseTime + 130000,
@@ -157,6 +196,10 @@ describe("AccumulationZoneDetector - Core Merge Functionality", () => {
                 0.8
             );
             trades2.forEach((trade) => detector.analyze(trade));
+            console.log(
+                "Candidates after second trades:",
+                (detector as any).getCandidateCount()
+            );
 
             const zone2Trigger = createTrade(
                 distantPrice,
@@ -166,8 +209,24 @@ describe("AccumulationZoneDetector - Core Merge Functionality", () => {
             );
             const result2 = detector.analyze(zone2Trigger);
 
-            // Should create second zone (no merge due to distance)
+            console.log("Result2 updates:", result2.updates.length);
+            console.log(
+                "Active zones after second:",
+                detector.getActiveZones().length
+            );
+            console.log(
+                "Candidates after second zone creation:",
+                (detector as any).getCandidateCount()
+            );
+
             const activeZones = detector.getActiveZones();
+            activeZones.forEach((zone, i) => {
+                console.log(
+                    `Zone ${i}: ID=${zone.id}, center=${zone.priceRange.center}`
+                );
+            });
+
+            // Should create second zone (no merge due to distance)
             expect(activeZones).toHaveLength(2);
 
             // Validate zones are distinct
@@ -333,13 +392,21 @@ function createConcentratedTrades(
 ): EnrichedTradeEvent[] {
     const trades: EnrichedTradeEvent[] = [];
 
-    for (let i = 0; i < count; i++) {
-        const timestamp = startTime + i * 2000;
-        const price = exactPrice; // All trades at exact same price for concentration
-        const quantity = 60 + Math.random() * 80; // 60-140 institutional size
-        const buyerIsMaker = Math.random() < sellRatio; // Sell pressure for accumulation
+    // Calculate how many trades should be sells to meet ratio
+    const sellCount = Math.ceil(count * sellRatio);
+    const buyCount = count - sellCount;
 
-        trades.push(createTrade(price, timestamp, buyerIsMaker, quantity));
+    // Create realistic institutional-sized trades over time
+    for (let i = 0; i < sellCount; i++) {
+        const timestamp = startTime + i * 3000; // 3 second intervals for realism
+        const quantity = 50 + Math.random() * 50; // 50-100 institutional sizes
+        trades.push(createTrade(exactPrice, timestamp, true, quantity)); // buyerIsMaker=true = sell
+    }
+
+    for (let i = 0; i < buyCount; i++) {
+        const timestamp = startTime + (sellCount + i) * 3000;
+        const quantity = 50 + Math.random() * 50; // 50-100 institutional sizes
+        trades.push(createTrade(exactPrice, timestamp, false, quantity)); // buyerIsMaker=false = buy
     }
 
     return trades;

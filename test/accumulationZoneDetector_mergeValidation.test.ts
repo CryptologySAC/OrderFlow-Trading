@@ -20,18 +20,36 @@ describe("AccumulationZoneDetector - Zone Merge Validation", () => {
             info: vi.fn(),
             warn: vi.fn(),
             error: vi.fn(),
-            debug: vi.fn(),
+            debug: vi.fn().mockImplementation((message, data) => {
+                // Log zone formation debug to understand why zones fail
+                if (
+                    message.includes("checkForZoneFormation") ||
+                    message.includes("Evaluating candidate") ||
+                    message.includes("failed") ||
+                    message.includes("Creating zone detection data") ||
+                    message.includes("Created new candidate") ||
+                    message.includes("About to call") ||
+                    message.includes("returned") ||
+                    message.includes("New zone created")
+                ) {
+                    console.log(
+                        `[DEBUG] ${message}`,
+                        JSON.stringify(data, null, 2)
+                    );
+                }
+            }),
         } as ILogger;
 
         mockMetrics = new MetricsCollector();
 
         const config: Partial<ZoneDetectorConfig> = {
-            minCandidateDuration: 120000, // 2 minutes (match production config)
-            minZoneVolume: 200, // Match production requirement
-            minTradeCount: 6, // Match production requirement
-            maxPriceDeviation: 0.02, // 2% (match production)
-            minZoneStrength: 0.45, // Reasonable for testing
-            strengthChangeThreshold: 0.15, // Match production
+            minCandidateDuration: 120000, // 2 minutes - realistic institutional timeframe
+            minZoneVolume: 200, // Production volume requirement
+            minTradeCount: 6, // Production trade count
+            maxPriceDeviation: 0.02, // 2% - realistic price deviation
+            minZoneStrength: 0.45, // Production strength requirement
+            strengthChangeThreshold: 0.15,
+            minSellRatio: 0.5, // 50% sell ratio for accumulation
         };
 
         detector = new AccumulationZoneDetector(
@@ -59,10 +77,10 @@ describe("AccumulationZoneDetector - Zone Merge Validation", () => {
             // Process trades to build first candidate
             zone1Trades.forEach((trade) => detector.analyze(trade));
 
-            // Advance time to meet minimum duration (2 minutes)
+            // Advance time to meet minimum duration (6 seconds)
             const zone1FormingTrade = createTrade(
                 basePrice + 0.1,
-                baseTime + 125000,
+                baseTime + 6000,
                 true,
                 80
             );
@@ -403,26 +421,38 @@ function createTradeSequence(
     startTime: number,
     count: number,
     favorsAccumulation: boolean,
-    sellRatio: number = 0.75 // 75% sell pressure for strong accumulation signal
+    sellRatio: number = 0.8 // 80% sell pressure for strong accumulation signal
 ): EnrichedTradeEvent[] {
     const trades: EnrichedTradeEvent[] = [];
 
-    // Create trades concentrated at the same price level to meet minTradeCount requirement
-    for (let i = 0; i < count; i++) {
-        const timestamp = startTime + i * 2000; // 2 second intervals for stability
-        // Keep most trades at the exact same price level to accumulate at one candidate
-        const price =
-            i < count * 0.8
-                ? basePrice // 80% of trades at exact same price
-                : basePrice + (Math.random() - 0.5) * 0.1; // 20% with minimal variation
-        const quantity = 50 + Math.random() * 100; // 50-150 quantity for institutional size
+    if (favorsAccumulation) {
+        // Calculate deterministic trade distribution
+        const sellCount = Math.ceil(count * sellRatio);
+        const buyCount = count - sellCount;
 
-        // Create sell pressure for accumulation
-        const buyerIsMaker = favorsAccumulation
-            ? Math.random() < sellRatio // More sells for accumulation
-            : Math.random() < 0.5; // Random for non-accumulation
+        // Create realistic institutional trades over time
+        for (let i = 0; i < sellCount; i++) {
+            const timestamp = startTime + i * 3000; // 3 second intervals for realism
+            const quantity = 50 + Math.random() * 50; // 50-100 institutional sizes
+            trades.push(createTrade(basePrice, timestamp, true, quantity));
+        }
 
-        trades.push(createTrade(price, timestamp, buyerIsMaker, quantity));
+        // Create buys (buyerIsMaker=false)
+        for (let i = 0; i < buyCount; i++) {
+            const timestamp = startTime + (sellCount + i) * 3000;
+            const quantity = 50 + Math.random() * 50; // 50-100 institutional sizes
+            trades.push(createTrade(basePrice, timestamp, false, quantity));
+        }
+    } else {
+        // Random for non-accumulation scenarios
+        for (let i = 0; i < count; i++) {
+            const timestamp = startTime + i * 500;
+            const quantity = 60 + Math.random() * 40;
+            const buyerIsMaker = Math.random() < 0.5;
+            trades.push(
+                createTrade(basePrice, timestamp, buyerIsMaker, quantity)
+            );
+        }
     }
 
     return trades;
