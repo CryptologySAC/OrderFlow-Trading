@@ -77,7 +77,6 @@ import {
     type InstitutionalSignals,
     type MarketRegime,
 } from "./enhancedZoneFormation.js";
-import { Config } from "../core/config.js";
 import { ZoneDetector } from "./base/zoneDetector.js";
 import type { AccumulationCandidate } from "./interfaces/detectorInterfaces.js";
 
