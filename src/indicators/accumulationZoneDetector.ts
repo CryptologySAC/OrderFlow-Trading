@@ -698,21 +698,81 @@ export class AccumulationZoneDetector extends ZoneDetector {
             // Update zone with new candidate data through zone manager
             const candidateTrades = candidate.trades.getAll();
 
+            // 🔧 FIX: Expand zone price range to accommodate candidate trades BEFORE adding them
+            // This prevents isTradeInZone() from rejecting trades from overlapping candidates
+            const candidatePrices = candidateTrades.map((t) => t.price);
+            const allPrices = [...candidatePrices, trade.price];
+
+            // Expand zone range for each unique price level in the candidate
+            const uniquePrices = [...new Set(allPrices)];
+            for (const price of uniquePrices) {
+                const expanded = this.zoneManager.expandZoneRange(
+                    existingZone.id,
+                    price
+                );
+                if (!expanded) {
+                    this.logger.warn(
+                        "Failed to expand zone range during merge",
+                        {
+                            component: "AccumulationZoneDetector",
+                            zoneId: existingZone.id,
+                            price,
+                        }
+                    );
+                }
+            }
+
+            // Track volume before merge for verification
+            const volumeBeforeMerge = existingZone.totalVolume;
+            const candidateVolume = candidate.totalVolume;
+            let tradesAddedSuccessfully = 0;
+
             // Add candidate trades to existing zone
             for (const candidateTrade of candidateTrades) {
-                this.zoneManager.updateZone(existingZone.id, candidateTrade);
+                const updateResult = this.zoneManager.updateZone(
+                    existingZone.id,
+                    candidateTrade
+                );
+                if (updateResult) {
+                    tradesAddedSuccessfully++;
+                } else {
+                    this.logger.warn(
+                        "Failed to add candidate trade to zone after expansion",
+                        {
+                            component: "AccumulationZoneDetector",
+                            zoneId: existingZone.id,
+                            tradePrice: candidateTrade.price,
+                            zoneRange: existingZone.priceRange,
+                        }
+                    );
+                }
             }
 
             // Also update zone with the current trade that triggered the merge
-            this.zoneManager.updateZone(existingZone.id, trade);
+            const triggerTradeResult = this.zoneManager.updateZone(
+                existingZone.id,
+                trade
+            );
+            if (triggerTradeResult) {
+                tradesAddedSuccessfully++;
+            }
+
+            // Verify volume increase after merge
+            const volumeAfterMerge = existingZone.totalVolume;
+            const actualVolumeIncrease = volumeAfterMerge - volumeBeforeMerge;
 
             // Log merge operation for monitoring
             this.logger.debug("Merged candidate with existing zone", {
                 component: "AccumulationZoneDetector",
                 existingZoneId: existingZone.id,
                 candidatePrice: candidate.priceLevel,
-                candidateVolume: candidate.totalVolume,
+                candidateVolume: candidateVolume,
                 mergedTrades: candidateTrades.length,
+                tradesAddedSuccessfully,
+                volumeBeforeMerge,
+                volumeAfterMerge,
+                actualVolumeIncrease,
+                expectedVolumeIncrease: candidateVolume + trade.quantity,
             });
         } catch (error) {
             this.logger.error("Failed to merge candidate with existing zone", {

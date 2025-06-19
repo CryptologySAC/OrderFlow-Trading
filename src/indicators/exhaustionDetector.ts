@@ -190,69 +190,116 @@ export class ExhaustionDetector
         // NEW: Update thresholds if needed
         this.maybeUpdateThresholds();
 
-        let score = 0;
-        const thresholds = this.getAdaptiveThresholds(); // NEW: Use adaptive thresholds
+        const thresholds = this.getAdaptiveThresholds();
 
-        // Factor 1: Adaptive depletion ratio (CHANGED from hardcoded values)
+        // 🔧 FIX: Define normalized weight constants to prevent score overflow
+        const weights = {
+            depletion: 0.4, // Primary exhaustion factor
+            passive: 0.25, // Passive liquidity depletion
+            continuity: 0.15, // Continuous depletion trend
+            imbalance: 0.1, // Market imbalance
+            spread: 0.08, // Spread widening
+            velocity: 0.02, // Volume velocity
+        };
+
+        let weightedScore = 0;
+
+        // Factor 1: Normalized depletion ratio scoring
+        let depletionScore = 0;
         if (conditions.depletionRatio > thresholds.depletionLevels.extreme) {
-            score += thresholds.scores.extreme;
+            depletionScore = 1.0; // Maximum depletion
         } else if (
             conditions.depletionRatio > thresholds.depletionLevels.high
         ) {
-            score += thresholds.scores.high;
+            depletionScore = 0.75; // High depletion
         } else if (
             conditions.depletionRatio > thresholds.depletionLevels.moderate
         ) {
-            score += thresholds.scores.moderate;
+            depletionScore = 0.5; // Moderate depletion
+        } else {
+            // Proportional scoring below moderate threshold
+            depletionScore = Math.min(
+                0.5,
+                conditions.depletionRatio / thresholds.depletionLevels.moderate
+            );
         }
+        weightedScore += depletionScore * weights.depletion;
 
-        // Factor 2: Adaptive passive strength (CHANGED from hardcoded values)
+        // Factor 2: Normalized passive strength scoring
+        let passiveScore = 0;
         if (
             conditions.passiveRatio <
             thresholds.passiveRatioLevels.severeDepletion
         ) {
-            score += 0.25; // Severely depleted
+            passiveScore = 1.0; // Severely depleted
         } else if (
             conditions.passiveRatio <
             thresholds.passiveRatioLevels.moderateDepletion
         ) {
-            score += 0.15; // Moderately depleted
+            passiveScore = 0.6; // Moderately depleted
         } else if (
             conditions.passiveRatio <
             thresholds.passiveRatioLevels.someDepletion
         ) {
-            score += 0.1; // Somewhat depleted
+            passiveScore = 0.3; // Somewhat depleted
+        } else {
+            // Proportional scoring - higher ratio = lower depletion score
+            passiveScore = Math.max(0, 1 - conditions.passiveRatio);
         }
+        weightedScore += passiveScore * weights.passive;
 
-        // Factor 3: Continuous depletion (adaptive to volatility) - CHANGED
-        const depletionThreshold =
-            thresholds.depletionLevels.moderate * conditions.avgPassive * 0.5;
+        // Factor 3: Normalized continuous depletion - 🔧 FIX: Fixed impossible threshold
+        const depletionThreshold = conditions.avgPassive * 0.2; // 20% of average passive (FIXED)
+        let continuityScore = 0;
         if (conditions.refillGap < -depletionThreshold) {
-            score += 0.15;
+            continuityScore = 1.0; // Strong continuous depletion
         } else if (conditions.refillGap < 0) {
-            score += 0.1;
+            continuityScore =
+                Math.abs(conditions.refillGap) / depletionThreshold; // Proportional
         }
+        weightedScore += continuityScore * weights.continuity;
 
-        // Factor 4-6: Keep existing logic for imbalance, spread, velocity (UNCHANGED)
-        if (conditions.imbalance > 0.8) score += 0.1;
-        else if (conditions.imbalance > 0.6) score += 0.05;
+        // Factor 4: Normalized imbalance scoring
+        let imbalanceScore = 0;
+        if (conditions.imbalance > 0.8) {
+            imbalanceScore = 1.0;
+        } else if (conditions.imbalance > 0.6) {
+            imbalanceScore = 0.5;
+        } else {
+            imbalanceScore = Math.max(0, (conditions.imbalance - 0.5) / 0.3); // Scale from 0.5-0.8 to 0-1
+        }
+        weightedScore += imbalanceScore * weights.imbalance;
 
+        // Factor 5: Normalized spread scoring
+        let spreadScore = 0;
         if (this.features.spreadAdjustment) {
-            if (conditions.spread > 0.005) score += 0.05;
-            else if (conditions.spread > 0.002) score += 0.03;
+            if (conditions.spread > 0.005) {
+                spreadScore = 1.0;
+            } else if (conditions.spread > 0.002) {
+                spreadScore = 0.6;
+            } else {
+                spreadScore = Math.max(0, conditions.spread / 0.002); // Proportional to 0.002 threshold
+            }
         }
+        weightedScore += spreadScore * weights.spread;
 
+        // Factor 6: Normalized velocity scoring
+        let velocityScore = 0;
         if (this.features.volumeVelocity && conditions.passiveVelocity < -100) {
-            score += 0.05;
+            velocityScore = Math.min(
+                1.0,
+                Math.abs(conditions.passiveVelocity) / 200
+            ); // Scale negative velocity
         }
+        weightedScore += velocityScore * weights.velocity;
 
-        // Penalty for insufficient data (UNCHANGED)
+        // Apply data quality penalty
         if (conditions.sampleCount < 5) {
-            score *= 0.7;
+            weightedScore *= 0.7;
         }
 
-        // NEW: Apply minimum confidence threshold
-        const finalScore = Math.max(0, Math.min(1, score));
+        // 🔧 FIX: Ensure score never exceeds 1.0 and meets minimum confidence
+        const finalScore = Math.max(0, Math.min(1, weightedScore));
         return finalScore >= thresholds.minimumConfidence ? finalScore : 0;
     }
 
@@ -802,8 +849,8 @@ export class ExhaustionDetector
         const ratio = numerator / denominator;
         if (!isFinite(ratio)) return defaultValue;
 
-        // Clamp to reasonable bounds
-        return Math.max(0, Math.min(1000, ratio));
+        // 🔧 FIX: Clamp to realistic market bounds (20:1 max vs previous 1000:1)
+        return Math.max(0, Math.min(20, ratio));
     }
 
     /**

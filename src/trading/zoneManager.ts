@@ -410,6 +410,40 @@ export class ZoneManager extends EventEmitter {
         );
     }
 
+    /**
+     * Expand zone price range to accommodate new price levels during merges
+     * This prevents volume loss when overlapping candidates are merged
+     */
+    public expandZoneRange(zoneId: string, newPrice: number): boolean {
+        const zone = this.activeZones.get(zoneId);
+        if (!zone) return false;
+
+        // Calculate if expansion is needed
+        const needsExpansion =
+            newPrice < zone.priceRange.min || newPrice > zone.priceRange.max;
+        if (!needsExpansion) return true; // No expansion needed
+
+        // Expand the zone's price range to include the new price
+        const originalMin = zone.priceRange.min;
+        const originalMax = zone.priceRange.max;
+
+        zone.priceRange.min = Math.min(zone.priceRange.min, newPrice);
+        zone.priceRange.max = Math.max(zone.priceRange.max, newPrice);
+        zone.priceRange.center =
+            (zone.priceRange.min + zone.priceRange.max) / 2;
+        zone.priceRange.width = zone.priceRange.max - zone.priceRange.min;
+
+        this.logger.debug("Zone price range expanded", {
+            component: "ZoneManager",
+            zoneId,
+            originalRange: { min: originalMin, max: originalMax },
+            newRange: { min: zone.priceRange.min, max: zone.priceRange.max },
+            expansionPrice: newPrice,
+        });
+
+        return true;
+    }
+
     private classifySignificance(
         detection: ZoneDetectionData
     ): AccumulationZone["significance"] {
