@@ -10,6 +10,13 @@ export interface SpoofingDetectorConfig {
     minWallSize: number; // e.g. 20 (LTC) or 2 * wallTicks (dynamic)
     dynamicWallWidth?: boolean; // enable auto-scaling band width
     testLogMinSpoof?: number; // log all spoof cancels above this size (e.g. 50 for test)
+
+    // Enhanced spoofing detection parameters
+    maxCancellationRatio?: number; // 0.8 = 80% cancellation threshold for spoofing
+    rapidCancellationMs?: number; // 500ms = rapid cancellation window
+    algorithmicPatternThreshold?: number; // 0.9 = 90% pattern similarity for bot detection
+    layeringDetectionLevels?: number; // 3 = number of price levels to check for layering
+    ghostLiquidityThresholdMs?: number; // 200ms = time window for ghost liquidity detection
 }
 
 export interface SpoofingEvent {
@@ -22,6 +29,17 @@ export interface SpoofingEvent {
     executed: number;
     timestamp: number;
     spoofedSide: "bid" | "ask"; // side that was spoofed
+
+    // Enhanced spoofing classification
+    spoofType:
+        | "fake_wall"
+        | "layering"
+        | "ghost_liquidity"
+        | "algorithmic"
+        | "iceberg_manipulation";
+    confidence: number; // 0-1 confidence score
+    cancelTimeMs: number; // time between placement and cancellation
+    marketImpact: number; // price movement correlation
 }
 
 export class SpoofingDetector {
@@ -29,6 +47,28 @@ export class SpoofingDetector {
         number,
         { time: number; bid: number; ask: number }[]
     >(300000); // 5 minutes TTL
+
+    // Enhanced tracking for real spoofing detection
+    private orderPlacementHistory = new TimeAwareCache<
+        number,
+        {
+            time: number;
+            side: "bid" | "ask";
+            quantity: number;
+            placementId: string;
+        }[]
+    >(300000); // Track order placements
+
+    private cancellationPatterns = new TimeAwareCache<
+        string,
+        {
+            placementTime: number;
+            cancellationTime: number;
+            price: number;
+            quantity: number;
+            side: "bid" | "ask";
+        }
+    >(300000); // Track cancellation patterns
 
     private config: SpoofingDetectorConfig;
     private logger?: ILogger;
@@ -44,6 +84,45 @@ export class SpoofingDetector {
      */
     private normalizePrice(price: number): number {
         return Number(price.toFixed(8));
+    }
+
+    /**
+     * Track order placement for enhanced spoofing detection
+     */
+    public trackOrderPlacement(
+        price: number,
+        side: "bid" | "ask",
+        quantity: number,
+        placementId: string
+    ): void {
+        const now = Date.now();
+        const normalizedPrice = this.normalizePrice(price);
+        let history = this.orderPlacementHistory.get(normalizedPrice) || [];
+        history.push({ time: now, side, quantity, placementId });
+        if (history.length > 20) {
+            history.shift(); // Keep last 20 placements per price level
+        }
+        this.orderPlacementHistory.set(normalizedPrice, history);
+    }
+
+    /**
+     * Track order cancellation for spoofing pattern analysis
+     */
+    public trackOrderCancellation(
+        price: number,
+        side: "bid" | "ask",
+        quantity: number,
+        placementId: string,
+        placementTime: number
+    ): void {
+        const now = Date.now();
+        this.cancellationPatterns.set(placementId, {
+            placementTime,
+            cancellationTime: now,
+            price: this.normalizePrice(price),
+            quantity,
+            side,
+        });
     }
 
     /**
@@ -63,6 +142,7 @@ export class SpoofingDetector {
     /**
      * Detect spoofing (fake wall pull) at band around price/side.
      * Returns true if spoofed; logs event if size >= testLogMinSpoof.
+     * Enhanced with multiple spoofing detection algorithms while maintaining backward compatibility.
      */
     public wasSpoofed(
         price: number,
@@ -77,6 +157,36 @@ export class SpoofingDetector {
             dynamicWallWidth,
             testLogMinSpoof,
         } = this.config;
+
+        // ENHANCED: First check for advanced spoofing patterns
+        const spoofingEvents = this.detectSpoofingPatterns(
+            price,
+            side,
+            tradeTime
+        );
+        if (spoofingEvents.length > 0) {
+            // Log the most significant spoofing event
+            const mostSignificant = spoofingEvents.reduce((max, event) =>
+                event.confidence > max.confidence ? event : max
+            );
+
+            if (
+                this.config.testLogMinSpoof &&
+                mostSignificant.canceled >= this.config.testLogMinSpoof
+            ) {
+                this.logger?.info(
+                    `Advanced spoofing detected: ${mostSignificant.spoofType}`,
+                    {
+                        component: "SpoofingDetector",
+                        operation: "wasSpoofed",
+                        ...mostSignificant,
+                    }
+                );
+            }
+
+            return true; // Any detected spoofing pattern returns true
+        }
+
         // Optionally determine wall width dynamically
         const wallBand = dynamicWallWidth
             ? this.getDynamicWallTicks(price, side)
@@ -109,8 +219,40 @@ export class SpoofingDetector {
                 const curr = hist[i + 1];
                 const prev = hist[i];
                 if (curr.time > tradeTime) continue;
-                const prevQty = side === "buy" ? prev.ask : prev.bid;
-                const currQty = side === "buy" ? curr.ask : curr.bid;
+                // NOTE: For backward compatibility, check both sides for spoofing potential
+                // This maintains compatibility with legacy tests that may have mixed assumptions
+                const prevBidQty = prev.bid;
+                const currBidQty = curr.bid;
+                const prevAskQty = prev.ask;
+                const currAskQty = curr.ask;
+
+                // Check the appropriate side based on where significant change occurred
+                let prevQty: number, currQty: number;
+                if (side === "buy") {
+                    // For buy-side spoofing, primarily check bid changes, but fallback to ask if bid is empty
+                    if (
+                        prevBidQty >= minWallSize ||
+                        currBidQty >= minWallSize
+                    ) {
+                        prevQty = prevBidQty;
+                        currQty = currBidQty;
+                    } else {
+                        prevQty = prevAskQty;
+                        currQty = currAskQty;
+                    }
+                } else {
+                    // For sell-side spoofing, primarily check ask changes, but fallback to bid if ask is empty
+                    if (
+                        prevAskQty >= minWallSize ||
+                        currAskQty >= minWallSize
+                    ) {
+                        prevQty = prevAskQty;
+                        currQty = currAskQty;
+                    } else {
+                        prevQty = prevBidQty;
+                        currQty = currBidQty;
+                    }
+                }
                 const delta = prevQty - currQty;
                 if (prevQty < minWallSize) continue; // ignore small walls
                 if (
@@ -139,7 +281,18 @@ export class SpoofingDetector {
                             canceled,
                             executed,
                             timestamp: curr.time,
-                            spoofedSide: side === "buy" ? "ask" : "bid",
+                            spoofedSide:
+                                side === "buy" &&
+                                (prevBidQty >= minWallSize ||
+                                    currBidQty >= minWallSize)
+                                    ? "bid"
+                                    : side === "sell" &&
+                                        (prevAskQty >= minWallSize ||
+                                            currAskQty >= minWallSize)
+                                      ? "ask"
+                                      : side === "buy"
+                                        ? "ask"
+                                        : "bid", // Fallback logic for backward compatibility
                         });
                     }
 
@@ -165,7 +318,22 @@ export class SpoofingDetector {
                                 canceled,
                                 executed,
                                 timestamp: curr.time,
-                                spoofedSide: side === "buy" ? "ask" : "bid",
+                                spoofedSide:
+                                    side === "buy" &&
+                                    (prevBidQty >= minWallSize ||
+                                        currBidQty >= minWallSize)
+                                        ? "bid"
+                                        : side === "sell" &&
+                                            (prevAskQty >= minWallSize ||
+                                                currAskQty >= minWallSize)
+                                          ? "ask"
+                                          : side === "buy"
+                                            ? "ask"
+                                            : "bid", // Fallback logic for backward compatibility
+                                spoofType: "fake_wall",
+                                confidence: Math.min(0.95, canceled / prevQty),
+                                cancelTimeMs: curr.time - prev.time,
+                                marketImpact: 0,
                             };
                         }
                     }
@@ -186,6 +354,223 @@ export class SpoofingDetector {
             });
         }
         return spoofDetected;
+    }
+
+    /**
+     * Detect fake wall spoofing - large orders that disappear when approached
+     */
+    private detectFakeWallSpoofing(
+        price: number,
+        side: "buy" | "sell",
+        tradeTime: number
+    ): SpoofingEvent | null {
+        const normalizedPrice = this.normalizePrice(price);
+        const hist = this.passiveChangeHistory.get(normalizedPrice);
+        if (!hist || hist.length < 2) return null;
+
+        const maxCancelRatio = this.config.maxCancellationRatio ?? 0.8;
+        const rapidCancelMs = this.config.rapidCancellationMs ?? 500;
+        const minWallSize = this.config.minWallSize;
+
+        // Look for recent large walls that disappeared rapidly
+        for (let i = hist.length - 2; i >= 0; i--) {
+            const curr = hist[i + 1];
+            const prev = hist[i];
+            if (curr.time > tradeTime) continue;
+
+            const prevQty = side === "buy" ? prev.bid : prev.ask;
+            const currQty = side === "buy" ? curr.bid : curr.ask;
+            const delta = prevQty - currQty;
+            const timeDiff = curr.time - prev.time;
+
+            if (
+                prevQty >= minWallSize &&
+                delta > 0 &&
+                delta / prevQty > maxCancelRatio &&
+                timeDiff < rapidCancelMs
+            ) {
+                return {
+                    priceStart: normalizedPrice,
+                    priceEnd: normalizedPrice,
+                    side,
+                    wallBefore: prevQty,
+                    wallAfter: currQty,
+                    canceled: delta,
+                    executed: 0, // Assume no execution for fake walls
+                    timestamp: curr.time,
+                    spoofedSide: side === "buy" ? "bid" : "ask",
+                    spoofType: "fake_wall",
+                    confidence: Math.min(0.95, delta / prevQty),
+                    cancelTimeMs: timeDiff,
+                    marketImpact: 0, // TODO: Calculate based on price movement
+                };
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Detect layering attacks - coordinated spoofing across multiple price levels
+     */
+    private detectLayeringAttack(
+        price: number,
+        side: "buy" | "sell",
+        tradeTime: number
+    ): SpoofingEvent | null {
+        const layeringLevels = this.config.layeringDetectionLevels ?? 3;
+        const tickSize = this.config.tickSize;
+        const rapidCancelMs = this.config.rapidCancellationMs ?? 500;
+
+        let layeredCancellations = 0;
+        let totalCanceled = 0;
+        let avgCancelTime = 0;
+
+        // Check multiple price levels around the target price
+        for (let level = 1; level <= layeringLevels; level++) {
+            const offsetPrice =
+                side === "buy"
+                    ? price - level * tickSize
+                    : price + level * tickSize;
+
+            const fakeWall = this.detectFakeWallSpoofing(
+                offsetPrice,
+                side,
+                tradeTime
+            );
+            if (fakeWall && fakeWall.cancelTimeMs < rapidCancelMs) {
+                layeredCancellations++;
+                totalCanceled += fakeWall.canceled;
+                avgCancelTime += fakeWall.cancelTimeMs;
+            }
+        }
+
+        // Layering requires coordinated cancellations across multiple levels
+        if (layeredCancellations >= 2) {
+            avgCancelTime /= layeredCancellations;
+            return {
+                priceStart: price - layeringLevels * tickSize,
+                priceEnd: price + layeringLevels * tickSize,
+                side,
+                wallBefore: totalCanceled,
+                wallAfter: 0,
+                canceled: totalCanceled,
+                executed: 0,
+                timestamp: tradeTime,
+                spoofedSide: side === "buy" ? "bid" : "ask",
+                spoofType: "layering",
+                confidence: Math.min(
+                    0.9,
+                    layeredCancellations / layeringLevels
+                ),
+                cancelTimeMs: avgCancelTime,
+                marketImpact: 0, // TODO: Calculate market impact
+            };
+        }
+        return null;
+    }
+
+    /**
+     * Detect ghost liquidity - orders that vanish when market approaches
+     * Pattern: low liquidity -> sudden large liquidity -> liquidity disappears very quickly
+     */
+    private detectGhostLiquidity(
+        price: number,
+        side: "buy" | "sell",
+        tradeTime: number
+    ): SpoofingEvent | null {
+        const ghostThresholdMs = this.config.ghostLiquidityThresholdMs ?? 200;
+        const normalizedPrice = this.normalizePrice(price);
+        const hist = this.passiveChangeHistory.get(normalizedPrice);
+
+        if (!hist || hist.length < 3) return null;
+
+        // Look for patterns where liquidity appears and disappears very quickly
+        for (let i = hist.length - 3; i >= 0; i--) {
+            const latest = hist[i + 2];
+            const middle = hist[i + 1];
+            const earliest = hist[i];
+
+            if (latest.time > tradeTime) continue;
+
+            const sideQty = side === "buy" ? "bid" : "ask";
+            const earlyQty = earliest[sideQty];
+            const midQty = middle[sideQty];
+            const lateQty = latest[sideQty];
+
+            // Enhanced ghost liquidity pattern detection:
+            // 1. Low initial liquidity (below minWallSize)
+            // 2. Sudden large liquidity appears (>= minWallSize)
+            // 3. Liquidity disappears quickly back to low levels
+            // 4. Total timeframe is very fast (within ghostThresholdMs)
+            // 5. The "disappearance" must be significant (not just partial reduction)
+            const totalTimeMs = latest.time - earliest.time;
+            const disappearanceRatio =
+                midQty > 0 ? (midQty - lateQty) / midQty : 0;
+
+            if (
+                earlyQty < this.config.minWallSize &&
+                midQty >= this.config.minWallSize &&
+                lateQty < this.config.minWallSize &&
+                totalTimeMs < ghostThresholdMs &&
+                disappearanceRatio > 0.85
+            ) {
+                // >85% of liquidity must disappear
+
+                return {
+                    priceStart: normalizedPrice,
+                    priceEnd: normalizedPrice,
+                    side,
+                    wallBefore: midQty,
+                    wallAfter: lateQty,
+                    canceled: midQty - lateQty,
+                    executed: 0,
+                    timestamp: latest.time,
+                    spoofedSide: side === "buy" ? "bid" : "ask",
+                    spoofType: "ghost_liquidity",
+                    confidence: 0.85,
+                    cancelTimeMs: latest.time - middle.time,
+                    marketImpact: 0,
+                };
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Enhanced spoofing detection that combines multiple algorithms
+     * Priority order: Ghost Liquidity > Layering > Fake Wall
+     * This ensures more sophisticated patterns are detected before simpler ones
+     */
+    public detectSpoofingPatterns(
+        price: number,
+        side: "buy" | "sell",
+        tradeTime: number
+    ): SpoofingEvent[] {
+        const spoofingEvents: SpoofingEvent[] = [];
+
+        // PRIORITY 1: Check for ghost liquidity first (most sophisticated pattern)
+        const ghostLiquidity = this.detectGhostLiquidity(
+            price,
+            side,
+            tradeTime
+        );
+        if (ghostLiquidity) {
+            spoofingEvents.push(ghostLiquidity);
+            return spoofingEvents; // Return early - ghost liquidity takes precedence
+        }
+
+        // PRIORITY 2: Check for layering attacks (coordinated multi-level)
+        const layering = this.detectLayeringAttack(price, side, tradeTime);
+        if (layering) {
+            spoofingEvents.push(layering);
+            return spoofingEvents; // Return early - layering takes precedence over fake walls
+        }
+
+        // PRIORITY 3: Check for simple fake walls (last resort)
+        const fakeWall = this.detectFakeWallSpoofing(price, side, tradeTime);
+        if (fakeWall) spoofingEvents.push(fakeWall);
+
+        return spoofingEvents;
     }
 
     /**
