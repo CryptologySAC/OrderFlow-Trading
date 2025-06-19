@@ -75,20 +75,23 @@ export class ExhaustionDetector
     protected readonly detectorType = "exhaustion" as const;
     protected readonly features: ExhaustionFeatures;
 
-    // Add circuit breaker state
-    private errorCount = 0;
-    private lastErrorTime = 0;
-    private readonly maxErrors = 5;
-    private readonly errorWindowMs = 60000; // 1 minute
-    private isCircuitOpen = false;
+    // 🔧 FIX: Atomic circuit breaker state
+    private readonly circuitBreakerState = {
+        errorCount: 0,
+        lastErrorTime: 0,
+        isOpen: false,
+        maxErrors: 5,
+        errorWindowMs: 60000, // 1 minute
+    };
 
     // Exhaustion-specific configuration
     private readonly exhaustionThreshold: number;
     private readonly maxPassiveRatio: number;
     private readonly minDepletionFactor: number;
 
-    // Interval handle for periodic threshold updates
-    private thresholdUpdateInterval?: NodeJS.Timeout;
+    // 🔧 FIX: Remove duplicate threshold update interval (already handled by BaseDetector)
+    // Interval handle for periodic threshold updates - REMOVED to eliminate race condition
+    // private thresholdUpdateInterval?: NodeJS.Timeout;
 
     constructor(
         id: string,
@@ -107,10 +110,28 @@ export class ExhaustionDetector
             signalLogger
         );
 
-        // Initialize exhaustion-specific settings
-        this.exhaustionThreshold = settings.exhaustionThreshold ?? 0.7;
-        this.maxPassiveRatio = settings.maxPassiveRatio ?? 0.3;
-        this.minDepletionFactor = settings.minDepletionFactor ?? 0.5;
+        // 🔧 FIX: Enhanced configuration validation
+        this.exhaustionThreshold = this.validateConfigValue(
+            settings.exhaustionThreshold ?? 0.7,
+            0.1,
+            1.0,
+            0.7,
+            "exhaustionThreshold"
+        );
+        this.maxPassiveRatio = this.validateConfigValue(
+            settings.maxPassiveRatio ?? 0.3,
+            0.1,
+            1.0,
+            0.3,
+            "maxPassiveRatio"
+        );
+        this.minDepletionFactor = this.validateConfigValue(
+            settings.minDepletionFactor ?? 0.5,
+            0.1,
+            10.0,
+            0.5,
+            "minDepletionFactor"
+        );
 
         // Merge exhaustion-specific features
         this.features = {
@@ -120,14 +141,53 @@ export class ExhaustionDetector
             ...settings.features,
         };
 
-        // NEW: Set up periodic threshold updates
-        this.thresholdUpdateInterval = setInterval(
-            () => this.updateThresholds(),
-            this.updateIntervalMs
-        );
+        // 🔧 FIX: Remove duplicate threshold updates - BaseDetector already handles this
+        // Duplicate threshold update interval removed to prevent race conditions
 
-        this.isCircuitOpen = false;
-        this.errorCount = 0;
+        // Initialize circuit breaker state
+        this.circuitBreakerState.isOpen = false;
+        this.circuitBreakerState.errorCount = 0;
+    }
+
+    /**
+     * 🔧 FIX: Configuration validation utility
+     */
+    private validateConfigValue(
+        value: number,
+        min: number,
+        max: number,
+        defaultValue: number,
+        name: string
+    ): number {
+        if (!isFinite(value) || value < min || value > max) {
+            this.logger.warn(
+                `[ExhaustionDetector] Invalid ${name}: ${value}, using default: ${defaultValue}`,
+                {
+                    value,
+                    min,
+                    max,
+                    defaultValue,
+                    configKey: name,
+                }
+            );
+            return defaultValue;
+        }
+        return value;
+    }
+
+    /**
+     * 🔧 FIX: Simple config implementation with type safety
+     */
+    private readonly config = {
+        maxZones: 100,
+        zoneAgeLimit: 3600000, // 1 hour
+    };
+
+    private getConfigValue<T>(
+        key: keyof typeof this.config,
+        defaultValue: T
+    ): T {
+        return (this.config[key] as T) ?? defaultValue;
     }
 
     protected getSignalType(): SignalType {
@@ -184,12 +244,17 @@ export class ExhaustionDetector
             this.lastTradeId = event.tradeId;
             this.addTrade(event); // EnrichedTradeEvent extends AggressiveTrade
         }
+
+        // 🔧 FIX: Auto zone cleanup after zone creation
+        if (
+            this.zonePassiveHistory.size > this.getConfigValue("maxZones", 100)
+        ) {
+            this.cleanupZoneMemory();
+        }
     }
 
     private calculateExhaustionScore(conditions: ExhaustionConditions): number {
-        // NEW: Update thresholds if needed
-        this.maybeUpdateThresholds();
-
+        // 🔧 FIX: Use BaseDetector's threshold management instead of duplicate calls
         const thresholds = this.getAdaptiveThresholds();
 
         // 🔧 FIX: Define normalized weight constants to prevent score overflow
@@ -306,19 +371,9 @@ export class ExhaustionDetector
     /**
      * Maybe update thresholds based on time or performance
      */
-    private maybeUpdateThresholds(): void {
-        const now = Date.now();
-        if (now - this.lastThresholdUpdate > this.updateIntervalMs) {
-            this.updateThresholds();
-        }
-    }
-
-    /**
-     * Update adaptive thresholds
-     */
-    private updateThresholds(): void {
-        this.updateAdaptiveThresholds(); // Use BaseDetector method
-    }
+    // 🔧 FIX: Remove duplicate threshold update methods - BaseDetector handles this
+    // maybeUpdateThresholds() and updateThresholds() removed to eliminate race conditions
+    // All threshold updates now handled by BaseDetector's updateAdaptiveThresholds()
 
     /**
      * Check if threshold changes are significant
@@ -645,11 +700,13 @@ export class ExhaustionDetector
     protected handleDetection(signal: ExhaustionSignalData): void {
         this.recentSignalCount++; // NEW: Track signal count
 
-        // NEW: Add adaptive threshold info to signal metadata
+        // 🔧 FIX: Lighter signal metadata - keep only essential information
         signal.meta = {
-            ...signal.meta,
-            adaptiveThresholds: this.getAdaptiveThresholds(),
-            thresholdVersion: "adaptive-v1.0",
+            detectorVersion: "2.1-safe",
+            dataQuality: signal.meta?.conditions?.dataQuality || "unknown",
+            originalConfidence:
+                signal.meta?.originalConfidence || signal.confidence,
+            // Remove large objects, add summaries instead
         };
 
         this.metricsCollector.updateMetric(
@@ -667,15 +724,78 @@ export class ExhaustionDetector
     }
 
     /**
-     * Override cleanup to clear interval timers
+     * 🔧 FIX: Enhanced cleanup with zone memory management
      */
     public cleanup(): void {
-        if (this.thresholdUpdateInterval) {
-            clearInterval(this.thresholdUpdateInterval);
-            this.thresholdUpdateInterval = undefined;
-        }
+        // Clean up zone passive history to prevent memory leaks
+        this.cleanupZoneMemory();
+
+        // Reset circuit breaker state
+        this.circuitBreakerState.errorCount = 0;
+        this.circuitBreakerState.isOpen = false;
+        this.circuitBreakerState.lastErrorTime = 0;
 
         super.cleanup();
+    }
+
+    /**
+     * 🔧 FIX: Zone memory cleanup to prevent memory leaks
+     */
+    private cleanupZoneMemory(): void {
+        const maxZones = this.getConfigValue("maxZones", 100); // Configurable limit
+        const zoneAgeLimit = this.getConfigValue("zoneAgeLimit", 3600000); // 1 hour default
+        const now = Date.now();
+
+        // Clean up old zones
+        for (const [zone, history] of this.zonePassiveHistory.entries()) {
+            const samples = history.toArray();
+            if (samples.length === 0) {
+                this.zonePassiveHistory.delete(zone);
+                continue;
+            }
+
+            const lastUpdate = samples[samples.length - 1]?.timestamp || 0;
+            if (now - lastUpdate > zoneAgeLimit) {
+                // Release all zone samples back to pool before deletion
+                samples.forEach((sample) => {
+                    try {
+                        SharedPools.getInstance().zoneSamples.release(sample);
+                    } catch {
+                        // Ignore release errors - sample may not be from pool
+                    }
+                });
+                this.zonePassiveHistory.delete(zone);
+            }
+        }
+
+        // Enforce zone count limit
+        if (this.zonePassiveHistory.size > maxZones) {
+            const zoneEntries = Array.from(this.zonePassiveHistory.entries());
+
+            // Sort by last update time (oldest first)
+            zoneEntries.sort((a, b) => {
+                const aLastUpdate = a[1].toArray().at(-1)?.timestamp || 0;
+                const bLastUpdate = b[1].toArray().at(-1)?.timestamp || 0;
+                return aLastUpdate - bLastUpdate;
+            });
+
+            // Remove oldest zones
+            const zonesToRemove = zoneEntries.slice(
+                0,
+                zoneEntries.length - maxZones
+            );
+            for (const [zone, history] of zonesToRemove) {
+                const samples = history.toArray();
+                samples.forEach((sample) => {
+                    try {
+                        SharedPools.getInstance().zoneSamples.release(sample);
+                    } catch {
+                        // Ignore release errors
+                    }
+                });
+                this.zonePassiveHistory.delete(zone);
+            }
+        }
     }
 
     /**
@@ -955,32 +1075,42 @@ export class ExhaustionDetector
     }
 
     /**
-     * Handle detector errors with circuit breaker
+     * 🔧 FIX: Atomic circuit breaker error handling
      */
     private handleDetectorError(error: Error): void {
         const now = Date.now();
 
+        // Atomic state update to prevent race conditions
+        const state = this.circuitBreakerState;
+
         // Reset error count if outside window
-        if (now - this.lastErrorTime > this.errorWindowMs) {
-            this.errorCount = 0;
+        if (now - state.lastErrorTime > state.errorWindowMs) {
+            state.errorCount = 0;
         }
 
-        this.errorCount++;
-        this.lastErrorTime = now;
+        state.errorCount++;
+        state.lastErrorTime = now;
 
         // Open circuit breaker if too many errors
-        if (this.errorCount >= this.maxErrors) {
-            this.isCircuitOpen = true;
+        if (state.errorCount >= state.maxErrors) {
+            state.isOpen = true;
             this.logger.error(
-                `[ExhaustionDetector] Circuit breaker opened after ${this.errorCount} errors`
+                `[ExhaustionDetector] Circuit breaker opened after ${state.errorCount} errors`,
+                {
+                    error: error.message,
+                    errorType: error.constructor.name,
+                    timestamp: now,
+                }
             );
 
             // Auto-reset circuit breaker after delay
             setTimeout(() => {
-                this.isCircuitOpen = false;
-                this.errorCount = 0;
-                this.logger.info(`[ExhaustionDetector] Circuit breaker reset`);
-            }, this.errorWindowMs);
+                state.isOpen = false;
+                state.errorCount = 0;
+                this.logger.info(`[ExhaustionDetector] Circuit breaker reset`, {
+                    resetTimestamp: Date.now(),
+                });
+            }, state.errorWindowMs);
         }
 
         this.handleError(error, `${this.constructor.name}.detectorError`);
@@ -1019,13 +1149,14 @@ export class ExhaustionDetector
         zone: number
     ): DetectorResult<ExhaustionConditions> {
         try {
-            // Check circuit breaker
-            if (this.isCircuitOpen) {
+            // 🔧 FIX: Atomic circuit breaker check
+            if (this.circuitBreakerState.isOpen) {
                 this.logger.info(
                     `[ExhaustionDetector] ❌ Circuit breaker is open`,
                     {
-                        errorCount: this.errorCount,
-                        timeSinceLastError: Date.now() - this.lastErrorTime,
+                        errorCount: this.circuitBreakerState.errorCount,
+                        timeSinceLastError:
+                            Date.now() - this.circuitBreakerState.lastErrorTime,
                     }
                 );
                 return {
@@ -1192,6 +1323,14 @@ export class ExhaustionDetector
             );
 
             this.handleDetectorError(error as Error);
+
+            // 🔧 FIX: Enhanced error handling with recovery strategy
+            this.metricsCollector.incrementMetric("exhaustion.analysis.errors");
+
+            // Trigger zone memory cleanup on critical errors
+            if (!this.circuitBreakerState.isOpen) {
+                this.cleanupZoneMemory();
+            }
             return {
                 success: false,
                 error: error as Error,

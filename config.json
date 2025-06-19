@@ -164,6 +164,8 @@
                 "confirmationTimeout": 50000,
                 "minDepletionFactor": 1.85,
                 "maxRevisitTicks": 0,
+                "maxZones": 50,
+                "zoneAgeLimit": 1800000,
                 "features": {
                     "depletionTracking": true,
                     "spreadAdjustment": false,
@@ -176,8 +178,8 @@
                 }
             },
             "absorption": {
-                "minAggVolume": 250,
-                "threshold": 0.7,
+                "minAggVolume": 150,
+                "threshold": 0.6,
                 "windowMs": 150000,
                 "zoneTicks": 4,
                 "eventCooldownMs": 30000,
@@ -191,7 +193,7 @@
                 "confirmationTimeout": 60000,
                 "maxRevisitTicks": 5,
                 "features": {
-                    "spoofingDetection": false,
+                    "spoofingDetection": true,
                     "adaptiveZone": true,
                     "passiveHistory": true,
                     "multiZone": false,
