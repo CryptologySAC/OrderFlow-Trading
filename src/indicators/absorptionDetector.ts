@@ -1002,14 +1002,14 @@ export class AbsorptionDetector
         }
 
         // Check cooldown (only confirm updates later)
-        if (!this.checkCooldown(zone, side === "bid" ? "buy" : "sell", false)) {
+        if (!this.checkCooldown(zone, side === "bid" ? "sell" : "buy", false)) { // IMPORTANT: This is the correct order SELL/BUY
             return;
         }
 
         // Analyze absorption conditions using object pooling
         const conditions = this.analyzeAbsorptionConditions(
             price,
-            side === "bid" ? "buy" : "sell",
+            side === "bid" ? "sell" : "buy", // IMPORTANT: This is the correct order SELL/BUY
             zone
         );
 
