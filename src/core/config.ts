@@ -11,6 +11,7 @@ import type {
     AllowedSymbols,
     ZoneDetectorSymbolConfig,
     EnhancedZoneFormationConfig,
+    MarketDataStorageConfig,
 } from "../types/configTypes.js";
 import type { ZoneDetectorConfig } from "../types/zoneTypes.js";
 import type { ExhaustionSettings } from "../indicators/exhaustionDetector.js";
@@ -282,6 +283,38 @@ export class Config {
             enableAlerts:
                 cfg.symbols[cfg.symbol].signalManager?.enableAlerts ?? true,
         };
+    }
+
+    static get DETECTOR_CONFIDENCE_THRESHOLDS(): Record<string, number> {
+        return (
+            (cfg.symbols[cfg.symbol].signalManager
+                ?.detectorThresholds as Record<string, number>) ?? {
+                exhaustion: 0.8,
+                cvd_confirmation: 0.7,
+                distribution: 0.8,
+                distribution_zone: 0.8,
+                absorption: 0.85,
+                accumulation: 0.95,
+                accumulation_zone: 0.95,
+            }
+        );
+    }
+
+    static get DETECTOR_POSITION_SIZING(): Record<string, number> {
+        return (
+            (cfg.symbols[cfg.symbol].signalManager?.positionSizing as Record<
+                string,
+                number
+            >) ?? {
+                exhaustion: 1.0,
+                cvd_confirmation: 0.7,
+                distribution: 0.7,
+                distribution_zone: 0.7,
+                absorption: 0.5,
+                accumulation: 0.0,
+                accumulation_zone: 0.0,
+            }
+        );
     }
 
     static get SIGNAL_COORDINATOR(): SignalCoordinatorConfig {
@@ -720,6 +753,11 @@ export class Config {
     // ✅ Enhanced zone formation configuration (replaces magic numbers)
     static get ENHANCED_ZONE_FORMATION(): EnhancedZoneFormationConfig {
         return ENHANCED_ZONE_CFG;
+    }
+
+    // Market Data Storage configuration for backtesting
+    static get marketDataStorage(): MarketDataStorageConfig | null {
+        return cfg.marketDataStorage || null;
     }
 
     /**

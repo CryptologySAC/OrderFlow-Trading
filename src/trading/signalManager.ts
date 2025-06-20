@@ -23,6 +23,7 @@ import type {
     PerformanceMetrics,
 } from "../analysis/signalTracker.js";
 import type { MarketContextCollector } from "../analysis/marketContextCollector.js";
+import { Config } from "../core/config.js";
 
 export interface SignalManagerConfig {
     confidenceThreshold?: number;
@@ -32,6 +33,8 @@ export interface SignalManagerConfig {
     maxQueueSize?: number;
     processingBatchSize?: number;
     backpressureThreshold?: number;
+    detectorThresholds?: Record<string, number>;
+    positionSizing?: Record<string, number>;
 }
 
 interface SignalCorrelation {
@@ -88,6 +91,8 @@ export class SignalManager extends EventEmitter {
             maxQueueSize: config.maxQueueSize ?? 1000,
             processingBatchSize: config.processingBatchSize ?? 10,
             backpressureThreshold: config.backpressureThreshold ?? 0.8,
+            detectorThresholds: config.detectorThresholds ?? {},
+            positionSizing: config.positionSizing ?? {},
         };
 
         this.logger.info(
@@ -135,19 +140,21 @@ export class SignalManager extends EventEmitter {
                 return null;
             }
 
-            // 2. Confidence threshold check (with floating-point rounding)
-            const roundedConfidence = Math.round(signal.confidence * 100) / 100;
-            const roundedThreshold =
-                Math.round(this.config.confidenceThreshold * 100) / 100;
-
-            if (roundedConfidence < roundedThreshold) {
-                this.logger.debug("Signal rejected due to low confidence", {
-                    signalId: signal.id,
-                    confidence: signal.confidence,
-                    roundedConfidence,
-                    threshold: this.config.confidenceThreshold,
-                    roundedThreshold,
-                });
+            // 2. Detector-specific confidence threshold check
+            if (!this.filterSignalByConfidence(signal)) {
+                this.logger.debug(
+                    "Signal rejected due to detector-specific confidence threshold",
+                    {
+                        signalId: signal.id,
+                        signalType: signal.type,
+                        confidence: signal.confidence,
+                        requiredThreshold:
+                            Config.DETECTOR_CONFIDENCE_THRESHOLDS[
+                                signal.type
+                            ] ?? 0.7,
+                        fallbackThreshold: this.config.confidenceThreshold,
+                    }
+                );
 
                 this.recordMetric(
                     "signal_rejected_low_confidence",
@@ -194,6 +201,25 @@ export class SignalManager extends EventEmitter {
             this.lastRejectReason = "processing_error";
             return null;
         }
+    }
+
+    /**
+     * Filter signal by detector-specific confidence threshold.
+     */
+    private filterSignalByConfidence(signal: ProcessedSignal): boolean {
+        const thresholds = Config.DETECTOR_CONFIDENCE_THRESHOLDS;
+        const minConfidence =
+            thresholds[signal.type] ?? this.config.confidenceThreshold;
+
+        return signal.confidence >= minConfidence;
+    }
+
+    /**
+     * Calculate position size based on detector type.
+     */
+    private calculatePositionSizeByType(signalType: SignalType): number {
+        const positionSizes = Config.DETECTOR_POSITION_SIZING;
+        return positionSizes[signalType] ?? 0.5; // Default 50%
     }
 
     /**
@@ -732,6 +758,11 @@ export class SignalManager extends EventEmitter {
             );
         }
 
+        // Calculate position size based on detector type
+        const positionSize = this.calculatePositionSizeByType(
+            originalSignal.type
+        );
+
         const signalData: TradingSignalData = {
             confidence: confirmedSignal.confidence,
             confirmations: Array.from(originalSignal.confirmations),
@@ -740,6 +771,7 @@ export class SignalManager extends EventEmitter {
             correlationData: confirmedSignal.correlationData,
             side,
             price: confirmedSignal.finalPrice,
+            positionSize,
         };
 
         const signal: Signal = {

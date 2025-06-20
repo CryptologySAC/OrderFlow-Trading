@@ -12,6 +12,17 @@ export interface MQTTConfig {
     reconnectPeriod?: number;
 }
 
+export interface MarketDataStorageConfig {
+    enabled: boolean;
+    dataDirectory: string;
+    format: "csv" | "jsonl" | "both";
+    maxFileSize: number;
+    depthLevels: number;
+    rotationHours: number;
+    compressionEnabled: boolean;
+    monitoringInterval: number;
+}
+
 export interface ConfigType {
     nodeEnv: string;
     symbol: AllowedSymbols;
@@ -24,6 +35,7 @@ export interface ConfigType {
     alertWebhookUrl: string;
     alertCooldownMs: number;
     maxStorageTime: number;
+    marketDataStorage?: MarketDataStorageConfig;
     zoneDetectors?: Record<string, ZoneDetectorSymbolConfig>;
     // ✅ Enhanced zone formation configuration
     enhancedZoneFormation?: EnhancedZoneFormationConfig;
@@ -217,6 +229,8 @@ type SignalManagerConfig = {
     signalTimeout?: number;
     enableMarketHealthCheck?: boolean;
     enableAlerts?: boolean;
+    detectorThresholds?: Record<string, number>;
+    positionSizing?: Record<string, number>;
 };
 
 type SignalCoordinatorConfig = {

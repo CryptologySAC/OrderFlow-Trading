@@ -39,7 +39,7 @@ describe("trading/SignalManager", () => {
             id: "test_signal_1",
             originalCandidate: {} as any,
             type: "absorption" as const,
-            confidence: 0.8,
+            confidence: 0.9, // Updated to exceed the new 0.85 threshold for absorption
             timestamp: new Date(),
             detectorId: "test_detector",
             processingMetadata: {},

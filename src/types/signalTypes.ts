@@ -235,6 +235,7 @@ export interface TradingSignalData {
     correlationData?: CorrelationData;
     side: "buy" | "sell";
     price: number;
+    positionSize?: number;
 }
 
 export interface DistributionResult {
