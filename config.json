@@ -260,14 +260,14 @@
             },
 
             "deltaCvdConfirmation": {
-                "windowsSec": [60, 300, 900],
-                "minZ": 3.5,
+                "windowsSec": [60],
+                "minZ": 2.5,
                 "priceCorrelationWeight": 0.4,
                 "volumeConcentrationWeight": 0.4,
                 "adaptiveThresholdMultiplier": 1.0,
 
-                "minTradesPerSec": 0.6,
-                "minVolPerSec": 1.5,
+                "minTradesPerSec": 1.0,
+                "minVolPerSec": 5,
                 "pricePrecision": 2,
 
                 "volatilityLookbackSec": 3600,
@@ -275,7 +275,14 @@
                 "stateCleanupIntervalSec": 300,
 
                 "dynamicThresholds": true,
-                "logDebug": false
+                "logDebug": false,
+
+                "volumeSurgeMultiplier": 4.0,
+                "imbalanceThreshold": 0.35,
+                "institutionalThreshold": 17.8,
+                "burstDetectionMs": 1000,
+                "sustainedVolumeMs": 30000,
+                "medianTradeSize": 0.6
             }
         }
     }

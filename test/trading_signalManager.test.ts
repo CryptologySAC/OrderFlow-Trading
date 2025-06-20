@@ -75,7 +75,7 @@ describe("trading/SignalManager", () => {
 
         const baseSignal = {
             originalCandidate: {} as any,
-            confidence: 0.8,
+            confidence: 0.96, // Updated to exceed the accumulation threshold of 0.95
             timestamp: new Date(),
             detectorId: "test_detector",
             processingMetadata: {},

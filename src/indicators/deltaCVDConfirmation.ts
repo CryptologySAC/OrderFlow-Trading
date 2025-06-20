@@ -48,6 +48,14 @@ export interface DeltaCVDConfirmationSettings extends BaseDetectorSettings {
     adaptiveThresholdMultiplier?: number; // multiplier for adaptive z-score thresholds
     maxDivergenceAllowed?: number; // max allowed price/CVD divergence before penalty
     stateCleanupIntervalSec?: number; // how often to cleanup old state
+
+    // Volume surge detection for 0.7%+ moves
+    volumeSurgeMultiplier?: number; // 4x volume surge threshold for momentum detection
+    imbalanceThreshold?: number; // 35% order flow imbalance threshold
+    institutionalThreshold?: number; // 17.8 LTC institutional trade size threshold
+    burstDetectionMs?: number; // 1000ms burst detection window
+    sustainedVolumeMs?: number; // 30000ms sustained volume confirmation window
+    medianTradeSize?: number; // 0.6 LTC median trade size baseline
 }
 
 interface WindowState {
@@ -68,6 +76,10 @@ interface WindowState {
     buyFlowProfile: Map<number, number>; // price level -> buy flow accumulation
     sellFlowProfile: Map<number, number>; // price level -> sell flow accumulation
     institutionalZones: InstitutionalZone[]; // identified institutional activity zones
+
+    // Volume surge detection state
+    volumeHistory: { timestamp: number; volume: number }[]; // recent volume snapshots
+    burstHistory: { timestamp: number; volume: number; imbalance: number }[]; // detected bursts
 }
 
 interface ConfidenceFactors {
@@ -120,6 +132,14 @@ export class DeltaCVDConfirmation extends BaseDetector {
     private readonly adaptiveThresholdMultiplier: number;
     private readonly maxDivergenceAllowed: number;
     private readonly stateCleanupIntervalSec: number;
+
+    // Volume surge detection parameters
+    private readonly volumeSurgeMultiplier: number;
+    private readonly imbalanceThreshold: number;
+    private readonly institutionalThreshold: number;
+    private readonly burstDetectionMs: number;
+    private readonly sustainedVolumeMs: number;
+    private readonly medianTradeSize: number;
 
     /* ---- enhanced mutable state --------------------------------- */
     private readonly states = new Map<number, WindowState>();
@@ -177,6 +197,14 @@ export class DeltaCVDConfirmation extends BaseDetector {
         this.stateCleanupIntervalSec =
             settings.stateCleanupIntervalSec ?? CLEANUP_INTERVAL_DEFAULT;
 
+        // Volume surge detection parameters
+        this.volumeSurgeMultiplier = settings.volumeSurgeMultiplier ?? 4.0;
+        this.imbalanceThreshold = settings.imbalanceThreshold ?? 0.35;
+        this.institutionalThreshold = settings.institutionalThreshold ?? 17.8;
+        this.burstDetectionMs = settings.burstDetectionMs ?? 1000;
+        this.sustainedVolumeMs = settings.sustainedVolumeMs ?? 30000;
+        this.medianTradeSize = settings.medianTradeSize ?? 0.6;
+
         // Initialize window states
         for (const w of this.windows) {
             this.states.set(w, {
@@ -193,6 +221,8 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 buyFlowProfile: new Map(),
                 sellFlowProfile: new Map(),
                 institutionalZones: [],
+                volumeHistory: [],
+                burstHistory: [],
             });
         }
 
@@ -239,6 +269,9 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
             // Update price statistics for this window
             this.updatePriceStatistics(state, event);
+
+            // Update volume surge tracking for momentum detection
+            this.updateVolumeSurgeTracking(state, event);
 
             // Drop old trades
             const cutoff = event.timestamp - w * 1000;
@@ -591,6 +624,150 @@ export class DeltaCVDConfirmation extends BaseDetector {
     }
 
     /* ------------------------------------------------------------------ */
+    /*  Volume Surge Detection for 0.7%+ Moves                         */
+    /* ------------------------------------------------------------------ */
+
+    private updateVolumeSurgeTracking(
+        state: WindowState,
+        event: EnrichedTradeEvent
+    ): void {
+        const now = event.timestamp;
+
+        // Update volume history with current trade volume
+        state.volumeHistory.push({
+            timestamp: now,
+            volume: event.quantity,
+        });
+
+        // Clean old volume history (keep last 30 seconds for sustained volume check)
+        const cutoff = now - this.sustainedVolumeMs;
+        state.volumeHistory = state.volumeHistory.filter(
+            (vh) => vh.timestamp > cutoff
+        );
+
+        // Clean old burst history (keep last 5 minutes for pattern analysis)
+        const burstCutoff = now - 300000; // 5 minutes
+        state.burstHistory = state.burstHistory.filter(
+            (bh) => bh.timestamp > burstCutoff
+        );
+    }
+
+    private detectVolumeSurge(state: WindowState, now: number): boolean {
+        if (state.volumeHistory.length < 10) return false; // Need minimum data
+
+        // Calculate recent volume (last 1 second)
+        const recentCutoff = now - this.burstDetectionMs;
+        const recentVolume = state.volumeHistory
+            .filter((vh) => vh.timestamp > recentCutoff)
+            .reduce((sum, vh) => sum + vh.volume, 0);
+
+        // Calculate baseline volume (previous 30 seconds, excluding recent 1 second)
+        const baselineCutoff = now - this.sustainedVolumeMs;
+        const baselineHistory = state.volumeHistory.filter(
+            (vh) =>
+                vh.timestamp > baselineCutoff && vh.timestamp <= recentCutoff
+        );
+
+        if (baselineHistory.length === 0) return false;
+
+        const baselineVolume =
+            baselineHistory.reduce((sum, vh) => sum + vh.volume, 0) /
+            (baselineHistory.length || 1);
+
+        // Check for volume surge (4x baseline)
+        const volumeMultiplier =
+            recentVolume / (baselineVolume || this.medianTradeSize);
+        return volumeMultiplier >= this.volumeSurgeMultiplier;
+    }
+
+    private detectOrderFlowImbalance(
+        state: WindowState,
+        now: number
+    ): { detected: boolean; imbalance: number } {
+        const recentCutoff = now - this.burstDetectionMs;
+        const recentTrades = state.trades.filter(
+            (t) => t.timestamp > recentCutoff
+        );
+
+        if (recentTrades.length < 3) return { detected: false, imbalance: 0 }; // Need minimum trades
+
+        const buyVolume = recentTrades
+            .filter((t) => !t.buyerIsMaker) // Aggressive buys
+            .reduce((sum, t) => sum + t.quantity, 0);
+
+        const sellVolume = recentTrades
+            .filter((t) => t.buyerIsMaker) // Aggressive sells
+            .reduce((sum, t) => sum + t.quantity, 0);
+
+        const totalVolume = buyVolume + sellVolume;
+        if (totalVolume === 0) return { detected: false, imbalance: 0 };
+
+        // Calculate imbalance (positive = buy imbalance, negative = sell imbalance)
+        const imbalance = Math.abs(buyVolume - sellVolume) / totalVolume;
+
+        return {
+            detected: imbalance >= this.imbalanceThreshold,
+            imbalance,
+        };
+    }
+
+    private detectInstitutionalActivity(
+        state: WindowState,
+        now: number
+    ): boolean {
+        const recentCutoff = now - this.burstDetectionMs;
+        const institutionalTrades = state.trades.filter(
+            (t) =>
+                t.timestamp > recentCutoff &&
+                t.quantity >= this.institutionalThreshold
+        );
+
+        // Look for institutional-sized trades in the recent burst window
+        return institutionalTrades.length > 0;
+    }
+
+    private validateVolumeSurgeConditions(
+        state: WindowState,
+        now: number
+    ): { valid: boolean; reason?: string } {
+        // Check for volume surge
+        const hasVolumeSurge = this.detectVolumeSurge(state, now);
+        if (!hasVolumeSurge) {
+            return { valid: false, reason: "no_volume_surge" };
+        }
+
+        // Check for order flow imbalance
+        const imbalanceResult = this.detectOrderFlowImbalance(state, now);
+        if (!imbalanceResult.detected) {
+            return { valid: false, reason: "insufficient_imbalance" };
+        }
+
+        // Check for institutional activity (optional enhancement)
+        const hasInstitutional = this.detectInstitutionalActivity(state, now);
+
+        // Record the burst for historical analysis
+        state.burstHistory.push({
+            timestamp: now,
+            volume: state.volumeHistory
+                .filter((vh) => vh.timestamp > now - this.burstDetectionMs)
+                .reduce((sum, vh) => sum + vh.volume, 0),
+            imbalance: imbalanceResult.imbalance,
+        });
+
+        this.logger.debug("Volume surge conditions validated", {
+            detector: this.getId(),
+            hasVolumeSurge,
+            imbalance: imbalanceResult.imbalance,
+            hasInstitutional,
+            reason: hasInstitutional
+                ? "institutional_enhanced"
+                : "volume_imbalance_confirmed",
+        });
+
+        return { valid: true };
+    }
+
+    /* ------------------------------------------------------------------ */
     /*  Enhanced Signal Detection with Confidence Scoring                */
     /* ------------------------------------------------------------------ */
 
@@ -615,6 +792,24 @@ export class DeltaCVDConfirmation extends BaseDetector {
                     }
                 );
                 return;
+            }
+
+            // Volume surge validation for 0.7%+ moves (only check shortest window for responsiveness)
+            if (w === this.windows[0]) {
+                const surgeResult = this.validateVolumeSurgeConditions(
+                    state,
+                    now
+                );
+                if (!surgeResult.valid) {
+                    this.metricsCollector.incrementCounter(
+                        "cvd_signals_rejected_total",
+                        1,
+                        {
+                            reason: surgeResult.reason || "volume_surge_failed",
+                        }
+                    );
+                    return;
+                }
             }
 
             // Compute CVD series and slope

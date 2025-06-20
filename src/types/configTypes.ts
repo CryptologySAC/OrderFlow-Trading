@@ -180,6 +180,12 @@ type DeltaCvdConfirmationConfig = {
     pricePrecision: number;
     dynamicThresholds: true;
     logDebug: true;
+    volumeSurgeMultiplier?: number;
+    imbalanceThreshold?: number;
+    institutionalThreshold?: number;
+    burstDetectionMs?: number;
+    sustainedVolumeMs?: number;
+    medianTradeSize?: number;
 };
 
 type AccumulationDetectorConfig = {

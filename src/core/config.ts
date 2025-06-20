@@ -518,6 +518,32 @@ export class Config {
             ),
             minZ: cfg.symbols[cfg.symbol].deltaCvdConfirmation?.minZ ?? 3,
             pricePrecision: Config.PRICE_PRECISION,
+
+            // Volume surge detection parameters
+            volumeSurgeMultiplier: Number(
+                cfg.symbols[cfg.symbol].deltaCvdConfirmation
+                    ?.volumeSurgeMultiplier ?? 4.0
+            ),
+            imbalanceThreshold: Number(
+                cfg.symbols[cfg.symbol].deltaCvdConfirmation
+                    ?.imbalanceThreshold ?? 0.35
+            ),
+            institutionalThreshold: Number(
+                cfg.symbols[cfg.symbol].deltaCvdConfirmation
+                    ?.institutionalThreshold ?? 17.8
+            ),
+            burstDetectionMs: Number(
+                cfg.symbols[cfg.symbol].deltaCvdConfirmation
+                    ?.burstDetectionMs ?? 1000
+            ),
+            sustainedVolumeMs: Number(
+                cfg.symbols[cfg.symbol].deltaCvdConfirmation
+                    ?.sustainedVolumeMs ?? 30000
+            ),
+            medianTradeSize: Number(
+                cfg.symbols[cfg.symbol].deltaCvdConfirmation?.medianTradeSize ??
+                    0.6
+            ),
         };
     }
 
