@@ -73,6 +73,10 @@ import type {
 } from "./utils/types.js";
 
 // Storage and processors
+import {
+    MarketDataStorageService,
+    type DataStorageConfig,
+} from "./services/marketDataStorageService.js";
 
 import { ProductionUtils } from "./utils/productionUtils.js";
 
@@ -105,6 +109,9 @@ export class OrderFlowDashboard {
     // Coordinators
     private readonly signalCoordinator: SignalCoordinator;
     private readonly anomalyDetector: AnomalyDetector;
+
+    // Market Data Storage for Backtesting
+    private marketDataStorage?: MarketDataStorageService;
 
     // Event-based Detectors (initialized in initializeDetectors)
     private absorptionDetector!: AbsorptionDetector;
@@ -169,6 +176,9 @@ export class OrderFlowDashboard {
 
             // 🚨 CRITICAL FIX: Initialize detectors AFTER orderBook is ready
             this.initializeDetectors(dependencies);
+
+            // Initialize market data storage for backtesting
+            this.initializeMarketDataStorage();
 
             this.setupEventHandlers();
             this.setupHttpServer();
@@ -251,6 +261,66 @@ export class OrderFlowDashboard {
 
         // Note: All detector initialization moved to initialize() method
         // to ensure proper dependency order (after orderBook is ready)
+    }
+
+    /**
+     * Initialize market data storage for backtesting
+     */
+    private initializeMarketDataStorage(): void {
+        try {
+            const storageConfig = Config.marketDataStorage;
+            if (!storageConfig) {
+                this.logger.info(
+                    "[OrderFlowDashboard] Market data storage not configured - skipping"
+                );
+                return;
+            }
+
+            const dataStorageConfig: DataStorageConfig = {
+                enabled: storageConfig.enabled ?? false,
+                dataDirectory:
+                    storageConfig.dataDirectory ?? "./backtesting_data",
+                format: storageConfig.format ?? "both",
+                symbol: Config.SYMBOL,
+                maxFileSize: storageConfig.maxFileSize ?? 100,
+                depthLevels: storageConfig.depthLevels ?? 20,
+                rotationHours: storageConfig.rotationHours ?? 6,
+                compressionEnabled: storageConfig.compressionEnabled ?? false,
+                monitoringInterval: storageConfig.monitoringInterval ?? 30,
+            };
+
+            this.marketDataStorage = new MarketDataStorageService(
+                dataStorageConfig,
+                this.logger,
+                this.metricsCollector
+            );
+
+            if (dataStorageConfig.enabled) {
+                this.marketDataStorage.start();
+                this.logger.info(
+                    "[OrderFlowDashboard] Market data storage initialized and started",
+                    {
+                        directory: dataStorageConfig.dataDirectory,
+                        format: dataStorageConfig.format,
+                        symbol: dataStorageConfig.symbol,
+                        depthLevels: dataStorageConfig.depthLevels,
+                    }
+                );
+            } else {
+                this.logger.info(
+                    "[OrderFlowDashboard] Market data storage is disabled"
+                );
+            }
+        } catch (error) {
+            this.logger.error(
+                "[OrderFlowDashboard] Failed to initialize market data storage",
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
+            // Don't throw - this is not critical for main functionality
+        }
     }
 
     /**
@@ -656,6 +726,11 @@ export class OrderFlowDashboard {
                     // Store last trade price for anomaly context
                     this.lastTradePrice = enrichedTrade.price;
 
+                    // Store trade data for backtesting (if enabled)
+                    if (this.marketDataStorage?.isActive()) {
+                        this.marketDataStorage.storeTrade(enrichedTrade);
+                    }
+
                     // Feed trade data to event-based detectors
                     this.absorptionDetector.onEnrichedTrade(enrichedTrade);
                     this.exhaustionDetector.onEnrichedTrade(enrichedTrade);
@@ -691,6 +766,35 @@ export class OrderFlowDashboard {
             this.preprocessor?.on(
                 "dashboard_orderbook_update",
                 (dashboardUpdate: OrderBookSnapshot) => {
+                    // Store depth data for backtesting (if enabled)
+                    if (this.marketDataStorage?.isActive()) {
+                        // Convert depth snapshot map to bids/asks arrays
+                        const bids: { price: number; quantity: number }[] = [];
+                        const asks: { price: number; quantity: number }[] = [];
+
+                        for (const [
+                            price,
+                            level,
+                        ] of dashboardUpdate.depthSnapshot) {
+                            if (level.bid > 0) {
+                                bids.push({ price, quantity: level.bid });
+                            }
+                            if (level.ask > 0) {
+                                asks.push({ price, quantity: level.ask });
+                            }
+                        }
+
+                        // Sort bids highest to lowest, asks lowest to highest
+                        bids.sort((a, b) => b.price - a.price);
+                        asks.sort((a, b) => a.price - b.price);
+
+                        this.marketDataStorage.storeDepthSnapshot(
+                            bids,
+                            asks,
+                            dashboardUpdate.timestamp
+                        );
+                    }
+
                     const orderBookMessage: WebSocketMessage =
                         this.dependencies.orderBookProcessor.onOrderBookUpdate(
                             dashboardUpdate
@@ -971,6 +1075,10 @@ export class OrderFlowDashboard {
                     metrics: this.metricsCollector.getMetrics(),
                     health: this.metricsCollector.getHealthSummary(),
                     dataStream: null, // DataStreamManager handled by BinanceWorker
+                    marketDataStorage:
+                        this.marketDataStorage?.getStorageStats() || {
+                            enabled: false,
+                        },
                     correlationId,
                 };
                 res.json(stats);
@@ -979,6 +1087,76 @@ export class OrderFlowDashboard {
                 this.handleError(
                     error as Error,
                     "stats_endpoint",
+                    correlationId
+                );
+                res.status(500).json({
+                    status: "error",
+                    error: (error as Error).message,
+                    correlationId,
+                });
+            }
+        });
+
+        // Market data storage status and control endpoint
+        this.httpServer.get("/market-data-storage", (req, res) => {
+            const correlationId = randomUUID();
+            try {
+                if (!this.marketDataStorage) {
+                    res.json({
+                        status: "not_configured",
+                        message: "Market data storage is not configured",
+                        correlationId,
+                    });
+                    return;
+                }
+
+                const stats = this.marketDataStorage.getStorageStats();
+                const config = this.marketDataStorage.getConfig();
+
+                res.json({
+                    status: "configured",
+                    stats,
+                    config,
+                    correlationId,
+                });
+            } catch (error) {
+                this.handleError(
+                    error as Error,
+                    "market_data_storage_endpoint",
+                    correlationId
+                );
+                res.status(500).json({
+                    status: "error",
+                    error: (error as Error).message,
+                    correlationId,
+                });
+            }
+        });
+
+        // Market data storage control endpoint
+        this.httpServer.post("/market-data-storage/log-status", (req, res) => {
+            const correlationId = randomUUID();
+            try {
+                if (!this.marketDataStorage) {
+                    res.status(404).json({
+                        status: "not_configured",
+                        message: "Market data storage is not configured",
+                        correlationId,
+                    });
+                    return;
+                }
+
+                this.marketDataStorage.logStatus();
+
+                res.json({
+                    status: "success",
+                    message: "Storage status logged",
+                    correlationId,
+                });
+            } catch (error) {
+                this.handleError(
+                    error as Error,
+                    "market_data_storage_control_endpoint",
                     correlationId
                 );
                 res.status(500).json({
@@ -1449,6 +1627,11 @@ export class OrderFlowDashboard {
             // Shutdown components
             // WebSocketManager shutdown handled by communication worker
             // DataStreamManager disconnect handled by BinanceWorker
+
+            // Stop market data storage
+            if (this.marketDataStorage?.isActive()) {
+                void this.marketDataStorage.stop();
+            }
 
             // Give time for cleanup
             // StatsBroadcaster stopped by communication worker

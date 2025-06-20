@@ -10,3 +10,4 @@ coverage/
 .yarn/
 test.patch
 server.log
+backtesting_data/

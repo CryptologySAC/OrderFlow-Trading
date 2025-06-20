@@ -986,26 +986,26 @@ export class AbsorptionDetector
         if (!side) {
             // No clear absorption detected - exit early
             return;
-        } else if (side) {
-            const opposingSide = side === "bid" ? "ask" : "bid";
-            const opposingAbsorption = this.checkAbsorptionConditions(
-                price,
-                opposingSide,
-                zone
-            );
+        } //else if (side) {
+        //const opposingSide = side === "bid" ? "ask" : "bid";
+        //const opposingAbsorption = this.checkAbsorptionConditions(
+        //    price,
+        //    opposingSide,
+        //    zone
+        //);
 
-            if (opposingAbsorption) {
-                // Both sides showing absorption - use stronger one only
-                const stronger = this.resolveConflictingAbsorption(zone);
-                // Convert trading direction to order book side for comparison:
-                // - "buy" absorption → "bid" side is absorbing
-                // - "sell" absorption → "ask" side is absorbing
-                const strongerSide = stronger === "buy" ? "bid" : "ask";
-                if (strongerSide !== side) {
-                    return; // Skip this signal, opposing side is stronger
-                }
-            }
-        }
+        // if (opposingAbsorption) {
+        // Both sides showing absorption - use stronger one only
+        //const stronger = this.resolveConflictingAbsorption(zone);
+        // Convert trading direction to order book side for comparison:
+        // - "buy" absorption → "bid" side is absorbing
+        // - "sell" absorption → "ask" side is absorbing
+        //const strongerSide = stronger === "buy" ? "bid" : "ask";
+        //if (strongerSide !== side) {
+        //return; // Skip this signal, opposing side is stronger
+        //}
+        //}
+        //}
 
         // Only signal at price extremes for "true tops"
         //const pricePercentile = this.calculatePricePercentile(
