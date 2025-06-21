@@ -20,6 +20,8 @@ import type {
 } from "./interfaces/detectorInterfaces.js";
 import { SignalType, ExhaustionSignalData } from "../types/signalTypes.js";
 import { DepthLevel } from "../utils/interfaces.js";
+import { VolumeAnalyzer } from "./utils/volumeAnalyzer.js";
+import type { VolumeSurgeConfig } from "./interfaces/volumeAnalysisInterface.js";
 
 export interface ExhaustionSettings extends BaseDetectorSettings {
     features?: ExhaustionFeatures;
@@ -27,6 +29,14 @@ export interface ExhaustionSettings extends BaseDetectorSettings {
     exhaustionThreshold?: number; // Minimum exhaustion score (0-1)
     maxPassiveRatio?: number; // Max ratio of current/avg passive for exhaustion
     minDepletionFactor?: number; // Min factor for passive depletion detection
+
+    // Volume surge detection parameters for enhanced exhaustion analysis
+    volumeSurgeMultiplier?: number; // Volume surge threshold for exhaustion validation
+    imbalanceThreshold?: number; // Order flow imbalance threshold for exhaustion
+    institutionalThreshold?: number; // Institutional trade size threshold
+    burstDetectionMs?: number; // Burst detection window
+    sustainedVolumeMs?: number; // Sustained volume analysis window
+    medianTradeSize?: number; // Baseline trade size for volume analysis
 }
 
 type DetectorResult<T> =
@@ -89,6 +99,10 @@ export class ExhaustionDetector
     private readonly maxPassiveRatio: number;
     private readonly minDepletionFactor: number;
 
+    // Volume surge analysis integration
+    private readonly volumeAnalyzer: VolumeAnalyzer;
+    private readonly volumeSurgeConfig: VolumeSurgeConfig;
+
     // 🔧 FIX: Remove duplicate threshold update interval (already handled by BaseDetector)
     // Interval handle for periodic threshold updates - REMOVED to eliminate race condition
     // private thresholdUpdateInterval?: NodeJS.Timeout;
@@ -131,6 +145,23 @@ export class ExhaustionDetector
             10.0,
             0.5,
             "minDepletionFactor"
+        );
+
+        // Initialize volume surge configuration
+        this.volumeSurgeConfig = {
+            volumeSurgeMultiplier: settings.volumeSurgeMultiplier ?? 3.0,
+            imbalanceThreshold: settings.imbalanceThreshold ?? 0.3,
+            institutionalThreshold: settings.institutionalThreshold ?? 15.0,
+            burstDetectionMs: settings.burstDetectionMs ?? 1500,
+            sustainedVolumeMs: settings.sustainedVolumeMs ?? 25000,
+            medianTradeSize: settings.medianTradeSize ?? 0.8,
+        };
+
+        // Initialize volume analyzer for enhanced exhaustion detection
+        this.volumeAnalyzer = new VolumeAnalyzer(
+            this.volumeSurgeConfig,
+            logger,
+            `${id}_exhaustion`
         );
 
         // Merge exhaustion-specific features
@@ -403,6 +434,8 @@ export class ExhaustionDetector
      * Exhaustion-specific trade handling (called by base class)
      */
     protected onEnrichedTradeSpecific(event: EnrichedTradeEvent): void {
+        // Update volume analysis tracking for enhanced exhaustion detection
+        this.volumeAnalyzer.updateVolumeTracking(event);
         void event;
     }
 
@@ -540,6 +573,27 @@ export class ExhaustionDetector
             return;
         }
 
+        // ✅ ENHANCED: Volume surge validation for exhaustion confirmation
+        const volumeValidation =
+            this.volumeAnalyzer.validateVolumeSurgeConditions(
+                tradesAtZone,
+                triggerTrade.timestamp
+            );
+
+        if (!volumeValidation.valid) {
+            this.logger.debug(
+                `[ExhaustionDetector] Exhaustion signal rejected - volume surge validation failed`,
+                {
+                    zone,
+                    price,
+                    side,
+                    score: adjustedScore,
+                    reason: volumeValidation.reason,
+                }
+            );
+            return;
+        }
+
         // Check for refill
         const oppositeQty = side === "buy" ? bookLevel.ask : bookLevel.bid;
         const refilled = this.checkRefill(price, side, oppositeQty);
@@ -547,6 +601,33 @@ export class ExhaustionDetector
         if (refilled) {
             this.metricsCollector.incrementMetric("exhaustionRefillRejected");
             return;
+        }
+
+        // ✅ ENHANCED: Apply volume surge confidence boost
+        const volumeBoost = this.volumeAnalyzer.calculateVolumeConfidenceBoost(
+            volumeValidation.volumeSurge,
+            volumeValidation.imbalance,
+            volumeValidation.institutional
+        );
+
+        let finalConfidence = adjustedScore;
+        if (volumeBoost.isValid) {
+            finalConfidence += volumeBoost.confidence;
+
+            this.logger.debug(
+                `[ExhaustionDetector] Volume surge confidence boost applied`,
+                {
+                    zone,
+                    price,
+                    side,
+                    originalConfidence: adjustedScore,
+                    volumeBoost: volumeBoost.confidence,
+                    finalConfidence,
+                    reason: volumeBoost.reason,
+                    enhancementFactors: volumeBoost.enhancementFactors,
+                    metadata: volumeBoost.metadata,
+                }
+            );
         }
 
         this.logger.info(`[ExhaustionDetector] 🎯 SIGNAL GENERATED!`, {
@@ -576,7 +657,7 @@ export class ExhaustionDetector
             oppositeQty,
             avgLiquidity: conditions.avgLiquidity,
             spread: conditions.spread,
-            confidence: adjustedScore,
+            confidence: Math.min(1, finalConfidence), // Cap at 1.0
             meta: {
                 conditions,
                 detectorVersion: "2.1-safe",

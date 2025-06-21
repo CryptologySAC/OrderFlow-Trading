@@ -44,7 +44,14 @@
                 "minCandidateDuration": 300000,
                 "minBuyRatio": 0.65,
                 "maxPriceDeviation": 0.02,
-                "minTradeCount": 15
+                "minTradeCount": 15,
+
+                "volumeSurgeMultiplier": 3.0,
+                "imbalanceThreshold": 0.35,
+                "institutionalThreshold": 17.8,
+                "burstDetectionMs": 1500,
+                "sustainedVolumeMs": 25000,
+                "medianTradeSize": 0.8
             },
             "distribution": {
                 "minZoneStrength": 0.8,
@@ -59,7 +66,14 @@
                 "minCandidateDuration": 300000,
                 "minSellRatio": 0.65,
                 "maxPriceDeviation": 0.012,
-                "minTradeCount": 10
+                "minTradeCount": 10,
+
+                "volumeSurgeMultiplier": 3.5,
+                "imbalanceThreshold": 0.3,
+                "institutionalThreshold": 15.0,
+                "burstDetectionMs": 1500,
+                "sustainedVolumeMs": 25000,
+                "medianTradeSize": 0.8
             }
         }
     },
@@ -197,13 +211,18 @@
             },
 
             "exhaustion": {
-                "minAggVolume": 800,
-                "windowMs": 120000,
+                "minAggVolume": 400,
+                "windowMs": 90000,
                 "pricePrecision": 2,
                 "zoneTicks": 3,
                 "eventCooldownMs": 15000,
-
-                "exhaustionThreshold": 0.8,
+                "volumeSurgeMultiplier": 2.5,
+                "imbalanceThreshold": 0.25,
+                "institutionalThreshold": 17.8,
+                "burstDetectionMs": 1000,
+                "sustainedVolumeMs": 30000,
+                "medianTradeSize": 0.6,
+                "exhaustionThreshold": 0.6,
                 "maxPassiveRatio": 0.2,
                 "minDepletionFactor": 0.3,
 
@@ -237,6 +256,13 @@
                 "icebergDetectionSensitivity": 1.0,
                 "icebergConfidenceMultiplier": 1.0,
 
+                "volumeSurgeMultiplier": 4.0,
+                "imbalanceThreshold": 0.35,
+                "institutionalThreshold": 17.8,
+                "burstDetectionMs": 1000,
+                "sustainedVolumeMs": 30000,
+                "medianTradeSize": 0.6,
+
                 "ewmaHalfLifeSec": 20,
                 "passiveWindowSec": 60,
 
@@ -261,13 +287,13 @@
 
             "deltaCvdConfirmation": {
                 "windowsSec": [60],
-                "minZ": 2.5,
+                "minZ": 2.0,
                 "priceCorrelationWeight": 0.4,
                 "volumeConcentrationWeight": 0.4,
                 "adaptiveThresholdMultiplier": 1.0,
 
-                "minTradesPerSec": 1.0,
-                "minVolPerSec": 5,
+                "minTradesPerSec": 0.5,
+                "minVolPerSec": 2.5,
                 "pricePrecision": 2,
 
                 "volatilityLookbackSec": 3600,
@@ -277,11 +303,11 @@
                 "dynamicThresholds": true,
                 "logDebug": false,
 
-                "volumeSurgeMultiplier": 4.0,
-                "imbalanceThreshold": 0.35,
-                "institutionalThreshold": 17.8,
-                "burstDetectionMs": 1000,
-                "sustainedVolumeMs": 30000,
+                "volumeSurgeMultiplier": 2.0,
+                "imbalanceThreshold": 0.2,
+                "institutionalThreshold": 8.0,
+                "burstDetectionMs": 2000,
+                "sustainedVolumeMs": 20000,
                 "medianTradeSize": 0.6
             }
         }

@@ -133,6 +133,14 @@ export interface ZoneDetectorConfig {
     minTradeCount: number; // Minimum trades before forming zone
     minBuyRatio?: number; // Minimum buy ratio for accumulation
     minSellRatio?: number; // Minimum sell ratio for distribution
+
+    // Volume surge detection parameters for enhanced zone analysis
+    volumeSurgeMultiplier?: number; // Volume surge threshold for zone validation
+    imbalanceThreshold?: number; // Order flow imbalance threshold
+    institutionalThreshold?: number; // Institutional trade size threshold
+    burstDetectionMs?: number; // Burst detection window
+    sustainedVolumeMs?: number; // Sustained volume analysis window
+    medianTradeSize?: number; // Baseline trade size for volume analysis
 }
 
 export interface ZoneQueryOptions {

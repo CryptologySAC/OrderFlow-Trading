@@ -65,6 +65,8 @@ import {
 } from "./enhancedZoneFormation.js";
 import { ZoneDetector } from "./base/zoneDetector.js";
 import type { DistributionCandidate } from "./interfaces/detectorInterfaces.js";
+import { VolumeAnalyzer } from "./utils/volumeAnalyzer.js";
+import type { VolumeSurgeConfig } from "./interfaces/volumeAnalysisInterface.js";
 
 /**
  * Zone-based DistributionDetector - detects distribution zones rather than point events
@@ -132,6 +134,10 @@ export class DistributionZoneDetector extends ZoneDetector {
     // Enhanced zone formation analyzer (identical)
     private readonly enhancedZoneFormation: EnhancedZoneFormation;
 
+    // Volume surge analysis integration
+    private readonly volumeAnalyzer: VolumeAnalyzer;
+    private readonly volumeSurgeConfig: VolumeSurgeConfig;
+
     constructor(
         id: string,
         symbol: string,
@@ -150,6 +156,23 @@ export class DistributionZoneDetector extends ZoneDetector {
             40, // institutionalSizeThreshold
             15, // icebergDetectionWindow
             0.25 // minInstitutionalRatio
+        );
+
+        // Initialize volume surge configuration
+        this.volumeSurgeConfig = {
+            volumeSurgeMultiplier: config.volumeSurgeMultiplier ?? 3.5,
+            imbalanceThreshold: config.imbalanceThreshold ?? 0.3,
+            institutionalThreshold: config.institutionalThreshold ?? 15.0,
+            burstDetectionMs: config.burstDetectionMs ?? 1500,
+            sustainedVolumeMs: config.sustainedVolumeMs ?? 25000,
+            medianTradeSize: config.medianTradeSize ?? 0.8,
+        };
+
+        // Initialize volume analyzer for enhanced distribution detection
+        this.volumeAnalyzer = new VolumeAnalyzer(
+            this.volumeSurgeConfig,
+            logger,
+            `${id}_distribution`
         );
 
         this.logger.info("DistributionZoneDetector initialized", {
@@ -172,6 +195,9 @@ export class DistributionZoneDetector extends ZoneDetector {
     analyze(trade: EnrichedTradeEvent): ZoneAnalysisResult {
         const updates: ZoneUpdate[] = [];
         const signals: ZoneSignal[] = [];
+
+        // Update volume analysis tracking for enhanced distribution detection
+        this.volumeAnalyzer.updateVolumeTracking(trade);
 
         // Add trade to recent trades history (identical)
         this.recentTrades.push(trade);
@@ -583,8 +609,71 @@ export class DistributionZoneDetector extends ZoneDetector {
             bestScore,
         });
 
+        // ✅ ENHANCED: Volume surge validation for distribution confirmation
+        const recentTrades = this.recentTrades.toArray().slice(-50); // Get recent trades for validation
+        const aggressiveTrades = recentTrades.map((t) => ({
+            price: t.price,
+            quantity: t.quantity,
+            timestamp: t.timestamp,
+            buyerIsMaker: t.buyerIsMaker,
+            pair: t.pair,
+            tradeId: t.tradeId,
+            originalTrade: t.originalTrade,
+        }));
+
+        const volumeValidation =
+            this.volumeAnalyzer.validateVolumeSurgeConditions(
+                aggressiveTrades,
+                trade.timestamp
+            );
+
+        if (!volumeValidation.valid) {
+            this.logger.debug(
+                `[DistributionZoneDetector] Distribution zone creation rejected - volume surge validation failed`,
+                {
+                    candidatePrice: bestCandidate.priceLevel,
+                    score: bestScore,
+                    reason: volumeValidation.reason,
+                }
+            );
+
+            // Clean up candidate and return without creating zone
+            this.candidates.delete(bestCandidate.priceLevel);
+            this.candidatePool.release(bestCandidate);
+            return null;
+        }
+
         // Create new zone only if no conflicts (identical)
         const zoneDetection = this.createZoneDetectionData(bestCandidate);
+
+        // ✅ ENHANCED: Apply volume surge confidence boost to zone strength
+        const volumeBoost = this.volumeAnalyzer.calculateVolumeConfidenceBoost(
+            volumeValidation.volumeSurge,
+            volumeValidation.imbalance,
+            volumeValidation.institutional
+        );
+
+        if (volumeBoost.isValid) {
+            // Enhance zone detection data with volume confidence
+            const originalStrength = zoneDetection.initialStrength;
+            zoneDetection.initialStrength = Math.min(
+                1.0,
+                originalStrength + volumeBoost.confidence
+            );
+
+            this.logger.debug(
+                `[DistributionZoneDetector] Volume surge confidence boost applied to zone`,
+                {
+                    candidatePrice: bestCandidate.priceLevel,
+                    originalStrength,
+                    volumeBoost: volumeBoost.confidence,
+                    finalStrength: zoneDetection.initialStrength,
+                    reason: volumeBoost.reason,
+                    enhancementFactors: volumeBoost.enhancementFactors,
+                    metadata: volumeBoost.metadata,
+                }
+            );
+        }
 
         this.logger.debug("DEBUG: About to call zoneManager.createZone", {
             component: "DistributionZoneDetector",

@@ -33,8 +33,8 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
             {
                 windowsSec: [60],
                 minZ: 2.5,
-                minTradesPerSec: 0.5,  // Reduced for testing
-                minVolPerSec: 2,       // Reduced for testing
+                minTradesPerSec: 0.5, // Reduced for testing
+                minVolPerSec: 2, // Reduced for testing
                 volumeSurgeMultiplier: 4.0,
                 imbalanceThreshold: 0.35,
                 institutionalThreshold: 17.8,
@@ -67,7 +67,7 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
 
     it("should detect volume surge with 4x baseline volume", () => {
         const baseTime = Date.now();
-        
+
         // Create baseline volume (higher volume trades over 60 seconds to meet minVolPerSec)
         for (let i = 0; i < 60; i++) {
             const trade = createTradeEvent(
@@ -98,7 +98,7 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
 
     it("should detect order flow imbalance above 35% threshold", () => {
         const baseTime = Date.now();
-        
+
         // Create baseline trades with sufficient volume
         for (let i = 0; i < 60; i++) {
             const trade = createTradeEvent(
@@ -113,12 +113,12 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
         // Create high volume burst with strong buy imbalance (80% buy volume)
         const burstTrades = [
             createTradeEvent(baseTime - 800, 50005, 8.0, false), // Aggressive buy
-            createTradeEvent(baseTime - 600, 50006, 9.0, false), // Aggressive buy  
+            createTradeEvent(baseTime - 600, 50006, 9.0, false), // Aggressive buy
             createTradeEvent(baseTime - 400, 50007, 8.5, false), // Aggressive buy
-            createTradeEvent(baseTime - 200, 50008, 2.0, true),  // Aggressive sell (small)
+            createTradeEvent(baseTime - 200, 50008, 2.0, true), // Aggressive sell (small)
         ];
 
-        burstTrades.forEach(trade => detector.onEnrichedTrade(trade));
+        burstTrades.forEach((trade) => detector.onEnrichedTrade(trade));
 
         // Should detect both volume surge and imbalance
         expect(mockMetrics.incrementCounter).toHaveBeenCalled();
@@ -126,7 +126,7 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
 
     it("should detect institutional activity with trades >= 17.8 LTC", () => {
         const baseTime = Date.now();
-        
+
         // Create baseline trades
         for (let i = 0; i < 15; i++) {
             const trade = createTradeEvent(
@@ -141,26 +141,26 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
         // Create institutional-sized trade with volume surge
         const institutionalTrades = [
             createTradeEvent(baseTime - 900, 50005, 20.0, false), // Large institutional buy
-            createTradeEvent(baseTime - 700, 50006, 3.0, false),  // Supporting volume
-            createTradeEvent(baseTime - 500, 50007, 2.5, false),  // Supporting volume
-            createTradeEvent(baseTime - 300, 50008, 1.5, true),   // Some selling
+            createTradeEvent(baseTime - 700, 50006, 3.0, false), // Supporting volume
+            createTradeEvent(baseTime - 500, 50007, 2.5, false), // Supporting volume
+            createTradeEvent(baseTime - 300, 50008, 1.5, true), // Some selling
         ];
 
-        institutionalTrades.forEach(trade => detector.onEnrichedTrade(trade));
+        institutionalTrades.forEach((trade) => detector.onEnrichedTrade(trade));
 
         // Should detect institutional activity enhancement
         expect(mockLogger.debug).toHaveBeenCalledWith(
             expect.stringContaining("Volume surge conditions validated"),
             expect.objectContaining({
                 hasInstitutional: true,
-                reason: "institutional_enhanced"
+                reason: "institutional_enhanced",
             })
         );
     });
 
     it("should reject signals without sufficient volume surge", () => {
         const baseTime = Date.now();
-        
+
         // Create normal volume trades without surge (but meeting basic requirements)
         for (let i = 0; i < 60; i++) {
             const trade = createTradeEvent(
@@ -188,14 +188,16 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
             "cvd_signals_rejected_total",
             1,
             expect.objectContaining({
-                reason: expect.stringMatching(/insufficient_volume_rate|no_volume_surge/)
+                reason: expect.stringMatching(
+                    /insufficient_volume_rate|no_volume_surge/
+                ),
             })
         );
     });
 
     it("should reject signals without sufficient order flow imbalance", () => {
         const baseTime = Date.now();
-        
+
         // Create baseline
         for (let i = 0; i < 20; i++) {
             const trade = createTradeEvent(
@@ -210,19 +212,19 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
         // Create volume surge but with balanced flow (no imbalance)
         const balancedTrades = [
             createTradeEvent(baseTime - 800, 50005, 2.5, false), // Buy
-            createTradeEvent(baseTime - 600, 50006, 2.5, true),  // Sell (balanced)
+            createTradeEvent(baseTime - 600, 50006, 2.5, true), // Sell (balanced)
             createTradeEvent(baseTime - 400, 50007, 2.0, false), // Buy
-            createTradeEvent(baseTime - 200, 50008, 2.0, true),  // Sell (balanced)
+            createTradeEvent(baseTime - 200, 50008, 2.0, true), // Sell (balanced)
         ];
 
-        balancedTrades.forEach(trade => detector.onEnrichedTrade(trade));
+        balancedTrades.forEach((trade) => detector.onEnrichedTrade(trade));
 
         // Should reject due to insufficient imbalance despite volume surge
         expect(mockMetrics.incrementCounter).toHaveBeenCalledWith(
             "cvd_signals_rejected_total",
             1,
             expect.objectContaining({
-                reason: "insufficient_imbalance"
+                reason: "insufficient_imbalance",
             })
         );
     });
@@ -230,7 +232,7 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
     it("should track volume history for surge detection", () => {
         const baseTime = Date.now();
         const detectorAny = detector as any;
-        
+
         // Create baseline trades with sufficient volume
         for (let i = 0; i < 60; i++) {
             const trade = createTradeEvent(
@@ -257,7 +259,7 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
         const state = detectorAny.states.get(60);
         expect(state?.volumeHistory).toBeDefined();
         expect(state?.volumeHistory?.length).toBeGreaterThan(0);
-        
+
         // Verify volume history contains recent trades
         if (state?.volumeHistory) {
             const recentVolume = state.volumeHistory.filter(
@@ -273,7 +275,7 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
         // should be processing correctly as evidenced by proper volume tracking
         const detectorAny = detector as any;
         const baseTime = Date.now();
-        
+
         // Add trades to build up volume history
         for (let i = 0; i < 30; i++) {
             const trade = createTradeEvent(
@@ -289,7 +291,7 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
         const state = detectorAny.states.get(60);
         expect(state?.volumeHistory).toBeDefined();
         expect(state?.burstHistory).toBeDefined();
-        
+
         // Verify our new configuration parameters are being used
         expect(detectorAny.volumeSurgeMultiplier).toBe(4.0);
         expect(detectorAny.imbalanceThreshold).toBe(0.35);

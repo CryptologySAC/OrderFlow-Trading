@@ -24,6 +24,8 @@ import { AbsorptionSignalData, SignalType } from "../types/signalTypes.js";
 import { SharedPools } from "../utils/objectPool.js";
 import { IOrderBookState } from "../market/orderBookState.js";
 import { FinancialMath } from "../utils/financialMath.js";
+import { VolumeAnalyzer } from "./utils/volumeAnalyzer.js";
+import type { VolumeSurgeConfig } from "./interfaces/volumeAnalysisInterface.js";
 
 export interface AbsorptionSettings extends BaseDetectorSettings {
     features?: AbsorptionFeatures;
@@ -33,6 +35,14 @@ export interface AbsorptionSettings extends BaseDetectorSettings {
     icebergDetectionSensitivity?: number; // Sensitivity for iceberg detection (0-1)
     icebergConfidenceMultiplier?: number; // Confidence multiplier when iceberg detected (1.0-2.0)
     maxAbsorptionRatio?: number; // Max aggressive/passive ratio for absorption
+
+    // Volume surge detection parameters for enhanced absorption analysis
+    volumeSurgeMultiplier?: number; // Volume surge threshold for absorption validation
+    imbalanceThreshold?: number; // Order flow imbalance threshold for absorption
+    institutionalThreshold?: number; // Institutional trade size threshold
+    burstDetectionMs?: number; // Burst detection window
+    sustainedVolumeMs?: number; // Sustained volume analysis window
+    medianTradeSize?: number; // Baseline trade size for volume analysis
 }
 
 /**
@@ -91,6 +101,10 @@ export class AbsorptionDetector
 
     private readonly orderBook: IOrderBookState;
 
+    // Volume surge analysis integration
+    private readonly volumeAnalyzer: VolumeAnalyzer;
+    private readonly volumeSurgeConfig: VolumeSurgeConfig;
+
     // Interval handles for proper cleanup
     private thresholdUpdateInterval?: NodeJS.Timeout;
     private historyCleanupInterval?: NodeJS.Timeout;
@@ -129,6 +143,23 @@ export class AbsorptionDetector
         this.icebergConfidenceMultiplier =
             settings.icebergConfidenceMultiplier ?? 1.2;
         this.maxAbsorptionRatio = settings.maxAbsorptionRatio ?? 0.5;
+
+        // Initialize volume surge configuration
+        this.volumeSurgeConfig = {
+            volumeSurgeMultiplier: settings.volumeSurgeMultiplier ?? 3.0,
+            imbalanceThreshold: settings.imbalanceThreshold ?? 0.3,
+            institutionalThreshold: settings.institutionalThreshold ?? 15.0,
+            burstDetectionMs: settings.burstDetectionMs ?? 1500,
+            sustainedVolumeMs: settings.sustainedVolumeMs ?? 25000,
+            medianTradeSize: settings.medianTradeSize ?? 0.8,
+        };
+
+        // Initialize volume analyzer for enhanced absorption detection
+        this.volumeAnalyzer = new VolumeAnalyzer(
+            this.volumeSurgeConfig,
+            logger,
+            `${id}_absorption`
+        );
 
         // Merge absorption-specific features
         this.features = {
@@ -232,6 +263,9 @@ export class AbsorptionDetector
      * Absorption-specific trade handling (called by base class)
      */
     protected onEnrichedTradeSpecific(event: EnrichedTradeEvent): void {
+        // Update volume analysis tracking for enhanced absorption detection
+        this.volumeAnalyzer.updateVolumeTracking(event);
+
         // Track absorption events for advanced analysis
         if (this.features.absorptionVelocity) {
             this.trackAbsorptionEvent(event);
@@ -1109,6 +1143,32 @@ export class AbsorptionDetector
             return;
         }
 
+        // ✅ ENHANCED: Volume surge validation for absorption confirmation
+        const volumeValidation =
+            this.volumeAnalyzer.validateVolumeSurgeConditions(
+                tradesAtZone,
+                triggerTrade.timestamp
+            );
+
+        if (!volumeValidation.valid) {
+            this.logger.debug(
+                `[AbsorptionDetector] Absorption signal rejected - volume surge validation failed`,
+                {
+                    zone,
+                    price,
+                    score,
+                    reason: volumeValidation.reason,
+                    volumeMultiplier:
+                        volumeValidation.volumeSurge.volumeMultiplier,
+                    imbalance: volumeValidation.imbalance.imbalance,
+                }
+            );
+            SharedPools.getInstance().absorptionConditions.release(
+                conditionsToRelease
+            );
+            return;
+        }
+
         // Calculate volumes
         const volumes = this.calculateZoneVolumes(
             zone,
@@ -1242,6 +1302,32 @@ export class AbsorptionDetector
         // Context-based urgency adjustments
         if (absorptionContext.isReversal && absorptionContext.strength > 0.7) {
             signalUrgency = "high"; // High urgency for strong reversal signals
+        }
+
+        // ✅ ENHANCED: Apply volume surge confidence boost
+        const volumeBoost = this.volumeAnalyzer.calculateVolumeConfidenceBoost(
+            volumeValidation.volumeSurge,
+            volumeValidation.imbalance,
+            volumeValidation.institutional
+        );
+
+        if (volumeBoost.isValid) {
+            finalConfidence += volumeBoost.confidence;
+
+            this.logger.debug(
+                `[AbsorptionDetector] Volume surge confidence boost applied`,
+                {
+                    zone,
+                    price,
+                    side,
+                    originalConfidence: score,
+                    volumeBoost: volumeBoost.confidence,
+                    finalConfidence,
+                    reason: volumeBoost.reason,
+                    enhancementFactors: volumeBoost.enhancementFactors,
+                    metadata: volumeBoost.metadata,
+                }
+            );
         }
 
         // ✅ ENHANCED: Calculate flow analysis for comprehensive debugging
