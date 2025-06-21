@@ -341,7 +341,7 @@ export class OrderFlowDashboard {
         this.signalCoordinator.registerDetector(
             this.absorptionDetector,
             ["absorption"],
-            60,
+            20,
             true
         );
 
@@ -368,7 +368,7 @@ export class OrderFlowDashboard {
         this.signalCoordinator.registerDetector(
             this.deltaCVDConfirmation,
             ["cvd_confirmation"],
-            30,
+            500,
             true
         );
 
@@ -410,7 +410,7 @@ export class OrderFlowDashboard {
         this.signalCoordinator.registerDetector(
             this.distributionZoneDetector,
             ["distribution"],
-            40,
+            50,
             true
         );
 
