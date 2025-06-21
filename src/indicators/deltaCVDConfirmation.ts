@@ -30,6 +30,32 @@ import { EnrichedTradeEvent } from "../types/marketEvents.js";
 /*  Enhanced Config & Types                                           */
 /* ------------------------------------------------------------------ */
 
+// PHASE 2: Depth data ingestion interfaces
+interface EnrichedDepthEvent {
+    timestamp: number;
+    side: "bid" | "ask";
+    level: number;
+    price: number;
+    quantity: number;
+}
+
+interface OrderbookSnapshot {
+    timestamp: number;
+    bids: { price: number; quantity: number }[];
+    asks: { price: number; quantity: number }[];
+}
+
+// PHASE 5: Iceberg tracking interfaces
+interface IcebergTracking {
+    price: number;
+    side: "bid" | "ask";
+    refillCount: number;
+    maxSize: number;
+    totalVolume: number;
+    firstSeen: number;
+    lastRefill: number;
+}
+
 interface CVDCalculationResult {
     cvdSeries: number[];
     slope: number;
@@ -63,6 +89,25 @@ export interface DeltaCVDConfirmationSettings extends BaseDetectorSettings {
     medianTradeSize?: number; // 0.6 LTC median trade size baseline
     dynamicThresholds?: boolean;
     logDebug?: boolean;
+
+    // PHASE 2: Depth analysis settings
+    enableDepthAnalysis?: boolean;
+    maxOrderbookAge?: number; // 5000ms
+
+    // PHASE 3: Absorption detection
+    absorptionCVDThreshold?: number; // 50
+    absorptionPriceThreshold?: number; // 0.1
+
+    // PHASE 4: Imbalance analysis
+    imbalanceWeight?: number; // 0.2
+
+    // PHASE 5: Iceberg detection
+    icebergMinRefills?: number; // 3
+    icebergMinSize?: number; // 20
+
+    // Enhanced confidence
+    baseConfidenceRequired?: number; // 0.4
+    finalConfidenceRequired?: number; // 0.6
 }
 
 interface WindowState {
@@ -152,10 +197,36 @@ export class DeltaCVDConfirmation extends BaseDetector {
     private readonly divergenceThreshold: number;
     private readonly divergenceLookbackSec: number;
 
+    // PHASE 2: Depth analysis configuration
+    private readonly enableDepthAnalysis: boolean;
+    private readonly maxOrderbookAge: number;
+
+    // PHASE 3: Absorption detection configuration
+    private readonly absorptionCVDThreshold: number;
+    private readonly absorptionPriceThreshold: number;
+
+    // PHASE 4: Imbalance analysis configuration
+    private readonly imbalanceWeight: number;
+
+    // PHASE 5: Iceberg detection configuration
+    private readonly icebergMinRefills: number;
+    private readonly icebergMinSize: number;
+
+    // Enhanced confidence thresholds
+    private readonly baseConfidenceRequired: number;
+    private readonly finalConfidenceRequired: number;
+
     /* ---- enhanced mutable state --------------------------------- */
     private readonly states = new Map<number, WindowState>();
     private lastSignalTs = 0;
     private lastStateCleanup = 0;
+
+    // PHASE 2: Orderbook snapshot tracking
+    private readonly orderbookSnapshots = new Map<number, OrderbookSnapshot>();
+    private readonly maxSnapshotAge = 60000; // Keep 1 minute of snapshots
+
+    // PHASE 5: Iceberg tracking state
+    private readonly icebergTracking = new Map<string, IcebergTracking>();
 
     // Market regime tracking
     private marketRegime: MarketRegime = {
@@ -220,6 +291,26 @@ export class DeltaCVDConfirmation extends BaseDetector {
         this.detectionMode = settings.detectionMode ?? "momentum";
         this.divergenceThreshold = settings.divergenceThreshold ?? 0.3;
         this.divergenceLookbackSec = settings.divergenceLookbackSec ?? 60;
+
+        // PHASE 2: Depth analysis configuration
+        this.enableDepthAnalysis = settings.enableDepthAnalysis ?? true;
+        this.maxOrderbookAge = settings.maxOrderbookAge ?? 5000;
+
+        // PHASE 3: Absorption detection configuration
+        this.absorptionCVDThreshold = settings.absorptionCVDThreshold ?? 50;
+        this.absorptionPriceThreshold =
+            settings.absorptionPriceThreshold ?? 0.1;
+
+        // PHASE 4: Imbalance analysis configuration
+        this.imbalanceWeight = settings.imbalanceWeight ?? 0.2;
+
+        // PHASE 5: Iceberg detection configuration
+        this.icebergMinRefills = settings.icebergMinRefills ?? 3;
+        this.icebergMinSize = settings.icebergMinSize ?? 20;
+
+        // Enhanced confidence thresholds
+        this.baseConfidenceRequired = settings.baseConfidenceRequired ?? 0.4;
+        this.finalConfidenceRequired = settings.finalConfidenceRequired ?? 0.6;
 
         // Initialize window states
         for (const w of this.windows) {
@@ -301,6 +392,282 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
         // Try to emit signal
         this.tryEmitSignal(event.timestamp);
+    }
+
+    // PHASE 2: Depth data ingestion capability
+    public processMarketEvent(
+        event: EnrichedTradeEvent | EnrichedDepthEvent
+    ): void {
+        if ("side" in event && "level" in event) {
+            // Depth event
+            this.onDepthUpdate(event);
+        } else {
+            // Trade event (existing logic)
+            this.onEnrichedTradeSpecific(event);
+        }
+    }
+
+    protected onDepthUpdate(event: EnrichedDepthEvent): void {
+        if (!this.enableDepthAnalysis) return;
+
+        // Update orderbook snapshot
+        this.updateOrderbookSnapshot(event);
+
+        // Clean old snapshots
+        this.cleanupOldSnapshots(event.timestamp);
+
+        // PHASE 5: Detect iceberg patterns
+        this.detectIcebergPattern(event);
+    }
+
+    private updateOrderbookSnapshot(event: EnrichedDepthEvent): void {
+        const roundedTimestamp = Math.floor(event.timestamp / 1000) * 1000;
+
+        let snapshot = this.orderbookSnapshots.get(roundedTimestamp);
+        if (!snapshot) {
+            snapshot = {
+                timestamp: roundedTimestamp,
+                bids: [],
+                asks: [],
+            };
+            this.orderbookSnapshots.set(roundedTimestamp, snapshot);
+        }
+
+        const levels = event.side === "bid" ? snapshot.bids : snapshot.asks;
+        const existingIndex = levels.findIndex((l) => l.price === event.price);
+
+        if (event.quantity === 0) {
+            // Remove level
+            if (existingIndex >= 0) {
+                levels.splice(existingIndex, 1);
+            }
+        } else {
+            // Update or add level
+            if (existingIndex >= 0) {
+                levels[existingIndex].quantity = event.quantity;
+            } else {
+                levels.push({ price: event.price, quantity: event.quantity });
+            }
+        }
+
+        // Sort levels (bids descending, asks ascending)
+        if (event.side === "bid") {
+            levels.sort((a, b) => b.price - a.price);
+        } else {
+            levels.sort((a, b) => a.price - b.price);
+        }
+    }
+
+    private cleanupOldSnapshots(timestamp: number): void {
+        const cutoff = timestamp - this.maxSnapshotAge;
+
+        for (const [ts, snapshot] of this.orderbookSnapshots.entries()) {
+            if (snapshot.timestamp < cutoff) {
+                this.orderbookSnapshots.delete(ts);
+            }
+        }
+    }
+
+    private getOrderbookSnapshotNear(
+        timestamp: number
+    ): OrderbookSnapshot | null {
+        // Find snapshot within maxOrderbookAge
+        const tolerance = this.maxOrderbookAge;
+
+        for (const snapshot of this.orderbookSnapshots.values()) {
+            if (Math.abs(snapshot.timestamp - timestamp) <= tolerance) {
+                return snapshot;
+            }
+        }
+
+        return null;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  PHASE 3: Absorption Detection                                     */
+    /* ------------------------------------------------------------------ */
+
+    private validateAbsorptionConditions(windowSec: number): {
+        detected: boolean;
+        type: "bullish_absorption" | "bearish_absorption" | "none";
+        strength: number;
+        expectedSignal: "buy" | "sell" | "neutral";
+        cvdMagnitude?: number;
+        priceChange?: number;
+    } {
+        const state = this.states.get(windowSec)!;
+
+        if (state.trades.length < 20) {
+            return {
+                detected: false,
+                type: "none",
+                strength: 0,
+                expectedSignal: "neutral",
+            };
+        }
+
+        // Calculate CVD with correct passive calculation
+        let cvd = 0;
+        const prices: number[] = [];
+
+        state.trades.forEach((trade) => {
+            const delta = trade.buyerIsMaker ? trade.quantity : -trade.quantity;
+            cvd += delta;
+            prices.push(trade.price);
+        });
+
+        if (prices.length < 2) {
+            return {
+                detected: false,
+                type: "none",
+                strength: 0,
+                expectedSignal: "neutral",
+            };
+        }
+
+        // Analyze divergence
+        const priceChange =
+            ((prices[prices.length - 1] - prices[0]) / prices[0]) * 100;
+        const cvdMagnitude = Math.abs(cvd);
+
+        // Absorption pattern: Strong CVD, weak price movement
+        const strongCVD = cvdMagnitude > this.absorptionCVDThreshold;
+        const weakPrice = Math.abs(priceChange) < this.absorptionPriceThreshold;
+
+        if (strongCVD && weakPrice) {
+            const type = cvd > 0 ? "bullish_absorption" : "bearish_absorption";
+            const expectedSignal = cvd > 0 ? "sell" : "buy"; // Reversal expected
+            const strength = Math.min(
+                1.0,
+                cvdMagnitude / (this.absorptionCVDThreshold * 4)
+            );
+
+            return {
+                detected: true,
+                type,
+                strength,
+                expectedSignal,
+                cvdMagnitude,
+                priceChange,
+            };
+        }
+
+        return {
+            detected: false,
+            type: "none",
+            strength: 0,
+            expectedSignal: "neutral",
+        };
+    }
+
+    private buildAbsorptionSignal(
+        absorption: ReturnType<typeof this.validateAbsorptionConditions>,
+        timestamp: number
+    ): DeltaCVDConfirmationResult {
+        const state = this.states.get(this.windows[0])!;
+        const lastTrade = state.trades[state.trades.length - 1];
+
+        return {
+            price: lastTrade?.price || 0,
+            side: absorption.expectedSignal as "buy" | "sell",
+            rateOfChange: absorption.priceChange || 0,
+            windowVolume: state.trades.reduce((sum, t) => sum + t.quantity, 0),
+            tradesInWindow: state.trades.length,
+            slopes: { [this.windows[0]]: 0 }, // Absorption doesn't have slope
+            zScores: { [this.windows[0]]: 0 }, // Absorption doesn't have z-score
+            confidence: Math.min(0.95, absorption.strength * 1.2), // Boost absorption confidence
+            metadata: {
+                type: absorption.type,
+                cvdMagnitude: absorption.cvdMagnitude,
+                priceChange: absorption.priceChange,
+                detectionMode: "absorption",
+                timestamp,
+                strength: absorption.strength,
+                reason: `absorption_${absorption.type}`,
+            },
+        };
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  PHASE 4: Orderbook Imbalance Analysis                            */
+    /* ------------------------------------------------------------------ */
+
+    private calculateOrderbookImbalance(timestamp: number): {
+        imbalance: number; // -1 to 1, negative = ask heavy, positive = bid heavy
+        strength: number; // 0 to 1, how significant the imbalance is
+        signal: "buy" | "sell" | "neutral";
+    } {
+        const snapshot = this.getOrderbookSnapshotNear(timestamp);
+        if (!snapshot) return { imbalance: 0, strength: 0, signal: "neutral" };
+
+        // Calculate top 5 levels on each side
+        const bidDepth = snapshot.bids
+            .slice(0, 5)
+            .reduce((sum, bid) => sum + bid.quantity, 0);
+        const askDepth = snapshot.asks
+            .slice(0, 5)
+            .reduce((sum, ask) => sum + ask.quantity, 0);
+
+        const totalDepth = bidDepth + askDepth;
+        if (totalDepth === 0)
+            return { imbalance: 0, strength: 0, signal: "neutral" };
+
+        const imbalance = (bidDepth - askDepth) / totalDepth;
+        const strength = Math.abs(imbalance);
+
+        let signal: "buy" | "sell" | "neutral" = "neutral";
+        if (imbalance > 0.2) signal = "buy"; // Strong bid depth
+        if (imbalance < -0.2) signal = "sell"; // Strong ask depth
+
+        return { imbalance, strength, signal };
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  PHASE 5: Iceberg Detection                                       */
+    /* ------------------------------------------------------------------ */
+
+    private detectIcebergPattern(event: EnrichedDepthEvent): void {
+        if (!this.enableDepthAnalysis) return;
+
+        const levelKey = `${event.side}_${event.price.toFixed(4)}`;
+
+        if (event.quantity === 0) {
+            // Level removed - finalize iceberg tracking
+            this.icebergTracking.delete(levelKey);
+        } else {
+            // Check for refill pattern
+            const existing = this.icebergTracking.get(levelKey);
+            if (existing) {
+                // Detect refill (size suddenly increased)
+                if (event.quantity > existing.maxSize * 1.3) {
+                    existing.refillCount++;
+                    existing.maxSize = event.quantity;
+                    existing.totalVolume += event.quantity;
+                    existing.lastRefill = event.timestamp;
+
+                    // Log potential iceberg
+                    if (existing.refillCount >= this.icebergMinRefills) {
+                        this.logger.info(`Iceberg detected at ${event.price}`, {
+                            side: event.side,
+                            refillCount: existing.refillCount,
+                            totalVolume: existing.totalVolume,
+                            maxSize: existing.maxSize,
+                        });
+                    }
+                }
+            } else if (event.quantity > this.icebergMinSize) {
+                // Track large new levels
+                this.icebergTracking.set(levelKey, {
+                    price: event.price,
+                    side: event.side,
+                    refillCount: 1,
+                    maxSize: event.quantity,
+                    totalVolume: event.quantity,
+                    firstSeen: event.timestamp,
+                    lastRefill: event.timestamp,
+                });
+            }
+        }
     }
 
     /* ------------------------------------------------------------------ */
@@ -425,7 +792,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
         const roundedPrice = Math.round(event.price / tickSize) * tickSize;
 
         // Calculate CVD delta for this trade
-        const cvdDelta = event.buyerIsMaker ? -event.quantity : event.quantity;
+        const cvdDelta = event.buyerIsMaker ? event.quantity : -event.quantity;
 
         // Update CVD profile
         const currentCVD = state.cvdProfile.get(roundedPrice) || 0;
@@ -803,6 +1170,25 @@ export class DeltaCVDConfirmation extends BaseDetector {
     /* ------------------------------------------------------------------ */
 
     private tryEmitSignal(now: number): void {
+        // PHASE 3: Check for absorption first (takes priority)
+        const absorption = this.validateAbsorptionConditions(this.windows[0]);
+
+        if (absorption.detected && absorption.strength > 0.5) {
+            // Absorption signal takes priority
+            const candidate = this.buildAbsorptionSignal(absorption, now);
+            this.handleDetection(candidate);
+
+            this.logger.info(
+                `[CVD] Absorption signal: ${absorption.type} → ${absorption.expectedSignal}`,
+                {
+                    strength: absorption.strength,
+                    cvdMagnitude: absorption.cvdMagnitude,
+                    priceChange: absorption.priceChange,
+                }
+            );
+            return;
+        }
+
         // Compute slopes and z-scores for each window
         const slopes: Record<number, number> = {};
         const zScores: Record<number, number> = {};
@@ -907,7 +1293,10 @@ export class DeltaCVDConfirmation extends BaseDetector {
             priceCorrelations,
             now
         );
-        const finalConfidence = this.computeFinalConfidence(confidenceFactors);
+        const finalConfidence = this.computeFinalConfidence(
+            confidenceFactors,
+            now
+        );
 
         // Build enhanced signal result
         const candidate = this.buildSignalCandidate(
@@ -981,7 +1370,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
                     continue;
                 }
 
-                const delta = tr.buyerIsMaker ? -tr.quantity : tr.quantity;
+                const delta = tr.buyerIsMaker ? tr.quantity : -tr.quantity;
                 cvd += delta;
                 result.cvdSeries.push(cvd);
             }
@@ -1419,7 +1808,10 @@ export class DeltaCVDConfirmation extends BaseDetector {
         return 0.1; // Heavy penalty for poor correlation
     }
 
-    private computeFinalConfidence(factors: ConfidenceFactors): number {
+    private computeFinalConfidence(
+        factors: ConfidenceFactors,
+        timestamp?: number
+    ): number {
         // Weighted combination of confidence factors
         const weights = {
             zScoreAlignment: 0.25,
@@ -1448,6 +1840,15 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
         // Apply divergence penalty
         confidence *= factors.divergencePenalty;
+
+        // PHASE 4: Add imbalance bonus if depth analysis enabled and timestamp provided
+        if (this.enableDepthAnalysis && timestamp) {
+            const imbalanceAnalysis =
+                this.calculateOrderbookImbalance(timestamp);
+            const imbalanceBonus =
+                imbalanceAnalysis.strength * this.imbalanceWeight;
+            confidence = Math.min(1.0, confidence + imbalanceBonus);
+        }
 
         // Ensure confidence is in [0, 1] range
         return Math.max(0.0, Math.min(1.0, confidence));
@@ -1609,7 +2010,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
     } {
         let cvd = 0;
         for (const trade of state.trades) {
-            const delta = trade.buyerIsMaker ? -trade.quantity : trade.quantity;
+            const delta = trade.buyerIsMaker ? trade.quantity : -trade.quantity;
             cvd += delta;
         }
 
@@ -1828,15 +2229,24 @@ export class DeltaCVDConfirmation extends BaseDetector {
         // FIX: Validate inputs to handle NaN values
         const validZScores: Record<number, number> = {};
         const validCorrelations: Record<number, number> = {};
-        
+
         for (const window of this.windows) {
-            validZScores[window] = Number.isFinite(testZScores[window]) ? testZScores[window] : 0;
-            validCorrelations[window] = Number.isFinite(testPriceCorrelations[window]) ? testPriceCorrelations[window] : 0;
+            validZScores[window] = Number.isFinite(testZScores[window])
+                ? testZScores[window]
+                : 0;
+            validCorrelations[window] = Number.isFinite(
+                testPriceCorrelations[window]
+            )
+                ? testPriceCorrelations[window]
+                : 0;
         }
 
         // FIX: Respect detection mode in simulation
-        const validationResult = this.validateSignalConditions(validZScores, validCorrelations);
-        
+        const validationResult = this.validateSignalConditions(
+            validZScores,
+            validCorrelations
+        );
+
         // If validation fails, return low confidence
         if (!validationResult.valid) {
             const emptyFactors: ConfidenceFactors = {
@@ -1847,7 +2257,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 temporalConsistency: 0,
                 divergencePenalty: 0,
             };
-            
+
             return {
                 factors: emptyFactors,
                 finalConfidence: 0,
@@ -1858,7 +2268,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
                     volumeConcentration: 0,
                     temporalConsistency: 0,
                     divergencePenalty: 0,
-                }
+                },
             };
         }
 

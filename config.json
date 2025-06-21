@@ -287,7 +287,7 @@
 
             "deltaCvdConfirmation": {
                 "windowsSec": [60],
-                "minZ": 2.0,
+                "minZ": 1.5,
                 "priceCorrelationWeight": 0.4,
                 "volumeConcentrationWeight": 0.4,
                 "adaptiveThresholdMultiplier": 1.0,
@@ -312,7 +312,21 @@
 
                 "detectionMode": "divergence",
                 "divergenceThreshold": 0.3,
-                "divergenceLookbackSec": 60
+                "divergenceLookbackSec": 60,
+
+                "enableDepthAnalysis": true,
+                "maxOrderbookAge": 5000,
+
+                "absorptionCVDThreshold": 50,
+                "absorptionPriceThreshold": 0.1,
+
+                "imbalanceWeight": 0.2,
+
+                "icebergMinRefills": 3,
+                "icebergMinSize": 20,
+
+                "baseConfidenceRequired": 0.4,
+                "finalConfidenceRequired": 0.6
             }
         }
     }

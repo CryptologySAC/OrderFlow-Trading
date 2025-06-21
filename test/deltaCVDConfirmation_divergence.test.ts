@@ -13,10 +13,10 @@ import type { EnrichedTradeEvent } from "../src/types/marketEvents";
 
 /**
  * COMPREHENSIVE DIVERGENCE DETECTION TESTS
- * 
+ *
  * Testing Standards (CLAUDE.md):
  * ✅ Test CORRECT logic implementation based on specifications
- * ✅ Validate exact method behavior against requirements  
+ * ✅ Validate exact method behavior against requirements
  * ✅ Ensure tests fail when known bugs are present
  * ✅ Tests MUST detect errors in code - never adjust tests to pass buggy implementations
  */
@@ -136,13 +136,16 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
         it("should require lower CVD activity threshold in divergence mode", () => {
             // In divergence mode, minZ threshold should be halved (1.0 instead of 2.0)
             // This tests the implementation: shortZ < this.minZ * 0.5
-            
+
             // Test with z-score of 0.8 (below half threshold of 1.0)
             const lowZScores = { 60: 0.8 };
             const correlations = { 60: 0.1 }; // Low correlation (good for divergence)
-            
-            const result = detector.simulateConfidence(lowZScores, correlations);
-            
+
+            const result = detector.simulateConfidence(
+                lowZScores,
+                correlations
+            );
+
             // In divergence mode, this should be rejected due to insufficient CVD activity
             // The confidence calculation should reflect this validation failure
             expect(result.finalConfidence).toBeLessThan(0.5);
@@ -151,38 +154,46 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
         it("should reward low correlation (divergence) instead of penalizing it", () => {
             // CRITICAL TEST: This validates the core divergence logic
             // High correlation should be rejected in divergence mode
-            
+
             const adequateZScores = { 60: 1.5 }; // Above half threshold (1.0)
             const highCorrelations = { 60: 0.8 }; // High correlation (bad for divergence)
-            
-            const result = detector.simulateConfidence(adequateZScores, highCorrelations);
-            
+
+            const result = detector.simulateConfidence(
+                adequateZScores,
+                highCorrelations
+            );
+
             // High correlation should result in low confidence in divergence mode
             expect(result.finalConfidence).toBeLessThan(0.3);
-            
+
             // Now test low correlation (good divergence)
             const lowCorrelations = { 60: 0.1 }; // Low correlation (good for divergence)
-            const divergenceResult = detector.simulateConfidence(adequateZScores, lowCorrelations);
-            
+            const divergenceResult = detector.simulateConfidence(
+                adequateZScores,
+                lowCorrelations
+            );
+
             // Low correlation should result in higher confidence in divergence mode
-            expect(divergenceResult.finalConfidence).toBeGreaterThan(result.finalConfidence);
+            expect(divergenceResult.finalConfidence).toBeGreaterThan(
+                result.finalConfidence
+            );
         });
 
         it("should detect price/CVD direction mismatch", () => {
             const baseTime = Date.now();
-            
+
             // Create a price-up scenario: trades showing upward price movement
             const upwardPriceTrades = [
-                createTradeEvent(100.00, 1.0, true, baseTime - 50000),
+                createTradeEvent(100.0, 1.0, true, baseTime - 50000),
                 createTradeEvent(100.05, 1.0, false, baseTime - 40000),
-                createTradeEvent(100.10, 1.0, true, baseTime - 30000),
+                createTradeEvent(100.1, 1.0, true, baseTime - 30000),
                 createTradeEvent(100.15, 1.0, false, baseTime - 20000),
-                createTradeEvent(100.20, 1.0, true, baseTime - 10000),
+                createTradeEvent(100.2, 1.0, true, baseTime - 10000),
                 createTradeEvent(100.25, 1.0, false, baseTime), // Final higher price
             ];
 
             // Process trades to build price history
-            upwardPriceTrades.forEach(trade => {
+            upwardPriceTrades.forEach((trade) => {
                 detector.onEnrichedTrade(trade);
             });
 
@@ -194,7 +205,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 createTradeEvent(100.23, 2.0, true, baseTime + 3000), // Sell aggression
             ];
 
-            sellAggressionTrades.forEach(trade => {
+            sellAggressionTrades.forEach((trade) => {
                 detector.onEnrichedTrade(trade);
             });
 
@@ -227,20 +238,25 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
 
         it("should generate SELL signal when price UP but CVD DOWN (bearish divergence)", () => {
             const baseTime = Date.now();
-            
+
             // Create upward price movement with sufficient volume and trade count
             const upwardPriceTrades = [
                 // Build sufficient trade history (20+ trades required)
-                ...Array.from({ length: 15 }, (_, i) => 
-                    createTradeEvent(100.00 + i * 0.01, 1.0, i % 2 === 0, baseTime - 60000 + i * 3000)
+                ...Array.from({ length: 15 }, (_, i) =>
+                    createTradeEvent(
+                        100.0 + i * 0.01,
+                        1.0,
+                        i % 2 === 0,
+                        baseTime - 60000 + i * 3000
+                    )
                 ),
                 // Final upward price movement
-                createTradeEvent(100.20, 1.5, false, baseTime - 5000),
+                createTradeEvent(100.2, 1.5, false, baseTime - 5000),
                 createTradeEvent(100.25, 1.5, false, baseTime - 2000),
-                createTradeEvent(100.30, 1.5, false, baseTime - 1000),
+                createTradeEvent(100.3, 1.5, false, baseTime - 1000),
             ];
 
-            upwardPriceTrades.forEach(trade => {
+            upwardPriceTrades.forEach((trade) => {
                 detector.onEnrichedTrade(trade);
             });
 
@@ -251,7 +267,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 createTradeEvent(100.24, 5.0, true, baseTime + 1000), // Large sell
             ];
 
-            heavySellAggression.forEach(trade => {
+            heavySellAggression.forEach((trade) => {
                 detector.onEnrichedTrade(trade);
             });
 
@@ -263,20 +279,25 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
 
         it("should generate BUY signal when price DOWN but CVD UP (bullish divergence)", () => {
             const baseTime = Date.now();
-            
+
             // Create downward price movement with sufficient volume and trade count
             const downwardPriceTrades = [
                 // Build sufficient trade history
-                ...Array.from({ length: 15 }, (_, i) => 
-                    createTradeEvent(100.00 - i * 0.01, 1.0, i % 2 === 0, baseTime - 60000 + i * 3000)
+                ...Array.from({ length: 15 }, (_, i) =>
+                    createTradeEvent(
+                        100.0 - i * 0.01,
+                        1.0,
+                        i % 2 === 0,
+                        baseTime - 60000 + i * 3000
+                    )
                 ),
                 // Final downward price movement
-                createTradeEvent(99.80, 1.5, true, baseTime - 5000),
+                createTradeEvent(99.8, 1.5, true, baseTime - 5000),
                 createTradeEvent(99.75, 1.5, true, baseTime - 2000),
-                createTradeEvent(99.70, 1.5, true, baseTime - 1000),
+                createTradeEvent(99.7, 1.5, true, baseTime - 1000),
             ];
 
-            downwardPriceTrades.forEach(trade => {
+            downwardPriceTrades.forEach((trade) => {
                 detector.onEnrichedTrade(trade);
             });
 
@@ -287,7 +308,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 createTradeEvent(99.76, 5.0, false, baseTime + 1000), // Large buy
             ];
 
-            heavyBuyAggression.forEach(trade => {
+            heavyBuyAggression.forEach((trade) => {
                 detector.onEnrichedTrade(trade);
             });
 
@@ -298,15 +319,20 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
 
         it("should generate NEUTRAL signal when no clear divergence exists", () => {
             const baseTime = Date.now();
-            
+
             // Create sideways price movement (no clear direction)
             const sidewaysTrades = [
-                ...Array.from({ length: 20 }, (_, i) => 
-                    createTradeEvent(100.00 + (Math.sin(i) * 0.02), 1.0, i % 2 === 0, baseTime - 60000 + i * 3000)
+                ...Array.from({ length: 20 }, (_, i) =>
+                    createTradeEvent(
+                        100.0 + Math.sin(i) * 0.02,
+                        1.0,
+                        i % 2 === 0,
+                        baseTime - 60000 + i * 3000
+                    )
                 ),
             ];
 
-            sidewaysTrades.forEach(trade => {
+            sidewaysTrades.forEach((trade) => {
                 detector.onEnrichedTrade(trade);
             });
 
@@ -352,8 +378,14 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
             const zScores = { 60: 3.0 }; // Higher z-score to ensure momentum passes
             const highCorrelations = { 60: 0.8 }; // High correlation
 
-            const momentumResult = momentumDetector.simulateConfidence(zScores, highCorrelations);
-            const divergenceResult = divergenceDetector.simulateConfidence(zScores, highCorrelations);
+            const momentumResult = momentumDetector.simulateConfidence(
+                zScores,
+                highCorrelations
+            );
+            const divergenceResult = divergenceDetector.simulateConfidence(
+                zScores,
+                highCorrelations
+            );
 
             // Momentum mode should accept high correlation (non-zero confidence)
             // Divergence mode should reject high correlation (zero confidence due to validation failure)
@@ -366,8 +398,14 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
             const mediumZScores = { 60: 1.5 }; // Above 1.0 (half of 2.0) but below 2.0
             const lowCorrelations = { 60: 0.1 }; // Good for divergence
 
-            const momentumResult = momentumDetector.simulateConfidence(mediumZScores, lowCorrelations);
-            const divergenceResult = divergenceDetector.simulateConfidence(mediumZScores, lowCorrelations);
+            const momentumResult = momentumDetector.simulateConfidence(
+                mediumZScores,
+                lowCorrelations
+            );
+            const divergenceResult = divergenceDetector.simulateConfidence(
+                mediumZScores,
+                lowCorrelations
+            );
 
             // Divergence mode should be more lenient with z-score threshold
             // This tests the minZ * 0.5 logic in divergence mode
@@ -402,8 +440,11 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
             const adequateZScores = { 60: 1.5 };
             const lowCorrelations = { 60: 0.1 }; // Good for divergence
 
-            const result = hybridDetector.simulateConfidence(adequateZScores, lowCorrelations);
-            
+            const result = hybridDetector.simulateConfidence(
+                adequateZScores,
+                lowCorrelations
+            );
+
             // Hybrid mode should use divergence validation if it passes
             expect(result.finalConfidence).toBeGreaterThanOrEqual(0);
             expect(result.finalConfidence).toBeLessThanOrEqual(1);
@@ -414,8 +455,11 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
             const highZScores = { 60: 3.0 }; // High z-score
             const highCorrelations = { 60: 0.8 }; // High correlation (bad for divergence, good for momentum)
 
-            const result = hybridDetector.simulateConfidence(highZScores, highCorrelations);
-            
+            const result = hybridDetector.simulateConfidence(
+                highZScores,
+                highCorrelations
+            );
+
             // Should fall back to momentum validation
             expect(result.finalConfidence).toBeGreaterThanOrEqual(0);
             expect(result.finalConfidence).toBeLessThanOrEqual(1);
@@ -441,15 +485,20 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
 
         it("should correctly identify upward price movement", () => {
             const baseTime = Date.now();
-            
+
             // Create clear upward price trend
             const upwardTrades = [
-                ...Array.from({ length: 25 }, (_, i) => 
-                    createTradeEvent(100.00 + i * 0.01, 1.0, i % 2 === 0, baseTime - 30000 + i * 1000)
+                ...Array.from({ length: 25 }, (_, i) =>
+                    createTradeEvent(
+                        100.0 + i * 0.01,
+                        1.0,
+                        i % 2 === 0,
+                        baseTime - 30000 + i * 1000
+                    )
                 ),
             ];
 
-            upwardTrades.forEach(trade => {
+            upwardTrades.forEach((trade) => {
                 detector.onEnrichedTrade(trade);
             });
 
@@ -461,15 +510,20 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
 
         it("should correctly identify downward price movement", () => {
             const baseTime = Date.now();
-            
+
             // Create clear downward price trend
             const downwardTrades = [
-                ...Array.from({ length: 25 }, (_, i) => 
-                    createTradeEvent(100.00 - i * 0.01, 1.0, i % 2 === 0, baseTime - 30000 + i * 1000)
+                ...Array.from({ length: 25 }, (_, i) =>
+                    createTradeEvent(
+                        100.0 - i * 0.01,
+                        1.0,
+                        i % 2 === 0,
+                        baseTime - 30000 + i * 1000
+                    )
                 ),
             ];
 
-            downwardTrades.forEach(trade => {
+            downwardTrades.forEach((trade) => {
                 detector.onEnrichedTrade(trade);
             });
 
@@ -479,15 +533,20 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
 
         it("should handle sideways movement correctly", () => {
             const baseTime = Date.now();
-            
+
             // Create sideways price movement (small oscillations around 100.00)
             const sidewaysTrades = [
-                ...Array.from({ length: 25 }, (_, i) => 
-                    createTradeEvent(100.00 + (Math.sin(i * 0.5) * 0.005), 1.0, i % 2 === 0, baseTime - 30000 + i * 1000)
+                ...Array.from({ length: 25 }, (_, i) =>
+                    createTradeEvent(
+                        100.0 + Math.sin(i * 0.5) * 0.005,
+                        1.0,
+                        i % 2 === 0,
+                        baseTime - 30000 + i * 1000
+                    )
                 ),
             ];
 
-            sidewaysTrades.forEach(trade => {
+            sidewaysTrades.forEach((trade) => {
                 detector.onEnrichedTrade(trade);
             });
 
@@ -497,15 +556,15 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
 
         it("should return sideways for insufficient trade data", () => {
             const baseTime = Date.now();
-            
+
             // Add fewer than 20 trades (minimum required)
             const fewTrades = [
-                createTradeEvent(100.00, 1.0, true, baseTime - 5000),
+                createTradeEvent(100.0, 1.0, true, baseTime - 5000),
                 createTradeEvent(100.05, 1.0, false, baseTime - 3000),
-                createTradeEvent(100.10, 1.0, true, baseTime - 1000),
+                createTradeEvent(100.1, 1.0, true, baseTime - 1000),
             ];
 
-            fewTrades.forEach(trade => {
+            fewTrades.forEach((trade) => {
                 detector.onEnrichedTrade(trade);
             });
 
@@ -536,8 +595,11 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
             const invalidZScores = { 60: NaN };
             const validCorrelations = { 60: 0.5 };
 
-            const result = detector.simulateConfidence(invalidZScores, validCorrelations);
-            
+            const result = detector.simulateConfidence(
+                invalidZScores,
+                validCorrelations
+            );
+
             // Should return valid confidence values even with invalid input
             expect(Number.isFinite(result.finalConfidence)).toBe(true);
             expect(result.finalConfidence).toBeGreaterThanOrEqual(0);
@@ -548,8 +610,11 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
             const validZScores = { 60: 2.5 };
             const invalidCorrelations = { 60: NaN };
 
-            const result = detector.simulateConfidence(validZScores, invalidCorrelations);
-            
+            const result = detector.simulateConfidence(
+                validZScores,
+                invalidCorrelations
+            );
+
             expect(Number.isFinite(result.finalConfidence)).toBe(true);
             expect(result.finalConfidence).toBeGreaterThanOrEqual(0);
             expect(result.finalConfidence).toBeLessThanOrEqual(1);
@@ -557,15 +622,21 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
 
         it("should handle extreme correlation values", () => {
             const validZScores = { 60: 2.5 };
-            
+
             // Test with extreme positive correlation
             const extremePositiveCorr = { 60: 0.99 };
-            const result1 = detector.simulateConfidence(validZScores, extremePositiveCorr);
-            
-            // Test with extreme negative correlation  
+            const result1 = detector.simulateConfidence(
+                validZScores,
+                extremePositiveCorr
+            );
+
+            // Test with extreme negative correlation
             const extremeNegativeCorr = { 60: -0.99 };
-            const result2 = detector.simulateConfidence(validZScores, extremeNegativeCorr);
-            
+            const result2 = detector.simulateConfidence(
+                validZScores,
+                extremeNegativeCorr
+            );
+
             // Both should return valid results
             expect(Number.isFinite(result1.finalConfidence)).toBe(true);
             expect(Number.isFinite(result2.finalConfidence)).toBe(true);
@@ -573,8 +644,13 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
 
         it("should handle zero quantities in trades", () => {
             const baseTime = Date.now();
-            const zeroQuantityTrade = createTradeEvent(100.00, 0, false, baseTime);
-            
+            const zeroQuantityTrade = createTradeEvent(
+                100.0,
+                0,
+                false,
+                baseTime
+            );
+
             // Should not crash with zero quantity
             expect(() => {
                 detector.onEnrichedTrade(zeroQuantityTrade);
@@ -583,14 +659,19 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
 
         it("should handle rapid-fire trades", () => {
             const baseTime = Date.now();
-            
+
             // Add many trades in quick succession
-            const rapidTrades = Array.from({ length: 100 }, (_, i) => 
-                createTradeEvent(100.00 + i * 0.001, 0.1, i % 2 === 0, baseTime + i)
+            const rapidTrades = Array.from({ length: 100 }, (_, i) =>
+                createTradeEvent(
+                    100.0 + i * 0.001,
+                    0.1,
+                    i % 2 === 0,
+                    baseTime + i
+                )
             );
 
             expect(() => {
-                rapidTrades.forEach(trade => {
+                rapidTrades.forEach((trade) => {
                     detector.onEnrichedTrade(trade);
                 });
             }).not.toThrow();
