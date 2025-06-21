@@ -226,8 +226,8 @@
                 "maxPassiveRatio": 0.2,
                 "minDepletionFactor": 0.3,
 
-                "moveTicks": 1,
-                "confirmationTimeout": 50000,
+                "minInitialMoveTicks": 1,
+                "confirmationTimeoutMs": 50000,
                 "maxRevisitTicks": 0,
                 "maxZones": 50,
                 "zoneAgeLimit": 1800000,
@@ -267,8 +267,8 @@
                 "passiveWindowSec": 60,
 
                 "signalCooldownMs": 120000,
-                "moveTicks": 4,
-                "confirmationTimeout": 60000,
+                "minInitialMoveTicks": 4,
+                "confirmationTimeoutMs": 60000,
                 "maxRevisitTicks": 5,
 
                 "features": {
@@ -308,7 +308,11 @@
                 "institutionalThreshold": 8.0,
                 "burstDetectionMs": 2000,
                 "sustainedVolumeMs": 20000,
-                "medianTradeSize": 0.6
+                "medianTradeSize": 0.6,
+
+                "detectionMode": "divergence",
+                "divergenceThreshold": 0.3,
+                "divergenceLookbackSec": 60
             }
         }
     }

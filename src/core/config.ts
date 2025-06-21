@@ -41,7 +41,7 @@ let CONFIG_SYMBOL: AllowedSymbols = (ENV_SYMBOL ??
 let SYMBOL_CFG =
     cfg.symbols[CONFIG_SYMBOL as keyof typeof cfg.symbols] ??
     (cfg.symbols as Record<string, unknown>)[cfg.symbol];
-let DATASTREAM_CFG = SYMBOL_CFG?.dataStream ?? {};
+let DATASTREAM_CFG: Partial<DataStreamConfig> = SYMBOL_CFG?.dataStream ?? {};
 let ZONE_CFG: ZoneDetectorSymbolConfig =
     cfg.zoneDetectors?.[CONFIG_SYMBOL] ?? ({} as ZoneDetectorSymbolConfig);
 let ENHANCED_ZONE_CFG: EnhancedZoneFormationConfig =
@@ -371,7 +371,7 @@ export class Config {
                 cfg.symbols[cfg.symbol].absorption?.minAggVolume ?? 600
             ),
             absorptionThreshold: Number(
-                cfg.symbols[cfg.symbol].absorption?.threshold ?? 0.75
+                cfg.symbols[cfg.symbol].absorption?.absorptionThreshold ?? 0.75
             ),
             windowMs: this.WINDOW_MS,
             zoneTicks: Number(
@@ -391,10 +391,11 @@ export class Config {
                     Config.PRICE_PRECISION
             ),
             minInitialMoveTicks: Number(
-                cfg.symbols[cfg.symbol].absorption?.moveTicks ?? 12
+                cfg.symbols[cfg.symbol].absorption?.minInitialMoveTicks ?? 12
             ),
             confirmationTimeoutMs: Number(
-                cfg.symbols[cfg.symbol].absorption?.confirmationTimeout ?? 60000
+                cfg.symbols[cfg.symbol].absorption?.confirmationTimeoutMs ??
+                    60000
             ),
             maxRevisitTicks: Number(
                 cfg.symbols[cfg.symbol].absorption?.maxRevisitTicks ?? 5
@@ -438,7 +439,7 @@ export class Config {
                 cfg.symbols[cfg.symbol].exhaustion?.minAggVolume ?? 600
             ),
             exhaustionThreshold: Number(
-                cfg.symbols[cfg.symbol].exhaustion?.threshold ?? 0.7
+                cfg.symbols[cfg.symbol].exhaustion?.exhaustionThreshold ?? 0.7
             ),
             windowMs: Number(Config.WINDOW_MS ?? 90000),
             zoneTicks: cfg.symbols[cfg.symbol].exhaustion?.zoneTicks ?? 3,
@@ -448,9 +449,9 @@ export class Config {
                 cfg.symbols[cfg.symbol].exhaustion?.maxPassiveRatio ?? 0.5,
             pricePrecision: Config.PRICE_PRECISION,
             minInitialMoveTicks:
-                cfg.symbols[cfg.symbol].exhaustion?.moveTicks ?? 12,
+                cfg.symbols[cfg.symbol].exhaustion?.minInitialMoveTicks ?? 12,
             confirmationTimeoutMs:
-                cfg.symbols[cfg.symbol].exhaustion?.confirmationTimeout ??
+                cfg.symbols[cfg.symbol].exhaustion?.confirmationTimeoutMs ??
                 60000,
             maxRevisitTicks:
                 cfg.symbols[cfg.symbol].exhaustion?.maxRevisitTicks ?? 5,
@@ -572,6 +573,19 @@ export class Config {
             medianTradeSize: Number(
                 cfg.symbols[cfg.symbol].deltaCvdConfirmation?.medianTradeSize ??
                     0.6
+            ),
+
+            // NEW: Detection mode settings
+            detectionMode:
+                cfg.symbols[cfg.symbol].deltaCvdConfirmation?.detectionMode ??
+                "divergence",
+            divergenceThreshold: Number(
+                cfg.symbols[cfg.symbol].deltaCvdConfirmation
+                    ?.divergenceThreshold ?? 0.3
+            ),
+            divergenceLookbackSec: Number(
+                cfg.symbols[cfg.symbol].deltaCvdConfirmation
+                    ?.divergenceLookbackSec ?? 60
             ),
         };
     }

@@ -1,5 +1,21 @@
 export type AllowedSymbols = "LTCUSDT";
 import type { ZoneDetectorConfig } from "./zoneTypes.js";
+import type { DeltaCVDConfirmationSettings } from "../indicators/deltaCVDConfirmation.js";
+import type { ExhaustionSettings } from "../indicators/exhaustionDetector.js";
+import type { AbsorptionSettings } from "../indicators/absorptionDetector.js";
+import type { SupportResistanceConfig } from "../indicators/supportResistanceDetector.js";
+import type { TradesProcessorOptions } from "../market/processors/tradesProcessor.js";
+import type { SignalManagerConfig } from "../trading/signalManager.js";
+import type { SignalCoordinatorConfig } from "../services/signalCoordinator.js";
+import type { OrderBookProcessorOptions } from "../market/processors/orderBookProcessor.js";
+import type { DataStreamConfig } from "../trading/dataStreamManager.js";
+import type { AnomalyDetectorOptions } from "../services/anomalyDetector.js";
+import type { SpoofingDetectorConfig } from "../services/spoofingDetector.js";
+import type { OrderBookStateOptions } from "../market/orderBookState.js";
+import type {
+    AccumulationSettings,
+    SuperiorFlowSettings,
+} from "../indicators/interfaces/detectorInterfaces.js";
 
 export interface MQTTConfig {
     url: string;
@@ -53,214 +69,23 @@ type SymbolConfig = {
     maxDashboardInterval?: number; // Maximum time between dashboard updates (default: 1000ms)
     significantChangeThreshold?: number; // Price change threshold for immediate updates (default: 0.001 = 0.1%)
     dataStream?: DataStreamConfig;
-    orderBookState: OrderBookStateConfig;
-    tradesProcessor?: TradesProcessorConfig;
+    orderBookState: OrderBookStateOptions;
+    tradesProcessor?: TradesProcessorOptions;
     signalManager?: SignalManagerConfig;
     signalCoordinator?: SignalCoordinatorConfig;
-    orderBookProcessor?: OrderBookProcessorConfig;
+    orderBookProcessor?: OrderBookProcessorOptions;
     emitDepthMetrics?: boolean;
-    anomalyDetector?: AnomalyDetectorConfig;
+    anomalyDetector?: AnomalyDetectorOptions;
     spoofingDetector?: SpoofingDetectorConfig;
-    exhaustion?: ExhaustionDetectorConfig;
-    absorption?: AbsorptionDetectorConfig;
-    deltaCvdConfirmation?: DeltaCvdConfirmationConfig;
-    accumulationDetector?: AccumulationDetectorConfig;
-    distributionDetector?: DistributionDetectorConfig;
+    exhaustion?: ExhaustionSettings;
+    absorption?: AbsorptionSettings;
+    deltaCvdConfirmation?: DeltaCVDConfirmationSettings;
+    accumulationDetector?: AccumulationSettings;
+    distributionDetector?: SuperiorFlowSettings;
     supportResistanceDetector?: SupportResistanceConfig;
 };
 
-type DataStreamConfig = {
-    reconnectDelay?: number;
-    maxReconnectAttempts?: number;
-    depthUpdateSpeed?: "100ms" | "1000ms";
-    enableHeartbeat?: boolean;
-    heartbeatInterval?: number;
-    // Enhanced configuration
-    maxBackoffDelay?: number;
-    streamHealthTimeout?: number;
-    enableStreamHealthCheck?: boolean;
-    reconnectOnHealthFailure?: boolean;
-    // Hard reload configuration
-    enableHardReload?: boolean;
-    hardReloadAfterAttempts?: number;
-    hardReloadCooldownMs?: number;
-    maxHardReloads?: number;
-    hardReloadRestartCommand?: string;
-};
-
-type AnomalyDetectorConfig = {
-    windowSize: number;
-    anomalyCooldownMs: number;
-    icebergDetectionWindow: number;
-    volumeImbalanceThreshold: number;
-    absorptionRatioThreshold: number;
-    normalSpreadBps: number;
-    minHistory: number;
-    orderSizeAnomalyThreshold: number;
-    tickSize: number;
-    flowWindowMs?: number;
-    orderSizeWindowMs?: number;
-    volatilityThreshold?: number;
-    spreadThresholdBps?: number;
-    extremeVolatilityWindowMs?: number;
-    liquidityCheckWindowMs?: number;
-    whaleCooldownMs?: number;
-    marketHealthWindowMs?: number;
-};
-
-type SpoofingDetectorConfig = {
-    wallTicks: number;
-    minWallSize: number;
-    dynamicWallWidth: true;
-    testLogMinSpoof: number;
-};
-
-type OrderBookStateConfig = {
-    pricePrecision: number;
-    maxLevels: number;
-    maxPriceDistance: number;
-    pruneIntervalMs: number;
-    maxErrorRate: number;
-    staleThresholdMs: number;
-};
-
-type ExhaustionDetectorConfig = {
-    minAggVolume: number;
-    threshold: number;
-    windowMs: number;
-    zoneTicks: number;
-    eventCooldownMs: number;
-    maxPassiveRatio: number;
-    pricePrecision: number;
-    moveTicks: number;
-    confirmationTimeout: number;
-    maxRevisitTicks: number;
-    features: {
-        depletionTracking: true;
-        spreadAdjustment: true;
-        spoofingDetection: true;
-        autoCalibrate: false;
-        adaptiveZone: true;
-        multiZone: true;
-        volumeVelocity: true;
-        passiveHistory: true;
-    };
-};
-
-type AbsorptionDetectorConfig = {
-    minAggVolume: number;
-    threshold: number;
-    windowMs: number;
-    zoneTicks: number;
-    eventCooldownMs: number;
-    minPassiveMultiplier: number;
-    maxAbsorptionRatio: number;
-    pricePrecision: number;
-    moveTicks: number;
-    confirmationTimeout: number;
-    maxRevisitTicks: number;
-    features: {
-        spoofingDetection: true;
-        adaptiveZone: true;
-        passiveHistory: true;
-        multiZone: true;
-        autoCalibrate: false;
-        icebergDetection: true;
-        liquidityGradient: true;
-        spreadAdjustment: true;
-        absorptionVelocity: true;
-    };
-};
-
-type DeltaCvdConfirmationConfig = {
-    windowsSec: number[];
-    minTradesPerSec: number;
-    minVolPerSec: number;
-    minZ: number;
-    pricePrecision: number;
-    dynamicThresholds: true;
-    logDebug: true;
-    volumeSurgeMultiplier?: number;
-    imbalanceThreshold?: number;
-    institutionalThreshold?: number;
-    burstDetectionMs?: number;
-    sustainedVolumeMs?: number;
-    medianTradeSize?: number;
-    volatilityLookbackSec?: number;
-    priceCorrelationWeight?: number;
-    volumeConcentrationWeight?: number;
-    adaptiveThresholdMultiplier?: number;
-    maxDivergenceAllowed?: number;
-    stateCleanupIntervalSec?: number;
-};
-
-type AccumulationDetectorConfig = {
-    minDurationMs: number;
-    zoneSize: number;
-    minRatio: number;
-    minRecentActivityMs: number;
-    minAggVolume: number;
-    trackSide: false;
-    pricePrecision: number;
-    accumulationThreshold: number;
-};
-
-type DistributionDetectorConfig = {
-    minDurationMs: number;
-    minRatio: number;
-    minRecentActivityMs: number;
-    threshold: number;
-    volumeConcentrationWeight: number;
-    strengthAnalysis: boolean;
-    velocityAnalysis: boolean;
-    symbol: string;
-    minAggVolume: number;
-    pricePrecision: number;
-};
-
-type SupportResistanceConfig = {
-    priceTolerancePercent: number;
-    minTouchCount: number;
-    minStrength: number;
-    timeWindowMs: number;
-    volumeWeightFactor: number;
-    rejectionConfirmationTicks: number;
-};
-
-type TradesProcessorConfig = {
-    storageTime?: number;
-    maxBacklogRetries?: number;
-    backlogBatchSize?: number;
-    maxMemoryTrades?: number;
-    saveQueueSize?: number;
-    healthCheckInterval?: number;
-};
-
-type SignalManagerConfig = {
-    confidenceThreshold?: number;
-    signalTimeout?: number;
-    enableMarketHealthCheck?: boolean;
-    enableAlerts?: boolean;
-    detectorThresholds?: Record<string, number>;
-    positionSizing?: Record<string, number>;
-};
-
-type SignalCoordinatorConfig = {
-    maxConcurrentProcessing?: number;
-    processingTimeoutMs?: number;
-    retryAttempts?: number;
-    retryDelayMs?: number;
-    enableMetrics?: boolean;
-    logLevel?: string;
-};
-
-type OrderBookProcessorConfig = {
-    binSize?: number;
-    numLevels?: number;
-    maxBufferSize?: number;
-    tickSize?: number;
-    precision?: number;
-};
+// All type definitions now imported from their respective source files
 
 export type ZoneDetectorSymbolConfig = {
     accumulation?: Partial<ZoneDetectorConfig>;

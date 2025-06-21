@@ -41,6 +41,11 @@ export interface DeltaCVDConfirmationSettings extends BaseDetectorSettings {
     minTradesPerSec?: number; // floor scaled by window
     minVolPerSec?: number; // floor scaled by window
 
+    // NEW: Detection mode
+    detectionMode?: "momentum" | "divergence" | "hybrid"; // Default: "momentum"
+    divergenceThreshold?: number; // 0.3 = 30% correlation threshold for divergence
+    divergenceLookbackSec?: number; // 60 seconds to check for price/CVD divergence
+
     // Enhanced settings
     volatilityLookbackSec?: number; // window for volatility baseline (default: 3600)
     priceCorrelationWeight?: number; // how much price correlation affects confidence (0-1)
@@ -142,6 +147,11 @@ export class DeltaCVDConfirmation extends BaseDetector {
     private readonly sustainedVolumeMs: number;
     private readonly medianTradeSize: number;
 
+    // NEW: Detection mode configuration
+    private readonly detectionMode: "momentum" | "divergence" | "hybrid";
+    private readonly divergenceThreshold: number;
+    private readonly divergenceLookbackSec: number;
+
     /* ---- enhanced mutable state --------------------------------- */
     private readonly states = new Map<number, WindowState>();
     private lastSignalTs = 0;
@@ -205,6 +215,11 @@ export class DeltaCVDConfirmation extends BaseDetector {
         this.burstDetectionMs = settings.burstDetectionMs ?? 1000;
         this.sustainedVolumeMs = settings.sustainedVolumeMs ?? 30000;
         this.medianTradeSize = settings.medianTradeSize ?? 0.6;
+
+        // NEW: Detection mode configuration
+        this.detectionMode = settings.detectionMode ?? "momentum";
+        this.divergenceThreshold = settings.divergenceThreshold ?? 0.3;
+        this.divergenceLookbackSec = settings.divergenceLookbackSec ?? 60;
 
         // Initialize window states
         for (const w of this.windows) {
@@ -1126,50 +1141,30 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 }
             }
 
-            // Check sign alignment with validation
-            const signs = this.windows.map((w) => {
-                const zScore = zScores[w];
-                return isFinite(zScore) ? Math.sign(zScore) : 0;
-            });
-
-            if (
-                signs.some((s) => s === 0) ||
-                !signs.every((s) => s === signs[0])
-            ) {
-                return { valid: false, reason: "no_sign_alignment" };
+            // NEW: Mode-specific validation
+            if (this.detectionMode === "divergence") {
+                return this.validateDivergenceConditions(
+                    zScores,
+                    priceCorrelations
+                );
+            } else if (this.detectionMode === "hybrid") {
+                // Try divergence first, fall back to momentum
+                const divergenceResult = this.validateDivergenceConditions(
+                    zScores,
+                    priceCorrelations
+                );
+                if (divergenceResult.valid) return divergenceResult;
+                return this.validateMomentumConditions(
+                    zScores,
+                    priceCorrelations
+                );
+            } else {
+                // Default momentum mode (existing logic)
+                return this.validateMomentumConditions(
+                    zScores,
+                    priceCorrelations
+                );
             }
-
-            // Check adaptive z-score threshold with bounds
-            const adaptiveMinZ = this.calculateAdaptiveThreshold();
-            if (!isFinite(adaptiveMinZ) || adaptiveMinZ <= 0) {
-                return { valid: false, reason: "invalid_adaptive_threshold" };
-            }
-
-            const shortestWindowZ = Math.abs(zScores[this.windows[0]]);
-            if (shortestWindowZ < adaptiveMinZ) {
-                return { valid: false, reason: "below_adaptive_threshold" };
-            }
-
-            // Check for excessive price/CVD divergence with validation
-            const correlations = this.windows
-                .map((w) => priceCorrelations[w])
-                .filter((c) => isFinite(c));
-            if (correlations.length === 0) {
-                return { valid: false, reason: "no_valid_correlations" };
-            }
-
-            const avgPriceCorrelation =
-                correlations.reduce((sum, corr) => sum + corr, 0) /
-                correlations.length;
-
-            if (Math.abs(avgPriceCorrelation) < 1 - this.maxDivergenceAllowed) {
-                return {
-                    valid: false,
-                    reason: "excessive_price_cvd_divergence",
-                };
-            }
-
-            return { valid: true, reason: "" };
         } catch (error) {
             this.logger.error(
                 "[DeltaCVDConfirmation] Signal validation failed",
@@ -1177,6 +1172,123 @@ export class DeltaCVDConfirmation extends BaseDetector {
             );
             return { valid: false, reason: "validation_error" };
         }
+    }
+
+    // NEW: DIVERGENCE VALIDATION METHOD
+    private validateDivergenceConditions(
+        zScores: Record<number, number>,
+        priceCorrelations: Record<number, number>
+    ): { valid: boolean; reason: string } {
+        const shortWindow = this.windows[0];
+        const state = this.states.get(shortWindow)!;
+
+        // Check for significant CVD activity (lower threshold than momentum mode)
+        const shortZ = Math.abs(zScores[shortWindow]);
+        if (shortZ < this.minZ * 0.5) {
+            // Half the normal threshold
+            return { valid: false, reason: "insufficient_cvd_activity" };
+        }
+
+        // REWARD divergence instead of penalizing it
+        const avgCorrelation =
+            this.windows
+                .map((w) => Math.abs(priceCorrelations[w]))
+                .reduce((sum, corr) => sum + corr, 0) / this.windows.length;
+
+        // In divergence mode, we WANT low correlation (divergence)
+        if (avgCorrelation > this.divergenceThreshold) {
+            return { valid: false, reason: "price_cvd_too_correlated" };
+        }
+
+        // Check for price/CVD direction mismatch in recent period
+        // For simulation mode, we can skip the detailed price direction check
+        // since we don't have actual trade data
+        if (state && state.trades.length >= 20) {
+            const priceDirection = this.calculateRecentPriceDirection(state);
+            const cvdDirection = zScores[shortWindow] > 0 ? "up" : "down";
+
+            const hasDivergence =
+                (priceDirection === "up" && cvdDirection === "down") ||
+                (priceDirection === "down" && cvdDirection === "up");
+
+            if (!hasDivergence) {
+                return { valid: false, reason: "no_price_cvd_divergence" };
+            }
+        }
+        // In simulation mode without trade data, we accept based on correlation alone
+
+        return { valid: true, reason: "divergence_detected" };
+    }
+
+    // NEW: MOMENTUM VALIDATION (existing logic extracted)
+    private validateMomentumConditions(
+        zScores: Record<number, number>,
+        priceCorrelations: Record<number, number>
+    ): { valid: boolean; reason: string } {
+        // Check sign alignment with validation
+        const signs = this.windows.map((w) => {
+            const zScore = zScores[w];
+            return isFinite(zScore) ? Math.sign(zScore) : 0;
+        });
+
+        if (signs.some((s) => s === 0) || !signs.every((s) => s === signs[0])) {
+            return { valid: false, reason: "no_sign_alignment" };
+        }
+
+        // Check adaptive z-score threshold with bounds
+        const adaptiveMinZ = this.calculateAdaptiveThreshold();
+        if (!isFinite(adaptiveMinZ) || adaptiveMinZ <= 0) {
+            return { valid: false, reason: "invalid_adaptive_threshold" };
+        }
+
+        const shortestWindowZ = Math.abs(zScores[this.windows[0]]);
+        if (shortestWindowZ < adaptiveMinZ) {
+            return { valid: false, reason: "below_adaptive_threshold" };
+        }
+
+        // Check for excessive price/CVD divergence with validation
+        const correlations = this.windows
+            .map((w) => priceCorrelations[w])
+            .filter((c) => isFinite(c));
+        if (correlations.length === 0) {
+            return { valid: false, reason: "no_valid_correlations" };
+        }
+
+        const avgPriceCorrelation =
+            correlations.reduce((sum, corr) => sum + corr, 0) /
+            correlations.length;
+
+        if (Math.abs(avgPriceCorrelation) < 1 - this.maxDivergenceAllowed) {
+            return {
+                valid: false,
+                reason: "excessive_price_cvd_divergence",
+            };
+        }
+
+        return { valid: true, reason: "momentum_confirmed" };
+    }
+
+    // NEW: RECENT PRICE DIRECTION HELPER
+    private calculateRecentPriceDirection(
+        state: WindowState
+    ): "up" | "down" | "sideways" {
+        if (state.trades.length < 20) return "sideways";
+
+        // Look at price movement over the divergence lookback period
+        const lookbackMs = this.divergenceLookbackSec * 1000;
+        const now = state.trades[state.trades.length - 1].timestamp;
+        const cutoff = now - lookbackMs;
+
+        const recentTrades = state.trades.filter((t) => t.timestamp >= cutoff);
+        if (recentTrades.length < 10) return "sideways";
+
+        const startPrice = recentTrades[0].price;
+        const endPrice = recentTrades[recentTrades.length - 1].price;
+        const priceChange = (endPrice - startPrice) / startPrice;
+
+        if (priceChange > 0.001) return "up"; // 0.1% threshold
+        if (priceChange < -0.001) return "down";
+        return "sideways";
     }
 
     /* ------------------------------------------------------------------ */
@@ -1353,13 +1465,33 @@ export class DeltaCVDConfirmation extends BaseDetector {
         finalConfidence: number,
         timestamp: number
     ): DeltaCVDConfirmationResult {
-        // CRITICAL FIX: Direction should be based on actual CVD slope, not z-score sign
-        // Z-score tells us if momentum is unusual, slope tells us the direction
-        const slope = slopes[this.windows[0]];
-        const side = slope > 0 ? "buy" : slope < 0 ? "sell" : "neutral";
         const shortestWindowState = this.states.get(this.windows[0])!;
         const lastTrade =
             shortestWindowState.trades[shortestWindowState.trades.length - 1];
+
+        // NEW: Mode-specific signal direction
+        let side: "buy" | "sell" | "neutral";
+
+        if (this.detectionMode === "divergence") {
+            // In divergence mode, signal OPPOSITE to CVD direction
+            const priceDirection =
+                this.calculateRecentPriceDirection(shortestWindowState);
+            const cvdDirection = slopes[this.windows[0]] > 0 ? "up" : "down";
+
+            // If price up but CVD down → sell signal (expect reversal down)
+            // If price down but CVD up → buy signal (expect reversal up)
+            if (priceDirection === "up" && cvdDirection === "down") {
+                side = "sell";
+            } else if (priceDirection === "down" && cvdDirection === "up") {
+                side = "buy";
+            } else {
+                side = "neutral";
+            }
+        } else {
+            // Original momentum logic
+            const slope = slopes[this.windows[0]];
+            side = slope > 0 ? "buy" : slope < 0 ? "sell" : "neutral";
+        }
 
         // Calculate total window volume
         const windowVolume = shortestWindowState.trades.reduce(
@@ -1693,9 +1825,46 @@ export class DeltaCVDConfirmation extends BaseDetector {
         finalConfidence: number;
         breakdown: Record<string, number>;
     } {
+        // FIX: Validate inputs to handle NaN values
+        const validZScores: Record<number, number> = {};
+        const validCorrelations: Record<number, number> = {};
+        
+        for (const window of this.windows) {
+            validZScores[window] = Number.isFinite(testZScores[window]) ? testZScores[window] : 0;
+            validCorrelations[window] = Number.isFinite(testPriceCorrelations[window]) ? testPriceCorrelations[window] : 0;
+        }
+
+        // FIX: Respect detection mode in simulation
+        const validationResult = this.validateSignalConditions(validZScores, validCorrelations);
+        
+        // If validation fails, return low confidence
+        if (!validationResult.valid) {
+            const emptyFactors: ConfidenceFactors = {
+                zScoreAlignment: 0,
+                magnitudeStrength: 0,
+                priceCorrelation: 0,
+                volumeConcentration: 0,
+                temporalConsistency: 0,
+                divergencePenalty: 0,
+            };
+            
+            return {
+                factors: emptyFactors,
+                finalConfidence: 0,
+                breakdown: {
+                    zScoreAlignment: 0,
+                    magnitudeStrength: 0,
+                    priceCorrelation: 0,
+                    volumeConcentration: 0,
+                    temporalConsistency: 0,
+                    divergencePenalty: 0,
+                }
+            };
+        }
+
         const slopes = this.windows.reduce(
             (acc, w) => {
-                acc[w] = testZScores[w] * 100; // Mock slope from z-score
+                acc[w] = validZScores[w] * 100; // Mock slope from z-score
                 return acc;
             },
             {} as Record<number, number>
@@ -1703,8 +1872,8 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
         const factors = this.calculateConfidenceFactors(
             slopes,
-            testZScores,
-            testPriceCorrelations,
+            validZScores,
+            validCorrelations,
             Date.now()
         );
 
