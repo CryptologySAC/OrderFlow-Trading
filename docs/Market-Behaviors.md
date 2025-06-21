@@ -139,8 +139,9 @@ Institutional trading behaviors in cryptocurrency spot markets exhibit sophistic
 **Software architecture** employs C++17/20 for performance-critical paths, Intel TBB for parallelization, DPDK for low-latency networking, and custom metrics with sub-10μs monitoring overhead. **Target latency**: End-to-end processing under 100μs for institutional behavior detection.
 
 **Detection thresholds summary**:
+
 - Iceberg orders: Volume execution exceeding displayed depth by 1.5x
-- Spoofing: Order-to-trade ratios >50:1 with >95% cancellation rates  
+- Spoofing: Order-to-trade ratios >50:1 with >95% cancellation rates
 - Hidden orders: Execution volumes >2x visible depth without price impact
 - Institutional flow: Order sizes >$100k with regular patterns and consistent timing
 - CVD imbalance: Deviations >300% of average indicating significant activity
