@@ -1278,6 +1278,11 @@ export class DeltaCVDConfirmation extends BaseDetector {
         // Check if slopes are consistently increasing or decreasing across timeframes
         const slopeValues = this.windows.map((w) => slopes[w]);
 
+        // Guard against single-window configuration
+        if (slopeValues.length < 2) {
+            return 0;
+        }
+
         // Calculate how monotonic the slopes are
         let increasing = 0;
         let decreasing = 0;
