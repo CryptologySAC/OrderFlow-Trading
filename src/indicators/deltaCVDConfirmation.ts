@@ -56,6 +56,8 @@ export interface DeltaCVDConfirmationSettings extends BaseDetectorSettings {
     burstDetectionMs?: number; // 1000ms burst detection window
     sustainedVolumeMs?: number; // 30000ms sustained volume confirmation window
     medianTradeSize?: number; // 0.6 LTC median trade size baseline
+    dynamicThresholds?: boolean;
+    logDebug?: boolean;
 }
 
 interface WindowState {
@@ -110,7 +112,6 @@ interface MarketRegime {
 }
 
 const MIN_SAMPLES_FOR_STATS = 30;
-//todo const MIN_SAMPLES_FOR_CONFIDENCE = 50;
 const VOLATILITY_LOOKBACK_DEFAULT = 3600; // 1 hour
 const CLEANUP_INTERVAL_DEFAULT = 300; // 5 minutes
 
@@ -120,7 +121,7 @@ const CLEANUP_INTERVAL_DEFAULT = 300; // 5 minutes
 export class DeltaCVDConfirmation extends BaseDetector {
     /* ---- immutable config --------------------------------------- */
     protected readonly detectorType = "cvd_confirmation" as const;
-    private windows: number[] = [60, 300, 900];
+    private readonly windows: number[];
     private readonly minZ: number;
     private readonly minTPS: number;
     private readonly minVPS: number;
@@ -367,10 +368,13 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 this.recentPriceChanges.push(event.price);
             }
         } catch (error) {
-            this.logger.error("Market regime update failed", {
-                error,
-                eventPrice: event.price,
-            });
+            this.logger.error(
+                "[DeltaCVDConfirmation] Market regime update failed",
+                {
+                    error,
+                    eventPrice: event.price,
+                }
+            );
         }
     }
 
@@ -556,14 +560,20 @@ export class DeltaCVDConfirmation extends BaseDetector {
                     )
                     .slice(0, 10); // Limit to 10 most significant zones
 
-                this.logger.debug("Aggressive CVD profile cleanup completed", {
-                    originalSize: totalProfileSize,
-                    newSize: state.cvdProfile.size,
-                    zonesKept: state.institutionalZones.length,
-                });
+                this.logger.debug(
+                    "[DeltaCVDConfirmation] Aggressive CVD profile cleanup completed",
+                    {
+                        originalSize: totalProfileSize,
+                        newSize: state.cvdProfile.size,
+                        zonesKept: state.institutionalZones.length,
+                    }
+                );
             }
         } catch (error) {
-            this.logger.error("CVD profile cleanup failed", { error: error });
+            this.logger.error(
+                "[DeltaCVDConfirmation] CVD profile cleanup failed",
+                { error: error }
+            );
             // Emergency cleanup on error
             state.cvdProfile.clear();
             state.buyFlowProfile.clear();
@@ -616,11 +626,14 @@ export class DeltaCVDConfirmation extends BaseDetector {
             state.lastCleanup = now;
         }
 
-        this.logger.debug("Periodic state cleanup completed", {
-            detector: this.getId(),
-            timestamp: now,
-            statesCount: this.states.size,
-        });
+        this.logger.debug(
+            "[DeltaCVDConfirmation] Periodic state cleanup completed",
+            {
+                detector: this.getId(),
+                timestamp: now,
+                statesCount: this.states.size,
+            }
+        );
     }
 
     /* ------------------------------------------------------------------ */
@@ -754,15 +767,18 @@ export class DeltaCVDConfirmation extends BaseDetector {
             imbalance: imbalanceResult.imbalance,
         });
 
-        this.logger.debug("Volume surge conditions validated", {
-            detector: this.getId(),
-            hasVolumeSurge,
-            imbalance: imbalanceResult.imbalance,
-            hasInstitutional,
-            reason: hasInstitutional
-                ? "institutional_enhanced"
-                : "volume_imbalance_confirmed",
-        });
+        this.logger.debug(
+            "[DeltaCVDConfirmation] Volume surge conditions validated",
+            {
+                detector: this.getId(),
+                hasVolumeSurge,
+                imbalance: imbalanceResult.imbalance,
+                hasInstitutional,
+                reason: hasInstitutional
+                    ? "institutional_enhanced"
+                    : "volume_imbalance_confirmed",
+            }
+        );
 
         return { valid: true };
     }
@@ -830,7 +846,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
             this.updateSlopeStatistics(state, slope);
 
             // Calculate adaptive z-score threshold
-            //const adaptiveMinZ = this.calculateAdaptiveThreshold();
+            const adaptiveMinZ = this.calculateAdaptiveThreshold();
             const zScore = this.calculateZScore(state, slope);
 
             slopes[w] = slope;
@@ -840,13 +856,13 @@ export class DeltaCVDConfirmation extends BaseDetector {
             this.cvdResultPool.release(cvdResult);
 
             // Store for later use
-            //this.logger.debug(`Window ${w}s analysis`, {
-            //    slope,
-            //    zScore,
-            //    priceCorrelation,
-            //    adaptiveMinZ,
-            //    tradesCount: state.trades.length,
-            //});
+            this.logger.debug(`[DeltaCVDConfirmation] Window ${w}s analysis`, {
+                slope,
+                zScore,
+                priceCorrelation,
+                adaptiveMinZ,
+                tradesCount: state.trades.length,
+            });
         }
 
         // Enhanced signal validation
@@ -899,13 +915,16 @@ export class DeltaCVDConfirmation extends BaseDetector {
             }
         );
 
-        this.logger.info("CVD confirmation signal emitted", {
-            detector: this.getId(),
-            side: candidate.side,
-            confidence: finalConfidence,
-            price: candidate.price,
-            confidenceFactors,
-        });
+        this.logger.info(
+            "[DeltaCVDConfirmation] CVD confirmation signal emitted",
+            {
+                detector: this.getId(),
+                side: candidate.side,
+                confidence: finalConfidence,
+                price: candidate.price,
+                confidenceFactors,
+            }
+        );
     }
 
     private validateTradeActivity(
@@ -979,7 +998,10 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
             return result;
         } catch (error) {
-            this.logger.error("CVD slope calculation failed", { error: error });
+            this.logger.error(
+                "[DeltaCVDConfirmation] CVD slope calculation failed",
+                { error: error }
+            );
             result.slope = 0;
             return result;
         }
@@ -1038,9 +1060,12 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 ? Math.max(-1, Math.min(1, correlation))
                 : 0;
         } catch (error) {
-            this.logger.error("Price correlation calculation failed", {
-                error: error,
-            });
+            this.logger.error(
+                "[DeltaCVDConfirmation] Price correlation calculation failed",
+                {
+                    error: error,
+                }
+            );
             return 0;
         }
     }
@@ -1146,7 +1171,10 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
             return { valid: true, reason: "" };
         } catch (error) {
-            this.logger.error("Signal validation failed", { error: error });
+            this.logger.error(
+                "[DeltaCVDConfirmation] Signal validation failed",
+                { error: error }
+            );
             return { valid: false, reason: "validation_error" };
         }
     }
@@ -1539,26 +1567,36 @@ export class DeltaCVDConfirmation extends BaseDetector {
     }
 
     public start(): void {
-        this.logger.info("Enhanced CVD Confirmation detector started", {
-            detector: this.getId(),
-            windows: this.windows,
-            minZ: this.minZ,
-            adaptiveThresholds: true,
-        });
+        this.logger.info(
+            "[DeltaCVDConfirmation] Enhanced CVD Confirmation detector started",
+            {
+                detector: this.getId(),
+                windows: this.windows,
+                minZ: this.minZ,
+                adaptiveThresholds: true,
+            }
+        );
     }
 
     public stop(): void {
-        this.logger.info("Enhanced CVD Confirmation detector stopped", {
-            detector: this.getId(),
-        });
+        this.logger.info(
+            "[DeltaCVDConfirmation] Enhanced CVD Confirmation detector stopped",
+            {
+                detector: this.getId(),
+            }
+        );
     }
 
     public enable(): void {
-        this.logger.info("Enhanced CVD Confirmation detector enabled");
+        this.logger.info(
+            "[DeltaCVDConfirmation] Enhanced CVD Confirmation detector enabled"
+        );
     }
 
     public disable(): void {
-        this.logger.info("Enhanced CVD Confirmation detector disabled");
+        this.logger.info(
+            "[DeltaCVDConfirmation] Enhanced CVD Confirmation detector disabled"
+        );
     }
 
     public getStatus(): string {

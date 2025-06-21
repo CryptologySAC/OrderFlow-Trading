@@ -173,7 +173,7 @@ type AbsorptionDetectorConfig = {
 };
 
 type DeltaCvdConfirmationConfig = {
-    windowSec: number[];
+    windowsSec: number[];
     minTradesPerSec: number;
     minVolPerSec: number;
     minZ: number;
@@ -186,6 +186,12 @@ type DeltaCvdConfirmationConfig = {
     burstDetectionMs?: number;
     sustainedVolumeMs?: number;
     medianTradeSize?: number;
+    volatilityLookbackSec?: number;
+    priceCorrelationWeight?: number;
+    volumeConcentrationWeight?: number;
+    adaptiveThresholdMultiplier?: number;
+    maxDivergenceAllowed?: number;
+    stateCleanupIntervalSec?: number;
 };
 
 type AccumulationDetectorConfig = {
