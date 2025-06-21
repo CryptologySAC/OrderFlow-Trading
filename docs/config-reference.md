@@ -124,11 +124,17 @@ Configuration for the AbsorptionDetector.
 
 ### deltaCvdConfirmation
 
-- `windowSec` – Array of window lengths (seconds) for cumulative volume delta checks.
+- `windowsSec` – Array of window lengths (seconds) for cumulative volume delta checks.
 - `minTradesPerSec` – Minimum trade frequency required for reliable stats.
 - `minVolPerSec` – Minimum volume per second to keep calculations meaningful.
 - `minZ` – Z-score threshold for confirming flow direction.
 - `pricePrecision` – Decimal precision used.
+- `volatilityLookbackSec` – Historical window for volatility baseline.
+- `priceCorrelationWeight` – Weighting for price correlation in confidence score.
+- `volumeConcentrationWeight` – Weighting for volume concentration factor.
+- `adaptiveThresholdMultiplier` – Multiplier for adaptive z-score thresholds.
+- `maxDivergenceAllowed` – Maximum allowed price/CVD divergence.
+- `stateCleanupIntervalSec` – How often to clean old state data.
 - `dynamicThresholds` – Use adaptive thresholds based on recent volatility.
 - `logDebug` – Enable extra debugging output.
 

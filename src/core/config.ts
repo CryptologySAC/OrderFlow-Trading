@@ -508,7 +508,7 @@ export class Config {
         return {
             symbol: Config.SYMBOL,
             windowsSec: cfg.symbols[cfg.symbol].deltaCvdConfirmation
-                ?.windowSec ?? [60, 300, 900],
+                ?.windowsSec ?? [60, 300, 900],
 
             minTradesPerSec:
                 cfg.symbols[cfg.symbol].deltaCvdConfirmation?.minTradesPerSec ??
@@ -517,6 +517,35 @@ export class Config {
                 cfg.symbols[cfg.symbol].deltaCvdConfirmation?.minVolPerSec ?? 20
             ),
             minZ: cfg.symbols[cfg.symbol].deltaCvdConfirmation?.minZ ?? 3,
+            volatilityLookbackSec: Number(
+                cfg.symbols[cfg.symbol].deltaCvdConfirmation
+                    ?.volatilityLookbackSec ?? 3600
+            ),
+            priceCorrelationWeight: Number(
+                cfg.symbols[cfg.symbol].deltaCvdConfirmation
+                    ?.priceCorrelationWeight ?? 0.3
+            ),
+            volumeConcentrationWeight: Number(
+                cfg.symbols[cfg.symbol].deltaCvdConfirmation
+                    ?.volumeConcentrationWeight ?? 0.2
+            ),
+            adaptiveThresholdMultiplier: Number(
+                cfg.symbols[cfg.symbol].deltaCvdConfirmation
+                    ?.adaptiveThresholdMultiplier ?? 1.5
+            ),
+            maxDivergenceAllowed: Number(
+                cfg.symbols[cfg.symbol].deltaCvdConfirmation
+                    ?.maxDivergenceAllowed ?? 0.7
+            ),
+            stateCleanupIntervalSec: Number(
+                cfg.symbols[cfg.symbol].deltaCvdConfirmation
+                    ?.stateCleanupIntervalSec ?? 300
+            ),
+            dynamicThresholds:
+                cfg.symbols[cfg.symbol].deltaCvdConfirmation
+                    ?.dynamicThresholds ?? false,
+            logDebug:
+                cfg.symbols[cfg.symbol].deltaCvdConfirmation?.logDebug ?? false,
             pricePrecision: Config.PRICE_PRECISION,
 
             // Volume surge detection parameters
