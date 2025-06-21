@@ -293,13 +293,6 @@ export class AccumulationZoneDetector extends ZoneDetector {
                 candidate.startTime = trade.timestamp;
                 candidate.lastUpdate = trade.timestamp;
                 this.candidates.set(priceLevel, candidate);
-
-                this.logger.debug("DEBUG: Created new candidate", {
-                    component: "AccumulationZoneDetector",
-                    priceLevel,
-                    originalPrice: trade.price,
-                    candidateCount: this.candidates.size,
-                });
             }
 
             const candidate = this.candidates.get(priceLevel)!;
@@ -440,58 +433,19 @@ export class AccumulationZoneDetector extends ZoneDetector {
         let bestCandidate: AccumulationCandidate | null = null;
         let bestScore = 0;
 
-        this.logger.debug(
-            "DEBUG: checkForZoneFormation - Starting with candidates",
-            {
-                component: "AccumulationZoneDetector",
-                candidateCount: this.candidates.size,
-                currentPrice: trade.price,
-                timestamp: now,
-            }
-        );
-
         for (const candidate of this.candidates.values()) {
             const duration = now - candidate.startTime;
 
-            this.logger.debug("DEBUG: Evaluating candidate", {
-                component: "AccumulationZoneDetector",
-                candidatePrice: candidate.priceLevel,
-                duration: duration,
-                minDuration: this.config.minCandidateDuration,
-                totalVolume: candidate.totalVolume,
-                minVolume: this.config.minZoneVolume,
-                tradeCount: candidate.trades.length,
-                minTradeCount: this.config.minTradeCount,
-            });
-
             // Must meet minimum duration requirement
             if (duration < this.config.minCandidateDuration) {
-                this.logger.debug("DEBUG: Candidate failed duration check", {
-                    component: "AccumulationZoneDetector",
-                    candidatePrice: candidate.priceLevel,
-                    duration,
-                    required: this.config.minCandidateDuration,
-                });
                 continue;
             }
 
             // Must have minimum volume and trade count
             if (candidate.totalVolume < this.config.minZoneVolume) {
-                this.logger.debug("DEBUG: Candidate failed volume check", {
-                    component: "AccumulationZoneDetector",
-                    candidatePrice: candidate.priceLevel,
-                    totalVolume: candidate.totalVolume,
-                    required: this.config.minZoneVolume,
-                });
                 continue;
             }
             if (candidate.trades.length < this.config.minTradeCount) {
-                this.logger.debug("DEBUG: Candidate failed trade count check", {
-                    component: "AccumulationZoneDetector",
-                    candidatePrice: candidate.priceLevel,
-                    tradeCount: candidate.trades.length,
-                    required: this.config.minTradeCount,
-                });
                 continue;
             }
 
@@ -505,14 +459,6 @@ export class AccumulationZoneDetector extends ZoneDetector {
             // For accumulation, we want high sell ratios (sells being absorbed)
             const minSellRatio = this.config.minSellRatio ?? 0.55;
             if (sellRatio < minSellRatio) {
-                this.logger.debug("DEBUG: Candidate failed sell ratio check", {
-                    component: "AccumulationZoneDetector",
-                    candidatePrice: candidate.priceLevel,
-                    sellRatio,
-                    required: minSellRatio,
-                    sellVolume: candidate.sellVolume,
-                    totalVolume: candidate.totalVolume,
-                });
                 continue;
             }
 
@@ -520,15 +466,6 @@ export class AccumulationZoneDetector extends ZoneDetector {
             // Higher maxPriceDeviation means we allow more price instability
             const requiredStability = 1 - this.config.maxPriceDeviation; // Convert deviation to stability
             if (candidate.priceStability < requiredStability) {
-                this.logger.debug(
-                    "DEBUG: Candidate failed price stability check",
-                    {
-                        component: "AccumulationZoneDetector",
-                        candidatePrice: candidate.priceLevel,
-                        priceStability: candidate.priceStability,
-                        required: requiredStability,
-                    }
-                );
                 continue;
             }
 
@@ -542,17 +479,6 @@ export class AccumulationZoneDetector extends ZoneDetector {
             // For accumulation, limit aggressive buying to avoid retail FOMO
             const maxBuyRatio = 1 - (this.config.minSellRatio ?? 0.55); // Complement of minSellRatio
             if (aggressiveBuyRatio > maxBuyRatio) {
-                this.logger.debug(
-                    "DEBUG: Candidate failed aggressive buy ratio check",
-                    {
-                        component: "AccumulationZoneDetector",
-                        candidatePrice: candidate.priceLevel,
-                        aggressiveBuyRatio,
-                        maxAllowed: maxBuyRatio,
-                        buyVolume: candidate.buyVolume,
-                        totalVolume: candidate.totalVolume,
-                    }
-                );
                 continue;
             }
 
@@ -571,16 +497,6 @@ export class AccumulationZoneDetector extends ZoneDetector {
                 this.config.minZoneStrength * 0.3
             ); // Much lower requirement
             if (institutionalScore < minInstitutionalScore) {
-                this.logger.debug(
-                    "DEBUG: Candidate failed institutional score check",
-                    {
-                        component: "AccumulationZoneDetector",
-                        candidatePrice: candidate.priceLevel,
-                        institutionalScore,
-                        required: minInstitutionalScore,
-                        institutionalSignals,
-                    }
-                );
                 continue;
             }
 
@@ -589,14 +505,6 @@ export class AccumulationZoneDetector extends ZoneDetector {
                 institutionalSignals,
                 trade.timestamp
             );
-
-            this.logger.debug("DEBUG: Candidate passed all checks, scoring", {
-                component: "AccumulationZoneDetector",
-                candidatePrice: candidate.priceLevel,
-                score,
-                bestScore,
-                minZoneStrength: this.config.minZoneStrength,
-            });
 
             // Use configurable minZoneStrength instead of hardcoded minScore
             if (score > bestScore && score > this.config.minZoneStrength) {
@@ -611,13 +519,6 @@ export class AccumulationZoneDetector extends ZoneDetector {
         }
 
         if (!bestCandidate) {
-            this.logger.debug(
-                "DEBUG: No qualified candidate found for zone formation",
-                {
-                    component: "AccumulationZoneDetector",
-                    candidateCount: this.candidates.size,
-                }
-            );
             return null;
         }
 
@@ -630,34 +531,10 @@ export class AccumulationZoneDetector extends ZoneDetector {
             proximityTolerancePercent
         );
 
-        this.logger.debug("DEBUG: Checking for nearby zones", {
-            component: "AccumulationZoneDetector",
-            candidatePrice,
-            proximityTolerancePercent,
-            proximityToleranceAbsolute:
-                candidatePrice * proximityTolerancePercent,
-            nearbyZoneCount: nearbyZones.length,
-            nearbyZones: nearbyZones.map((z) => ({
-                id: z.id,
-                center: z.priceRange.center,
-                distance: Math.abs(z.priceRange.center - candidatePrice),
-            })),
-        });
-
         // If nearby zones exist, merge with strongest existing zone instead of creating new one
         if (nearbyZones.length > 0) {
             const strongestZone = nearbyZones.reduce((strongest, zone) =>
                 zone.strength > strongest.strength ? zone : strongest
-            );
-
-            this.logger.debug(
-                "DEBUG: Found nearby zones, merging with strongest",
-                {
-                    component: "AccumulationZoneDetector",
-                    candidatePrice,
-                    strongestZoneId: strongestZone.id,
-                    strongestZonePrice: strongestZone.priceRange.center,
-                }
             );
 
             // Merge candidate data into existing zone
@@ -669,12 +546,6 @@ export class AccumulationZoneDetector extends ZoneDetector {
 
             return strongestZone; // Return updated existing zone
         }
-
-        this.logger.debug("DEBUG: No nearby zones found, creating new zone", {
-            component: "AccumulationZoneDetector",
-            candidatePrice,
-            bestScore,
-        });
 
         // ✅ ENHANCED: Volume surge validation for accumulation confirmation
         const recentTrades = this.recentTrades.toArray().slice(-50); // Get recent trades for validation
@@ -695,15 +566,6 @@ export class AccumulationZoneDetector extends ZoneDetector {
             );
 
         if (!volumeValidation.valid) {
-            this.logger.debug(
-                `[AccumulationZoneDetector] Accumulation zone creation rejected - volume surge validation failed`,
-                {
-                    candidatePrice: bestCandidate.priceLevel,
-                    score: bestScore,
-                    reason: volumeValidation.reason,
-                }
-            );
-
             // Clean up candidate and return without creating zone
             this.candidates.delete(bestCandidate.priceLevel);
             this.candidatePool.release(bestCandidate);
@@ -727,26 +589,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
                 1.0,
                 originalStrength + volumeBoost.confidence
             );
-
-            this.logger.debug(
-                `[AccumulationZoneDetector] Volume surge confidence boost applied to zone`,
-                {
-                    candidatePrice: bestCandidate.priceLevel,
-                    originalStrength,
-                    volumeBoost: volumeBoost.confidence,
-                    finalStrength: zoneDetection.initialStrength,
-                    reason: volumeBoost.reason,
-                    enhancementFactors: volumeBoost.enhancementFactors,
-                    metadata: volumeBoost.metadata,
-                }
-            );
         }
-
-        this.logger.debug("DEBUG: About to call zoneManager.createZone", {
-            component: "AccumulationZoneDetector",
-            candidatePrice: bestCandidate.priceLevel,
-            zoneDetection,
-        });
 
         const zone = this.zoneManager.createZone(
             "accumulation",
@@ -755,22 +598,9 @@ export class AccumulationZoneDetector extends ZoneDetector {
             zoneDetection
         );
 
-        this.logger.debug("DEBUG: zoneManager.createZone returned", {
-            component: "AccumulationZoneDetector",
-            zoneReturned: !!zone,
-            zoneId: zone?.id,
-            zonePrice: zone?.priceRange.center,
-        });
-
         // Remove candidate as it's now a zone
         this.candidates.delete(bestCandidate.priceLevel);
         this.candidatePool.release(bestCandidate);
-
-        this.logger.debug("DEBUG: New zone created successfully", {
-            component: "AccumulationZoneDetector",
-            zoneId: zone?.id,
-            zonePrice: zone?.priceRange.center,
-        });
 
         return zone;
     }
@@ -811,20 +641,13 @@ export class AccumulationZoneDetector extends ZoneDetector {
                 }
             }
 
-            // Track volume before merge for verification
-            const volumeBeforeMerge = existingZone.totalVolume;
-            const candidateVolume = candidate.totalVolume;
-            let tradesAddedSuccessfully = 0;
-
             // Add candidate trades to existing zone
             for (const candidateTrade of candidateTrades) {
                 const updateResult = this.zoneManager.updateZone(
                     existingZone.id,
                     candidateTrade
                 );
-                if (updateResult) {
-                    tradesAddedSuccessfully++;
-                } else {
+                if (!updateResult) {
                     this.logger.warn(
                         "Failed to add candidate trade to zone after expansion",
                         {
@@ -836,33 +659,6 @@ export class AccumulationZoneDetector extends ZoneDetector {
                     );
                 }
             }
-
-            // Also update zone with the current trade that triggered the merge
-            const triggerTradeResult = this.zoneManager.updateZone(
-                existingZone.id,
-                trade
-            );
-            if (triggerTradeResult) {
-                tradesAddedSuccessfully++;
-            }
-
-            // Verify volume increase after merge
-            const volumeAfterMerge = existingZone.totalVolume;
-            const actualVolumeIncrease = volumeAfterMerge - volumeBeforeMerge;
-
-            // Log merge operation for monitoring
-            this.logger.debug("Merged candidate with existing zone", {
-                component: "AccumulationZoneDetector",
-                existingZoneId: existingZone.id,
-                candidatePrice: candidate.priceLevel,
-                candidateVolume: candidateVolume,
-                mergedTrades: candidateTrades.length,
-                tradesAddedSuccessfully,
-                volumeBeforeMerge,
-                volumeAfterMerge,
-                actualVolumeIncrease,
-                expectedVolumeIncrease: candidateVolume + trade.quantity,
-            });
         } catch (error) {
             this.logger.error("Failed to merge candidate with existing zone", {
                 error: error instanceof Error ? error.message : String(error),
@@ -1036,14 +832,6 @@ export class AccumulationZoneDetector extends ZoneDetector {
         // ✅ PERFORMANCE FIX: Get all trades once from CircularBuffer
         const trades = candidate.trades.getAll();
         const prices = trades.map((t) => t.price);
-
-        this.logger.debug("DEBUG: Creating zone detection data", {
-            component: "AccumulationZoneDetector",
-            candidatePriceLevel: candidate.priceLevel,
-            tradeCount: trades.length,
-            tradePrices: prices.slice(0, 5), // Show first 5 prices
-            uniquePrices: [...new Set(prices)], // Show unique prices
-        });
 
         const minPrice = Math.min(...prices);
         const maxPrice = Math.max(...prices);
@@ -1235,14 +1023,6 @@ export class AccumulationZoneDetector extends ZoneDetector {
             this.pricePrecision
         );
 
-        this.logger.debug("DEBUG: Price level calculation", {
-            component: "AccumulationZoneDetector",
-            originalPrice: price,
-            priceLevel,
-            zoneTicks: this.zoneTicks,
-            pricePrecision: this.pricePrecision,
-        });
-
         return priceLevel;
     }
 
@@ -1252,7 +1032,6 @@ export class AccumulationZoneDetector extends ZoneDetector {
     private cleanupOldCandidates(): void {
         const now = Date.now();
         const maxAge = 1800000;
-        let cleanedCount = 0;
 
         for (const [priceLevel, candidate] of this.candidates) {
             if (now - candidate.startTime > maxAge) {
@@ -1262,16 +1041,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
                 }
                 this.candidates.delete(priceLevel);
                 this.candidatePool.release(candidate);
-                cleanedCount++;
             }
-        }
-
-        // Log cleanup metrics
-        if (cleanedCount > 0) {
-            this.logger.debug("Cleaned old candidates", {
-                cleanedCount,
-                component: "AccumulationZoneDetector",
-            });
         }
     }
 

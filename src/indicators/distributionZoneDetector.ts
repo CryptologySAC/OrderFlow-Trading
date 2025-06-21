@@ -271,13 +271,6 @@ export class DistributionZoneDetector extends ZoneDetector {
             candidate.absorptionQuality = 0;
 
             this.candidates.set(priceLevel, candidate);
-
-            this.logger.debug("DEBUG: Created new candidate", {
-                component: "DistributionZoneDetector",
-                priceLevel,
-                originalPrice: trade.price,
-                candidateCount: this.candidates.size,
-            });
         }
 
         // Add trade to candidate (identical)
@@ -376,58 +369,19 @@ export class DistributionZoneDetector extends ZoneDetector {
         let bestCandidate: DistributionCandidate | null = null;
         let bestScore = 0;
 
-        this.logger.debug(
-            "DEBUG: checkForZoneFormation - Starting with candidates",
-            {
-                component: "DistributionZoneDetector",
-                candidateCount: this.candidates.size,
-                currentPrice: trade.price,
-                timestamp: now,
-            }
-        );
-
         for (const candidate of this.candidates.values()) {
             const duration = now - candidate.startTime;
 
-            this.logger.debug("DEBUG: Evaluating candidate", {
-                component: "DistributionZoneDetector",
-                candidatePrice: candidate.priceLevel,
-                duration: duration,
-                minDuration: this.config.minCandidateDuration,
-                totalVolume: candidate.totalVolume,
-                minVolume: this.config.minZoneVolume,
-                tradeCount: candidate.trades.length,
-                minTradeCount: this.config.minTradeCount,
-            });
-
             // Must meet minimum duration requirement (identical)
             if (duration < this.config.minCandidateDuration) {
-                this.logger.debug("DEBUG: Candidate failed duration check", {
-                    component: "DistributionZoneDetector",
-                    candidatePrice: candidate.priceLevel,
-                    duration,
-                    required: this.config.minCandidateDuration,
-                });
                 continue;
             }
 
             // Must have minimum volume and trade count (identical)
             if (candidate.totalVolume < this.config.minZoneVolume) {
-                this.logger.debug("DEBUG: Candidate failed volume check", {
-                    component: "DistributionZoneDetector",
-                    candidatePrice: candidate.priceLevel,
-                    totalVolume: candidate.totalVolume,
-                    required: this.config.minZoneVolume,
-                });
                 continue;
             }
             if (candidate.trades.length < this.config.minTradeCount) {
-                this.logger.debug("DEBUG: Candidate failed trade count check", {
-                    component: "DistributionZoneDetector",
-                    candidatePrice: candidate.priceLevel,
-                    tradeCount: candidate.trades.length,
-                    required: this.config.minTradeCount,
-                });
                 continue;
             }
 
@@ -441,29 +395,12 @@ export class DistributionZoneDetector extends ZoneDetector {
             // This is the inverse of accumulation's high sell ratios
             const minBuyRatio = this.config.minSellRatio ?? 0.55; // Config uses minSellRatio, we invert the logic
             if (buyRatio < minBuyRatio) {
-                this.logger.debug("DEBUG: Candidate failed buy ratio check", {
-                    component: "DistributionZoneDetector",
-                    candidatePrice: candidate.priceLevel,
-                    buyRatio,
-                    required: minBuyRatio,
-                    buyVolume: candidate.buyVolume,
-                    totalVolume: candidate.totalVolume,
-                });
                 continue;
             }
 
             // Check price stability using maxPriceDeviation from config (identical)
             const requiredStability = 1 - this.config.maxPriceDeviation;
             if (candidate.priceStability < requiredStability) {
-                this.logger.debug(
-                    "DEBUG: Candidate failed price stability check",
-                    {
-                        component: "DistributionZoneDetector",
-                        candidatePrice: candidate.priceLevel,
-                        priceStability: candidate.priceStability,
-                        required: requiredStability,
-                    }
-                );
                 continue;
             }
 
@@ -476,17 +413,6 @@ export class DistributionZoneDetector extends ZoneDetector {
             // For distribution, limit aggressive selling to avoid dump patterns
             const maxSellRatio = 1 - (this.config.minSellRatio ?? 0.55); // Complement of minBuyRatio
             if (aggressiveSellRatio > maxSellRatio) {
-                this.logger.debug(
-                    "DEBUG: Candidate failed aggressive sell ratio check",
-                    {
-                        component: "DistributionZoneDetector",
-                        candidatePrice: candidate.priceLevel,
-                        aggressiveSellRatio,
-                        maxAllowed: maxSellRatio,
-                        sellVolume: candidate.sellVolume,
-                        totalVolume: candidate.totalVolume,
-                    }
-                );
                 continue;
             }
 
@@ -504,16 +430,6 @@ export class DistributionZoneDetector extends ZoneDetector {
                 this.config.minZoneStrength * 0.3
             );
             if (institutionalScore < minInstitutionalScore) {
-                this.logger.debug(
-                    "DEBUG: Candidate failed institutional score check",
-                    {
-                        component: "DistributionZoneDetector",
-                        candidatePrice: candidate.priceLevel,
-                        institutionalScore,
-                        required: minInstitutionalScore,
-                        institutionalSignals,
-                    }
-                );
                 continue;
             }
 
@@ -523,34 +439,14 @@ export class DistributionZoneDetector extends ZoneDetector {
                 trade.timestamp
             );
 
-            this.logger.debug("DEBUG: Candidate passed all checks, scoring", {
-                component: "DistributionZoneDetector",
-                candidatePrice: candidate.priceLevel,
-                score,
-                bestScore,
-                minZoneStrength: this.config.minZoneStrength,
-            });
-
             // Use configurable minZoneStrength (identical)
             if (score > bestScore && score > this.config.minZoneStrength) {
                 bestScore = score;
                 bestCandidate = candidate;
-                this.logger.debug("DEBUG: New best candidate found", {
-                    component: "DistributionZoneDetector",
-                    candidatePrice: candidate.priceLevel,
-                    score: bestScore,
-                });
             }
         }
 
         if (!bestCandidate) {
-            this.logger.debug(
-                "DEBUG: No qualified candidate found for zone formation",
-                {
-                    component: "DistributionZoneDetector",
-                    candidateCount: this.candidates.size,
-                }
-            );
             return null;
         }
 
@@ -563,34 +459,10 @@ export class DistributionZoneDetector extends ZoneDetector {
             proximityTolerancePercent
         );
 
-        this.logger.debug("DEBUG: Checking for nearby zones", {
-            component: "DistributionZoneDetector",
-            candidatePrice,
-            proximityTolerancePercent,
-            proximityToleranceAbsolute:
-                candidatePrice * proximityTolerancePercent,
-            nearbyZoneCount: nearbyZones.length,
-            nearbyZones: nearbyZones.map((z) => ({
-                id: z.id,
-                center: z.priceRange.center,
-                distance: Math.abs(z.priceRange.center - candidatePrice),
-            })),
-        });
-
         // If nearby zones exist, merge with strongest existing zone (identical)
         if (nearbyZones.length > 0) {
             const strongestZone = nearbyZones.reduce((strongest, zone) =>
                 zone.strength > strongest.strength ? zone : strongest
-            );
-
-            this.logger.debug(
-                "DEBUG: Found nearby zones, merging with strongest",
-                {
-                    component: "DistributionZoneDetector",
-                    candidatePrice,
-                    strongestZoneId: strongestZone.id,
-                    strongestZonePrice: strongestZone.priceRange.center,
-                }
             );
 
             // Merge candidate data into existing zone
@@ -602,12 +474,6 @@ export class DistributionZoneDetector extends ZoneDetector {
 
             return strongestZone; // Return updated existing zone
         }
-
-        this.logger.debug("DEBUG: No nearby zones found, creating new zone", {
-            component: "DistributionZoneDetector",
-            candidatePrice,
-            bestScore,
-        });
 
         // ✅ ENHANCED: Volume surge validation for distribution confirmation
         const recentTrades = this.recentTrades.toArray().slice(-50); // Get recent trades for validation
@@ -628,15 +494,6 @@ export class DistributionZoneDetector extends ZoneDetector {
             );
 
         if (!volumeValidation.valid) {
-            this.logger.debug(
-                `[DistributionZoneDetector] Distribution zone creation rejected - volume surge validation failed`,
-                {
-                    candidatePrice: bestCandidate.priceLevel,
-                    score: bestScore,
-                    reason: volumeValidation.reason,
-                }
-            );
-
             // Clean up candidate and return without creating zone
             this.candidates.delete(bestCandidate.priceLevel);
             this.candidatePool.release(bestCandidate);
@@ -660,26 +517,7 @@ export class DistributionZoneDetector extends ZoneDetector {
                 1.0,
                 originalStrength + volumeBoost.confidence
             );
-
-            this.logger.debug(
-                `[DistributionZoneDetector] Volume surge confidence boost applied to zone`,
-                {
-                    candidatePrice: bestCandidate.priceLevel,
-                    originalStrength,
-                    volumeBoost: volumeBoost.confidence,
-                    finalStrength: zoneDetection.initialStrength,
-                    reason: volumeBoost.reason,
-                    enhancementFactors: volumeBoost.enhancementFactors,
-                    metadata: volumeBoost.metadata,
-                }
-            );
         }
-
-        this.logger.debug("DEBUG: About to call zoneManager.createZone", {
-            component: "DistributionZoneDetector",
-            candidatePrice: bestCandidate.priceLevel,
-            zoneDetection,
-        });
 
         const zone = this.zoneManager.createZone(
             "distribution", // Only difference: zone type
@@ -688,22 +526,9 @@ export class DistributionZoneDetector extends ZoneDetector {
             zoneDetection
         );
 
-        this.logger.debug("DEBUG: zoneManager.createZone returned", {
-            component: "DistributionZoneDetector",
-            zoneReturned: !!zone,
-            zoneId: zone?.id,
-            zonePrice: zone?.priceRange.center,
-        });
-
         // Remove candidate as it's now a zone
         this.candidates.delete(bestCandidate.priceLevel);
         this.candidatePool.release(bestCandidate);
-
-        this.logger.debug("DEBUG: New zone created successfully", {
-            component: "DistributionZoneDetector",
-            zoneId: zone?.id,
-            zonePrice: zone?.priceRange.center,
-        });
 
         return zone;
     }
@@ -729,12 +554,6 @@ export class DistributionZoneDetector extends ZoneDetector {
             this.zoneManager.updateZone(existingZone.id, trade);
 
             // Log merge operation for monitoring
-            this.logger.debug("Merged candidate with existing zone", {
-                component: "DistributionZoneDetector",
-                existingZoneId: existingZone.id,
-                candidateVolume: candidate.totalVolume,
-                mergedTrades: candidateTrades.length + 1,
-            });
         } catch (error) {
             this.logger.error("Failed to merge candidate with existing zone", {
                 component: "DistributionZoneDetector",
@@ -856,14 +675,6 @@ export class DistributionZoneDetector extends ZoneDetector {
         const minPrice = Math.min(...prices);
         const maxPrice = Math.max(...prices);
         const centerPrice = (minPrice + maxPrice) / 2;
-
-        this.logger.debug("DEBUG: Creating zone detection data", {
-            component: "DistributionZoneDetector",
-            candidatePriceLevel: candidate.priceLevel,
-            tradeCount: trades.length,
-            tradePrices: prices.slice(0, 5), // First 5 prices for debugging
-            uniquePrices: [...new Set(prices)],
-        });
 
         return {
             priceRange: {

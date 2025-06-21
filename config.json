@@ -21,7 +21,7 @@
     "marketDataStorage": {
         "enabled": true,
         "dataDirectory": "./backtesting_data",
-        "format": "both",
+        "format": "csv",
         "maxFileSize": 25,
         "depthLevels": 20,
         "rotationHours": 3,
@@ -292,7 +292,7 @@
                 "volumeConcentrationWeight": 0.4,
                 "adaptiveThresholdMultiplier": 1.0,
 
-                "minTradesPerSec": 0.5,
+                "minTradesPerSec": 0.4,
                 "minVolPerSec": 2.5,
                 "pricePrecision": 2,
 
@@ -301,7 +301,7 @@
                 "stateCleanupIntervalSec": 300,
 
                 "dynamicThresholds": true,
-                "logDebug": false,
+                "logDebug": true,
 
                 "volumeSurgeMultiplier": 2.0,
                 "imbalanceThreshold": 0.2,

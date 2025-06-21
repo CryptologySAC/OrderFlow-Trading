@@ -15,6 +15,7 @@
 ### **All Detectors Enhanced with Institutional Volume Analysis:**
 
 **🎯 Volume Surge Detection Framework:**
+
 - **2x-4x volume surge thresholds** across all detectors
 - **Order flow imbalance detection** (20-35% institutional flow identification)
 - **Institutional trade detection** (8-17.8 LTC threshold monitoring)
@@ -22,6 +23,7 @@
 - **Signal confidence boosting** (up to 40% enhancement for qualifying signals)
 
 **⚡ Real-Time Capabilities:**
+
 - **Sub-second institutional activity detection**
 - **Dynamic baseline volume tracking** (30-second rolling windows)
 - **Aggressive trade classification** (maker vs taker analysis)
@@ -123,6 +125,7 @@
 ### **Core Components:**
 
 **📊 VolumeAnalyzer Class:**
+
 - **Baseline Tracking**: 30-second rolling windows for dynamic volume baselines
 - **Surge Detection**: Real-time volume spike identification (2x-4x thresholds)
 - **Flow Analysis**: Buyer vs seller aggression classification using buyerIsMaker field
@@ -131,16 +134,18 @@
 ### **Detection Algorithms:**
 
 **🔥 Volume Surge Detection:**
+
 ```typescript
 // Detector-specific thresholds:
 DeltaCVD: 2.0x surge multiplier
-Exhaustion: 2.5x surge multiplier  
+Exhaustion: 2.5x surge multiplier
 Distribution: 3.5x surge multiplier
 Absorption: 4.0x surge multiplier
 Accumulation: 3.0x surge multiplier
 ```
 
 **⚖️ Order Flow Imbalance:**
+
 ```typescript
 // Institutional flow identification:
 DeltaCVD: 20% imbalance threshold
@@ -151,6 +156,7 @@ Accumulation: 35% imbalance threshold
 ```
 
 **🏦 Institutional Activity:**
+
 ```typescript
 // Large trade detection:
 DeltaCVD: 8.0 LTC minimum
@@ -163,12 +169,14 @@ Accumulation: 17.8 LTC minimum
 ### **Signal Enhancement Process:**
 
 **🚀 Confidence Boosting Algorithm:**
+
 1. **Volume Surge Validation** → 30% confidence boost
 2. **Order Flow Imbalance** → 5% confidence boost (scaled by imbalance %)
 3. **Institutional Activity** → 25% confidence boost
 4. **Maximum Enhancement** → 40% total confidence boost
 
 **⚡ Real-Time Processing:**
+
 - **Burst Detection**: 1-2 second windows for high-frequency analysis
 - **Sustained Analysis**: 20-30 second windows for trend confirmation
 - **Memory Management**: Object pooling and circular buffers for performance
@@ -237,6 +245,7 @@ Enhanced Zone Formation = Market regime filter
 ## **🎯 Practical Trading Scenarios**
 
 ### **Scenario 1: Institutional Momentum Breakout**
+
 ```
 1. DeltaCVD detects 2x volume surge + 25% buy imbalance
 2. Signal confidence boosted from 0.7 → 0.9 (40% enhancement)
@@ -245,6 +254,7 @@ Enhanced Zone Formation = Market regime filter
 ```
 
 ### **Scenario 2: Exhaustion Reversal with Volume**
+
 ```
 1. Exhaustion detector identifies liquidity depletion
 2. Volume analyzer confirms 2.5x surge in opposite direction
@@ -253,6 +263,7 @@ Enhanced Zone Formation = Market regime filter
 ```
 
 ### **Scenario 3: Zone Formation Validation**
+
 ```
 1. Accumulation zone candidate identified
 2. Volume surge analysis validates institutional activity
@@ -263,12 +274,14 @@ Enhanced Zone Formation = Market regime filter
 ## **🚀 Performance Impact of Volume Integration**
 
 ### **Before Volume Surge Integration:**
+
 - Standard signal generation based on price action alone
 - No institutional activity validation
 - Limited confidence boosting capabilities
 - Higher false positive rates
 
 ### **After Volume Surge Integration:**
+
 - **Enhanced signal quality** through institutional validation
 - **Dynamic confidence boosting** up to 40% for qualifying signals
 - **Reduced false positives** through multi-criteria filtering
@@ -277,16 +290,19 @@ Enhanced Zone Formation = Market regime filter
 ## **⚡ Key Trading Advantages**
 
 ### **Speed Benefits:**
+
 - **Sub-second detection** of institutional activity
 - **Real-time volume validation** before signal generation
 - **Immediate confidence scoring** for position sizing decisions
 
 ### **Accuracy Benefits:**
+
 - **Multi-dimensional analysis** (price + volume + flow + institutional)
 - **Adaptive thresholds** based on market conditions
 - **Smart filtering** removes low-conviction signals
 
 ### **Risk Management Benefits:**
+
 - **Institutional confirmation** reduces directional risk
 - **Volume validation** confirms signal strength
 - **Dynamic position sizing** based on enhanced confidence levels

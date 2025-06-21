@@ -2,14 +2,14 @@
 
 ## 🔥 Volume Surge Integration Parameters (Phase 2 Complete)
 
-| Parameter                    | Type    | Range          | Description                                    | DeltaCVD | Exhaustion | Absorption | Distribution | Accumulation |
-| ---------------------------- | ------- | -------------- | ---------------------------------------------- | -------- | ---------- | ---------- | ------------ | ------------ |
-| **volumeSurgeMultiplier**    | number  | 2.0 - 4.0      | Volume surge threshold multiplier              | **2.0**  | **2.5**    | **4.0**    | **3.5**      | **3.0**      |
-| **imbalanceThreshold**       | number  | 0.20 - 0.35    | Order flow imbalance detection (% threshold)   | **0.20** | **0.25**   | **0.35**   | **0.30**     | **0.35**     |
-| **institutionalThreshold**   | number  | 8.0 - 17.8     | Minimum trade size for institutional detection | **8.0**  | **17.8**   | **17.8**   | **15.0**     | **17.8**     |
-| **burstDetectionMs**         | number  | 1000 - 2000    | Burst detection window (milliseconds)          | **2000** | **1000**   | **1000**   | **1500**     | **1500**     |
-| **sustainedVolumeMs**        | number  | 20000 - 30000  | Sustained volume analysis window               | **20000** | **30000**  | **30000**  | **25000**    | **25000**    |
-| **medianTradeSize**          | number  | 0.6 - 0.8      | Baseline trade size for volume comparison      | **0.6**  | **0.6**    | **0.6**    | **0.8**      | **0.8**      |
+| Parameter                  | Type   | Range         | Description                                    | DeltaCVD  | Exhaustion | Absorption | Distribution | Accumulation |
+| -------------------------- | ------ | ------------- | ---------------------------------------------- | --------- | ---------- | ---------- | ------------ | ------------ |
+| **volumeSurgeMultiplier**  | number | 2.0 - 4.0     | Volume surge threshold multiplier              | **2.0**   | **2.5**    | **4.0**    | **3.5**      | **3.0**      |
+| **imbalanceThreshold**     | number | 0.20 - 0.35   | Order flow imbalance detection (% threshold)   | **0.20**  | **0.25**   | **0.35**   | **0.30**     | **0.35**     |
+| **institutionalThreshold** | number | 8.0 - 17.8    | Minimum trade size for institutional detection | **8.0**   | **17.8**   | **17.8**   | **15.0**     | **17.8**     |
+| **burstDetectionMs**       | number | 1000 - 2000   | Burst detection window (milliseconds)          | **2000**  | **1000**   | **1000**   | **1500**     | **1500**     |
+| **sustainedVolumeMs**      | number | 20000 - 30000 | Sustained volume analysis window               | **20000** | **30000**  | **30000**  | **25000**    | **25000**    |
+| **medianTradeSize**        | number | 0.6 - 0.8     | Baseline trade size for volume comparison      | **0.6**   | **0.6**    | **0.6**    | **0.8**      | **0.8**      |
 
 ### 🎯 Volume Surge Enhancement Benefits:
 
@@ -39,35 +39,35 @@
 
 ## 🏛️ Zone Detector Parameters (Accumulation & Distribution)
 
-| Parameter                    | Type    | Range          | Description                                    | Accumulation | Distribution |
-| ---------------------------- | ------- | -------------- | ---------------------------------------------- | ------------ | ------------ |
-| **minZoneStrength**          | number  | 0.7 - 0.9      | Minimum zone strength for formation            | **0.8**      | **0.8**      |
-| **maxZoneWidth**             | number  | 0.008 - 0.014  | Maximum price width for zone                   | **0.008**    | **0.014**    |
-| **minZoneVolume**            | number  | 1000 - 1200    | Minimum volume required for zone               | **1200**     | **1000**     |
-| **maxActiveZones**           | number  | 3 - 5          | Maximum concurrent zones                       | **3**        | **3**        |
-| **zoneTimeoutMs**            | number  | 600000 - 1800000 | Zone expiration time                         | **600000**   | **1800000**  |
-| **completionThreshold**      | number  | 0.8 - 0.9      | Zone completion confidence threshold           | **0.9**      | **0.8**      |
-| **strengthChangeThreshold**  | number  | 0.15 - 0.18    | Minimum strength change for updates            | **0.15**     | **0.18**     |
-| **minCandidateDuration**     | number  | 300000         | Minimum duration for zone candidate            | **300000**   | **300000**   |
-| **minBuyRatio / minSellRatio** | number | 0.65           | Minimum buy/sell ratio for zone type          | **0.65**     | **0.65**     |
-| **maxPriceDeviation**        | number  | 0.012 - 0.02   | Maximum price deviation within zone            | **0.02**     | **0.012**    |
-| **minTradeCount**            | number  | 10 - 15        | Minimum trades for zone validation             | **15**       | **10**       |
+| Parameter                      | Type   | Range            | Description                          | Accumulation | Distribution |
+| ------------------------------ | ------ | ---------------- | ------------------------------------ | ------------ | ------------ |
+| **minZoneStrength**            | number | 0.7 - 0.9        | Minimum zone strength for formation  | **0.8**      | **0.8**      |
+| **maxZoneWidth**               | number | 0.008 - 0.014    | Maximum price width for zone         | **0.008**    | **0.014**    |
+| **minZoneVolume**              | number | 1000 - 1200      | Minimum volume required for zone     | **1200**     | **1000**     |
+| **maxActiveZones**             | number | 3 - 5            | Maximum concurrent zones             | **3**        | **3**        |
+| **zoneTimeoutMs**              | number | 600000 - 1800000 | Zone expiration time                 | **600000**   | **1800000**  |
+| **completionThreshold**        | number | 0.8 - 0.9        | Zone completion confidence threshold | **0.9**      | **0.8**      |
+| **strengthChangeThreshold**    | number | 0.15 - 0.18      | Minimum strength change for updates  | **0.15**     | **0.18**     |
+| **minCandidateDuration**       | number | 300000           | Minimum duration for zone candidate  | **300000**   | **300000**   |
+| **minBuyRatio / minSellRatio** | number | 0.65             | Minimum buy/sell ratio for zone type | **0.65**     | **0.65**     |
+| **maxPriceDeviation**          | number | 0.012 - 0.02     | Maximum price deviation within zone  | **0.02**     | **0.012**    |
+| **minTradeCount**              | number | 10 - 15          | Minimum trades for zone validation   | **15**       | **10**       |
 
 ---
 
 ## 🎚️ Feature Toggle Impact Matrix
 
-| Feature                | Detector   | Signal Volume | Signal Quality | CPU Impact | Volume Integration | When to Enable |
-| ---------------------- | ---------- | ------------- | -------------- | ---------- | ------------------ | -------------- |
-| **volumeSurgeDetection** | **ALL**  | **+15%** 📈   | **+40%** 🚀    | Medium     | **✅ INTEGRATED**   | **ALWAYS**     |
-| **icebergDetection**   | Absorption | **+30%** 📈   | **+20%** 📈    | Medium     | **✅ Enhanced**     | **Phase 2+**   |
-| **liquidityGradient**  | Absorption | **+15%** 📈   | **+25%** 📈    | High       | **✅ Enhanced**     | **Phase 2+**   |
-| **depletionTracking**  | Exhaustion | **+25%** 📈   | **+15%** 📈    | Medium     | **✅ Enhanced**     | **Phase 2+**   |
-| **spreadAdjustment**   | Both       | **-15%** 📉   | **+25%** 📈    | Low        | **✅ Enhanced**     | **Phase 3+**   |
-| **spoofingDetection**  | Both       | **-10%** 📉   | **+30%** 📈    | Medium     | **⚠️ Conditional**  | **Phase 3+**   |
-| **autoCalibrate**      | Both       | **±10%** ↕️   | **+10%** 📈    | Low        | **✅ Enhanced**     | **Phase 2+**   |
-| **adaptiveZone**       | Both       | **+10%** 📈   | **+5%** 📈     | Medium     | **✅ Enhanced**     | **Phase 2+**   |
-| **multiZone**          | Both       | **+20%** 📈   | **+5%** 📈     | High       | **✅ Enhanced**     | **Phase 3+**   |
+| Feature                  | Detector   | Signal Volume | Signal Quality | CPU Impact | Volume Integration | When to Enable |
+| ------------------------ | ---------- | ------------- | -------------- | ---------- | ------------------ | -------------- |
+| **volumeSurgeDetection** | **ALL**    | **+15%** 📈   | **+40%** 🚀    | Medium     | **✅ INTEGRATED**  | **ALWAYS**     |
+| **icebergDetection**     | Absorption | **+30%** 📈   | **+20%** 📈    | Medium     | **✅ Enhanced**    | **Phase 2+**   |
+| **liquidityGradient**    | Absorption | **+15%** 📈   | **+25%** 📈    | High       | **✅ Enhanced**    | **Phase 2+**   |
+| **depletionTracking**    | Exhaustion | **+25%** 📈   | **+15%** 📈    | Medium     | **✅ Enhanced**    | **Phase 2+**   |
+| **spreadAdjustment**     | Both       | **-15%** 📉   | **+25%** 📈    | Low        | **✅ Enhanced**    | **Phase 3+**   |
+| **spoofingDetection**    | Both       | **-10%** 📉   | **+30%** 📈    | Medium     | **⚠️ Conditional** | **Phase 3+**   |
+| **autoCalibrate**        | Both       | **±10%** ↕️   | **+10%** 📈    | Low        | **✅ Enhanced**    | **Phase 2+**   |
+| **adaptiveZone**         | Both       | **+10%** 📈   | **+5%** 📈     | Medium     | **✅ Enhanced**    | **Phase 2+**   |
+| **multiZone**            | Both       | **+20%** 📈   | **+5%** 📈     | High       | **✅ Enhanced**    | **Phase 3+**   |
 
 ---
 
@@ -82,7 +82,7 @@
     threshold: 0.5,              // Low confidence requirement
     windowMs: 60000,             // Short window
     eventCooldownMs: 8000,       // Short cooldown
-    
+
     // Volume surge integration (Conservative)
     volumeSurgeMultiplier: 2.0,  // Lower threshold for more signals
     imbalanceThreshold: 0.15,    // Lower imbalance requirement
@@ -103,7 +103,7 @@
     threshold: 0.65,             // Higher confidence
     windowMs: 90000,             // Full window
     eventCooldownMs: 12000,      // Medium cooldown
-    
+
     // Volume surge integration (Balanced)
     volumeSurgeMultiplier: 2.5,  // Medium threshold
     imbalanceThreshold: 0.25,    // Medium imbalance requirement
@@ -124,7 +124,7 @@
     threshold: 0.75,             // High confidence
     windowMs: 90000,             // Full context
     eventCooldownMs: 15000,      // Long cooldown
-    
+
     // Volume surge integration (Strict)
     volumeSurgeMultiplier: 4.0,  // High threshold (Absorption-level)
     imbalanceThreshold: 0.35,    // High imbalance requirement
@@ -206,12 +206,12 @@
 
 ## 🏁 **Volume-Enhanced Phase Progression**
 
-| Phase | Duration | Goal                     | Signal Volume | Accuracy Target | Volume Features                                          |
-| ----- | -------- | ------------------------ | ------------- | --------------- | -------------------------------------------------------- |
-| **1** | 3 days   | Volume Discovery         | 30-100/hour   | 35-50%          | Basic volume surge detection, low thresholds            |
-| **2** | 4 days   | Volume Filtering         | 15-60/hour    | 50-70%          | Add imbalance detection, moderate thresholds            |
-| **3** | 5 days   | Volume Quality           | 10-40/hour    | 70-85%          | Add institutional detection, higher thresholds          |
-| **4** | 4 days   | Volume Production        | 3-15/hour     | 85-95%          | Full volume validation, maximum thresholds              |
+| Phase | Duration | Goal              | Signal Volume | Accuracy Target | Volume Features                                |
+| ----- | -------- | ----------------- | ------------- | --------------- | ---------------------------------------------- |
+| **1** | 3 days   | Volume Discovery  | 30-100/hour   | 35-50%          | Basic volume surge detection, low thresholds   |
+| **2** | 4 days   | Volume Filtering  | 15-60/hour    | 50-70%          | Add imbalance detection, moderate thresholds   |
+| **3** | 5 days   | Volume Quality    | 10-40/hour    | 70-85%          | Add institutional detection, higher thresholds |
+| **4** | 4 days   | Volume Production | 3-15/hour     | 85-95%          | Full volume validation, maximum thresholds     |
 
 **🎯 Volume Success Metrics:** Each phase should show improvement in precision through enhanced institutional validation while maintaining reasonable signal frequency.
 
