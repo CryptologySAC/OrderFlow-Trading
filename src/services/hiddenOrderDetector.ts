@@ -183,9 +183,12 @@ export class HiddenOrderDetector extends Detector {
         const depthSnapshot = trade.depthSnapshot!;
         const side = trade.buyerIsMaker ? "sell" : "buy";
 
-        // Get visible liquidity at the trade price level
+        // Convert depth snapshot to price-sorted array for efficient lookup
+        const depthLevels = this.convertSnapshotToArray(depthSnapshot);
+
+        // Get visible liquidity at the trade price level using binary search
         const visibleVolume = this.getVisibleVolumeAtPrice(
-            depthSnapshot,
+            depthLevels,
             trade.price,
             side
         );
@@ -222,26 +225,61 @@ export class HiddenOrderDetector extends Detector {
      * Get visible volume at specific price level
      */
     private getVisibleVolumeAtPrice(
-        depthSnapshot: Map<number, PassiveLevel>,
+        depthLevels: PassiveLevel[],
         price: number,
         side: "buy" | "sell"
     ): number {
-        // Look for exact price match first
-        const exactLevel = depthSnapshot.get(price);
-        if (exactLevel) {
-            return side === "buy" ? exactLevel.ask : exactLevel.bid;
-        }
-
-        // Look for price within tolerance
+        // Binary search for closest level
+        let left = 0;
+        let right = depthLevels.length - 1;
         const tolerance = price * this.config.priceTolerance;
-        for (const [levelPrice, level] of depthSnapshot) {
-            if (Math.abs(levelPrice - price) <= tolerance) {
+
+        while (left <= right) {
+            const mid = Math.floor((left + right) / 2);
+            const level = depthLevels[mid];
+
+            if (level.price === price) {
                 return side === "buy" ? level.ask : level.bid;
+            }
+
+            if (level.price < price) {
+                left = mid + 1;
+            } else {
+                right = mid - 1;
             }
         }
 
-        // No visible liquidity found at this price
-        return 0;
+        // Check nearest neighbors within tolerance
+        const candidates: PassiveLevel[] = [];
+        if (left < depthLevels.length) {
+            candidates.push(depthLevels[left]);
+        }
+        if (right >= 0) {
+            candidates.push(depthLevels[right]);
+        }
+
+        let bestVolume = 0;
+        let bestDiff = Infinity;
+        for (const candidate of candidates) {
+            const diff = Math.abs(candidate.price - price);
+            if (diff <= tolerance && diff < bestDiff) {
+                bestDiff = diff;
+                bestVolume = side === "buy" ? candidate.ask : candidate.bid;
+            }
+        }
+
+        return bestVolume;
+    }
+
+    /**
+     * Convert a depth snapshot Map to a price-sorted array
+     */
+    private convertSnapshotToArray(
+        depthSnapshot: Map<number, PassiveLevel>
+    ): PassiveLevel[] {
+        const levels = Array.from(depthSnapshot.values());
+        levels.sort((a, b) => a.price - b.price);
+        return levels;
     }
 
     /**
