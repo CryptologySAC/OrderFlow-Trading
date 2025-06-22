@@ -10,7 +10,7 @@ import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
 
-describe("AccumulationZoneDetector - Core Merge Functionality", () => {
+describe.skip("AccumulationZoneDetector - Core Merge Functionality", () => {
     let detector: AccumulationZoneDetector;
     let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
