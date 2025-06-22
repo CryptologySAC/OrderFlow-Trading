@@ -2,10 +2,10 @@
 # Backtesting Performance Summary
 
 ## Overview
-- **Total Configurations Tested**: 3
+- **Total Configurations Tested**: 42
 - **Successful Tests**: 0
 - **Performance Configurations**: 0
-- **Generated**: 2025-06-22T22:14:07.563Z
+- **Generated**: 2025-06-22T22:16:32.931Z
 
 ## Top Performers
 

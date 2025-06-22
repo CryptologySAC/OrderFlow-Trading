@@ -399,6 +399,9 @@ export class DetectorTestRunner extends EventEmitter {
             getMetrics: () => ({ legacy: {}, enhanced: {} }),
             getHealthSummary: () => "Healthy",
             getAverageLatency: () => 0,
+            createCounter: () => ({ increment: () => {}, get: () => 0 }),
+            createHistogram: () => ({ observe: () => {}, get: () => ({}) }),
+            createGauge: () => ({ set: () => {}, get: () => 0 }),
         };
 
         switch (testConfig.detectorType) {
@@ -444,10 +447,12 @@ export class DetectorTestRunner extends EventEmitter {
                 );
 
             case "deltaCVDDetector":
+                const mockSpoofingDetector = {} as SpoofingDetector;
                 return new DeltaCVDConfirmation(
                     testConfig.id,
                     testConfig.config as DeltaCVDConfirmationSettings,
                     mockLogger,
+                    mockSpoofingDetector,
                     mockMetrics
                 );
 

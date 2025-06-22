@@ -65,6 +65,15 @@ class ScriptMetricsCollector {
     getAverageLatency(): number {
         return 0;
     }
+    createCounter(): { increment: () => void; get: () => number } {
+        return { increment: () => {}, get: () => 0 };
+    }
+    createHistogram(): { observe: (value: number) => void; get: () => Record<string, unknown> } {
+        return { observe: () => {}, get: () => ({}) };
+    }
+    createGauge(): { set: (value: number) => void; get: () => number } {
+        return { set: () => {}, get: () => 0 };
+    }
 }
 
 interface BacktestConfig {
