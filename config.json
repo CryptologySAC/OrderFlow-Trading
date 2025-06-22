@@ -211,7 +211,7 @@
             },
 
             "exhaustion": {
-                "minAggVolume": 400,
+                "minAggVolume": 40,
                 "windowMs": 90000,
                 "pricePrecision": 2,
                 "zoneTicks": 3,
@@ -244,7 +244,7 @@
             },
 
             "absorption": {
-                "minAggVolume": 400,
+                "minAggVolume": 40,
                 "windowMs": 60000,
                 "pricePrecision": 2,
                 "zoneTicks": 3,
