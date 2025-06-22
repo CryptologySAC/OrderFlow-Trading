@@ -708,9 +708,8 @@ export class AnomalyDetector extends EventEmitter {
         };
 
         // Clone to avoid mutation
-        const payload: AnomalyEvent = JSON.parse(
-            JSON.stringify(anomaly)
-        ) as AnomalyEvent;
+        // structuredClone available in Node >=17
+        const payload: AnomalyEvent = structuredClone(anomaly);
 
         // Keep history for market health reporting
         this.recentAnomalies.push(payload);
