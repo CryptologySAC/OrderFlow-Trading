@@ -5,6 +5,7 @@ export class RollingWindow<T = number> implements Iterable<T> {
     private pointer = 0;
     private filled = false;
     private _sum = 0; // for numbers only, will guard below
+    private _sumSquares = 0; // for variance/stddev
     private readonly _capacity: number;
 
     constructor(
@@ -20,9 +21,16 @@ export class RollingWindow<T = number> implements Iterable<T> {
             throw new TypeError("Non-numeric value pushed into numeric window");
         }
         if (this.isNumeric) {
-            // Remove old from sum, add new
-            if (this.filled) this._sum -= this.buffer[this.pointer] as number;
-            this._sum += value as number;
+            // Remove old value from aggregates when window is full
+            if (this.filled) {
+                const old = this.buffer[this.pointer] as number;
+                this._sum -= old;
+                this._sumSquares -= old * old;
+            }
+
+            const num = value as number;
+            this._sum += num;
+            this._sumSquares += num * num;
         }
         this.buffer[this.pointer] = value;
         this.pointer = (this.pointer + 1) % this._capacity;
@@ -63,13 +71,11 @@ export class RollingWindow<T = number> implements Iterable<T> {
         if (!this.isNumeric)
             throw new Error("stdDev() only for numeric buffers");
 
-        if (this.count() === 0) return 0;
-        const arr = this.toArray() as number[];
-        const mean = this.mean();
-        return Math.sqrt(
-            arr.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) /
-                (arr.length || 1)
-        );
+        const n = this.count();
+        if (n === 0) return 0;
+        const mean = this._sum / n;
+        const variance = this._sumSquares / n - mean * mean;
+        return Math.sqrt(Math.max(variance, 0));
     }
 
     public toArray(): T[] {
@@ -85,6 +91,7 @@ export class RollingWindow<T = number> implements Iterable<T> {
         this.pointer = 0;
         this.filled = false;
         this._sum = 0;
+        this._sumSquares = 0;
         this.buffer = new Array(this._capacity) as T[];
     }
 

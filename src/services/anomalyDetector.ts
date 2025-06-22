@@ -18,6 +18,7 @@ import type {
     ConnectivityStatus,
 } from "../infrastructure/apiConnectivityMonitor.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
+import { RollingStatsWindow } from "../utils/rollingStatsWindow.js";
 
 export interface AnomalyDetectorOptions {
     /** Rolling trade window size for statistics (default: 9000 trades for 15min) */
@@ -144,6 +145,11 @@ export class AnomalyDetector extends EventEmitter {
     private currentBestBid = 0;
     private currentBestAsk = 0;
 
+    private priceHistory: RollingWindow<number>;
+    private returnStats: RollingStatsWindow;
+    private recentReturnStats: RollingStatsWindow;
+    private lastPrice = 0;
+
     // Flow tracking for market structure analysis
     private recentFlowWindow: RollingWindow<{
         volume: number;
@@ -192,6 +198,15 @@ export class AnomalyDetector extends EventEmitter {
         this.marketHistory = new RollingWindow<MarketSnapshot>(
             this.windowSize,
             false
+        );
+
+        this.priceHistory = new RollingWindow<number>(this.windowSize);
+        this.returnStats = new RollingStatsWindow(
+            this.extremeVolatilityWindowMs
+        );
+        this.recentReturnStats = new RollingStatsWindow(
+            this.extremeVolatilityWindowMs,
+            20
         );
 
         this.orderSizeHistory = new RollingWindow<{
@@ -250,6 +265,15 @@ export class AnomalyDetector extends EventEmitter {
                 price: trade.price,
                 time: now,
             });
+
+            // Track price and returns for volatility calculations
+            if (this.lastPrice > 0) {
+                const ret = (trade.price - this.lastPrice) / this.lastPrice;
+                this.returnStats.push(ret, now);
+                this.recentReturnStats.push(ret, now);
+            }
+            this.lastPrice = trade.price;
+            this.priceHistory.push(trade.price);
 
             // Compute spread if we have valid quotes
             let spreadBps: number | undefined;
@@ -335,9 +359,8 @@ export class AnomalyDetector extends EventEmitter {
      * Critical infrastructure issue requiring immediate attention.
      */
     private checkFlashCrash(snapshot: MarketSnapshot): void {
-        const prices = this.marketHistory.toArray().map((h) => h.price);
-        const mean = this.calculateMean(prices);
-        const stdDev = this.calculateStdDev(prices, mean);
+        const mean = this.priceHistory.mean();
+        const stdDev = this.priceHistory.stdDev();
         const zScore = Math.abs(snapshot.price - mean) / (stdDev || 1);
 
         if (zScore > 5) {
@@ -528,33 +551,13 @@ export class AnomalyDetector extends EventEmitter {
      * Market health issue indicating unstable conditions.
      */
     private checkExtremeVolatility(snapshot: MarketSnapshot): void {
-        const now = Date.now();
-        const recentPrices = this.marketHistory
-            .toArray()
-            .filter((s) => now - s.timestamp < this.extremeVolatilityWindowMs)
-            .map((h) => h.price);
+        const allReturnsStdDev = this.returnStats.stdDev();
+        const recentStdDev = this.recentReturnStats.stdDev();
 
-        const returns: number[] = [];
-        for (let i = 1; i < recentPrices.length; i++) {
-            if (recentPrices[i - 1] > 0) {
-                returns.push(
-                    (recentPrices[i] - recentPrices[i - 1]) /
-                        recentPrices[i - 1]
-                );
-            }
-        }
-
-        const recentReturns = returns.slice(-20);
-        const allReturnsStdDev = this.calculateStdDev(
-            returns,
-            this.calculateMean(returns)
-        );
-        const recentStdDev = this.calculateStdDev(
-            recentReturns,
-            this.calculateMean(recentReturns)
-        );
-
-        if (recentStdDev > allReturnsStdDev * 2.5) {
+        if (
+            this.returnStats.count() > 20 &&
+            recentStdDev > allReturnsStdDev * 2.5
+        ) {
             this.emitAnomaly({
                 type: "extreme_volatility",
                 detectedAt: snapshot.timestamp,
