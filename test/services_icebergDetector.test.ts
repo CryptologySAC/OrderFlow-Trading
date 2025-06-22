@@ -290,10 +290,16 @@ describe("services/IcebergDetector", () => {
                         }),
                         strength: expect.any(Number),
                         completion: 1.0,
+                        avgRefillGap: expect.any(Number),
+                        temporalScore: expect.any(Number),
                     }),
                     significance: expect.stringMatching(/^(low|medium|high)$/),
                 })
             );
+
+            const events = detector.getCompletedIcebergs();
+            expect(events.length).toBe(1);
+            expect(events[0].avgRefillGap).toBeGreaterThan(0);
         });
     });
 

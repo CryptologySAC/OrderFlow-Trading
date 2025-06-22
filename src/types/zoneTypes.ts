@@ -172,6 +172,8 @@ export interface IcebergZoneUpdate {
         side: "buy" | "sell";
         institutionalScore: number;
         priceStability: number;
+        avgRefillGap: number;
+        temporalScore: number;
     };
     significance: "low" | "medium" | "high";
 }
