@@ -5,6 +5,8 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 import { AnomalyDetectorOptions } from "../services/anomalyDetector.js";
 import { SpoofingDetectorConfig } from "../services/spoofingDetector.js";
+import type { IcebergDetectorConfig } from "../services/icebergDetector.js";
+import type { HiddenOrderDetectorConfig } from "../services/hiddenOrderDetector.js";
 import { OrderBookStateOptions } from "../market/orderBookState.js";
 import type {
     ConfigType,
@@ -815,6 +817,54 @@ export class Config {
             marketHealthWindowMs: Number(
                 cfg.symbols[cfg.symbol].anomalyDetector?.marketHealthWindowMs ??
                     900_000
+            ),
+        };
+    }
+
+    static get ICEBERG_DETECTOR(): Partial<IcebergDetectorConfig> {
+        const icebergConfig = cfg.symbols[cfg.symbol]?.icebergDetector;
+        return {
+            minRefillCount: Number(icebergConfig?.minRefillCount ?? 3),
+            maxSizeVariation: Number(icebergConfig?.maxSizeVariation ?? 0.2),
+            minTotalSize: Number(icebergConfig?.minTotalSize ?? 50),
+            maxRefillTimeMs: Number(icebergConfig?.maxRefillTimeMs ?? 30000),
+            priceStabilityTolerance: Number(
+                icebergConfig?.priceStabilityTolerance ?? 0.005
+            ),
+            institutionalSizeThreshold: Number(
+                icebergConfig?.institutionalSizeThreshold ?? 10
+            ),
+            trackingWindowMs: Number(icebergConfig?.trackingWindowMs ?? 300000),
+            maxActiveIcebergs: Number(icebergConfig?.maxActiveIcebergs ?? 20),
+        };
+    }
+
+    static get HIDDEN_ORDER_DETECTOR(): Partial<HiddenOrderDetectorConfig> {
+        const hiddenOrderConfig = cfg.symbols[cfg.symbol]?.hiddenOrderDetector;
+        return {
+            minTradeSize: Number(hiddenOrderConfig?.minTradeSize ?? 5),
+            maxTradeGapMs: Number(hiddenOrderConfig?.maxTradeGapMs ?? 10000),
+            minTradeSequence: Number(hiddenOrderConfig?.minTradeSequence ?? 4),
+            priceDeviationTolerance: Number(
+                hiddenOrderConfig?.priceDeviationTolerance ?? 0.002
+            ),
+            volumeConcentrationThreshold: Number(
+                hiddenOrderConfig?.volumeConcentrationThreshold ?? 0.7
+            ),
+            minCumulativeVolume: Number(
+                hiddenOrderConfig?.minCumulativeVolume ?? 30
+            ),
+            trackingWindowMs: Number(
+                hiddenOrderConfig?.trackingWindowMs ?? 180000
+            ),
+            maxActiveCandidates: Number(
+                hiddenOrderConfig?.maxActiveCandidates ?? 15
+            ),
+            stealthThreshold: Number(
+                hiddenOrderConfig?.stealthThreshold ?? 0.8
+            ),
+            reserveActivationDistance: Number(
+                hiddenOrderConfig?.reserveActivationDistance ?? 0.001
             ),
         };
     }

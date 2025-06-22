@@ -15,6 +15,8 @@ import { SignalCoordinator } from "../services/signalCoordinator.js";
 import { AnomalyDetector } from "../services/anomalyDetector.js";
 import { SignalManager } from "../trading/signalManager.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
+import { IcebergDetector } from "../services/icebergDetector.js";
+import { HiddenOrderDetector } from "../services/hiddenOrderDetector.js";
 import { IndividualTradesManager } from "../data/individualTradesManager.js";
 import { MicrostructureAnalyzer } from "../data/microstructureAnalyzer.js";
 import { SignalTracker } from "../analysis/signalTracker.js";
@@ -50,6 +52,8 @@ export interface Dependencies {
     anomalyDetector: AnomalyDetector;
     signalManager: SignalManager;
     spoofingDetector: SpoofingDetector;
+    icebergDetector: IcebergDetector;
+    hiddenOrderDetector: HiddenOrderDetector;
     individualTradesManager?: IndividualTradesManager;
     microstructureAnalyzer?: MicrostructureAnalyzer;
 
@@ -79,7 +83,6 @@ export function createDependencies(threadManager: ThreadManager): Dependencies {
         const db = getDB("./storage/trades.db");
         runMigrations(db);
 
-        const spoofingDetector = new SpoofingDetector(Config.SPOOFING_DETECTOR);
         const binanceFeed = new BinanceDataFeed();
         const individualTradesManager = new IndividualTradesManager(
             Config.INDIVIDUAL_TRADES_MANAGER,
@@ -114,6 +117,39 @@ export function createDependencies(threadManager: ThreadManager): Dependencies {
             Config.ANOMALY_DETECTOR,
             logger
         );
+
+        // Create SpoofingDetector with anomaly integration
+        const spoofingDetector = new SpoofingDetector(
+            Config.SPOOFING_DETECTOR,
+            logger
+        );
+
+        // Connect spoofing detector to anomaly detector for event forwarding
+        spoofingDetector.setAnomalyDetector?.(anomalyDetector);
+
+        // Create IcebergDetector with anomaly integration
+        const icebergDetector = new IcebergDetector(
+            "iceberg-detector",
+            Config.ICEBERG_DETECTOR,
+            logger,
+            metricsCollector,
+            signalLogger
+        );
+
+        // Connect iceberg detector to anomaly detector for event forwarding
+        icebergDetector.setAnomalyDetector(anomalyDetector);
+
+        // Create HiddenOrderDetector with anomaly integration
+        const hiddenOrderDetector = new HiddenOrderDetector(
+            "hidden-order-detector",
+            Config.HIDDEN_ORDER_DETECTOR,
+            logger,
+            metricsCollector,
+            signalLogger
+        );
+
+        // Connect hidden order detector to anomaly detector for event forwarding
+        hiddenOrderDetector.setAnomalyDetector(anomalyDetector);
 
         const alertManager = new AlertManager(
             Config.ALERT_WEBHOOK_URL,
@@ -162,6 +198,8 @@ export function createDependencies(threadManager: ThreadManager): Dependencies {
             anomalyDetector,
             signalManager,
             spoofingDetector,
+            icebergDetector,
+            hiddenOrderDetector,
             individualTradesManager,
             microstructureAnalyzer,
             binanceFeed,

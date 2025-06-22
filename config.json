@@ -285,15 +285,39 @@
                 }
             },
 
+            "icebergDetector": {
+                "minRefillCount": 3,
+                "maxSizeVariation": 0.2,
+                "minTotalSize": 50,
+                "maxRefillTimeMs": 30000,
+                "priceStabilityTolerance": 0.005,
+                "institutionalSizeThreshold": 10,
+                "trackingWindowMs": 300000,
+                "maxActiveIcebergs": 20
+            },
+
+            "hiddenOrderDetector": {
+                "minTradeSize": 5,
+                "maxTradeGapMs": 10000,
+                "minTradeSequence": 4,
+                "priceDeviationTolerance": 0.002,
+                "volumeConcentrationThreshold": 0.7,
+                "minCumulativeVolume": 30,
+                "trackingWindowMs": 180000,
+                "maxActiveCandidates": 15,
+                "stealthThreshold": 0.8,
+                "reserveActivationDistance": 0.001
+            },
+
             "deltaCvdConfirmation": {
                 "windowsSec": [60],
-                "minZ": 1.5,
+                "minZ": 1.8,
                 "priceCorrelationWeight": 0.4,
                 "volumeConcentrationWeight": 0.4,
                 "adaptiveThresholdMultiplier": 1.0,
 
-                "minTradesPerSec": 0.4,
-                "minVolPerSec": 2.5,
+                "minTradesPerSec": 0.25,
+                "minVolPerSec": 0.8,
                 "pricePrecision": 2,
 
                 "volatilityLookbackSec": 3600,
@@ -303,8 +327,8 @@
                 "dynamicThresholds": true,
                 "logDebug": true,
 
-                "volumeSurgeMultiplier": 2.0,
-                "imbalanceThreshold": 0.2,
+                "volumeSurgeMultiplier": 1.5,
+                "imbalanceThreshold": 0.1,
                 "institutionalThreshold": 8.0,
                 "burstDetectionMs": 2000,
                 "sustainedVolumeMs": 20000,
@@ -317,7 +341,7 @@
                 "enableDepthAnalysis": true,
                 "maxOrderbookAge": 5000,
 
-                "absorptionCVDThreshold": 50,
+                "absorptionCVDThreshold": 75,
                 "absorptionPriceThreshold": 0.1,
 
                 "imbalanceWeight": 0.2,
@@ -326,7 +350,7 @@
                 "icebergMinSize": 20,
 
                 "baseConfidenceRequired": 0.4,
-                "finalConfidenceRequired": 0.6
+                "finalConfidenceRequired": 0.45
             }
         }
     }

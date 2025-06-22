@@ -18,6 +18,9 @@ import { DetectorUtils } from "./base/detectorUtils.js";
 import type {
     DeltaCVDConfirmationResult,
     SignalType,
+    ConfidenceFactors,
+    MarketRegime,
+    InstitutionalZone,
 } from "../types/signalTypes.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
@@ -132,33 +135,6 @@ interface WindowState {
     // Volume surge detection state
     volumeHistory: { timestamp: number; volume: number }[]; // recent volume snapshots
     burstHistory: { timestamp: number; volume: number; imbalance: number }[]; // detected bursts
-}
-
-interface ConfidenceFactors {
-    zScoreAlignment: number; // 0-1, how well z-scores align across windows
-    magnitudeStrength: number; // 0-1, strength of z-score magnitudes
-    priceCorrelation: number; // -1 to 1, correlation between price and CVD
-    volumeConcentration: number; // 0-1, how concentrated volume is at key levels
-    temporalConsistency: number; // 0-1, consistency of signal across timeframes
-    divergencePenalty: number; // 0-1, penalty for price/CVD divergence
-}
-
-interface InstitutionalZone {
-    priceLevel: number; // price level where institutional activity detected
-    netCVD: number; // net CVD accumulation at this level
-    buyVolume: number; // total buy volume at this level
-    sellVolume: number; // total sell volume at this level
-    firstSeen: number; // timestamp when first detected
-    lastUpdate: number; // timestamp of last activity
-    strength: number; // 0-1, strength of institutional activity
-    isActive: boolean; // whether zone is currently active
-}
-
-interface MarketRegime {
-    volatility: number; // current volatility estimate
-    baselineVolatility: number; // historical baseline
-    trendStrength: number; // 0-1, how trending vs ranging
-    volumeNormalization: number; // volume normalization factor
 }
 
 const MIN_SAMPLES_FOR_STATS = 30;
@@ -536,7 +512,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
         if (strongCVD && weakPrice) {
             const type = cvd > 0 ? "bullish_absorption" : "bearish_absorption";
-            const expectedSignal = cvd > 0 ? "sell" : "buy"; // Reversal expected
+            const expectedSignal = cvd > 0 ? "buy" : "sell";
             const strength = Math.min(
                 1.0,
                 cvdMagnitude / (this.absorptionCVDThreshold * 4)
@@ -560,32 +536,168 @@ export class DeltaCVDConfirmation extends BaseDetector {
         };
     }
 
-    private buildAbsorptionSignal(
-        absorption: ReturnType<typeof this.validateAbsorptionConditions>,
+    /**
+     * Enhanced signal builder that ALWAYS includes proper CVD data
+     * Replaces the problematic buildAbsorptionSignal() method
+     */
+    private buildEnhancedSignalCandidate(
+        slopes: Record<number, number>,
+        zScores: Record<number, number>,
+        priceCorrelations: Record<number, number>,
+        confidenceFactors: ConfidenceFactors,
+        finalConfidence: number,
+        absorption: ReturnType<typeof this.validateAbsorptionConditions> | null,
+        signalType: "enhanced_cvd" | "cvd_divergence" | "absorption_enhanced",
         timestamp: number
     ): DeltaCVDConfirmationResult {
-        const state = this.states.get(this.windows[0])!;
-        const lastTrade = state.trades[state.trades.length - 1];
+        const shortestWindowState = this.states.get(this.windows[0])!;
+        const lastTrade =
+            shortestWindowState.trades[shortestWindowState.trades.length - 1];
 
-        return {
-            price: lastTrade?.price || 0,
-            side: absorption.expectedSignal as "buy" | "sell",
-            rateOfChange: absorption.priceChange || 0,
-            windowVolume: state.trades.reduce((sum, t) => sum + t.quantity, 0),
-            tradesInWindow: state.trades.length,
-            slopes: { [this.windows[0]]: 0 }, // Absorption doesn't have slope
-            zScores: { [this.windows[0]]: 0 }, // Absorption doesn't have z-score
-            confidence: Math.min(0.95, absorption.strength * 1.2), // Boost absorption confidence
+        // Signal direction logic based on detection mode
+        let side: "buy" | "sell" | "neutral";
+
+        if (this.detectionMode === "divergence") {
+            // In divergence mode, signal OPPOSITE to CVD direction
+            const priceDirection =
+                this.calculateRecentPriceDirection(shortestWindowState);
+            const cvdDirection = slopes[this.windows[0]] > 0 ? "up" : "down";
+
+            // If price up but CVD down → sell signal (expect reversal down)
+            // If price down but CVD up → buy signal (expect reversal up)
+            if (priceDirection === "up" && cvdDirection === "down") {
+                side = "sell";
+            } else if (priceDirection === "down" && cvdDirection === "up") {
+                side = "buy";
+            } else {
+                side = "neutral";
+            }
+        } else {
+            // Original momentum logic
+            const slope = slopes[this.windows[0]];
+            side = slope > 0 ? "buy" : slope < 0 ? "sell" : "neutral";
+        }
+
+        // If we have absorption, potentially override signal direction
+        if (absorption?.detected && absorption.expectedSignal !== "neutral") {
+            // In enhanced mode, absorption can provide additional conviction
+            if (signalType === "absorption_enhanced") {
+                // Use absorption signal if it aligns with CVD, otherwise use CVD
+                if (
+                    (side === "buy" && absorption.expectedSignal === "buy") ||
+                    (side === "sell" && absorption.expectedSignal === "sell")
+                ) {
+                    // Perfect alignment - keep CVD signal
+                } else {
+                    // Conflict - use the stronger signal or default to CVD
+                    side = side; // Keep CVD signal as primary
+                }
+            }
+        }
+
+        // Calculate total window volume
+        const windowVolume = shortestWindowState.trades.reduce(
+            (sum, t) => sum + t.quantity,
+            0
+        );
+
+        // Calculate rate of change (slope normalized by time)
+        const rateOfChange = slopes[this.windows[0]] / this.windows[0]; // qty per second
+
+        const candidate: DeltaCVDConfirmationResult = {
+            price: lastTrade.price,
+            side,
+            slopes, // ✅ REAL CVD slopes, not hardcoded zeros!
+            zScores, // ✅ REAL z-scores, not hardcoded zeros!
+            tradesInWindow: shortestWindowState.trades.length,
+            rateOfChange,
+            confidence: finalConfidence,
+            windowVolume,
+
+            // Enhanced metadata with absorption information
             metadata: {
-                type: absorption.type,
-                cvdMagnitude: absorption.cvdMagnitude,
-                priceChange: absorption.priceChange,
-                detectionMode: "absorption",
+                confidenceFactors,
+                priceCorrelations,
+                marketRegime: { ...this.marketRegime },
+                adaptiveThreshold: this.calculateAdaptiveThreshold(),
                 timestamp,
-                strength: absorption.strength,
-                reason: `absorption_${absorption.type}`,
+                signalType, // Track what type of signal this is
+
+                // CVD Analysis (always present now!)
+                cvdAnalysis: {
+                    shortestWindowSlope: slopes[this.windows[0]],
+                    shortestWindowZScore: zScores[this.windows[0]],
+                    requiredMinZ: this.calculateAdaptiveThreshold(),
+                    detectionMode: this.detectionMode,
+                    passedStatisticalTest:
+                        Math.abs(zScores[this.windows[0]]) >=
+                        this.calculateAdaptiveThreshold(),
+                },
+
+                // Absorption Analysis (if present)
+                absorptionAnalysis: absorption?.detected
+                    ? {
+                          type: absorption.type,
+                          strength: absorption.strength,
+                          expectedSignal: absorption.expectedSignal,
+                          cvdMagnitude: absorption.cvdMagnitude,
+                          priceChange: absorption.priceChange,
+                          alignsWithCVD:
+                              (side === "buy" &&
+                                  absorption.expectedSignal === "buy") ||
+                              (side === "sell" &&
+                                  absorption.expectedSignal === "sell"),
+                      }
+                    : null,
+
+                // Volume profile insights
+                volumeConcentration: confidenceFactors.volumeConcentration,
+                majorVolumeLevel:
+                    this.findMajorVolumeLevel(shortestWindowState),
+
+                // Institutional activity insights
+                institutionalZones: shortestWindowState.institutionalZones,
+                dominantInstitutionalSide:
+                    this.getDominantInstitutionalSide(shortestWindowState),
+                cvdWeightedPrice:
+                    this.calculateCVDWeightedPrice(shortestWindowState),
+                institutionalFlowStrength:
+                    this.calculateInstitutionalFlowStrength(
+                        shortestWindowState
+                    ),
+
+                // Statistical context
+                sampleSizes: this.windows.reduce(
+                    (acc, w) => {
+                        acc[w] = this.states.get(w)!.trades.length;
+                        return acc;
+                    },
+                    {} as Record<number, number>
+                ),
+
+                // Divergence analysis
+                priceMovement: this.calculatePriceMovement(shortestWindowState),
+                cvdMovement: this.calculateCVDMovement(shortestWindowState),
+
+                // Timing context
+                signalFrequency: this.calculateRecentSignalFrequency(timestamp),
+                timeToLastSignal: timestamp - this.lastSignalTs,
+
+                // Quality metrics
+                qualityMetrics: {
+                    cvdStatisticalSignificance:
+                        Math.abs(zScores[this.windows[0]]) /
+                        this.calculateAdaptiveThreshold(),
+                    absorptionConfirmation: absorption?.detected || false,
+                    signalPurity:
+                        signalType === "absorption_enhanced"
+                            ? "premium"
+                            : "standard",
+                },
             },
         };
+
+        return candidate;
     }
 
     /* ------------------------------------------------------------------ */
@@ -1170,30 +1282,12 @@ export class DeltaCVDConfirmation extends BaseDetector {
     /* ------------------------------------------------------------------ */
 
     private tryEmitSignal(now: number): void {
-        // PHASE 3: Check for absorption first (takes priority)
-        const absorption = this.validateAbsorptionConditions(this.windows[0]);
-
-        if (absorption.detected && absorption.strength > 0.5) {
-            // Absorption signal takes priority
-            const candidate = this.buildAbsorptionSignal(absorption, now);
-            this.handleDetection(candidate);
-
-            this.logger.info(
-                `[CVD] Absorption signal: ${absorption.type} → ${absorption.expectedSignal}`,
-                {
-                    strength: absorption.strength,
-                    cvdMagnitude: absorption.cvdMagnitude,
-                    priceChange: absorption.priceChange,
-                }
-            );
-            return;
-        }
-
-        // Compute slopes and z-scores for each window
+        // STEP 1: ALWAYS calculate CVD divergence first (no bypassing!)
         const slopes: Record<number, number> = {};
         const zScores: Record<number, number> = {};
         const priceCorrelations: Record<number, number> = {};
 
+        // Calculate CVD for all windows
         for (const w of this.windows) {
             const state = this.states.get(w)!;
             if (state.trades.length < MIN_SAMPLES_FOR_STATS) return;
@@ -1204,9 +1298,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 this.metricsCollector.incrementCounter(
                     "cvd_signals_rejected_total",
                     1,
-                    {
-                        reason: result.reason,
-                    }
+                    { reason: result.reason }
                 );
                 return;
             }
@@ -1221,16 +1313,13 @@ export class DeltaCVDConfirmation extends BaseDetector {
                     this.metricsCollector.incrementCounter(
                         "cvd_signals_rejected_total",
                         1,
-                        {
-                            reason: surgeResult.reason || "volume_surge_failed",
-                        }
+                        { reason: surgeResult.reason || "volume_surge_failed" }
                     );
                     return;
                 }
             }
 
             // Compute CVD series and slope
-
             const cvdResult: CVDCalculationResult = this.computeCVDSlope(state);
             const { cvdSeries, slope } = cvdResult;
 
@@ -1240,8 +1329,6 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 cvdSeries
             );
             priceCorrelations[w] = priceCorrelation;
-
-            // Note: cvdResult will be released after all windows are processed
 
             // Update slope statistics using Welford's algorithm
             this.updateSlopeStatistics(state, slope);
@@ -1256,7 +1343,6 @@ export class DeltaCVDConfirmation extends BaseDetector {
             // Release the pooled result object for reuse
             this.cvdResultPool.release(cvdResult);
 
-            // Store for later use
             this.logger.debug(`[DeltaCVDConfirmation] Window ${w}s analysis`, {
                 slope,
                 zScore,
@@ -1266,7 +1352,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
             });
         }
 
-        // Enhanced signal validation
+        // STEP 2: REQUIRE CVD statistical significance FIRST
         const validationResult = this.validateSignalConditions(
             zScores,
             priceCorrelations
@@ -1275,36 +1361,79 @@ export class DeltaCVDConfirmation extends BaseDetector {
             this.metricsCollector.incrementCounter(
                 "cvd_signals_rejected_total",
                 1,
-                {
-                    reason: validationResult.reason,
-                }
+                { reason: validationResult.reason }
             );
             return;
+        }
+
+        // STEP 3: Check for absorption as ADDITIONAL confirmation (not replacement!)
+        const absorption = this.validateAbsorptionConditions(this.windows[0]);
+
+        // STEP 4: Decide signal type based on what we have
+        let signalType:
+            | "enhanced_cvd"
+            | "cvd_divergence"
+            | "absorption_enhanced";
+        let enhancedConfidence = false;
+
+        if (absorption.detected && absorption.strength > 0.5) {
+            // We have BOTH CVD divergence AND absorption - this is the premium signal!
+            signalType = "absorption_enhanced";
+            enhancedConfidence = true;
+
+            this.logger.info(
+                `[CVD] ENHANCED SIGNAL: CVD divergence + absorption alignment detected`,
+                {
+                    cvdZScore: zScores[this.windows[0]],
+                    absorptionStrength: absorption.strength,
+                    absorptionType: absorption.type,
+                }
+            );
+        } else {
+            // We have CVD divergence but no absorption confirmation
+            signalType = "cvd_divergence";
+
+            this.logger.info(
+                `[CVD] Standard CVD divergence signal (no absorption confirmation)`,
+                {
+                    cvdZScore: zScores[this.windows[0]],
+                    detectionMode: this.detectionMode,
+                }
+            );
         }
 
         // Throttle signals
         if (now - this.lastSignalTs < 60_000) return;
         this.lastSignalTs = now;
 
-        // Calculate comprehensive confidence score
+        // STEP 5: Calculate comprehensive confidence score
         const confidenceFactors = this.calculateConfidenceFactors(
             slopes,
             zScores,
             priceCorrelations,
             now
         );
-        const finalConfidence = this.computeFinalConfidence(
+
+        let finalConfidence = this.computeFinalConfidence(
             confidenceFactors,
             now
         );
 
-        // Build enhanced signal result
-        const candidate = this.buildSignalCandidate(
+        // STEP 6: Apply absorption enhancement bonus (if applicable)
+        if (enhancedConfidence) {
+            const absorptionBonus = absorption.strength * 0.15; // 15% max bonus
+            finalConfidence = Math.min(0.98, finalConfidence + absorptionBonus);
+        }
+
+        // STEP 7: Build the signal with proper CVD data (no more hardcoded zeros!)
+        const candidate = this.buildEnhancedSignalCandidate(
             slopes,
             zScores,
             priceCorrelations,
             confidenceFactors,
             finalConfidence,
+            absorption.detected ? absorption : null,
+            signalType,
             now
         );
 
@@ -1314,21 +1443,18 @@ export class DeltaCVDConfirmation extends BaseDetector {
         this.metricsCollector.recordHistogram(
             "cvd_confidence_scores",
             finalConfidence,
-            {
-                signal_side: candidate.side,
-            }
+            { signal_side: candidate.side }
         );
 
-        this.logger.info(
-            "[DeltaCVDConfirmation] CVD confirmation signal emitted",
-            {
-                detector: this.getId(),
-                side: candidate.side,
-                confidence: finalConfidence,
-                price: candidate.price,
-                confidenceFactors,
-            }
-        );
+        this.logger.info("[DeltaCVDConfirmation] CVD signal emitted", {
+            detector: this.getId(),
+            side: candidate.side,
+            confidence: finalConfidence,
+            price: candidate.price,
+            signalType,
+            hasAbsorption: absorption.detected,
+            cvdZScore: zScores[this.windows[0]],
+        });
     }
 
     private validateTradeActivity(
@@ -1688,9 +1814,10 @@ export class DeltaCVDConfirmation extends BaseDetector {
         slopes: Record<number, number>,
         zScores: Record<number, number>,
         priceCorrelations: Record<number, number>,
-        timestamp: number
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        _timestamp: number
     ): ConfidenceFactors {
-        void timestamp; //todo
+        // Note: timestamp parameter reserved for future temporal analysis features
         // 1. Z-Score Alignment (how consistent are the signals across timeframes)
         const zScoreAlignment = this.calculateZScoreAlignment(zScores);
 

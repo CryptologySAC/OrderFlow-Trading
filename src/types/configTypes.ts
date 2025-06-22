@@ -11,6 +11,8 @@ import type { OrderBookProcessorOptions } from "../market/processors/orderBookPr
 import type { DataStreamConfig } from "../trading/dataStreamManager.js";
 import type { AnomalyDetectorOptions } from "../services/anomalyDetector.js";
 import type { SpoofingDetectorConfig } from "../services/spoofingDetector.js";
+import type { IcebergDetectorConfig } from "../services/icebergDetector.js";
+import type { HiddenOrderDetectorConfig } from "../services/hiddenOrderDetector.js";
 import type { OrderBookStateOptions } from "../market/orderBookState.js";
 import type {
     AccumulationSettings,
@@ -77,6 +79,8 @@ type SymbolConfig = {
     emitDepthMetrics?: boolean;
     anomalyDetector?: AnomalyDetectorOptions;
     spoofingDetector?: SpoofingDetectorConfig;
+    icebergDetector?: Partial<IcebergDetectorConfig>;
+    hiddenOrderDetector?: Partial<HiddenOrderDetectorConfig>;
     exhaustion?: ExhaustionSettings;
     absorption?: AbsorptionSettings;
     deltaCvdConfirmation?: DeltaCVDConfirmationSettings;

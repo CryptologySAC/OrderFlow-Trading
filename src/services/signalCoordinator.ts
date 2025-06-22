@@ -23,15 +23,7 @@ import type {
     SignalProcessedEvent,
     SignalQueuedEvent,
 } from "../utils/types.js";
-
-class DetectorStub extends EventEmitter {
-    constructor(private readonly id: string) {
-        super();
-    }
-    public getId(): string {
-        return this.id;
-    }
-}
+import { DetectorStub } from "../utils/detectorStub.js";
 
 type DetectorLike = Detector | { id?: unknown; detectorId?: unknown };
 

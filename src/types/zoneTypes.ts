@@ -154,3 +154,77 @@ export interface ZoneQueryOptions {
         tolerance: number;
     };
 }
+
+// Enhanced zone types for new detectors
+export interface IcebergZoneUpdate {
+    updateType: "zone_created" | "zone_updated" | "zone_completed";
+    zone: {
+        id: string;
+        type: "iceberg";
+        priceRange: { min: number; max: number };
+        strength: number;
+        completion: number;
+        startTime: number;
+        endTime?: number;
+        totalVolume: number;
+        refillCount: number;
+        averagePieceSize: number;
+        side: "buy" | "sell";
+        institutionalScore: number;
+        priceStability: number;
+    };
+    significance: "low" | "medium" | "high";
+}
+
+export interface HiddenOrderZoneUpdate {
+    updateType: "zone_created" | "zone_updated" | "zone_completed";
+    zone: {
+        id: string;
+        type: "hidden_liquidity";
+        priceRange: { min: number; max: number };
+        strength: number;
+        completion: number;
+        startTime: number;
+        endTime?: number;
+        totalVolume: number;
+        tradeCount: number;
+        averageTradeSize: number;
+        side: "buy" | "sell";
+        stealthScore: number;
+        stealthType:
+            | "reserve_order"
+            | "stealth_liquidity"
+            | "algorithmic_hidden"
+            | "institutional_stealth";
+        volumeConcentration: number;
+        detectionMethod: string;
+    };
+    significance: "low" | "medium" | "high";
+}
+
+export interface SpoofingZoneUpdate {
+    updateType: "zone_created" | "zone_updated" | "zone_completed";
+    zone: {
+        id: string;
+        type: "spoofing";
+        priceRange: { min: number; max: number };
+        strength: number;
+        completion: number;
+        startTime: number;
+        endTime?: number;
+        spoofType:
+            | "fake_wall"
+            | "layering"
+            | "ghost_liquidity"
+            | "algorithmic"
+            | "iceberg_manipulation";
+        wallSize: number;
+        canceled: number;
+        executed: number;
+        side: "buy" | "sell";
+        confidence: number;
+        marketImpact: number;
+        cancelTimeMs: number;
+    };
+    significance: "low" | "medium" | "high";
+}

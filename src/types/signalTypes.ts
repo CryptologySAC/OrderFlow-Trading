@@ -135,7 +135,75 @@ export interface DeltaCVDConfirmationResult {
     slopes: Record<number, number>;
     zScores: Record<number, number>;
     confidence: number;
-    metadata?: Record<string, unknown>;
+    metadata?: DeltaCVDConfirmationMetadata;
+}
+
+interface DeltaCVDConfirmationMetadata {
+    signalType?: "enhanced_cvd" | "cvd_divergence" | "absorption_enhanced";
+    cvdAnalysis?: {
+        shortestWindowSlope: number;
+        shortestWindowZScore: number;
+        requiredMinZ: number;
+        detectionMode: string;
+        passedStatisticalTest: boolean;
+    };
+    absorptionAnalysis?: {
+        type: string;
+        strength: number;
+        expectedSignal: string;
+        cvdMagnitude?: number;
+        priceChange?: number;
+        alignsWithCVD: boolean;
+    } | null;
+    qualityMetrics?: {
+        cvdStatisticalSignificance: number;
+        absorptionConfirmation: boolean;
+        signalPurity: "premium" | "standard";
+    };
+    confidenceFactors?: ConfidenceFactors;
+    priceCorrelations?: Record<number, number>;
+    marketRegime?: MarketRegime;
+    adaptiveThreshold?: number;
+    timestamp: number;
+    volumeConcentration?: number;
+    majorVolumeLevel?: number | null;
+    institutionalZones?: InstitutionalZone[];
+    dominantInstitutionalSide?: string;
+    cvdWeightedPrice?: number;
+    institutionalFlowStrength?: number;
+    sampleSizes?: Record<number, number>;
+    priceMovement?: {
+        absoluteMove: number;
+        percentMove: number;
+        direction: "up" | "down" | "flat";
+    };
+    cvdMovement: {
+        totalCVD: number;
+        normalizedCVD: number;
+        direction: "bullish" | "bearish" | "neutral";
+    };
+    signalFrequency?: number;
+    timeToLastSignal?: number;
+}
+
+export interface InstitutionalZone {
+    priceLevel: number; // price level where institutional activity detected
+    netCVD: number; // net CVD accumulation at this level
+    buyVolume: number; // total buy volume at this level
+    sellVolume: number; // total sell volume at this level
+    firstSeen: number; // timestamp when first detected
+    lastUpdate: number; // timestamp of last activity
+    strength: number; // 0-1, strength of institutional activity
+    isActive: boolean; // whether zone is currently active
+}
+
+export interface ConfidenceFactors {
+    zScoreAlignment: number; // 0-1, how well z-scores align across windows
+    magnitudeStrength: number; // 0-1, strength of z-score magnitudes
+    priceCorrelation: number; // -1 to 1, correlation between price and CVD
+    volumeConcentration: number; // 0-1, how concentrated volume is at key levels
+    temporalConsistency: number; // 0-1, consistency of signal across timeframes
+    divergencePenalty: number; // 0-1, penalty for price/CVD divergence
 }
 
 export interface SignalCandidate {
@@ -267,7 +335,7 @@ export type MarketRegime = {
     baselineVolatility: number;
     trendStrength: number;
     volumeNormalization: number;
-    lastUpdate: number;
+    lastUpdate?: number;
 };
 
 export interface DistributionEvent {

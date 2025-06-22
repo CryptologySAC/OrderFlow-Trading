@@ -1,8 +1,10 @@
 // src/indicators/SpoofingDetector.ts
 // TODO If you want to score spoofing events, modify your SpoofingDetector to return the actual SpoofingEvent object (not just boolean).
 // TODO You could then emit a severity/confidence level proportional to the size and cancel/execution ratio.
+import { EventEmitter } from "events";
 import { TimeAwareCache } from "../utils/timeAwareCache.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { AnomalyDetector } from "./anomalyDetector.js";
 
 export interface SpoofingDetectorConfig {
     tickSize: number; // 0.01 for LTCUSDT
@@ -42,7 +44,33 @@ export interface SpoofingEvent {
     marketImpact: number; // price movement correlation
 }
 
-export class SpoofingDetector {
+export interface SpoofingZone {
+    id: string;
+    type: "spoofing";
+    priceRange: {
+        min: number;
+        max: number;
+    };
+    startTime: number;
+    endTime?: number;
+    strength: number;
+    completion: number;
+    spoofType:
+        | "fake_wall"
+        | "layering"
+        | "ghost_liquidity"
+        | "algorithmic"
+        | "iceberg_manipulation";
+    wallSize: number;
+    canceled: number;
+    executed: number;
+    side: "buy" | "sell";
+    confidence: number;
+    marketImpact: number;
+    cancelTimeMs: number;
+}
+
+export class SpoofingDetector extends EventEmitter {
     private passiveChangeHistory = new TimeAwareCache<
         number,
         { time: number; bid: number; ask: number }[]
@@ -72,10 +100,19 @@ export class SpoofingDetector {
 
     private config: SpoofingDetectorConfig;
     private logger?: ILogger;
+    private anomalyDetector?: AnomalyDetector;
 
     constructor(config: SpoofingDetectorConfig, logger?: ILogger) {
+        super();
         this.config = config;
         this.logger = logger;
+    }
+
+    /**
+     * Set the anomaly detector for event forwarding
+     */
+    public setAnomalyDetector(anomalyDetector: AnomalyDetector): void {
+        this.anomalyDetector = anomalyDetector;
     }
 
     /**
@@ -183,6 +220,14 @@ export class SpoofingDetector {
                     }
                 );
             }
+
+            // Emit anomaly event if anomaly detector is available
+            if (this.anomalyDetector) {
+                this.anomalyDetector.onSpoofingEvent(mostSignificant, price);
+            }
+
+            // Create spoofing zone for chart visualization
+            this.emitSpoofingZone(mostSignificant);
 
             return true; // Any detected spoofing pattern returns true
         }
@@ -353,7 +398,74 @@ export class SpoofingDetector {
                 ...maxSpoofEvent,
             });
         }
+
+        // Emit anomaly event for legacy spoofing detection if found
+        if (spoofDetected && maxSpoofEvent && this.anomalyDetector) {
+            this.anomalyDetector.onSpoofingEvent(maxSpoofEvent, price);
+
+            // Create spoofing zone for chart visualization
+            this.emitSpoofingZone(maxSpoofEvent);
+        }
+
         return spoofDetected;
+    }
+
+    /**
+     * Create and emit spoofing zone for chart visualization
+     */
+    private emitSpoofingZone(spoofingEvent: SpoofingEvent): void {
+        const priceRange = Math.abs(
+            spoofingEvent.priceEnd - spoofingEvent.priceStart
+        );
+        const priceDeviation = Math.max(
+            priceRange / 2,
+            this.config.tickSize * 2
+        );
+
+        const spoofingZone: SpoofingZone = {
+            id: `spoof_${spoofingEvent.timestamp}`,
+            type: "spoofing",
+            priceRange: {
+                min:
+                    Math.min(spoofingEvent.priceStart, spoofingEvent.priceEnd) -
+                    priceDeviation,
+                max:
+                    Math.max(spoofingEvent.priceStart, spoofingEvent.priceEnd) +
+                    priceDeviation,
+            },
+            startTime: spoofingEvent.timestamp - spoofingEvent.cancelTimeMs,
+            endTime: spoofingEvent.timestamp,
+            strength: spoofingEvent.confidence,
+            completion: 1.0, // Completed when detected
+            spoofType: spoofingEvent.spoofType,
+            wallSize: spoofingEvent.wallBefore,
+            canceled: spoofingEvent.canceled,
+            executed: spoofingEvent.executed,
+            side: spoofingEvent.side,
+            confidence: spoofingEvent.confidence,
+            marketImpact: spoofingEvent.marketImpact,
+            cancelTimeMs: spoofingEvent.cancelTimeMs,
+        };
+
+        // Emit zone update for dashboard visualization
+        this.emit("zoneUpdated", {
+            updateType: "zone_created",
+            zone: spoofingZone,
+            significance:
+                spoofingEvent.confidence > 0.8
+                    ? "high"
+                    : spoofingEvent.confidence > 0.6
+                      ? "medium"
+                      : "low",
+        });
+
+        this.logger?.info?.("Spoofing zone created", {
+            component: "SpoofingDetector",
+            operation: "emitSpoofingZone",
+            zoneId: spoofingZone.id,
+            spoofType: spoofingEvent.spoofType,
+            confidence: spoofingEvent.confidence,
+        });
     }
 
     /**

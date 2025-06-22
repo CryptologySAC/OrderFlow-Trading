@@ -1151,18 +1151,6 @@ export class AbsorptionDetector
             );
 
         if (!volumeValidation.valid) {
-            this.logger.debug(
-                `[AbsorptionDetector] Absorption signal rejected - volume surge validation failed`,
-                {
-                    zone,
-                    price,
-                    score,
-                    reason: volumeValidation.reason,
-                    volumeMultiplier:
-                        volumeValidation.volumeSurge.volumeMultiplier,
-                    imbalance: volumeValidation.imbalance.imbalance,
-                }
-            );
             SharedPools.getInstance().absorptionConditions.release(
                 conditionsToRelease
             );
@@ -1209,15 +1197,6 @@ export class AbsorptionDetector
                 triggerTrade.timestamp
             )
         ) {
-            this.logger.warn(
-                `[AbsorptionDetector] Signal rejected - absorption spoofing detected`,
-                {
-                    zone,
-                    price,
-                    side,
-                    aggressive: volumes.aggressive,
-                }
-            );
             this.metricsCollector.incrementMetric("absorptionSpoofingRejected");
             // Release pooled conditions object before early return
             SharedPools.getInstance().absorptionConditions.release(
@@ -1241,14 +1220,6 @@ export class AbsorptionDetector
                     triggerTrade.timestamp
                 ))
         ) {
-            this.logger.warn(
-                `[AbsorptionDetector] Signal rejected - general spoofing detected`,
-                {
-                    zone,
-                    price,
-                    side,
-                }
-            );
             this.metricsCollector.incrementMetric("absorptionSpoofingRejected");
             // Release pooled conditions object before early return
             SharedPools.getInstance().absorptionConditions.release(

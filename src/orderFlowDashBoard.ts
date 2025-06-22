@@ -54,6 +54,9 @@ import type {
     ZoneUpdate,
     ZoneSignal,
     ZoneAnalysisResult,
+    IcebergZoneUpdate,
+    HiddenOrderZoneUpdate,
+    SpoofingZoneUpdate,
 } from "./types/zoneTypes.js";
 
 // Utils imports
@@ -736,6 +739,14 @@ export class OrderFlowDashboard {
                     this.exhaustionDetector.onEnrichedTrade(enrichedTrade);
                     this.anomalyDetector.onEnrichedTrade(enrichedTrade);
                     this.deltaCVDConfirmation.onEnrichedTrade(enrichedTrade);
+
+                    // Feed trade data to new advanced detectors
+                    this.dependencies.icebergDetector.onEnrichedTrade(
+                        enrichedTrade
+                    );
+                    this.dependencies.hiddenOrderDetector.onEnrichedTrade(
+                        enrichedTrade
+                    );
                     // Support/Resistance detector disabled
                     // this.supportResistanceDetector.onEnrichedTrade(
                     //     enrichedTrade
@@ -1019,6 +1030,126 @@ export class OrderFlowDashboard {
                     duration: zone.timeInZone,
                     totalVolume: zone.totalVolume,
                 });
+            }
+        );
+
+        // Iceberg Detector Zone Events
+        this.dependencies.icebergDetector.on(
+            "zoneUpdated",
+            (update: IcebergZoneUpdate) => {
+                this.logger.info("Iceberg zone detected", {
+                    component: "IcebergDetector",
+                    zoneId: update.zone.id,
+                    priceRange: update.zone.priceRange,
+                    strength: update.zone.strength,
+                    refillCount: update.zone.refillCount,
+                    totalVolume: update.zone.totalVolume,
+                });
+
+                // Broadcast zone update to clients
+                const message: WebSocketMessage = {
+                    type: "zoneUpdate",
+                    now: Date.now(),
+                    data: {
+                        updateType: update.updateType,
+                        zone: {
+                            id: update.zone.id,
+                            type: update.zone.type,
+                            priceRange: update.zone.priceRange,
+                            strength: update.zone.strength,
+                            completion: update.zone.completion,
+                            startTime: update.zone.startTime,
+                            endTime: update.zone.endTime,
+                            totalVolume: update.zone.totalVolume,
+                            refillCount: update.zone.refillCount,
+                            side: update.zone.side,
+                            institutionalScore: update.zone.institutionalScore,
+                        },
+                        significance: update.significance,
+                    },
+                };
+                this.broadcastMessage(message);
+            }
+        );
+
+        // Hidden Order Detector Zone Events
+        this.dependencies.hiddenOrderDetector.on(
+            "zoneUpdated",
+            (update: HiddenOrderZoneUpdate) => {
+                this.logger.info("Hidden order zone detected", {
+                    component: "HiddenOrderDetector",
+                    zoneId: update.zone.id,
+                    priceRange: update.zone.priceRange,
+                    strength: update.zone.strength,
+                    stealthType: update.zone.stealthType,
+                    totalVolume: update.zone.totalVolume,
+                });
+
+                // Broadcast zone update to clients
+                const message: WebSocketMessage = {
+                    type: "zoneUpdate",
+                    now: Date.now(),
+                    data: {
+                        updateType: update.updateType,
+                        zone: {
+                            id: update.zone.id,
+                            type: update.zone.type,
+                            priceRange: update.zone.priceRange,
+                            strength: update.zone.strength,
+                            completion: update.zone.completion,
+                            startTime: update.zone.startTime,
+                            endTime: update.zone.endTime,
+                            totalVolume: update.zone.totalVolume,
+                            tradeCount: update.zone.tradeCount,
+                            side: update.zone.side,
+                            stealthType: update.zone.stealthType,
+                            stealthScore: update.zone.stealthScore,
+                        },
+                        significance: update.significance,
+                    },
+                };
+                this.broadcastMessage(message);
+            }
+        );
+
+        // Spoofing Detector Zone Events
+        this.dependencies.spoofingDetector.on(
+            "zoneUpdated",
+            (update: SpoofingZoneUpdate) => {
+                this.logger.info("Spoofing zone detected", {
+                    component: "SpoofingDetector",
+                    zoneId: update.zone.id,
+                    priceRange: update.zone.priceRange,
+                    strength: update.zone.strength,
+                    spoofType: update.zone.spoofType,
+                    wallSize: update.zone.wallSize,
+                });
+
+                // Broadcast zone update to clients
+                const message: WebSocketMessage = {
+                    type: "zoneUpdate",
+                    now: Date.now(),
+                    data: {
+                        updateType: update.updateType,
+                        zone: {
+                            id: update.zone.id,
+                            type: update.zone.type,
+                            priceRange: update.zone.priceRange,
+                            strength: update.zone.strength,
+                            completion: update.zone.completion,
+                            startTime: update.zone.startTime,
+                            endTime: update.zone.endTime,
+                            spoofType: update.zone.spoofType,
+                            wallSize: update.zone.wallSize,
+                            canceled: update.zone.canceled,
+                            executed: update.zone.executed,
+                            side: update.zone.side,
+                            confidence: update.zone.confidence,
+                        },
+                        significance: update.significance,
+                    },
+                };
+                this.broadcastMessage(message);
             }
         );
     }
