@@ -6,17 +6,22 @@ export class HiddenOrderDetector {
     }
 
     onEnrichedTrade = vi.fn();
-    getStatus = vi.fn().mockReturnValue("Active: 0 candidates, 0 detected (avg stealth: 0.0%)");
+    getStatus = vi
+        .fn()
+        .mockReturnValue("Detected: 0 hidden orders (avg hidden: 0.0)");
     markSignalConfirmed = vi.fn();
-    getActiveCandidates = vi.fn().mockReturnValue([]);
     getDetectedHiddenOrders = vi.fn().mockReturnValue([]);
     getStatistics = vi.fn().mockReturnValue({
-        activeCandidates: 0,
-        detectedHiddenOrders: 0,
-        avgStealthScore: 0,
+        totalHiddenOrders: 0,
+        avgHiddenVolume: 0,
+        avgHiddenPercentage: 0,
         avgConfidence: 0,
-        totalVolumeDetected: 0,
-        detectionsByType: {},
+        totalHiddenVolumeDetected: 0,
+        detectionsByConfidence: {
+            high: 0,
+            medium: 0,
+            low: 0,
+        },
     });
     setAnomalyDetector = vi.fn();
     emit = vi.fn();

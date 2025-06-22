@@ -297,16 +297,12 @@
             },
 
             "hiddenOrderDetector": {
+                "minHiddenVolume": 10,
                 "minTradeSize": 5,
-                "maxTradeGapMs": 10000,
-                "minTradeSequence": 4,
-                "priceDeviationTolerance": 0.002,
-                "volumeConcentrationThreshold": 0.7,
-                "minCumulativeVolume": 30,
-                "trackingWindowMs": 180000,
-                "maxActiveCandidates": 15,
-                "stealthThreshold": 0.8,
-                "reserveActivationDistance": 0.001
+                "priceTolerance": 0.0001,
+                "maxDepthAgeMs": 1000,
+                "minConfidence": 0.8,
+                "zoneHeightPercentage": 0.002
             },
 
             "deltaCvdConfirmation": {

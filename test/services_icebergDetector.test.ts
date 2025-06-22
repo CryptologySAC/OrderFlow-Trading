@@ -11,7 +11,7 @@ describe("services/IcebergDetector", () => {
 
     beforeEach(() => {
         vi.useFakeTimers();
-        
+
         mockLogger = {
             info: vi.fn(),
             warn: vi.fn(),
@@ -55,14 +55,14 @@ describe("services/IcebergDetector", () => {
             const baseTime = Date.now();
             const price = 100.0;
             const size = 12; // Above institutional threshold (10)
-            
+
             // Create consistent refill pattern at the same price level
             for (let i = 0; i < 4; i++) {
                 const trade: EnrichedTradeEvent = {
                     symbol: "LTCUSDT",
                     price, // Same price for all trades (key for iceberg detection)
-                    quantity: size + (i * 0.2), // Small size variation (within 20% tolerance)
-                    timestamp: baseTime + (i * 15000), // 15 second intervals (within 30 second timeout)
+                    quantity: size + i * 0.2, // Small size variation (within 20% tolerance)
+                    timestamp: baseTime + i * 15000, // 15 second intervals (within 30 second timeout)
                     buyerIsMaker: false, // Buy order (market order hitting asks)
                     tradeId: 1000 + i,
                     orderData: {
@@ -85,7 +85,7 @@ describe("services/IcebergDetector", () => {
             // Check that candidates are being tracked
             const candidates = detector.getActiveCandidates();
             expect(candidates.length).toBeGreaterThan(0);
-            
+
             if (candidates.length > 0) {
                 // Verify candidate properties
                 const candidate = candidates[0];
@@ -100,7 +100,7 @@ describe("services/IcebergDetector", () => {
             const baseTime = Date.now();
             const price = 100.0;
             const baseSize = 15;
-            
+
             // Create trades with high size variation (should not detect as iceberg)
             const trades = [
                 { size: baseSize, time: baseTime },
@@ -143,14 +143,14 @@ describe("services/IcebergDetector", () => {
             const baseTime = Date.now();
             const price = 100.0;
             const smallSize = 5; // Below institutional threshold of 10
-            
+
             // Create pattern with small sizes
             for (let i = 0; i < 5; i++) {
                 const trade: EnrichedTradeEvent = {
                     symbol: "LTCUSDT",
                     price,
                     quantity: smallSize,
-                    timestamp: baseTime + (i * 10000),
+                    timestamp: baseTime + i * 10000,
                     buyerIsMaker: false,
                     tradeId: 1000 + i,
                     orderData: {
@@ -179,14 +179,14 @@ describe("services/IcebergDetector", () => {
             const baseTime = Date.now();
             const price = 100.0;
             const size = 12; // Above threshold
-            
+
             // First two trades within timeout
             for (let i = 0; i < 2; i++) {
                 const trade: EnrichedTradeEvent = {
                     symbol: "LTCUSDT",
                     price,
                     quantity: size,
-                    timestamp: baseTime + (i * 15000), // 15 second intervals
+                    timestamp: baseTime + i * 15000, // 15 second intervals
                     buyerIsMaker: false,
                     tradeId: 1000 + i,
                     orderData: {
@@ -250,14 +250,14 @@ describe("services/IcebergDetector", () => {
             const baseTime = Date.now();
             const price = 100.0;
             const size = 20; // Large institutional size
-            
+
             // Create perfect iceberg pattern
             for (let i = 0; i < 4; i++) {
                 const trade: EnrichedTradeEvent = {
                     symbol: "LTCUSDT",
                     price,
                     quantity: size, // Consistent size
-                    timestamp: baseTime + (i * 15000),
+                    timestamp: baseTime + i * 15000,
                     buyerIsMaker: false,
                     tradeId: 1000 + i,
                     orderData: {
@@ -278,26 +278,29 @@ describe("services/IcebergDetector", () => {
             }
 
             // Should have emitted zoneUpdated event
-            expect(mockEmit).toHaveBeenCalledWith("zoneUpdated", expect.objectContaining({
-                updateType: "zone_created",
-                zone: expect.objectContaining({
-                    type: "iceberg",
-                    priceRange: expect.objectContaining({
-                        min: expect.any(Number),
-                        max: expect.any(Number),
+            expect(mockEmit).toHaveBeenCalledWith(
+                "zoneUpdated",
+                expect.objectContaining({
+                    updateType: "zone_created",
+                    zone: expect.objectContaining({
+                        type: "iceberg",
+                        priceRange: expect.objectContaining({
+                            min: expect.any(Number),
+                            max: expect.any(Number),
+                        }),
+                        strength: expect.any(Number),
+                        completion: 1.0,
                     }),
-                    strength: expect.any(Number),
-                    completion: 1.0,
-                }),
-                significance: expect.stringMatching(/^(low|medium|high)$/),
-            }));
+                    significance: expect.stringMatching(/^(low|medium|high)$/),
+                })
+            );
         });
     });
 
     describe("Statistics and Status", () => {
         it("should provide accurate statistics", () => {
             const stats = detector.getStatistics();
-            
+
             expect(stats).toEqual({
                 activeCandidates: 0,
                 completedIcebergs: 0,

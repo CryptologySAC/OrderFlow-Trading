@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { HiddenOrderDetector } from "../src/services/hiddenOrderDetector.js";
-import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
+import type {
+    EnrichedTradeEvent,
+    PassiveLevel,
+} from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 
@@ -11,7 +14,7 @@ describe("services/HiddenOrderDetector", () => {
 
     beforeEach(() => {
         vi.useFakeTimers();
-        
+
         mockLogger = {
             info: vi.fn(),
             warn: vi.fn(),
@@ -28,16 +31,12 @@ describe("services/HiddenOrderDetector", () => {
         };
 
         const config = {
+            minHiddenVolume: 10,
             minTradeSize: 5,
-            maxTradeGapMs: 10000,
-            minTradeSequence: 4,
-            priceDeviationTolerance: 0.002,
-            volumeConcentrationThreshold: 0.7,
-            minCumulativeVolume: 30,
-            trackingWindowMs: 180000,
-            maxActiveCandidates: 15,
-            stealthThreshold: 0.8,
-            reserveActivationDistance: 0.001,
+            priceTolerance: 0.0001,
+            maxDepthAgeMs: 1000,
+            minConfidence: 0.8,
+            zoneHeightPercentage: 0.002,
         };
 
         detector = new HiddenOrderDetector(
@@ -53,267 +52,281 @@ describe("services/HiddenOrderDetector", () => {
     });
 
     describe("Hidden Order Detection Logic", () => {
-        it("should detect stealth liquidity pattern", () => {
+        it("should detect hidden orders when executed volume exceeds visible liquidity", () => {
             const baseTime = Date.now();
             const price = 100.0;
-            const size = 8; // Above minimum trade size
-            
-            // Create consistent algorithmic pattern
-            for (let i = 0; i < 5; i++) {
-                const trade: EnrichedTradeEvent = {
-                    symbol: "LTCUSDT",
-                    price: price + (Math.random() * 0.002), // Very tight price range
-                    quantity: size + (Math.random() * 0.1), // Very consistent size
-                    timestamp: baseTime + (i * 8000), // Regular timing
-                    buyerIsMaker: false,
-                    tradeId: 1000 + i,
-                    orderData: {
-                        passive: { buy: 50, sell: 0 },
-                        aggressive: { buy: size, sell: 0 },
-                        imbalance: { buy: 0.85, sell: 0.15 },
-                        refill: { buy: false, sell: false }, // No visible refill
-                    },
-                    derivedMetrics: {
-                        isAbsorption: false,
-                        absorptionStrength: 0,
-                        marketPressure: 0.05,
-                        liquidityImpact: 0.02, // Low impact despite size
-                    },
-                };
 
-                detector.onEnrichedTrade(trade);
-            }
+            // Create depth snapshot with limited visible liquidity
+            const depthSnapshot = new Map<number, PassiveLevel>();
+            depthSnapshot.set(price, {
+                price,
+                bid: 20, // Only 20 visible on bid
+                ask: 15, // Only 15 visible on ask
+                timestamp: baseTime,
+            });
 
-            // Should create candidates
-            const candidates = detector.getActiveCandidates();
-            expect(candidates.length).toBeGreaterThan(0);
-            
-            // Verify candidate properties
-            const candidate = candidates[0];
-            expect(candidate.side).toBe("buy");
-            expect(candidate.trades.length).toBe(5);
-            expect(candidate.totalVolume).toBeGreaterThan(30); // Above minimum
-        });
-
-        it("should calculate stealth score correctly", () => {
-            const baseTime = Date.now();
-            const price = 100.0;
-            const exactSize = 10; // Exactly same size (high consistency)
-            
-            // Create highly algorithmic pattern
-            for (let i = 0; i < 6; i++) {
-                const trade: EnrichedTradeEvent = {
-                    symbol: "LTCUSDT",
-                    price, // Exact same price
-                    quantity: exactSize, // Exact same size
-                    timestamp: baseTime + (i * 5000), // Exact timing intervals
-                    buyerIsMaker: false,
-                    tradeId: 1000 + i,
-                    orderData: {
-                        passive: { buy: 100, sell: 0 },
-                        aggressive: { buy: exactSize, sell: 0 },
-                        imbalance: { buy: 0.9, sell: 0.1 },
-                        refill: { buy: false, sell: false },
-                    },
-                    derivedMetrics: {
-                        isAbsorption: false,
-                        absorptionStrength: 0,
-                        marketPressure: 0.02,
-                        liquidityImpact: 0.01, // Minimal impact
-                    },
-                };
-
-                detector.onEnrichedTrade(trade);
-            }
-
-            // Should detect high stealth score due to perfect consistency
-            const detectedOrders = detector.getDetectedHiddenOrders();
-            if (detectedOrders.length > 0) {
-                const order = detectedOrders[0];
-                expect(order.stealthScore).toBeGreaterThan(0.6);
-                expect(order.type).toBe("algorithmic_hidden");
-            }
-        });
-
-        it("should filter out non-qualifying sequences", () => {
-            const baseTime = Date.now();
-            const price = 100.0;
-            const smallSize = 3; // Below minimum trade size
-            
-            // Create pattern with small trades
-            for (let i = 0; i < 5; i++) {
-                const trade: EnrichedTradeEvent = {
-                    symbol: "LTCUSDT",
-                    price,
-                    quantity: smallSize,
-                    timestamp: baseTime + (i * 5000),
-                    buyerIsMaker: false,
-                    tradeId: 1000 + i,
-                    orderData: {
-                        passive: { buy: 50, sell: 0 },
-                        aggressive: { buy: smallSize, sell: 0 },
-                        imbalance: { buy: 0.8, sell: 0.2 },
-                        refill: { buy: false, sell: false },
-                    },
-                    derivedMetrics: {
-                        isAbsorption: false,
-                        absorptionStrength: 0,
-                        marketPressure: 0.1,
-                        liquidityImpact: 0.05,
-                    },
-                };
-
-                detector.onEnrichedTrade(trade);
-            }
-
-            // Should not create candidates due to small size
-            const candidates = detector.getActiveCandidates();
-            expect(candidates.length).toBe(0);
-        });
-
-        it("should handle trade gaps correctly", () => {
-            const baseTime = Date.now();
-            const price = 100.0;
-            const size = 10;
-            
-            // First sequence
-            for (let i = 0; i < 3; i++) {
-                const trade: EnrichedTradeEvent = {
-                    symbol: "LTCUSDT",
-                    price,
-                    quantity: size,
-                    timestamp: baseTime + (i * 5000),
-                    buyerIsMaker: false,
-                    tradeId: 1000 + i,
-                    orderData: {
-                        passive: { buy: 100, sell: 0 },
-                        aggressive: { buy: size, sell: 0 },
-                        imbalance: { buy: 0.8, sell: 0.2 },
-                        refill: { buy: false, sell: false },
-                    },
-                    derivedMetrics: {
-                        isAbsorption: false,
-                        absorptionStrength: 0,
-                        marketPressure: 0.1,
-                        liquidityImpact: 0.05,
-                    },
-                };
-
-                detector.onEnrichedTrade(trade);
-            }
-
-            // Large gap (15 seconds, maxTradeGapMs is 10 seconds)
-            const gapTrade: EnrichedTradeEvent = {
+            // Market buy order that executes 50 LTC but only 15 was visible
+            const trade: EnrichedTradeEvent = {
                 symbol: "LTCUSDT",
                 price,
-                quantity: size,
-                timestamp: baseTime + 20000,
-                buyerIsMaker: false,
-                tradeId: 1003,
-                orderData: {
-                    passive: { buy: 100, sell: 0 },
-                    aggressive: { buy: size, sell: 0 },
-                    imbalance: { buy: 0.8, sell: 0.2 },
-                    refill: { buy: false, sell: false },
-                },
-                derivedMetrics: {
-                    isAbsorption: false,
-                    absorptionStrength: 0,
-                    marketPressure: 0.1,
-                    liquidityImpact: 0.05,
-                },
+                quantity: 50, // Executed 50
+                timestamp: baseTime,
+                buyerIsMaker: false, // Market buy order
+                tradeId: "1000",
+                pair: "LTCUSDT",
+                originalTrade: {} as any,
+                passiveBidVolume: 20,
+                passiveAskVolume: 15,
+                zonePassiveBidVolume: 20,
+                zonePassiveAskVolume: 15,
+                depthSnapshot,
+                bestBid: 99.99,
+                bestAsk: 100.01,
             };
 
-            detector.onEnrichedTrade(gapTrade);
+            detector.onEnrichedTrade(trade);
 
-            // Should still have candidates but sequence should be broken
-            const candidates = detector.getActiveCandidates();
-            if (candidates.length > 0) {
-                expect(candidates[0].consecutiveGaps).toBeGreaterThan(0);
-            }
-        });
-    });
-
-    describe("Hidden Order Classification", () => {
-        it("should classify algorithmic hidden orders", () => {
-            const baseTime = Date.now();
-            const price = 100.0;
-            const size = 12;
-            
-            // Perfect algorithmic pattern
-            for (let i = 0; i < 8; i++) {
-                const trade: EnrichedTradeEvent = {
-                    symbol: "LTCUSDT",
-                    price,
-                    quantity: size, // Exact same size
-                    timestamp: baseTime + (i * 6000), // Exact intervals
-                    buyerIsMaker: false,
-                    tradeId: 1000 + i,
-                    orderData: {
-                        passive: { buy: 100, sell: 0 },
-                        aggressive: { buy: size, sell: 0 },
-                        imbalance: { buy: 0.95, sell: 0.05 },
-                        refill: { buy: false, sell: false },
-                    },
-                    derivedMetrics: {
-                        isAbsorption: false,
-                        absorptionStrength: 0,
-                        marketPressure: 0.01,
-                        liquidityImpact: 0.005,
-                    },
-                };
-
-                detector.onEnrichedTrade(trade);
-            }
-
-            // Force evaluation
-            vi.advanceTimersByTime(180000); // Move past evaluation window
-
+            // Should detect hidden order: 50 executed - 15 visible = 35 hidden
             const detectedOrders = detector.getDetectedHiddenOrders();
-            if (detectedOrders.length > 0) {
-                const order = detectedOrders[0];
-                expect(order.type).toBe("algorithmic_hidden");
-            }
+            expect(detectedOrders.length).toBe(1);
+
+            const hiddenOrder = detectedOrders[0];
+            expect(hiddenOrder.side).toBe("buy");
+            expect(hiddenOrder.executedVolume).toBe(50);
+            expect(hiddenOrder.visibleVolume).toBe(15);
+            expect(hiddenOrder.hiddenVolume).toBe(35);
+            expect(hiddenOrder.hiddenPercentage).toBe(0.7); // 35/50
+            expect(hiddenOrder.confidence).toBeGreaterThan(0.7);
         });
 
-        it("should classify institutional stealth orders", () => {
+        it("should not detect when executed volume equals visible liquidity", () => {
             const baseTime = Date.now();
             const price = 100.0;
-            const largeSize = 25; // Large institutional size
-            
-            // Institutional pattern
-            for (let i = 0; i < 6; i++) {
-                const trade: EnrichedTradeEvent = {
-                    symbol: "LTCUSDT",
-                    price: price + (i * 0.001), // Slight price progression
-                    quantity: largeSize + (i * 2), // Varying large sizes
-                    timestamp: baseTime + (i * 12000),
-                    buyerIsMaker: false,
-                    tradeId: 1000 + i,
-                    orderData: {
-                        passive: { buy: 200, sell: 0 },
-                        aggressive: { buy: largeSize, sell: 0 },
-                        imbalance: { buy: 0.8, sell: 0.2 },
-                        refill: { buy: false, sell: false },
-                    },
-                    derivedMetrics: {
-                        isAbsorption: false,
-                        absorptionStrength: 0,
-                        marketPressure: 0.2,
-                        liquidityImpact: 0.1,
-                    },
-                };
 
-                detector.onEnrichedTrade(trade);
-            }
+            // Create depth snapshot with sufficient visible liquidity
+            const depthSnapshot = new Map<number, PassiveLevel>();
+            depthSnapshot.set(price, {
+                price,
+                bid: 50,
+                ask: 50, // Enough visible liquidity
+                timestamp: baseTime,
+            });
 
+            // Market buy order that executes exactly what was visible
+            const trade: EnrichedTradeEvent = {
+                symbol: "LTCUSDT",
+                price,
+                quantity: 25, // Less than visible ask (50)
+                timestamp: baseTime,
+                buyerIsMaker: false,
+                tradeId: "1001",
+                pair: "LTCUSDT",
+                originalTrade: {} as any,
+                passiveBidVolume: 50,
+                passiveAskVolume: 50,
+                zonePassiveBidVolume: 50,
+                zonePassiveAskVolume: 50,
+                depthSnapshot,
+                bestBid: 99.99,
+                bestAsk: 100.01,
+            };
+
+            detector.onEnrichedTrade(trade);
+
+            // Should not detect hidden order
             const detectedOrders = detector.getDetectedHiddenOrders();
-            if (detectedOrders.length > 0) {
-                const order = detectedOrders[0];
-                expect(order.type).toBe("institutional_stealth");
-                expect(order.averageTradeSize).toBeGreaterThan(20);
-                expect(order.totalVolume).toBeGreaterThan(100);
-            }
+            expect(detectedOrders.length).toBe(0);
+        });
+
+        it("should handle market sell orders correctly", () => {
+            const baseTime = Date.now();
+            const price = 100.0;
+
+            // Create depth snapshot
+            const depthSnapshot = new Map<number, PassiveLevel>();
+            depthSnapshot.set(price, {
+                price,
+                bid: 10, // Only 10 visible on bid
+                ask: 40,
+                timestamp: baseTime,
+            });
+
+            // Market sell order hitting bids
+            const trade: EnrichedTradeEvent = {
+                symbol: "LTCUSDT",
+                price,
+                quantity: 60, // Executed 60 but only 10 visible on bid
+                timestamp: baseTime,
+                buyerIsMaker: true, // Market sell order (seller is taker, buyer is maker)
+                tradeId: "1002",
+                pair: "LTCUSDT",
+                originalTrade: {} as any,
+                passiveBidVolume: 10,
+                passiveAskVolume: 40,
+                zonePassiveBidVolume: 10,
+                zonePassiveAskVolume: 40,
+                depthSnapshot,
+                bestBid: 99.99,
+                bestAsk: 100.01,
+            };
+
+            detector.onEnrichedTrade(trade);
+
+            // Should detect hidden order on sell side
+            const detectedOrders = detector.getDetectedHiddenOrders();
+            expect(detectedOrders.length).toBe(1);
+
+            const hiddenOrder = detectedOrders[0];
+            expect(hiddenOrder.side).toBe("sell");
+            expect(hiddenOrder.executedVolume).toBe(60);
+            expect(hiddenOrder.visibleVolume).toBe(10);
+            expect(hiddenOrder.hiddenVolume).toBe(50);
+        });
+
+        it("should not detect when hidden volume is below minimum threshold", () => {
+            const baseTime = Date.now();
+            const price = 100.0;
+
+            const depthSnapshot = new Map<number, PassiveLevel>();
+            depthSnapshot.set(price, {
+                price,
+                bid: 20,
+                ask: 18, // Close to executed volume
+                timestamp: baseTime,
+            });
+
+            // Small hidden volume (below 10 threshold)
+            const trade: EnrichedTradeEvent = {
+                symbol: "LTCUSDT",
+                price,
+                quantity: 25, // Only 7 hidden (25-18)
+                timestamp: baseTime,
+                buyerIsMaker: false,
+                tradeId: "1003",
+                pair: "LTCUSDT",
+                originalTrade: {} as any,
+                passiveBidVolume: 20,
+                passiveAskVolume: 18,
+                zonePassiveBidVolume: 20,
+                zonePassiveAskVolume: 18,
+                depthSnapshot,
+                bestBid: 99.99,
+                bestAsk: 100.01,
+            };
+
+            detector.onEnrichedTrade(trade);
+
+            // Should not detect due to small hidden volume
+            const detectedOrders = detector.getDetectedHiddenOrders();
+            expect(detectedOrders.length).toBe(0);
+        });
+
+        it("should not detect when trade size is below minimum", () => {
+            const baseTime = Date.now();
+            const price = 100.0;
+
+            const depthSnapshot = new Map<number, PassiveLevel>();
+            depthSnapshot.set(price, {
+                price,
+                bid: 10,
+                ask: 0, // No visible liquidity
+                timestamp: baseTime,
+            });
+
+            // Small trade size (below 5 threshold)
+            const trade: EnrichedTradeEvent = {
+                symbol: "LTCUSDT",
+                price,
+                quantity: 3, // Below minTradeSize
+                timestamp: baseTime,
+                buyerIsMaker: false,
+                tradeId: "1004",
+                pair: "LTCUSDT",
+                originalTrade: {} as any,
+                passiveBidVolume: 10,
+                passiveAskVolume: 0,
+                zonePassiveBidVolume: 10,
+                zonePassiveAskVolume: 0,
+                depthSnapshot,
+                bestBid: 99.99,
+                bestAsk: 100.01,
+            };
+
+            detector.onEnrichedTrade(trade);
+
+            // Should not detect due to small trade size
+            const detectedOrders = detector.getDetectedHiddenOrders();
+            expect(detectedOrders.length).toBe(0);
+        });
+
+        it("should require depth snapshot to analyze", () => {
+            const baseTime = Date.now();
+            const price = 100.0;
+
+            // Trade without depth snapshot
+            const trade: EnrichedTradeEvent = {
+                symbol: "LTCUSDT",
+                price,
+                quantity: 50,
+                timestamp: baseTime,
+                buyerIsMaker: false,
+                tradeId: "1005",
+                pair: "LTCUSDT",
+                originalTrade: {} as any,
+                passiveBidVolume: 0,
+                passiveAskVolume: 0,
+                zonePassiveBidVolume: 0,
+                zonePassiveAskVolume: 0,
+                // No depthSnapshot
+                bestBid: 99.99,
+                bestAsk: 100.01,
+            };
+
+            detector.onEnrichedTrade(trade);
+
+            // Should not detect without depth data
+            const detectedOrders = detector.getDetectedHiddenOrders();
+            expect(detectedOrders.length).toBe(0);
+        });
+
+        it("should handle price tolerance for order book matching", () => {
+            const baseTime = Date.now();
+            const price = 100.0;
+
+            const depthSnapshot = new Map<number, PassiveLevel>();
+            depthSnapshot.set(price, {
+                price,
+                bid: 30,
+                ask: 5, // Limited ask liquidity
+                timestamp: baseTime,
+            });
+
+            const trade: EnrichedTradeEvent = {
+                symbol: "LTCUSDT",
+                price,
+                quantity: 50, // Larger trade for higher confidence
+                timestamp: baseTime,
+                buyerIsMaker: false,
+                tradeId: "1006",
+                pair: "LTCUSDT",
+                originalTrade: {} as any,
+                passiveBidVolume: 30,
+                passiveAskVolume: 5,
+                zonePassiveBidVolume: 30,
+                zonePassiveAskVolume: 5,
+                depthSnapshot,
+                bestBid: 99.99,
+                bestAsk: 100.01,
+            };
+
+            detector.onEnrichedTrade(trade);
+
+            // Should find nearby price level within tolerance
+            const detectedOrders = detector.getDetectedHiddenOrders();
+            expect(detectedOrders.length).toBe(1);
+
+            const hiddenOrder = detectedOrders[0];
+            expect(hiddenOrder.hiddenVolume).toBe(45); // 50 - 5 (visible ask)
         });
     });
 
@@ -324,110 +337,168 @@ describe("services/HiddenOrderDetector", () => {
 
             const baseTime = Date.now();
             const price = 100.0;
-            const size = 15;
-            
-            // Create stealth pattern
-            for (let i = 0; i < 6; i++) {
-                const trade: EnrichedTradeEvent = {
-                    symbol: "LTCUSDT",
-                    price,
-                    quantity: size,
-                    timestamp: baseTime + (i * 8000),
-                    buyerIsMaker: false,
-                    tradeId: 1000 + i,
-                    orderData: {
-                        passive: { buy: 100, sell: 0 },
-                        aggressive: { buy: size, sell: 0 },
-                        imbalance: { buy: 0.9, sell: 0.1 },
-                        refill: { buy: false, sell: false },
-                    },
-                    derivedMetrics: {
-                        isAbsorption: false,
-                        absorptionStrength: 0,
-                        marketPressure: 0.05,
-                        liquidityImpact: 0.02,
-                    },
-                };
 
-                detector.onEnrichedTrade(trade);
-            }
+            const depthSnapshot = new Map<number, PassiveLevel>();
+            depthSnapshot.set(price, {
+                price,
+                bid: 30,
+                ask: 10,
+                timestamp: baseTime,
+            });
 
-            // Should emit zoneUpdated event for hidden order zone
-            expect(mockEmit).toHaveBeenCalledWith("zoneUpdated", expect.objectContaining({
-                updateType: "zone_created",
-                zone: expect.objectContaining({
-                    type: "hidden_liquidity",
-                    priceRange: expect.objectContaining({
-                        min: expect.any(Number),
-                        max: expect.any(Number),
+            const trade: EnrichedTradeEvent = {
+                symbol: "LTCUSDT",
+                price,
+                quantity: 60, // Large hidden volume
+                timestamp: baseTime,
+                buyerIsMaker: false,
+                tradeId: "1007",
+                pair: "LTCUSDT",
+                originalTrade: {} as any,
+                passiveBidVolume: 30,
+                passiveAskVolume: 10,
+                zonePassiveBidVolume: 30,
+                zonePassiveAskVolume: 10,
+                depthSnapshot,
+                bestBid: 99.99,
+                bestAsk: 100.01,
+            };
+
+            detector.onEnrichedTrade(trade);
+
+            // Should emit zoneUpdated event
+            expect(mockEmit).toHaveBeenCalledWith(
+                "zoneUpdated",
+                expect.objectContaining({
+                    updateType: "zone_created",
+                    zone: expect.objectContaining({
+                        type: "hidden_liquidity",
+                        priceRange: expect.objectContaining({
+                            min: expect.any(Number),
+                            max: expect.any(Number),
+                        }),
+                        executedVolume: 60,
+                        visibleVolume: 10,
+                        hiddenVolume: 50,
+                        side: "buy",
+                        completion: 1.0,
                     }),
-                    strength: expect.any(Number),
-                    completion: 1.0,
-                    stealthType: expect.stringMatching(/^(reserve_order|stealth_liquidity|algorithmic_hidden|institutional_stealth)$/),
-                }),
-                significance: expect.stringMatching(/^(low|medium|high)$/),
-            }));
+                    significance: "high", // High confidence should result in high significance
+                })
+            );
         });
     });
 
     describe("Statistics and Status", () => {
         it("should provide accurate statistics", () => {
             const stats = detector.getStatistics();
-            
+
             expect(stats).toEqual({
-                activeCandidates: 0,
-                detectedHiddenOrders: 0,
-                avgStealthScore: 0,
+                totalHiddenOrders: 0,
+                avgHiddenVolume: 0,
+                avgHiddenPercentage: 0,
                 avgConfidence: 0,
-                totalVolumeDetected: 0,
-                detectionsByType: {},
+                totalHiddenVolumeDetected: 0,
+                detectionsByConfidence: {
+                    high: 0,
+                    medium: 0,
+                    low: 0,
+                },
             });
         });
 
         it("should provide status string", () => {
             const status = detector.getStatus();
-            expect(status).toContain("Active:");
-            expect(status).toContain("candidates");
-            expect(status).toContain("detected");
+            expect(status).toContain("Detected:");
+            expect(status).toContain("hidden orders");
+            expect(status).toContain("avg hidden:");
+        });
+
+        it("should calculate statistics after detections", () => {
+            const baseTime = Date.now();
+            const price = 100.0;
+
+            const depthSnapshot = new Map<number, PassiveLevel>();
+            depthSnapshot.set(price, {
+                price,
+                bid: 20,
+                ask: 5,
+                timestamp: baseTime,
+            });
+
+            // Create multiple hidden orders
+            for (let i = 0; i < 3; i++) {
+                const trade: EnrichedTradeEvent = {
+                    symbol: "LTCUSDT",
+                    price,
+                    quantity: 50 + i * 20, // Larger trades to meet confidence thresholds
+                    timestamp: baseTime + i * 1000,
+                    buyerIsMaker: false,
+                    tradeId: `100${i}`,
+                    pair: "LTCUSDT",
+                    originalTrade: {} as any,
+                    passiveBidVolume: 20,
+                    passiveAskVolume: 5,
+                    zonePassiveBidVolume: 20,
+                    zonePassiveAskVolume: 5,
+                    depthSnapshot,
+                    bestBid: 99.99,
+                    bestAsk: 100.01,
+                };
+
+                detector.onEnrichedTrade(trade);
+            }
+
+            const stats = detector.getStatistics();
+            expect(stats.totalHiddenOrders).toBeGreaterThanOrEqual(2); // At least 2 should pass confidence thresholds
+            expect(stats.avgHiddenVolume).toBeGreaterThan(0);
+            expect(stats.totalHiddenVolumeDetected).toBeGreaterThan(0);
         });
     });
 
     describe("Data Cleanup", () => {
-        it("should clean up expired data", () => {
+        it("should clean up old events", () => {
             const baseTime = Date.now();
             const price = 100.0;
-            const size = 10;
-            
+
+            const depthSnapshot = new Map<number, PassiveLevel>();
+            depthSnapshot.set(price, {
+                price,
+                bid: 20,
+                ask: 5,
+                timestamp: baseTime,
+            });
+
             // Add some data
             const trade: EnrichedTradeEvent = {
                 symbol: "LTCUSDT",
                 price,
-                quantity: size,
+                quantity: 30,
                 timestamp: baseTime,
                 buyerIsMaker: false,
-                tradeId: 1000,
-                orderData: {
-                    passive: { buy: 100, sell: 0 },
-                    aggressive: { buy: size, sell: 0 },
-                    imbalance: { buy: 0.8, sell: 0.2 },
-                    refill: { buy: false, sell: false },
-                },
-                derivedMetrics: {
-                    isAbsorption: false,
-                    absorptionStrength: 0,
-                    marketPressure: 0.1,
-                    liquidityImpact: 0.05,
-                },
+                tradeId: "1000",
+                pair: "LTCUSDT",
+                originalTrade: {} as any,
+                passiveBidVolume: 20,
+                passiveAskVolume: 5,
+                zonePassiveBidVolume: 20,
+                zonePassiveAskVolume: 5,
+                depthSnapshot,
+                bestBid: 99.99,
+                bestAsk: 100.01,
             };
 
             detector.onEnrichedTrade(trade);
 
-            // Advance time beyond tracking window (3 minutes)
-            vi.advanceTimersByTime(200000); // 3.3 minutes
+            // Verify detection
+            expect(detector.getDetectedHiddenOrders().length).toBe(1);
+
+            // Advance time beyond cleanup window (5 minutes)
+            vi.advanceTimersByTime(350000); // 5.8 minutes
 
             // Data should be cleaned up
-            const candidates = detector.getActiveCandidates();
-            expect(candidates.length).toBe(0);
+            const remainingOrders = detector.getDetectedHiddenOrders();
+            expect(remainingOrders.length).toBe(0);
         });
     });
 
@@ -440,8 +511,7 @@ describe("services/HiddenOrderDetector", () => {
                 timestamp: NaN,
                 buyerIsMaker: false,
                 tradeId: -1,
-                orderData: undefined,
-                derivedMetrics: null,
+                depthSnapshot: undefined,
             } as any;
 
             // Should not throw error
@@ -449,9 +519,47 @@ describe("services/HiddenOrderDetector", () => {
                 detector.onEnrichedTrade(invalidTrade);
             }).not.toThrow();
 
-            // Should not create candidates
-            const candidates = detector.getActiveCandidates();
-            expect(candidates.length).toBe(0);
+            // Should not create detections
+            const detectedOrders = detector.getDetectedHiddenOrders();
+            expect(detectedOrders.length).toBe(0);
+        });
+
+        it("should handle stale depth snapshots", () => {
+            const baseTime = Date.now();
+            const price = 100.0;
+
+            // Create stale depth snapshot
+            const depthSnapshot = new Map<number, PassiveLevel>();
+            depthSnapshot.set(price, {
+                price,
+                bid: 20,
+                ask: 5,
+                timestamp: baseTime - 2000, // 2 seconds old (exceeds 1 second limit)
+            });
+
+            const trade: EnrichedTradeEvent = {
+                symbol: "LTCUSDT",
+                price,
+                quantity: 30,
+                timestamp: baseTime,
+                buyerIsMaker: false,
+                tradeId: "1000",
+                pair: "LTCUSDT",
+                originalTrade: {} as any,
+                passiveBidVolume: 20,
+                passiveAskVolume: 5,
+                zonePassiveBidVolume: 20,
+                zonePassiveAskVolume: 5,
+                depthSnapshot,
+                bestBid: 99.99,
+                bestAsk: 100.01,
+            };
+
+            detector.onEnrichedTrade(trade);
+
+            // Should not detect due to stale depth data
+            const detectedOrders = detector.getDetectedHiddenOrders();
+            expect(detectedOrders.length).toBe(0);
         });
     });
 });

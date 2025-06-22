@@ -6,7 +6,11 @@ export class IcebergDetector {
     }
 
     onEnrichedTrade = vi.fn();
-    getStatus = vi.fn().mockReturnValue("Active: 0 candidates, 0 completed (avg confidence: 0.0%)");
+    getStatus = vi
+        .fn()
+        .mockReturnValue(
+            "Active: 0 candidates, 0 completed (avg confidence: 0.0%)"
+        );
     markSignalConfirmed = vi.fn();
     getActiveCandidates = vi.fn().mockReturnValue([]);
     getCompletedIcebergs = vi.fn().mockReturnValue([]);

@@ -842,29 +842,13 @@ export class Config {
     static get HIDDEN_ORDER_DETECTOR(): Partial<HiddenOrderDetectorConfig> {
         const hiddenOrderConfig = cfg.symbols[cfg.symbol]?.hiddenOrderDetector;
         return {
+            minHiddenVolume: Number(hiddenOrderConfig?.minHiddenVolume ?? 10),
             minTradeSize: Number(hiddenOrderConfig?.minTradeSize ?? 5),
-            maxTradeGapMs: Number(hiddenOrderConfig?.maxTradeGapMs ?? 10000),
-            minTradeSequence: Number(hiddenOrderConfig?.minTradeSequence ?? 4),
-            priceDeviationTolerance: Number(
-                hiddenOrderConfig?.priceDeviationTolerance ?? 0.002
-            ),
-            volumeConcentrationThreshold: Number(
-                hiddenOrderConfig?.volumeConcentrationThreshold ?? 0.7
-            ),
-            minCumulativeVolume: Number(
-                hiddenOrderConfig?.minCumulativeVolume ?? 30
-            ),
-            trackingWindowMs: Number(
-                hiddenOrderConfig?.trackingWindowMs ?? 180000
-            ),
-            maxActiveCandidates: Number(
-                hiddenOrderConfig?.maxActiveCandidates ?? 15
-            ),
-            stealthThreshold: Number(
-                hiddenOrderConfig?.stealthThreshold ?? 0.8
-            ),
-            reserveActivationDistance: Number(
-                hiddenOrderConfig?.reserveActivationDistance ?? 0.001
+            priceTolerance: Number(hiddenOrderConfig?.priceTolerance ?? 0.0001),
+            maxDepthAgeMs: Number(hiddenOrderConfig?.maxDepthAgeMs ?? 1000),
+            minConfidence: Number(hiddenOrderConfig?.minConfidence ?? 0.8),
+            zoneHeightPercentage: Number(
+                hiddenOrderConfig?.zoneHeightPercentage ?? 0.002
             ),
         };
     }
