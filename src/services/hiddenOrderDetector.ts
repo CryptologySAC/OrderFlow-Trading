@@ -131,12 +131,16 @@ export class HiddenOrderDetector extends Detector {
                 return;
             }
 
-            // Check depth snapshot age
-            const depthAge =
-                trade.timestamp -
-                (trade.depthSnapshot.get(trade.price)?.timestamp || 0);
-            if (depthAge > this.config.maxDepthAgeMs) {
-                return;
+            // Check depth snapshot age if a nearby level exists
+            const levelTimestamp = this.getClosestDepthLevelTimestamp(
+                trade.depthSnapshot,
+                trade.price
+            );
+            if (levelTimestamp !== undefined) {
+                const depthAge = trade.timestamp - levelTimestamp;
+                if (depthAge > this.config.maxDepthAgeMs) {
+                    return;
+                }
             }
 
             // Analyze for hidden order
@@ -242,6 +246,32 @@ export class HiddenOrderDetector extends Detector {
 
         // No visible liquidity found at this price
         return 0;
+    }
+
+    /**
+     * Get timestamp of the closest depth level within price tolerance
+     */
+    private getClosestDepthLevelTimestamp(
+        depthSnapshot: Map<number, PassiveLevel>,
+        price: number
+    ): number | undefined {
+        const exactLevel = depthSnapshot.get(price);
+        if (exactLevel) {
+            return exactLevel.timestamp;
+        }
+
+        const tolerance = price * this.config.priceTolerance;
+        let nearest: PassiveLevel | undefined;
+        let minDiff = tolerance;
+        for (const [levelPrice, level] of depthSnapshot) {
+            const diff = Math.abs(levelPrice - price);
+            if (diff <= tolerance && diff < minDiff) {
+                nearest = level;
+                minDiff = diff;
+            }
+        }
+
+        return nearest?.timestamp;
     }
 
     /**
