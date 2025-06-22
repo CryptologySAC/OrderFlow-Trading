@@ -448,16 +448,24 @@ export class SpoofingDetector extends EventEmitter {
         };
 
         // Emit zone update for dashboard visualization
-        this.emit("zoneUpdated", {
-            updateType: "zone_created",
-            zone: spoofingZone,
-            significance:
-                spoofingEvent.confidence > 0.8
-                    ? "high"
-                    : spoofingEvent.confidence > 0.6
-                      ? "medium"
-                      : "low",
-        });
+        try {
+            this.emit("zoneUpdated", {
+                updateType: "zone_created",
+                zone: spoofingZone,
+                significance:
+                    spoofingEvent.confidence > 0.8
+                        ? "high"
+                        : spoofingEvent.confidence > 0.6
+                          ? "medium"
+                          : "low",
+            });
+        } catch (err) {
+            this.logger?.error?.("Failed to emit spoofing zone", {
+                component: "SpoofingDetector",
+                operation: "emitSpoofingZone",
+                error: err instanceof Error ? err.message : String(err),
+            });
+        }
 
         this.logger?.info?.("Spoofing zone created", {
             component: "SpoofingDetector",
