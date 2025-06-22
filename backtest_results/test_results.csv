@@ -1,0 +1,4 @@
+configId,detectorType,duration,totalSignals,totalMovements,success,error
+deltacvd_conservative,deltaCVDDetector,0,0,0,false,Cannot read properties of undefined (reading 'createCounter')
+deltacvd_balanced,deltaCVDDetector,0,0,0,false,Cannot read properties of undefined (reading 'createCounter')
+deltacvd_aggressive,deltaCVDDetector,0,0,0,false,Cannot read properties of undefined (reading 'createCounter')
