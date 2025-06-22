@@ -58,6 +58,10 @@ export interface IcebergEvent {
     firstSeen: number;
     lastRefill: number;
     priceStability: number;
+    /** Average time gap between refills */
+    avgRefillGap: number;
+    /** Temporal consistency score used in confidence calculation */
+    temporalScore: number;
     confidence: number;
     institutionalScore: number;
     completionStatus: "active" | "completed" | "abandoned";
@@ -80,6 +84,8 @@ export interface IcebergZone {
     side: "buy" | "sell";
     institutionalScore: number;
     priceStability: number;
+    avgRefillGap: number;
+    temporalScore: number;
 }
 
 interface IcebergCandidate {
@@ -358,8 +364,13 @@ export class IcebergDetector extends Detector {
             sizes.reduce((sum, size) => sum + size, 0) / sizes.length;
         const sizeVariation = this.calculateSizeVariation(sizes, avgSize);
 
-        // Calculate temporal consistency (not used currently but ready for future enhancements)
-        this.calculateTimeGaps(pieces);
+        // Calculate temporal consistency between refills
+        const timeGaps = this.calculateTimeGaps(pieces);
+        const temporalScore = this.calculateTemporalScore(timeGaps);
+        const avgRefillGap =
+            timeGaps.length > 0
+                ? timeGaps.reduce((sum, g) => sum + g, 0) / timeGaps.length
+                : 0;
 
         // Calculate price stability (all pieces should be at same price)
         const priceStability = 1.0; // Perfect stability since all at same price level
@@ -376,7 +387,8 @@ export class IcebergDetector extends Detector {
             priceStability,
             institutionalScore,
             pieces.length,
-            candidate.totalExecuted
+            candidate.totalExecuted,
+            temporalScore
         );
 
         // Check if this qualifies as an iceberg
@@ -386,7 +398,9 @@ export class IcebergDetector extends Detector {
                 avgSize,
                 sizeVariation,
                 confidence,
-                institutionalScore
+                institutionalScore,
+                avgRefillGap,
+                temporalScore
             );
             this.activeCandidates.delete(candidate.id);
         }
@@ -414,6 +428,21 @@ export class IcebergDetector extends Detector {
             gaps.push(pieces[i].timestamp - pieces[i - 1].timestamp);
         }
         return gaps;
+    }
+
+    /**
+     * Calculate temporal consistency score from refill gaps
+     */
+    private calculateTemporalScore(gaps: number[]): number {
+        if (gaps.length === 0) return 1;
+
+        const avgGap = gaps.reduce((sum, g) => sum + g, 0) / gaps.length;
+        const variation = this.calculateSizeVariation(gaps, avgGap);
+
+        const avgScore = Math.max(0, 1 - avgGap / this.config.maxRefillTimeMs);
+        const variationScore = Math.max(0, 1 - variation);
+
+        return avgScore * 0.7 + variationScore * 0.3;
     }
 
     /**
@@ -460,7 +489,8 @@ export class IcebergDetector extends Detector {
         priceStability: number,
         institutionalScore: number,
         pieceCount: number,
-        totalSize: number
+        totalSize: number,
+        temporalScore: number
     ): number {
         // Size consistency component (lower variation = higher confidence)
         const sizeConsistency = Math.max(
@@ -479,11 +509,12 @@ export class IcebergDetector extends Detector {
 
         // Weighted average
         return (
-            sizeConsistency * 0.4 +
+            sizeConsistency * 0.35 +
             priceStability * 0.2 +
             institutionalScore * 0.2 +
             pieceCountScore * 0.1 +
-            sizeScore * 0.1
+            sizeScore * 0.1 +
+            temporalScore * 0.05
         );
     }
 
@@ -511,7 +542,9 @@ export class IcebergDetector extends Detector {
         avgSize: number,
         sizeVariation: number,
         confidence: number,
-        institutionalScore: number
+        institutionalScore: number,
+        avgRefillGap: number,
+        temporalScore: number
     ): void {
         const icebergEvent: IcebergEvent = {
             id: candidate.id,
@@ -523,6 +556,8 @@ export class IcebergDetector extends Detector {
             firstSeen: candidate.firstSeen,
             lastRefill: candidate.lastActivity,
             priceStability: 1.0, // Perfect since all at same price
+            avgRefillGap,
+            temporalScore,
             confidence,
             institutionalScore,
             completionStatus: "completed",
@@ -557,6 +592,8 @@ export class IcebergDetector extends Detector {
                     priceStability: 1.0,
                     sizeVariation,
                     duration: candidate.lastActivity - candidate.firstSeen,
+                    avgRefillGap,
+                    temporalScore,
                 },
                 meta: {
                     icebergDetected: true,
@@ -609,6 +646,8 @@ export class IcebergDetector extends Detector {
             side: candidate.side,
             institutionalScore,
             priceStability: 1.0,
+            avgRefillGap,
+            temporalScore,
         };
 
         // Emit zone update for dashboard visualization
