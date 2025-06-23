@@ -59,6 +59,9 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
     // Performance optimization: Cache tree size to avoid O(n) size() calls
     private cachedSize = 0;
 
+    // Backtesting support
+    private readonly disableSequenceValidation: boolean;
+
     constructor(
         options: OrderBookStateOptions,
         logger: ILogger,
@@ -80,6 +83,8 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
         this.pruneIntervalMs = options.pruneIntervalMs ?? 30000; // 30 seconds
         this.maxErrorRate = options.maxErrorRate ?? 10;
         this.staleThresholdMs = options.staleThresholdMs ?? 300000; // 5 minutes
+        this.disableSequenceValidation =
+            options.disableSequenceValidation ?? false;
 
         // Start pruning timer
         this.startPruneTimer();
@@ -109,15 +114,20 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
                 return;
             }
 
-            // Validate update sequence - ignore outdated updates
-            if (
-                update.u &&
-                this.lastUpdateId &&
-                update.u <= this.lastUpdateId
-            ) {
-                return; // Skip duplicate/out-of-date update
+            // Validate update sequence - ignore outdated updates (skip in backtesting mode)
+            if (!this.disableSequenceValidation) {
+                if (
+                    update.u &&
+                    this.lastUpdateId &&
+                    update.u <= this.lastUpdateId
+                ) {
+                    return; // Skip duplicate/out-of-date update
+                }
+                this.lastUpdateId = update.u ?? this.lastUpdateId;
+            } else {
+                // Backtesting mode: Accept all updates without sequence validation
+                this.lastUpdateId = update.u ?? this.lastUpdateId;
             }
-            this.lastUpdateId = update.u ?? this.lastUpdateId;
 
             const bids = (update.b as [string, string][]) || [];
             const asks = (update.a as [string, string][]) || [];
@@ -396,6 +406,7 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
             this.logger.info("Starting RedBlackTreeOrderBook recovery", {
                 symbol: this.symbol,
                 component: "RedBlackTreeOrderBook",
+                backtestingMode: this.disableSequenceValidation,
             });
 
             // Reset state
@@ -404,19 +415,35 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
             this.isInitialized = false;
             this.snapshotBuffer = [];
 
-            // Fetch initial snapshot
-            await this.fetchInitialOrderBook();
+            // BACKTESTING SUPPORT: Skip live snapshot fetch when in backtesting mode
+            if (this.disableSequenceValidation) {
+                // Backtesting mode: Initialize empty order book that will be populated by simulated depth updates
+                this.logger.info(
+                    "Backtesting mode detected - initializing empty order book",
+                    {
+                        symbol: this.symbol,
+                        component: "RedBlackTreeOrderBook",
+                    }
+                );
+                this.isInitialized = true;
+                this.lastUpdateTime = Date.now();
+                this.lastUpdateId = 0; // Start from 0 for backtesting
+            } else {
+                // Production mode: Fetch initial snapshot from live market
+                await this.fetchInitialOrderBook();
 
-            // Process any buffered updates
-            this.processBufferedUpdates();
+                // Process any buffered updates
+                this.processBufferedUpdates();
 
-            this.isInitialized = true;
-            this.lastUpdateTime = Date.now();
+                this.isInitialized = true;
+                this.lastUpdateTime = Date.now();
+            }
 
             this.logger.info("RedBlackTreeOrderBook recovery completed", {
                 symbol: this.symbol,
                 levels: this.cachedSize,
                 component: "RedBlackTreeOrderBook",
+                backtestingMode: this.disableSequenceValidation,
             });
         } catch (error) {
             this.handleError(error as Error, "RedBlackTreeOrderBook.recover");

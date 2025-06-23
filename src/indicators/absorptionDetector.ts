@@ -340,7 +340,21 @@ export class AbsorptionDetector
         if (this.features.liquidityGradient) {
             this.updateLiquidityLayers(event);
         }
-        void event;
+
+        // 🚨 CRITICAL FIX: Add missing signal detection and emission logic
+        // Convert EnrichedTradeEvent to AggressiveTrade for absorption analysis
+        const aggressiveTrade: AggressiveTrade = {
+            tradeId: event.tradeId,
+            pair: event.pair,
+            price: event.price,
+            quantity: event.quantity,
+            timestamp: event.timestamp,
+            buyerIsMaker: event.buyerIsMaker,
+            originalTrade: event.originalTrade,
+        };
+
+        // Perform absorption signal detection
+        this.checkForSignal(aggressiveTrade);
     }
 
     private calculateAbsorptionScore(conditions: AbsorptionConditions): number {

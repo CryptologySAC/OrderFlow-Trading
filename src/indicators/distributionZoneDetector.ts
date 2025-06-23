@@ -175,6 +175,20 @@ export class DistributionZoneDetector extends ZoneDetector {
             `${id}_distribution`
         );
 
+        // Forward zone manager events (CRITICAL FIX: enables signal emission)
+        this.zoneManager.on("zoneCreated", (zone) =>
+            this.emit("zoneCreated", zone)
+        );
+        this.zoneManager.on("zoneUpdated", (update) =>
+            this.emit("zoneUpdated", update)
+        );
+        this.zoneManager.on("zoneCompleted", (zone) =>
+            this.emit("zoneCompleted", zone)
+        );
+        this.zoneManager.on("zoneInvalidated", (update) =>
+            this.emit("zoneInvalidated", update)
+        );
+
         this.logger.info("DistributionZoneDetector initialized", {
             component: "DistributionZoneDetector",
             symbol: this.symbol,
