@@ -68,7 +68,7 @@ import {
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
-import { DetectorUtils } from "./base/detectorUtils.js";
+// DetectorUtils removed in favor of internal safe calculation methods
 import { RollingWindow } from "../utils/rollingWindow.js";
 import { ObjectPool } from "../utils/objectPool.js";
 import { CircularBuffer } from "../utils/circularBuffer.js";
@@ -216,9 +216,87 @@ export class AccumulationZoneDetector extends ZoneDetector {
     }
 
     /**
+     * 🔧 FIX: Numeric validation helper to prevent NaN/Infinity propagation
+     */
+    private validateNumeric(value: number, fallback: number): number {
+        return isFinite(value) && !isNaN(value) && value !== 0
+            ? value
+            : fallback;
+    }
+
+    /**
+     * 🔧 FIX: Safe division helper to prevent division by zero
+     */
+    private safeDivision(
+        numerator: number,
+        denominator: number,
+        fallback: number = 0
+    ): number {
+        if (
+            !isFinite(numerator) ||
+            !isFinite(denominator) ||
+            denominator === 0
+        ) {
+            return fallback;
+        }
+        const result = numerator / denominator;
+        return isFinite(result) ? result : fallback;
+    }
+
+    /**
+     * 🔧 FIX: Safe mean calculation to replace DetectorUtils.calculateMean
+     */
+    private safeMean(values: number[]): number {
+        if (!values || values.length === 0) {
+            return 0;
+        }
+
+        let sum = 0;
+        let validCount = 0;
+
+        for (const value of values) {
+            if (isFinite(value) && !isNaN(value)) {
+                sum += value;
+                validCount++;
+            }
+        }
+
+        return validCount > 0 ? sum / validCount : 0;
+    }
+
+    /**
      * Main analysis method - processes trade and returns zone updates/signals
      */
     public analyze(trade: EnrichedTradeEvent): ZoneAnalysisResult {
+        // 🔧 FIX: Add comprehensive input validation
+        const validPrice = this.validateNumeric(trade.price, 0);
+        if (validPrice === 0) {
+            this.logger.warn(
+                "[AccumulationZoneDetector] Invalid price detected, skipping trade",
+                {
+                    price: trade.price,
+                    tradeId: trade.tradeId,
+                }
+            );
+            return { updates: [], signals: [], activeZones: [] };
+        }
+
+        const validQuantity = this.validateNumeric(trade.quantity, 0);
+        if (validQuantity === 0) {
+            this.logger.warn(
+                "[AccumulationZoneDetector] Invalid quantity detected, skipping trade",
+                {
+                    quantity: trade.quantity,
+                    tradeId: trade.tradeId,
+                }
+            );
+            return { updates: [], signals: [], activeZones: [] };
+        }
+
+        // Validate passive volume values (reserved for future use)
+        // const validBidVolume = Math.max(0, trade.zonePassiveBidVolume || 0);
+        // const validAskVolume = Math.max(0, trade.zonePassiveAskVolume || 0);
+
         const updates: ZoneUpdate[] = [];
         const signals: ZoneSignal[] = [];
 
@@ -407,9 +485,8 @@ export class AccumulationZoneDetector extends ZoneDetector {
         const priceRange =
             Math.max(...recentTrades.map((t) => t.price)) -
             Math.min(...recentTrades.map((t) => t.price));
-        const avgPrice = DetectorUtils.calculateMean(
-            recentTrades.map((t) => t.price)
-        );
+        // 🔧 FIX: Replace DetectorUtils.calculateMean with safe internal method
+        const avgPrice = this.safeMean(recentTrades.map((t) => t.price));
 
         if (avgPrice > 0) {
             const priceStability = 1 - priceRange / avgPrice;
@@ -450,7 +527,8 @@ export class AccumulationZoneDetector extends ZoneDetector {
             }
 
             // CRITICAL FIX: Must show ABSORPTION pattern (high sell ratio being absorbed)
-            const sellRatio = DetectorUtils.safeDivide(
+            // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
+            const sellRatio = this.safeDivision(
                 candidate.sellVolume,
                 candidate.totalVolume,
                 0
@@ -470,7 +548,8 @@ export class AccumulationZoneDetector extends ZoneDetector {
             }
 
             // Must show minimal aggressive buying (avoid retail FOMO patterns)
-            const aggressiveBuyRatio = DetectorUtils.safeDivide(
+            // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
+            const aggressiveBuyRatio = this.safeDivision(
                 candidate.buyVolume,
                 candidate.totalVolume,
                 0
@@ -678,14 +757,16 @@ export class AccumulationZoneDetector extends ZoneDetector {
         currentTradeTimestamp: number
     ): number {
         // Calculate all required ratios with safe division
-        const sellRatio = DetectorUtils.safeDivide(
+        // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
+        const sellRatio = this.safeDivision(
             candidate.sellVolume,
             candidate.totalVolume,
             0
         );
 
         // FIXED: Calculate aggressive buy ratio (missing variable)
-        const aggressiveBuyRatio = DetectorUtils.safeDivide(
+        // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
+        const aggressiveBuyRatio = this.safeDivision(
             candidate.buyVolume,
             candidate.totalVolume,
             0
@@ -739,14 +820,16 @@ export class AccumulationZoneDetector extends ZoneDetector {
 
         // Accumulation score factors:
         // 1. High sell volume being absorbed (institutions buying the sells)
-        const sellAbsorptionRatio = DetectorUtils.safeDivide(
+        // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
+        const sellAbsorptionRatio = this.safeDivision(
             candidate.sellVolume,
             totalVolume,
             0
         );
 
         // 2. Minimal aggressive buying (not retail FOMO)
-        const aggressiveBuyRatio = DetectorUtils.safeDivide(
+        // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
+        const aggressiveBuyRatio = this.safeDivision(
             candidate.buyVolume,
             totalVolume,
             0
@@ -837,7 +920,8 @@ export class AccumulationZoneDetector extends ZoneDetector {
         const maxPrice = Math.max(...prices);
         const centerPrice = (minPrice + maxPrice) / 2;
 
-        const buyRatio = DetectorUtils.safeDivide(
+        // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
+        const buyRatio = this.safeDivision(
             candidate.buyVolume,
             candidate.totalVolume,
             0
@@ -849,7 +933,8 @@ export class AccumulationZoneDetector extends ZoneDetector {
                   ? "mixed"
                   : "retail";
 
-        const sellRatio = DetectorUtils.safeDivide(
+        // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
+        const sellRatio = this.safeDivision(
             candidate.sellVolume,
             candidate.totalVolume,
             0
@@ -1015,15 +1100,39 @@ export class AccumulationZoneDetector extends ZoneDetector {
     /**
      * Convert price to discrete level for candidate tracking
      * Uses standardized zone calculation for consistency
+     * 🔧 FIX: Inline zone calculation to avoid DetectorUtils dependency
      */
     private getPriceLevel(price: number): number {
-        const priceLevel = DetectorUtils.calculateZone(
-            price,
-            this.zoneTicks,
-            this.pricePrecision
-        );
+        if (
+            !isFinite(price) ||
+            isNaN(price) ||
+            price <= 0 ||
+            this.zoneTicks <= 0 ||
+            this.pricePrecision < 0
+        ) {
+            this.logger.warn(
+                "[AccumulationZoneDetector] Invalid zone calculation parameters",
+                {
+                    price,
+                    zoneTicks: this.zoneTicks,
+                    pricePrecision: this.pricePrecision,
+                }
+            );
+            return 0;
+        }
 
-        return priceLevel;
+        // Use integer arithmetic for financial precision
+        const scale = Math.pow(10, this.pricePrecision);
+        const scaledPrice = Math.round(price * scale);
+        const scaledTickSize = Math.round(
+            Math.pow(10, -this.pricePrecision) * scale
+        );
+        const scaledZoneSize = this.zoneTicks * scaledTickSize;
+
+        // Ensure consistent rounding across all detectors
+        const scaledResult =
+            Math.round(scaledPrice / scaledZoneSize) * scaledZoneSize;
+        return scaledResult / scale;
     }
 
     /**
