@@ -3,11 +3,19 @@
 import { EventEmitter } from "events";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
-import type { HealthSummary } from "../infrastructure/metricsCollector.js";
+import type {
+    HealthSummary,
+    HistogramSummary,
+    MetricMetadata,
+} from "../infrastructure/metricsCollector.js";
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import type { SignalCandidate } from "../types/signalTypes.js";
 
-import { MarketSimulator, type SimulatorConfig } from "./marketSimulator.js";
+import {
+    MarketSimulator,
+    type SimulatorConfig,
+    type DepthDataPoint,
+} from "./marketSimulator.js";
 import {
     PerformanceAnalyzer,
     type DetectorSignal,
@@ -31,6 +39,15 @@ import type { SpoofingDetectorConfig } from "../services/spoofingDetector.js";
 import type { AbsorptionSettings } from "../indicators/absorptionDetector.js";
 import type { ExhaustionSettings } from "../indicators/exhaustionDetector.js";
 import type { DeltaCVDConfirmationSettings } from "../indicators/deltaCVDConfirmation.js";
+
+// Import real production components for authentic testing
+import {
+    OrderBookState,
+    type IOrderBookState,
+} from "../market/orderBookState.js";
+import { OrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
+import type { SpotWebsocketStreams } from "@binance/spot";
+import type { ThreadManager } from "../multithreading/threadManager.js";
 
 // Generic detector interface for testing
 interface DetectorInstance {
@@ -93,6 +110,11 @@ export class DetectorTestRunner extends EventEmitter {
     // Performance tracking
     private performanceAnalyzer: PerformanceAnalyzer;
 
+    // Real production components for authentic testing
+    private realOrderBook?: IOrderBookState;
+    private realSpoofingDetector?: SpoofingDetector;
+    private preprocessor?: OrderflowPreprocessor;
+
     constructor(
         config: TestRunnerConfig,
         logger: ILogger,
@@ -103,6 +125,101 @@ export class DetectorTestRunner extends EventEmitter {
         this.logger = logger;
         this.metricsCollector = metricsCollector;
         this.performanceAnalyzer = new PerformanceAnalyzer();
+
+        // Initialize real production components for authentic testing
+        this.initializeRealComponents();
+    }
+
+    /**
+     * Initialize real production components instead of mocks
+     */
+    private initializeRealComponents(): void {
+        try {
+            // Create minimal ThreadManager mock for backtesting
+            const mockThreadManager = {
+                callStorage: <T>(): Promise<T> => Promise.resolve({} as T),
+                broadcast: () => {},
+                isInitialized: () => true,
+                shutdown: () => Promise.resolve(),
+                getWorkerStats: () => ({}),
+                requestDepthSnapshot: () =>
+                    Promise.resolve({
+                        lastUpdateId: 0,
+                        bids: [],
+                        asks: [],
+                    }),
+            } as Partial<ThreadManager>;
+
+            // Initialize real OrderBookState with production configuration
+            // but adapted for backtesting (disable sequence validation for historical data)
+            this.realOrderBook = new OrderBookState(
+                {
+                    pricePrecision: 2, // LTCUSDT uses 2 decimal places
+                    symbol: this.config.symbol,
+                    maxLevels: 1000,
+                    maxPriceDistance: 0.05, // 5% from mid price
+                    pruneIntervalMs: 30000,
+                    maxErrorRate: 1000, // Much higher tolerance for backtesting
+                    staleThresholdMs: 5000,
+                    disableSequenceValidation: true, // Disable for backtesting historical data
+                },
+                this.logger,
+                this.metricsCollector,
+                mockThreadManager as ThreadManager
+            );
+
+            // Initialize real SpoofingDetector with production configuration
+            this.realSpoofingDetector = new SpoofingDetector(
+                {
+                    tickSize: 0.01, // LTCUSDT tick size
+                    wallTicks: 5,
+                    minWallSize: 10,
+                    maxCancellationRatio: 0.8,
+                    rapidCancellationMs: 500,
+                    ghostLiquidityThresholdMs: 200,
+                },
+                this.logger
+            );
+
+            // Initialize OrderFlowPreprocessor for authentic EnrichedTradeEvent creation
+            this.preprocessor = new OrderflowPreprocessor(
+                {
+                    symbol: this.config.symbol,
+                    pricePrecision: 2,
+                    quantityPrecision: 8,
+                    bandTicks: 5,
+                    tickSize: 0.01,
+                    enableIndividualTrades: false, // Disabled for backtesting performance
+                },
+                this.realOrderBook,
+                this.logger,
+                this.metricsCollector
+            );
+
+            this.logger.info(
+                "Real production components initialized for authentic backtesting",
+                {
+                    component: "DetectorTestRunner",
+                    symbol: this.config.symbol,
+                    orderBookInitialized: !!this.realOrderBook,
+                    spoofingDetectorInitialized: !!this.realSpoofingDetector,
+                    preprocessorInitialized: !!this.preprocessor,
+                }
+            );
+        } catch (error) {
+            const errorMessage =
+                error instanceof Error ? error.message : String(error);
+            this.logger.error(
+                "Failed to initialize real production components",
+                {
+                    component: "DetectorTestRunner",
+                    error: errorMessage,
+                }
+            );
+            throw new Error(
+                `Failed to initialize real production components: ${errorMessage}`
+            );
+        }
     }
 
     /**
@@ -219,7 +336,7 @@ export class DetectorTestRunner extends EventEmitter {
             // Create detector instance
             const detector = this.createDetector(testConfig);
 
-            // Create test execution
+            // Create test execution with the execution context passed directly
             const execution: TestExecution = {
                 testId,
                 config: testConfig,
@@ -227,7 +344,9 @@ export class DetectorTestRunner extends EventEmitter {
                 detector: detector,
                 signals: [],
                 startTime: Date.now(),
-                promise: this.executeTest(testId, simulator, detector),
+                promise: Promise.resolve().then(() =>
+                    this.executeTestWithContext(testConfig, simulator, detector)
+                ),
             };
 
             this.runningTests.set(testId, execution);
@@ -261,48 +380,163 @@ export class DetectorTestRunner extends EventEmitter {
     }
 
     /**
-     * Execute a single test
+     * Execute a single test with direct context (avoids race conditions)
      */
-    private async executeTest(
-        testId: string,
+    private async executeTestWithContext(
+        testConfig: TestConfiguration,
         simulator: MarketSimulator,
         detector: unknown
     ): Promise<TestResult> {
-        const execution = this.runningTests.get(testId)!;
         const startTime = Date.now();
+        const testId = testConfig.id;
+        let signalCount = 0;
+        let movementCount = 0;
 
         try {
-            // Set up event listeners
-            let signalCount = 0;
-            let movementCount = 0;
+            // Set up event listeners for authentic market data processing
+
+            // Process depth events through real order book
+            simulator.on("depthEvent", (depth: DepthDataPoint) => {
+                try {
+                    if (this.realOrderBook && this.preprocessor) {
+                        // Convert depth event to Binance format for real order book
+                        const binanceDepthUpdate = {
+                            e: "depthUpdate",
+                            E: depth.timestamp,
+                            s: this.config.symbol,
+                            U: depth.timestamp, // Using timestamp as update ID
+                            u: depth.timestamp,
+                            b:
+                                depth.side === "bid"
+                                    ? [
+                                          [
+                                              depth.price.toString(),
+                                              depth.quantity.toString(),
+                                          ],
+                                      ]
+                                    : [],
+                            a:
+                                depth.side === "ask"
+                                    ? [
+                                          [
+                                              depth.price.toString(),
+                                              depth.quantity.toString(),
+                                          ],
+                                      ]
+                                    : [],
+                        } as SpotWebsocketStreams.DiffBookDepthResponse;
+
+                        this.realOrderBook.updateDepth(binanceDepthUpdate);
+                    }
+                } catch (error) {
+                    this.logger.error("Error processing depth event", {
+                        testId,
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
+                }
+            });
 
             simulator.on("enrichedTrade", (trade: EnrichedTradeEvent) => {
-                // Process trade through detector
+                // Process trade through detector using authentic market data
                 try {
+                    // Validate trade data
+                    if (
+                        !trade ||
+                        typeof trade.price !== "number" ||
+                        typeof trade.quantity !== "number"
+                    ) {
+                        this.logger.warn("Invalid trade event received", {
+                            testId,
+                            trade,
+                        });
+                        return;
+                    }
+
+                    // Create authentic enriched trade event using real preprocessor
+                    let authenticTradeEvent = trade;
+                    if (this.preprocessor && this.realOrderBook) {
+                        try {
+                            // Use real order book data for depth snapshot
+                            const depthSnapshot = this.realOrderBook.snapshot();
+                            authenticTradeEvent = {
+                                ...trade,
+                                depthSnapshot,
+                                bestBid: this.realOrderBook.getBestBid(),
+                                bestAsk: this.realOrderBook.getBestAsk(),
+                                // Update passive volumes using real order book
+                                passiveBidVolume:
+                                    this.getPassiveVolumeFromRealOrderBook(
+                                        trade.price,
+                                        "bid"
+                                    ),
+                                passiveAskVolume:
+                                    this.getPassiveVolumeFromRealOrderBook(
+                                        trade.price,
+                                        "ask"
+                                    ),
+                                zonePassiveBidVolume:
+                                    this.getZonePassiveVolumeFromRealOrderBook(
+                                        trade.price,
+                                        "bid"
+                                    ),
+                                zonePassiveAskVolume:
+                                    this.getZonePassiveVolumeFromRealOrderBook(
+                                        trade.price,
+                                        "ask"
+                                    ),
+                            };
+                        } catch (preprocessError) {
+                            this.logger.warn(
+                                "Error creating authentic trade event, using original",
+                                {
+                                    testId,
+                                    error:
+                                        preprocessError instanceof Error
+                                            ? preprocessError.message
+                                            : String(preprocessError),
+                                }
+                            );
+                        }
+                    }
+
+                    // Process through detector
                     if (
                         (detector as DetectorInstance).onEnrichedTrade &&
                         typeof (detector as DetectorInstance)
                             .onEnrichedTrade === "function"
                     ) {
-                        (detector as DetectorInstance).onEnrichedTrade!(trade);
+                        (detector as DetectorInstance).onEnrichedTrade!(
+                            authenticTradeEvent
+                        );
                     } else if (
                         (detector as DetectorInstance).detect &&
                         typeof (detector as DetectorInstance).detect ===
                             "function"
                     ) {
-                        (detector as DetectorInstance).detect!(trade);
+                        (detector as DetectorInstance).detect!(
+                            authenticTradeEvent
+                        );
                     }
                 } catch (error) {
-                    this.logger.warn(
+                    this.logger.error(
                         "Error processing trade through detector",
                         {
                             testId,
+                            detectorType: testConfig.detectorType,
                             error:
                                 error instanceof Error
                                     ? error.message
                                     : String(error),
+                            stack:
+                                error instanceof Error
+                                    ? error.stack
+                                    : undefined,
                         }
                     );
+                    // Don't throw the error - just log it and continue
                 }
             });
 
@@ -323,8 +557,8 @@ export class DetectorTestRunner extends EventEmitter {
                             signalCount++;
                             const detectorSignal: DetectorSignal = {
                                 timestamp: signal.timestamp,
-                                detectorType: execution.config.detectorType,
-                                configId: execution.config.id,
+                                detectorType: testConfig.detectorType,
+                                configId: testConfig.id,
                                 side:
                                     signal.side === "neutral"
                                         ? "buy"
@@ -337,7 +571,11 @@ export class DetectorTestRunner extends EventEmitter {
                                 >,
                             };
 
-                            execution.signals.push(detectorSignal);
+                            // Store signals in execution object if it still exists
+                            const execution = this.runningTests.get(testId);
+                            if (execution) {
+                                execution.signals.push(detectorSignal);
+                            }
                             this.performanceAnalyzer.recordSignal(
                                 detectorSignal
                             );
@@ -389,8 +627,8 @@ export class DetectorTestRunner extends EventEmitter {
 
             const endTime = Date.now();
             const result: TestResult = {
-                configId: execution.config.id,
-                detectorType: execution.config.detectorType,
+                configId: testConfig.id,
+                detectorType: testConfig.detectorType,
                 startTime,
                 endTime,
                 duration: endTime - startTime,
@@ -421,7 +659,7 @@ export class DetectorTestRunner extends EventEmitter {
             }
 
             // Suggest garbage collection after large tests
-            if (execution.signals.length > 1000) {
+            if (signalCount > 1000) {
                 if (global.gc) {
                     global.gc();
                 }
@@ -455,12 +693,12 @@ export class DetectorTestRunner extends EventEmitter {
             simulator.removeAllListeners();
 
             return {
-                configId: execution.config.id,
-                detectorType: execution.config.detectorType,
+                configId: testConfig.id,
+                detectorType: testConfig.detectorType,
                 startTime,
                 endTime,
                 duration: endTime - startTime,
-                totalSignals: execution.signals.length,
+                totalSignals: signalCount,
                 totalMovements: 0,
                 success: false,
                 error: errorMessage,
@@ -469,15 +707,89 @@ export class DetectorTestRunner extends EventEmitter {
     }
 
     /**
-     * Create detector instance based on configuration
+     * Get passive volume from real order book at specific price level
+     */
+    private getPassiveVolumeFromRealOrderBook(
+        price: number,
+        side: "bid" | "ask"
+    ): number {
+        if (!this.realOrderBook) return 0;
+
+        try {
+            const level = this.realOrderBook.getLevel(price);
+            if (!level) return 0;
+            return side === "bid" ? level.bid : level.ask;
+        } catch {
+            return 0;
+        }
+    }
+
+    /**
+     * Get zone passive volume from real order book in price zone around target price
+     */
+    private getZonePassiveVolumeFromRealOrderBook(
+        price: number,
+        side: "bid" | "ask"
+    ): number {
+        if (!this.realOrderBook) return 0;
+
+        try {
+            const tolerance = price * 0.001; // 0.1% zone
+            const snapshot = this.realOrderBook.snapshot();
+            let total = 0;
+
+            for (const [levelPrice, level] of snapshot) {
+                if (Math.abs(levelPrice - price) <= tolerance) {
+                    total += side === "bid" ? level.bid : level.ask;
+                }
+            }
+
+            return total;
+        } catch {
+            return 0;
+        }
+    }
+
+    /**
+     * Create detector instance based on configuration using real production components
      */
     private createDetector(testConfig: TestConfiguration): DetectorInstance {
-        const mockLogger: ILogger = {
-            info: () => {},
-            warn: () => {},
-            error: () => {},
-            debug: () => {},
-            isDebugEnabled: () => false,
+        // Use real logger for authentic debugging (but keep it quiet)
+        const realLogger: ILogger = {
+            info: (msg, data) => {
+                if (
+                    this.config.logLevel === "debug" ||
+                    this.config.logLevel === "info"
+                ) {
+                    this.logger.info(
+                        `[${testConfig.detectorType}] ${msg}`,
+                        data
+                    );
+                }
+            },
+            warn: (msg, data) => {
+                if (
+                    this.config.logLevel === "debug" ||
+                    this.config.logLevel === "info" ||
+                    this.config.logLevel === "warn"
+                ) {
+                    this.logger.warn(
+                        `[${testConfig.detectorType}] ${msg}`,
+                        data
+                    );
+                }
+            },
+            error: (msg, data) =>
+                this.logger.error(`[${testConfig.detectorType}] ${msg}`, data),
+            debug: (msg, data) => {
+                if (this.config.logLevel === "debug") {
+                    this.logger.debug(
+                        `[${testConfig.detectorType}] ${msg}`,
+                        data
+                    );
+                }
+            },
+            isDebugEnabled: () => this.config.logLevel === "debug",
             setCorrelationId: () => {},
             removeCorrelationId: () => {},
         };
@@ -489,13 +801,18 @@ export class DetectorTestRunner extends EventEmitter {
             getHistogramSummary: () => null,
             recordGauge: () => {},
             getGaugeValue: () => null,
-            createGauge: () => {},
+            createGauge: () => ({
+                increment: () => {},
+                decrement: () => {},
+                set: () => {},
+                get: () => 0,
+            }),
             setGauge: () => {},
             incrementCounter: () => {},
             decrementCounter: () => {},
             getCounterRate: () => 0,
-            createCounter: () => {},
-            createHistogram: () => {},
+            createCounter: () => ({ increment: () => {}, get: () => 0 }),
+            createHistogram: () => ({ observe: () => {}, reset: () => {} }),
             updateMetric: () => {},
             incrementMetric: () => {},
             getMetrics: () => ({
@@ -504,7 +821,7 @@ export class DetectorTestRunner extends EventEmitter {
                     connectionsActive: 0,
                     processingLatency: [],
                     errorsCount: 0,
-                    circuitBreakerState: 'closed',
+                    circuitBreakerState: "closed",
                     uptime: 0,
                 },
                 enhanced: {
@@ -512,16 +829,33 @@ export class DetectorTestRunner extends EventEmitter {
                     connectionsActive: 0,
                     processingLatency: [],
                     errorsCount: 0,
-                    circuitBreakerState: 'closed',
+                    circuitBreakerState: "closed",
                     uptime: 0,
                 },
+                counters: {} as Record<
+                    string,
+                    { value: string; rate?: number; lastIncrement: number }
+                >,
+                gauges: {} as Record<string, number>,
+                histograms: {} as Record<string, HistogramSummary | null>,
+                metadata: {} as Record<string, MetricMetadata>,
             }),
             getAverageLatency: () => 0,
             getLatencyPercentiles: () => ({}),
             exportPrometheus: () => "",
             exportJSON: () => "",
             getHealthSummary: (): HealthSummary =>
-                ({ status: "healthy", details: {} }) as HealthSummary,
+                ({
+                    status: "healthy",
+                    details: {},
+                    healthy: true,
+                    uptime: 0,
+                    errorRate: 0,
+                    avgLatency: 0,
+                    memoryUsage: 0,
+                    cpuUsage: 0,
+                    activeConnections: 0,
+                }) as unknown as HealthSummary,
             reset: () => {},
             cleanup: () => {},
         };
@@ -531,7 +865,7 @@ export class DetectorTestRunner extends EventEmitter {
                 return new HiddenOrderDetector(
                     testConfig.id,
                     testConfig.config as Partial<HiddenOrderDetectorConfig>,
-                    mockLogger,
+                    realLogger,
                     mockMetrics
                 );
 
@@ -539,7 +873,7 @@ export class DetectorTestRunner extends EventEmitter {
                 return new IcebergDetector(
                     testConfig.id,
                     testConfig.config as Partial<IcebergDetectorConfig>,
-                    mockLogger,
+                    realLogger,
                     mockMetrics
                 );
 
@@ -552,61 +886,62 @@ export class DetectorTestRunner extends EventEmitter {
                     minWallSize: 10,
                     ...spoofingConfig,
                 };
-                return new SpoofingDetector(fullConfig, mockLogger);
+                return new SpoofingDetector(fullConfig, realLogger);
             }
 
             case "absorptionDetector": {
-                const mockOrderBook = {
-                    updateDepth: () => {},
-                    getLevel: () => ({ price: 0, quantity: 0 }),
-                    getBestBid: () => 0,
-                    getBestAsk: () => 0,
-                    getSpread: () => 0,
-                    getImbalance: () => 0,
-                    getBidAskRatio: () => 1,
-                    getDepthAtDistance: () => 0,
-                    getTotalBidVolume: () => 0,
-                    getTotalAskVolume: () => 0,
-                    getVolumeWeightedMidPrice: () => 0,
-                    clear: () => {},
-                    getLevels: () => [],
-                    getBidLevels: () => [],
-                    getAskLevels: () => [],
-                    snapshot: () => ({
-                        bids: [],
-                        asks: [],
-                        timestamp: Date.now(),
-                    }),
-                };
-                const mockSpoofingDetector = {} as SpoofingDetector;
+                // Use real production components for authentic testing
+                if (!this.realOrderBook) {
+                    throw new Error(
+                        "Real OrderBookState not initialized for AbsorptionDetector testing"
+                    );
+                }
+                if (!this.realSpoofingDetector) {
+                    throw new Error(
+                        "Real SpoofingDetector not initialized for AbsorptionDetector testing"
+                    );
+                }
+
                 return new AbsorptionDetector(
                     testConfig.id,
                     testConfig.config as AbsorptionSettings,
-                    mockOrderBook,
-                    mockLogger,
-                    mockSpoofingDetector,
-                    mockMetrics
+                    this.realOrderBook, // Use real order book with authentic market data
+                    realLogger,
+                    this.realSpoofingDetector, // Use real spoofing detector
+                    mockMetrics // Keep simplified metrics for performance
                 );
             }
 
             case "exhaustionDetector": {
-                const mockSpoofingDetector = {} as SpoofingDetector;
+                // Use real spoofing detector for authentic testing
+                if (!this.realSpoofingDetector) {
+                    throw new Error(
+                        "Real SpoofingDetector not initialized for ExhaustionDetector testing"
+                    );
+                }
+
                 return new ExhaustionDetector(
                     testConfig.id,
                     testConfig.config as ExhaustionSettings,
-                    mockLogger,
-                    mockSpoofingDetector,
+                    realLogger,
+                    this.realSpoofingDetector, // Use real spoofing detector
                     mockMetrics
                 );
             }
 
             case "deltaCVDDetector":
-                const mockSpoofingDetector = {} as SpoofingDetector;
+                // Use real spoofing detector for authentic DeltaCVD testing
+                if (!this.realSpoofingDetector) {
+                    throw new Error(
+                        "Real SpoofingDetector not initialized for DeltaCVDDetector testing"
+                    );
+                }
+
                 return new DeltaCVDConfirmation(
                     testConfig.id,
                     testConfig.config as DeltaCVDConfirmationSettings,
-                    mockLogger,
-                    mockSpoofingDetector,
+                    realLogger,
+                    this.realSpoofingDetector, // Use real spoofing detector with actual config
                     mockMetrics
                 );
 
@@ -625,10 +960,15 @@ export class DetectorTestRunner extends EventEmitter {
             return;
         }
 
-        const runningPromises = Array.from(this.runningTests.entries()).map(
-            async ([testId, execution]) => {
-                try {
-                    const result = await execution.promise;
+        // Create a copy of the current running tests to avoid modification during iteration
+        const testEntries = Array.from(this.runningTests.entries());
+
+        const runningPromises = testEntries.map(async ([testId, execution]) => {
+            try {
+                const result = await execution.promise;
+
+                // Only update if the test is still in running state (avoid double processing)
+                if (this.runningTests.has(testId)) {
                     this.completedTests.set(testId, result);
                     this.runningTests.delete(testId);
 
@@ -637,16 +977,17 @@ export class DetectorTestRunner extends EventEmitter {
                         result,
                         duration: result.duration,
                     });
-                } catch (error) {
-                    this.logger.error("Test execution error", {
-                        component: "DetectorTestRunner",
-                        testId,
-                        error:
-                            error instanceof Error
-                                ? error.message
-                                : String(error),
-                    });
+                }
+            } catch (error) {
+                this.logger.error("Test execution error", {
+                    component: "DetectorTestRunner",
+                    testId,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                });
 
+                // Only process error if test is still running (avoid double processing)
+                if (this.runningTests.has(testId)) {
                     const result: TestResult = {
                         configId: execution.config.id,
                         detectorType: execution.config.detectorType,
@@ -672,7 +1013,7 @@ export class DetectorTestRunner extends EventEmitter {
                     });
                 }
             }
-        );
+        });
 
         // Wait for the first test to complete
         await Promise.race(runningPromises);

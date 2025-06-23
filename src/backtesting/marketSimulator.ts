@@ -94,18 +94,56 @@ export class MarketSimulator extends EventEmitter {
             const dataFiles = this.getDataFiles();
             this.allDataPoints = [];
 
-            // Limit data for testing - only process first 2 files
-            const limitedFiles = dataFiles.slice(0, 2);
+            // Process ALL data files for realistic live market simulation
+            this.logger.info("Loading complete market dataset", {
+                component: "MarketSimulator",
+                totalFiles: dataFiles.length,
+                dataDirectory: this.config.dataDirectory,
+            });
 
-            for (const file of limitedFiles) {
+            let processedFiles = 0;
+            for (const file of dataFiles) {
+                processedFiles++;
+
                 if (file.includes("_trades.csv")) {
                     const trades = this.loadTradesFile(file);
                     this.allDataPoints = this.allDataPoints.concat(trades);
                     this.stats.totalTrades += trades.length;
+
+                    this.logger.debug("Loaded trades file", {
+                        component: "MarketSimulator",
+                        file: file.split("/").pop(),
+                        tradesLoaded: trades.length,
+                        totalTrades: this.stats.totalTrades,
+                        progress: `${processedFiles}/${dataFiles.length}`,
+                    });
                 } else if (file.includes("_depth.csv")) {
                     const depths = this.loadDepthFile(file);
                     this.allDataPoints = this.allDataPoints.concat(depths);
                     this.stats.totalDepthUpdates += depths.length;
+
+                    this.logger.debug("Loaded depth file", {
+                        component: "MarketSimulator",
+                        file: file.split("/").pop(),
+                        depthUpdatesLoaded: depths.length,
+                        totalDepthUpdates: this.stats.totalDepthUpdates,
+                        progress: `${processedFiles}/${dataFiles.length}`,
+                    });
+                }
+
+                // Log progress every 10 files
+                if (
+                    processedFiles % 10 === 0 ||
+                    processedFiles === dataFiles.length
+                ) {
+                    this.logger.info("Market data loading progress", {
+                        component: "MarketSimulator",
+                        filesProcessed: processedFiles,
+                        totalFiles: dataFiles.length,
+                        totalEvents: this.allDataPoints.length,
+                        memoryUsage:
+                            process.memoryUsage().heapUsed / 1024 / 1024,
+                    });
                 }
             }
 
@@ -212,6 +250,8 @@ export class MarketSimulator extends EventEmitter {
             this.processTradeEvent(event.data as TradeDataPoint);
         } else if (event.type === "depth") {
             this.processDepthEvent(event.data as DepthDataPoint);
+            // Emit depth event for real order book processing
+            this.emit("depthEvent", event.data as DepthDataPoint);
         }
 
         this.currentIndex++;
@@ -244,7 +284,21 @@ export class MarketSimulator extends EventEmitter {
             depthSnapshot.set(price, { ...level });
         }
 
-        // Create enriched trade event
+        // Create enriched trade event with properly formatted originalTrade
+        const mockOriginalTrade = {
+            e: "aggTrade", // Event type
+            E: trade.timestamp, // Event time
+            s: this.config.symbol, // Symbol
+            a: parseInt(trade.tradeId), // Aggregate trade ID
+            p: trade.price.toString(), // Price
+            q: trade.quantity.toString(), // Quantity
+            f: parseInt(trade.tradeId), // First trade ID
+            l: parseInt(trade.tradeId), // Last trade ID
+            T: trade.timestamp, // Trade time
+            m: trade.side === "sell", // Is buyer maker
+            M: true, // Ignore - always true for agg trades
+        };
+
         const enrichedTrade: EnrichedTradeEvent = {
             price: trade.price,
             quantity: trade.quantity,
@@ -252,7 +306,8 @@ export class MarketSimulator extends EventEmitter {
             buyerIsMaker: trade.side === "sell", // If side is sell, buyer is maker
             tradeId: trade.tradeId,
             pair: this.config.symbol,
-            originalTrade: trade,
+            originalTrade:
+                mockOriginalTrade as unknown as import("@binance/spot").SpotWebsocketStreams.AggTradeResponse, // Cast to match interface
 
             // Calculate passive volumes from order book
             passiveBidVolume: this.getPassiveVolume(trade.price, "bid"),

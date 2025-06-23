@@ -16,6 +16,7 @@ export interface OrderBookStateOptions {
     pruneIntervalMs?: number; // Interval for pruning distant levels
     maxErrorRate?: number; // Max errors per minute before circuit opens
     staleThresholdMs?: number; // Threshold for stale levels
+    disableSequenceValidation?: boolean; // Disable sequence gap validation (for backtesting)
 }
 
 export interface IOrderBookState {
@@ -82,6 +83,7 @@ export class OrderBookState implements IOrderBookState {
 
     private maxLevels: number = 1000;
     private maxPriceDistance: number = 0.1; // 10% max price distance for levels
+    private readonly disableSequenceValidation: boolean;
 
     private book: SnapShot = new Map();
     private readonly pricePrecision: number;
@@ -122,6 +124,8 @@ export class OrderBookState implements IOrderBookState {
             options.maxPriceDistance ?? this.maxPriceDistance;
         this.pruneIntervalMs = options.pruneIntervalMs ?? this.pruneIntervalMs;
         this.maxErrorRate = options.maxErrorRate ?? this.maxErrorRate;
+        this.disableSequenceValidation =
+            options.disableSequenceValidation ?? false;
         this.startPruning();
         setInterval(() => this.connectionHealthCheck(), 10000);
     }
@@ -205,7 +209,12 @@ export class OrderBookState implements IOrderBookState {
             return; // Reject updates while circuit is open
         }
 
-        if (this.expectedUpdateId && update.U) {
+        // Only validate sequence gaps if not in backtesting mode
+        if (
+            !this.disableSequenceValidation &&
+            this.expectedUpdateId &&
+            update.U
+        ) {
             const gap = update.U - this.expectedUpdateId;
             if (gap > 1) {
                 throw new Error(
