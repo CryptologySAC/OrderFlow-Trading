@@ -886,7 +886,9 @@ export class AbsorptionDetector
         // Get average passive liquidity in this zone
         const zoneHistory = this.zonePassiveHistory.get(zone);
         const avgPassive = zoneHistory
-            ? FinancialMath.calculateMean(zoneHistory.toArray().map((s) => s.total))
+            ? FinancialMath.calculateMean(
+                  zoneHistory.toArray().map((s) => s.total)
+              )
             : totalVolume; // Fallback to aggressive volume
 
         if (avgPassive === 0) return 1.0;
@@ -1767,7 +1769,9 @@ export class AbsorptionDetector
                 const currentPassive =
                     relevantPassiveValues[relevantPassiveValues.length - 1] ||
                     0;
-                const avgPassive = FinancialMath.calculateMean(relevantPassiveValues);
+                const avgPassive = FinancialMath.calculateMean(
+                    relevantPassiveValues
+                );
                 const maxPassive = Math.max(...relevantPassiveValues);
                 const minPassive = Math.min(...relevantPassiveValues);
 
@@ -2284,7 +2288,9 @@ export class AbsorptionDetector
 
         const passive =
             passiveSnapshots.length > 0
-                ? FinancialMath.calculateMean(passiveSnapshots.map((s) => s.total))
+                ? FinancialMath.calculateMean(
+                      passiveSnapshots.map((s) => s.total)
+                  )
                 : 0;
 
         return { aggressive, passive, trades };

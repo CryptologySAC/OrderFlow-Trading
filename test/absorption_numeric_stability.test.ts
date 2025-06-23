@@ -7,6 +7,7 @@ import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorIn
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { IOrderBookState } from "../src/market/orderBookState.js";
+import { FinancialMath } from "../src/utils/financialMath.js";
 
 describe("AbsorptionDetector Numeric Stability Fixes", () => {
     let detector: AbsorptionDetector;
@@ -227,25 +228,21 @@ describe("AbsorptionDetector Numeric Stability Fixes", () => {
     });
 
     it("should handle safe division correctly", () => {
-        const detector_internal = detector as any;
-
-        // Test safeDivision method
-        expect(detector_internal.safeDivision(10, 2, 0)).toBe(5);
-        expect(detector_internal.safeDivision(10, 0, 99)).toBe(99); // Division by zero returns fallback
-        expect(detector_internal.safeDivision(NaN, 2, 99)).toBe(99); // NaN numerator returns fallback
-        expect(detector_internal.safeDivision(10, NaN, 99)).toBe(99); // NaN denominator returns fallback
-        expect(detector_internal.safeDivision(Infinity, 2, 99)).toBe(99); // Infinity returns fallback
+        // Use FinancialMath.safeDivide directly since deprecated methods were removed
+        expect(FinancialMath.safeDivide(10, 2, 0)).toBe(5);
+        expect(FinancialMath.safeDivide(10, 0, 99)).toBe(99); // Division by zero returns fallback
+        expect(FinancialMath.safeDivide(NaN, 2, 99)).toBe(99); // NaN numerator returns fallback
+        expect(FinancialMath.safeDivide(10, NaN, 99)).toBe(99); // NaN denominator returns fallback
+        expect(FinancialMath.safeDivide(Infinity, 2, 99)).toBe(99); // Infinity returns fallback
     });
 
     it("should handle safe mean calculation correctly", () => {
-        const detector_internal = detector as any;
-
-        // Test safeMean method
-        expect(detector_internal.safeMean([1, 2, 3, 4, 5])).toBe(3);
-        expect(detector_internal.safeMean([NaN, 2, 3])).toBe(2.5); // Ignores NaN
-        expect(detector_internal.safeMean([Infinity, 2, 3])).toBe(2.5); // Ignores Infinity
-        expect(detector_internal.safeMean([])).toBe(0); // Empty array returns 0
-        expect(detector_internal.safeMean([NaN, Infinity])).toBe(0); // All invalid returns 0
+        // Use FinancialMath.calculateMean directly since deprecated methods were removed
+        expect(FinancialMath.calculateMean([1, 2, 3, 4, 5])).toBe(3);
+        expect(FinancialMath.calculateMean([NaN, 2, 3])).toBe(2.5); // Ignores NaN
+        expect(FinancialMath.calculateMean([Infinity, 2, 3])).toBe(2.5); // Ignores Infinity
+        expect(FinancialMath.calculateMean([])).toBe(0); // Empty array returns 0
+        expect(FinancialMath.calculateMean([NaN, Infinity])).toBe(0); // All invalid returns 0
     });
 
     it("should handle negative passive volume values gracefully", () => {

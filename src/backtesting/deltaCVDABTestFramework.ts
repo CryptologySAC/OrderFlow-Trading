@@ -555,13 +555,25 @@ export class DeltaCVDABTestFramework extends EventEmitter {
         const accuracies = Array.from(results.values()).map(
             (r) => r.metrics.signalAccuracy
         );
+
+        if (accuracies.length === 0) return 0;
+
         const mean = accuracies.reduce((a, b) => a + b, 0) / accuracies.length;
+
+        // Protect against division by zero when mean is 0
+        if (mean === 0 || !Number.isFinite(mean)) return 0;
+
         const variance =
             accuracies.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
             accuracies.length;
         const stdDev = Math.sqrt(variance);
 
-        // Higher variance = lower confidence
-        return Math.max(0, Math.min(1, 1 - stdDev / mean));
+        // Higher variance = lower confidence - safe division to prevent NaN
+        if (!Number.isFinite(stdDev) || stdDev === 0) return 1; // Perfect confidence if no variance
+
+        const relativeDev = stdDev / mean;
+        if (!Number.isFinite(relativeDev)) return 0; // Invalid calculation
+
+        return Math.max(0, Math.min(1, 1 - relativeDev));
     }
 }

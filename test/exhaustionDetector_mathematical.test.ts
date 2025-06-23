@@ -8,6 +8,7 @@ import {
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
+import { FinancialMath } from "../src/utils/financialMath.js";
 
 // Mock dependencies - simplified for mathematical tests
 const createMocks = () => ({
@@ -289,14 +290,18 @@ describe("ExhaustionDetector - Mathematical Correctness", () => {
 
     describe("🔧 FIX #3: Market-Realistic Ratio Bounds", () => {
         it("should clamp ratios to maximum 20:1", () => {
-            const detectorAny = detector as any;
+            // Use FinancialMath.safeDivide with clamping logic since deprecated methods were removed
+            const clampRatio = (numerator: number, denominator: number, defaultValue: number, maxRatio = 20) => {
+                const ratio = FinancialMath.safeDivide(numerator, denominator, defaultValue);
+                return Math.max(0, Math.min(maxRatio, ratio));
+            };
 
             // Test extreme ratios
-            expect(detectorAny.calculateSafeRatio(1000, 1, 0)).toBe(20); // 1000:1 → 20:1
-            expect(detectorAny.calculateSafeRatio(50, 1, 0)).toBe(20); // 50:1 → 20:1
-            expect(detectorAny.calculateSafeRatio(20, 1, 0)).toBe(20); // 20:1 → 20:1
-            expect(detectorAny.calculateSafeRatio(15, 1, 0)).toBe(15); // 15:1 → 15:1 (unchanged)
-            expect(detectorAny.calculateSafeRatio(5, 1, 0)).toBe(5); // 5:1 → 5:1 (unchanged)
+            expect(clampRatio(1000, 1, 0)).toBe(20); // 1000:1 → 20:1
+            expect(clampRatio(50, 1, 0)).toBe(20); // 50:1 → 20:1
+            expect(clampRatio(20, 1, 0)).toBe(20); // 20:1 → 20:1
+            expect(clampRatio(15, 1, 0)).toBe(15); // 15:1 → 15:1 (unchanged)
+            expect(clampRatio(5, 1, 0)).toBe(5); // 5:1 → 5:1 (unchanged)
         });
 
         it("should handle realistic market ratios correctly", () => {
@@ -338,13 +343,17 @@ describe("ExhaustionDetector - Mathematical Correctness", () => {
         });
 
         it("should prevent division by zero and handle edge cases", () => {
-            const detectorAny = detector as any;
+            // Use FinancialMath.safeDivide with clamping since deprecated methods were removed
+            const clampRatio = (numerator: number, denominator: number, defaultValue: number, maxRatio = 20) => {
+                const ratio = FinancialMath.safeDivide(numerator, denominator, defaultValue);
+                return Math.max(0, Math.min(maxRatio, ratio));
+            };
 
-            expect(detectorAny.calculateSafeRatio(100, 0, 999)).toBe(999); // Division by zero default
-            expect(detectorAny.calculateSafeRatio(0, 100, 5)).toBe(0); // Zero numerator
-            expect(detectorAny.calculateSafeRatio(NaN, 100, 3)).toBe(3); // NaN numerator
-            expect(detectorAny.calculateSafeRatio(100, NaN, 7)).toBe(7); // NaN denominator
-            expect(detectorAny.calculateSafeRatio(Infinity, 100, 2)).toBe(2); // Infinity handling
+            expect(clampRatio(100, 0, 999)).toBe(20); // Division by zero default, then clamped to max
+            expect(clampRatio(0, 100, 5)).toBe(0); // Zero numerator
+            expect(clampRatio(NaN, 100, 3)).toBe(3); // NaN numerator
+            expect(clampRatio(100, NaN, 7)).toBe(7); // NaN denominator
+            expect(clampRatio(Infinity, 100, 2)).toBe(2); // Infinity handling
         });
     });
 

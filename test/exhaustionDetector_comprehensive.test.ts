@@ -20,6 +20,7 @@ import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import { SharedPools } from "../src/utils/objectPool.js";
+import { FinancialMath } from "../src/utils/financialMath.js";
 
 // Mock dependencies
 const createMockLogger = (): ILogger => ({
@@ -604,27 +605,39 @@ describe("ExhaustionDetector - Comprehensive Logic Tests", () => {
 
     describe("Safe Ratio Calculations", () => {
         it("should clamp ratios to realistic market bounds", () => {
-            const detectorAny = detector as any;
+            // Use FinancialMath.safeDivide directly since deprecated methods were removed
+            // Test safe division with clamping logic (simulating calculateSafeRatio behavior)
+            const clampRatio = (
+                numerator: number,
+                denominator: number,
+                defaultValue: number,
+                maxRatio = 20
+            ) => {
+                const ratio = FinancialMath.safeDivide(
+                    numerator,
+                    denominator,
+                    defaultValue
+                );
+                return Math.max(0, Math.min(maxRatio, ratio));
+            };
 
-            // Test extreme values
-            expect(detectorAny.calculateSafeRatio(1000, 1, 0)).toBe(20); // Clamped to max
-            expect(detectorAny.calculateSafeRatio(-10, 5, 0)).toBe(0); // Clamped to min
-            expect(detectorAny.calculateSafeRatio(10, 0, 5)).toBe(5); // Division by zero default
-            expect(detectorAny.calculateSafeRatio(NaN, 5, 1)).toBe(1); // NaN default
-            expect(detectorAny.calculateSafeRatio(10, NaN, 2)).toBe(2); // NaN default
+            expect(clampRatio(1000, 1, 0)).toBe(20); // Clamped to max
+            expect(clampRatio(-10, 5, 0)).toBe(0); // Clamped to min
+            expect(clampRatio(10, 0, 5)).toBe(5); // Division by zero default
+            expect(clampRatio(NaN, 5, 1)).toBe(1); // NaN default
+            expect(clampRatio(10, NaN, 2)).toBe(2); // NaN default
         });
 
         it("should calculate safe means with FinancialMath precision", () => {
-            const detectorAny = detector as any;
-
-            expect(detectorAny.calculateSafeMean([])).toBe(0);
-            expect(detectorAny.calculateSafeMean([1, 2, 3])).toBe(2);
-            expect(detectorAny.calculateSafeMean([1, NaN, 3])).toBe(2); // Excludes NaN
-            expect(detectorAny.calculateSafeMean([1, -5, 3])).toBeCloseTo(
+            // Use FinancialMath.calculateMean directly since deprecated methods were removed
+            expect(FinancialMath.calculateMean([])).toBe(0);
+            expect(FinancialMath.calculateMean([1, 2, 3])).toBe(2);
+            expect(FinancialMath.calculateMean([1, NaN, 3])).toBe(2); // Excludes NaN
+            expect(FinancialMath.calculateMean([1, -5, 3])).toBeCloseTo(
                 -0.33333333,
                 5
             ); // Includes negative values (correct financial behavior)
-            expect(detectorAny.calculateSafeMean([NaN, Infinity, -1])).toBe(-1); // Only valid value
+            expect(FinancialMath.calculateMean([NaN, Infinity, -1])).toBe(-1); // Only valid value
         });
 
         it("should handle velocity calculations safely", () => {

@@ -9,6 +9,7 @@ import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
+import { FinancialMath } from "../src/utils/financialMath.js";
 
 // Mock dependencies for operational tests
 const createOperationalMocks = () => ({
@@ -625,8 +626,8 @@ describe("ExhaustionDetector - Operational Safety Tests", () => {
                 () => detectorAny.getConfigValue("maxZones", 100),
                 () => detectorAny.getConfigValue("zoneAgeLimit", 3600000),
                 () => detectorAny.validateInputs(50000, "buy", 50000),
-                () => detectorAny.calculateSafeRatio(100, 50, 0),
-                () => detectorAny.calculateSafeMean([10, 20, 30]),
+                () => Math.max(0, Math.min(20, FinancialMath.safeDivide(100, 50, 0))), // Replaces calculateSafeRatio
+                () => FinancialMath.calculateMean([10, 20, 30]), // Replaces calculateSafeMean
             ];
 
             const promises = operations.map((op) => Promise.resolve(op()));

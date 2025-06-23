@@ -293,7 +293,7 @@ describe("DeltaCVD A/B Testing Framework", () => {
 
             // This will throw because orderbook is mocked, but that's ok
             try {
-                detector.detect(trade);
+                (detector as any).processMarketEvent(trade);
             } catch {}
 
             expect(recordSpy).toHaveBeenCalled();
