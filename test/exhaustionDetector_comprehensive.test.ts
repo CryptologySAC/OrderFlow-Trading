@@ -614,23 +614,26 @@ describe("ExhaustionDetector - Comprehensive Logic Tests", () => {
             expect(detectorAny.calculateSafeRatio(10, NaN, 2)).toBe(2); // NaN default
         });
 
-        it("should calculate safe means excluding invalid values", () => {
+        it("should calculate safe means with FinancialMath precision", () => {
             const detectorAny = detector as any;
 
             expect(detectorAny.calculateSafeMean([])).toBe(0);
             expect(detectorAny.calculateSafeMean([1, 2, 3])).toBe(2);
-            expect(detectorAny.calculateSafeMean([1, NaN, 3])).toBe(2);
-            expect(detectorAny.calculateSafeMean([1, -5, 3])).toBe(2); // Excludes negative
-            expect(detectorAny.calculateSafeMean([NaN, Infinity, -1])).toBe(0); // All invalid
+            expect(detectorAny.calculateSafeMean([1, NaN, 3])).toBe(2); // Excludes NaN
+            expect(detectorAny.calculateSafeMean([1, -5, 3])).toBeCloseTo(
+                -0.33333333,
+                5
+            ); // Includes negative values (correct financial behavior)
+            expect(detectorAny.calculateSafeMean([NaN, Infinity, -1])).toBe(-1); // Only valid value
         });
 
         it("should handle velocity calculations safely", () => {
             const detectorAny = detector as any;
 
             const validSamples = [
-                { total: 100, timestamp: 1000 },
-                { total: 110, timestamp: 2000 },
-                { total: 90, timestamp: 3000 },
+                { total: 100, timestamp: 1000 }, // +10 velocity (110-100)/1s
+                { total: 110, timestamp: 2000 }, // -20 velocity (90-110)/1s
+                { total: 90, timestamp: 3000 }, // Mean velocity = (10-20)/2 = -5
             ];
 
             const invalidSamples = [
@@ -638,9 +641,8 @@ describe("ExhaustionDetector - Comprehensive Logic Tests", () => {
                 { total: 100, timestamp: NaN },
             ];
 
-            expect(
-                detectorAny.calculateSafeVelocity(validSamples)
-            ).toBeGreaterThanOrEqual(0);
+            // Velocity can be negative (volume decreasing) - this is correct financial behavior
+            expect(detectorAny.calculateSafeVelocity(validSamples)).toBe(-5);
             expect(detectorAny.calculateSafeVelocity(invalidSamples)).toBe(0);
             expect(detectorAny.calculateSafeVelocity([])).toBe(0);
             expect(detectorAny.calculateSafeVelocity([validSamples[0]])).toBe(

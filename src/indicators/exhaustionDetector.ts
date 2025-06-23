@@ -218,13 +218,7 @@ export class ExhaustionDetector
     /**
      * @deprecated Use FinancialMath.safeDivide() directly for institutional-grade precision
      */
-    private safeDivision(
-        numerator: number,
-        denominator: number,
-        fallback: number = 0
-    ): number {
-        return FinancialMath.safeDivide(numerator, denominator, fallback);
-    }
+    // Deprecated safeDivision method removed - use FinancialMath.safeDivide() directly
 
     /**
      * 🔧 FIX: Safe mean calculation to replace DetectorUtils.calculateMean
@@ -1108,30 +1102,7 @@ export class ExhaustionDetector
         return Math.max(0, Math.min(1, confidence));
     }
 
-    /**
-     * Safe ratio calculation with bounds checking
-     */
-    private calculateSafeRatio(
-        numerator: number,
-        denominator: number,
-        defaultValue = 0
-    ): number {
-        if (!isFinite(numerator) || !isFinite(denominator)) return defaultValue;
-        if (denominator === 0) return defaultValue;
-
-        const ratio = numerator / denominator;
-        if (!isFinite(ratio)) return defaultValue;
-
-        // 🔧 FIX: Clamp to realistic market bounds (20:1 max vs previous 1000:1)
-        return Math.max(0, Math.min(20, ratio));
-    }
-
-    /**
-     * @deprecated Use FinancialMath.calculateMean() directly for institutional-grade precision
-     */
-    private calculateSafeMean(values: number[]): number {
-        return FinancialMath.calculateMean(values);
-    }
+    // Deprecated calculateSafeRatio and calculateSafeMean methods removed - use FinancialMath directly
 
     /**
      * Safe velocity calculation

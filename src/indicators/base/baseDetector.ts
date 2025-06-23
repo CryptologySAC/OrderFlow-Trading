@@ -216,59 +216,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
         }
     }
 
-    /**
-     * Safe internal calculation methods to replace DetectorUtils dependencies
-     */
-    protected safeMean(values: number[]): number {
-        if (!values || values.length === 0) {
-            return 0;
-        }
-
-        let sum = 0;
-        let validCount = 0;
-
-        for (const value of values) {
-            if (isFinite(value) && !isNaN(value)) {
-                sum += value;
-                validCount++;
-            }
-        }
-
-        return validCount > 0 ? sum / validCount : 0;
-    }
-
-    protected safeCalculateZone(price: number): number {
-        if (
-            !isFinite(price) ||
-            isNaN(price) ||
-            price <= 0 ||
-            this.zoneTicks <= 0 ||
-            this.pricePrecision < 0
-        ) {
-            this.logger.warn(
-                "[BaseDetector] Invalid zone calculation parameters",
-                {
-                    price,
-                    zoneTicks: this.zoneTicks,
-                    pricePrecision: this.pricePrecision,
-                }
-            );
-            return 0;
-        }
-
-        // Use integer arithmetic for financial precision
-        const scale = Math.pow(10, this.pricePrecision);
-        const scaledPrice = Math.round(price * scale);
-        const scaledTickSize = Math.round(
-            Math.pow(10, -this.pricePrecision) * scale
-        );
-        const scaledZoneSize = this.zoneTicks * scaledTickSize;
-
-        // Ensure consistent rounding across all detectors
-        const scaledResult =
-            Math.round(scaledPrice / scaledZoneSize) * scaledZoneSize;
-        return scaledResult / scale;
-    }
+    // Deprecated methods removed - use FinancialMath directly for all calculations
 
     /**
      * Validate detector settings

@@ -11,25 +11,30 @@ import {
     AllocationStrategy,
 } from "../src/analysis/deltaCVDABMonitor.js";
 import { DeltaCVDWithABTesting } from "../src/indicators/deltaCVDWithABTesting.js";
-import { Logger } from "../src/infrastructure/logger.js";
+import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
 import { RedBlackTreeOrderBook } from "../src/market/redBlackTreeOrderBook.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
 // Mock dependencies
-vi.mock("../src/infrastructure/logger");
 vi.mock("../src/infrastructure/metricsCollector");
 vi.mock("../src/market/redBlackTreeOrderBook");
 
 describe("DeltaCVD A/B Testing Framework", () => {
     let framework: DeltaCVDABTestFramework;
     let monitor: DeltaCVDABMonitor;
-    let logger: Logger;
+    let logger: ILogger;
     let metricsCollector: MetricsCollector;
     let orderBook: RedBlackTreeOrderBook;
 
     beforeEach(() => {
-        logger = new Logger("test");
+        // Create mock logger following logging standards
+        logger = {
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            debug: vi.fn(),
+        } as ILogger;
         metricsCollector = new MetricsCollector();
         orderBook = new RedBlackTreeOrderBook(
             "BTCUSDT",

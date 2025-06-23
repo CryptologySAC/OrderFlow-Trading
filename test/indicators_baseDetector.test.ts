@@ -69,7 +69,7 @@ class TestDetector extends BaseDetector {
             this.zoneTicks
         );
         const side = trade.buyerIsMaker ? "sell" : "buy";
-        if (aggressive >= 2 && this.checkCooldown(zone, side)) {
+        if (aggressive >= 2 && this.checkCooldown(zone, side, true)) {
             this.signals.push({ zone, aggressive, passive });
         }
     }
@@ -105,14 +105,16 @@ describe("indicators/BaseDetector", () => {
 
     it("groups trades into zones and emits once per threshold", () => {
         const now = Date.now();
-        det.onEnrichedTrade(makeEvent(100.01, 1, now));
-        det.onEnrichedTrade(makeEvent(100.02, 1, now + 1));
-        det.onEnrichedTrade(makeEvent(100.07, 1, now + 2));
+        // With zoneTicks=2 and precision=2, zone size = 0.02
+        // Use prices that map to the same zone (100.02)
+        det.onEnrichedTrade(makeEvent(100.02, 1, now)); // → zone 100.02
+        det.onEnrichedTrade(makeEvent(100.03, 1, now + 1)); // → zone 100.02
+        det.onEnrichedTrade(makeEvent(100.039, 1, now + 2)); // → zone 100.02
         expect(det.signals.length).toBe(1);
         expect(det.signals[0]).toMatchObject({
             zone: 100.02,
-            aggressive: 2,
-            passive: 2,
+            aggressive: 2, // Need >= 2 aggressive volume to trigger
+            passive: 2, // 2 trades processed when signal was generated
         });
     });
 

@@ -648,7 +648,7 @@ export class AbsorptionDetector
 
         // Calculate rolling statistics
         const currentPassive = relevantPassive[relevantPassive.length - 1] || 0;
-        const avgPassive = this.safeMean(relevantPassive);
+        const avgPassive = FinancialMath.calculateMean(relevantPassive);
         const minPassive = Math.min(...relevantPassive);
 
         // Get recent aggressive volume
@@ -698,7 +698,7 @@ export class AbsorptionDetector
         if (nearbyLevels.length < 3) return 0;
 
         // Calculate gradient strength (higher = more liquidity depth)
-        const avgVolume = this.safeMean(nearbyLevels);
+        const avgVolume = FinancialMath.calculateMean(nearbyLevels);
         const centerIndex = Math.floor(nearbyLevels.length / 2);
         const centerVolume = nearbyLevels[centerIndex] || 0;
 
@@ -886,7 +886,7 @@ export class AbsorptionDetector
         // Get average passive liquidity in this zone
         const zoneHistory = this.zonePassiveHistory.get(zone);
         const avgPassive = zoneHistory
-            ? this.safeMean(zoneHistory.toArray().map((s) => s.total))
+            ? FinancialMath.calculateMean(zoneHistory.toArray().map((s) => s.total))
             : totalVolume; // Fallback to aggressive volume
 
         if (avgPassive === 0) return 1.0;
@@ -963,8 +963,8 @@ export class AbsorptionDetector
 
         if (earlier.length === 0) return 1;
 
-        const recentAvg = this.safeMean(recent);
-        const earlierAvg = this.safeMean(earlier);
+        const recentAvg = FinancialMath.calculateMean(recent);
+        const earlierAvg = FinancialMath.calculateMean(earlier);
 
         // Return growth ratio (>1 means growing passive liquidity = stronger absorption)
         return FinancialMath.safeDivide(recentAvg, earlierAvg, 1.0);
@@ -1681,7 +1681,7 @@ export class AbsorptionDetector
             return { absorptionRatio: 0, passiveStrength: 0, refillRate: 0 };
         }
 
-        const avgPassiveTotal = this.safeMean(
+        const avgPassiveTotal = FinancialMath.calculateMean(
             passiveSnapshots.map((s) => s.total)
         );
         const currentPassive =
@@ -1767,7 +1767,7 @@ export class AbsorptionDetector
                 const currentPassive =
                     relevantPassiveValues[relevantPassiveValues.length - 1] ||
                     0;
-                const avgPassive = this.safeMean(relevantPassiveValues);
+                const avgPassive = FinancialMath.calculateMean(relevantPassiveValues);
                 const maxPassive = Math.max(...relevantPassiveValues);
                 const minPassive = Math.min(...relevantPassiveValues);
 
@@ -1898,7 +1898,7 @@ export class AbsorptionDetector
 
         try {
             // Check how consistently passive liquidity is maintained
-            const avgPassive = this.safeMean(passiveValues);
+            const avgPassive = FinancialMath.calculateMean(passiveValues);
             if (avgPassive === 0) {
                 // Calculate consistency from value distribution instead
                 const nonZeroValues = passiveValues.filter((v) => v > 0);
@@ -2284,7 +2284,7 @@ export class AbsorptionDetector
 
         const passive =
             passiveSnapshots.length > 0
-                ? this.safeMean(passiveSnapshots.map((s) => s.total))
+                ? FinancialMath.calculateMean(passiveSnapshots.map((s) => s.total))
                 : 0;
 
         return { aggressive, passive, trades };
@@ -2312,13 +2312,13 @@ export class AbsorptionDetector
         }
 
         // Calculate aggregate microstructure metrics
-        const avgFragmentation = this.safeMean(
+        const avgFragmentation = FinancialMath.calculateMean(
             recentEvents.map((e) => e.microstructure!.fragmentationScore)
         );
-        const avgEfficiency = this.safeMean(
+        const avgEfficiency = FinancialMath.calculateMean(
             recentEvents.map((e) => e.microstructure!.executionEfficiency)
         );
-        const avgToxicity = this.safeMean(
+        const avgToxicity = FinancialMath.calculateMean(
             recentEvents.map((e) => e.microstructure!.toxicityScore)
         );
         const totalCoordination = recentEvents.reduce(

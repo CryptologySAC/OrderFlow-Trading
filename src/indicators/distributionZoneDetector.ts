@@ -215,23 +215,7 @@ export class DistributionZoneDetector extends ZoneDetector {
             : fallback;
     }
 
-    /**
-     * @deprecated Use FinancialMath.safeDivide() directly for institutional-grade precision
-     */
-    private safeDivision(
-        numerator: number,
-        denominator: number,
-        fallback: number = 0
-    ): number {
-        return FinancialMath.safeDivide(numerator, denominator, fallback);
-    }
-
-    /**
-     * @deprecated Use FinancialMath.calculateMean() directly for institutional-grade precision
-     */
-    private safeMean(values: number[]): number {
-        return FinancialMath.calculateMean(values);
-    }
+    // Deprecated safeDivision and safeMean methods removed - use FinancialMath directly
 
     /**
      * Main analysis method - mirrors AccumulationZoneDetector exactly
