@@ -8,7 +8,11 @@
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
-        "types": ["vitest/globals", "node"]
+        "types": ["vitest/globals", "node"],
+        "allowSyntheticDefaultImports": true
     },
-    "include": ["src/**/*", "test/**/*"]
+    "include": ["src/**/*", "test/**/*", "scripts/**/*"],
+    "ts-node": {
+        "esm": true
+    }
 }

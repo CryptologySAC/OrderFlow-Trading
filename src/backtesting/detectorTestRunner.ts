@@ -3,6 +3,7 @@
 import { EventEmitter } from "events";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import type { HealthSummary } from "../infrastructure/metricsCollector.js";
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import type { SignalCandidate } from "../types/signalTypes.js";
 
@@ -11,6 +12,7 @@ import {
     PerformanceAnalyzer,
     type DetectorSignal,
     type PriceMovement,
+    type SignalPerformance,
 } from "./performanceAnalyzer.js";
 import { type TestConfiguration } from "./configMatrix.js";
 
@@ -277,13 +279,30 @@ export class DetectorTestRunner extends EventEmitter {
             simulator.on("enrichedTrade", (trade: EnrichedTradeEvent) => {
                 // Process trade through detector
                 try {
-                    if (detector.onEnrichedTrade && typeof detector.onEnrichedTrade === 'function') {
-                        detector.onEnrichedTrade(trade);
-                    } else if (detector.detect && typeof detector.detect === 'function') {
-                        detector.detect(trade);
+                    if (
+                        (detector as DetectorInstance).onEnrichedTrade &&
+                        typeof (detector as DetectorInstance)
+                            .onEnrichedTrade === "function"
+                    ) {
+                        (detector as DetectorInstance).onEnrichedTrade!(trade);
+                    } else if (
+                        (detector as DetectorInstance).detect &&
+                        typeof (detector as DetectorInstance).detect ===
+                            "function"
+                    ) {
+                        (detector as DetectorInstance).detect!(trade);
                     }
                 } catch (error) {
-                    this.logger.warn("Error processing trade through detector", { testId, error });
+                    this.logger.warn(
+                        "Error processing trade through detector",
+                        {
+                            testId,
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                        }
+                    );
                 }
             });
 
@@ -293,25 +312,48 @@ export class DetectorTestRunner extends EventEmitter {
             });
 
             // Listen for detector signals
-            if (detector.on && typeof detector.on === 'function') {
+            if (
+                (detector as DetectorInstance).on &&
+                typeof (detector as DetectorInstance).on === "function"
+            ) {
                 try {
-                    detector.on("signalCandidate", (signal: SignalCandidate) => {
-                        signalCount++;
-                        const detectorSignal: DetectorSignal = {
-                            timestamp: signal.timestamp,
-                            detectorType: execution.config.detectorType,
-                            configId: execution.config.id,
-                            side: signal.side === "neutral" ? "buy" : signal.side,
-                            confidence: signal.confidence,
-                            price: signal.data?.price || 0,
-                            data: signal.data as unknown as Record<string, unknown>,
-                        };
+                    (detector as DetectorInstance).on!(
+                        "signalCandidate",
+                        (signal: SignalCandidate) => {
+                            signalCount++;
+                            const detectorSignal: DetectorSignal = {
+                                timestamp: signal.timestamp,
+                                detectorType: execution.config.detectorType,
+                                configId: execution.config.id,
+                                side:
+                                    signal.side === "neutral"
+                                        ? "buy"
+                                        : signal.side,
+                                confidence: signal.confidence,
+                                price: signal.data?.price || 0,
+                                data: signal.data as unknown as Record<
+                                    string,
+                                    unknown
+                                >,
+                            };
 
-                        execution.signals.push(detectorSignal);
-                        this.performanceAnalyzer.recordSignal(detectorSignal);
-                    });
+                            execution.signals.push(detectorSignal);
+                            this.performanceAnalyzer.recordSignal(
+                                detectorSignal
+                            );
+                        }
+                    );
                 } catch (error) {
-                    this.logger.warn("Error setting up detector signal listener", { testId, error });
+                    this.logger.warn(
+                        "Error setting up detector signal listener",
+                        {
+                            testId,
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                        }
+                    );
                 }
             }
 
@@ -328,7 +370,11 @@ export class DetectorTestRunner extends EventEmitter {
                 simulator.once("error", (error) => {
                     // Clean up event listeners on error
                     simulator.removeAllListeners();
-                    reject(error);
+                    reject(
+                        error instanceof Error
+                            ? error
+                            : new Error(String(error))
+                    );
                 });
 
                 // Add timeout to prevent hanging tests
@@ -362,12 +408,18 @@ export class DetectorTestRunner extends EventEmitter {
             });
 
             // Memory cleanup - remove all detector listeners and clear references
-            if (detector && typeof detector === 'object') {
-                if ('removeAllListeners' in detector && typeof detector.removeAllListeners === 'function') {
-                    detector.removeAllListeners();
+            if (detector && typeof detector === "object") {
+                if (
+                    "removeAllListeners" in detector &&
+                    typeof (detector as { removeAllListeners?: () => void })
+                        .removeAllListeners === "function"
+                ) {
+                    (
+                        detector as { removeAllListeners: () => void }
+                    ).removeAllListeners();
                 }
             }
-            
+
             // Suggest garbage collection after large tests
             if (execution.signals.length > 1000) {
                 if (global.gc) {
@@ -389,9 +441,15 @@ export class DetectorTestRunner extends EventEmitter {
             });
 
             // Memory cleanup on error - remove all listeners
-            if (detector && typeof detector === 'object') {
-                if ('removeAllListeners' in detector && typeof detector.removeAllListeners === 'function') {
-                    detector.removeAllListeners();
+            if (detector && typeof detector === "object") {
+                if (
+                    "removeAllListeners" in detector &&
+                    typeof (detector as { removeAllListeners?: () => void })
+                        .removeAllListeners === "function"
+                ) {
+                    (
+                        detector as { removeAllListeners: () => void }
+                    ).removeAllListeners();
                 }
             }
             simulator.removeAllListeners();
@@ -425,14 +483,47 @@ export class DetectorTestRunner extends EventEmitter {
         };
 
         const mockMetrics: IMetricsCollector = {
+            registerMetric: () => {},
+            recordHistogram: () => {},
+            getHistogramPercentiles: () => null,
+            getHistogramSummary: () => null,
+            recordGauge: () => {},
+            getGaugeValue: () => null,
+            createGauge: () => {},
+            setGauge: () => {},
+            incrementCounter: () => {},
+            decrementCounter: () => {},
+            getCounterRate: () => 0,
+            createCounter: () => {},
+            createHistogram: () => {},
             updateMetric: () => {},
             incrementMetric: () => {},
-            getMetrics: () => ({ legacy: {}, enhanced: {} }),
-            getHealthSummary: () => "Healthy",
+            getMetrics: () => ({
+                legacy: {
+                    signalsGenerated: 0,
+                    connectionsActive: 0,
+                    processingLatency: [],
+                    errorsCount: 0,
+                    circuitBreakerState: 'closed',
+                    uptime: 0,
+                },
+                enhanced: {
+                    signalsGenerated: 0,
+                    connectionsActive: 0,
+                    processingLatency: [],
+                    errorsCount: 0,
+                    circuitBreakerState: 'closed',
+                    uptime: 0,
+                },
+            }),
             getAverageLatency: () => 0,
-            createCounter: () => ({ increment: () => {}, get: () => 0 }),
-            createHistogram: () => ({ observe: () => {}, get: () => ({}) }),
-            createGauge: () => ({ set: () => {}, get: () => 0 }),
+            getLatencyPercentiles: () => ({}),
+            exportPrometheus: () => "",
+            exportJSON: () => "",
+            getHealthSummary: (): HealthSummary =>
+                ({ status: "healthy", details: {} }) as HealthSummary,
+            reset: () => {},
+            cleanup: () => {},
         };
 
         switch (testConfig.detectorType) {
@@ -452,30 +543,62 @@ export class DetectorTestRunner extends EventEmitter {
                     mockMetrics
                 );
 
-            case "spoofingDetector":
-                return new SpoofingDetector(
-                    testConfig.config as SpoofingDetectorConfig,
-                    mockLogger
-                );
+            case "spoofingDetector": {
+                const spoofingConfig =
+                    testConfig.config as Partial<SpoofingDetectorConfig>;
+                const fullConfig: SpoofingDetectorConfig = {
+                    tickSize: 0.01,
+                    wallTicks: 5,
+                    minWallSize: 10,
+                    ...spoofingConfig,
+                };
+                return new SpoofingDetector(fullConfig, mockLogger);
+            }
 
-            case "absorptionDetector":
+            case "absorptionDetector": {
+                const mockOrderBook = {
+                    updateDepth: () => {},
+                    getLevel: () => ({ price: 0, quantity: 0 }),
+                    getBestBid: () => 0,
+                    getBestAsk: () => 0,
+                    getSpread: () => 0,
+                    getImbalance: () => 0,
+                    getBidAskRatio: () => 1,
+                    getDepthAtDistance: () => 0,
+                    getTotalBidVolume: () => 0,
+                    getTotalAskVolume: () => 0,
+                    getVolumeWeightedMidPrice: () => 0,
+                    clear: () => {},
+                    getLevels: () => [],
+                    getBidLevels: () => [],
+                    getAskLevels: () => [],
+                    snapshot: () => ({
+                        bids: [],
+                        asks: [],
+                        timestamp: Date.now(),
+                    }),
+                };
+                const mockSpoofingDetector = {} as SpoofingDetector;
                 return new AbsorptionDetector(
                     testConfig.id,
                     testConfig.config as AbsorptionSettings,
+                    mockOrderBook,
                     mockLogger,
-                    mockMetrics,
-                    {} as SpoofingDetector,
-                    {} as IMetricsCollector
+                    mockSpoofingDetector,
+                    mockMetrics
                 );
+            }
 
-            case "exhaustionDetector":
+            case "exhaustionDetector": {
+                const mockSpoofingDetector = {} as SpoofingDetector;
                 return new ExhaustionDetector(
                     testConfig.id,
                     testConfig.config as ExhaustionSettings,
                     mockLogger,
-                    mockMetrics,
-                    {} as IMetricsCollector
+                    mockSpoofingDetector,
+                    mockMetrics
                 );
+            }
 
             case "deltaCVDDetector":
                 const mockSpoofingDetector = {} as SpoofingDetector;
@@ -641,7 +764,7 @@ export class DetectorTestRunner extends EventEmitter {
     /**
      * Get performance analysis results
      */
-    public getPerformanceResults(): Map<string, PerformanceMetrics> {
+    public getPerformanceResults(): Map<string, SignalPerformance> {
         return this.performanceAnalyzer.getAllPerformanceResults();
     }
 

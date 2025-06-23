@@ -68,7 +68,10 @@ class ScriptMetricsCollector {
     createCounter(): { increment: () => void; get: () => number } {
         return { increment: () => {}, get: () => 0 };
     }
-    createHistogram(): { observe: (value: number) => void; get: () => Record<string, unknown> } {
+    createHistogram(): {
+        observe: (value: number) => void;
+        get: () => Record<string, unknown>;
+    } {
         return { observe: () => {}, get: () => ({}) };
     }
     createGauge(): { set: (value: number) => void; get: () => number } {
