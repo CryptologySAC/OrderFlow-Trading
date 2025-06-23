@@ -327,7 +327,10 @@ describe("IcebergDetector Numeric Stability Fixes", () => {
         expect(detector_internal.calculateSizeVariation([1, 2, 3], 0)).toBe(1);
 
         // Test with normal values
-        const result = detector_internal.calculateSizeVariation([10, 12, 8], 10);
+        const result = detector_internal.calculateSizeVariation(
+            [10, 12, 8],
+            10
+        );
         expect(result).toBeGreaterThan(0);
         expect(result).toBeLessThan(1);
     });

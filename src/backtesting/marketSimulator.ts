@@ -54,12 +54,19 @@ export class MarketSimulator extends EventEmitter {
     private orderBook = new Map<number, PassiveLevel>();
     private lastDepthUpdate = 0;
 
-    // Data processing
-    private allDataPoints: MarketDataPoint[] = [];
+    // Streaming data processing - MEMORY FIX: No longer store all data points
+    private currentDataPoints: MarketDataPoint[] = [];
+    private dataFiles: string[] = [];
+    private currentFileIndex = 0;
     private currentIndex = 0;
     private isRunning = false;
     private startTime = 0;
     private realStartTime = 0;
+
+    // Memory management
+    private readonly BATCH_SIZE = 5000; // Process in smaller batches
+    private processedEventCount = 0;
+    private totalEventsEstimate = 0;
 
     // Statistics
     private stats = {
@@ -91,83 +98,41 @@ export class MarketSimulator extends EventEmitter {
         });
 
         try {
-            const dataFiles = this.getDataFiles();
-            this.allDataPoints = [];
+            this.dataFiles = this.getDataFiles();
+            this.currentDataPoints = [];
 
-            // Process ALL data files for realistic live market simulation
-            this.logger.info("Loading complete market dataset", {
+            // 🔧 MEMORY FIX: Streaming approach - load files one at a time
+            this.logger.info("Initializing streaming market data loader", {
                 component: "MarketSimulator",
-                totalFiles: dataFiles.length,
+                totalFiles: this.dataFiles.length,
                 dataDirectory: this.config.dataDirectory,
+                memoryUsage: Math.round(
+                    process.memoryUsage().heapUsed / 1024 / 1024
+                ),
             });
 
-            let processedFiles = 0;
-            for (const file of dataFiles) {
-                processedFiles++;
+            // Estimate total events without loading everything
+            this.totalEventsEstimate = this.estimateEventsCount();
 
-                if (file.includes("_trades.csv")) {
-                    const trades = this.loadTradesFile(file);
-                    this.allDataPoints = this.allDataPoints.concat(trades);
-                    this.stats.totalTrades += trades.length;
+            // Load first batch of data
+            this.loadNextBatch();
 
-                    this.logger.debug("Loaded trades file", {
-                        component: "MarketSimulator",
-                        file: file.split("/").pop(),
-                        tradesLoaded: trades.length,
-                        totalTrades: this.stats.totalTrades,
-                        progress: `${processedFiles}/${dataFiles.length}`,
-                    });
-                } else if (file.includes("_depth.csv")) {
-                    const depths = this.loadDepthFile(file);
-                    this.allDataPoints = this.allDataPoints.concat(depths);
-                    this.stats.totalDepthUpdates += depths.length;
-
-                    this.logger.debug("Loaded depth file", {
-                        component: "MarketSimulator",
-                        file: file.split("/").pop(),
-                        depthUpdatesLoaded: depths.length,
-                        totalDepthUpdates: this.stats.totalDepthUpdates,
-                        progress: `${processedFiles}/${dataFiles.length}`,
-                    });
-                }
-
-                // Log progress every 10 files
-                if (
-                    processedFiles % 10 === 0 ||
-                    processedFiles === dataFiles.length
-                ) {
-                    this.logger.info("Market data loading progress", {
-                        component: "MarketSimulator",
-                        filesProcessed: processedFiles,
-                        totalFiles: dataFiles.length,
-                        totalEvents: this.allDataPoints.length,
-                        memoryUsage:
-                            process.memoryUsage().heapUsed / 1024 / 1024,
-                    });
-                }
-            }
-
-            // Sort all data points by timestamp
-            this.allDataPoints.sort((a, b) => a.timestamp - b.timestamp);
-
-            if (this.allDataPoints.length === 0) {
+            if (this.currentDataPoints.length === 0) {
                 throw new Error("No market data found");
             }
 
-            this.startTime = this.allDataPoints[0].timestamp;
+            this.startTime = this.currentDataPoints[0].timestamp;
 
-            this.logger.info("Market data loaded successfully", {
+            this.logger.info("Market data streaming initialized", {
                 component: "MarketSimulator",
-                totalEvents: this.allDataPoints.length,
-                totalTrades: this.stats.totalTrades,
-                totalDepthUpdates: this.stats.totalDepthUpdates,
+                estimatedTotalEvents: this.totalEventsEstimate,
+                initialBatchSize: this.currentDataPoints.length,
+                totalFiles: this.dataFiles.length,
+                memoryUsage: Math.round(
+                    process.memoryUsage().heapUsed / 1024 / 1024
+                ),
                 timeRange: {
                     start: new Date(this.startTime).toISOString(),
-                    end: new Date(
-                        this.allDataPoints[
-                            this.allDataPoints.length - 1
-                        ].timestamp
-                    ).toISOString(),
                 },
             });
         } catch (error) {
@@ -187,7 +152,7 @@ export class MarketSimulator extends EventEmitter {
             throw new Error("Simulator is already running");
         }
 
-        if (this.allDataPoints.length === 0) {
+        if (this.currentDataPoints.length === 0) {
             throw new Error("No data loaded. Call initialize() first");
         }
 
@@ -198,11 +163,14 @@ export class MarketSimulator extends EventEmitter {
         this.logger.info("Starting market simulation", {
             component: "MarketSimulator",
             speedMultiplier: this.config.speedMultiplier,
-            totalEvents: this.allDataPoints.length,
+            estimatedTotalEvents: this.totalEventsEstimate,
+            memoryUsage: Math.round(
+                process.memoryUsage().heapUsed / 1024 / 1024
+            ),
         });
 
         this.emit("simulationStarted", {
-            totalEvents: this.allDataPoints.length,
+            totalEvents: this.totalEventsEstimate,
             startTimestamp: this.startTime,
         });
 
@@ -216,16 +184,20 @@ export class MarketSimulator extends EventEmitter {
         this.isRunning = false;
         this.logger.info("Market simulation stopped", {
             component: "MarketSimulator",
-            processedEvents: this.stats.processedEvents,
+            processedEvents: this.processedEventCount,
             progress:
-                ((this.currentIndex / this.allDataPoints.length) * 100).toFixed(
-                    2
-                ) + "%",
+                (
+                    (this.processedEventCount / this.totalEventsEstimate) *
+                    100
+                ).toFixed(2) + "%",
+            memoryUsage: Math.round(
+                process.memoryUsage().heapUsed / 1024 / 1024
+            ),
         });
 
         this.emit("simulationStopped", {
-            processedEvents: this.stats.processedEvents,
-            totalEvents: this.allDataPoints.length,
+            processedEvents: this.processedEventCount,
+            totalEvents: this.totalEventsEstimate,
         });
     }
 
@@ -233,18 +205,37 @@ export class MarketSimulator extends EventEmitter {
      * Process the next event in the sequence
      */
     private processNextEvent(): void {
-        if (!this.isRunning || this.currentIndex >= this.allDataPoints.length) {
-            if (this.currentIndex >= this.allDataPoints.length) {
+        // 🔧 MEMORY FIX: Check if we need to load more data
+        if (this.currentIndex >= this.currentDataPoints.length) {
+            if (this.currentFileIndex >= this.dataFiles.length) {
+                // All data processed
                 this.emit("simulationCompleted", {
-                    totalEvents: this.allDataPoints.length,
+                    totalEvents: this.processedEventCount,
                     stats: this.stats,
                 });
+                this.isRunning = false;
+                return;
             }
+
+            // Load next batch and clean up memory
+            this.loadNextBatch();
+            this.currentIndex = 0;
+
+            // Force garbage collection hint
+            if (global.gc && this.processedEventCount % 50000 === 0) {
+                global.gc();
+            }
+        }
+
+        if (
+            !this.isRunning ||
+            this.currentIndex >= this.currentDataPoints.length
+        ) {
             this.isRunning = false;
             return;
         }
 
-        const event = this.allDataPoints[this.currentIndex];
+        const event = this.currentDataPoints[this.currentIndex];
 
         if (event.type === "trade") {
             this.processTradeEvent(event.data as TradeDataPoint);
@@ -256,16 +247,20 @@ export class MarketSimulator extends EventEmitter {
 
         this.currentIndex++;
         this.stats.processedEvents++;
+        this.processedEventCount++;
 
         // Emit progress updates every 10000 events
-        if (this.stats.processedEvents % 10000 === 0) {
+        if (this.processedEventCount % 10000 === 0) {
             const progress =
-                (this.currentIndex / this.allDataPoints.length) * 100;
+                (this.processedEventCount / this.totalEventsEstimate) * 100;
             this.emit("progress", {
-                processed: this.stats.processedEvents,
-                total: this.allDataPoints.length,
+                processed: this.processedEventCount,
+                total: this.totalEventsEstimate,
                 progress: progress,
                 currentTimestamp: event.timestamp,
+                memoryUsage: Math.round(
+                    process.memoryUsage().heapUsed / 1024 / 1024
+                ),
             });
         }
 
@@ -353,23 +348,102 @@ export class MarketSimulator extends EventEmitter {
         }
 
         this.lastDepthUpdate = depth.timestamp;
+
+        // 🔧 MEMORY FIX: Prune order book periodically to prevent memory bloat
+        if (this.orderBook.size > 10000) {
+            this.pruneOrderBook();
+        }
     }
 
     /**
      * Calculate delay until next event based on timestamp and speed multiplier
      */
     private calculateNextDelay(currentTimestamp: number): number {
-        if (this.currentIndex >= this.allDataPoints.length - 1) {
+        if (this.currentIndex >= this.currentDataPoints.length - 1) {
             return 0;
         }
 
         const nextTimestamp =
-            this.allDataPoints[this.currentIndex + 1].timestamp;
+            this.currentDataPoints[this.currentIndex + 1].timestamp;
         const realDelayMs = nextTimestamp - currentTimestamp;
         const simulatedDelayMs = realDelayMs / this.config.speedMultiplier;
 
         // Minimum delay to prevent overwhelming the system
         return Math.max(simulatedDelayMs, 1);
+    }
+
+    /**
+     * 🔧 MEMORY FIX: Estimate total events without loading all data
+     */
+    private estimateEventsCount(): number {
+        // Rough estimate: 12,000 trades per hour-file
+        const tradeFiles = this.dataFiles.filter((f) =>
+            f.includes("_trades.csv")
+        ).length;
+        const depthFiles = this.dataFiles.filter((f) =>
+            f.includes("_depth.csv")
+        ).length;
+
+        // Conservative estimates based on typical market data
+        return tradeFiles * 12000 + depthFiles * 8000;
+    }
+
+    /**
+     * 🔧 MEMORY FIX: Load next batch of data and clean up previous batch
+     */
+    private loadNextBatch(): void {
+        // Clean up previous batch
+        this.currentDataPoints = [];
+
+        if (this.currentFileIndex >= this.dataFiles.length) {
+            return;
+        }
+
+        const batchStart = this.currentFileIndex;
+        const batchEnd = Math.min(
+            this.currentFileIndex + 2,
+            this.dataFiles.length
+        ); // Process 2 files at a time
+
+        this.logger.debug("Loading next data batch", {
+            component: "MarketSimulator",
+            batchStart,
+            batchEnd,
+            totalFiles: this.dataFiles.length,
+            memoryUsageBefore: Math.round(
+                process.memoryUsage().heapUsed / 1024 / 1024
+            ),
+        });
+
+        // Load next batch of files
+        for (let i = batchStart; i < batchEnd; i++) {
+            const file = this.dataFiles[i];
+
+            if (file.includes("_trades.csv")) {
+                const trades = this.loadTradesFile(file);
+                this.currentDataPoints = this.currentDataPoints.concat(trades);
+                this.stats.totalTrades += trades.length;
+            } else if (file.includes("_depth.csv")) {
+                const depths = this.loadDepthFile(file);
+                this.currentDataPoints = this.currentDataPoints.concat(depths);
+                this.stats.totalDepthUpdates += depths.length;
+            }
+        }
+
+        // Sort current batch by timestamp
+        this.currentDataPoints.sort((a, b) => a.timestamp - b.timestamp);
+
+        this.currentFileIndex = batchEnd;
+
+        this.logger.debug("Batch loaded successfully", {
+            component: "MarketSimulator",
+            batchSize: this.currentDataPoints.length,
+            filesProcessed: this.currentFileIndex,
+            totalFiles: this.dataFiles.length,
+            memoryUsageAfter: Math.round(
+                process.memoryUsage().heapUsed / 1024 / 1024
+            ),
+        });
     }
 
     /**
@@ -526,6 +600,7 @@ export class MarketSimulator extends EventEmitter {
 
     /**
      * Track price movements for performance analysis
+     * 🔧 MEMORY FIX: Limit price movements array size
      */
     private trackPriceMovement(price: number, timestamp: number): void {
         if (this.stats.priceMovements.length === 0) {
@@ -550,6 +625,12 @@ export class MarketSimulator extends EventEmitter {
                 percentChange,
                 direction: percentChange > 0 ? "up" : "down",
             });
+
+            // 🔧 MEMORY FIX: Limit array size to prevent memory accumulation
+            if (this.stats.priceMovements.length > 1000) {
+                this.stats.priceMovements =
+                    this.stats.priceMovements.slice(-500); // Keep last 500
+            }
 
             // Emit significant price movement
             this.emit("priceMovement", {
@@ -579,5 +660,58 @@ export class MarketSimulator extends EventEmitter {
         direction: "up" | "down";
     }> {
         return [...this.stats.priceMovements];
+    }
+
+    /**
+     * 🔧 MEMORY FIX: Prune order book to prevent memory bloat
+     */
+    private pruneOrderBook(): void {
+        // Remove levels with zero volume and old timestamps
+        const cutoff = this.lastDepthUpdate - 300000; // 5 minutes old
+        const pricesToRemove: number[] = [];
+
+        for (const [price, level] of this.orderBook) {
+            if (
+                (level.bid === 0 && level.ask === 0) ||
+                level.timestamp < cutoff
+            ) {
+                pricesToRemove.push(price);
+            }
+        }
+
+        for (const price of pricesToRemove) {
+            this.orderBook.delete(price);
+        }
+
+        this.logger.debug("Order book pruned", {
+            component: "MarketSimulator",
+            removedLevels: pricesToRemove.length,
+            remainingLevels: this.orderBook.size,
+            memoryUsage: Math.round(
+                process.memoryUsage().heapUsed / 1024 / 1024
+            ),
+        });
+    }
+
+    /**
+     * 🔧 MEMORY FIX: Cleanup resources and force garbage collection
+     */
+    public cleanup(): void {
+        this.stop();
+        this.currentDataPoints = [];
+        this.orderBook.clear();
+        this.stats.priceMovements = [];
+
+        this.logger.info("MarketSimulator cleanup completed", {
+            component: "MarketSimulator",
+            memoryUsage: Math.round(
+                process.memoryUsage().heapUsed / 1024 / 1024
+            ),
+        });
+
+        // Force garbage collection if available
+        if (global.gc) {
+            global.gc();
+        }
     }
 }

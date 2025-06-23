@@ -645,6 +645,14 @@ export class DetectorTestRunner extends EventEmitter {
                 totalMovements: movementCount,
             });
 
+            // 🔧 MEMORY FIX: Comprehensive cleanup to prevent memory leaks
+
+            // Stop and clean up simulator
+            simulator.stop();
+            if (typeof simulator.cleanup === "function") {
+                simulator.cleanup();
+            }
+
             // Memory cleanup - remove all detector listeners and clear references
             if (detector && typeof detector === "object") {
                 if (
@@ -656,14 +664,29 @@ export class DetectorTestRunner extends EventEmitter {
                         detector as { removeAllListeners: () => void }
                     ).removeAllListeners();
                 }
-            }
 
-            // Suggest garbage collection after large tests
-            if (signalCount > 1000) {
-                if (global.gc) {
-                    global.gc();
+                // Additional cleanup for detectors with cleanup methods
+                if (
+                    "cleanup" in detector &&
+                    typeof (detector as { cleanup?: () => void }).cleanup ===
+                        "function"
+                ) {
+                    (detector as { cleanup: () => void }).cleanup();
                 }
             }
+
+            // Force garbage collection after every test to prevent memory accumulation
+            if (global.gc) {
+                global.gc();
+            }
+
+            this.logger.debug("Test memory cleanup completed", {
+                component: "DetectorTestRunner",
+                testId,
+                memoryUsage: Math.round(
+                    process.memoryUsage().heapUsed / 1024 / 1024
+                ),
+            });
 
             return result;
         } catch (error) {
@@ -678,6 +701,25 @@ export class DetectorTestRunner extends EventEmitter {
                 duration: endTime - startTime,
             });
 
+            // 🔧 MEMORY FIX: Critical cleanup on error to prevent memory leaks
+
+            // Stop and clean up simulator
+            try {
+                simulator.stop();
+                if (typeof simulator.cleanup === "function") {
+                    simulator.cleanup();
+                }
+            } catch (cleanupError) {
+                this.logger.warn("Error during simulator cleanup", {
+                    component: "DetectorTestRunner",
+                    testId,
+                    error:
+                        cleanupError instanceof Error
+                            ? cleanupError.message
+                            : String(cleanupError),
+                });
+            }
+
             // Memory cleanup on error - remove all listeners
             if (detector && typeof detector === "object") {
                 if (
@@ -689,8 +731,32 @@ export class DetectorTestRunner extends EventEmitter {
                         detector as { removeAllListeners: () => void }
                     ).removeAllListeners();
                 }
+
+                // Additional cleanup for detectors with cleanup methods
+                if (
+                    "cleanup" in detector &&
+                    typeof (detector as { cleanup?: () => void }).cleanup ===
+                        "function"
+                ) {
+                    try {
+                        (detector as { cleanup: () => void }).cleanup();
+                    } catch (cleanupError) {
+                        this.logger.warn("Error during detector cleanup", {
+                            component: "DetectorTestRunner",
+                            testId,
+                            error:
+                                cleanupError instanceof Error
+                                    ? cleanupError.message
+                                    : String(cleanupError),
+                        });
+                    }
+                }
             }
-            simulator.removeAllListeners();
+
+            // Force garbage collection on error
+            if (global.gc) {
+                global.gc();
+            }
 
             return {
                 configId: testConfig.id,
