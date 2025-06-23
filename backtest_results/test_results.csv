@@ -1,2 +1,2 @@
 configId,detectorType,duration,totalSignals,totalMovements,success,error
-absorptionDetector_phase1_default,absorptionDetector,600009,0,0,false,Test timeout
+absorptionDetector_phase1_default,absorptionDetector,600006,0,0,false,Test timeout
