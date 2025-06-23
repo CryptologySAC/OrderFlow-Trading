@@ -296,16 +296,16 @@ export class DetectorTestRunner extends EventEmitter {
             if (detector.on && typeof detector.on === 'function') {
                 try {
                     detector.on("signalCandidate", (signal: SignalCandidate) => {
-                    signalCount++;
-                    const detectorSignal: DetectorSignal = {
-                        timestamp: signal.timestamp,
-                        detectorType: testConfig.detectorType,
-                        configId: testConfig.id,
-                        side: signal.side === "neutral" ? "buy" : signal.side,
-                        confidence: signal.confidence,
-                        price: signal.data?.price || 0,
-                        data: signal.data as unknown as Record<string, unknown>,
-                    };
+                        signalCount++;
+                        const detectorSignal: DetectorSignal = {
+                            timestamp: signal.timestamp,
+                            detectorType: execution.config.detectorType,
+                            configId: execution.config.id,
+                            side: signal.side === "neutral" ? "buy" : signal.side,
+                            confidence: signal.confidence,
+                            price: signal.data?.price || 0,
+                            data: signal.data as unknown as Record<string, unknown>,
+                        };
 
                         execution.signals.push(detectorSignal);
                         this.performanceAnalyzer.recordSignal(detectorSignal);
@@ -320,12 +320,21 @@ export class DetectorTestRunner extends EventEmitter {
 
             // Wait for simulation to complete
             await new Promise<void>((resolve, reject) => {
-                simulator.once("simulationCompleted", () => resolve());
-                simulator.once("error", reject);
+                simulator.once("simulationCompleted", () => {
+                    // Clean up event listeners to prevent memory leaks
+                    simulator.removeAllListeners();
+                    resolve();
+                });
+                simulator.once("error", (error) => {
+                    // Clean up event listeners on error
+                    simulator.removeAllListeners();
+                    reject(error);
+                });
 
                 // Add timeout to prevent hanging tests
                 setTimeout(
                     () => {
+                        simulator.removeAllListeners();
                         reject(new Error("Test timeout"));
                     },
                     10 * 60 * 1000
@@ -352,6 +361,20 @@ export class DetectorTestRunner extends EventEmitter {
                 totalMovements: movementCount,
             });
 
+            // Memory cleanup - remove all detector listeners and clear references
+            if (detector && typeof detector === 'object') {
+                if ('removeAllListeners' in detector && typeof detector.removeAllListeners === 'function') {
+                    detector.removeAllListeners();
+                }
+            }
+            
+            // Suggest garbage collection after large tests
+            if (execution.signals.length > 1000) {
+                if (global.gc) {
+                    global.gc();
+                }
+            }
+
             return result;
         } catch (error) {
             const endTime = Date.now();
@@ -364,6 +387,14 @@ export class DetectorTestRunner extends EventEmitter {
                 error: errorMessage,
                 duration: endTime - startTime,
             });
+
+            // Memory cleanup on error - remove all listeners
+            if (detector && typeof detector === 'object') {
+                if ('removeAllListeners' in detector && typeof detector.removeAllListeners === 'function') {
+                    detector.removeAllListeners();
+                }
+            }
+            simulator.removeAllListeners();
 
             return {
                 configId: execution.config.id,

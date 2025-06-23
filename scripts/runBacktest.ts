@@ -419,7 +419,7 @@ function parseArgs(): BacktestConfig {
         outputDirectory: "./backtest_results",
         symbol: "LTCUSDT",
         speedMultiplier: 100,
-        parallelTests: 3,
+        parallelTests: 1,
         sortBy: "f1Score",
         includeGridSearch: true,
         gridSearchPoints: 4,

@@ -30,7 +30,8 @@ npx tsx scripts/runBacktest.ts --detector deltaCVDDetector
 
 ### 3. **Smart Hierarchical Test (42 configurations)**
 ```bash
-npx tsx scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 1 --verbose
+# Use increased memory limit and garbage collection for large tests
+node --max-old-space-size=8192 --expose-gc node_modules/.bin/tsx scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 1 --verbose
 ```
 
 ### 4. **View Results**
@@ -63,22 +64,22 @@ Traditional approaches test parameters randomly or use basic profiles. Our hiera
 ### **Phase 1: Major Parameter Exploration**
 ```bash
 # Test 42 combinations of major DeltaCVD parameters
-npx tsx scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 1 --verbose
+node --max-old-space-size=8192 --expose-gc node_modules/.bin/tsx scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 1 --verbose
 
 # Test with maximum speed and real-time progress
-npx tsx scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 1 --verbose --speed 1000
+node --max-old-space-size=8192 --expose-gc node_modules/.bin/tsx scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 1 --verbose --speed 1000
 
 # Test Hidden Order detector with hierarchical approach
-npx tsx scripts/runBacktest.ts --detector hiddenOrderDetector --hierarchical --phase 1 --verbose
+node --max-old-space-size=8192 --expose-gc node_modules/.bin/tsx scripts/runBacktest.ts --detector hiddenOrderDetector --hierarchical --phase 1 --verbose
 ```
 
 ### **Phase 2: Minor Parameter Optimization**
 ```bash
 # Optimize minor parameters around best Phase 1 results
-npx tsx scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 2 --phase1-results ./backtest_results/rankings.csv --verbose
+node --max-old-space-size=8192 --expose-gc node_modules/.bin/tsx scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 2 --phase1-results ./backtest_results/rankings.csv --verbose
 
 # Use specific Phase 1 results file
-npx tsx scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 2 --phase1-results ./custom_phase1_results.csv
+node --max-old-space-size=8192 --expose-gc node_modules/.bin/tsx scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 2 --phase1-results ./custom_phase1_results.csv
 ```
 
 ### **Standard Testing (Legacy Mode)**
@@ -254,21 +255,25 @@ npx tsx scripts/runBacktest.ts --speed 1000  # Maximum allowed
 
 **❌ "Out of memory" or slow performance**
 ```bash
-# Reduce parallel testing
-npx tsx scripts/runBacktest.ts --parallel 1
+# Use increased memory limit (8GB) with garbage collection
+node --max-old-space-size=8192 --expose-gc node_modules/.bin/tsx scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 1 --verbose
 
-# Increase speed
-npx tsx scripts/runBacktest.ts --speed 1000
+# Alternative: Use smaller memory footprint (reduce parallel testing)
+node --max-old-space-size=4096 --expose-gc node_modules/.bin/tsx scripts/runBacktest.ts --parallel 1
+
+# Increase speed for faster processing
+node --max-old-space-size=8192 --expose-gc node_modules/.bin/tsx scripts/runBacktest.ts --speed 1000
 
 # Test smaller date range
-npx tsx scripts/runBacktest.ts --start-date 2025-06-22 --end-date 2025-06-22
+node --max-old-space-size=8192 --expose-gc node_modules/.bin/tsx scripts/runBacktest.ts --start-date 2025-06-22 --end-date 2025-06-22
 ```
 
 ### **Performance Optimization**
 
 **⚡ For Faster Testing:**
 - Use `--speed 1000` (maximum)
-- Use `--parallel 1` (reduces memory usage)
+- Use `--parallel 1` (reduces memory usage) 
+- Use `node --max-old-space-size=8192 --expose-gc` for memory management
 - Use `--verbose` to see real-time progress
 - Focus on single detector with `--detector`
 
@@ -286,13 +291,13 @@ npx tsx scripts/runBacktest.ts --start-date 2025-06-22 --end-date 2025-06-22
 
 ```bash
 # Step 1: Phase 1 - Test major parameters (42 configs)
-npx tsx scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 1 --verbose --speed 1000
+node --max-old-space-size=8192 --expose-gc node_modules/.bin/tsx scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 1 --verbose --speed 1000
 
 # Step 2: Review Phase 1 results
 open backtest_results/backtesting_results.html
 
 # Step 3: Phase 2 - Optimize minor parameters around best results (125 configs)  
-npx tsx scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 2 --phase1-results ./backtest_results/rankings.csv --verbose
+node --max-old-space-size=8192 --expose-gc node_modules/.bin/tsx scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 2 --phase1-results ./backtest_results/rankings.csv --verbose
 
 # Step 4: Review final optimized results
 open backtest_results/backtesting_results.html
@@ -303,9 +308,9 @@ cat backtest_results/optimal_configurations.json
 
 ```bash
 # Test each detector's best hierarchical configuration
-npx tsx scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 1 --verbose
-npx tsx scripts/runBacktest.ts --detector hiddenOrderDetector --hierarchical --phase 1 --verbose  
-npx tsx scripts/runBacktest.ts --detector icebergDetector --hierarchical --phase 1 --verbose
+node --max-old-space-size=8192 --expose-gc node_modules/.bin/tsx scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 1 --verbose
+node --max-old-space-size=8192 --expose-gc node_modules/.bin/tsx scripts/runBacktest.ts --detector hiddenOrderDetector --hierarchical --phase 1 --verbose  
+node --max-old-space-size=8192 --expose-gc node_modules/.bin/tsx scripts/runBacktest.ts --detector icebergDetector --hierarchical --phase 1 --verbose
 
 # Compare results across detectors
 # (Results are in separate runs - compare optimal_configurations.json files)
@@ -315,7 +320,7 @@ npx tsx scripts/runBacktest.ts --detector icebergDetector --hierarchical --phase
 
 ```bash
 # Fast basic test to validate framework
-npx tsx scripts/runBacktest.ts --detector deltaCVDDetector --speed 1000 --parallel 1
+node --max-old-space-size=4096 --expose-gc node_modules/.bin/tsx scripts/runBacktest.ts --detector deltaCVDDetector --speed 1000 --parallel 1
 
 # View results quickly  
 open backtest_results/backtesting_results.html
