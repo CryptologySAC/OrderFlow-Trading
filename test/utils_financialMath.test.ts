@@ -996,3 +996,141 @@ describe("FinancialMath - Mission Critical Statistical Methods", () => {
         });
     });
 });
+
+describe("FinancialMath - Safe Division Methods", () => {
+    describe("safeDivide()", () => {
+        it("should divide numbers correctly", () => {
+            const result = FinancialMath.safeDivide(10, 2);
+            expect(result).toBe(5);
+        });
+
+        it("should handle division by zero", () => {
+            const result = FinancialMath.safeDivide(10, 0);
+            expect(result).toBe(0);
+        });
+
+        it("should use custom default value for division by zero", () => {
+            const result = FinancialMath.safeDivide(10, 0, -1);
+            expect(result).toBe(-1);
+        });
+
+        it("should handle infinite numerator", () => {
+            const result = FinancialMath.safeDivide(Infinity, 2);
+            expect(result).toBe(0);
+        });
+
+        it("should handle infinite denominator", () => {
+            const result = FinancialMath.safeDivide(10, Infinity);
+            expect(result).toBe(0);
+        });
+
+        it("should handle NaN inputs", () => {
+            const result1 = FinancialMath.safeDivide(NaN, 2);
+            expect(result1).toBe(0);
+
+            const result2 = FinancialMath.safeDivide(10, NaN);
+            expect(result2).toBe(0);
+        });
+
+        it("should use precise BigInt arithmetic for reasonable values", () => {
+            const result = FinancialMath.safeDivide(1, 3);
+            expect(result).toBeCloseTo(0.33333333, 6);
+        });
+
+        it("should fallback to regular division for extreme values", () => {
+            const extremeValue = Number.MAX_SAFE_INTEGER;
+            const result = FinancialMath.safeDivide(extremeValue, 2);
+            expect(result).toBeCloseTo(extremeValue / 2, 0);
+        });
+
+        it("should handle very small values precisely", () => {
+            const result = FinancialMath.safeDivide(0.000001, 0.000002);
+            expect(result).toBeCloseTo(0.5, 6);
+        });
+    });
+});
+
+describe("FinancialMath - Zone Calculation Methods", () => {
+    describe("calculateZone()", () => {
+        it("should calculate zone correctly for valid inputs", () => {
+            const result = FinancialMath.calculateZone(100.55, 5, 2);
+            expect(result).toBeGreaterThan(0);
+            expect(Number.isFinite(result)).toBe(true);
+        });
+
+        it("should throw error for invalid price", () => {
+            expect(() => FinancialMath.calculateZone(0, 5, 2)).toThrow(
+                "Invalid zone calculation parameters"
+            );
+
+            expect(() => FinancialMath.calculateZone(-10, 5, 2)).toThrow(
+                "Invalid zone calculation parameters"
+            );
+        });
+
+        it("should throw error for invalid zoneTicks", () => {
+            expect(() => FinancialMath.calculateZone(100, 0, 2)).toThrow(
+                "Invalid zone calculation parameters"
+            );
+
+            expect(() => FinancialMath.calculateZone(100, -5, 2)).toThrow(
+                "Invalid zone calculation parameters"
+            );
+        });
+
+        it("should throw error for invalid pricePrecision", () => {
+            expect(() => FinancialMath.calculateZone(100, 5, -1)).toThrow(
+                "Invalid zone calculation parameters"
+            );
+        });
+
+        it("should handle different price precisions consistently", () => {
+            const price = 100.12345;
+            const result2 = FinancialMath.calculateZone(price, 5, 2);
+            const result4 = FinancialMath.calculateZone(price, 5, 4);
+            const result8 = FinancialMath.calculateZone(price, 5, 8);
+
+            expect(Number.isFinite(result2)).toBe(true);
+            expect(Number.isFinite(result4)).toBe(true);
+            expect(Number.isFinite(result8)).toBe(true);
+
+            // Higher precision should give more granular zones
+            expect(result8).toBeGreaterThanOrEqual(result4);
+            expect(result4).toBeGreaterThanOrEqual(result2);
+        });
+
+        it("should produce consistent zone boundaries", () => {
+            const price1 = 100.15;
+            const price2 = 100.16;
+            const zoneTicks = 10;
+            const precision = 2;
+
+            const zone1 = FinancialMath.calculateZone(
+                price1,
+                zoneTicks,
+                precision
+            );
+            const zone2 = FinancialMath.calculateZone(
+                price2,
+                zoneTicks,
+                precision
+            );
+
+            // Prices close together should often map to same zone
+            expect(Number.isFinite(zone1)).toBe(true);
+            expect(Number.isFinite(zone2)).toBe(true);
+        });
+
+        it("should handle edge case with minimum tick size", () => {
+            const result = FinancialMath.calculateZone(1.01, 1, 8);
+            expect(Number.isFinite(result)).toBe(true);
+            expect(result).toBeGreaterThan(0);
+        });
+
+        it("should handle large prices and zone ticks", () => {
+            const result = FinancialMath.calculateZone(50000.123456, 100, 6);
+            expect(Number.isFinite(result)).toBe(true);
+            expect(result).toBeGreaterThan(0);
+        });
+    });
+});

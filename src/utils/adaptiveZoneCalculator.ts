@@ -1,3 +1,5 @@
+import { FinancialMath } from "./financialMath.js";
+
 /**
  * Adaptive zone size calculation (ATR-based).
  */
@@ -23,7 +25,11 @@ export class AdaptiveZoneCalculator {
             for (let i = 1; i < this.priceWindow.length; i++) {
                 sum += Math.abs(this.priceWindow[i] - this.priceWindow[i - 1]);
             }
-            this.rollingATR = sum / (this.priceWindow.length - 1);
+            this.rollingATR = FinancialMath.safeDivide(
+                sum,
+                this.priceWindow.length - 1,
+                0
+            );
         }
     }
 
@@ -34,7 +40,12 @@ export class AdaptiveZoneCalculator {
         const tick = 1 / Math.pow(10, pricePrecision);
         return Math.max(
             1,
-            Math.min(10, Math.round((this.rollingATR / tick) * 2))
+            Math.min(
+                10,
+                Math.round(
+                    FinancialMath.safeDivide(this.rollingATR, tick, 0) * 2
+                )
+            )
         );
     }
 

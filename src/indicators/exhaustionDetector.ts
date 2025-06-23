@@ -4,7 +4,7 @@ import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
-// DetectorUtils removed in favor of internal safe calculation methods
+import { FinancialMath } from "../utils/financialMath.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
 import { SharedPools } from "../utils/objectPool.js";
 import { AdaptiveThresholds } from "./marketRegimeDetector.js";
@@ -216,22 +216,14 @@ export class ExhaustionDetector
     }
 
     /**
-     * 🔧 FIX: Safe division helper to prevent division by zero
+     * @deprecated Use FinancialMath.safeDivide() directly for institutional-grade precision
      */
     private safeDivision(
         numerator: number,
         denominator: number,
         fallback: number = 0
     ): number {
-        if (
-            !isFinite(numerator) ||
-            !isFinite(denominator) ||
-            denominator === 0
-        ) {
-            return fallback;
-        }
-        const result = numerator / denominator;
-        return isFinite(result) ? result : fallback;
+        return FinancialMath.safeDivide(numerator, denominator, fallback);
     }
 
     /**
@@ -1135,17 +1127,10 @@ export class ExhaustionDetector
     }
 
     /**
-     * Safe mean calculation
+     * @deprecated Use FinancialMath.calculateMean() directly for institutional-grade precision
      */
     private calculateSafeMean(values: number[]): number {
-        if (values.length === 0) return 0;
-
-        const validValues = values.filter((v) => isFinite(v) && v >= 0);
-        if (validValues.length === 0) return 0;
-
-        return (
-            validValues.reduce((sum, val) => sum + val, 0) / validValues.length
-        );
+        return FinancialMath.calculateMean(values);
     }
 
     /**

@@ -68,7 +68,7 @@ import {
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
-// DetectorUtils removed in favor of internal safe calculation methods
+import { FinancialMath } from "../utils/financialMath.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
 import { ObjectPool } from "../utils/objectPool.js";
 import { CircularBuffer } from "../utils/circularBuffer.js";
@@ -225,43 +225,21 @@ export class AccumulationZoneDetector extends ZoneDetector {
     }
 
     /**
-     * 🔧 FIX: Safe division helper to prevent division by zero
+     * @deprecated Use FinancialMath.safeDivide() directly for institutional-grade precision
      */
     private safeDivision(
         numerator: number,
         denominator: number,
         fallback: number = 0
     ): number {
-        if (
-            !isFinite(numerator) ||
-            !isFinite(denominator) ||
-            denominator === 0
-        ) {
-            return fallback;
-        }
-        const result = numerator / denominator;
-        return isFinite(result) ? result : fallback;
+        return FinancialMath.safeDivide(numerator, denominator, fallback);
     }
 
     /**
-     * 🔧 FIX: Safe mean calculation to replace DetectorUtils.calculateMean
+     * @deprecated Use FinancialMath.calculateMean() directly for institutional-grade precision
      */
     private safeMean(values: number[]): number {
-        if (!values || values.length === 0) {
-            return 0;
-        }
-
-        let sum = 0;
-        let validCount = 0;
-
-        for (const value of values) {
-            if (isFinite(value) && !isNaN(value)) {
-                sum += value;
-                validCount++;
-            }
-        }
-
-        return validCount > 0 ? sum / validCount : 0;
+        return FinancialMath.calculateMean(values);
     }
 
     /**

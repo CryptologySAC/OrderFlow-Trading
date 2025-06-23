@@ -1,3 +1,5 @@
+import { FinancialMath } from "./financialMath.js";
+
 export class RollingStatsWindow {
     private entries: { value: number; time: number }[] = [];
     private sum = 0;
@@ -38,14 +40,17 @@ export class RollingStatsWindow {
     }
 
     mean(): number {
-        return this.entries.length === 0 ? 0 : this.sum / this.entries.length;
+        return this.entries.length === 0
+            ? 0
+            : FinancialMath.safeDivide(this.sum, this.entries.length, 0);
     }
 
     stdDev(): number {
         const n = this.entries.length;
         if (n === 0) return 0;
-        const mean = this.sum / n;
-        const variance = this.sumSquares / n - mean * mean;
+        const mean = FinancialMath.safeDivide(this.sum, n, 0);
+        const variance =
+            FinancialMath.safeDivide(this.sumSquares, n, 0) - mean * mean;
         return Math.sqrt(Math.max(variance, 0));
     }
 }

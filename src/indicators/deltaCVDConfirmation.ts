@@ -14,7 +14,7 @@
    -------------------------------------------------------------------------- */
 
 import { BaseDetector } from "./base/baseDetector.js";
-// DetectorUtils removed in favor of internal safe calculation methods
+import { FinancialMath } from "../utils/financialMath.js";
 import type {
     DeltaCVDConfirmationResult,
     SignalType,
@@ -892,22 +892,14 @@ export class DeltaCVDConfirmation extends BaseDetector {
     }
 
     /**
-     * Safe division with bounds checking to prevent division by zero
+     * @deprecated Use FinancialMath.safeDivide() directly for institutional-grade precision
      */
     private safeDivision(
         numerator: number,
         denominator: number,
         fallback: number = 0
     ): number {
-        if (
-            !isFinite(numerator) ||
-            !isFinite(denominator) ||
-            denominator === 0
-        ) {
-            return fallback;
-        }
-        const result = numerator / denominator;
-        return isFinite(result) ? result : fallback;
+        return FinancialMath.safeDivide(numerator, denominator, fallback);
     }
 
     private updateMarketRegime(event: EnrichedTradeEvent): void {

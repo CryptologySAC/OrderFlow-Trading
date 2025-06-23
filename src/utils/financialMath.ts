@@ -297,4 +297,70 @@ export class FinancialMath {
     static calculateMedian(values: number[]): number {
         return this.calculatePercentile(values, 50);
     }
+
+    /**
+     * MISSION CRITICAL: Safe division with zero protection and precision handling
+     * Replaces duplicate safeDivision methods across detectors
+     */
+    static safeDivide(
+        numerator: number,
+        denominator: number,
+        defaultValue: number = 0
+    ): number {
+        if (
+            !Number.isFinite(numerator) ||
+            !Number.isFinite(denominator) ||
+            denominator === 0 ||
+            isNaN(numerator) ||
+            isNaN(denominator)
+        ) {
+            return defaultValue;
+        }
+
+        // Use BigInt arithmetic for precision when both values are reasonable
+        if (
+            Math.abs(numerator) <
+                Number.MAX_SAFE_INTEGER / this.QUANTITY_SCALE &&
+            Math.abs(denominator) <
+                Number.MAX_SAFE_INTEGER / this.QUANTITY_SCALE
+        ) {
+            const numInt = BigInt(Math.round(numerator * this.QUANTITY_SCALE));
+            const denInt = BigInt(
+                Math.round(denominator * this.QUANTITY_SCALE)
+            );
+            const resultInt = (numInt * BigInt(this.QUANTITY_SCALE)) / denInt;
+            const result = Number(resultInt) / this.QUANTITY_SCALE;
+            return Number.isFinite(result) ? result : defaultValue;
+        }
+
+        // Fallback to regular division for extreme values
+        const result = numerator / denominator;
+        return Number.isFinite(result) ? result : defaultValue;
+    }
+
+    /**
+     * MISSION CRITICAL: Calculate zone using precise arithmetic
+     * Replaces DetectorUtils.calculateZone() with enhanced precision
+     */
+    static calculateZone(
+        price: number,
+        zoneTicks: number,
+        pricePrecision: number
+    ): number {
+        if (price <= 0 || zoneTicks <= 0 || pricePrecision < 0) {
+            throw new Error(
+                `Invalid zone calculation parameters: price=${price}, zoneTicks=${zoneTicks}, pricePrecision=${pricePrecision}`
+            );
+        }
+
+        // Use priceToInt/intToPrice for consistent precision handling
+        const priceInt = this.priceToInt(price);
+        const tickSize = Math.pow(10, -pricePrecision);
+        const tickInt = this.priceToInt(tickSize);
+        const zoneSize = BigInt(zoneTicks) * tickInt;
+
+        // Ensure consistent rounding across all detectors
+        const zoneInt = (priceInt / zoneSize) * zoneSize;
+        return this.intToPrice(zoneInt);
+    }
 }

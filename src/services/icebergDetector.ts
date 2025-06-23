@@ -15,6 +15,7 @@
 
 import { randomUUID } from "crypto";
 import { Detector } from "../indicators/base/detectorEnrichedTrade.js";
+import { FinancialMath } from "../utils/financialMath.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
@@ -158,22 +159,14 @@ export class IcebergDetector extends Detector {
     }
 
     /**
-     * 🔧 FIX: Safe division helper to prevent division by zero
+     * @deprecated Use FinancialMath.safeDivide() directly for institutional-grade precision
      */
     private safeDivision(
         numerator: number,
         denominator: number,
         fallback: number = 0
     ): number {
-        if (
-            !isFinite(numerator) ||
-            !isFinite(denominator) ||
-            denominator === 0
-        ) {
-            return fallback;
-        }
-        const result = numerator / denominator;
-        return isFinite(result) ? result : fallback;
+        return FinancialMath.safeDivide(numerator, denominator, fallback);
     }
 
     /**

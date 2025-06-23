@@ -1,5 +1,6 @@
 import { TimeAwareCache } from "./timeAwareCache.js";
 import { DepthLevel } from "./interfaces.js";
+import { FinancialMath } from "./financialMath.js";
 
 /**
  * Tracks passive orderbook volume over time for refill logic.
@@ -81,7 +82,11 @@ export class PassiveVolumeTracker {
         const totalBid = recentHistory.reduce((sum, h) => sum + h.bid, 0);
         const totalAsk = recentHistory.reduce((sum, h) => sum + h.ask, 0);
 
-        return (totalBid + totalAsk) / recentHistory.length;
+        return FinancialMath.safeDivide(
+            totalBid + totalAsk,
+            recentHistory.length,
+            0
+        );
     }
 
     /**
@@ -108,14 +113,16 @@ export class PassiveVolumeTracker {
         }
 
         if (side === "buy") {
-            return (
-                recentHistory.reduce((sum, h) => sum + h.ask, 0) /
-                recentHistory.length
+            return FinancialMath.safeDivide(
+                recentHistory.reduce((sum, h) => sum + h.ask, 0),
+                recentHistory.length,
+                0
             );
         } else {
-            return (
-                recentHistory.reduce((sum, h) => sum + h.bid, 0) /
-                recentHistory.length
+            return FinancialMath.safeDivide(
+                recentHistory.reduce((sum, h) => sum + h.bid, 0),
+                recentHistory.length,
+                0
             );
         }
     }

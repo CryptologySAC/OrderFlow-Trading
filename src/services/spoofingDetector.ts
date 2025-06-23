@@ -3,6 +3,7 @@
 // TODO You could then emit a severity/confidence level proportional to the size and cancel/execution ratio.
 import { EventEmitter } from "events";
 import { TimeAwareCache } from "../utils/timeAwareCache.js";
+import { FinancialMath } from "../utils/financialMath.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { AnomalyDetector } from "./anomalyDetector.js";
 
@@ -118,22 +119,14 @@ export class SpoofingDetector extends EventEmitter {
     }
 
     /**
-     * 🔧 FIX: Safe division helper to prevent division by zero
+     * @deprecated Use FinancialMath.safeDivide() directly for institutional-grade precision
      */
     private safeDivision(
         numerator: number,
         denominator: number,
         fallback: number = 0
     ): number {
-        if (
-            !isFinite(numerator) ||
-            !isFinite(denominator) ||
-            denominator === 0
-        ) {
-            return fallback;
-        }
-        const result = numerator / denominator;
-        return isFinite(result) ? result : fallback;
+        return FinancialMath.safeDivide(numerator, denominator, fallback);
     }
 
     /**
