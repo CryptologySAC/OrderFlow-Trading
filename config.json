@@ -330,11 +330,12 @@
                 "sustainedVolumeMs": 20000,
                 "medianTradeSize": 0.6,
 
-                "detectionMode": "divergence",
+                "detectionMode": "momentum",
                 "divergenceThreshold": 0.3,
                 "divergenceLookbackSec": 60,
 
-                "enableDepthAnalysis": true,
+                "enableDepthAnalysis": false,
+                "usePassiveVolume": true,
                 "maxOrderbookAge": 5000,
 
                 "absorptionCVDThreshold": 75,
@@ -345,8 +346,8 @@
                 "icebergMinRefills": 3,
                 "icebergMinSize": 20,
 
-                "baseConfidenceRequired": 0.4,
-                "finalConfidenceRequired": 0.45
+                "baseConfidenceRequired": 0.3,
+                "finalConfidenceRequired": 0.5
             }
         }
     }

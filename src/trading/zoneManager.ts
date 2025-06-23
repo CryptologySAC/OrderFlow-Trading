@@ -45,6 +45,9 @@ export class ZoneManager extends EventEmitter {
         // Cleanup old zones periodically
         setInterval(() => this.cleanupExpiredZones(), 300000); // Every 5 minutes
 
+        // Enhanced memory management cleanup for completed zones and history
+        setInterval(() => this.cleanup(), 1800000); // Every 30 minutes
+
         this.logger.info("ZoneManager initialized", {
             component: "ZoneManager",
             config: this.config,
@@ -667,5 +670,48 @@ export class ZoneManager extends EventEmitter {
                 {} as Record<string, number>
             ),
         };
+    }
+
+    /**
+     * Enhanced memory management cleanup for zone data
+     */
+    public cleanup(maxCompletedZones: number = 100): void {
+        // Clean up old completed zones to prevent memory accumulation
+        if (this.completedZones.length > maxCompletedZones) {
+            // Keep only the most recent zones
+            const toRemove = this.completedZones.length - maxCompletedZones;
+            this.completedZones.splice(0, toRemove);
+
+            this.logger.info(
+                "ZoneManager cleanup: removed old completed zones",
+                {
+                    component: "ZoneManager",
+                    removedCount: toRemove,
+                    remainingCount: this.completedZones.length,
+                }
+            );
+        }
+
+        // Clean up very old zone history entries
+        const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+        for (const [symbol, history] of this.zoneHistory) {
+            const filteredHistory = history.filter(
+                (zone) => (zone.endTime || zone.startTime) > oneWeekAgo
+            );
+
+            if (filteredHistory.length !== history.length) {
+                this.zoneHistory.set(symbol, filteredHistory);
+                this.logger.info(
+                    "ZoneManager cleanup: removed old zone history",
+                    {
+                        component: "ZoneManager",
+                        symbol,
+                        removedCount: history.length - filteredHistory.length,
+                        remainingCount: filteredHistory.length,
+                    }
+                );
+            }
+        }
     }
 }

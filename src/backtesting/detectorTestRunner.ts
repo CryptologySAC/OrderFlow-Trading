@@ -41,10 +41,8 @@ import type { ExhaustionSettings } from "../indicators/exhaustionDetector.js";
 import type { DeltaCVDConfirmationSettings } from "../indicators/deltaCVDConfirmation.js";
 
 // Import real production components for authentic testing
-import {
-    OrderBookState,
-    type IOrderBookState,
-} from "../market/orderBookState.js";
+import { RedBlackTreeOrderBook } from "../market/redBlackTreeOrderBook.js";
+import type { IOrderBookState } from "../market/orderBookState.js";
 import { OrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
 import type { SpotWebsocketStreams } from "@binance/spot";
 import type { ThreadManager } from "../multithreading/threadManager.js";
@@ -150,9 +148,9 @@ export class DetectorTestRunner extends EventEmitter {
                     }),
             } as Partial<ThreadManager>;
 
-            // Initialize real OrderBookState with production configuration
-            // but adapted for backtesting (disable sequence validation for historical data)
-            this.realOrderBook = new OrderBookState(
+            // Initialize RedBlackTreeOrderBook with production configuration
+            // Performance optimized O(log n) operations for faster backtesting
+            this.realOrderBook = new RedBlackTreeOrderBook(
                 {
                     pricePrecision: 2, // LTCUSDT uses 2 decimal places
                     symbol: this.config.symbol,
@@ -167,6 +165,8 @@ export class DetectorTestRunner extends EventEmitter {
                 this.metricsCollector,
                 mockThreadManager as ThreadManager
             );
+
+            // Note: orderBook.recover() will be called when testing starts
 
             // Initialize real SpoofingDetector with production configuration
             this.realSpoofingDetector = new SpoofingDetector(
@@ -393,6 +393,10 @@ export class DetectorTestRunner extends EventEmitter {
         let movementCount = 0;
 
         try {
+            // Initialize order book with initial snapshot if not already done
+            if (this.realOrderBook) {
+                await this.realOrderBook.recover();
+            }
             // Set up event listeners for authentic market data processing
 
             // Process depth events through real order book

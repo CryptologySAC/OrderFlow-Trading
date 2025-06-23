@@ -187,6 +187,9 @@ export class DistributionZoneDetector extends ZoneDetector {
                 minZoneStrength: this.config.minZoneStrength,
             },
         });
+
+        // Cleanup old candidates periodically (matching AccumulationZoneDetector)
+        setInterval(() => this.cleanupOldCandidates(), 300000); // Every 5 minutes
     }
 
     /**
@@ -967,6 +970,25 @@ export class DistributionZoneDetector extends ZoneDetector {
 
     public getCandidates(): DistributionCandidate[] {
         return Array.from(this.candidates.values());
+    }
+
+    /**
+     * Cleanup old candidates that haven't formed zones (matching AccumulationZoneDetector)
+     */
+    private cleanupOldCandidates(): void {
+        const now = Date.now();
+        const maxAge = 1800000; // 30 minutes
+
+        for (const [priceLevel, candidate] of this.candidates) {
+            if (now - candidate.startTime > maxAge) {
+                // Validate before cleanup
+                if (candidate.trades.length > 0) {
+                    candidate.trades.clear(); // ✅ PERFORMANCE: Use CircularBuffer.clear()
+                }
+                this.candidates.delete(priceLevel);
+                this.candidatePool.release(candidate);
+            }
+        }
     }
 
     /**
