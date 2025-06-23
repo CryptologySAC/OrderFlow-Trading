@@ -19,7 +19,7 @@ import {
     HybridTradeEvent,
     AggressiveTrade,
 } from "../types/marketEvents.js";
-import { DetectorUtils } from "./base/detectorUtils.js";
+// DetectorUtils removed in favor of internal safe calculation methods
 import { AbsorptionSignalData, SignalType } from "../types/signalTypes.js";
 import { SharedPools } from "../utils/objectPool.js";
 import { IOrderBookState } from "../market/orderBookState.js";
@@ -200,8 +200,90 @@ export class AbsorptionDetector
         return "absorption";
     }
 
+    /**
+     * 🔧 FIX: Numeric validation helper to prevent NaN/Infinity propagation
+     */
+    private validateNumeric(value: number, fallback: number): number {
+        return isFinite(value) && !isNaN(value) && value !== 0
+            ? value
+            : fallback;
+    }
+
+    /**
+     * 🔧 FIX: Safe division helper to prevent division by zero
+     */
+    private safeDivision(
+        numerator: number,
+        denominator: number,
+        fallback: number = 0
+    ): number {
+        if (
+            !isFinite(numerator) ||
+            !isFinite(denominator) ||
+            denominator === 0
+        ) {
+            return fallback;
+        }
+        const result = numerator / denominator;
+        return isFinite(result) ? result : fallback;
+    }
+
+    /**
+     * 🔧 FIX: Safe mean calculation to replace DetectorUtils.calculateMean
+     */
+    private safeMean(values: number[]): number {
+        if (!values || values.length === 0) {
+            return 0;
+        }
+
+        let sum = 0;
+        let validCount = 0;
+
+        for (const value of values) {
+            if (isFinite(value) && !isNaN(value)) {
+                sum += value;
+                validCount++;
+            }
+        }
+
+        return validCount > 0 ? sum / validCount : 0;
+    }
+
     public onEnrichedTrade(event: EnrichedTradeEvent | HybridTradeEvent): void {
-        const zone = this.calculateZone(event.price);
+        // 🔧 FIX: Add comprehensive input validation to prevent NaN/Infinity propagation
+        const validPrice = this.validateNumeric(event.price, 0);
+        if (validPrice === 0) {
+            this.logger.warn(
+                "[AbsorptionDetector] Invalid price detected, skipping trade",
+                {
+                    price: event.price,
+                    quantity: event.quantity,
+                    timestamp: event.timestamp,
+                    pair: event.pair,
+                }
+            );
+            return;
+        }
+
+        const validQuantity = this.validateNumeric(event.quantity, 0);
+        if (validQuantity === 0) {
+            this.logger.warn(
+                "[AbsorptionDetector] Invalid quantity detected, skipping trade",
+                {
+                    price: event.price,
+                    quantity: event.quantity,
+                    timestamp: event.timestamp,
+                    pair: event.pair,
+                }
+            );
+            return;
+        }
+
+        // Validate passive volume values
+        const validBidVolume = Math.max(0, event.zonePassiveBidVolume || 0);
+        const validAskVolume = Math.max(0, event.zonePassiveAskVolume || 0);
+
+        const zone = this.calculateZone(validPrice);
 
         // Get or create zone-specific history
         if (!this.zonePassiveHistory.has(zone)) {
@@ -217,15 +299,15 @@ export class AbsorptionDetector
 
         // Use object pool to reduce GC pressure
         const snap = SharedPools.getInstance().zoneSamples.acquire();
-        snap.bid = event.zonePassiveBidVolume;
-        snap.ask = event.zonePassiveAskVolume;
-        snap.total = event.zonePassiveBidVolume + event.zonePassiveAskVolume;
+        snap.bid = validBidVolume;
+        snap.ask = validAskVolume;
+        snap.total = validBidVolume + validAskVolume;
         snap.timestamp = event.timestamp;
 
         this.passiveEWMA.push(
             event.buyerIsMaker
-                ? event.zonePassiveBidVolume // aggressive sell → tests BID
-                : event.zonePassiveAskVolume // aggressive buy  → tests ASK
+                ? validBidVolume // aggressive sell → tests BID
+                : validAskVolume // aggressive buy  → tests ASK
         );
 
         if (!last || last.bid !== snap.bid || last.ask !== snap.ask) {
@@ -566,7 +648,7 @@ export class AbsorptionDetector
 
         // Calculate rolling statistics
         const currentPassive = relevantPassive[relevantPassive.length - 1] || 0;
-        const avgPassive = DetectorUtils.calculateMean(relevantPassive);
+        const avgPassive = this.safeMean(relevantPassive);
         const minPassive = Math.min(...relevantPassive);
 
         // Get recent aggressive volume
@@ -616,11 +698,13 @@ export class AbsorptionDetector
         if (nearbyLevels.length < 3) return 0;
 
         // Calculate gradient strength (higher = more liquidity depth)
-        const avgVolume = DetectorUtils.calculateMean(nearbyLevels);
+        const avgVolume = this.safeMean(nearbyLevels);
         const centerIndex = Math.floor(nearbyLevels.length / 2);
         const centerVolume = nearbyLevels[centerIndex] || 0;
 
-        return avgVolume > 0 ? Math.min(1, centerVolume / avgVolume) : 0;
+        return avgVolume > 0
+            ? Math.min(1, this.safeDivision(centerVolume, avgVolume, 0))
+            : 0;
     }
 
     /**
@@ -792,15 +876,13 @@ export class AbsorptionDetector
         // Get average passive liquidity in this zone
         const zoneHistory = this.zonePassiveHistory.get(zone);
         const avgPassive = zoneHistory
-            ? DetectorUtils.calculateMean(
-                  zoneHistory.toArray().map((s) => s.total)
-              )
+            ? this.safeMean(zoneHistory.toArray().map((s) => s.total))
             : totalVolume; // Fallback to aggressive volume
 
         if (avgPassive === 0) return 1.0;
 
         // Calculate expected price movement based on volume pressure
-        const volumePressure = totalVolume / avgPassive;
+        const volumePressure = this.safeDivision(totalVolume, avgPassive, 1.0);
         const tickSize = Math.pow(10, -this.pricePrecision);
         const expectedMovement = volumePressure * tickSize * 10; // Scaling factor
 
@@ -808,7 +890,11 @@ export class AbsorptionDetector
 
         // Efficiency = actual movement / expected movement
         // Low efficiency = absorption (price didn't move as much as expected)
-        const efficiency = priceMovement / expectedMovement;
+        const efficiency = this.safeDivision(
+            priceMovement,
+            expectedMovement,
+            1.0
+        );
 
         return Math.max(0.1, Math.min(2.0, efficiency));
     }
@@ -863,11 +949,11 @@ export class AbsorptionDetector
 
         if (earlier.length === 0) return 1;
 
-        const recentAvg = DetectorUtils.calculateMean(recent);
-        const earlierAvg = DetectorUtils.calculateMean(earlier);
+        const recentAvg = this.safeMean(recent);
+        const earlierAvg = this.safeMean(earlier);
 
         // Return growth ratio (>1 means growing passive liquidity = stronger absorption)
-        return earlierAvg > 0 ? recentAvg / earlierAvg : 1;
+        return this.safeDivision(recentAvg, earlierAvg, 1.0);
     }
 
     /**
@@ -975,7 +1061,7 @@ export class AbsorptionDetector
         const sortedPrices = [...recentPrices].sort((a, b) => a - b);
         const below = sortedPrices.filter((p) => p < price).length;
 
-        return below / sortedPrices.length;
+        return this.safeDivision(below, sortedPrices.length, 0);
     }
 
     /**
@@ -1229,8 +1315,11 @@ export class AbsorptionDetector
         }
 
         // Absorption ratio check (aggressive shouldn't overwhelm passive)
-        const absorptionRatio =
-            volumes.passive > 0 ? volumes.aggressive / volumes.passive : 1;
+        const absorptionRatio = this.safeDivision(
+            volumes.aggressive,
+            volumes.passive,
+            1.0
+        );
         if (absorptionRatio > this.maxAbsorptionRatio) {
             // Release pooled conditions object before early return
 
@@ -1399,11 +1488,16 @@ export class AbsorptionDetector
                     flowAnalysis: {
                         buyVolume,
                         sellVolume,
-                        volumeRatio:
-                            sellVolume > 0 ? buyVolume / sellVolume : buyVolume,
-                        dominantFlowConfidence:
-                            Math.abs(buyVolume - sellVolume) /
-                            (buyVolume + sellVolume),
+                        volumeRatio: this.safeDivision(
+                            buyVolume,
+                            sellVolume,
+                            buyVolume
+                        ),
+                        dominantFlowConfidence: this.safeDivision(
+                            Math.abs(buyVolume - sellVolume),
+                            buyVolume + sellVolume,
+                            0
+                        ),
                     },
                 },
             }
@@ -1475,11 +1569,16 @@ export class AbsorptionDetector
                     sellVolume,
                     tradeCount: tradesAtZone.length,
                     dominantSide: dominantAggressiveSide,
-                    volumeRatio:
-                        sellVolume > 0 ? buyVolume / sellVolume : buyVolume,
-                    confidenceScore:
-                        Math.abs(buyVolume - sellVolume) /
+                    volumeRatio: this.safeDivision(
+                        buyVolume,
+                        sellVolume,
+                        buyVolume
+                    ),
+                    confidenceScore: this.safeDivision(
+                        Math.abs(buyVolume - sellVolume),
                         Math.max(buyVolume + sellVolume, 1),
+                        0
+                    ),
                 },
                 // ✅ NEW: Include context-aware analysis
                 absorptionContext: {
@@ -1568,7 +1667,7 @@ export class AbsorptionDetector
             return { absorptionRatio: 0, passiveStrength: 0, refillRate: 0 };
         }
 
-        const avgPassiveTotal = DetectorUtils.calculateMean(
+        const avgPassiveTotal = this.safeMean(
             passiveSnapshots.map((s) => s.total)
         );
         const currentPassive =
@@ -1578,14 +1677,10 @@ export class AbsorptionDetector
         const absorptionRatio =
             aggressiveInZone === 0
                 ? 1 // neutral
-                : DetectorUtils.safeDivide(
-                      aggressiveInZone,
-                      avgPassiveTotal,
-                      0
-                  );
+                : this.safeDivision(aggressiveInZone, avgPassiveTotal, 0);
 
         // Passive strength: how well passive maintained
-        const passiveStrength = DetectorUtils.safeDivide(
+        const passiveStrength = this.safeDivision(
             currentPassive,
             avgPassiveTotal,
             0
@@ -1654,9 +1749,7 @@ export class AbsorptionDetector
                 const currentPassive =
                     relevantPassiveValues[relevantPassiveValues.length - 1] ||
                     0;
-                const avgPassive = DetectorUtils.calculateMean(
-                    relevantPassiveValues
-                );
+                const avgPassive = this.safeMean(relevantPassiveValues);
                 const maxPassive = Math.max(...relevantPassiveValues);
                 const minPassive = Math.min(...relevantPassiveValues);
 
@@ -1664,11 +1757,18 @@ export class AbsorptionDetector
                 const ewmaAgg = this.aggressiveEWMA.get(); // 15 s aggressive
                 const ewmaPas = this.passiveEWMA.get(); // 15 s passive (opposite side)
 
-                const absorptionRatio = ewmaPas > 0 ? ewmaAgg / ewmaPas : 1; // smaller = stronger absorption
+                const absorptionRatio = this.safeDivision(
+                    ewmaAgg,
+                    ewmaPas,
+                    1.0
+                ); // smaller = stronger absorption
 
                 // ✅ FIX 1: Properly calculate passive strength
-                const passiveStrength =
-                    avgPassive > 0 ? currentPassive / avgPassive : 0;
+                const passiveStrength = this.safeDivision(
+                    currentPassive,
+                    avgPassive,
+                    0
+                );
 
                 // ✅ FIX 3: Properly implement iceberg detection
                 const icebergSignal = this.features.icebergDetection
@@ -1780,7 +1880,7 @@ export class AbsorptionDetector
 
         try {
             // Check how consistently passive liquidity is maintained
-            const avgPassive = DetectorUtils.calculateMean(passiveValues);
+            const avgPassive = this.safeMean(passiveValues);
             if (avgPassive === 0) {
                 // Calculate consistency from value distribution instead
                 const nonZeroValues = passiveValues.filter((v) => v > 0);
@@ -2166,9 +2266,7 @@ export class AbsorptionDetector
 
         const passive =
             passiveSnapshots.length > 0
-                ? DetectorUtils.calculateMean(
-                      passiveSnapshots.map((s) => s.total)
-                  )
+                ? this.safeMean(passiveSnapshots.map((s) => s.total))
                 : 0;
 
         return { aggressive, passive, trades };
@@ -2196,13 +2294,13 @@ export class AbsorptionDetector
         }
 
         // Calculate aggregate microstructure metrics
-        const avgFragmentation = DetectorUtils.calculateMean(
+        const avgFragmentation = this.safeMean(
             recentEvents.map((e) => e.microstructure!.fragmentationScore)
         );
-        const avgEfficiency = DetectorUtils.calculateMean(
+        const avgEfficiency = this.safeMean(
             recentEvents.map((e) => e.microstructure!.executionEfficiency)
         );
-        const avgToxicity = DetectorUtils.calculateMean(
+        const avgToxicity = this.safeMean(
             recentEvents.map((e) => e.microstructure!.toxicityScore)
         );
         const totalCoordination = recentEvents.reduce(
