@@ -58,7 +58,7 @@
  */
 
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
-import { DetectorUtils } from "./base/detectorUtils.js";
+import { FinancialMath } from "../utils/financialMath.js";
 import { Config } from "../core/config.js";
 
 /**
@@ -251,7 +251,7 @@ export class EnhancedZoneFormation {
         // 4. Price stability during execution
         const prices = trades.map((t) => t.price);
         const priceRange = Math.max(...prices) - Math.min(...prices);
-        const avgPrice = DetectorUtils.calculateMean(prices);
+        const avgPrice = FinancialMath.calculateMean(prices);
         const priceStability =
             avgPrice > 0
                 ? Math.max(
@@ -301,8 +301,8 @@ export class EnhancedZoneFormation {
         }
 
         // Consistency = low standard deviation relative to mean
-        const mean = DetectorUtils.calculateMean(volumePerWindow);
-        const stdDev = DetectorUtils.calculateStdDev(volumePerWindow);
+        const mean = FinancialMath.calculateMean(volumePerWindow);
+        const stdDev = FinancialMath.calculateStdDev(volumePerWindow);
 
         return mean > 0 ? Math.max(0, 1 - stdDev / mean) : 0;
     }
@@ -346,9 +346,9 @@ export class EnhancedZoneFormation {
      */
     private analyzeOrderSizeDistribution(trades: EnrichedTradeEvent[]): number {
         const orderSizes = trades.map((t) => t.quantity);
-        const median = DetectorUtils.calculateMedian(orderSizes);
-        const p75 = DetectorUtils.calculatePercentile(orderSizes, 75);
-        const p95 = DetectorUtils.calculatePercentile(orderSizes, 95);
+        const median = FinancialMath.calculateMedian(orderSizes);
+        const p75 = FinancialMath.calculatePercentile(orderSizes, 75);
+        const p95 = FinancialMath.calculatePercentile(orderSizes, 95);
 
         // Institutional activity shows:
         // 1. Higher concentration in upper percentiles
@@ -399,8 +399,8 @@ export class EnhancedZoneFormation {
         }
 
         // Consistency = low variance in activity across time windows
-        const mean = DetectorUtils.calculateMean(tradesPerWindow);
-        const stdDev = DetectorUtils.calculateStdDev(tradesPerWindow);
+        const mean = FinancialMath.calculateMean(tradesPerWindow);
+        const stdDev = FinancialMath.calculateStdDev(tradesPerWindow);
 
         return mean > 0 ? Math.max(0, 1 - stdDev / mean) : 0;
     }
@@ -1662,12 +1662,12 @@ export class EnhancedZoneFormation {
                 (priceHistory[i] - priceHistory[i - 1]) / priceHistory[i - 1]
             );
         }
-        const volatility = DetectorUtils.calculateStdDev(priceChanges);
+        const volatility = FinancialMath.calculateStdDev(priceChanges);
 
         // Calculate volume characteristics
         const volumes = recentTrades.map((t) => t.quantity);
-        const avgVolume = DetectorUtils.calculateMean(volumes);
-        const volumeStdDev = DetectorUtils.calculateStdDev(volumes);
+        const avgVolume = FinancialMath.calculateMean(volumes);
+        const volumeStdDev = FinancialMath.calculateStdDev(volumes);
 
         // Determine trend strength
         const trendStrength = this.calculateTrendStrength(priceHistory);
@@ -1697,8 +1697,8 @@ export class EnhancedZoneFormation {
         const firstHalf = prices.slice(0, Math.floor(prices.length / 2));
         const secondHalf = prices.slice(Math.floor(prices.length / 2));
 
-        const firstAvg = DetectorUtils.calculateMean(firstHalf);
-        const secondAvg = DetectorUtils.calculateMean(secondHalf);
+        const firstAvg = FinancialMath.calculateMean(firstHalf);
+        const secondAvg = FinancialMath.calculateMean(secondHalf);
 
         const priceChange = Math.abs(secondAvg - firstAvg) / firstAvg;
         return Math.min(1, priceChange * 10); // Scale to 0-1

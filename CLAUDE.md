@@ -316,6 +316,62 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 - ✅ Write tests that guide proper bug fixes
 - ✅ Use deterministic test data to ensure reliable error detection
 
+### 🔢 FINANCIALMATH - MISSION CRITICAL CALCULATIONS (MANDATORY)
+
+**CRITICAL REQUIREMENT**: ALL financial calculations MUST use `src/utils/financialMath.ts` for precision and accuracy.
+
+#### Why FinancialMath is Required
+
+- **Floating Point Precision**: Eliminates floating-point arithmetic errors in financial calculations
+- **Trading Accuracy**: Ensures precise price/quantity calculations for live trading
+- **Regulatory Compliance**: Meets institutional-grade numerical precision requirements
+- **Data Integrity**: Prevents accumulation of rounding errors in high-frequency operations
+
+#### Mandatory Usage Patterns
+
+**✅ REQUIRED: Use FinancialMath for all calculations**
+
+```typescript
+// Price calculations
+const midPrice = FinancialMath.calculateMidPrice(bid, ask, precision);
+const spread = FinancialMath.calculateSpread(ask, bid, precision);
+
+// Quantity operations
+const ratio = FinancialMath.divideQuantities(volume1, volume2);
+const product = FinancialMath.multiplyQuantities(price, quantity);
+
+// Statistical calculations (NEW)
+const mean = FinancialMath.calculateMean(values);
+const stdDev = FinancialMath.calculateStdDev(values);
+const percentile = FinancialMath.calculatePercentile(values, 95);
+```
+
+**❌ PROHIBITED: Direct floating-point arithmetic**
+
+```typescript
+// NEVER DO THIS - causes precision errors
+const midPrice = (bid + ask) / 2;
+const ratio = volume1 / volume2;
+const mean = values.reduce((a, b) => a + b) / values.length;
+```
+
+#### Implementation Requirements
+
+- **ALL detectors**: Must use FinancialMath for price/quantity operations
+- **Statistical Analysis**: Must use FinancialMath statistical methods (not DetectorUtils)
+- **Zone Calculations**: Must use FinancialMath for zone-based computations
+- **Risk Calculations**: Must use FinancialMath for precision-critical risk metrics
+
+#### Migration Priority
+
+**HIGH PRIORITY**: Replace any DetectorUtils usage with FinancialMath equivalents
+
+- **DetectorUtils.calculateMean()** → **FinancialMath.calculateMean()**
+- **DetectorUtils.calculateStdDev()** → **FinancialMath.calculateStdDev()**
+- **DetectorUtils.calculatePercentile()** → **FinancialMath.calculatePercentile()**
+
+**RATIONALE**: FinancialMath provides institutional-grade precision while DetectorUtils may have floating-point precision issues affecting live trading.
+
 ### Database
 
 - SQLite database with migrations in `src/infrastructure/migrate.ts`

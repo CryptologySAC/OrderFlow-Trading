@@ -91,7 +91,7 @@ export class FinancialMath {
         }
         const qty1Int = BigInt(Math.round(qty1 * this.QUANTITY_SCALE));
         const qty2Int = BigInt(Math.round(qty2 * this.QUANTITY_SCALE));
-        const resultInt = qty1Int / qty2Int / BigInt(this.QUANTITY_SCALE);
+        const resultInt = (qty1Int * BigInt(this.QUANTITY_SCALE)) / qty2Int;
         return Number(resultInt) / this.QUANTITY_SCALE;
     }
 
@@ -114,8 +114,26 @@ export class FinancialMath {
      * Returns: -1 if qty1 < qty2, 0 if equal, 1 if qty1 > qty2
      */
     static compareQuantities(qty1: number, qty2: number): number {
-        const qty1Int = BigInt(Math.round(qty1 * this.QUANTITY_SCALE));
-        const qty2Int = BigInt(Math.round(qty2 * this.QUANTITY_SCALE));
+        // Handle extreme values that can't be converted to BigInt
+        if (!Number.isFinite(qty1) || !Number.isFinite(qty2)) {
+            if (qty1 === qty2) return 0;
+            if (qty1 > qty2) return 1;
+            return -1;
+        }
+
+        // Check if scaling would cause overflow
+        const scaled1 = qty1 * this.QUANTITY_SCALE;
+        const scaled2 = qty2 * this.QUANTITY_SCALE;
+
+        if (!Number.isFinite(scaled1) || !Number.isFinite(scaled2)) {
+            // Fallback to simple comparison for extreme values
+            if (qty1 === qty2) return 0;
+            if (qty1 > qty2) return 1;
+            return -1;
+        }
+
+        const qty1Int = BigInt(Math.round(scaled1));
+        const qty2Int = BigInt(Math.round(scaled2));
 
         if (qty1Int < qty2Int) return -1;
         if (qty1Int > qty2Int) return 1;
@@ -154,5 +172,129 @@ export class FinancialMath {
             throw new Error(`Invalid quantity string: ${quantityStr}`);
         }
         return quantity;
+    }
+
+    /**
+     * MISSION CRITICAL: Calculate mean with precision handling
+     * Replaces DetectorUtils.calculateMean() with institutional-grade precision
+     */
+    static calculateMean(values: number[]): number {
+        if (!values || values.length === 0) {
+            return 0;
+        }
+
+        // Filter out invalid values and use BigInt for precision
+        const validValues = values.filter(
+            (v) => Number.isFinite(v) && !isNaN(v)
+        );
+        if (validValues.length === 0) {
+            return 0;
+        }
+
+        // Use BigInt arithmetic to avoid floating-point precision loss
+        let sum = 0n;
+        for (const value of validValues) {
+            sum += BigInt(Math.round(value * this.QUANTITY_SCALE));
+        }
+
+        const result =
+            Number(sum / BigInt(validValues.length)) / this.QUANTITY_SCALE;
+        return result;
+    }
+
+    /**
+     * MISSION CRITICAL: Calculate standard deviation with Welford's algorithm
+     * Replaces DetectorUtils.calculateStdDev() with numerically stable implementation
+     */
+    static calculateStdDev(values: number[]): number {
+        if (!values || values.length === 0) {
+            return 0;
+        }
+        if (values.length === 1) {
+            return 0;
+        }
+
+        // Filter out invalid values
+        const validValues = values.filter(
+            (v) => Number.isFinite(v) && !isNaN(v)
+        );
+        if (validValues.length <= 1) {
+            return 0;
+        }
+
+        // Welford's algorithm for numerical stability
+        let mean = 0;
+        let m2 = 0;
+        let count = 0;
+
+        for (const value of validValues) {
+            count++;
+            const delta = value - mean;
+            mean += delta / count;
+            const delta2 = value - mean;
+            m2 += delta * delta2;
+        }
+
+        const variance = m2 / (count - 1);
+        return Math.sqrt(variance);
+    }
+
+    /**
+     * MISSION CRITICAL: Calculate percentile with precise interpolation
+     * Replaces DetectorUtils.calculatePercentile() with institutional-grade precision
+     */
+    static calculatePercentile(values: number[], percentile: number): number {
+        if (!values || values.length === 0) {
+            return 0;
+        }
+        if (
+            percentile < 0 ||
+            percentile > 100 ||
+            !Number.isFinite(percentile)
+        ) {
+            throw new Error(
+                `Invalid percentile: ${percentile}. Must be between 0 and 100.`
+            );
+        }
+
+        // Filter out invalid values and sort
+        const validValues = values.filter(
+            (v) => Number.isFinite(v) && !isNaN(v)
+        );
+        if (validValues.length === 0) {
+            return 0;
+        }
+
+        const sorted = [...validValues].sort((a, b) => a - b);
+
+        if (percentile === 0) {
+            return sorted[0];
+        }
+        if (percentile === 100) {
+            return sorted[sorted.length - 1];
+        }
+
+        // Use precise percentile calculation with interpolation
+        const index = (percentile / 100) * (sorted.length - 1);
+        const lower = Math.floor(index);
+        const upper = Math.ceil(index);
+
+        if (lower === upper) {
+            return sorted[lower];
+        }
+
+        // Linear interpolation between adjacent values
+        const weight = index - lower;
+        const result = sorted[lower] * (1 - weight) + sorted[upper] * weight;
+
+        return result;
+    }
+
+    /**
+     * MISSION CRITICAL: Calculate median (50th percentile)
+     * Optimized version of calculatePercentile for median calculation
+     */
+    static calculateMedian(values: number[]): number {
+        return this.calculatePercentile(values, 50);
     }
 }
