@@ -2,10 +2,10 @@
 
 ## Overview
 
-- **Total Configurations Tested**: 42
+- **Total Configurations Tested**: 1
 - **Successful Tests**: 0
 - **Performance Configurations**: 0
-- **Generated**: 2025-06-22T22:16:32.931Z
+- **Generated**: 2025-06-23T12:58:30.512Z
 
 ## Top Performers
 

@@ -27,14 +27,14 @@ ls backtesting_data/
 ### 2. **Basic Test (3 configurations)**
 
 ```bash
-npx ts-node scripts/runBacktest.ts --detector deltaCVDDetector
+node run_hierarchical_backtest.js --detector deltaCVDDetector
 ```
 
 ### 3. **Smart Hierarchical Test (42 configurations)**
 
 ```bash
 # Use increased memory limit and garbage collection for large tests
-node --max-old-space-size=8192 --expose-gc node_modules/.bin/ts-node scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 1 --verbose
+node --max-old-space-size=8192 --expose-gc run_hierarchical_backtest.js --detector deltaCVDDetector --hierarchical --phase 1 --verbose
 ```
 
 ### 4. **View Results**
@@ -69,23 +69,23 @@ Traditional approaches test parameters randomly or use basic profiles. Our hiera
 
 ```bash
 # Test 42 combinations of major DeltaCVD parameters
-node --max-old-space-size=8192 --expose-gc node_modules/.bin/ts-node scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 1 --verbose
+node --max-old-space-size=8192 --expose-gc run_hierarchical_backtest.js --detector deltaCVDDetector --hierarchical --phase 1 --verbose
 
 # Test with maximum speed and real-time progress
-node --max-old-space-size=8192 --expose-gc node_modules/.bin/ts-node scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 1 --verbose --speed 1000
+node --max-old-space-size=8192 --expose-gc run_hierarchical_backtest.js --detector deltaCVDDetector --hierarchical --phase 1 --verbose --speed 1000
 
 # Test Hidden Order detector with hierarchical approach
-node --max-old-space-size=8192 --expose-gc node_modules/.bin/ts-node scripts/runBacktest.ts --detector hiddenOrderDetector --hierarchical --phase 1 --verbose
+node --max-old-space-size=8192 --expose-gc run_hierarchical_backtest.js --detector hiddenOrderDetector --hierarchical --phase 1 --verbose
 ```
 
 ### **Phase 2: Minor Parameter Optimization**
 
 ```bash
 # Optimize minor parameters around best Phase 1 results
-node --max-old-space-size=8192 --expose-gc node_modules/.bin/ts-node scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 2 --phase1-results ./backtest_results/rankings.csv --verbose
+node --max-old-space-size=8192 --expose-gc run_hierarchical_backtest.js --detector deltaCVDDetector --hierarchical --phase 2 --phase1-results ./backtest_results/rankings.csv --verbose
 
 # Use specific Phase 1 results file
-node --max-old-space-size=8192 --expose-gc node_modules/.bin/ts-node scripts/runBacktest.ts --detector deltaCVDDetector --hierarchical --phase 2 --phase1-results ./custom_phase1_results.csv
+node --max-old-space-size=8192 --expose-gc run_hierarchical_backtest.js --detector deltaCVDDetector --hierarchical --phase 2 --phase1-results ./custom_phase1_results.csv
 ```
 
 ### **Standard Testing (Legacy Mode)**

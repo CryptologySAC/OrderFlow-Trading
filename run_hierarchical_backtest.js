@@ -117,7 +117,7 @@ Examples:
                 includeProfiles: !this.config.hierarchicalTesting,
                 includeGridSearch: !this.config.hierarchicalTesting,
             });
-            
+
             const configurations = configMatrix.generateAllConfigurations();
 
             console.log(

@@ -59,25 +59,6 @@ export interface HiddenOrderEvent {
     depthSnapshot: Map<number, PassiveLevel> | undefined;
 }
 
-export interface HiddenOrderZone {
-    id: string;
-    type: "hidden_liquidity";
-    priceRange: {
-        min: number;
-        max: number;
-    };
-    startTime: number;
-    endTime: number;
-    strength: number;
-    completion: number;
-    executedVolume: number;
-    visibleVolume: number;
-    hiddenVolume: number;
-    side: "buy" | "sell";
-    confidence: number;
-    hiddenPercentage: number;
-}
-
 /**
  * Hidden order detection using order book depth vs execution volume analysis
  */
@@ -313,6 +294,34 @@ export class HiddenOrderDetector extends Detector {
     }
 
     /**
+     * Determine stealth type based on hidden volume characteristics
+     */
+    private determineStealthType(
+        hiddenVolume: number,
+        totalVolume: number
+    ):
+        | "reserve_order"
+        | "stealth_liquidity"
+        | "algorithmic_hidden"
+        | "institutional_stealth" {
+        const hiddenPercentage = hiddenVolume / totalVolume;
+
+        if (totalVolume >= 100) {
+            // Large orders suggest institutional activity
+            return "institutional_stealth";
+        } else if (hiddenPercentage >= 0.8) {
+            // Mostly hidden suggests algorithmic stealth
+            return "algorithmic_hidden";
+        } else if (hiddenPercentage >= 0.5) {
+            // Significant hidden portion suggests stealth liquidity
+            return "stealth_liquidity";
+        } else {
+            // Smaller hidden portion suggests reserve order
+            return "reserve_order";
+        }
+    }
+
+    /**
      * Calculate confidence score for hidden order detection
      */
     private calculateConfidence(
@@ -433,9 +442,9 @@ export class HiddenOrderDetector extends Detector {
 
         // Create hidden order zone for chart visualization
         const zoneHeight = trade.price * this.config.zoneHeightPercentage;
-        const hiddenOrderZone: HiddenOrderZone = {
+        const hiddenOrderZone = {
             id: `hidden_${hiddenOrderEvent.id}`,
-            type: "hidden_liquidity",
+            type: "hidden_liquidity" as const,
             priceRange: {
                 min: trade.price - zoneHeight / 2,
                 max: trade.price + zoneHeight / 2,
@@ -444,10 +453,20 @@ export class HiddenOrderDetector extends Detector {
             endTime: trade.timestamp, // Instant consumption
             strength: hiddenData.confidence,
             completion: 1.0, // Completed when detected
+            totalVolume: trade.quantity,
+            tradeCount: 1, // Single trade event
+            averageTradeSize: trade.quantity,
+            side,
+            stealthScore: hiddenData.confidence,
+            stealthType: this.determineStealthType(
+                hiddenData.hiddenVolume,
+                trade.quantity
+            ),
+            volumeConcentration: hiddenData.hiddenVolume / trade.quantity,
+            // Additional properties for compatibility
             executedVolume: trade.quantity,
             visibleVolume: hiddenData.visibleVolume,
             hiddenVolume: hiddenData.hiddenVolume,
-            side,
             confidence: hiddenData.confidence,
             hiddenPercentage,
         };
