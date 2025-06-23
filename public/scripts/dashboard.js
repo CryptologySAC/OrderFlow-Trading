@@ -2906,10 +2906,19 @@ function updateZoneBox(zone) {
             ];
         if (annotation) {
             // Update zone properties
-            annotation.yMin = zone.priceRange.min;
-            annotation.yMax = zone.priceRange.max;
-            annotation.backgroundColor = getZoneColor(zone);
-            annotation.borderColor = getZoneBorderColor(zone);
+            if (zone.type === "hidden_liquidity") {
+                const price =
+                    zone.priceRange.center ??
+                    (zone.priceRange.min + zone.priceRange.max) / 2;
+                annotation.yMin = price;
+                annotation.yMax = price;
+                annotation.borderColor = getZoneBorderColor(zone);
+            } else {
+                annotation.yMin = zone.priceRange.min;
+                annotation.yMax = zone.priceRange.max;
+                annotation.backgroundColor = getZoneColor(zone);
+                annotation.borderColor = getZoneBorderColor(zone);
+            }
             annotation.label.content = getZoneLabel(zone);
 
             tradesChart.update("none");
@@ -2930,10 +2939,16 @@ function completeZoneBox(zone) {
             ];
         if (annotation) {
             // Change to completed zone style
-            annotation.backgroundColor = getCompletedZoneColor(zone);
-            annotation.borderColor = getCompletedZoneBorderColor(zone);
-            annotation.borderWidth = 2;
-            annotation.borderDash = [5, 5]; // Dashed border for completed zones
+            if (zone.type === "hidden_liquidity") {
+                annotation.borderColor = getCompletedZoneBorderColor(zone);
+                annotation.borderWidth = 2;
+                annotation.borderDash = [5, 5];
+            } else {
+                annotation.backgroundColor = getCompletedZoneColor(zone);
+                annotation.borderColor = getCompletedZoneBorderColor(zone);
+                annotation.borderWidth = 2;
+                annotation.borderDash = [5, 5];
+            }
             annotation.label.content = getZoneLabel(zone) + " ✓";
 
             tradesChart.update("none");
@@ -2968,36 +2983,71 @@ function removeZoneBox(zoneId) {
  */
 function addZoneToChart(zone) {
     if (!tradesChart?.options?.plugins?.annotation?.annotations) return;
+    let zoneAnnotation;
 
-    const zoneAnnotation = {
-        type: "box",
-        xMin: zone.startTime,
-        xMax: Date.now() + 5 * 60 * 1000, // Extend 5 minutes into future
-        yMin: zone.priceRange.min,
-        yMax: zone.priceRange.max,
-        backgroundColor: getZoneColor(zone),
-        borderColor: getZoneBorderColor(zone),
-        borderWidth: 1,
-        label: {
-            display: true,
-            content: getZoneLabel(zone),
-            position: "start",
-            font: {
-                size: 10,
-                weight: "bold",
+    if (zone.type === "hidden_liquidity") {
+        const price =
+            zone.priceRange.center ??
+            (zone.priceRange.min + zone.priceRange.max) / 2;
+        zoneAnnotation = {
+            type: "line",
+            xMin: zone.startTime,
+            xMax: Date.now() + 5 * 60 * 1000,
+            yMin: price,
+            yMax: price,
+            borderColor: getZoneBorderColor(zone),
+            borderWidth: 2,
+            label: {
+                display: true,
+                content: getZoneLabel(zone),
+                position: "start",
+                font: {
+                    size: 10,
+                    weight: "bold",
+                },
+                color: getZoneTextColor(zone),
+                backgroundColor: "rgba(255, 255, 255, 0.8)",
+                padding: 4,
+                borderRadius: 3,
             },
-            color: getZoneTextColor(zone),
-            backgroundColor: "rgba(255, 255, 255, 0.8)",
-            padding: 4,
-            borderRadius: 3,
-        },
-        enter: (ctx, event) => {
-            showZoneTooltip(zone, event);
-        },
-        leave: () => {
-            hideZoneTooltip();
-        },
-    };
+            enter: (ctx, event) => {
+                showZoneTooltip(zone, event);
+            },
+            leave: () => {
+                hideZoneTooltip();
+            },
+        };
+    } else {
+        zoneAnnotation = {
+            type: "box",
+            xMin: zone.startTime,
+            xMax: Date.now() + 5 * 60 * 1000, // Extend 5 minutes into future
+            yMin: zone.priceRange.min,
+            yMax: zone.priceRange.max,
+            backgroundColor: getZoneColor(zone),
+            borderColor: getZoneBorderColor(zone),
+            borderWidth: 1,
+            label: {
+                display: true,
+                content: getZoneLabel(zone),
+                position: "start",
+                font: {
+                    size: 10,
+                    weight: "bold",
+                },
+                color: getZoneTextColor(zone),
+                backgroundColor: "rgba(255, 255, 255, 0.8)",
+                padding: 4,
+                borderRadius: 3,
+            },
+            enter: (ctx, event) => {
+                showZoneTooltip(zone, event);
+            },
+            leave: () => {
+                hideZoneTooltip();
+            },
+        };
+    }
 
     tradesChart.options.plugins.annotation.annotations[`zone_${zone.id}`] =
         zoneAnnotation;
