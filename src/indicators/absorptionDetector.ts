@@ -492,18 +492,45 @@ export class AbsorptionDetector
 
         //Check for Iceberg first
         const zoneHistory = this.zonePassiveHistory.get(zone);
-        if (!zoneHistory) return false;
+        if (!zoneHistory) {
+            this.logger.debug(
+                "[AbsorptionDetector] Zone history missing for absorption check",
+                {
+                    price,
+                    side,
+                    zone,
+                    detectorId: this.id,
+                    availableZones: Array.from(this.zonePassiveHistory.keys()),
+                }
+            );
+            return false;
+        }
 
         // 🚨 CRITICAL FIX: Add null safety guard for orderBook
         if (!this.orderBook) {
-            this.logger.warn("OrderBook unavailable for absorption analysis", {
+            this.logger.warn(
+                "[AbsorptionDetector] OrderBook unavailable for absorption analysis",
+                {
+                    price,
+                    side,
+                    zone,
+                    detectorId: this.id,
+                    hasOrderBook: !!this.orderBook,
+                }
+            );
+            return false; // Skip iceberg detection, continue with basic absorption logic
+        }
+
+        this.logger.debug(
+            "[AbsorptionDetector] Checking absorption conditions",
+            {
                 price,
                 side,
                 zone,
-                detectorId: this.id,
-            });
-            return false; // Skip iceberg detection, continue with basic absorption logic
-        }
+                zoneHistoryCount: zoneHistory.count(),
+                orderBookAvailable: !!this.orderBook,
+            }
+        );
 
         // 🚨 CRITICAL FIX: Iceberg detection should ENHANCE absorption confidence, not abort
         let icebergConfidenceFactor = 1.0;
@@ -1137,6 +1164,21 @@ export class AbsorptionDetector
 
         // Check score threshold
         if (score < this.absorptionThreshold) {
+            this.logger.debug(
+                "[AbsorptionDetector] Signal rejected - score below threshold",
+                {
+                    score,
+                    threshold: this.absorptionThreshold,
+                    price,
+                    side,
+                    zone,
+                    conditions: {
+                        absorptionRatio: conditions.absorptionRatio,
+                        aggressiveVolume: conditions.aggressiveVolume,
+                        avgPassive: conditions.avgPassive,
+                    },
+                }
+            );
             SharedPools.getInstance().absorptionConditions.release(
                 conditionsToRelease
             );
@@ -1166,6 +1208,17 @@ export class AbsorptionDetector
 
         // Volume threshold check
         if (volumes.aggressive < this.minAggVolume) {
+            this.logger.debug(
+                "[AbsorptionDetector] Signal rejected - aggressive volume below minimum",
+                {
+                    aggressiveVolume: volumes.aggressive,
+                    minRequired: this.minAggVolume,
+                    passiveVolume: volumes.passive,
+                    price,
+                    side,
+                    zone,
+                }
+            );
             // Release pooled conditions object before early return
 
             SharedPools.getInstance().absorptionConditions.release(

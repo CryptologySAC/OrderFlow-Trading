@@ -17,11 +17,13 @@
 **📋 Problem Addressed:** Performance degradation concerns after passive depth integration
 
 **🎯 Solution:** Systematic A/B testing framework with three configurations:
+
 - **`simplified_no_passive`**: Pure CVD calculation (baseline)
-- **`simplified_with_passive`**: Enhanced CVD with proper passive volume weighting  
+- **`simplified_with_passive`**: Enhanced CVD with proper passive volume weighting
 - **`current_complex`**: Full enhancement phases (comparison)
 
 **⚡ Performance Improvements:**
+
 - **60%+ memory reduction** through simplified state tracking
 - **40-60% faster processing** with conditional enhancement phases
 - **Proper passive volume implementation** (was previously minimal)

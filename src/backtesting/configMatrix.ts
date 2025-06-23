@@ -331,6 +331,49 @@ export class ConfigMatrix {
                         description:
                             "Aggressive absorption detection for early signals",
                         profile: "aggressive",
+                    },
+                    // BACKTESTING-OPTIMIZED CONFIGURATIONS for LTCUSDT
+                    {
+                        id: `absorption_backtesting_sensitive`,
+                        detectorType,
+                        config: {
+                            minAggVolume: 10,
+                            absorptionThreshold: 0.5,
+                            minPassiveMultiplier: 1.2,
+                            eventCooldownMs: 2000,
+                            maxAbsorptionRatio: 0.6,
+                        },
+                        description:
+                            "Backtesting-optimized sensitive absorption detection",
+                        profile: "custom",
+                    },
+                    {
+                        id: `absorption_backtesting_moderate`,
+                        detectorType,
+                        config: {
+                            minAggVolume: 25,
+                            absorptionThreshold: 0.6,
+                            minPassiveMultiplier: 1.5,
+                            eventCooldownMs: 5000,
+                            maxAbsorptionRatio: 0.5,
+                        },
+                        description:
+                            "Backtesting-optimized moderate absorption detection",
+                        profile: "custom",
+                    },
+                    {
+                        id: `absorption_backtesting_strict`,
+                        detectorType,
+                        config: {
+                            minAggVolume: 50,
+                            absorptionThreshold: 0.7,
+                            minPassiveMultiplier: 2.0,
+                            eventCooldownMs: 10000,
+                            maxAbsorptionRatio: 0.4,
+                        },
+                        description:
+                            "Backtesting-optimized strict absorption detection",
+                        profile: "custom",
                     }
                 );
                 break;
@@ -553,10 +596,12 @@ export class ConfigMatrix {
             case "absorptionDetector":
                 const absorptionConfigs = this.generateParameterGrid(
                     {
-                        minAggVolume: [300, 600, 900, 1200],
-                        absorptionThreshold: [0.65, 0.75, 0.85, 0.95],
-                        minPassiveMultiplier: [1.5, 2.0, 2.5, 3.0],
-                        eventCooldownMs: [5000, 15000, 30000, 60000],
+                        // BACKTESTING-OPTIMIZED: Lower thresholds for LTCUSDT
+                        minAggVolume: [10, 25, 50, 100, 300, 600],
+                        absorptionThreshold: [0.4, 0.5, 0.6, 0.7, 0.75, 0.8],
+                        minPassiveMultiplier: [1.1, 1.2, 1.5, 2.0, 2.5],
+                        eventCooldownMs: [1000, 2000, 5000, 10000, 15000],
+                        maxAbsorptionRatio: [0.3, 0.4, 0.5, 0.6, 0.7],
                     },
                     points
                 );

@@ -41,6 +41,7 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
                 burstDetectionMs: 1000,
                 sustainedVolumeMs: 30000,
                 medianTradeSize: 0.6,
+                enableDepthAnalysis: true, // ENABLE for volume surge testing
             },
             mockLogger,
             mockSpoofing,

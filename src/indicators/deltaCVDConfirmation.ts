@@ -14,7 +14,7 @@
    -------------------------------------------------------------------------- */
 
 import { BaseDetector } from "./base/baseDetector.js";
-import { DetectorUtils } from "./base/detectorUtils.js";
+// DetectorUtils removed in favor of internal safe calculation methods
 import type {
     DeltaCVDConfirmationResult,
     SignalType,
@@ -282,6 +282,16 @@ export class DeltaCVDConfirmation extends BaseDetector {
         this.enableDepthAnalysis = settings.enableDepthAnalysis ?? false;
         this.maxOrderbookAge = settings.maxOrderbookAge ?? 5000;
 
+        // PERFORMANCE OPTIMIZATION: Log configuration choices for debugging
+        this.logger.info("[DeltaCVDConfirmation] Configuration initialized", {
+            detector: this.getId(),
+            usePassiveVolume: this.usePassiveVolume,
+            enableDepthAnalysis: this.enableDepthAnalysis,
+            detectionMode: this.detectionMode,
+            simplifiedMode: !this.enableDepthAnalysis,
+            memoryOptimized: true,
+        });
+
         // PHASE 3: Absorption detection configuration
         this.absorptionCVDThreshold = settings.absorptionCVDThreshold ?? 50;
         this.absorptionPriceThreshold =
@@ -500,33 +510,82 @@ export class DeltaCVDConfirmation extends BaseDetector {
         const prices: number[] = [];
 
         state.trades.forEach((trade) => {
-            let effectiveQuantity = trade.quantity;
+            // CRITICAL FIX: Validate trade data
+            const validQuantity = this.validateNumeric(trade.quantity, 0);
+            const validPrice = this.validateNumeric(trade.price, 0);
+
+            if (validQuantity === 0 || validPrice === 0) {
+                this.logger.debug(
+                    "[DeltaCVDConfirmation] Invalid trade data in CVD calculation",
+                    {
+                        originalQuantity: trade.quantity,
+                        originalPrice: trade.price,
+                        validQuantity,
+                        validPrice,
+                    }
+                );
+                return; // Skip invalid trades
+            }
+
+            let effectiveQuantity = validQuantity;
 
             // A/B Test: Conditionally incorporate passive volume for enhanced signal quality
             if (this.usePassiveVolume) {
                 // Enhanced CVD: Weight trade by passive volume at execution price
                 const passiveVolume = trade.buyerIsMaker
-                    ? trade.passiveAskVolume
-                    : trade.passiveBidVolume;
+                    ? this.validateNumeric(trade.passiveAskVolume || 0, 0)
+                    : this.validateNumeric(trade.passiveBidVolume || 0, 0);
 
-                // If passive volume exists, use it to weight the trade impact
-                if (passiveVolume > 0) {
+                // CRITICAL FIX: Enhanced passive volume validation and calculation
+                if (passiveVolume > 0 && isFinite(passiveVolume)) {
                     // Scale trade quantity by ratio of passive volume to aggressive volume
                     // This amplifies signals when large aggressive orders hit thin passive volume
-                    const volumeRatio = Math.min(
-                        5.0,
-                        passiveVolume / trade.quantity
+                    const volumeRatio = this.safeDivision(
+                        passiveVolume,
+                        validQuantity,
+                        1.0
                     );
-                    effectiveQuantity =
-                        trade.quantity * (1 + volumeRatio * 0.1);
+
+                    // ENHANCED: Cap volume ratio to prevent extreme multipliers
+                    const cappedRatio = Math.min(
+                        5.0,
+                        Math.max(0.1, volumeRatio)
+                    );
+
+                    // ENHANCED: Apply weighting with bounds checking
+                    const weightingFactor = 1 + cappedRatio * 0.1;
+                    effectiveQuantity = validQuantity * weightingFactor;
+
+                    // CRITICAL FIX: Validate final effective quantity
+                    if (
+                        !isFinite(effectiveQuantity) ||
+                        effectiveQuantity <= 0
+                    ) {
+                        this.logger.debug(
+                            "[DeltaCVDConfirmation] Invalid effective quantity, using original",
+                            {
+                                passiveVolume,
+                                volumeRatio,
+                                cappedRatio,
+                                weightingFactor,
+                                originalQuantity: validQuantity,
+                                effectiveQuantity,
+                            }
+                        );
+                        effectiveQuantity = validQuantity;
+                    }
                 }
             }
 
             const delta = trade.buyerIsMaker
                 ? effectiveQuantity
                 : -effectiveQuantity;
-            cvd += delta;
-            prices.push(trade.price);
+
+            // ENHANCED: Validate delta before adding to CVD
+            if (isFinite(delta)) {
+                cvd += delta;
+                prices.push(validPrice);
+            }
         });
 
         if (prices.length < 2) {
@@ -823,89 +882,156 @@ export class DeltaCVDConfirmation extends BaseDetector {
     /*  Market Regime & State Management                                  */
     /* ------------------------------------------------------------------ */
 
+    /**
+     * Helper method to validate numeric values and prevent NaN/Infinity propagation
+     */
+    private validateNumeric(value: number, fallback: number): number {
+        return isFinite(value) && !isNaN(value) && value !== 0
+            ? value
+            : fallback;
+    }
+
+    /**
+     * Safe division with bounds checking to prevent division by zero
+     */
+    private safeDivision(
+        numerator: number,
+        denominator: number,
+        fallback: number = 0
+    ): number {
+        if (
+            !isFinite(numerator) ||
+            !isFinite(denominator) ||
+            denominator === 0
+        ) {
+            return fallback;
+        }
+        const result = numerator / denominator;
+        return isFinite(result) ? result : fallback;
+    }
+
     private updateMarketRegime(event: EnrichedTradeEvent): void {
         try {
-            if (this.recentPriceChanges.length > 0) {
-                this.recentPriceChanges.push(event.price);
+            // CRITICAL FIX: Validate input price
+            const validPrice = this.validateNumeric(event.price, 0);
+            if (validPrice === 0) {
+                this.logger.warn(
+                    "[DeltaCVDConfirmation] Invalid price in market regime update",
+                    {
+                        originalPrice: event.price,
+                        timestamp: event.timestamp,
+                    }
+                );
+                return;
+            }
 
-                // FIX: Add bounds checking
+            if (this.recentPriceChanges.length > 0) {
+                this.recentPriceChanges.push(validPrice);
+
+                // ENHANCED: More conservative bounds checking
                 const maxLength = Math.max(
-                    100,
-                    this.volatilityLookbackSec / 10
+                    50, // Reduced from 100 for better performance
+                    Math.min(500, this.volatilityLookbackSec / 10) // Cap at 500
                 );
                 while (this.recentPriceChanges.length > maxLength) {
                     this.recentPriceChanges.shift();
                 }
 
-                // FIX: Ensure minimum data before calculations
-                if (this.recentPriceChanges.length > 20) {
-                    // Increased from 10
+                // ENHANCED: Require more data before calculations to improve stability
+                if (this.recentPriceChanges.length > 30) {
                     const returns = [];
                     for (let i = 1; i < this.recentPriceChanges.length; i++) {
-                        // FIX: Validate prices before calculation
                         const currentPrice = this.recentPriceChanges[i];
                         const prevPrice = this.recentPriceChanges[i - 1];
 
+                        // CRITICAL FIX: Enhanced validation with bounds checking
                         if (
-                            !isFinite(currentPrice) ||
-                            !isFinite(prevPrice) ||
-                            prevPrice === 0
+                            this.validateNumeric(currentPrice, 0) === 0 ||
+                            this.validateNumeric(prevPrice, 0) === 0
                         ) {
                             continue;
                         }
 
-                        const priceReturn =
-                            (currentPrice - prevPrice) / prevPrice;
-                        if (isFinite(priceReturn)) {
+                        const priceReturn = this.safeDivision(
+                            currentPrice - prevPrice,
+                            prevPrice,
+                            0
+                        );
+
+                        // ENHANCED: Additional bounds checking for returns
+                        if (Math.abs(priceReturn) < 0.5) {
+                            // Cap at 50% move to prevent outliers
                             returns.push(priceReturn);
                         }
                     }
 
-                    if (returns.length > 10) {
-                        const mean =
-                            returns.reduce((sum, r) => sum + r, 0) /
-                            returns.length;
-                        const variance =
+                    if (returns.length > 20) {
+                        // Increased minimum requirement
+                        const mean = this.safeDivision(
+                            returns.reduce((sum, r) => sum + r, 0),
+                            returns.length,
+                            0
+                        );
+
+                        const variance = this.safeDivision(
                             returns.reduce(
                                 (sum, r) => sum + Math.pow(r - mean, 2),
                                 0
-                            ) / returns.length;
+                            ),
+                            returns.length,
+                            0
+                        );
 
-                        if (isFinite(variance) && variance > 0) {
-                            this.marketRegime.volatility = Math.sqrt(variance);
+                        // CRITICAL FIX: Enhanced variance validation
+                        if (variance > 0 && variance < 1) {
+                            // Cap variance to prevent extreme values
+                            const volatility = Math.sqrt(variance);
 
-                            // Update baseline volatility with bounds checking
+                            // ENHANCED: Smooth volatility updates with bounds
+                            this.marketRegime.volatility = Math.min(
+                                0.1,
+                                Math.max(0.0001, volatility)
+                            );
+
+                            // Update baseline volatility with enhanced bounds checking
                             if (this.marketRegime.baselineVolatility === 0) {
                                 this.marketRegime.baselineVolatility =
                                     this.marketRegime.volatility;
                             } else {
-                                this.marketRegime.baselineVolatility =
+                                const newBaseline =
                                     this.marketRegime.baselineVolatility *
                                         0.99 +
                                     this.marketRegime.volatility * 0.01;
-                            }
-
-                            // Update metrics with validation
-                            if (isFinite(this.marketRegime.volatility)) {
-                                this.metricsCollector.setGauge(
-                                    "cvd_market_volatility",
-                                    this.marketRegime.volatility
+                                this.marketRegime.baselineVolatility = Math.min(
+                                    0.1,
+                                    Math.max(0.0001, newBaseline)
                                 );
                             }
+
+                            // Update metrics with final validation
+                            this.metricsCollector.setGauge(
+                                "cvd_market_volatility",
+                                this.marketRegime.volatility
+                            );
                         }
                     }
                 }
             } else {
-                this.recentPriceChanges.push(event.price);
+                this.recentPriceChanges.push(validPrice);
             }
         } catch (error) {
             this.logger.error(
                 "[DeltaCVDConfirmation] Market regime update failed",
                 {
-                    error,
+                    error:
+                        error instanceof Error ? error.message : String(error),
                     eventPrice: event.price,
+                    timestamp: event.timestamp,
                 }
             );
+            // ENHANCED: Reset to safe state on error
+            this.marketRegime.volatility = 0.001;
+            this.marketRegime.baselineVolatility = 0.001;
         }
     }
 
@@ -1048,19 +1174,45 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
     private cleanupCVDProfiles(state: WindowState): void {
         try {
-            // FIX: Add memory usage tracking
+            // PERFORMANCE OPTIMIZATION: Only clean if depth analysis is enabled
+            if (!this.enableDepthAnalysis) {
+                return;
+            }
+
+            // ENHANCED: Memory usage tracking with system monitoring
             const totalProfileSize =
                 state.cvdProfile.size +
                 state.buyFlowProfile.size +
                 state.sellFlowProfile.size;
 
-            if (totalProfileSize > 3000) {
-                // More aggressive cleanup threshold
-                // Keep only top 300 levels by absolute CVD (reduced from 500)
+            const memoryUsage = process.memoryUsage();
+            const heapUsedMB = memoryUsage.heapUsed / 1024 / 1024;
+
+            // ENHANCED: Adaptive cleanup thresholds based on memory pressure
+            let cleanupThreshold = 2000; // Default
+            if (heapUsedMB > 1000) {
+                // Above 1GB
+                cleanupThreshold = 1000; // More aggressive
+            } else if (heapUsedMB > 500) {
+                // Above 500MB
+                cleanupThreshold = 1500; // Moderately aggressive
+            }
+
+            if (totalProfileSize > cleanupThreshold) {
+                // ENHANCED: More intelligent cleanup strategy
+                const entriesToKeep = Math.min(
+                    200,
+                    Math.max(50, cleanupThreshold / 10)
+                );
+
                 const sortedCVDEntries = Array.from(state.cvdProfile.entries())
-                    .filter(([price, cvd]) => isFinite(price) && isFinite(cvd)) // Validate data
+                    .filter(
+                        ([price, cvd]) =>
+                            this.validateNumeric(price, 0) !== 0 &&
+                            this.validateNumeric(cvd, 0) !== 0
+                    ) // Enhanced validation
                     .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
-                    .slice(0, 300);
+                    .slice(0, entriesToKeep);
 
                 const pricesToKeep = new Set(
                     sortedCVDEntries.map(([price]) => price)
@@ -1073,15 +1225,20 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
                 // Repopulate with significant levels only
                 sortedCVDEntries.forEach(([price, cvd]) => {
-                    state.cvdProfile.set(price, cvd);
+                    if (
+                        this.validateNumeric(price, 0) !== 0 &&
+                        this.validateNumeric(cvd, 0) !== 0
+                    ) {
+                        state.cvdProfile.set(price, cvd);
+                    }
                 });
 
-                // Clean institutional zones more aggressively
-                state.institutionalZones = state.institutionalZones
+                // ENHANCED: Clean institutional zones more intelligently
+                const activeZones = state.institutionalZones
                     .filter(
                         (zone) =>
-                            isFinite(zone.priceLevel) &&
-                            isFinite(zone.netCVD) &&
+                            this.validateNumeric(zone.priceLevel, 0) !== 0 &&
+                            this.validateNumeric(zone.netCVD, 0) !== 0 &&
                             zone.isActive &&
                             Array.from(pricesToKeep).some(
                                 (price) =>
@@ -1089,27 +1246,51 @@ export class DeltaCVDConfirmation extends BaseDetector {
                                     this.calculateTickSize(price)
                             )
                     )
-                    .slice(0, 10); // Limit to 10 most significant zones
+                    .sort((a, b) => b.strength - a.strength)
+                    .slice(0, Math.min(5, entriesToKeep / 20)); // Scale with entries kept
+
+                state.institutionalZones = activeZones;
 
                 this.logger.debug(
-                    "[DeltaCVDConfirmation] Aggressive CVD profile cleanup completed",
+                    "[DeltaCVDConfirmation] Adaptive CVD profile cleanup completed",
                     {
                         originalSize: totalProfileSize,
                         newSize: state.cvdProfile.size,
                         zonesKept: state.institutionalZones.length,
+                        memoryUsageMB: heapUsedMB,
+                        cleanupThreshold,
+                        entriesKept: entriesToKeep,
                     }
                 );
             }
         } catch (error) {
             this.logger.error(
                 "[DeltaCVDConfirmation] CVD profile cleanup failed",
-                { error: error }
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    memoryUsage: process.memoryUsage().heapUsed / 1024 / 1024,
+                }
             );
-            // Emergency cleanup on error
-            state.cvdProfile.clear();
-            state.buyFlowProfile.clear();
-            state.sellFlowProfile.clear();
-            state.institutionalZones = [];
+            // ENHANCED: Emergency cleanup with validation
+            try {
+                state.cvdProfile.clear();
+                state.buyFlowProfile.clear();
+                state.sellFlowProfile.clear();
+                state.institutionalZones = [];
+                state.volumeHistory = [];
+                state.burstHistory = [];
+
+                // Force garbage collection if available
+                if (global.gc) {
+                    global.gc();
+                }
+            } catch (emergencyError) {
+                this.logger.error(
+                    "[DeltaCVDConfirmation] Emergency cleanup failed",
+                    { error: emergencyError }
+                );
+            }
         }
     }
 
@@ -1526,48 +1707,179 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
         try {
             let cvd = 0;
+            let validTradeCount = 0;
 
             for (const tr of state.trades) {
-                // Validate trade data
-                if (!isFinite(tr.quantity) || tr.quantity <= 0) {
+                // CRITICAL FIX: Enhanced trade data validation
+                const validQuantity = this.validateNumeric(tr.quantity, 0);
+                if (validQuantity === 0) {
+                    this.logger.debug(
+                        "[DeltaCVDConfirmation] Skipping invalid trade in CVD slope",
+                        {
+                            originalQuantity: tr.quantity,
+                            timestamp: tr.timestamp,
+                        }
+                    );
                     continue;
                 }
 
-                const delta = tr.buyerIsMaker ? tr.quantity : -tr.quantity;
-                cvd += delta;
-                result.cvdSeries.push(cvd);
+                // ENHANCED: Apply passive volume weighting if enabled
+                let effectiveQuantity = validQuantity;
+                if (this.usePassiveVolume) {
+                    const passiveVolume = tr.buyerIsMaker
+                        ? this.validateNumeric(tr.passiveAskVolume || 0, 0)
+                        : this.validateNumeric(tr.passiveBidVolume || 0, 0);
+
+                    if (passiveVolume > 0) {
+                        const volumeRatio = this.safeDivision(
+                            passiveVolume,
+                            validQuantity,
+                            1.0
+                        );
+                        const cappedRatio = Math.min(
+                            5.0,
+                            Math.max(0.1, volumeRatio)
+                        );
+                        effectiveQuantity =
+                            validQuantity * (1 + cappedRatio * 0.1);
+
+                        // Validate final quantity
+                        if (
+                            !isFinite(effectiveQuantity) ||
+                            effectiveQuantity <= 0
+                        ) {
+                            effectiveQuantity = validQuantity;
+                        }
+                    }
+                }
+
+                const delta = tr.buyerIsMaker
+                    ? effectiveQuantity
+                    : -effectiveQuantity;
+
+                // ENHANCED: Validate delta before accumulation
+                if (isFinite(delta)) {
+                    cvd += delta;
+                    result.cvdSeries.push(cvd);
+                    validTradeCount++;
+                }
             }
 
-            // Calculate slope with validation
-            const n = result.cvdSeries.length;
-            if (n < 2) {
+            // ENHANCED: Require minimum valid trades for stable slope calculation
+            if (validTradeCount < 5) {
+                this.logger.debug(
+                    "[DeltaCVDConfirmation] Insufficient valid trades for slope calculation",
+                    {
+                        totalTrades: state.trades.length,
+                        validTrades: validTradeCount,
+                    }
+                );
                 result.slope = 0;
                 return result;
             }
 
-            // Linear regression with overflow protection
-            const sumX = (n * (n - 1)) / 2;
-            const sumX2 = ((n - 1) * n * (2 * n - 1)) / 6;
-            const sumY = result.cvdSeries.reduce((sum, v) => sum + v, 0);
-            const sumXY = result.cvdSeries.reduce(
-                (sum, v, i) => sum + v * i,
-                0
-            );
+            // CRITICAL FIX: Enhanced linear regression with bounds checking
+            const n = result.cvdSeries.length;
+            if (n < 5) {
+                result.slope = 0;
+                return result;
+            }
+
+            // ENHANCED: Safe arithmetic sequence calculations
+            const sumX = this.safeDivision(n * (n - 1), 2, 0);
+            const sumX2 = this.safeDivision((n - 1) * n * (2 * n - 1), 6, 0);
+
+            if (sumX === 0 || sumX2 === 0) {
+                result.slope = 0;
+                return result;
+            }
+
+            // ENHANCED: Safe summation with overflow protection
+            let sumY = 0;
+            let sumXY = 0;
+            let hasOverflow = false;
+
+            for (let i = 0; i < result.cvdSeries.length; i++) {
+                const value = result.cvdSeries[i];
+                if (!isFinite(value)) {
+                    hasOverflow = true;
+                    break;
+                }
+
+                sumY += value;
+                sumXY += value * i;
+
+                // ENHANCED: Check for overflow during accumulation
+                if (!isFinite(sumY) || !isFinite(sumXY)) {
+                    hasOverflow = true;
+                    break;
+                }
+            }
+
+            if (hasOverflow) {
+                this.logger.warn(
+                    "[DeltaCVDConfirmation] Numerical overflow in CVD slope calculation",
+                    {
+                        seriesLength: result.cvdSeries.length,
+                        maxValue: Math.max(
+                            ...result.cvdSeries.filter((v) => isFinite(v))
+                        ),
+                        minValue: Math.min(
+                            ...result.cvdSeries.filter((v) => isFinite(v))
+                        ),
+                    }
+                );
+                result.slope = 0;
+                return result;
+            }
+
+            // CRITICAL FIX: Safe denominator calculation with validation
             const denom = n * sumX2 - sumX * sumX;
 
-            if (denom === 0 || !isFinite(denom)) {
+            if (!isFinite(denom) || Math.abs(denom) < 1e-10) {
+                this.logger.debug(
+                    "[DeltaCVDConfirmation] Invalid denominator in slope calculation",
+                    {
+                        denom,
+                        n,
+                        sumX,
+                        sumX2,
+                    }
+                );
                 result.slope = 0;
                 return result;
             }
 
-            const slope = (n * sumXY - sumX * sumY) / denom;
-            result.slope = isFinite(slope) ? slope : 0;
+            // ENHANCED: Final slope calculation with validation
+            const numerator = n * sumXY - sumX * sumY;
+            const slope = this.safeDivision(numerator, denom, 0);
 
+            // ENHANCED: Cap slope to prevent extreme values
+            const cappedSlope = Math.max(-1e6, Math.min(1e6, slope));
+
+            if (Math.abs(cappedSlope) !== Math.abs(slope)) {
+                this.logger.warn(
+                    "[DeltaCVDConfirmation] CVD slope capped to prevent extreme value",
+                    {
+                        originalSlope: slope,
+                        cappedSlope,
+                        seriesLength: n,
+                        validTrades: validTradeCount,
+                    }
+                );
+            }
+
+            result.slope = cappedSlope;
             return result;
         } catch (error) {
             this.logger.error(
                 "[DeltaCVDConfirmation] CVD slope calculation failed",
-                { error: error }
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    tradesCount: state.trades.length,
+                    usePassiveVolume: this.usePassiveVolume,
+                }
             );
             result.slope = 0;
             return result;
@@ -1580,26 +1892,73 @@ export class DeltaCVDConfirmation extends BaseDetector {
         cvdSeries: number[]
     ): number {
         try {
-            if (state.trades.length < 10) return 0; // Increased minimum
+            // ENHANCED: More conservative minimum data requirement
+            if (state.trades.length < 20) return 0;
 
-            const prices = state.trades.map((tr) => tr.price);
-            const n = Math.min(prices.length, cvdSeries.length);
+            const prices = state.trades.map((tr) =>
+                this.validateNumeric(tr.price, 0)
+            );
+            const validPrices = prices.filter((p) => p !== 0);
 
-            if (n < 10) return 0;
-
-            const priceSlice = prices.slice(-n);
-            const cvdSlice = cvdSeries.slice(-n);
-
-            // VALIDATE DATA
-            if (
-                priceSlice.some((p) => !isFinite(p)) ||
-                cvdSlice.some((c) => !isFinite(c))
-            ) {
+            // CRITICAL FIX: Ensure we have valid price data
+            if (validPrices.length < 20) {
+                this.logger.warn(
+                    "[DeltaCVDConfirmation] Insufficient valid price data for correlation",
+                    {
+                        totalTrades: state.trades.length,
+                        validPrices: validPrices.length,
+                    }
+                );
                 return 0;
             }
 
-            const priceMean = priceSlice.reduce((sum, p) => sum + p, 0) / n;
-            const cvdMean = cvdSlice.reduce((sum, c) => sum + c, 0) / n;
+            const n = Math.min(validPrices.length, cvdSeries.length);
+            if (n < 20) return 0;
+
+            const priceSlice = validPrices.slice(-n);
+            const cvdSlice = cvdSeries.slice(-n);
+
+            // ENHANCED: Comprehensive data validation
+            const hasInvalidPrices = priceSlice.some(
+                (p) => !isFinite(p) || p === 0
+            );
+            const hasInvalidCVD = cvdSlice.some((c) => !isFinite(c));
+
+            if (hasInvalidPrices || hasInvalidCVD) {
+                this.logger.debug(
+                    "[DeltaCVDConfirmation] Invalid data detected in correlation calculation",
+                    {
+                        hasInvalidPrices,
+                        hasInvalidCVD,
+                        sampleSize: n,
+                    }
+                );
+                return 0;
+            }
+
+            // ENHANCED: Safe mean calculations
+            const priceMean = this.safeDivision(
+                priceSlice.reduce((sum, p) => sum + p, 0),
+                n,
+                0
+            );
+            const cvdMean = this.safeDivision(
+                cvdSlice.reduce((sum, c) => sum + c, 0),
+                n,
+                0
+            );
+
+            // CRITICAL FIX: Validate means before proceeding
+            if (priceMean === 0) {
+                this.logger.warn(
+                    "[DeltaCVDConfirmation] Invalid price mean in correlation",
+                    {
+                        priceMean,
+                        sampleSize: n,
+                    }
+                );
+                return 0;
+            }
 
             let numerator = 0;
             let priceSSQ = 0;
@@ -1608,29 +1967,60 @@ export class DeltaCVDConfirmation extends BaseDetector {
             for (let i = 0; i < n; i++) {
                 const priceDiff = priceSlice[i] - priceMean;
                 const cvdDiff = cvdSlice[i] - cvdMean;
-                numerator += priceDiff * cvdDiff;
-                priceSSQ += priceDiff * priceDiff;
-                cvdSSQ += cvdDiff * cvdDiff;
+
+                // ENHANCED: Validate differences before using
+                if (isFinite(priceDiff) && isFinite(cvdDiff)) {
+                    numerator += priceDiff * cvdDiff;
+                    priceSSQ += priceDiff * priceDiff;
+                    cvdSSQ += cvdDiff * cvdDiff;
+                }
+            }
+
+            // CRITICAL FIX: Enhanced denominator validation
+            if (priceSSQ <= 0 || cvdSSQ <= 0) {
+                this.logger.debug(
+                    "[DeltaCVDConfirmation] Insufficient variance for correlation",
+                    {
+                        priceSSQ,
+                        cvdSSQ,
+                        sampleSize: n,
+                    }
+                );
+                return 0;
             }
 
             const denominator = Math.sqrt(priceSSQ * cvdSSQ);
 
-            // FIX: Prevent division by zero
-            if (denominator === 0 || !isFinite(denominator)) {
+            // ENHANCED: Comprehensive denominator validation
+            if (!isFinite(denominator) || denominator <= 1e-10) {
+                this.logger.debug(
+                    "[DeltaCVDConfirmation] Invalid denominator in correlation",
+                    {
+                        denominator,
+                        priceSSQ,
+                        cvdSSQ,
+                    }
+                );
                 return 0;
             }
 
-            const correlation = numerator / denominator;
+            const correlation = this.safeDivision(numerator, denominator, 0);
 
-            // FIX: Validate result
-            return isFinite(correlation)
-                ? Math.max(-1, Math.min(1, correlation))
-                : 0;
+            // ENHANCED: Validate and clamp final result
+            if (!isFinite(correlation)) {
+                return 0;
+            }
+
+            // Clamp to valid correlation range with tolerance for floating point errors
+            return Math.max(-0.999, Math.min(0.999, correlation));
         } catch (error) {
             this.logger.error(
                 "[DeltaCVDConfirmation] Price correlation calculation failed",
                 {
-                    error: error,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    tradesCount: state.trades.length,
+                    cvdSeriesLength: cvdSeries.length,
                 }
             );
             return 0;
@@ -1638,13 +2028,46 @@ export class DeltaCVDConfirmation extends BaseDetector {
     }
 
     private updateSlopeStatistics(state: WindowState, slope: number): void {
-        const delta = slope - state.rollingMean;
-        state.count += 1;
-        if (state.count === 1) {
-            state.rollingVar = 0; // Initialize
+        // CRITICAL FIX: Validate input slope
+        const validSlope = this.validateNumeric(slope, 0);
+        if (!isFinite(validSlope)) {
+            this.logger.debug(
+                "[DeltaCVDConfirmation] Invalid slope in statistics update",
+                {
+                    originalSlope: slope,
+                    validatedSlope: validSlope,
+                }
+            );
+            return;
         }
-        state.rollingMean += DetectorUtils.safeDivide(delta, state.count, 0);
-        state.rollingVar += delta * (slope - state.rollingMean);
+
+        const delta = validSlope - state.rollingMean;
+        state.count += 1;
+
+        if (state.count === 1) {
+            state.rollingVar = 0;
+            state.rollingMean = validSlope;
+        } else {
+            // ENHANCED: Use safe division for mean update
+            const meanUpdate = this.safeDivision(delta, state.count, 0);
+            state.rollingMean += meanUpdate;
+
+            // CRITICAL FIX: Ensure variance calculation is stable
+            const newDelta = validSlope - state.rollingMean;
+            state.rollingVar += delta * newDelta;
+
+            // ENHANCED: Prevent negative variance due to floating point errors
+            if (state.rollingVar < 0) {
+                this.logger.debug(
+                    "[DeltaCVDConfirmation] Negative variance detected, resetting",
+                    {
+                        variance: state.rollingVar,
+                        count: state.count,
+                    }
+                );
+                state.rollingVar = 0;
+            }
+        }
     }
 
     private calculateAdaptiveThreshold(): number {
@@ -1667,15 +2090,65 @@ export class DeltaCVDConfirmation extends BaseDetector {
     }
 
     private calculateZScore(state: WindowState, slope: number): number {
-        if (state.count < 2) return 0;
+        // ENHANCED: Require more samples for stable statistics
+        if (state.count < 5) return 0;
 
-        const variance = DetectorUtils.safeDivide(
+        // CRITICAL FIX: Enhanced variance calculation with validation
+        const variance = this.safeDivision(
             state.rollingVar,
             state.count - 1,
             0
         );
-        const std = Math.sqrt(variance) || 1e-9;
-        return DetectorUtils.safeDivide(slope - state.rollingMean, std, 0);
+
+        // ENHANCED: Validate variance before proceeding
+        if (variance <= 0 || !isFinite(variance)) {
+            this.logger.debug(
+                "[DeltaCVDConfirmation] Invalid variance in Z-score calculation",
+                {
+                    variance,
+                    count: state.count,
+                    rollingVar: state.rollingVar,
+                }
+            );
+            return 0;
+        }
+
+        // CRITICAL FIX: Safe standard deviation with bounds checking
+        const std = Math.sqrt(variance);
+        if (!isFinite(std) || std < 1e-10) {
+            this.logger.debug(
+                "[DeltaCVDConfirmation] Invalid standard deviation in Z-score",
+                {
+                    std,
+                    variance,
+                }
+            );
+            return 0;
+        }
+
+        // ENHANCED: Validate slope and mean before calculation
+        const validSlope = this.validateNumeric(slope, 0);
+        const validMean = this.validateNumeric(state.rollingMean, 0);
+
+        const zScore = this.safeDivision(validSlope - validMean, std, 0);
+
+        // ENHANCED: Cap Z-score to prevent extreme values
+        const cappedZScore = Math.max(-20, Math.min(20, zScore));
+
+        if (Math.abs(cappedZScore) !== Math.abs(zScore)) {
+            this.logger.debug(
+                "[DeltaCVDConfirmation] Z-score capped to prevent extreme value",
+                {
+                    originalZScore: zScore,
+                    cappedZScore,
+                    slope: validSlope,
+                    mean: validMean,
+                    std,
+                }
+            );
+        }
+
+        return cappedZScore;
     }
 
     private validateSignalConditions(

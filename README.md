@@ -36,16 +36,19 @@ if (lastSignal) {
 ## 📚 Documentation
 
 ### Core Documentation
+
 - **[Detector Overview](./docs/detectors.md)** - Complete detector hierarchy and implementation guide
 - **[Configuration Reference](./docs/config-reference.md)** - Parameter configuration and tuning
 - **[Backtesting Framework](./docs/BACKTESTING_FRAMEWORK.md)** - Testing and optimization guide
 
 ### Detector-Specific Guides
-- **[DeltaCVD Simplification Guide](./docs/DeltaCVD-Simplification-Guide.md)** - A/B testing framework and optimization ⭐ *Latest*
+
+- **[DeltaCVD Simplification Guide](./docs/DeltaCVD-Simplification-Guide.md)** - A/B testing framework and optimization ⭐ _Latest_
 - **[Absorption Detector](./docs/Absorption-Detector.md)** - Order absorption detection
 - **[Accumulation Detector](./docs/Accumulation-Detector.md)** - Volume accumulation zones
 - **[Zone-Based Architecture](./docs/Zone-Based-Architecture.md)** - Advanced zone detection system
 
 ### Performance & Monitoring
+
 - **[Stats API Reference](./docs/stats-api-reference.md)** - Performance monitoring and metrics
 - **[Parameter Reference Table](./docs/parameter-reference-table.md)** - Complete parameter documentation

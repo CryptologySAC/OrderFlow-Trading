@@ -502,6 +502,7 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 **NEW A/B Testing Framework:** Three configurations available for passive volume optimization:
 
 **Simplified Configurations (Recommended):**
+
 ```typescript
 // No passive volume (pure CVD baseline)
 {
@@ -516,13 +517,14 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 {
     usePassiveVolume: true,
     enableDepthAnalysis: false,
-    detectionMode: "momentum", 
+    detectionMode: "momentum",
     baseConfidenceRequired: 0.3,
     finalConfidenceRequired: 0.5
 }
 ```
 
 **Complex Configuration (Full Features):**
+
 ```typescript
 {
     usePassiveVolume: true,
@@ -534,12 +536,14 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 ```
 
 **Key Benefits:**
+
 - 60%+ memory reduction with simplified configurations
 - 40-60% faster processing with conditional enhancement phases
 - Proper passive volume implementation (was previously minimal)
 - Systematic A/B testing for optimal signal quality
 
 **Usage:**
+
 ```bash
 # Test configurations
 node run_hierarchical_backtest.js --detector deltaCVDDetector --profile simplified_no_passive
