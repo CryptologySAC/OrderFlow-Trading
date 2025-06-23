@@ -4,7 +4,7 @@ import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
-import { DetectorUtils } from "./base/detectorUtils.js";
+// DetectorUtils removed in favor of internal safe calculation methods
 import { SpoofingDetector } from "../services/spoofingDetector.js";
 import { SharedPools } from "../utils/objectPool.js";
 import { AdaptiveThresholds } from "./marketRegimeDetector.js";
@@ -207,6 +207,55 @@ export class ExhaustionDetector
     }
 
     /**
+     * 🔧 FIX: Numeric validation helper to prevent NaN/Infinity propagation
+     */
+    private validateNumeric(value: number, fallback: number): number {
+        return isFinite(value) && !isNaN(value) && value !== 0
+            ? value
+            : fallback;
+    }
+
+    /**
+     * 🔧 FIX: Safe division helper to prevent division by zero
+     */
+    private safeDivision(
+        numerator: number,
+        denominator: number,
+        fallback: number = 0
+    ): number {
+        if (
+            !isFinite(numerator) ||
+            !isFinite(denominator) ||
+            denominator === 0
+        ) {
+            return fallback;
+        }
+        const result = numerator / denominator;
+        return isFinite(result) ? result : fallback;
+    }
+
+    /**
+     * 🔧 FIX: Safe mean calculation to replace DetectorUtils.calculateMean
+     */
+    private safeMean(values: number[]): number {
+        if (!values || values.length === 0) {
+            return 0;
+        }
+
+        let sum = 0;
+        let validCount = 0;
+
+        for (const value of values) {
+            if (isFinite(value) && !isNaN(value)) {
+                sum += value;
+                validCount++;
+            }
+        }
+
+        return validCount > 0 ? sum / validCount : 0;
+    }
+
+    /**
      * 🔧 FIX: Simple config implementation with type safety
      */
     private readonly config = {
@@ -229,7 +278,40 @@ export class ExhaustionDetector
     /*  Incoming enriched trade                                           */
     /* ------------------------------------------------------------------ */
     public onEnrichedTrade(event: EnrichedTradeEvent): void {
-        const zone = this.calculateZone(event.price);
+        // 🔧 FIX: Add comprehensive input validation to prevent NaN/Infinity propagation
+        const validPrice = this.validateNumeric(event.price, 0);
+        if (validPrice === 0) {
+            this.logger.warn(
+                "[ExhaustionDetector] Invalid price detected, skipping trade",
+                {
+                    price: event.price,
+                    quantity: event.quantity,
+                    timestamp: event.timestamp,
+                    pair: event.pair,
+                }
+            );
+            return;
+        }
+
+        const validQuantity = this.validateNumeric(event.quantity, 0);
+        if (validQuantity === 0) {
+            this.logger.warn(
+                "[ExhaustionDetector] Invalid quantity detected, skipping trade",
+                {
+                    price: event.price,
+                    quantity: event.quantity,
+                    timestamp: event.timestamp,
+                    pair: event.pair,
+                }
+            );
+            return;
+        }
+
+        // Validate passive volume values
+        const validBidVolume = Math.max(0, event.zonePassiveBidVolume || 0);
+        const validAskVolume = Math.max(0, event.zonePassiveAskVolume || 0);
+
+        const zone = this.calculateZone(validPrice);
 
         // create window if absent
         if (!this.zonePassiveHistory.has(zone)) {
@@ -246,15 +328,15 @@ export class ExhaustionDetector
 
         // Use object pool to reduce GC pressure
         const snap = SharedPools.getInstance().zoneSamples.acquire();
-        snap.bid = event.zonePassiveBidVolume;
-        snap.ask = event.zonePassiveAskVolume;
-        snap.total = event.zonePassiveBidVolume + event.zonePassiveAskVolume;
+        snap.bid = validBidVolume;
+        snap.ask = validAskVolume;
+        snap.total = validBidVolume + validAskVolume;
         snap.timestamp = event.timestamp;
 
         const spread = this.getCurrentSpread()?.spread ?? 0;
         this.adaptiveThresholdCalculator.updateMarketData(
-            event.price,
-            event.quantity,
+            validPrice,
+            validQuantity,
             spread
         );
 
@@ -822,8 +904,24 @@ export class ExhaustionDetector
      * 🔧 FIX: Zone memory cleanup to prevent memory leaks
      */
     private cleanupZoneMemory(): void {
-        const maxZones = this.getConfigValue("maxZones", 100); // Configurable limit
-        const zoneAgeLimit = this.getConfigValue("zoneAgeLimit", 3600000); // 1 hour default
+        // 🔧 FIX: Adaptive cleanup thresholds based on memory pressure
+        const memUsage = process.memoryUsage();
+        const heapUsedMB = memUsage.heapUsed / 1024 / 1024;
+
+        let maxZones = this.getConfigValue("maxZones", 100);
+        let zoneAgeLimit = this.getConfigValue("zoneAgeLimit", 3600000); // 1 hour default
+
+        // Adaptive thresholds based on memory pressure
+        if (heapUsedMB > 1000) {
+            // Above 1GB - more aggressive cleanup
+            maxZones = Math.floor(maxZones * 0.5);
+            zoneAgeLimit = Math.floor(zoneAgeLimit * 0.5);
+        } else if (heapUsedMB > 500) {
+            // Above 500MB - moderate cleanup
+            maxZones = Math.floor(maxZones * 0.7);
+            zoneAgeLimit = Math.floor(zoneAgeLimit * 0.7);
+        }
+
         const now = Date.now();
 
         // Clean up old zones
@@ -1428,7 +1526,7 @@ export class ExhaustionDetector
         }
 
         try {
-            const avgPassive = DetectorUtils.calculateMean(passiveValues);
+            const avgPassive = this.safeMean(passiveValues);
             if (avgPassive === 0) return 0.5; // Neutral consistency if no passive volume
 
             let consistentPeriods = 0;
@@ -1473,10 +1571,12 @@ export class ExhaustionDetector
             const recentVelocity = this.calculatePeriodVelocity(recent);
             const earlierVelocity = this.calculatePeriodVelocity(earlier);
 
-            // Return velocity increase ratio with safety checks
-            if (earlierVelocity <= 0) return 1.0; // Avoid division by zero
-
-            const velocityRatio = recentVelocity / earlierVelocity;
+            // Return velocity increase ratio with safety checks using safeDivision
+            const velocityRatio = this.safeDivision(
+                recentVelocity,
+                earlierVelocity,
+                1.0
+            );
 
             // Safety checks and bounds
             if (!isFinite(velocityRatio)) return 1.0;
@@ -1508,7 +1608,11 @@ export class ExhaustionDetector
                     const volumeChange = Math.abs(
                         current.total - previous.total
                     );
-                    const velocity = volumeChange / (timeDelta / 1000); // per second
+                    const velocity = this.safeDivision(
+                        volumeChange,
+                        timeDelta / 1000,
+                        0
+                    ); // per second
 
                     if (isFinite(velocity)) {
                         totalVelocity += velocity;
@@ -1517,8 +1621,11 @@ export class ExhaustionDetector
                 }
             }
 
-            const avgVelocity =
-                validPeriods > 0 ? totalVelocity / validPeriods : 0;
+            const avgVelocity = this.safeDivision(
+                totalVelocity,
+                validPeriods,
+                0
+            );
             return isFinite(avgVelocity) ? avgVelocity : 0;
         } catch (error) {
             this.logger?.warn(
@@ -1588,8 +1695,16 @@ export class ExhaustionDetector
             }
 
             // Calculate iceberg confidence
-            const refillRate = refillCount / (samples.length / 10);
-            const strengthRate = significantRefills / Math.max(1, refillCount);
+            const refillRate = this.safeDivision(
+                refillCount,
+                samples.length / 10,
+                0
+            );
+            const strengthRate = this.safeDivision(
+                significantRefills,
+                Math.max(1, refillCount),
+                0
+            );
 
             return Math.min(1, refillRate * 0.7 + strengthRate * 0.3);
         } catch (error) {
@@ -1612,7 +1727,11 @@ export class ExhaustionDetector
         try {
             // Calculate gradient strength (higher = more liquidity depth)
             const currentLiquidity = samples[samples.length - 1]?.total || 0;
-            const gradientStrength = currentLiquidity / avgLiquidity;
+            const gradientStrength = this.safeDivision(
+                currentLiquidity,
+                avgLiquidity,
+                0
+            );
 
             return Math.min(1, Math.max(0, gradientStrength));
         } catch (error) {
