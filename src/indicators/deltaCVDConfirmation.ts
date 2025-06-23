@@ -540,7 +540,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 if (passiveVolume > 0 && isFinite(passiveVolume)) {
                     // Scale trade quantity by ratio of passive volume to aggressive volume
                     // This amplifies signals when large aggressive orders hit thin passive volume
-                    const volumeRatio = this.safeDivision(
+                    const volumeRatio = FinancialMath.safeDivide(
                         passiveVolume,
                         validQuantity,
                         1.0
@@ -944,7 +944,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
                             continue;
                         }
 
-                        const priceReturn = this.safeDivision(
+                        const priceReturn = FinancialMath.safeDivide(
                             currentPrice - prevPrice,
                             prevPrice,
                             0
@@ -959,13 +959,13 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
                     if (returns.length > 20) {
                         // Increased minimum requirement
-                        const mean = this.safeDivision(
+                        const mean = FinancialMath.safeDivide(
                             returns.reduce((sum, r) => sum + r, 0),
                             returns.length,
                             0
                         );
 
-                        const variance = this.safeDivision(
+                        const variance = FinancialMath.safeDivide(
                             returns.reduce(
                                 (sum, r) => sum + Math.pow(r - mean, 2),
                                 0
@@ -1723,7 +1723,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
                         : this.validateNumeric(tr.passiveBidVolume || 0, 0);
 
                     if (passiveVolume > 0) {
-                        const volumeRatio = this.safeDivision(
+                        const volumeRatio = FinancialMath.safeDivide(
                             passiveVolume,
                             validQuantity,
                             1.0
@@ -1778,8 +1778,12 @@ export class DeltaCVDConfirmation extends BaseDetector {
             }
 
             // ENHANCED: Safe arithmetic sequence calculations
-            const sumX = this.safeDivision(n * (n - 1), 2, 0);
-            const sumX2 = this.safeDivision((n - 1) * n * (2 * n - 1), 6, 0);
+            const sumX = FinancialMath.safeDivide(n * (n - 1), 2, 0);
+            const sumX2 = FinancialMath.safeDivide(
+                (n - 1) * n * (2 * n - 1),
+                6,
+                0
+            );
 
             if (sumX === 0 || sumX2 === 0) {
                 result.slope = 0;
@@ -1844,7 +1848,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
             // ENHANCED: Final slope calculation with validation
             const numerator = n * sumXY - sumX * sumY;
-            const slope = this.safeDivision(numerator, denom, 0);
+            const slope = FinancialMath.safeDivide(numerator, denom, 0);
 
             // ENHANCED: Cap slope to prevent extreme values
             const cappedSlope = Math.max(-1e6, Math.min(1e6, slope));
@@ -1929,12 +1933,12 @@ export class DeltaCVDConfirmation extends BaseDetector {
             }
 
             // ENHANCED: Safe mean calculations
-            const priceMean = this.safeDivision(
+            const priceMean = FinancialMath.safeDivide(
                 priceSlice.reduce((sum, p) => sum + p, 0),
                 n,
                 0
             );
-            const cvdMean = this.safeDivision(
+            const cvdMean = FinancialMath.safeDivide(
                 cvdSlice.reduce((sum, c) => sum + c, 0),
                 n,
                 0
@@ -1996,7 +2000,11 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 return 0;
             }
 
-            const correlation = this.safeDivision(numerator, denominator, 0);
+            const correlation = FinancialMath.safeDivide(
+                numerator,
+                denominator,
+                0
+            );
 
             // ENHANCED: Validate and clamp final result
             if (!isFinite(correlation)) {
@@ -2041,7 +2049,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
             state.rollingMean = validSlope;
         } else {
             // ENHANCED: Use safe division for mean update
-            const meanUpdate = this.safeDivision(delta, state.count, 0);
+            const meanUpdate = FinancialMath.safeDivide(delta, state.count, 0);
             state.rollingMean += meanUpdate;
 
             // CRITICAL FIX: Ensure variance calculation is stable
@@ -2086,7 +2094,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
         if (state.count < 5) return 0;
 
         // CRITICAL FIX: Enhanced variance calculation with validation
-        const variance = this.safeDivision(
+        const variance = FinancialMath.safeDivide(
             state.rollingVar,
             state.count - 1,
             0
@@ -2122,7 +2130,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
         const validSlope = this.validateNumeric(slope, 0);
         const validMean = this.validateNumeric(state.rollingMean, 0);
 
-        const zScore = this.safeDivision(validSlope - validMean, std, 0);
+        const zScore = FinancialMath.safeDivide(validSlope - validMean, std, 0);
 
         // ENHANCED: Cap Z-score to prevent extreme values
         const cappedZScore = Math.max(-20, Math.min(20, zScore));

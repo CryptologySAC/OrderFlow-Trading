@@ -1160,7 +1160,7 @@ export class ExhaustionDetector
             }
 
             return velocities.length > 0
-                ? this.calculateSafeMean(velocities)
+                ? FinancialMath.calculateMean(velocities)
                 : 0;
         } catch {
             return 0;
@@ -1215,9 +1215,9 @@ export class ExhaustionDetector
     private calculateVariance(values: number[]): number {
         if (values.length < 2) return 0;
 
-        const mean = this.calculateSafeMean(values);
+        const mean = FinancialMath.calculateMean(values);
         const squaredDiffs = values.map((val) => Math.pow(val - mean, 2));
-        return this.calculateSafeMean(squaredDiffs);
+        return FinancialMath.calculateMean(squaredDiffs);
     }
 
     /**
@@ -1358,7 +1358,7 @@ export class ExhaustionDetector
             // Calculate all metrics with bounds checking
             const currentPassive =
                 samples.length > 0 ? samples.at(-1)!.total : 0;
-            const avgPassive = this.calculateSafeMean(
+            const avgPassive = FinancialMath.calculateMean(
                 samples.map((s) => s.total)
             );
             const minPassive =
@@ -1367,11 +1367,11 @@ export class ExhaustionDetector
                     : 0;
 
             // Safe ratio calculations with bounds
-            const passiveRatio = this.calculateSafeRatio(
+            const passiveRatio = FinancialMath.safeDivide(
                 currentPassive,
                 avgPassive
             );
-            const depletionRatio = this.calculateSafeRatio(
+            const depletionRatio = FinancialMath.safeDivide(
                 recentAggressive,
                 avgPassive
             );
@@ -1494,7 +1494,7 @@ export class ExhaustionDetector
         }
 
         try {
-            const avgPassive = this.safeMean(passiveValues);
+            const avgPassive = FinancialMath.calculateMean(passiveValues);
             if (avgPassive === 0) return 0.5; // Neutral consistency if no passive volume
 
             let consistentPeriods = 0;
@@ -1540,7 +1540,7 @@ export class ExhaustionDetector
             const earlierVelocity = this.calculatePeriodVelocity(earlier);
 
             // Return velocity increase ratio with safety checks using safeDivision
-            const velocityRatio = this.safeDivision(
+            const velocityRatio = FinancialMath.safeDivide(
                 recentVelocity,
                 earlierVelocity,
                 1.0
@@ -1576,7 +1576,7 @@ export class ExhaustionDetector
                     const volumeChange = Math.abs(
                         current.total - previous.total
                     );
-                    const velocity = this.safeDivision(
+                    const velocity = FinancialMath.safeDivide(
                         volumeChange,
                         timeDelta / 1000,
                         0
@@ -1589,7 +1589,7 @@ export class ExhaustionDetector
                 }
             }
 
-            const avgVelocity = this.safeDivision(
+            const avgVelocity = FinancialMath.safeDivide(
                 totalVelocity,
                 validPeriods,
                 0
@@ -1663,12 +1663,12 @@ export class ExhaustionDetector
             }
 
             // Calculate iceberg confidence
-            const refillRate = this.safeDivision(
+            const refillRate = FinancialMath.safeDivide(
                 refillCount,
                 samples.length / 10,
                 0
             );
-            const strengthRate = this.safeDivision(
+            const strengthRate = FinancialMath.safeDivide(
                 significantRefills,
                 Math.max(1, refillCount),
                 0
@@ -1695,7 +1695,7 @@ export class ExhaustionDetector
         try {
             // Calculate gradient strength (higher = more liquidity depth)
             const currentLiquidity = samples[samples.length - 1]?.total || 0;
-            const gradientStrength = this.safeDivision(
+            const gradientStrength = FinancialMath.safeDivide(
                 currentLiquidity,
                 avgLiquidity,
                 0

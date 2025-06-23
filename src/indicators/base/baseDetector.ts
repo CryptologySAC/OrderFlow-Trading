@@ -24,6 +24,7 @@ import { TimeAwareCache } from "../../utils/timeAwareCache.js";
 import { AdaptiveZoneCalculator } from "../../utils/adaptiveZoneCalculator.js";
 import { PassiveVolumeTracker } from "../../utils/passiveVolumeTracker.js";
 import { SpoofingDetector } from "../../services/spoofingDetector.js";
+import { FinancialMath } from "../../utils/financialMath.js";
 import {
     AdaptiveThresholdCalculator,
     AdaptiveThresholds,
@@ -531,7 +532,9 @@ export abstract class BaseDetector extends Detector implements IDetector {
                 }
 
                 result.passive =
-                    passiveValues.length > 0 ? this.safeMean(passiveValues) : 0;
+                    passiveValues.length > 0
+                        ? FinancialMath.calculateMean(passiveValues)
+                        : 0;
             } finally {
                 sharedPools.numberArrays.release(passiveValues);
             }
@@ -620,8 +623,8 @@ export abstract class BaseDetector extends Detector implements IDetector {
                 askValues.push(sample.ask);
             }
 
-            const avgBid = this.safeMean(bidValues);
-            const avgAsk = this.safeMean(askValues);
+            const avgBid = FinancialMath.calculateMean(bidValues);
+            const avgAsk = FinancialMath.calculateMean(askValues);
 
             const total = avgBid + avgAsk;
             const result = sharedPools.imbalanceResults.acquire();
@@ -833,7 +836,11 @@ export abstract class BaseDetector extends Detector implements IDetector {
             }
 
             // Also check zone passive history for this price level
-            const priceZone = this.safeCalculateZone(price);
+            const priceZone = FinancialMath.calculateZone(
+                price,
+                this.getEffectiveZoneTicks(),
+                this.pricePrecision
+            );
             const zoneHistory = this.zonePassiveHistory.get(priceZone);
             if (zoneHistory) {
                 const passiveSnapshots = zoneHistory
@@ -841,7 +848,7 @@ export abstract class BaseDetector extends Detector implements IDetector {
                     .filter((s) => now - s.timestamp < this.windowMs);
 
                 if (passiveSnapshots.length > 0) {
-                    const avgPassiveAtPriceZone = this.safeMean(
+                    const avgPassiveAtPriceZone = FinancialMath.calculateMean(
                         passiveSnapshots.map((s) => s.total)
                     );
                     // Add to passive if we don't have current book data
@@ -1061,7 +1068,11 @@ export abstract class BaseDetector extends Detector implements IDetector {
      * Uses standardized calculation method for consistency across all detectors
      */
     protected calculateZone(price: number): number {
-        return this.safeCalculateZone(price);
+        return FinancialMath.calculateZone(
+            price,
+            this.getEffectiveZoneTicks(),
+            this.pricePrecision
+        );
     }
 
     /**

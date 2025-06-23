@@ -464,7 +464,9 @@ export class AccumulationZoneDetector extends ZoneDetector {
             Math.max(...recentTrades.map((t) => t.price)) -
             Math.min(...recentTrades.map((t) => t.price));
         // 🔧 FIX: Replace DetectorUtils.calculateMean with safe internal method
-        const avgPrice = this.safeMean(recentTrades.map((t) => t.price));
+        const avgPrice = FinancialMath.calculateMean(
+            recentTrades.map((t) => t.price)
+        );
 
         if (avgPrice > 0) {
             const priceStability = 1 - priceRange / avgPrice;
@@ -506,7 +508,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
 
             // CRITICAL FIX: Must show ABSORPTION pattern (high sell ratio being absorbed)
             // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-            const sellRatio = this.safeDivision(
+            const sellRatio = FinancialMath.safeDivide(
                 candidate.sellVolume,
                 candidate.totalVolume,
                 0
@@ -527,7 +529,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
 
             // Must show minimal aggressive buying (avoid retail FOMO patterns)
             // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-            const aggressiveBuyRatio = this.safeDivision(
+            const aggressiveBuyRatio = FinancialMath.safeDivide(
                 candidate.buyVolume,
                 candidate.totalVolume,
                 0
@@ -736,7 +738,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
     ): number {
         // Calculate all required ratios with safe division
         // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-        const sellRatio = this.safeDivision(
+        const sellRatio = FinancialMath.safeDivide(
             candidate.sellVolume,
             candidate.totalVolume,
             0
@@ -744,7 +746,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
 
         // FIXED: Calculate aggressive buy ratio (missing variable)
         // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-        const aggressiveBuyRatio = this.safeDivision(
+        const aggressiveBuyRatio = FinancialMath.safeDivide(
             candidate.buyVolume,
             candidate.totalVolume,
             0
@@ -799,7 +801,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
         // Accumulation score factors:
         // 1. High sell volume being absorbed (institutions buying the sells)
         // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-        const sellAbsorptionRatio = this.safeDivision(
+        const sellAbsorptionRatio = FinancialMath.safeDivide(
             candidate.sellVolume,
             totalVolume,
             0
@@ -807,7 +809,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
 
         // 2. Minimal aggressive buying (not retail FOMO)
         // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-        const aggressiveBuyRatio = this.safeDivision(
+        const aggressiveBuyRatio = FinancialMath.safeDivide(
             candidate.buyVolume,
             totalVolume,
             0
@@ -899,7 +901,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
         const centerPrice = (minPrice + maxPrice) / 2;
 
         // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-        const buyRatio = this.safeDivision(
+        const buyRatio = FinancialMath.safeDivide(
             candidate.buyVolume,
             candidate.totalVolume,
             0
@@ -912,7 +914,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
                   : "retail";
 
         // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-        const sellRatio = this.safeDivision(
+        const sellRatio = FinancialMath.safeDivide(
             candidate.sellVolume,
             candidate.totalVolume,
             0

@@ -703,7 +703,7 @@ export class AbsorptionDetector
         const centerVolume = nearbyLevels[centerIndex] || 0;
 
         return avgVolume > 0
-            ? Math.min(1, this.safeDivision(centerVolume, avgVolume, 0))
+            ? Math.min(1, FinancialMath.safeDivide(centerVolume, avgVolume, 0))
             : 0;
     }
 
@@ -892,7 +892,11 @@ export class AbsorptionDetector
         if (avgPassive === 0) return 1.0;
 
         // Calculate expected price movement based on volume pressure
-        const volumePressure = this.safeDivision(totalVolume, avgPassive, 1.0);
+        const volumePressure = FinancialMath.safeDivide(
+            totalVolume,
+            avgPassive,
+            1.0
+        );
         const tickSize = Math.pow(10, -this.pricePrecision);
         const expectedMovement = volumePressure * tickSize * 10; // Scaling factor
 
@@ -900,7 +904,7 @@ export class AbsorptionDetector
 
         // Efficiency = actual movement / expected movement
         // Low efficiency = absorption (price didn't move as much as expected)
-        const efficiency = this.safeDivision(
+        const efficiency = FinancialMath.safeDivide(
             priceMovement,
             expectedMovement,
             1.0
@@ -963,7 +967,7 @@ export class AbsorptionDetector
         const earlierAvg = this.safeMean(earlier);
 
         // Return growth ratio (>1 means growing passive liquidity = stronger absorption)
-        return this.safeDivision(recentAvg, earlierAvg, 1.0);
+        return FinancialMath.safeDivide(recentAvg, earlierAvg, 1.0);
     }
 
     /**
@@ -1071,7 +1075,7 @@ export class AbsorptionDetector
         const sortedPrices = [...recentPrices].sort((a, b) => a - b);
         const below = sortedPrices.filter((p) => p < price).length;
 
-        return this.safeDivision(below, sortedPrices.length, 0);
+        return FinancialMath.safeDivide(below, sortedPrices.length, 0);
     }
 
     /**
@@ -1325,7 +1329,7 @@ export class AbsorptionDetector
         }
 
         // Absorption ratio check (aggressive shouldn't overwhelm passive)
-        const absorptionRatio = this.safeDivision(
+        const absorptionRatio = FinancialMath.safeDivide(
             volumes.aggressive,
             volumes.passive,
             1.0
@@ -1498,12 +1502,12 @@ export class AbsorptionDetector
                     flowAnalysis: {
                         buyVolume,
                         sellVolume,
-                        volumeRatio: this.safeDivision(
+                        volumeRatio: FinancialMath.safeDivide(
                             buyVolume,
                             sellVolume,
                             buyVolume
                         ),
-                        dominantFlowConfidence: this.safeDivision(
+                        dominantFlowConfidence: FinancialMath.safeDivide(
                             Math.abs(buyVolume - sellVolume),
                             buyVolume + sellVolume,
                             0
@@ -1579,12 +1583,12 @@ export class AbsorptionDetector
                     sellVolume,
                     tradeCount: tradesAtZone.length,
                     dominantSide: dominantAggressiveSide,
-                    volumeRatio: this.safeDivision(
+                    volumeRatio: FinancialMath.safeDivide(
                         buyVolume,
                         sellVolume,
                         buyVolume
                     ),
-                    confidenceScore: this.safeDivision(
+                    confidenceScore: FinancialMath.safeDivide(
                         Math.abs(buyVolume - sellVolume),
                         Math.max(buyVolume + sellVolume, 1),
                         0
@@ -1687,10 +1691,14 @@ export class AbsorptionDetector
         const absorptionRatio =
             aggressiveInZone === 0
                 ? 1 // neutral
-                : this.safeDivision(aggressiveInZone, avgPassiveTotal, 0);
+                : FinancialMath.safeDivide(
+                      aggressiveInZone,
+                      avgPassiveTotal,
+                      0
+                  );
 
         // Passive strength: how well passive maintained
-        const passiveStrength = this.safeDivision(
+        const passiveStrength = FinancialMath.safeDivide(
             currentPassive,
             avgPassiveTotal,
             0
@@ -1767,14 +1775,14 @@ export class AbsorptionDetector
                 const ewmaAgg = this.aggressiveEWMA.get(); // 15 s aggressive
                 const ewmaPas = this.passiveEWMA.get(); // 15 s passive (opposite side)
 
-                const absorptionRatio = this.safeDivision(
+                const absorptionRatio = FinancialMath.safeDivide(
                     ewmaAgg,
                     ewmaPas,
                     1.0
                 ); // smaller = stronger absorption
 
                 // ✅ FIX 1: Properly calculate passive strength
-                const passiveStrength = this.safeDivision(
+                const passiveStrength = FinancialMath.safeDivide(
                     currentPassive,
                     avgPassive,
                     0

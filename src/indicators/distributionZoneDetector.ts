@@ -411,7 +411,7 @@ export class DistributionZoneDetector extends ZoneDetector {
         // This is the inverse of accumulation where we want sells being absorbed
 
         // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-        const currentBuyRatio = this.safeDivision(
+        const currentBuyRatio = FinancialMath.safeDivide(
             candidate.buyVolume,
             candidate.totalVolume,
             0
@@ -458,7 +458,7 @@ export class DistributionZoneDetector extends ZoneDetector {
 
             // 🔄 INVERTED LOGIC: Must show DISTRIBUTION pattern (high buy ratio - institutions selling into retail buying)
             // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-            const buyRatio = this.safeDivision(
+            const buyRatio = FinancialMath.safeDivide(
                 candidate.buyVolume,
                 candidate.totalVolume,
                 0
@@ -478,7 +478,7 @@ export class DistributionZoneDetector extends ZoneDetector {
 
             // 🔄 INVERTED LOGIC: Must show minimal aggressive selling (avoid institutional dumping patterns)
             // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-            const aggressiveSellRatio = this.safeDivision(
+            const aggressiveSellRatio = FinancialMath.safeDivide(
                 candidate.sellVolume,
                 candidate.totalVolume,
                 0
@@ -646,14 +646,14 @@ export class DistributionZoneDetector extends ZoneDetector {
         timestamp: number
     ): number {
         // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-        const buyRatio = this.safeDivision(
+        const buyRatio = FinancialMath.safeDivide(
             candidate.buyVolume,
             candidate.totalVolume,
             0
         );
 
         // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-        const sellRatio = this.safeDivision(
+        const sellRatio = FinancialMath.safeDivide(
             candidate.sellVolume,
             candidate.totalVolume,
             0
@@ -777,7 +777,7 @@ export class DistributionZoneDetector extends ZoneDetector {
      */
     private calculateInitialStrength(candidate: DistributionCandidate): number {
         // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-        const buyRatio = this.safeDivision(
+        const buyRatio = FinancialMath.safeDivide(
             candidate.buyVolume,
             candidate.totalVolume,
             0
@@ -867,7 +867,7 @@ export class DistributionZoneDetector extends ZoneDetector {
 
     private calculateFlowConsistency(candidate: DistributionCandidate): number {
         // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-        const buyRatio = this.safeDivision(
+        const buyRatio = FinancialMath.safeDivide(
             candidate.buyVolume,
             candidate.totalVolume,
             0
