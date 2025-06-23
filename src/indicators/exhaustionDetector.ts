@@ -237,23 +237,6 @@ export class ExhaustionDetector
     /**
      * 🔧 FIX: Safe mean calculation to replace DetectorUtils.calculateMean
      */
-    private safeMean(values: number[]): number {
-        if (!values || values.length === 0) {
-            return 0;
-        }
-
-        let sum = 0;
-        let validCount = 0;
-
-        for (const value of values) {
-            if (isFinite(value) && !isNaN(value)) {
-                sum += value;
-                validCount++;
-            }
-        }
-
-        return validCount > 0 ? sum / validCount : 0;
-    }
 
     /**
      * 🔧 FIX: Simple config implementation with type safety

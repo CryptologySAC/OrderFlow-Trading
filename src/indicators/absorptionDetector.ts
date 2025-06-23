@@ -231,23 +231,6 @@ export class AbsorptionDetector
     /**
      * 🔧 FIX: Safe mean calculation to replace DetectorUtils.calculateMean
      */
-    private safeMean(values: number[]): number {
-        if (!values || values.length === 0) {
-            return 0;
-        }
-
-        let sum = 0;
-        let validCount = 0;
-
-        for (const value of values) {
-            if (isFinite(value) && !isNaN(value)) {
-                sum += value;
-                validCount++;
-            }
-        }
-
-        return validCount > 0 ? sum / validCount : 0;
-    }
 
     public onEnrichedTrade(event: EnrichedTradeEvent | HybridTradeEvent): void {
         // 🔧 FIX: Add comprehensive input validation to prevent NaN/Infinity propagation
@@ -729,8 +712,32 @@ export class AbsorptionDetector
      */
     private trackAbsorptionEvent(event: EnrichedTradeEvent): void {
         const zone = this.calculateZone(event.price);
-        // Use absorbing side for consistent absorption tracking
-        const side = this.getAbsorbingSide(event);
+
+        // Get recent trades at this zone for proper absorption analysis
+        const recentTrades = this.trades.getAll().filter((trade) => {
+            const tradeZone = this.calculateZone(trade.price);
+            return (
+                tradeZone === zone &&
+                event.timestamp - trade.timestamp < this.windowMs
+            );
+        });
+
+        // Use enhanced absorbing side detection
+        const absorbingSide = this.getAbsorbingSideForZone(
+            recentTrades,
+            zone,
+            event.price
+        );
+
+        // Convert bid/ask to buy/sell and handle null case
+        let side: "buy" | "sell";
+        if (!absorbingSide) {
+            // Fallback to simple aggressive side detection when no clear absorption
+            side = event.buyerIsMaker ? "sell" : "buy";
+        } else {
+            // Convert orderbook side to trading side
+            side = absorbingSide === "bid" ? "buy" : "sell";
+        }
 
         if (!this.absorptionHistory.has(zone)) {
             this.absorptionHistory.set(zone, []);
@@ -750,20 +757,6 @@ export class AbsorptionDetector
             zone,
             events.filter((e) => e.timestamp > cutoff)
         );
-    }
-
-    /**
-     * Get absorbing (passive) side for absorption signals - LEGACY METHOD
-     *
-     * @deprecated Use getAbsorbingSideForZone() for proper flow analysis
-     * @param trade The aggressive trade hitting passive liquidity
-     * @returns The side that is providing passive liquidity (absorbing)
-     */
-    private getAbsorbingSide(trade: AggressiveTrade): "buy" | "sell" {
-        // For absorption, we want the PASSIVE side that's absorbing the aggressive flow
-        // - Aggressive buy (buyerIsMaker=false) hits ask → sellers are absorbing → "sell"
-        // - Aggressive sell (buyerIsMaker=true) hits bid → buyers are absorbing → "buy"
-        return trade.buyerIsMaker ? "buy" : "sell";
     }
 
     /**
