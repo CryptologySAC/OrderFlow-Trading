@@ -1,2 +1,11 @@
 configId,detectorType,duration,totalSignals,totalMovements,success,error
-absorptionDetector_phase1_default,absorptionDetector,600006,0,0,false,Test timeout
+absorption_conservative,absorptionDetector,0,0,0,false,Failed to initialize order book: Failed to fetch order book snapshot
+absorption_balanced,absorptionDetector,0,0,0,false,Failed to initialize order book: Failed to fetch order book snapshot
+absorption_aggressive,absorptionDetector,0,0,0,false,Failed to initialize order book: Failed to fetch order book snapshot
+absorption_backtesting_sensitive,absorptionDetector,0,0,0,false,Failed to initialize order book: Failed to fetch order book snapshot
+absorption_backtesting_moderate,absorptionDetector,0,0,0,false,Failed to initialize order book: Failed to fetch order book snapshot
+absorption_backtesting_strict,absorptionDetector,0,0,0,false,Failed to initialize order book: Failed to fetch order book snapshot
+absorption_grid_0,absorptionDetector,0,0,0,false,Failed to initialize order book: Failed to fetch order book snapshot
+absorption_grid_1,absorptionDetector,0,0,0,false,Failed to initialize order book: Failed to fetch order book snapshot
+absorption_grid_2,absorptionDetector,0,0,0,false,Failed to initialize order book: Failed to fetch order book snapshot
+absorption_grid_3,absorptionDetector,0,0,0,false,Failed to initialize order book: Failed to fetch order book snapshot
