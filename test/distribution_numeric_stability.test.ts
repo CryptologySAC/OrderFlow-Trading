@@ -124,18 +124,18 @@ describe("DistributionZoneDetector Numeric Stability Fixes", () => {
         };
 
         const result = detector.analyze(invalidTrade);
-        
+
         expect(result).toBeDefined();
         expect(result.updates).toEqual([]);
         expect(result.signals).toEqual([]);
         expect(result.activeZones).toEqual([]);
-        
+
         // Should log a warning about invalid price
         expect(mockLogger.warn).toHaveBeenCalledWith(
             "[DistributionZoneDetector] Invalid price detected, skipping trade",
             expect.objectContaining({
                 price: NaN,
-                tradeId: "test1"
+                tradeId: "test1",
             })
         );
     });
@@ -159,18 +159,18 @@ describe("DistributionZoneDetector Numeric Stability Fixes", () => {
         };
 
         const result = detector.analyze(invalidTrade);
-        
+
         expect(result).toBeDefined();
         expect(result.updates).toEqual([]);
         expect(result.signals).toEqual([]);
         expect(result.activeZones).toEqual([]);
-        
+
         // Should log a warning about invalid quantity
         expect(mockLogger.warn).toHaveBeenCalledWith(
             "[DistributionZoneDetector] Invalid quantity detected, skipping trade",
             expect.objectContaining({
                 quantity: Infinity,
-                tradeId: "test2"
+                tradeId: "test2",
             })
         );
     });
@@ -194,18 +194,18 @@ describe("DistributionZoneDetector Numeric Stability Fixes", () => {
         };
 
         const result = detector.analyze(zeroTrade);
-        
+
         expect(result).toBeDefined();
         expect(result.updates).toEqual([]);
         expect(result.signals).toEqual([]);
         expect(result.activeZones).toEqual([]);
-        
+
         // Should log a warning about invalid price
         expect(mockLogger.warn).toHaveBeenCalledWith(
             "[DistributionZoneDetector] Invalid price detected, skipping trade",
             expect.objectContaining({
                 price: 0,
-                tradeId: "test3"
+                tradeId: "test3",
             })
         );
     });
@@ -264,7 +264,7 @@ describe("DistributionZoneDetector Numeric Stability Fixes", () => {
         };
 
         const result = detector.analyze(tradeWithNegativePassive);
-        
+
         expect(result).toBeDefined();
         // Should not crash and process the trade
         expect(result.updates).toBeDefined();
@@ -291,7 +291,7 @@ describe("DistributionZoneDetector Numeric Stability Fixes", () => {
         };
 
         const result = detector.analyze(tradeWithExtremePassive);
-        
+
         expect(result).toBeDefined();
         // Should not crash and process the trade
         expect(result.updates).toBeDefined();
@@ -318,12 +318,12 @@ describe("DistributionZoneDetector Numeric Stability Fixes", () => {
         };
 
         const result = detector.analyze(validTrade);
-        
+
         expect(result).toBeDefined();
         expect(result.updates).toBeDefined();
         expect(result.signals).toBeDefined();
         expect(result.activeZones).toBeDefined();
-        
+
         // Should not log any warnings for valid trade
         expect(mockLogger.warn).not.toHaveBeenCalled();
     });
@@ -333,18 +333,18 @@ describe("DistributionZoneDetector Numeric Stability Fixes", () => {
 
         // Test getPriceLevel method with valid values
         expect(detector_internal.getPriceLevel(100.5)).toBeGreaterThan(0);
-        
+
         // Test with edge cases
         expect(detector_internal.getPriceLevel(0)).toBe(0); // Invalid price
         expect(detector_internal.getPriceLevel(-1)).toBe(0); // Negative price
         expect(detector_internal.getPriceLevel(NaN)).toBe(0); // NaN price
         expect(detector_internal.getPriceLevel(Infinity)).toBe(0); // Infinity price
-        
+
         // Should log warnings for invalid parameters
         expect(mockLogger.warn).toHaveBeenCalledWith(
             "[DistributionZoneDetector] Invalid zone calculation parameters",
             expect.objectContaining({
-                price: 0
+                price: 0,
             })
         );
     });
@@ -353,7 +353,7 @@ describe("DistributionZoneDetector Numeric Stability Fixes", () => {
         // Add multiple trades to create distribution scenario
         for (let i = 0; i < 10; i++) {
             const trade: EnrichedTradeEvent = {
-                price: 100 + (i * 0.01), // Clustered around 100
+                price: 100 + i * 0.01, // Clustered around 100
                 quantity: 1 + i,
                 timestamp: Date.now() - i * 1000,
                 buyerIsMaker: i % 3 !== 0, // Mostly buy pressure (distribution pattern)
@@ -378,7 +378,7 @@ describe("DistributionZoneDetector Numeric Stability Fixes", () => {
 
     it("should handle distribution quality calculations safely", () => {
         const detector_internal = detector as any;
-        
+
         // Create a candidate that might trigger distribution quality analysis
         const mockCandidate = {
             priceLevel: 100,
@@ -386,10 +386,14 @@ describe("DistributionZoneDetector Numeric Stability Fixes", () => {
             trades: {
                 getAll: () => [
                     { price: 100, quantity: 60, timestamp: Date.now() - 60000 },
-                    { price: 100.01, quantity: 50, timestamp: Date.now() - 30000 },
-                    { price: 99.99, quantity: 40, timestamp: Date.now() }
+                    {
+                        price: 100.01,
+                        quantity: 50,
+                        timestamp: Date.now() - 30000,
+                    },
+                    { price: 99.99, quantity: 40, timestamp: Date.now() },
                 ],
-                length: 3
+                length: 3,
             },
             buyVolume: 100, // High buy volume for distribution
             sellVolume: 50,
@@ -399,14 +403,14 @@ describe("DistributionZoneDetector Numeric Stability Fixes", () => {
             consecutiveTrades: 3,
             priceStability: 0.99,
             tradeCount: 3,
-            absorptionQuality: 0.5
+            absorptionQuality: 0.5,
         };
 
         // Test safe mean on prices
         const prices = mockCandidate.trades.getAll().map((t: any) => t.price);
         const safeMeanResult = detector_internal.safeMean(prices);
         expect(safeMeanResult).toBeCloseTo(100, 2);
-        
+
         // Test safe division calculations for distribution
         const buyRatio = detector_internal.safeDivision(
             mockCandidate.buyVolume,
@@ -414,7 +418,7 @@ describe("DistributionZoneDetector Numeric Stability Fixes", () => {
             0
         );
         expect(buyRatio).toBeCloseTo(0.667, 2);
-        
+
         // Distribution quality calculations should not crash
         expect(true).toBe(true);
     });
@@ -439,7 +443,7 @@ describe("DistributionZoneDetector Numeric Stability Fixes", () => {
         };
 
         const result = detector.analyze(distributionTrade);
-        
+
         expect(result).toBeDefined();
         // Distribution should process high buy pressure as positive signal
         expect(result.updates).toBeDefined();

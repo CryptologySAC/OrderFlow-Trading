@@ -43,12 +43,10 @@ describe("AbsorptionDetector Numeric Stability Fixes", () => {
             incrementCounter: vi.fn(),
             decrementCounter: vi.fn(),
             getCounterRate: vi.fn().mockReturnValue(0),
-            createCounter: vi
-                .fn()
-                .mockReturnValue({
-                    increment: vi.fn(),
-                    get: vi.fn().mockReturnValue(0),
-                }),
+            createCounter: vi.fn().mockReturnValue({
+                increment: vi.fn(),
+                get: vi.fn().mockReturnValue(0),
+            }),
             createHistogram: vi
                 .fn()
                 .mockReturnValue({ observe: vi.fn(), reset: vi.fn() }),
@@ -112,7 +110,9 @@ describe("AbsorptionDetector Numeric Stability Fixes", () => {
             getBestBid: vi.fn().mockReturnValue(100),
             getBestAsk: vi.fn().mockReturnValue(101),
             getSpread: vi.fn().mockReturnValue(1),
-            getBidAskVolumes: vi.fn().mockReturnValue({ bidVolume: 10, askVolume: 10 }),
+            getBidAskVolumes: vi
+                .fn()
+                .mockReturnValue({ bidVolume: 10, askVolume: 10 }),
             getTotalBidVolume: vi.fn().mockReturnValue(100),
             getTotalAskVolume: vi.fn().mockReturnValue(100),
             getOrderBookSnapshot: vi.fn().mockReturnValue(new Map()),
@@ -332,7 +332,7 @@ describe("AbsorptionDetector Numeric Stability Fixes", () => {
         // Add multiple trades to create volume clustering scenario
         for (let i = 0; i < 10; i++) {
             const trade: EnrichedTradeEvent = {
-                price: 100 + (i * 0.1), // Clustered around 100
+                price: 100 + i * 0.1, // Clustered around 100
                 quantity: 1 + i,
                 timestamp: Date.now() - i * 1000,
                 buyerIsMaker: i % 2 === 0,
@@ -356,7 +356,7 @@ describe("AbsorptionDetector Numeric Stability Fixes", () => {
 
     it("should handle absorption velocity calculations safely", () => {
         const detector_internal = detector as any;
-        
+
         // Test velocity calculations don't crash with edge cases
         const trades = [
             { price: 100, quantity: 1, timestamp: Date.now() - 5000 },

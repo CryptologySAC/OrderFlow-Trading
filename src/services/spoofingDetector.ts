@@ -109,6 +109,77 @@ export class SpoofingDetector extends EventEmitter {
     }
 
     /**
+     * 🔧 FIX: Numeric validation helper to prevent NaN/Infinity propagation
+     */
+    private validateNumeric(value: number, fallback: number): number {
+        return isFinite(value) && !isNaN(value) && value !== 0
+            ? value
+            : fallback;
+    }
+
+    /**
+     * 🔧 FIX: Safe division helper to prevent division by zero
+     */
+    private safeDivision(
+        numerator: number,
+        denominator: number,
+        fallback: number = 0
+    ): number {
+        if (
+            !isFinite(numerator) ||
+            !isFinite(denominator) ||
+            denominator === 0
+        ) {
+            return fallback;
+        }
+        const result = numerator / denominator;
+        return isFinite(result) ? result : fallback;
+    }
+
+    /**
+     * 🔧 FIX: Safe ratio calculation specialized for trading metrics
+     */
+    private safeRatio(
+        numerator: number,
+        denominator: number,
+        fallback: number = 0
+    ): number {
+        if (
+            !isFinite(numerator) ||
+            !isFinite(denominator) ||
+            denominator <= 0 ||
+            numerator < 0
+        ) {
+            return fallback;
+        }
+        const result = numerator / denominator;
+        return isFinite(result) && result >= 0
+            ? Math.min(result, 1.0)
+            : fallback;
+    }
+
+    /**
+     * 🔧 FIX: Safe mean calculation
+     */
+    private safeMean(values: number[]): number {
+        if (!values || values.length === 0) {
+            return 0;
+        }
+
+        let sum = 0;
+        let validCount = 0;
+
+        for (const value of values) {
+            if (isFinite(value) && !isNaN(value)) {
+                sum += value;
+                validCount++;
+            }
+        }
+
+        return validCount > 0 ? sum / validCount : 0;
+    }
+
+    /**
      * Set the anomaly detector for event forwarding
      */
     public setAnomalyDetector(anomalyDetector: AnomalyDetector): void {
@@ -132,10 +203,39 @@ export class SpoofingDetector extends EventEmitter {
         quantity: number,
         placementId: string
     ): void {
+        // 🔧 FIX: Add comprehensive input validation
+        const validPrice = this.validateNumeric(price, 0);
+        if (validPrice === 0) {
+            this.logger?.warn?.(
+                "[SpoofingDetector] Invalid price in trackOrderPlacement, skipping",
+                {
+                    price,
+                    side,
+                    quantity,
+                    placementId,
+                }
+            );
+            return;
+        }
+
+        const validQuantity = this.validateNumeric(quantity, 0);
+        if (validQuantity === 0) {
+            this.logger?.warn?.(
+                "[SpoofingDetector] Invalid quantity in trackOrderPlacement, skipping",
+                {
+                    price: validPrice,
+                    side,
+                    quantity,
+                    placementId,
+                }
+            );
+            return;
+        }
+
         const now = Date.now();
-        const normalizedPrice = this.normalizePrice(price);
+        const normalizedPrice = this.normalizePrice(validPrice);
         let history = this.orderPlacementHistory.get(normalizedPrice) || [];
-        history.push({ time: now, side, quantity, placementId });
+        history.push({ time: now, side, quantity: validQuantity, placementId });
         if (history.length > 20) {
             history.shift(); // Keep last 20 placements per price level
         }
@@ -152,12 +252,41 @@ export class SpoofingDetector extends EventEmitter {
         placementId: string,
         placementTime: number
     ): void {
+        // 🔧 FIX: Add comprehensive input validation
+        const validPrice = this.validateNumeric(price, 0);
+        if (validPrice === 0) {
+            this.logger?.warn?.(
+                "[SpoofingDetector] Invalid price in trackOrderCancellation, skipping",
+                {
+                    price,
+                    side,
+                    quantity,
+                    placementId,
+                }
+            );
+            return;
+        }
+
+        const validQuantity = this.validateNumeric(quantity, 0);
+        if (validQuantity === 0) {
+            this.logger?.warn?.(
+                "[SpoofingDetector] Invalid quantity in trackOrderCancellation, skipping",
+                {
+                    price: validPrice,
+                    side,
+                    quantity,
+                    placementId,
+                }
+            );
+            return;
+        }
+
         const now = Date.now();
         this.cancellationPatterns.set(placementId, {
             placementTime,
             cancellationTime: now,
-            price: this.normalizePrice(price),
-            quantity,
+            price: this.normalizePrice(validPrice),
+            quantity: validQuantity,
             side,
         });
     }
@@ -166,10 +295,28 @@ export class SpoofingDetector extends EventEmitter {
      * Track changes in passive (limit) orderbook at price level.
      */
     public trackPassiveChange(price: number, bid: number, ask: number): void {
+        // 🔧 FIX: Add comprehensive input validation
+        const validPrice = this.validateNumeric(price, 0);
+        if (validPrice === 0) {
+            this.logger?.warn?.(
+                "[SpoofingDetector] Invalid price in trackPassiveChange, skipping",
+                {
+                    price,
+                    bid,
+                    ask,
+                }
+            );
+            return;
+        }
+
+        // Validate bid and ask - allow zero but not NaN/Infinity
+        const validBid = isFinite(bid) && !isNaN(bid) ? Math.max(0, bid) : 0;
+        const validAsk = isFinite(ask) && !isNaN(ask) ? Math.max(0, ask) : 0;
+
         const now = Date.now();
-        const normalizedPrice = this.normalizePrice(price);
+        const normalizedPrice = this.normalizePrice(validPrice);
         let history = this.passiveChangeHistory.get(normalizedPrice) || [];
-        history.push({ time: now, bid, ask });
+        history.push({ time: now, bid: validBid, ask: validAsk });
         if (history.length > 10) {
             history.shift(); // Remove oldest item instead of creating new array
         }
@@ -342,10 +489,10 @@ export class SpoofingDetector extends EventEmitter {
                     }
 
                     // Only count as spoof if most was canceled, not executed
-                    // Fix: Add zero check to prevent division by zero
+                    // 🔧 FIX: Use safe ratio to prevent division by zero
                     if (
                         delta > 0 &&
-                        canceled / delta > 0.7 &&
+                        this.safeRatio(canceled, delta, 0) > 0.7 &&
                         canceled >= minWallSize
                     ) {
                         spoofDetected = true;
@@ -376,7 +523,10 @@ export class SpoofingDetector extends EventEmitter {
                                             ? "ask"
                                             : "bid", // Fallback logic for backward compatibility
                                 spoofType: "fake_wall",
-                                confidence: Math.min(0.95, canceled / prevQty),
+                                confidence: Math.min(
+                                    0.95,
+                                    this.safeRatio(canceled, prevQty, 0)
+                                ),
                                 cancelTimeMs: curr.time - prev.time,
                                 marketImpact: 0,
                             };
@@ -506,7 +656,7 @@ export class SpoofingDetector extends EventEmitter {
             if (
                 prevQty >= minWallSize &&
                 delta > 0 &&
-                delta / prevQty > maxCancelRatio &&
+                this.safeRatio(delta, prevQty, 0) > maxCancelRatio &&
                 timeDiff < rapidCancelMs
             ) {
                 return {
@@ -520,7 +670,10 @@ export class SpoofingDetector extends EventEmitter {
                     timestamp: curr.time,
                     spoofedSide: side === "buy" ? "bid" : "ask",
                     spoofType: "fake_wall",
-                    confidence: Math.min(0.95, delta / prevQty),
+                    confidence: Math.min(
+                        0.95,
+                        this.safeRatio(delta, prevQty, 0)
+                    ),
                     cancelTimeMs: timeDiff,
                     marketImpact: 0, // TODO: Calculate based on price movement
                 };
@@ -566,7 +719,12 @@ export class SpoofingDetector extends EventEmitter {
 
         // Layering requires coordinated cancellations across multiple levels
         if (layeredCancellations >= 2) {
-            avgCancelTime /= layeredCancellations;
+            // 🔧 FIX: Use safe division to prevent division by zero
+            avgCancelTime = this.safeDivision(
+                avgCancelTime,
+                layeredCancellations,
+                0
+            );
             return {
                 priceStart: price - layeringLevels * tickSize,
                 priceEnd: price + layeringLevels * tickSize,
@@ -580,7 +738,7 @@ export class SpoofingDetector extends EventEmitter {
                 spoofType: "layering",
                 confidence: Math.min(
                     0.9,
-                    layeredCancellations / layeringLevels
+                    this.safeRatio(layeredCancellations, layeringLevels, 0)
                 ),
                 cancelTimeMs: avgCancelTime,
                 marketImpact: 0, // TODO: Calculate market impact
@@ -624,8 +782,12 @@ export class SpoofingDetector extends EventEmitter {
             // 4. Total timeframe is very fast (within ghostThresholdMs)
             // 5. The "disappearance" must be significant (not just partial reduction)
             const totalTimeMs = latest.time - earliest.time;
-            const disappearanceRatio =
-                midQty > 0 ? (midQty - lateQty) / midQty : 0;
+            // 🔧 FIX: Use safe ratio calculation to prevent division by zero
+            const disappearanceRatio = this.safeRatio(
+                midQty - lateQty,
+                midQty,
+                0
+            );
 
             if (
                 earlyQty < this.config.minWallSize &&
