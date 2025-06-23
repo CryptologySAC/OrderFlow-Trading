@@ -149,6 +149,75 @@ export class IcebergDetector extends Detector {
     }
 
     /**
+     * 🔧 FIX: Numeric validation helper to prevent NaN/Infinity propagation
+     */
+    private validateNumeric(value: number, fallback: number): number {
+        return isFinite(value) && !isNaN(value) && value !== 0
+            ? value
+            : fallback;
+    }
+
+    /**
+     * 🔧 FIX: Safe division helper to prevent division by zero
+     */
+    private safeDivision(
+        numerator: number,
+        denominator: number,
+        fallback: number = 0
+    ): number {
+        if (
+            !isFinite(numerator) ||
+            !isFinite(denominator) ||
+            denominator === 0
+        ) {
+            return fallback;
+        }
+        const result = numerator / denominator;
+        return isFinite(result) ? result : fallback;
+    }
+
+    /**
+     * 🔧 FIX: Safe ratio calculation specialized for trading metrics
+     */
+    private safeRatio(
+        numerator: number,
+        denominator: number,
+        fallback: number = 0
+    ): number {
+        if (
+            !isFinite(numerator) ||
+            !isFinite(denominator) ||
+            denominator <= 0 ||
+            numerator < 0
+        ) {
+            return fallback;
+        }
+        const result = numerator / denominator;
+        return isFinite(result) && result >= 0 ? result : fallback;
+    }
+
+    /**
+     * 🔧 FIX: Safe mean calculation
+     */
+    private safeMean(values: number[]): number {
+        if (!values || values.length === 0) {
+            return 0;
+        }
+
+        let sum = 0;
+        let validCount = 0;
+
+        for (const value of values) {
+            if (isFinite(value) && !isNaN(value)) {
+                sum += value;
+                validCount++;
+            }
+        }
+
+        return validCount > 0 ? sum / validCount : 0;
+    }
+
+    /**
      * Set the anomaly detector for event forwarding
      */
     public setAnomalyDetector(anomalyDetector: AnomalyDetector): void {
@@ -160,15 +229,52 @@ export class IcebergDetector extends Detector {
      */
     public onEnrichedTrade(trade: EnrichedTradeEvent): void {
         try {
+            // 🔧 FIX: Add comprehensive input validation
+            const validPrice = this.validateNumeric(trade.price, 0);
+            if (validPrice === 0) {
+                this.logger.warn(
+                    "[IcebergDetector] Invalid price detected, skipping trade",
+                    {
+                        price: trade.price,
+                        tradeId: trade.tradeId,
+                    }
+                );
+                return;
+            }
+
+            const validQuantity = this.validateNumeric(trade.quantity, 0);
+            if (validQuantity === 0) {
+                this.logger.warn(
+                    "[IcebergDetector] Invalid quantity detected, skipping trade",
+                    {
+                        quantity: trade.quantity,
+                        tradeId: trade.tradeId,
+                    }
+                );
+                return;
+            }
+
             const now = trade.timestamp;
-            const normalizedPrice = this.normalizePrice(trade.price);
+            const normalizedPrice = this.normalizePrice(validPrice);
             const side = trade.buyerIsMaker ? "sell" : "buy";
 
+            // Create validated trade object
+            const validatedTrade = {
+                ...trade,
+                price: validPrice,
+                quantity: validQuantity,
+            };
+
             // Update price level activity
-            this.updatePriceLevelActivity(normalizedPrice, trade.quantity, now);
+            this.updatePriceLevelActivity(normalizedPrice, validQuantity, now);
 
             // Check for potential iceberg patterns
-            this.analyzeForIcebergPatterns(trade, normalizedPrice, side, now);
+            this.analyzeForIcebergPatterns(
+                validatedTrade,
+                normalizedPrice,
+                side,
+                now
+            );
 
             // Update existing candidates
             this.updateExistingCandidates();
@@ -227,7 +333,12 @@ export class IcebergDetector extends Detector {
         activity.lastTradeTime = timestamp;
         activity.executedVolume += size;
         activity.tradeCount++;
-        activity.averageSize = activity.executedVolume / activity.tradeCount;
+        // 🔧 FIX: Use safe division to prevent division by zero
+        activity.averageSize = this.safeDivision(
+            activity.executedVolume,
+            activity.tradeCount,
+            0
+        );
 
         this.priceLevelActivity.set(price, activity);
     }
@@ -299,7 +410,12 @@ export class IcebergDetector extends Detector {
         }
 
         // Look for patterns that suggest fragmented orders
-        const sizeRatio = trade.quantity / activity.averageSize;
+        // 🔧 FIX: Use safe division to prevent division by zero
+        const sizeRatio = this.safeDivision(
+            trade.quantity,
+            activity.averageSize,
+            1
+        );
         return sizeRatio >= 0.5 && sizeRatio <= 2.0; // Similar to average size
     }
 
@@ -360,17 +476,15 @@ export class IcebergDetector extends Detector {
 
         // Calculate size consistency
         const sizes = pieces.map((p) => p.size);
-        const avgSize =
-            sizes.reduce((sum, size) => sum + size, 0) / sizes.length;
+        // 🔧 FIX: Use safe mean calculation to prevent division by zero
+        const avgSize = this.safeMean(sizes);
         const sizeVariation = this.calculateSizeVariation(sizes, avgSize);
 
         // Calculate temporal consistency between refills
         const timeGaps = this.calculateTimeGaps(pieces);
         const temporalScore = this.calculateTemporalScore(timeGaps);
-        const avgRefillGap =
-            timeGaps.length > 0
-                ? timeGaps.reduce((sum, g) => sum + g, 0) / timeGaps.length
-                : 0;
+        // 🔧 FIX: Use safe mean calculation to prevent division by zero
+        const avgRefillGap = this.safeMean(timeGaps);
 
         // Calculate price stability (all pieces should be at same price)
         const priceStability = 1.0; // Perfect stability since all at same price level
@@ -412,11 +526,14 @@ export class IcebergDetector extends Detector {
     private calculateSizeVariation(sizes: number[], avgSize: number): number {
         if (sizes.length < 2) return 0;
 
-        const variance =
-            sizes.reduce((sum, size) => sum + Math.pow(size - avgSize, 2), 0) /
-            sizes.length;
-        const stdDev = Math.sqrt(variance);
-        return avgSize > 0 ? stdDev / avgSize : 1;
+        const variance = this.safeDivision(
+            sizes.reduce((sum, size) => sum + Math.pow(size - avgSize, 2), 0),
+            sizes.length,
+            0
+        );
+        const stdDev = Math.sqrt(Math.max(0, variance));
+        // 🔧 FIX: Use safe division to prevent division by zero
+        return this.safeDivision(stdDev, avgSize, 1);
     }
 
     /**
@@ -436,7 +553,8 @@ export class IcebergDetector extends Detector {
     private calculateTemporalScore(gaps: number[]): number {
         if (gaps.length === 0) return 1;
 
-        const avgGap = gaps.reduce((sum, g) => sum + g, 0) / gaps.length;
+        // 🔧 FIX: Use safe mean calculation to prevent division by zero
+        const avgGap = this.safeMean(gaps);
         const variation = this.calculateSizeVariation(gaps, avgGap);
 
         const avgScore = Math.max(0, 1 - avgGap / this.config.maxRefillTimeMs);
@@ -732,18 +850,13 @@ export class IcebergDetector extends Detector {
         return {
             activeCandidates: this.activeCandidates.size,
             completedIcebergs: recentIcebergs.length,
-            avgConfidence:
-                recentIcebergs.length > 0
-                    ? recentIcebergs.reduce((sum, i) => sum + i.confidence, 0) /
-                      recentIcebergs.length
-                    : 0,
-            avgInstitutionalScore:
-                recentIcebergs.length > 0
-                    ? recentIcebergs.reduce(
-                          (sum, i) => sum + i.institutionalScore,
-                          0
-                      ) / recentIcebergs.length
-                    : 0,
+            // 🔧 FIX: Use safe mean calculation to prevent division by zero
+            avgConfidence: this.safeMean(
+                recentIcebergs.map((i) => i.confidence)
+            ),
+            avgInstitutionalScore: this.safeMean(
+                recentIcebergs.map((i) => i.institutionalScore)
+            ),
             totalVolumeDetected: recentIcebergs.reduce(
                 (sum, i) => sum + i.totalSize,
                 0

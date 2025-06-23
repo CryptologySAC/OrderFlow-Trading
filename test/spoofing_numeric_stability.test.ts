@@ -83,7 +83,13 @@ describe("SpoofingDetector Numeric Stability Fixes", () => {
     });
 
     it("should handle NaN price values without crashing in trackOrderCancellation", () => {
-        detector.trackOrderCancellation(NaN, "bid", 10, "test_cancel_1", Date.now());
+        detector.trackOrderCancellation(
+            NaN,
+            "bid",
+            10,
+            "test_cancel_1",
+            Date.now()
+        );
 
         // Should log a warning about invalid price
         expect(mockLogger.warn).toHaveBeenCalledWith(
@@ -98,7 +104,13 @@ describe("SpoofingDetector Numeric Stability Fixes", () => {
     });
 
     it("should handle zero quantity values gracefully in trackOrderCancellation", () => {
-        detector.trackOrderCancellation(100, "ask", 0, "test_cancel_2", Date.now());
+        detector.trackOrderCancellation(
+            100,
+            "ask",
+            0,
+            "test_cancel_2",
+            Date.now()
+        );
 
         // Should log a warning about invalid quantity (zero)
         expect(mockLogger.warn).toHaveBeenCalledWith(
@@ -212,7 +224,11 @@ describe("SpoofingDetector Numeric Stability Fixes", () => {
             detector.trackPassiveChange(100, 0, 20); // Wall disappears
         }, 10);
 
-        const spoofingEvents = detector.detectSpoofingPatterns(100, "buy", now + 100);
+        const spoofingEvents = detector.detectSpoofingPatterns(
+            100,
+            "buy",
+            now + 100
+        );
 
         // Should not crash and return valid array
         expect(Array.isArray(spoofingEvents)).toBe(true);
@@ -230,7 +246,11 @@ describe("SpoofingDetector Numeric Stability Fixes", () => {
             }, 10);
         }
 
-        const spoofingEvents = detector.detectSpoofingPatterns(100, "buy", now + 200);
+        const spoofingEvents = detector.detectSpoofingPatterns(
+            100,
+            "buy",
+            now + 200
+        );
 
         // Should not crash and handle division by zero in avgCancelTime calculation
         expect(Array.isArray(spoofingEvents)).toBe(true);
@@ -240,11 +260,15 @@ describe("SpoofingDetector Numeric Stability Fixes", () => {
         const now = Date.now();
 
         // Create ghost liquidity pattern: low -> high -> low
-        detector.trackPassiveChange(100, 5, 10);   // Low liquidity
-        detector.trackPassiveChange(100, 50, 10);  // Sudden high liquidity
-        detector.trackPassiveChange(100, 3, 10);   // Disappears quickly
+        detector.trackPassiveChange(100, 5, 10); // Low liquidity
+        detector.trackPassiveChange(100, 50, 10); // Sudden high liquidity
+        detector.trackPassiveChange(100, 3, 10); // Disappears quickly
 
-        const spoofingEvents = detector.detectSpoofingPatterns(100, "buy", now + 150);
+        const spoofingEvents = detector.detectSpoofingPatterns(
+            100,
+            "buy",
+            now + 150
+        );
 
         // Should not crash and handle disappearanceRatio calculation safely
         expect(Array.isArray(spoofingEvents)).toBe(true);
