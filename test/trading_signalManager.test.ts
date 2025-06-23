@@ -26,6 +26,12 @@ describe("trading/SignalManager", () => {
             recentAnomalyTypes: [],
             volatilityRatio: 1.0,
             highestSeverity: "low",
+            metrics: {
+                volatility: 0.5,
+                spreadBps: 1.0,
+                flowImbalance: 0.0,
+                lastUpdateAge: 0,
+            },
         });
 
         const manager = new SignalManager(
@@ -63,6 +69,12 @@ describe("trading/SignalManager", () => {
             recentAnomalyTypes: [],
             volatilityRatio: 1.0,
             highestSeverity: "low",
+            metrics: {
+                volatility: 0.5,
+                spreadBps: 1.0,
+                flowImbalance: 0.0,
+                lastUpdateAge: 0,
+            },
         });
 
         const manager = new SignalManager(

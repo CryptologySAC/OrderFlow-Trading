@@ -35,6 +35,17 @@ export interface SignalManagerConfig {
     backpressureThreshold?: number;
     detectorThresholds?: Record<string, number>;
     positionSizing?: Record<string, number>;
+
+    // 🔧 Enhanced backpressure configuration
+    enableSignalPrioritization?: boolean;
+    adaptiveBatchSizing?: boolean;
+    maxAdaptiveBatchSize?: number;
+    minAdaptiveBatchSize?: number;
+    circuitBreakerThreshold?: number;
+    circuitBreakerResetMs?: number;
+    signalTypePriorities?: Record<string, number>;
+    adaptiveBackpressure?: boolean;
+    highPriorityBypassThreshold?: number;
 }
 
 interface SignalCorrelation {
@@ -42,6 +53,27 @@ interface SignalCorrelation {
     correlatedSignals: ProcessedSignal[];
     timestamp: number;
     strength: number;
+}
+
+interface PrioritizedSignal {
+    signal: ProcessedSignal;
+    priority: number;
+    enqueuedAt: number;
+    processingAttempts: number;
+}
+
+interface CircuitBreakerState {
+    isOpen: boolean;
+    failureCount: number;
+    lastFailureTime: number;
+    nextRetryTime: number;
+}
+
+interface AdaptiveMetrics {
+    avgProcessingTimeMs: number;
+    queueThroughputPerSecond: number;
+    recentProcessingTimes: number[];
+    lastThroughputCalculation: number;
 }
 
 /**
@@ -65,11 +97,23 @@ export class SignalManager extends EventEmitter {
     private readonly signalThrottleMs = 30000; // 30 seconds minimum between similar signals
     private readonly priceTolerancePercent = 0.02; // 0.02% price tolerance for duplicates - very tight for precise deduplication
 
-    // Backpressure management for high-frequency signal processing
-    private readonly signalQueue: ProcessedSignal[] = [];
+    // Enhanced backpressure management for high-frequency signal processing
+    private readonly signalQueue: PrioritizedSignal[] = [];
     private readonly droppedSignalCounts = new Map<string, number>(); // type -> count
     private isProcessing = false;
     private backpressureActive = false;
+
+    // 🔧 Enhanced backpressure features
+    private readonly circuitBreakers = new Map<string, CircuitBreakerState>(); // detectorId -> state
+    private readonly adaptiveMetrics: AdaptiveMetrics = {
+        avgProcessingTimeMs: 0,
+        queueThroughputPerSecond: 0,
+        recentProcessingTimes: [],
+        lastThroughputCalculation: Date.now(),
+    };
+    private currentBatchSize: number = 10;
+    private lastQueueSizeCheck = Date.now();
+    private queueGrowthRate = 0;
 
     constructor(
         private readonly anomalyDetector: AnomalyDetector,
@@ -93,6 +137,27 @@ export class SignalManager extends EventEmitter {
             backpressureThreshold: config.backpressureThreshold ?? 0.8,
             detectorThresholds: config.detectorThresholds ?? {},
             positionSizing: config.positionSizing ?? {},
+
+            // 🔧 Enhanced backpressure configuration with institutional defaults
+            enableSignalPrioritization:
+                config.enableSignalPrioritization ?? true,
+            adaptiveBatchSizing: config.adaptiveBatchSizing ?? true,
+            maxAdaptiveBatchSize: config.maxAdaptiveBatchSize ?? 50,
+            minAdaptiveBatchSize: config.minAdaptiveBatchSize ?? 5,
+            circuitBreakerThreshold: config.circuitBreakerThreshold ?? 5,
+            circuitBreakerResetMs: config.circuitBreakerResetMs ?? 30000,
+            signalTypePriorities: {
+                absorption: 10,
+                exhaustion: 9,
+                deltaCVDConfirmation: 8,
+                accumulation: 7,
+                distribution: 7,
+                supportResistance: 6,
+                ...(config.signalTypePriorities || {}),
+            },
+            adaptiveBackpressure: config.adaptiveBackpressure ?? true,
+            highPriorityBypassThreshold:
+                config.highPriorityBypassThreshold ?? 8.5,
         };
 
         this.logger.info(
@@ -104,6 +169,9 @@ export class SignalManager extends EventEmitter {
             }
         );
 
+        // Initialize enhanced backpressure features
+        this.currentBatchSize = this.config.processingBatchSize;
+
         // Initialize metrics
         this.initializeMetrics();
 
@@ -113,6 +181,13 @@ export class SignalManager extends EventEmitter {
             void this.threadManager.callStorage("purgeSignalHistory");
             void this.threadManager.callStorage("purgeConfirmedSignals");
         }, 60000); // Every minute
+
+        // 🔧 Enhanced adaptive metrics and circuit breaker management
+        setInterval(() => {
+            this.updateAdaptiveMetrics();
+            this.adjustAdaptiveBatchSize();
+            this.checkCircuitBreakers();
+        }, 5000); // Every 5 seconds
     }
 
     /**
@@ -397,64 +472,159 @@ export class SignalManager extends EventEmitter {
     public handleProcessedSignal(
         signal: ProcessedSignal
     ): ConfirmedSignal | null {
-        // Check backpressure before processing
-        if (this.shouldDropSignal(signal)) {
-            this.recordDroppedSignal(signal);
+        // 🔧 Enhanced circuit breaker check for detector
+        if (this.isCircuitBreakerOpen(signal.detectorId)) {
+            this.recordDroppedSignal(signal, "circuit_breaker");
             return null;
         }
 
-        // For high load, use queued processing
+        // 🔧 Enhanced backpressure check with prioritization
+        const priority = this.calculateSignalPriority(signal);
+        const shouldDrop = this.shouldDropSignal(signal, priority);
+
+        if (shouldDrop) {
+            this.recordDroppedSignal(signal, "backpressure");
+            return null;
+        }
+
+        // 🔧 High-priority bypass for critical signals
+        const isHighPriority =
+            priority >= this.config.highPriorityBypassThreshold;
+
+        // For high load, use prioritized queued processing
         if (this.signalQueue.length > 0 || this.isProcessing) {
-            this.signalQueue.push(signal);
+            const prioritizedSignal: PrioritizedSignal = {
+                signal,
+                priority,
+                enqueuedAt: Date.now(),
+                processingAttempts: 0,
+            };
+
+            if (isHighPriority && this.config.enableSignalPrioritization) {
+                // Insert high-priority signals at front of queue
+                this.signalQueue.unshift(prioritizedSignal);
+            } else {
+                // Regular signals go to back, maintain insertion order for same priority
+                this.signalQueue.push(prioritizedSignal);
+            }
+
+            // 🔧 Enhanced queue sorting by priority if enabled
+            if (this.config.enableSignalPrioritization) {
+                this.signalQueue.sort((a, b) => b.priority - a.priority);
+            }
+
             this.metricsCollector.setGauge(
                 "signal_manager_queue_size",
                 this.signalQueue.length
             );
+            this.metricsCollector.setGauge(
+                "signal_manager_avg_queue_priority",
+                this.signalQueue.reduce((sum, s) => sum + s.priority, 0) /
+                    this.signalQueue.length
+            );
+
             void this.startProcessing();
             return null; // Async processing
         }
 
         // For normal load, process synchronously (backward compatibility)
-        return this.processSignalSync(signal);
+        const startTime = Date.now();
+        const result = this.processSignalSync(signal);
+        const processingTime = Date.now() - startTime;
+
+        // Update adaptive metrics
+        this.updateProcessingMetrics(processingTime, result !== null);
+
+        return result;
     }
 
     /**
-     * Process signals from queue with backpressure management.
+     * 🔧 Enhanced process signals from queue with adaptive batch management.
      */
     private async startProcessing(): Promise<void> {
         if (this.isProcessing) return;
 
         this.isProcessing = true;
+        let batchStartTime = Date.now();
 
         while (this.signalQueue.length > 0) {
-            // Process in batches to prevent blocking
-            const batch = this.signalQueue.splice(
-                0,
-                this.config.processingBatchSize
-            );
+            // 🔧 Use adaptive batch sizing for optimal performance
+            const batchSize = this.config.adaptiveBatchSizing
+                ? this.currentBatchSize
+                : this.config.processingBatchSize;
 
-            for (const signal of batch) {
+            const batch = this.signalQueue.splice(0, batchSize);
+            let successCount = 0;
+
+            for (const prioritizedSignal of batch) {
                 try {
-                    this.processSignalSync(signal);
+                    prioritizedSignal.processingAttempts++;
+                    const startTime = Date.now();
+
+                    const result = this.processSignalSync(
+                        prioritizedSignal.signal
+                    );
+
+                    const processingTime = Date.now() - startTime;
+                    const success = result !== null;
+
+                    if (success) {
+                        successCount++;
+                        this.resetCircuitBreaker(
+                            prioritizedSignal.signal.detectorId
+                        );
+                    } else {
+                        this.recordCircuitBreakerFailure(
+                            prioritizedSignal.signal.detectorId
+                        );
+                    }
+
+                    // Update adaptive processing metrics
+                    this.updateProcessingMetrics(processingTime, success);
                 } catch (error) {
-                    this.logger.error("Failed to process signal", {
-                        signalId: signal.id,
+                    this.logger.error("Failed to process prioritized signal", {
+                        signalId: prioritizedSignal.signal.id,
+                        priority: prioritizedSignal.priority,
+                        attempts: prioritizedSignal.processingAttempts,
                         error:
                             error instanceof Error
                                 ? error.message
                                 : String(error),
                     });
+
+                    this.recordCircuitBreakerFailure(
+                        prioritizedSignal.signal.detectorId
+                    );
                 }
             }
 
-            // Update queue metrics
+            // 🔧 Update enhanced queue metrics
             this.metricsCollector.setGauge(
                 "signal_manager_queue_size",
                 this.signalQueue.length
             );
+            this.metricsCollector.setGauge(
+                "signal_manager_current_batch_size",
+                batchSize
+            );
+            this.metricsCollector.setGauge(
+                "signal_manager_batch_success_rate",
+                batch.length > 0 ? successCount / batch.length : 0
+            );
 
-            // Yield to event loop between batches
-            await new Promise((resolve) => setImmediate(resolve));
+            const batchProcessingTime = Date.now() - batchStartTime;
+            this.metricsCollector.setGauge(
+                "signal_manager_batch_processing_time_ms",
+                batchProcessingTime
+            );
+
+            // 🔧 Adaptive yield time based on queue pressure
+            const queuePressure =
+                this.signalQueue.length / this.config.maxQueueSize;
+            const yieldTimeMs = queuePressure > 0.7 ? 1 : 5; // Shorter yield under high pressure
+
+            await new Promise((resolve) => setTimeout(resolve, yieldTimeMs));
+            batchStartTime = Date.now();
         }
 
         this.isProcessing = false;
@@ -607,56 +777,83 @@ export class SignalManager extends EventEmitter {
     /**
      * Check if signal should be dropped due to backpressure.
      */
-    private shouldDropSignal(signal: ProcessedSignal): boolean {
+    private shouldDropSignal(
+        signal: ProcessedSignal,
+        priority: number
+    ): boolean {
         const queueUtilization =
             this.signalQueue.length / this.config.maxQueueSize;
 
-        // Activate backpressure if queue is getting full
-        if (queueUtilization >= this.config.backpressureThreshold) {
-            if (!this.backpressureActive) {
-                this.backpressureActive = true;
-                this.logger.warn(
-                    "Backpressure activated - queue utilization high",
-                    {
-                        queueSize: this.signalQueue.length,
-                        maxSize: this.config.maxQueueSize,
-                        utilization: queueUtilization,
-                    }
-                );
-            }
-
-            // Drop lower confidence signals first during backpressure
-            const confidenceThreshold = this.config.confidenceThreshold + 0.1; // Higher bar during pressure
-            if (signal.confidence < confidenceThreshold) {
-                return true;
-            }
-        } else if (
-            this.backpressureActive &&
-            queueUtilization < this.config.backpressureThreshold * 0.5
-        ) {
-            // Deactivate backpressure when queue clears
-            this.backpressureActive = false;
-            this.logger.info(
-                "Backpressure deactivated - queue utilization normalized",
-                {
-                    queueSize: this.signalQueue.length,
-                    utilization: queueUtilization,
-                }
+        // 🔧 Adaptive backpressure threshold based on market conditions
+        let backpressureThreshold = this.config.backpressureThreshold;
+        if (this.config.adaptiveBackpressure) {
+            // Lower threshold during high-volatility conditions (more selective)
+            const marketHealth = this.anomalyDetector.getMarketHealth();
+            const marketVolatility =
+                typeof marketHealth.metrics.volatility === "number"
+                    ? marketHealth.metrics.volatility
+                    : 0.5;
+            backpressureThreshold = Math.max(
+                0.5,
+                this.config.backpressureThreshold - marketVolatility * 0.2
             );
         }
 
-        // Hard limit: drop signal if queue is full
+        // Activate backpressure if queue is getting full
+        if (queueUtilization >= backpressureThreshold) {
+            if (!this.backpressureActive) {
+                this.backpressureActive = true;
+                this.logger.warn("Enhanced backpressure activated", {
+                    queueSize: this.signalQueue.length,
+                    maxSize: this.config.maxQueueSize,
+                    utilization: queueUtilization,
+                    adaptiveThreshold: backpressureThreshold,
+                    signalPriority: priority,
+                });
+            }
+
+            // 🔧 Priority-based dropping during backpressure
+            const priorityThreshold =
+                this.calculateBackpressurePriorityThreshold(queueUtilization);
+            if (priority < priorityThreshold) {
+                return true;
+            }
+
+            // 🔧 Additional confidence-based filtering for medium priority signals
+            if (priority < 8) {
+                const confidenceThreshold =
+                    0.8 + (queueUtilization - backpressureThreshold) * 0.4;
+                if (signal.confidence < Math.min(confidenceThreshold, 0.95)) {
+                    return true;
+                }
+            }
+        } else if (
+            this.backpressureActive &&
+            queueUtilization < backpressureThreshold * 0.5
+        ) {
+            // Deactivate backpressure when queue clears
+            this.backpressureActive = false;
+            this.logger.info("Enhanced backpressure deactivated", {
+                queueSize: this.signalQueue.length,
+                utilization: queueUtilization,
+            });
+        }
+
+        // 🔧 Hard limit: drop signals if queue is completely full (except highest priority)
         if (this.signalQueue.length >= this.config.maxQueueSize) {
-            return true;
+            return priority < this.config.highPriorityBypassThreshold;
         }
 
         return false;
     }
 
     /**
-     * Record metrics for dropped signals.
+     * 🔧 Enhanced record metrics for dropped signals with detailed reasons.
      */
-    private recordDroppedSignal(signal: ProcessedSignal): void {
+    private recordDroppedSignal(
+        signal: ProcessedSignal,
+        dropReason: string
+    ): void {
         const currentCount = this.droppedSignalCounts.get(signal.type) || 0;
         this.droppedSignalCounts.set(signal.type, currentCount + 1);
 
@@ -666,18 +863,27 @@ export class SignalManager extends EventEmitter {
             {
                 signal_type: signal.type,
                 detector_id: signal.detectorId,
-                drop_reason: this.backpressureActive
-                    ? "backpressure"
-                    : "queue_full",
+                drop_reason: dropReason,
             }
         );
 
-        this.logger.warn("Signal dropped due to backpressure", {
+        // Track drop reasons separately for analysis
+        this.metricsCollector.incrementCounter(
+            `signal_manager_drops_${dropReason}_total`,
+            1,
+            {
+                signal_type: signal.type,
+            }
+        );
+
+        this.logger.warn("Signal dropped with enhanced tracking", {
             signalId: signal.id,
             signalType: signal.type,
             confidence: signal.confidence,
             queueSize: this.signalQueue.length,
             backpressureActive: this.backpressureActive,
+            dropReason,
+            priority: this.calculateSignalPriority(signal),
         });
     }
 
@@ -1944,6 +2150,261 @@ export class SignalManager extends EventEmitter {
         void metrics;
         // TODO: Implement when label-based filtering is available
         return {};
+    }
+
+    // 🔧 =============== ENHANCED BACKPRESSURE HELPER METHODS ===============
+
+    /**
+     * Calculate priority score for a signal based on type, confidence, and market conditions.
+     */
+    private calculateSignalPriority(signal: ProcessedSignal): number {
+        // Base priority from signal type configuration
+        const baseTypePriority =
+            this.config.signalTypePriorities[signal.type] || 5;
+
+        // Confidence boost (0.5 - 1.0 confidence maps to 0-2 priority points)
+        const confidenceBoost = Math.max(0, (signal.confidence - 0.5) * 4);
+
+        // Market health modifier
+        const marketHealth = this.anomalyDetector.getMarketHealth();
+        const healthModifier = marketHealth.isHealthy ? 0.5 : -0.5;
+
+        // Time sensitivity - newer signals get slight priority
+        const ageMs = Date.now() - signal.timestamp.getTime();
+        const freshnessBoost = Math.max(0, 1 - ageMs / 60000); // Decay over 1 minute
+
+        return Math.min(
+            10,
+            Math.max(
+                0,
+                baseTypePriority +
+                    confidenceBoost +
+                    healthModifier +
+                    freshnessBoost
+            )
+        );
+    }
+
+    /**
+     * Calculate priority threshold for dropping signals during backpressure.
+     */
+    private calculateBackpressurePriorityThreshold(
+        queueUtilization: number
+    ): number {
+        // Progressive priority thresholds based on queue pressure
+        if (queueUtilization >= 0.95) return 9; // Only highest priority
+        if (queueUtilization >= 0.9) return 8; // High priority
+        if (queueUtilization >= 0.85) return 7; // Medium-high priority
+        if (queueUtilization >= 0.8) return 6; // Medium priority
+        return 5; // Medium-low and above
+    }
+
+    /**
+     * Check if circuit breaker is open for a detector.
+     */
+    private isCircuitBreakerOpen(detectorId: string): boolean {
+        const state = this.circuitBreakers.get(detectorId);
+        if (!state) return false;
+
+        if (state.isOpen && Date.now() > state.nextRetryTime) {
+            // Time to test if circuit can be closed
+            state.isOpen = false;
+            this.logger.info("Circuit breaker test mode", { detectorId });
+        }
+
+        return state.isOpen;
+    }
+
+    /**
+     * Record circuit breaker failure for a detector.
+     */
+    private recordCircuitBreakerFailure(detectorId: string): void {
+        let state = this.circuitBreakers.get(detectorId);
+        if (!state) {
+            state = {
+                isOpen: false,
+                failureCount: 0,
+                lastFailureTime: 0,
+                nextRetryTime: 0,
+            };
+            this.circuitBreakers.set(detectorId, state);
+        }
+
+        state.failureCount++;
+        state.lastFailureTime = Date.now();
+
+        if (state.failureCount >= this.config.circuitBreakerThreshold) {
+            state.isOpen = true;
+            state.nextRetryTime =
+                Date.now() + this.config.circuitBreakerResetMs;
+
+            this.logger.warn("Circuit breaker opened for detector", {
+                detectorId,
+                failureCount: state.failureCount,
+                nextRetryTime: new Date(state.nextRetryTime).toISOString(),
+            });
+
+            this.metricsCollector.incrementCounter(
+                "signal_manager_circuit_breaker_opened_total",
+                1,
+                { detector_id: detectorId }
+            );
+        }
+    }
+
+    /**
+     * Reset circuit breaker on successful processing.
+     */
+    private resetCircuitBreaker(detectorId: string): void {
+        const state = this.circuitBreakers.get(detectorId);
+        if (state && state.failureCount > 0) {
+            state.failureCount = 0;
+            if (state.isOpen) {
+                state.isOpen = false;
+                this.logger.info("Circuit breaker reset", { detectorId });
+                this.metricsCollector.incrementCounter(
+                    "signal_manager_circuit_breaker_reset_total",
+                    1,
+                    { detector_id: detectorId }
+                );
+            }
+        }
+    }
+
+    /**
+     * Update processing metrics for adaptive optimization.
+     */
+    private updateProcessingMetrics(
+        processingTimeMs: number,
+        success: boolean
+    ): void {
+        // Update processing time metrics
+        this.adaptiveMetrics.recentProcessingTimes.push(processingTimeMs);
+
+        // Keep only recent measurements (last 100)
+        if (this.adaptiveMetrics.recentProcessingTimes.length > 100) {
+            this.adaptiveMetrics.recentProcessingTimes.shift();
+        }
+
+        // Calculate rolling average
+        this.adaptiveMetrics.avgProcessingTimeMs =
+            this.adaptiveMetrics.recentProcessingTimes.reduce(
+                (sum, time) => sum + time,
+                0
+            ) / this.adaptiveMetrics.recentProcessingTimes.length;
+
+        // Update success rate metrics
+        this.metricsCollector.incrementCounter(
+            success
+                ? "signal_manager_processing_success_total"
+                : "signal_manager_processing_failure_total",
+            1
+        );
+
+        this.metricsCollector.setGauge(
+            "signal_manager_avg_processing_time_ms",
+            this.adaptiveMetrics.avgProcessingTimeMs
+        );
+    }
+
+    /**
+     * Update adaptive metrics and throughput calculations.
+     */
+    private updateAdaptiveMetrics(): void {
+        const now = Date.now();
+        const timeSinceLastUpdate =
+            now - this.adaptiveMetrics.lastThroughputCalculation;
+
+        if (timeSinceLastUpdate >= 5000) {
+            // Update every 5 seconds
+            // Calculate throughput based on recent processing
+            const recentProcessingCount =
+                this.adaptiveMetrics.recentProcessingTimes.length;
+            this.adaptiveMetrics.queueThroughputPerSecond =
+                recentProcessingCount / (timeSinceLastUpdate / 1000);
+
+            this.adaptiveMetrics.lastThroughputCalculation = now;
+
+            // Update queue growth rate
+            const currentQueueSize = this.signalQueue.length;
+            const timeDiff = now - this.lastQueueSizeCheck;
+            if (timeDiff > 0) {
+                this.queueGrowthRate = currentQueueSize / (timeDiff / 1000); // Signals per second
+            }
+            this.lastQueueSizeCheck = now;
+
+            this.metricsCollector.setGauge(
+                "signal_manager_queue_throughput_per_sec",
+                this.adaptiveMetrics.queueThroughputPerSecond
+            );
+            this.metricsCollector.setGauge(
+                "signal_manager_queue_growth_rate",
+                this.queueGrowthRate
+            );
+        }
+    }
+
+    /**
+     * Adjust batch size based on performance metrics.
+     */
+    private adjustAdaptiveBatchSize(): void {
+        if (!this.config.adaptiveBatchSizing) return;
+
+        const currentLoad = this.signalQueue.length / this.config.maxQueueSize;
+        const avgProcessingTime = this.adaptiveMetrics.avgProcessingTimeMs;
+
+        // Increase batch size if:
+        // - Queue is growing faster than we can process
+        // - Processing time is low (system has capacity)
+        // - Queue utilization is high
+        if (
+            this.queueGrowthRate >
+                this.adaptiveMetrics.queueThroughputPerSecond &&
+            avgProcessingTime < 10 &&
+            currentLoad > 0.3
+        ) {
+            this.currentBatchSize = Math.min(
+                this.config.maxAdaptiveBatchSize,
+                this.currentBatchSize + 2
+            );
+        }
+        // Decrease batch size if:
+        // - Processing time is high (system overloaded)
+        // - Queue is stable or shrinking
+        else if (
+            avgProcessingTime > 50 ||
+            (this.queueGrowthRate <=
+                this.adaptiveMetrics.queueThroughputPerSecond &&
+                currentLoad < 0.5)
+        ) {
+            this.currentBatchSize = Math.max(
+                this.config.minAdaptiveBatchSize,
+                this.currentBatchSize - 1
+            );
+        }
+
+        this.metricsCollector.setGauge(
+            "signal_manager_adaptive_batch_size",
+            this.currentBatchSize
+        );
+    }
+
+    /**
+     * Check and update circuit breaker states.
+     */
+    private checkCircuitBreakers(): void {
+        for (const [detectorId, state] of this.circuitBreakers) {
+            this.metricsCollector.setGauge(
+                "signal_manager_circuit_breaker_failure_count",
+                state.failureCount,
+                { detector_id: detectorId }
+            );
+            this.metricsCollector.setGauge(
+                "signal_manager_circuit_breaker_is_open",
+                state.isOpen ? 1 : 0,
+                { detector_id: detectorId }
+            );
+        }
     }
 }
 

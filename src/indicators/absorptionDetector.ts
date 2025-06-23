@@ -480,6 +480,17 @@ export class AbsorptionDetector
     /**
      * Override cleanup to properly clear interval timers and prevent memory leaks
      */
+    /**
+     * Simple method for testing buyerIsMaker interpretation logic
+     * @deprecated Only for unit tests - use enhanced zone-based detection in production
+     */
+    public getAbsorbingSide(trade: AggressiveTrade): "buy" | "sell" {
+        // For testing: simple interpretation of buyerIsMaker field
+        // - Aggressive buy (buyerIsMaker=false) hits ask → sellers are absorbing → "sell"
+        // - Aggressive sell (buyerIsMaker=true) hits bid → buyers are absorbing → "buy"
+        return trade.buyerIsMaker ? "buy" : "sell";
+    }
+
     public cleanup(): void {
         // Clear absorption detector specific intervals
         if (this.thresholdUpdateInterval) {
