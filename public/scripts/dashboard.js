@@ -2946,7 +2946,8 @@ function completeZoneBox(zone) {
             if (zone.type === "hidden_liquidity" || zone.type === "iceberg") {
                 annotation.borderColor = getCompletedZoneBorderColor(zone);
                 annotation.borderWidth = 2;
-                annotation.borderDash = zone.type === "iceberg" ? [3, 3] : [5, 5]; // Shorter dashes for iceberg
+                annotation.borderDash =
+                    zone.type === "iceberg" ? [3, 3] : [5, 5]; // Shorter dashes for iceberg
                 // Set final end time for iceberg orders
                 if (zone.type === "iceberg" && zone.endTime) {
                     annotation.xMax = zone.endTime;
@@ -2997,10 +2998,10 @@ function addZoneToChart(zone) {
         const price =
             zone.priceRange.center ??
             (zone.priceRange.min + zone.priceRange.max) / 2;
-        
+
         // Calculate actual end time for iceberg orders based on zone duration
-        const endTime = zone.endTime || (Date.now() + 5 * 60 * 1000);
-        
+        const endTime = zone.endTime || Date.now() + 5 * 60 * 1000;
+
         zoneAnnotation = {
             type: "line",
             xMin: zone.startTime,

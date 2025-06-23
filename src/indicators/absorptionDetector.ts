@@ -36,6 +36,9 @@ export interface AbsorptionSettings extends BaseDetectorSettings {
     icebergConfidenceMultiplier?: number; // Confidence multiplier when iceberg detected (1.0-2.0)
     maxAbsorptionRatio?: number; // Max aggressive/passive ratio for absorption
 
+    // Price efficiency and threshold parameters (previously hardcoded)
+    priceEfficiencyThreshold?: number; // Price efficiency threshold for absorption detection (default 0.85)
+
     // Volume surge detection parameters for enhanced absorption analysis
     volumeSurgeMultiplier?: number; // Volume surge threshold for absorption validation
     imbalanceThreshold?: number; // Order flow imbalance threshold for absorption
@@ -94,6 +97,7 @@ export class AbsorptionDetector
     private readonly icebergDetectionSensitivity: number;
     private readonly icebergConfidenceMultiplier: number;
     private readonly maxAbsorptionRatio: number;
+    private readonly priceEfficiencyThreshold: number;
 
     // Advanced tracking
     private readonly absorptionHistory = new Map<number, AbsorptionEvent[]>();
@@ -143,6 +147,8 @@ export class AbsorptionDetector
         this.icebergConfidenceMultiplier =
             settings.icebergConfidenceMultiplier ?? 1.2;
         this.maxAbsorptionRatio = settings.maxAbsorptionRatio ?? 0.5;
+        this.priceEfficiencyThreshold =
+            settings.priceEfficiencyThreshold ?? 0.85;
 
         // Initialize volume surge configuration
         this.volumeSurgeConfig = {
@@ -831,8 +837,8 @@ export class AbsorptionDetector
             zone
         );
 
-        // If price efficiency < 0.7, there's likely absorption happening
-        if (priceEfficiency < 0.7) {
+        // If price efficiency < threshold, there's likely absorption happening
+        if (priceEfficiency < this.priceEfficiencyThreshold) {
             // The PASSIVE side opposite to aggressive flow is absorbing
             return dominantAggressiveSide === "buy" ? "ask" : "bid";
         }

@@ -397,6 +397,73 @@ const mean = values.reduce((a, b) => a + b) / values.length;
 - **No implicit returns**
 - **KEEP CODE SIMPLE** - Avoid complex casting patterns, prefer interface compatibility
 
+#### 🚫 MAGIC NUMBERS PROHIBITION (ZERO TOLERANCE)
+
+**CRITICAL RULE**: Magic numbers are **STRICTLY FORBIDDEN** in all detector implementations. All threshold, limit, and calculation values MUST be configurable via settings interfaces.
+
+**PROHIBITED PATTERNS:**
+
+```typescript
+// ❌ NEVER: Hardcoded thresholds in detector logic
+if (priceEfficiency < 0.7) return null;
+if (imbalance > 0.8) return "high";
+if (correlation < 0.4) return false;
+const spreadThreshold = 0.005; // FORBIDDEN
+
+// ❌ NEVER: Magic numbers in calculations
+const confidence = volume * 0.85; // FORBIDDEN
+const score = Math.min(ratio, 0.95); // FORBIDDEN
+if (trades.length > 100) return; // FORBIDDEN
+```
+
+**REQUIRED PATTERNS:**
+
+```typescript
+// ✅ CORRECT: All values configurable via settings
+if (priceEfficiency < this.priceEfficiencyThreshold) return null;
+if (imbalance > this.imbalanceHighThreshold) return "high";
+if (correlation < this.weakCorrelationThreshold) return false;
+const spreadThreshold = this.spreadHighThreshold;
+
+// ✅ CORRECT: Settings interface with defaults
+export interface DetectorSettings extends BaseDetectorSettings {
+    priceEfficiencyThreshold?: number; // Default 0.85
+    imbalanceHighThreshold?: number;    // Default 0.8
+    weakCorrelationThreshold?: number;  // Default 0.4
+    spreadHighThreshold?: number;       // Default 0.005
+}
+
+// ✅ CORRECT: Constructor reads from settings
+constructor(settings: DetectorSettings) {
+    this.priceEfficiencyThreshold = settings.priceEfficiencyThreshold ?? 0.85;
+    this.imbalanceHighThreshold = settings.imbalanceHighThreshold ?? 0.8;
+}
+```
+
+**WHY THIS MATTERS:**
+
+- **Signal Blocking Prevention**: Hardcoded values can block signal generation
+- **Backtesting Flexibility**: Different values can be tested systematically
+- **Production Optimization**: Optimal values can be deployed from testing results
+- **Configuration Auditability**: All parameters visible in config.json
+- **Institutional Compliance**: Full repeatability and parameter transparency
+
+**ENFORCEMENT:**
+
+- Any magic number in detector code is an **IMMEDIATE REJECTION**
+- All threshold/limit values MUST be in settings interfaces
+- All calculations MUST use configurable parameters
+- Constructor MUST read ALL numeric values from settings
+- Unit tests MUST verify configurability of ALL parameters
+
+**VIOLATION DETECTION:**
+
+Code review will reject any occurrence of:
+- Hardcoded decimals (0.7, 0.85, 0.005) in detector logic
+- Hardcoded integers (100, 50, 1000) as thresholds or limits  
+- Mathematical operations with literal numbers as thresholds
+- Conditional statements with hardcoded comparison values
+
 #### Error Handling Standards
 
 - **ALL async operations MUST have try-catch blocks**
@@ -771,6 +838,7 @@ interface IWorkerCircuitBreaker {
 **NEVER:**
 
 - **Modify, overwrite, or copy over the `.env` file - Contains irreplaceable production API keys**
+- **Use magic numbers or hardcoded thresholds in detector implementations**
 - Modify production-critical algorithms without explicit approval
 - Change WebSocket URLs or connection parameters
 - Alter signal processing logic without validation

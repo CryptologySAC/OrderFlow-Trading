@@ -30,6 +30,12 @@ export interface ExhaustionSettings extends BaseDetectorSettings {
     maxPassiveRatio?: number; // Max ratio of current/avg passive for exhaustion
     minDepletionFactor?: number; // Min factor for passive depletion detection
 
+    // Scoring threshold parameters (previously hardcoded)
+    imbalanceHighThreshold?: number; // High imbalance threshold (default 0.8)
+    imbalanceMediumThreshold?: number; // Medium imbalance threshold (default 0.6)
+    spreadHighThreshold?: number; // High spread threshold (default 0.005)
+    spreadMediumThreshold?: number; // Medium spread threshold (default 0.002)
+
     // Volume surge detection parameters for enhanced exhaustion analysis
     volumeSurgeMultiplier?: number; // Volume surge threshold for exhaustion validation
     imbalanceThreshold?: number; // Order flow imbalance threshold for exhaustion
@@ -98,6 +104,10 @@ export class ExhaustionDetector
     private readonly exhaustionThreshold: number;
     private readonly maxPassiveRatio: number;
     private readonly minDepletionFactor: number;
+    private readonly imbalanceHighThreshold: number;
+    private readonly imbalanceMediumThreshold: number;
+    private readonly spreadHighThreshold: number;
+    private readonly spreadMediumThreshold: number;
 
     // Volume surge analysis integration
     private readonly volumeAnalyzer: VolumeAnalyzer;
@@ -145,6 +155,34 @@ export class ExhaustionDetector
             10.0,
             0.5,
             "minDepletionFactor"
+        );
+        this.imbalanceHighThreshold = this.validateConfigValue(
+            settings.imbalanceHighThreshold ?? 0.8,
+            0.1,
+            1.0,
+            0.8,
+            "imbalanceHighThreshold"
+        );
+        this.imbalanceMediumThreshold = this.validateConfigValue(
+            settings.imbalanceMediumThreshold ?? 0.6,
+            0.1,
+            1.0,
+            0.6,
+            "imbalanceMediumThreshold"
+        );
+        this.spreadHighThreshold = this.validateConfigValue(
+            settings.spreadHighThreshold ?? 0.005,
+            0.001,
+            0.1,
+            0.005,
+            "spreadHighThreshold"
+        );
+        this.spreadMediumThreshold = this.validateConfigValue(
+            settings.spreadMediumThreshold ?? 0.002,
+            0.0001,
+            0.1,
+            0.002,
+            "spreadMediumThreshold"
         );
 
         // Initialize volume surge configuration
@@ -408,24 +446,27 @@ export class ExhaustionDetector
 
         // Factor 4: Normalized imbalance scoring
         let imbalanceScore = 0;
-        if (conditions.imbalance > 0.8) {
+        if (conditions.imbalance > this.imbalanceHighThreshold) {
             imbalanceScore = 1.0;
-        } else if (conditions.imbalance > 0.6) {
+        } else if (conditions.imbalance > this.imbalanceMediumThreshold) {
             imbalanceScore = 0.5;
         } else {
-            imbalanceScore = Math.max(0, (conditions.imbalance - 0.5) / 0.3); // Scale from 0.5-0.8 to 0-1
+            imbalanceScore = Math.max(0, (conditions.imbalance - 0.5) / 0.3); // Scale from 0.5-threshold to 0-1
         }
         weightedScore += imbalanceScore * weights.imbalance;
 
         // Factor 5: Normalized spread scoring
         let spreadScore = 0;
         if (this.features.spreadAdjustment) {
-            if (conditions.spread > 0.005) {
+            if (conditions.spread > this.spreadHighThreshold) {
                 spreadScore = 1.0;
-            } else if (conditions.spread > 0.002) {
+            } else if (conditions.spread > this.spreadMediumThreshold) {
                 spreadScore = 0.6;
             } else {
-                spreadScore = Math.max(0, conditions.spread / 0.002); // Proportional to 0.002 threshold
+                spreadScore = Math.max(
+                    0,
+                    conditions.spread / this.spreadMediumThreshold
+                ); // Proportional to medium threshold
             }
         }
         weightedScore += spreadScore * weights.spread;

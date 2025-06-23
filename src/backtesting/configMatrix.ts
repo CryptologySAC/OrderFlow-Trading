@@ -459,6 +459,10 @@ export class ConfigMatrix {
                             // Minimal confidence requirements
                             baseConfidenceRequired: 0.3,
                             finalConfidenceRequired: 0.5,
+                            // Threshold parameters for testing
+                            strongCorrelationThreshold: 0.7,
+                            weakCorrelationThreshold: 0.3,
+                            depthImbalanceThreshold: 0.2,
                         },
                         description:
                             "Simplified DeltaCVD with basic passive volume analysis",
@@ -479,6 +483,10 @@ export class ConfigMatrix {
                             // Higher confidence requirements due to complexity
                             baseConfidenceRequired: 0.4,
                             finalConfidenceRequired: 0.6,
+                            // Threshold parameters for testing
+                            strongCorrelationThreshold: 0.7,
+                            weakCorrelationThreshold: 0.3,
+                            depthImbalanceThreshold: 0.2,
                         },
                         description:
                             "Current complex DeltaCVD implementation (baseline)",
@@ -602,6 +610,7 @@ export class ConfigMatrix {
                         minPassiveMultiplier: [1.1, 1.2, 1.5, 2.0, 2.5],
                         eventCooldownMs: [1000, 2000, 5000, 10000, 15000],
                         maxAbsorptionRatio: [0.3, 0.4, 0.5, 0.6, 0.7],
+                        priceEfficiencyThreshold: [0.75, 0.8, 0.85, 0.9, 0.95],
                     },
                     points
                 );
@@ -624,6 +633,10 @@ export class ConfigMatrix {
                         exhaustionThreshold: [0.6, 0.7, 0.8, 0.9],
                         maxPassiveRatio: [0.3, 0.5, 0.7, 0.9],
                         eventCooldownMs: [5000, 15000, 30000, 60000],
+                        imbalanceHighThreshold: [0.7, 0.8, 0.9],
+                        imbalanceMediumThreshold: [0.5, 0.6, 0.7],
+                        spreadHighThreshold: [0.003, 0.005, 0.007],
+                        spreadMediumThreshold: [0.001, 0.002, 0.003],
                     },
                     points
                 );

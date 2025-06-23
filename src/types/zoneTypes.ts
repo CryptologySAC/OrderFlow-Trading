@@ -134,6 +134,11 @@ export interface ZoneDetectorConfig {
     minBuyRatio?: number; // Minimum buy ratio for accumulation
     minSellRatio?: number; // Minimum sell ratio for distribution
 
+    // Zone strength threshold parameters (previously hardcoded)
+    priceStabilityThreshold?: number; // Price stability threshold for accumulation (default 0.98)
+    strongZoneThreshold?: number; // Strong zone strength threshold (default 0.7)
+    weakZoneThreshold?: number; // Weak zone invalidation threshold (default 0.4)
+
     // Volume surge detection parameters for enhanced zone analysis
     volumeSurgeMultiplier?: number; // Volume surge threshold for zone validation
     imbalanceThreshold?: number; // Order flow imbalance threshold

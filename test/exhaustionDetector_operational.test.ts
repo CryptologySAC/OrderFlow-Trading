@@ -626,7 +626,11 @@ describe("ExhaustionDetector - Operational Safety Tests", () => {
                 () => detectorAny.getConfigValue("maxZones", 100),
                 () => detectorAny.getConfigValue("zoneAgeLimit", 3600000),
                 () => detectorAny.validateInputs(50000, "buy", 50000),
-                () => Math.max(0, Math.min(20, FinancialMath.safeDivide(100, 50, 0))), // Replaces calculateSafeRatio
+                () =>
+                    Math.max(
+                        0,
+                        Math.min(20, FinancialMath.safeDivide(100, 50, 0))
+                    ), // Replaces calculateSafeRatio
                 () => FinancialMath.calculateMean([10, 20, 30]), // Replaces calculateSafeMean
             ];
 

@@ -145,6 +145,11 @@ export class AccumulationZoneDetector extends ZoneDetector {
     private readonly pricePrecision: number;
     private readonly zoneTicks: number;
 
+    // Zone strength threshold parameters
+    private readonly priceStabilityThreshold: number;
+    private readonly strongZoneThreshold: number;
+    private readonly weakZoneThreshold: number;
+
     // Enhanced zone formation analyzer
     private readonly enhancedZoneFormation: EnhancedZoneFormation;
 
@@ -166,6 +171,11 @@ export class AccumulationZoneDetector extends ZoneDetector {
         this.symbol = symbol;
         this.pricePrecision = 2; // Should come from config
         this.zoneTicks = 2; // Price levels that define a zone
+
+        // Initialize threshold parameters
+        this.priceStabilityThreshold = config.priceStabilityThreshold ?? 0.98;
+        this.strongZoneThreshold = config.strongZoneThreshold ?? 0.7;
+        this.weakZoneThreshold = config.weakZoneThreshold ?? 0.4;
 
         // Initialize enhanced zone formation analyzer
         this.enhancedZoneFormation = new EnhancedZoneFormation(
@@ -472,7 +482,10 @@ export class AccumulationZoneDetector extends ZoneDetector {
             const priceStability = 1 - priceRange / avgPrice;
 
             // Good absorption = high sell volume with minimal price decline
-            if (priceStability > 0.98 && trade.buyerIsMaker) {
+            if (
+                priceStability > this.priceStabilityThreshold &&
+                trade.buyerIsMaker
+            ) {
                 // This is positive for accumulation - sells absorbed without price drop
                 candidate.absorptionQuality =
                     (candidate.absorptionQuality || 0) + 0.1;
@@ -953,7 +966,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
         switch (update.updateType) {
             case "zone_strengthened":
                 if (
-                    zone.strength > 0.7 &&
+                    zone.strength > this.strongZoneThreshold &&
                     (update.changeMetrics?.strengthChange ?? 0) >
                         this.config.strengthChangeThreshold
                 ) {
@@ -1001,7 +1014,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
                 break;
 
             case "zone_weakened":
-                if (zone.strength < 0.4) {
+                if (zone.strength < this.weakZoneThreshold) {
                     signals.push({
                         signalType: "zone_invalidation",
                         zone,

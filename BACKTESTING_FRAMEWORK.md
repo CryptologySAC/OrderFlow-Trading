@@ -341,6 +341,16 @@ const customRanges = {
         { minHiddenVolume: 15, minConfidence: 0.85 },
         { minHiddenVolume: 25, minConfidence: 0.75 },
     ],
+    // NEW: Threshold parameter testing for all detectors
+    absorptionDetector: [
+        { priceEfficiencyThreshold: 0.75, absorptionThreshold: 0.6 },
+        { priceEfficiencyThreshold: 0.85, absorptionThreshold: 0.7 },
+        { priceEfficiencyThreshold: 0.95, absorptionThreshold: 0.8 },
+    ],
+    exhaustionDetector: [
+        { imbalanceHighThreshold: 0.8, spreadHighThreshold: 0.005 },
+        { imbalanceHighThreshold: 0.9, spreadHighThreshold: 0.008 },
+    ],
 };
 ```
 
@@ -356,3 +366,89 @@ interface CustomMetrics {
 ```
 
 This framework provides the scientific foundation for optimizing detector performance and building confidence in trading signal quality! 🚀
+
+## 🔧 Threshold Configuration Enhancement (2025-06-23)
+
+### Problem Solved: "No Signals at All" Issue
+
+**Root Cause**: Hardcoded thresholds in detector implementations were blocking signal generation during backtesting, particularly `priceEfficiency < 0.7` in AbsorptionDetector.
+
+**Solution**: Made all detector thresholds fully configurable through `config.json`:
+
+### New Configurable Thresholds
+
+**AbsorptionDetector** (`priceEfficiencyThreshold`):
+
+```json
+{
+    "absorption": {
+        "priceEfficiencyThreshold": 0.85, // Was hardcoded at 0.7
+        "absorptionThreshold": 0.6
+    }
+}
+```
+
+**ExhaustionDetector** (scoring thresholds):
+
+```json
+{
+    "exhaustion": {
+        "imbalanceHighThreshold": 0.8, // Was hardcoded
+        "imbalanceMediumThreshold": 0.6, // Was hardcoded
+        "spreadHighThreshold": 0.005, // Was hardcoded
+        "spreadMediumThreshold": 0.002 // Was hardcoded
+    }
+}
+```
+
+**DeltaCVDConfirmation** (correlation thresholds):
+
+```json
+{
+    "deltaCvdConfirmation": {
+        "strongCorrelationThreshold": 0.8, // Was hardcoded
+        "weakCorrelationThreshold": 0.4, // Was hardcoded
+        "depthImbalanceThreshold": 0.7 // Was hardcoded
+    }
+}
+```
+
+**AccumulationZoneDetector** (zone thresholds):
+
+```json
+{
+    "zoneDetectors": {
+        "LTCUSDT": {
+            "accumulation": {
+                "priceStabilityThreshold": 0.002, // Now configurable
+                "strongZoneThreshold": 0.8, // Now configurable
+                "weakZoneThreshold": 0.6 // Now configurable
+            }
+        }
+    }
+}
+```
+
+### Backtesting Benefits
+
+1. **Systematic Threshold Testing**: Backtesting can now test different threshold combinations to find optimal values
+2. **Grid Search Enhancement**: ConfigMatrix includes threshold parameters for comprehensive testing
+3. **Signal Generation Recovery**: Previously blocked signals are now generated based on configurable parameters
+4. **Production Deployment**: Optimal thresholds from backtesting can be directly deployed to `config.json`
+
+### Testing Threshold Configurations
+
+```bash
+# Test different priceEfficiencyThreshold values for AbsorptionDetector
+node run_hierarchical_backtest.js --detector absorptionDetector \
+    --custom-config '{"priceEfficiencyThreshold": 0.75}'
+
+# Test ExhaustionDetector with lower imbalance thresholds
+node run_hierarchical_backtest.js --detector exhaustionDetector \
+    --custom-config '{"imbalanceHighThreshold": 0.7, "imbalanceMediumThreshold": 0.5}'
+
+# Grid search across multiple threshold values
+npx ts-node scripts/runBacktest.ts --detectors absorptionDetector,exhaustionDetector --grid-points 5
+```
+
+This enhancement ensures that backtesting can find optimal threshold configurations and eliminates the "No Signals at all" issue that was caused by hardcoded parameters.

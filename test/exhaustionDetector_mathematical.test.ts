@@ -291,8 +291,17 @@ describe("ExhaustionDetector - Mathematical Correctness", () => {
     describe("🔧 FIX #3: Market-Realistic Ratio Bounds", () => {
         it("should clamp ratios to maximum 20:1", () => {
             // Use FinancialMath.safeDivide with clamping logic since deprecated methods were removed
-            const clampRatio = (numerator: number, denominator: number, defaultValue: number, maxRatio = 20) => {
-                const ratio = FinancialMath.safeDivide(numerator, denominator, defaultValue);
+            const clampRatio = (
+                numerator: number,
+                denominator: number,
+                defaultValue: number,
+                maxRatio = 20
+            ) => {
+                const ratio = FinancialMath.safeDivide(
+                    numerator,
+                    denominator,
+                    defaultValue
+                );
                 return Math.max(0, Math.min(maxRatio, ratio));
             };
 
@@ -344,8 +353,17 @@ describe("ExhaustionDetector - Mathematical Correctness", () => {
 
         it("should prevent division by zero and handle edge cases", () => {
             // Use FinancialMath.safeDivide with clamping since deprecated methods were removed
-            const clampRatio = (numerator: number, denominator: number, defaultValue: number, maxRatio = 20) => {
-                const ratio = FinancialMath.safeDivide(numerator, denominator, defaultValue);
+            const clampRatio = (
+                numerator: number,
+                denominator: number,
+                defaultValue: number,
+                maxRatio = 20
+            ) => {
+                const ratio = FinancialMath.safeDivide(
+                    numerator,
+                    denominator,
+                    defaultValue
+                );
                 return Math.max(0, Math.min(maxRatio, ratio));
             };
 

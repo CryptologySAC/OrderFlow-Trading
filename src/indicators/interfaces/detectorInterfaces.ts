@@ -88,6 +88,11 @@ export interface AccumulationSettings extends BaseDetectorSettings {
     minRatio?: number; // Min passive/aggressive ratio
     minRecentActivityMs?: number; // Trade staleness threshold
     accumulationThreshold?: number; // Confidence threshold (0-1)
+
+    // Zone strength threshold parameters (previously hardcoded)
+    priceStabilityThreshold?: number; // Price stability threshold for accumulation (default 0.98)
+    strongZoneThreshold?: number; // Strong zone strength threshold (default 0.7)
+    weakZoneThreshold?: number; // Weak zone invalidation threshold (default 0.4)
 }
 
 export interface AbsorptionFeatures extends DetectorFeatures {

@@ -46,6 +46,10 @@
                 "maxPriceDeviation": 0.02,
                 "minTradeCount": 15,
 
+                "priceStabilityThreshold": 0.98,
+                "strongZoneThreshold": 0.7,
+                "weakZoneThreshold": 0.4,
+
                 "volumeSurgeMultiplier": 3.0,
                 "imbalanceThreshold": 0.35,
                 "institutionalThreshold": 17.8,
@@ -226,6 +230,11 @@
                 "maxPassiveRatio": 0.2,
                 "minDepletionFactor": 0.3,
 
+                "imbalanceHighThreshold": 0.8,
+                "imbalanceMediumThreshold": 0.6,
+                "spreadHighThreshold": 0.005,
+                "spreadMediumThreshold": 0.002,
+
                 "minInitialMoveTicks": 1,
                 "confirmationTimeoutMs": 50000,
                 "maxRevisitTicks": 0,
@@ -255,6 +264,8 @@
                 "maxAbsorptionRatio": 0.4,
                 "icebergDetectionSensitivity": 1.0,
                 "icebergConfidenceMultiplier": 1.0,
+
+                "priceEfficiencyThreshold": 0.85,
 
                 "volumeSurgeMultiplier": 4.0,
                 "imbalanceThreshold": 0.35,
@@ -347,7 +358,11 @@
                 "icebergMinSize": 20,
 
                 "baseConfidenceRequired": 0.3,
-                "finalConfidenceRequired": 0.5
+                "finalConfidenceRequired": 0.5,
+
+                "strongCorrelationThreshold": 0.7,
+                "weakCorrelationThreshold": 0.3,
+                "depthImbalanceThreshold": 0.2
             }
         }
     }

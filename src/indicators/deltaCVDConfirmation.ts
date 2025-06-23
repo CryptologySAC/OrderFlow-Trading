@@ -114,6 +114,11 @@ export interface DeltaCVDConfirmationSettings extends BaseDetectorSettings {
     // Enhanced confidence
     baseConfidenceRequired?: number; // 0.4
     finalConfidenceRequired?: number; // 0.6
+
+    // Correlation threshold parameters (previously hardcoded)
+    strongCorrelationThreshold?: number; // Strong correlation threshold (default 0.7)
+    weakCorrelationThreshold?: number; // Weak correlation threshold (default 0.3)
+    depthImbalanceThreshold?: number; // Depth imbalance signal threshold (default 0.2)
 }
 
 interface WindowState {
@@ -197,6 +202,11 @@ export class DeltaCVDConfirmation extends BaseDetector {
     // Enhanced confidence thresholds
     private readonly baseConfidenceRequired: number;
     private readonly finalConfidenceRequired: number;
+
+    // Correlation and depth threshold parameters
+    private readonly strongCorrelationThreshold: number;
+    private readonly weakCorrelationThreshold: number;
+    private readonly depthImbalanceThreshold: number;
 
     /* ---- enhanced mutable state --------------------------------- */
     private readonly states = new Map<number, WindowState>();
@@ -307,6 +317,11 @@ export class DeltaCVDConfirmation extends BaseDetector {
         // Enhanced confidence thresholds
         this.baseConfidenceRequired = settings.baseConfidenceRequired ?? 0.4;
         this.finalConfidenceRequired = settings.finalConfidenceRequired ?? 0.6;
+        this.strongCorrelationThreshold =
+            settings.strongCorrelationThreshold ?? 0.7;
+        this.weakCorrelationThreshold =
+            settings.weakCorrelationThreshold ?? 0.3;
+        this.depthImbalanceThreshold = settings.depthImbalanceThreshold ?? 0.2;
 
         // Initialize window states
         for (const w of this.windows) {
@@ -824,8 +839,8 @@ export class DeltaCVDConfirmation extends BaseDetector {
         const strength = Math.abs(imbalance);
 
         let signal: "buy" | "sell" | "neutral" = "neutral";
-        if (imbalance > 0.2) signal = "buy"; // Strong bid depth
-        if (imbalance < -0.2) signal = "sell"; // Strong ask depth
+        if (imbalance > this.depthImbalanceThreshold) signal = "buy"; // Strong bid depth
+        if (imbalance < -this.depthImbalanceThreshold) signal = "sell"; // Strong ask depth
 
         return { imbalance, strength, signal };
     }
@@ -2440,8 +2455,11 @@ export class DeltaCVDConfirmation extends BaseDetector {
         // Penalty increases as correlation decreases
         const absCorrelation = Math.abs(avgPriceCorrelation);
 
-        if (absCorrelation > 0.7) return 1.0; // No penalty for good correlation
-        if (absCorrelation > 0.3) return 0.5 + (absCorrelation - 0.3) * 1.25; // Linear penalty
+        if (absCorrelation > this.strongCorrelationThreshold) return 1.0; // No penalty for good correlation
+        if (absCorrelation > this.weakCorrelationThreshold)
+            return (
+                0.5 + (absCorrelation - this.weakCorrelationThreshold) * 1.25
+            ); // Linear penalty
         return 0.1; // Heavy penalty for poor correlation
     }
 
