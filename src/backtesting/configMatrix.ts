@@ -31,7 +31,14 @@ export interface TestConfiguration {
     detectorType: keyof ConfigurationMatrix;
     config: Record<string, unknown>;
     description: string;
-    profile: "conservative" | "balanced" | "aggressive" | "custom";
+    profile:
+        | "conservative"
+        | "balanced"
+        | "aggressive"
+        | "custom"
+        | "simplified_no_passive"
+        | "simplified_with_passive"
+        | "current_complex";
 }
 
 export interface ConfigMatrixOptions {
@@ -370,42 +377,69 @@ export class ConfigMatrix {
                 break;
 
             case "deltaCVDDetector":
+                // A/B Test configurations for passive volume analysis
                 configurations.push(
                     {
-                        id: `deltacvd_conservative`,
-                        detectorType,
-                        config: {
-                            minZ: 4,
-                            minTradesPerSec: 1.0,
-                            minVolPerSec: 50,
-                            divergenceThreshold: 0.5,
-                        },
-                        description: "Conservative delta CVD detection",
-                        profile: "conservative",
-                    },
-                    {
-                        id: `deltacvd_balanced`,
+                        id: `deltacvd_simplified_no_passive`,
                         detectorType,
                         config: {
                             minZ: 3,
                             minTradesPerSec: 0.5,
                             minVolPerSec: 20,
                             divergenceThreshold: 0.3,
+                            // SIMPLIFIED: Disable all enhancement phases
+                            enableDepthAnalysis: false,
+                            detectionMode: "momentum",
+                            // Disable passive volume usage for core signal
+                            usePassiveVolume: false,
+                            // Minimal confidence requirements
+                            baseConfidenceRequired: 0.3,
+                            finalConfidenceRequired: 0.5,
                         },
-                        description: "Balanced delta CVD detection",
-                        profile: "balanced",
+                        description:
+                            "Simplified DeltaCVD without passive depth analysis",
+                        profile: "simplified_no_passive",
                     },
                     {
-                        id: `deltacvd_aggressive`,
+                        id: `deltacvd_simplified_with_passive`,
                         detectorType,
                         config: {
-                            minZ: 2,
-                            minTradesPerSec: 0.2,
-                            minVolPerSec: 10,
-                            divergenceThreshold: 0.2,
+                            minZ: 3,
+                            minTradesPerSec: 0.5,
+                            minVolPerSec: 20,
+                            divergenceThreshold: 0.3,
+                            // SIMPLIFIED: Disable advanced phases but keep passive volume
+                            enableDepthAnalysis: false,
+                            detectionMode: "momentum",
+                            // Test passive volume usage
+                            usePassiveVolume: true,
+                            // Minimal confidence requirements
+                            baseConfidenceRequired: 0.3,
+                            finalConfidenceRequired: 0.5,
                         },
-                        description: "Aggressive delta CVD detection",
-                        profile: "aggressive",
+                        description:
+                            "Simplified DeltaCVD with basic passive volume analysis",
+                        profile: "simplified_with_passive",
+                    },
+                    {
+                        id: `deltacvd_current_complex`,
+                        detectorType,
+                        config: {
+                            minZ: 3,
+                            minTradesPerSec: 0.5,
+                            minVolPerSec: 20,
+                            divergenceThreshold: 0.3,
+                            // CURRENT: All enhancement phases enabled (baseline comparison)
+                            enableDepthAnalysis: true,
+                            detectionMode: "hybrid",
+                            usePassiveVolume: true,
+                            // Higher confidence requirements due to complexity
+                            baseConfidenceRequired: 0.4,
+                            finalConfidenceRequired: 0.6,
+                        },
+                        description:
+                            "Current complex DeltaCVD implementation (baseline)",
+                        profile: "current_complex",
                     }
                 );
                 break;

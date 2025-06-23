@@ -75,6 +75,9 @@ export interface DeltaCVDConfirmationSettings extends BaseDetectorSettings {
     divergenceThreshold?: number; // 0.3 = 30% correlation threshold for divergence
     divergenceLookbackSec?: number; // 60 seconds to check for price/CVD divergence
 
+    // A/B Testing: Passive volume usage control
+    usePassiveVolume?: boolean; // Enable/disable passive volume in CVD calculation (default: true)
+
     // Enhanced settings
     volatilityLookbackSec?: number; // window for volatility baseline (default: 3600)
     priceCorrelationWeight?: number; // how much price correlation affects confidence (0-1)
@@ -173,6 +176,9 @@ export class DeltaCVDConfirmation extends BaseDetector {
     private readonly divergenceThreshold: number;
     private readonly divergenceLookbackSec: number;
 
+    // A/B Testing: Passive volume configuration
+    private readonly usePassiveVolume: boolean;
+
     // PHASE 2: Depth analysis configuration
     private readonly enableDepthAnalysis: boolean;
     private readonly maxOrderbookAge: number;
@@ -268,8 +274,12 @@ export class DeltaCVDConfirmation extends BaseDetector {
         this.divergenceThreshold = settings.divergenceThreshold ?? 0.3;
         this.divergenceLookbackSec = settings.divergenceLookbackSec ?? 60;
 
+        // A/B Testing: Passive volume configuration
+        this.usePassiveVolume = settings.usePassiveVolume ?? true;
+
         // PHASE 2: Depth analysis configuration
-        this.enableDepthAnalysis = settings.enableDepthAnalysis ?? true;
+        // SIMPLIFICATION: Default to false for better performance unless explicitly enabled
+        this.enableDepthAnalysis = settings.enableDepthAnalysis ?? false;
         this.maxOrderbookAge = settings.maxOrderbookAge ?? 5000;
 
         // PHASE 3: Absorption detection configuration
@@ -344,17 +354,20 @@ export class DeltaCVDConfirmation extends BaseDetector {
             const state = this.states.get(w)!;
             state.trades.push(event);
 
-            // Update volume profile
-            this.updateVolumeProfile(state, event);
+            // SIMPLIFICATION: Only update complex profiles if depth analysis is enabled
+            if (this.enableDepthAnalysis) {
+                // Update volume profile
+                this.updateVolumeProfile(state, event);
 
-            // Update CVD-weighted price level tracking
-            this.updateCVDProfile(state, event);
+                // Update CVD-weighted price level tracking
+                this.updateCVDProfile(state, event);
 
-            // Update price statistics for this window
+                // Update volume surge tracking for momentum detection
+                this.updateVolumeSurgeTracking(state, event);
+            }
+
+            // Always update price statistics (needed for core signal calculation)
             this.updatePriceStatistics(state, event);
-
-            // Update volume surge tracking for momentum detection
-            this.updateVolumeSurgeTracking(state, event);
 
             // Drop old trades
             const cutoff = event.timestamp - w * 1000;
@@ -482,12 +495,36 @@ export class DeltaCVDConfirmation extends BaseDetector {
             };
         }
 
-        // Calculate CVD with correct passive calculation
+        // Calculate CVD with conditional passive volume integration
         let cvd = 0;
         const prices: number[] = [];
 
         state.trades.forEach((trade) => {
-            const delta = trade.buyerIsMaker ? trade.quantity : -trade.quantity;
+            let effectiveQuantity = trade.quantity;
+
+            // A/B Test: Conditionally incorporate passive volume for enhanced signal quality
+            if (this.usePassiveVolume) {
+                // Enhanced CVD: Weight trade by passive volume at execution price
+                const passiveVolume = trade.buyerIsMaker
+                    ? trade.passiveAskVolume
+                    : trade.passiveBidVolume;
+
+                // If passive volume exists, use it to weight the trade impact
+                if (passiveVolume > 0) {
+                    // Scale trade quantity by ratio of passive volume to aggressive volume
+                    // This amplifies signals when large aggressive orders hit thin passive volume
+                    const volumeRatio = Math.min(
+                        5.0,
+                        passiveVolume / trade.quantity
+                    );
+                    effectiveQuantity =
+                        trade.quantity * (1 + volumeRatio * 0.1);
+                }
+            }
+
+            const delta = trade.buyerIsMaker
+                ? effectiveQuantity
+                : -effectiveQuantity;
             cvd += delta;
             prices.push(trade.price);
         });
@@ -2136,15 +2173,35 @@ export class DeltaCVDConfirmation extends BaseDetector {
         direction: "bullish" | "bearish" | "neutral";
     } {
         let cvd = 0;
+        let totalVolume = 0;
+
         for (const trade of state.trades) {
-            const delta = trade.buyerIsMaker ? trade.quantity : -trade.quantity;
+            let effectiveQuantity = trade.quantity;
+
+            // A/B Test: Conditionally incorporate passive volume for enhanced CVD
+            if (this.usePassiveVolume) {
+                const passiveVolume = trade.buyerIsMaker
+                    ? trade.passiveAskVolume
+                    : trade.passiveBidVolume;
+
+                if (passiveVolume > 0) {
+                    // Weight trade by passive volume ratio (capped at 5x multiplier)
+                    const volumeRatio = Math.min(
+                        5.0,
+                        passiveVolume / trade.quantity
+                    );
+                    effectiveQuantity =
+                        trade.quantity * (1 + volumeRatio * 0.1);
+                }
+            }
+
+            const delta = trade.buyerIsMaker
+                ? effectiveQuantity
+                : -effectiveQuantity;
             cvd += delta;
+            totalVolume += effectiveQuantity;
         }
 
-        const totalVolume = state.trades.reduce(
-            (sum, t) => sum + t.quantity,
-            0
-        );
         const normalizedCVD = totalVolume > 0 ? cvd / totalVolume : 0;
 
         const direction =
