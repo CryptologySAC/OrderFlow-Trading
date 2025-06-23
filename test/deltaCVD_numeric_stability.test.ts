@@ -41,12 +41,10 @@ describe("DeltaCVD Numeric Stability Fixes", () => {
             incrementCounter: vi.fn(),
             decrementCounter: vi.fn(),
             getCounterRate: vi.fn().mockReturnValue(0),
-            createCounter: vi
-                .fn()
-                .mockReturnValue({
-                    increment: vi.fn(),
-                    get: vi.fn().mockReturnValue(0),
-                }),
+            createCounter: vi.fn().mockReturnValue({
+                increment: vi.fn(),
+                get: vi.fn().mockReturnValue(0),
+            }),
             createHistogram: vi
                 .fn()
                 .mockReturnValue({ observe: vi.fn(), reset: vi.fn() }),
