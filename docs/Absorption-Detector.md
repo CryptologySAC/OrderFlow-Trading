@@ -269,12 +269,24 @@ const features = {
 
 ## 🔧 Technical Implementation
 
+### **Algorithm Complexity:**
+
+For detailed performance analysis and complexity metrics, see [Algorithm Complexity Analysis](./Algorithm-Complexity-Analysis.md#1-absorptiondetector---price-efficiency-analysis).
+
+**Performance Summary:**
+
+- **Time Complexity**: `O(n·z)` where n = trades, z = active zones
+- **Space Complexity**: `O(z·k)` where k = samples per zone (bounded at 100K objects)
+- **CPU Intensity**: ⭐⭐⭐ (Moderate - zone processing in hot path)
+- **Target Latency**: < 1ms per trade for institutional requirements
+
 ### **Memory Management:**
 
 - **Circular buffers** for trade history (performance optimized)
-- **Object pooling** for absorption candidates
+- **Object pooling** for absorption candidates using SharedPools.zoneSamples
 - **Time-based cleanup** for expired zones and candidates
 - **Volume analyzer integration** with shared framework
+- **Bounded data structures** prevent memory bloat (max 1000 zones × 100 samples)
 
 ### **Performance Optimizations:**
 
@@ -282,6 +294,7 @@ const features = {
 - **Batched volume calculations** for efficiency
 - **Smart invalidation** of outdated signals
 - **Resource monitoring** and automatic cleanup
+- **Zone iteration scaling** optimized for market activity levels
 
 ## 🎯 Key Trading Insights
 

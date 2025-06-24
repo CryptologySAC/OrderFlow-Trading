@@ -2,11 +2,14 @@
 
 import { describe, it, expect } from "vitest";
 import { FinancialMath } from "../src/utils/financialMath.js";
-import { PropertyTestDataGenerator, MathematicalPropertyValidator } from "./framework/mathematicalPropertyTesting.js";
+import {
+    PropertyTestDataGenerator,
+    MathematicalPropertyValidator,
+} from "./framework/mathematicalPropertyTesting.js";
 
 describe("FinancialMath Mathematical Property Tests", () => {
     let dataGenerator: PropertyTestDataGenerator;
-    
+
     beforeEach(() => {
         dataGenerator = new PropertyTestDataGenerator(42);
     });
@@ -22,12 +25,24 @@ describe("FinancialMath Mathematical Property Tests", () => {
 
             testCases.forEach(([a, b, c]) => {
                 // (a + b) + c should equal a + (b + c)
-                const left = FinancialMath.safeAdd(FinancialMath.safeAdd(a, b), c);
-                const right = FinancialMath.safeAdd(a, FinancialMath.safeAdd(b, c));
-                
+                const left = FinancialMath.safeAdd(
+                    FinancialMath.safeAdd(a, b),
+                    c
+                );
+                const right = FinancialMath.safeAdd(
+                    a,
+                    FinancialMath.safeAdd(b, c)
+                );
+
                 expect(left).toBeCloseTo(right, 10);
-                MathematicalPropertyValidator.validateNumericalStability(left, "associativity.left");
-                MathematicalPropertyValidator.validateNumericalStability(right, "associativity.right");
+                MathematicalPropertyValidator.validateNumericalStability(
+                    left,
+                    "associativity.left"
+                );
+                MathematicalPropertyValidator.validateNumericalStability(
+                    right,
+                    "associativity.right"
+                );
             });
         });
 
@@ -50,15 +65,21 @@ describe("FinancialMath Mathematical Property Tests", () => {
                 const mulRight = FinancialMath.safeMultiply(b, a);
                 expect(mulLeft).toBeCloseTo(mulRight, 15);
 
-                MathematicalPropertyValidator.validateNumericalStability(addLeft, "commutativity.add");
-                MathematicalPropertyValidator.validateNumericalStability(mulLeft, "commutativity.mul");
+                MathematicalPropertyValidator.validateNumericalStability(
+                    addLeft,
+                    "commutativity.add"
+                );
+                MathematicalPropertyValidator.validateNumericalStability(
+                    mulLeft,
+                    "commutativity.mul"
+                );
             });
         });
 
         it("should maintain identity properties", () => {
             const testValues = [0.1, 1, 100, 0.00001, 999999.99];
 
-            testValues.forEach(value => {
+            testValues.forEach((value) => {
                 // Addition identity: a + 0 = a
                 const addIdentity = FinancialMath.safeAdd(value, 0);
                 expect(addIdentity).toBeCloseTo(value, 15);
@@ -71,31 +92,55 @@ describe("FinancialMath Mathematical Property Tests", () => {
                 const divIdentity = FinancialMath.safeDivide(value, 1);
                 expect(divIdentity).toBeCloseTo(value, 15);
 
-                MathematicalPropertyValidator.validateNumericalStability(addIdentity, "identity.add");
-                MathematicalPropertyValidator.validateNumericalStability(mulIdentity, "identity.mul");
-                MathematicalPropertyValidator.validateNumericalStability(divIdentity, "identity.div");
+                MathematicalPropertyValidator.validateNumericalStability(
+                    addIdentity,
+                    "identity.add"
+                );
+                MathematicalPropertyValidator.validateNumericalStability(
+                    mulIdentity,
+                    "identity.mul"
+                );
+                MathematicalPropertyValidator.validateNumericalStability(
+                    divIdentity,
+                    "identity.div"
+                );
             });
         });
 
         it("should handle inverse operations correctly", () => {
             const testValues = [0.1, 1, 100, 0.00001, 999999.99];
 
-            testValues.forEach(value => {
+            testValues.forEach((value) => {
                 if (value !== 0) {
                     // Multiplication/Division inverse: (a * b) / b = a
                     const multiplier = 7.3;
-                    const multiplied = FinancialMath.safeMultiply(value, multiplier);
-                    const divided = FinancialMath.safeDivide(multiplied, multiplier);
+                    const multiplied = FinancialMath.safeMultiply(
+                        value,
+                        multiplier
+                    );
+                    const divided = FinancialMath.safeDivide(
+                        multiplied,
+                        multiplier
+                    );
                     expect(divided).toBeCloseTo(value, 12);
 
                     // Addition/Subtraction inverse: (a + b) - b = a
                     const addend = 123.456;
                     const added = FinancialMath.safeAdd(value, addend);
-                    const subtracted = FinancialMath.safeSubtract(added, addend);
+                    const subtracted = FinancialMath.safeSubtract(
+                        added,
+                        addend
+                    );
                     expect(subtracted).toBeCloseTo(value, 12);
 
-                    MathematicalPropertyValidator.validateNumericalStability(divided, "inverse.div");
-                    MathematicalPropertyValidator.validateNumericalStability(subtracted, "inverse.sub");
+                    MathematicalPropertyValidator.validateNumericalStability(
+                        divided,
+                        "inverse.div"
+                    );
+                    MathematicalPropertyValidator.validateNumericalStability(
+                        subtracted,
+                        "inverse.sub"
+                    );
                 }
             });
         });
@@ -110,18 +155,24 @@ describe("FinancialMath Mathematical Property Tests", () => {
             // Division by very small numbers should not overflow
             const result = FinancialMath.safeDivide(1, 1e-10, 999); // Use less extreme value
             expect(isFinite(result)).toBe(true);
-            MathematicalPropertyValidator.validateNumericalStability(result, "division.smallDenominator");
+            MathematicalPropertyValidator.validateNumericalStability(
+                result,
+                "division.smallDenominator"
+            );
 
             // Division by very large numbers should not underflow to zero unexpectedly
             const smallResult = FinancialMath.safeDivide(1, 1e10); // Use less extreme value
             expect(isFinite(smallResult)).toBe(true);
-            MathematicalPropertyValidator.validateNumericalStability(smallResult, "division.largeDenominator");
+            MathematicalPropertyValidator.validateNumericalStability(
+                smallResult,
+                "division.largeDenominator"
+            );
         });
 
         it("should maintain ratio properties", () => {
             const testCases = [
                 { a: 100, b: 200, expectedRatio: 0.5 },
-                { a: 1, b: 3, expectedRatio: 1/3 },
+                { a: 1, b: 3, expectedRatio: 1 / 3 },
                 { a: 0.1, b: 0.2, expectedRatio: 0.5 },
                 { a: 1000000, b: 2000000, expectedRatio: 0.5 },
             ];
@@ -134,8 +185,14 @@ describe("FinancialMath Mathematical Property Tests", () => {
                 const reversed = FinancialMath.safeMultiply(ratio, b);
                 expect(reversed).toBeCloseTo(a, 6); // Reduced precision for BigInt arithmetic
 
-                MathematicalPropertyValidator.validateNumericalStability(ratio, "ratio.calculate");
-                MathematicalPropertyValidator.validateNumericalStability(reversed, "ratio.reverse");
+                MathematicalPropertyValidator.validateNumericalStability(
+                    ratio,
+                    "ratio.calculate"
+                );
+                MathematicalPropertyValidator.validateNumericalStability(
+                    reversed,
+                    "ratio.reverse"
+                );
             });
         });
 
@@ -145,14 +202,17 @@ describe("FinancialMath Mathematical Property Tests", () => {
             const baseA = 3;
             const baseB = 7;
 
-            scales.forEach(scale => {
+            scales.forEach((scale) => {
                 const scaledA = baseA * scale;
                 const scaledB = baseB * scale;
                 const ratio = FinancialMath.safeDivide(scaledA, scaledB);
                 const expectedRatio = baseA / baseB;
 
                 expect(ratio).toBeCloseTo(expectedRatio, 6); // Reduced precision expectation
-                MathematicalPropertyValidator.validateNumericalStability(ratio, `scaleInvariance.${scale}`);
+                MathematicalPropertyValidator.validateNumericalStability(
+                    ratio,
+                    `scaleInvariance.${scale}`
+                );
             });
         });
     });
@@ -160,21 +220,28 @@ describe("FinancialMath Mathematical Property Tests", () => {
     describe("Price and Spread Calculations", () => {
         it("should calculate mid prices correctly", () => {
             const testCases = [
-                { bid: 99.95, ask: 100.05, precision: 2, expected: 100.00 },
+                { bid: 99.95, ask: 100.05, precision: 2, expected: 100.0 },
                 { bid: 50.123, ask: 50.127, precision: 3, expected: 50.125 },
                 { bid: 0.001, ask: 0.002, precision: 6, expected: 0.0015 },
                 { bid: 999.9, ask: 1000.1, precision: 1, expected: 1000.0 },
             ];
 
             testCases.forEach(({ bid, ask, precision, expected }) => {
-                const midPrice = FinancialMath.calculateMidPrice(bid, ask, precision);
+                const midPrice = FinancialMath.calculateMidPrice(
+                    bid,
+                    ask,
+                    precision
+                );
                 expect(midPrice).toBeCloseTo(expected, precision);
-                
+
                 // Mid price should be between bid and ask
                 expect(midPrice).toBeGreaterThanOrEqual(Math.min(bid, ask));
                 expect(midPrice).toBeLessThanOrEqual(Math.max(bid, ask));
 
-                MathematicalPropertyValidator.validatePriceBounds(midPrice, "midPrice");
+                MathematicalPropertyValidator.validatePriceBounds(
+                    midPrice,
+                    "midPrice"
+                );
             });
         });
 
@@ -186,9 +253,13 @@ describe("FinancialMath Mathematical Property Tests", () => {
             ];
 
             testCases.forEach(({ ask, bid, precision, expected }) => {
-                const spread = FinancialMath.calculateSpread(ask, bid, precision);
+                const spread = FinancialMath.calculateSpread(
+                    ask,
+                    bid,
+                    precision
+                );
                 expect(spread).toBeCloseTo(expected, precision);
-                
+
                 // Spread should always be non-negative
                 expect(spread).toBeGreaterThanOrEqual(0);
 
@@ -196,7 +267,10 @@ describe("FinancialMath Mathematical Property Tests", () => {
                 const manualSpread = Math.abs(ask - bid);
                 expect(spread).toBeCloseTo(manualSpread, precision);
 
-                MathematicalPropertyValidator.validateNumericalStability(spread, "spread");
+                MathematicalPropertyValidator.validateNumericalStability(
+                    spread,
+                    "spread"
+                );
             });
         });
 
@@ -206,7 +280,11 @@ describe("FinancialMath Mathematical Property Tests", () => {
             const ask = 100.05;
             const precision = 2;
 
-            const midPrice = FinancialMath.calculateMidPrice(bid, ask, precision);
+            const midPrice = FinancialMath.calculateMidPrice(
+                bid,
+                ask,
+                precision
+            );
             const spread = FinancialMath.calculateSpread(ask, bid, precision);
 
             // Relationship: ask = midPrice + spread/2, bid = midPrice - spread/2
@@ -239,7 +317,10 @@ describe("FinancialMath Mathematical Property Tests", () => {
                 expect(mean).toBeGreaterThanOrEqual(min);
                 expect(mean).toBeLessThanOrEqual(max);
 
-                MathematicalPropertyValidator.validateNumericalStability(mean, "mean");
+                MathematicalPropertyValidator.validateNumericalStability(
+                    mean,
+                    "mean"
+                );
             });
         });
 
@@ -258,27 +339,39 @@ describe("FinancialMath Mathematical Property Tests", () => {
                 // Standard deviation should be non-negative
                 expect(stdDev).toBeGreaterThanOrEqual(0);
 
-                MathematicalPropertyValidator.validateNumericalStability(stdDev, "stdDev");
+                MathematicalPropertyValidator.validateNumericalStability(
+                    stdDev,
+                    "stdDev"
+                );
             });
         });
 
         it("should calculate percentiles correctly", () => {
             const sortedValues = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-            
+
             // Test known percentiles
-            expect(FinancialMath.calculatePercentile(sortedValues, 0)).toBe(1);    // Minimum
-            expect(FinancialMath.calculatePercentile(sortedValues, 50)).toBe(5.5); // Median
-            expect(FinancialMath.calculatePercentile(sortedValues, 100)).toBe(10); // Maximum
+            expect(FinancialMath.calculatePercentile(sortedValues, 0)).toBe(1); // Minimum
+            expect(FinancialMath.calculatePercentile(sortedValues, 50)).toBe(
+                5.5
+            ); // Median
+            expect(FinancialMath.calculatePercentile(sortedValues, 100)).toBe(
+                10
+            ); // Maximum
 
             // Percentile should be monotonic
             const percentiles = [10, 25, 50, 75, 90];
-            const percentileValues = percentiles.map(p => 
+            const percentileValues = percentiles.map((p) =>
                 FinancialMath.calculatePercentile(sortedValues, p)
             );
 
             for (let i = 1; i < percentileValues.length; i++) {
-                expect(percentileValues[i]).toBeGreaterThanOrEqual(percentileValues[i-1]);
-                MathematicalPropertyValidator.validateNumericalStability(percentileValues[i], `percentile.${percentiles[i]}`);
+                expect(percentileValues[i]).toBeGreaterThanOrEqual(
+                    percentileValues[i - 1]
+                );
+                MathematicalPropertyValidator.validateNumericalStability(
+                    percentileValues[i],
+                    `percentile.${percentiles[i]}`
+                );
             }
         });
 
@@ -289,15 +382,18 @@ describe("FinancialMath Mathematical Property Tests", () => {
             const stdDev = FinancialMath.calculateStdDev(values);
 
             // Mean should equal manual calculation
-            const manualMean = values.reduce((sum, v) => sum + v, 0) / values.length;
+            const manualMean =
+                values.reduce((sum, v) => sum + v, 0) / values.length;
             expect(mean).toBeCloseTo(manualMean, 15);
 
             // Standard deviation squared should equal sample variance (n-1 denominator)
-            const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / (values.length - 1);
+            const variance =
+                values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) /
+                (values.length - 1);
             expect(stdDev * stdDev).toBeCloseTo(variance, 6); // Reduced precision for BigInt arithmetic
 
             // All values should be within reasonable standard deviations of mean
-            values.forEach(value => {
+            values.forEach((value) => {
                 const zScore = Math.abs(value - mean) / stdDev;
                 expect(zScore).toBeLessThan(5); // Within 5 standard deviations
             });
@@ -317,18 +413,27 @@ describe("FinancialMath Mathematical Property Tests", () => {
                 // Multiplication
                 const product = FinancialMath.multiplyQuantities(qty1, qty2);
                 expect(product).toBeCloseTo(qty1 * qty2, 6); // Reduced precision for BigInt arithmetic
-                MathematicalPropertyValidator.validateQuantityBounds(product, "quantity.multiply");
+                MathematicalPropertyValidator.validateQuantityBounds(
+                    product,
+                    "quantity.multiply"
+                );
 
                 // Division (if qty2 is not zero)
                 if (qty2 !== 0) {
                     const quotient = FinancialMath.divideQuantities(qty1, qty2);
                     expect(quotient).toBeCloseTo(qty1 / qty2, 6); // Reduced precision for BigInt arithmetic
-                    
+
                     // Verify inverse relationship
-                    const reconstructed = FinancialMath.multiplyQuantities(quotient, qty2);
+                    const reconstructed = FinancialMath.multiplyQuantities(
+                        quotient,
+                        qty2
+                    );
                     expect(reconstructed).toBeCloseTo(qty1, 4); // Further reduced precision for compound BigInt operations
-                    
-                    MathematicalPropertyValidator.validateNumericalStability(quotient, "quantity.divide");
+
+                    MathematicalPropertyValidator.validateNumericalStability(
+                        quotient,
+                        "quantity.divide"
+                    );
                 }
             });
         });
@@ -338,15 +443,27 @@ describe("FinancialMath Mathematical Property Tests", () => {
             const price = 100.0;
             const quantities = [0.001, 0.1, 1.0, 10.0, 100.0, 1000.0];
 
-            quantities.forEach(quantity => {
-                const volume = FinancialMath.multiplyQuantities(price, quantity);
-                const reconstructedQty = FinancialMath.divideQuantities(volume, price);
-                
+            quantities.forEach((quantity) => {
+                const volume = FinancialMath.multiplyQuantities(
+                    price,
+                    quantity
+                );
+                const reconstructedQty = FinancialMath.divideQuantities(
+                    volume,
+                    price
+                );
+
                 // Should be able to reconstruct original quantity
                 expect(reconstructedQty).toBeCloseTo(quantity, 6); // Reduced precision for BigInt arithmetic
-                
-                MathematicalPropertyValidator.validateQuantityBounds(volume, "quantity.volume");
-                MathematicalPropertyValidator.validateQuantityBounds(reconstructedQty, "quantity.reconstructed");
+
+                MathematicalPropertyValidator.validateQuantityBounds(
+                    volume,
+                    "quantity.volume"
+                );
+                MathematicalPropertyValidator.validateQuantityBounds(
+                    reconstructedQty,
+                    "quantity.reconstructed"
+                );
             });
         });
     });
@@ -361,26 +478,39 @@ describe("FinancialMath Mathematical Property Tests", () => {
                 1e15,
             ];
 
-            extremeValues.forEach(value => {
+            extremeValues.forEach((value) => {
                 // All operations should return finite numbers or fallbacks
                 const addResult = FinancialMath.safeAdd(value, 1);
                 const multiplyResult = FinancialMath.safeMultiply(value, 2);
                 const divideResult = FinancialMath.safeDivide(value, 2);
 
-                MathematicalPropertyValidator.validateNumericalStability(addResult, `extreme.add.${value}`);
-                MathematicalPropertyValidator.validateNumericalStability(multiplyResult, `extreme.multiply.${value}`);
-                MathematicalPropertyValidator.validateNumericalStability(divideResult, `extreme.divide.${value}`);
+                MathematicalPropertyValidator.validateNumericalStability(
+                    addResult,
+                    `extreme.add.${value}`
+                );
+                MathematicalPropertyValidator.validateNumericalStability(
+                    multiplyResult,
+                    `extreme.multiply.${value}`
+                );
+                MathematicalPropertyValidator.validateNumericalStability(
+                    divideResult,
+                    `extreme.divide.${value}`
+                );
             });
         });
 
         it("should handle invalid inputs safely", () => {
             const invalidInputs = [NaN, Infinity, -Infinity];
 
-            invalidInputs.forEach(invalid => {
+            invalidInputs.forEach((invalid) => {
                 // Operations with invalid inputs should not crash
                 expect(() => FinancialMath.safeAdd(invalid, 1)).not.toThrow();
-                expect(() => FinancialMath.safeMultiply(invalid, 1)).not.toThrow();
-                expect(() => FinancialMath.safeDivide(invalid, 1, 999)).not.toThrow();
+                expect(() =>
+                    FinancialMath.safeMultiply(invalid, 1)
+                ).not.toThrow();
+                expect(() =>
+                    FinancialMath.safeDivide(invalid, 1, 999)
+                ).not.toThrow();
 
                 // Results should be safe fallback values
                 const addResult = FinancialMath.safeAdd(invalid, 1);
@@ -420,15 +550,21 @@ describe("FinancialMath Mathematical Property Tests", () => {
 
             // After many operations, should still be close to original
             expect(value).toBeCloseTo(1.0, 10);
-            MathematicalPropertyValidator.validateNumericalStability(value, "precision.repeated");
+            MathematicalPropertyValidator.validateNumericalStability(
+                value,
+                "precision.repeated"
+            );
         });
 
         it("should handle large datasets efficiently", () => {
             // Generate large dataset
-            const largeDataset = Array.from({ length: 10000 }, (_, i) => i * 0.001);
+            const largeDataset = Array.from(
+                { length: 10000 },
+                (_, i) => i * 0.001
+            );
 
             const startTime = performance.now();
-            
+
             const mean = FinancialMath.calculateMean(largeDataset);
             const stdDev = FinancialMath.calculateStdDev(largeDataset);
             const p95 = FinancialMath.calculatePercentile(largeDataset, 95);
@@ -440,9 +576,18 @@ describe("FinancialMath Mathematical Property Tests", () => {
             expect(duration).toBeLessThan(100);
 
             // Results should be mathematically correct
-            MathematicalPropertyValidator.validateNumericalStability(mean, "performance.mean");
-            MathematicalPropertyValidator.validateNumericalStability(stdDev, "performance.stdDev");
-            MathematicalPropertyValidator.validateNumericalStability(p95, "performance.percentile");
+            MathematicalPropertyValidator.validateNumericalStability(
+                mean,
+                "performance.mean"
+            );
+            MathematicalPropertyValidator.validateNumericalStability(
+                stdDev,
+                "performance.stdDev"
+            );
+            MathematicalPropertyValidator.validateNumericalStability(
+                p95,
+                "performance.percentile"
+            );
         });
     });
 });

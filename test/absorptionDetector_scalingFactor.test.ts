@@ -14,7 +14,7 @@ import type { AbsorptionSettings } from "../src/indicators/absorptionDetector.js
 
 /**
  * ✅ SCALING FACTOR CONFIGURATION TEST SUITE
- * 
+ *
  * Validates that the priceEfficiencyScalingFactor parameter is properly configurable
  * and affects price efficiency calculations as expected.
  */
@@ -23,9 +23,9 @@ describe("AbsorptionDetector - Scaling Factor Configuration", () => {
     let mockMetrics: MetricsCollector;
     let mockSpoofing: SpoofingDetector;
     let mockOrderBook: OrderBookState;
-    
+
     const BASE_PRICE = 50000;
-    
+
     beforeEach(() => {
         mockLogger = {
             info: vi.fn(),
@@ -38,7 +38,7 @@ describe("AbsorptionDetector - Scaling Factor Configuration", () => {
         } as ILogger;
 
         mockMetrics = new MetricsCollector();
-        
+
         mockSpoofing = {
             wasSpoofed: vi.fn().mockReturnValue(false),
         } as any;
@@ -62,16 +62,16 @@ describe("AbsorptionDetector - Scaling Factor Configuration", () => {
 
     it("should use configurable priceEfficiencyScalingFactor in calculations", () => {
         console.log("🔧 TESTING: Configurable scaling factor functionality");
-        
+
         const scalingFactorTests = [
             { factor: 5, name: "Low Scaling" },
             { factor: 10, name: "Default Scaling" },
             { factor: 20, name: "High Scaling" },
         ];
 
-        scalingFactorTests.forEach(test => {
+        scalingFactorTests.forEach((test) => {
             console.log(`\n🔧 Testing scaling factor: ${test.factor}`);
-            
+
             const config: AbsorptionSettings = {
                 minAggVolume: 40,
                 windowMs: 60000,
@@ -125,16 +125,20 @@ describe("AbsorptionDetector - Scaling Factor Configuration", () => {
             }
 
             // Process test trades
-            testTrades.forEach(trade => {
+            testTrades.forEach((trade) => {
                 detector.onEnrichedTrade(trade);
             });
 
             // Calculate expected efficiency with this scaling factor
-            const totalVolume = testTrades.reduce((sum, t) => sum + t.quantity, 0);
+            const totalVolume = testTrades.reduce(
+                (sum, t) => sum + t.quantity,
+                0
+            );
             const avgPassive = 200;
-            const actualPriceMovement = Math.max(...testTrades.map(t => t.price)) - 
-                                       Math.min(...testTrades.map(t => t.price));
-            
+            const actualPriceMovement =
+                Math.max(...testTrades.map((t) => t.price)) -
+                Math.min(...testTrades.map((t) => t.price));
+
             const volumePressure = totalVolume / avgPassive;
             const tickSize = 0.01; // Based on pricePrecision: 2
             const expectedMovement = volumePressure * tickSize * test.factor;
@@ -142,14 +146,20 @@ describe("AbsorptionDetector - Scaling Factor Configuration", () => {
 
             console.log(`🔧 Scaling factor ${test.factor} results:`);
             console.log(`   Volume Pressure: ${volumePressure.toFixed(3)}`);
-            console.log(`   Expected Movement (with scaling): ${expectedMovement.toFixed(4)}`);
-            console.log(`   Actual Movement: ${actualPriceMovement.toFixed(4)}`);
-            console.log(`   Calculated Efficiency: ${calculatedEfficiency.toFixed(3)}`);
+            console.log(
+                `   Expected Movement (with scaling): ${expectedMovement.toFixed(4)}`
+            );
+            console.log(
+                `   Actual Movement: ${actualPriceMovement.toFixed(4)}`
+            );
+            console.log(
+                `   Calculated Efficiency: ${calculatedEfficiency.toFixed(3)}`
+            );
             console.log(`   Signal Generated: ${signalGenerated}`);
 
             // Verify the scaling factor affects calculations as expected
             expect(calculatedEfficiency).toBeGreaterThan(0);
-            
+
             // Higher scaling factors should result in lower efficiency for same price movement
             // (because expected movement increases, making actual movement look relatively smaller)
             if (test.factor === 20) {
@@ -164,7 +174,7 @@ describe("AbsorptionDetector - Scaling Factor Configuration", () => {
 
     it("should use default scaling factor when not specified", () => {
         console.log("🔧 TESTING: Default scaling factor behavior");
-        
+
         const configWithoutScaling: AbsorptionSettings = {
             minAggVolume: 40,
             windowMs: 60000,
@@ -189,7 +199,9 @@ describe("AbsorptionDetector - Scaling Factor Configuration", () => {
 
         // Test that detector was created successfully and uses default value
         expect(detector).toBeDefined();
-        
-        console.log("✅ Detector created successfully with default scaling factor");
+
+        console.log(
+            "✅ Detector created successfully with default scaling factor"
+        );
     });
 });

@@ -2,20 +2,25 @@
 
 /**
  * Integration Test Suite - Market Data Replay
- * 
+ *
  * Comprehensive end-to-end testing using real market data replay.
  * Tests the entire detector pipeline under realistic trading conditions.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { MarketDataReplay, MarketScenarioBuilder, type MarketScenario, type ReplayMetrics } from '../framework/marketDataReplay.js';
-import { AbsorptionDetector } from '../../src/indicators/absorptionDetector.js';
-import { ExhaustionDetector } from '../../src/indicators/exhaustionDetector.js';
-import { AccumulationZoneDetector } from '../../src/indicators/accumulationZoneDetector.js';
-import { DistributionZoneDetector } from '../../src/indicators/distributionZoneDetector.js';
-import { DeltaCVDConfirmation } from '../../src/indicators/deltaCVDConfirmation.js';
-import type { EnrichedTradeEvent } from '../../src/types/marketEvents.js';
-import type { SignalCandidate } from '../../src/types/signalTypes.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import {
+    MarketDataReplay,
+    MarketScenarioBuilder,
+    type MarketScenario,
+    type ReplayMetrics,
+} from "../framework/marketDataReplay.js";
+import { AbsorptionDetector } from "../../src/indicators/absorptionDetector.js";
+import { ExhaustionDetector } from "../../src/indicators/exhaustionDetector.js";
+import { AccumulationZoneDetector } from "../../src/indicators/accumulationZoneDetector.js";
+import { DistributionZoneDetector } from "../../src/indicators/distributionZoneDetector.js";
+import { DeltaCVDConfirmation } from "../../src/indicators/deltaCVDConfirmation.js";
+import type { EnrichedTradeEvent } from "../../src/types/marketEvents.js";
+import type { SignalCandidate } from "../../src/types/signalTypes.js";
 
 // Mock dependencies
 const mockLogger = {
@@ -30,7 +35,7 @@ const mockMetricsCollector = {
     incrementMetric: vi.fn(),
     getMetrics: vi.fn().mockReturnValue({}),
     recordLatency: vi.fn(),
-    getHealthSummary: vi.fn().mockReturnValue('healthy'),
+    getHealthSummary: vi.fn().mockReturnValue("healthy"),
     // Additional methods needed by DeltaCVDConfirmation
     createCounter: vi.fn(),
     createHistogram: vi.fn(),
@@ -72,14 +77,14 @@ interface DetectorSignalCapture {
 /**
  * Integration Test Suite for Market Data Replay
  */
-describe('Market Data Replay Integration Tests', () => {
+describe("Market Data Replay Integration Tests", () => {
     let replay: MarketDataReplay;
     let detectorSignals: Map<string, DetectorSignalCapture>;
 
     beforeEach(() => {
         replay = new MarketDataReplay(mockLogger);
         detectorSignals = new Map();
-        
+
         // Reset all mocks
         vi.clearAllMocks();
     });
@@ -88,11 +93,11 @@ describe('Market Data Replay Integration Tests', () => {
         replay.stopReplay();
     });
 
-    describe('AbsorptionDetector Integration', () => {
-        it('should detect price efficiency absorption during volume surge scenario', async () => {
+    describe("AbsorptionDetector Integration", () => {
+        it("should detect price efficiency absorption during volume surge scenario", async () => {
             // Create absorption detector with lower thresholds for testing
             const absorptionDetector = new AbsorptionDetector(
-                'LTCUSDT',
+                "LTCUSDT",
                 {
                     minAggVolume: 50, // Lower volume threshold
                     windowMs: 60000,
@@ -109,17 +114,24 @@ describe('Market Data Replay Integration Tests', () => {
             );
 
             // Set up signal capture
-            const signalCapture: DetectorSignalCapture = { signals: [], latencies: [], memoryUsage: [] };
-            absorptionDetector.on('signalCandidate', (signal: SignalCandidate) => {
-                signalCapture.signals.push(signal);
-            });
+            const signalCapture: DetectorSignalCapture = {
+                signals: [],
+                latencies: [],
+                memoryUsage: [],
+            };
+            absorptionDetector.on(
+                "signalCandidate",
+                (signal: SignalCandidate) => {
+                    signalCapture.signals.push(signal);
+                }
+            );
 
             // Load volume surge scenario
             const scenario = MarketScenarioBuilder.createVolumeSurgeScenario();
             replay.loadScenario(scenario);
 
             // Set up replay event handlers
-            replay.on('trade', (trade: EnrichedTradeEvent) => {
+            replay.on("trade", (trade: EnrichedTradeEvent) => {
                 const startTime = performance.now();
                 absorptionDetector.onEnrichedTrade(trade);
                 const latency = performance.now() - startTime;
@@ -131,7 +143,7 @@ describe('Market Data Replay Integration Tests', () => {
             await replay.startReplay({
                 speed: 100, // 100x speed for fast testing
                 enableOrderBook: true,
-                enableTiming: false
+                enableTiming: false,
             });
 
             const metrics = replay.getMetrics();
@@ -139,40 +151,45 @@ describe('Market Data Replay Integration Tests', () => {
             // Validate performance requirements
             expect(metrics.eventsProcessed).toBeGreaterThan(0);
             expect(metrics.averageLatency).toBeLessThan(5); // < 5ms per trade
-            
+
             const maxLatency = Math.max(...signalCapture.latencies);
             expect(maxLatency).toBeLessThan(10); // < 10ms max latency
 
             // Validate memory usage (should be stable)
             const memoryStart = signalCapture.memoryUsage[0];
-            const memoryEnd = signalCapture.memoryUsage[signalCapture.memoryUsage.length - 1];
+            const memoryEnd =
+                signalCapture.memoryUsage[signalCapture.memoryUsage.length - 1];
             const memoryGrowth = (memoryEnd - memoryStart) / memoryStart;
             expect(memoryGrowth).toBeLessThan(0.5); // < 50% memory growth
 
             // Validate absorption signals (may be 0 with high thresholds)
-            const absorptionSignals = signalCapture.signals.filter(s => s.type === 'absorption');
-            
+            const absorptionSignals = signalCapture.signals.filter(
+                (s) => s.type === "absorption"
+            );
+
             // Check expected absorption event if signals were generated
-            const expectedEvent = scenario.expectedEvents.find(e => e.type === 'absorption');
+            const expectedEvent = scenario.expectedEvents.find(
+                (e) => e.type === "absorption"
+            );
             if (expectedEvent && absorptionSignals.length > 0) {
-                const matchingSignals = absorptionSignals.filter(s => 
-                    s.confidence >= 0.5 // Use lower threshold for testing
+                const matchingSignals = absorptionSignals.filter(
+                    (s) => s.confidence >= 0.5 // Use lower threshold for testing
                 );
                 expect(matchingSignals.length).toBeGreaterThanOrEqual(0);
             }
-            
+
             // Integration test should at least process without errors
             expect(signalCapture.latencies.length).toBeGreaterThan(0);
 
-            detectorSignals.set('absorption', signalCapture);
+            detectorSignals.set("absorption", signalCapture);
         });
     });
 
-    describe('ExhaustionDetector Integration', () => {
-        it('should detect 12-factor exhaustion during liquidity depletion scenario', async () => {
+    describe("ExhaustionDetector Integration", () => {
+        it("should detect 12-factor exhaustion during liquidity depletion scenario", async () => {
             // Create exhaustion detector with lower thresholds for testing
             const exhaustionDetector = new ExhaustionDetector(
-                'LTCUSDT',
+                "LTCUSDT",
                 {
                     minAggVolume: 50, // Lower volume threshold
                     windowMs: 90000,
@@ -187,17 +204,24 @@ describe('Market Data Replay Integration Tests', () => {
             );
 
             // Set up signal capture
-            const signalCapture: DetectorSignalCapture = { signals: [], latencies: [], memoryUsage: [] };
-            exhaustionDetector.on('signalCandidate', (signal: SignalCandidate) => {
-                signalCapture.signals.push(signal);
-            });
+            const signalCapture: DetectorSignalCapture = {
+                signals: [],
+                latencies: [],
+                memoryUsage: [],
+            };
+            exhaustionDetector.on(
+                "signalCandidate",
+                (signal: SignalCandidate) => {
+                    signalCapture.signals.push(signal);
+                }
+            );
 
             // Load exhaustion scenario
             const scenario = MarketScenarioBuilder.createExhaustionScenario();
             replay.loadScenario(scenario);
 
             // Set up replay event handlers
-            replay.on('trade', (trade: EnrichedTradeEvent) => {
+            replay.on("trade", (trade: EnrichedTradeEvent) => {
                 const startTime = performance.now();
                 exhaustionDetector.onEnrichedTrade(trade);
                 const latency = performance.now() - startTime;
@@ -208,7 +232,7 @@ describe('Market Data Replay Integration Tests', () => {
             await replay.startReplay({
                 speed: 50, // 50x speed
                 enableOrderBook: true,
-                enableTiming: false
+                enableTiming: false,
             });
 
             const metrics = replay.getMetrics();
@@ -218,29 +242,33 @@ describe('Market Data Replay Integration Tests', () => {
             expect(metrics.averageLatency).toBeLessThan(5);
 
             // Validate exhaustion signals (may be 0 with high thresholds)
-            const exhaustionSignals = signalCapture.signals.filter(s => s.type === 'exhaustion');
+            const exhaustionSignals = signalCapture.signals.filter(
+                (s) => s.type === "exhaustion"
+            );
 
             // Check expected exhaustion event if signals were generated
-            const expectedEvent = scenario.expectedEvents.find(e => e.type === 'exhaustion');
+            const expectedEvent = scenario.expectedEvents.find(
+                (e) => e.type === "exhaustion"
+            );
             if (expectedEvent && exhaustionSignals.length > 0) {
-                const matchingSignals = exhaustionSignals.filter(s => 
-                    s.confidence >= 0.5 // Use lower threshold for testing
+                const matchingSignals = exhaustionSignals.filter(
+                    (s) => s.confidence >= 0.5 // Use lower threshold for testing
                 );
                 expect(matchingSignals.length).toBeGreaterThanOrEqual(0);
             }
-            
+
             // Integration test should at least process without errors
             expect(signalCapture.latencies.length).toBeGreaterThan(0);
 
-            detectorSignals.set('exhaustion', signalCapture);
+            detectorSignals.set("exhaustion", signalCapture);
         });
     });
 
-    describe('Simplified Zone Detection Integration', () => {
-        it('should handle zone-based detector concepts without complex dependencies', async () => {
+    describe("Simplified Zone Detection Integration", () => {
+        it("should handle zone-based detector concepts without complex dependencies", async () => {
             // Use simple AbsorptionDetector to simulate zone-based concepts
             const zoneBasedDetector = new AbsorptionDetector(
-                'LTCUSDT',
+                "LTCUSDT",
                 {
                     minAggVolume: 30,
                     windowMs: 60000,
@@ -254,17 +282,24 @@ describe('Market Data Replay Integration Tests', () => {
             );
 
             // Set up signal capture
-            const signalCapture: DetectorSignalCapture = { signals: [], latencies: [], memoryUsage: [] };
-            zoneBasedDetector.on('signalCandidate', (signal: SignalCandidate) => {
-                signalCapture.signals.push(signal);
-            });
+            const signalCapture: DetectorSignalCapture = {
+                signals: [],
+                latencies: [],
+                memoryUsage: [],
+            };
+            zoneBasedDetector.on(
+                "signalCandidate",
+                (signal: SignalCandidate) => {
+                    signalCapture.signals.push(signal);
+                }
+            );
 
             // Load accumulation scenario
             const scenario = MarketScenarioBuilder.createAccumulationScenario();
             replay.loadScenario(scenario);
 
             // Set up replay event handlers
-            replay.on('trade', (trade: EnrichedTradeEvent) => {
+            replay.on("trade", (trade: EnrichedTradeEvent) => {
                 const startTime = performance.now();
                 zoneBasedDetector.onEnrichedTrade(trade);
                 const latency = performance.now() - startTime;
@@ -275,30 +310,37 @@ describe('Market Data Replay Integration Tests', () => {
             await replay.startReplay({
                 speed: 200, // 200x speed for zone formation
                 enableOrderBook: false,
-                enableTiming: false
+                enableTiming: false,
             });
 
             const metrics = replay.getMetrics();
 
             // Validate performance requirements
             expect(metrics.eventsProcessed).toBeGreaterThan(0);
-            
+
             // Check for processing activity - zone concepts are working
             expect(signalCapture.latencies.length).toBeGreaterThan(0);
-            
-            const avgLatency = signalCapture.latencies.reduce((a, b) => a + b, 0) / signalCapture.latencies.length;
+
+            const avgLatency =
+                signalCapture.latencies.reduce((a, b) => a + b, 0) /
+                signalCapture.latencies.length;
             expect(avgLatency).toBeLessThan(2); // Should be fast for zone processing
 
-            detectorSignals.set('zone_based', signalCapture);
+            detectorSignals.set("zone_based", signalCapture);
         });
     });
 
-    describe('Multi-Detector Performance Test', () => {
-        it('should handle multiple detectors processing same data stream efficiently', async () => {
+    describe("Multi-Detector Performance Test", () => {
+        it("should handle multiple detectors processing same data stream efficiently", async () => {
             // Create multiple detectors
             const absorptionDetector = new AbsorptionDetector(
-                'LTCUSDT',
-                { minAggVolume: 200, windowMs: 60000, zoneTicks: 3, absorptionThreshold: 0.6 },
+                "LTCUSDT",
+                {
+                    minAggVolume: 200,
+                    windowMs: 60000,
+                    zoneTicks: 3,
+                    absorptionThreshold: 0.6,
+                },
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
@@ -306,8 +348,13 @@ describe('Market Data Replay Integration Tests', () => {
             );
 
             const exhaustionDetector = new ExhaustionDetector(
-                'LTCUSDT',
-                { minAggVolume: 200, windowMs: 90000, zoneTicks: 3, exhaustionThreshold: 0.6 },
+                "LTCUSDT",
+                {
+                    minAggVolume: 200,
+                    windowMs: 90000,
+                    zoneTicks: 3,
+                    exhaustionThreshold: 0.6,
+                },
                 mockLogger,
                 mockSpoofingDetector,
                 mockMetricsCollector
@@ -315,8 +362,13 @@ describe('Market Data Replay Integration Tests', () => {
 
             // Use a third absorption detector with different settings to simulate multi-detector
             const thirdDetector = new AbsorptionDetector(
-                'LTCUSDT',
-                { minAggVolume: 80, windowMs: 45000, zoneTicks: 2, absorptionThreshold: 0.4 },
+                "LTCUSDT",
+                {
+                    minAggVolume: 80,
+                    windowMs: 45000,
+                    zoneTicks: 2,
+                    absorptionThreshold: 0.4,
+                },
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
@@ -327,24 +379,29 @@ describe('Market Data Replay Integration Tests', () => {
             const allSignals: SignalCandidate[] = [];
             const allLatencies: number[] = [];
 
-            [absorptionDetector, exhaustionDetector, thirdDetector].forEach(detector => {
-                detector.on('signalCandidate', (signal: SignalCandidate) => {
-                    allSignals.push(signal);
-                });
-            });
+            [absorptionDetector, exhaustionDetector, thirdDetector].forEach(
+                (detector) => {
+                    detector.on(
+                        "signalCandidate",
+                        (signal: SignalCandidate) => {
+                            allSignals.push(signal);
+                        }
+                    );
+                }
+            );
 
             // Load complex scenario
             const scenario = MarketScenarioBuilder.createVolumeSurgeScenario();
             replay.loadScenario(scenario);
 
             // Process trades through all detectors
-            replay.on('trade', (trade: EnrichedTradeEvent) => {
+            replay.on("trade", (trade: EnrichedTradeEvent) => {
                 const startTime = performance.now();
-                
+
                 absorptionDetector.onEnrichedTrade(trade);
                 exhaustionDetector.onEnrichedTrade(trade);
                 thirdDetector.onEnrichedTrade(trade);
-                
+
                 const totalLatency = performance.now() - startTime;
                 allLatencies.push(totalLatency);
             });
@@ -353,22 +410,25 @@ describe('Market Data Replay Integration Tests', () => {
             await replay.startReplay({
                 speed: 100,
                 enableOrderBook: true,
-                enableTiming: false
+                enableTiming: false,
             });
 
             const metrics = replay.getMetrics();
 
             // Validate multi-detector performance
             expect(metrics.eventsProcessed).toBeGreaterThan(0);
-            
-            const avgLatency = allLatencies.reduce((a, b) => a + b, 0) / allLatencies.length;
+
+            const avgLatency =
+                allLatencies.reduce((a, b) => a + b, 0) / allLatencies.length;
             expect(avgLatency).toBeLessThan(15); // < 15ms for all detectors combined
-            
+
             const maxLatency = Math.max(...allLatencies);
             expect(maxLatency).toBeLessThan(50); // < 50ms max for all detectors
 
             // Memory should remain stable even with multiple detectors
-            const memoryGrowthMB = (metrics.memoryUsage.peak - metrics.memoryUsage.start) / (1024 * 1024);
+            const memoryGrowthMB =
+                (metrics.memoryUsage.peak - metrics.memoryUsage.start) /
+                (1024 * 1024);
             expect(memoryGrowthMB).toBeLessThan(100); // < 100MB growth
 
             // Should have some signal activity from at least one detector
@@ -376,24 +436,27 @@ describe('Market Data Replay Integration Tests', () => {
         });
     });
 
-    describe('Stress Test - Extended Operation', () => {
-        it('should maintain performance during extended operation with large data sets', async () => {
+    describe("Stress Test - Extended Operation", () => {
+        it("should maintain performance during extended operation with large data sets", async () => {
             // Create a large synthetic scenario
             const largeScenario: MarketScenario = {
-                name: 'Stress Test Scenario',
-                description: 'Large dataset for stress testing',
-                symbol: 'LTCUSDT',
+                name: "Stress Test Scenario",
+                description: "Large dataset for stress testing",
+                symbol: "LTCUSDT",
                 startTime: Date.now() - 3600000, // 1 hour ago
                 endTime: Date.now(),
                 expectedEvents: [],
-                data: []
+                data: [],
             };
 
             // Generate 10,000 data points (1 hour at ~3 second intervals)
             const basePrice = 65.0;
             for (let i = 0; i < 10000; i++) {
-                const timestamp = largeScenario.startTime + (i * 360); // Every 360ms
-                const price = basePrice + Math.sin(i / 100) * 0.5 + (Math.random() - 0.5) * 0.02;
+                const timestamp = largeScenario.startTime + i * 360; // Every 360ms
+                const price =
+                    basePrice +
+                    Math.sin(i / 100) * 0.5 +
+                    (Math.random() - 0.5) * 0.02;
                 const quantity = 10 + Math.random() * 50;
 
                 largeScenario.data.push({
@@ -403,15 +466,20 @@ describe('Market Data Replay Integration Tests', () => {
                         price,
                         quantity,
                         buyerIsMaker: Math.random() > 0.5,
-                        timestamp
-                    }
+                        timestamp,
+                    },
                 });
             }
 
             // Create absorption detector for stress test
             const detector = new AbsorptionDetector(
-                'LTCUSDT',
-                { minAggVolume: 200, windowMs: 60000, zoneTicks: 3, absorptionThreshold: 0.6 },
+                "LTCUSDT",
+                {
+                    minAggVolume: 200,
+                    windowMs: 60000,
+                    zoneTicks: 3,
+                    absorptionThreshold: 0.6,
+                },
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
@@ -423,11 +491,11 @@ describe('Market Data Replay Integration Tests', () => {
 
             replay.loadScenario(largeScenario);
 
-            replay.on('trade', (trade: EnrichedTradeEvent) => {
+            replay.on("trade", (trade: EnrichedTradeEvent) => {
                 const startTime = performance.now();
                 detector.onEnrichedTrade(trade);
                 latencies.push(performance.now() - startTime);
-                
+
                 // Sample memory every 1000 trades
                 if (latencies.length % 1000 === 0) {
                     memoryReadings.push(process.memoryUsage().heapUsed);
@@ -439,7 +507,7 @@ describe('Market Data Replay Integration Tests', () => {
             await replay.startReplay({
                 speed: 1000, // Very fast for stress test
                 enableOrderBook: false,
-                enableTiming: false
+                enableTiming: false,
             });
             const testDuration = Date.now() - testStart;
 
@@ -452,33 +520,41 @@ describe('Market Data Replay Integration Tests', () => {
             // Performance should remain stable throughout
             const firstHalfLatencies = latencies.slice(0, 5000);
             const secondHalfLatencies = latencies.slice(5000);
-            
-            const firstHalfAvg = firstHalfLatencies.reduce((a, b) => a + b, 0) / firstHalfLatencies.length;
-            const secondHalfAvg = secondHalfLatencies.reduce((a, b) => a + b, 0) / secondHalfLatencies.length;
-            
+
+            const firstHalfAvg =
+                firstHalfLatencies.reduce((a, b) => a + b, 0) /
+                firstHalfLatencies.length;
+            const secondHalfAvg =
+                secondHalfLatencies.reduce((a, b) => a + b, 0) /
+                secondHalfLatencies.length;
+
             // Performance degradation should be minimal
             const performanceDegradation = secondHalfAvg / firstHalfAvg;
             expect(performanceDegradation).toBeLessThan(2.0); // < 2x degradation
 
             // Memory should remain stable
             if (memoryReadings.length > 1) {
-                const memoryGrowth = (memoryReadings[memoryReadings.length - 1] - memoryReadings[0]) / memoryReadings[0];
+                const memoryGrowth =
+                    (memoryReadings[memoryReadings.length - 1] -
+                        memoryReadings[0]) /
+                    memoryReadings[0];
                 expect(memoryGrowth).toBeLessThan(1.0); // < 100% memory growth
             }
 
             // Throughput should meet requirements
-            const tradesPerSecond = metrics.eventsProcessed / (testDuration / 1000);
+            const tradesPerSecond =
+                metrics.eventsProcessed / (testDuration / 1000);
             expect(tradesPerSecond).toBeGreaterThan(100); // > 100 trades/second
         });
     });
 
-    describe('Signal Quality Validation', () => {
-        it('should generate signals with appropriate confidence levels and timing', async () => {
+    describe("Signal Quality Validation", () => {
+        it("should generate signals with appropriate confidence levels and timing", async () => {
             // Test signal quality across multiple scenarios
             const scenarios = [
                 MarketScenarioBuilder.createAccumulationScenario(),
                 MarketScenarioBuilder.createExhaustionScenario(),
-                MarketScenarioBuilder.createVolumeSurgeScenario()
+                MarketScenarioBuilder.createVolumeSurgeScenario(),
             ];
 
             const allResults: Array<{
@@ -490,8 +566,13 @@ describe('Market Data Replay Integration Tests', () => {
 
             for (const scenario of scenarios) {
                 const detector = new AbsorptionDetector(
-                    'LTCUSDT',
-                    { minAggVolume: 30, windowMs: 60000, zoneTicks: 3, absorptionThreshold: 0.3 },
+                    "LTCUSDT",
+                    {
+                        minAggVolume: 30,
+                        windowMs: 60000,
+                        zoneTicks: 3,
+                        absorptionThreshold: 0.3,
+                    },
                     mockOrderBookState,
                     mockLogger,
                     mockSpoofingDetector,
@@ -501,28 +582,28 @@ describe('Market Data Replay Integration Tests', () => {
                 const signals: SignalCandidate[] = [];
                 const timing: number[] = [];
 
-                detector.on('signalCandidate', (signal: SignalCandidate) => {
+                detector.on("signalCandidate", (signal: SignalCandidate) => {
                     signals.push(signal);
                     timing.push(Date.now());
                 });
 
                 replay.loadScenario(scenario);
 
-                replay.on('trade', (trade: EnrichedTradeEvent) => {
+                replay.on("trade", (trade: EnrichedTradeEvent) => {
                     detector.onEnrichedTrade(trade);
                 });
 
                 await replay.startReplay({
                     speed: 100,
                     enableOrderBook: true,
-                    enableTiming: false
+                    enableTiming: false,
                 });
 
                 allResults.push({
                     scenario: scenario.name,
                     signals,
                     expectedEvents: scenario.expectedEvents.length,
-                    timing
+                    timing,
                 });
             }
 
@@ -540,20 +621,28 @@ describe('Market Data Replay Integration Tests', () => {
             }
 
             // Overall signal quality assessment
-            const totalSignals = allResults.reduce((sum, r) => sum + r.signals.length, 0);
+            const totalSignals = allResults.reduce(
+                (sum, r) => sum + r.signals.length,
+                0
+            );
             expect(totalSignals).toBeGreaterThanOrEqual(0); // May be 0 if thresholds are high
         });
     });
 
-    describe('Advanced Market Scenarios', () => {
-        it('should handle flash crash scenario with exhaustion and absorption signals', async () => {
+    describe("Advanced Market Scenarios", () => {
+        it("should handle flash crash scenario with exhaustion and absorption signals", async () => {
             const scenario = MarketScenarioBuilder.createFlashCrashScenario();
             replay.loadScenario(scenario);
 
             // Create multiple detectors to catch different phases
             const absorptionDetector = new AbsorptionDetector(
-                'LTCUSDT',
-                { minAggVolume: 150, windowMs: 60000, zoneTicks: 3, absorptionThreshold: 0.7 },
+                "LTCUSDT",
+                {
+                    minAggVolume: 150,
+                    windowMs: 60000,
+                    zoneTicks: 3,
+                    absorptionThreshold: 0.7,
+                },
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
@@ -561,24 +650,47 @@ describe('Market Data Replay Integration Tests', () => {
             );
 
             const exhaustionDetector = new ExhaustionDetector(
-                'LTCUSDT',
-                { minAggVolume: 150, windowMs: 60000, zoneTicks: 3, exhaustionThreshold: 0.7 },
+                "LTCUSDT",
+                {
+                    minAggVolume: 150,
+                    windowMs: 60000,
+                    zoneTicks: 3,
+                    exhaustionThreshold: 0.7,
+                },
                 mockLogger,
                 mockSpoofingDetector,
                 mockMetricsCollector
             );
 
-            const allSignals: Array<{ type: string; signal: SignalCandidate; timestamp: number }> = [];
+            const allSignals: Array<{
+                type: string;
+                signal: SignalCandidate;
+                timestamp: number;
+            }> = [];
 
-            absorptionDetector.on('signalCandidate', (signal: SignalCandidate) => {
-                allSignals.push({ type: 'absorption', signal, timestamp: Date.now() });
-            });
+            absorptionDetector.on(
+                "signalCandidate",
+                (signal: SignalCandidate) => {
+                    allSignals.push({
+                        type: "absorption",
+                        signal,
+                        timestamp: Date.now(),
+                    });
+                }
+            );
 
-            exhaustionDetector.on('signalCandidate', (signal: SignalCandidate) => {
-                allSignals.push({ type: 'exhaustion', signal, timestamp: Date.now() });
-            });
+            exhaustionDetector.on(
+                "signalCandidate",
+                (signal: SignalCandidate) => {
+                    allSignals.push({
+                        type: "exhaustion",
+                        signal,
+                        timestamp: Date.now(),
+                    });
+                }
+            );
 
-            replay.on('trade', (trade: EnrichedTradeEvent) => {
+            replay.on("trade", (trade: EnrichedTradeEvent) => {
                 absorptionDetector.onEnrichedTrade(trade);
                 exhaustionDetector.onEnrichedTrade(trade);
             });
@@ -587,7 +699,7 @@ describe('Market Data Replay Integration Tests', () => {
             await replay.startReplay({
                 speed: 50, // Moderate speed for complex scenario
                 enableOrderBook: true,
-                enableTiming: false
+                enableTiming: false,
             });
 
             const metrics = replay.getMetrics();
@@ -597,11 +709,17 @@ describe('Market Data Replay Integration Tests', () => {
             expect(metrics.tradesProcessed).toBeGreaterThan(50);
 
             // Check for expected signal patterns during flash crash
-            const exhaustionSignals = allSignals.filter(s => s.type === 'exhaustion');
-            const absorptionSignals = allSignals.filter(s => s.type === 'absorption');
+            const exhaustionSignals = allSignals.filter(
+                (s) => s.type === "exhaustion"
+            );
+            const absorptionSignals = allSignals.filter(
+                (s) => s.type === "absorption"
+            );
 
             // Flash crash should generate some signal activity
-            expect(exhaustionSignals.length + absorptionSignals.length).toBeGreaterThanOrEqual(0);
+            expect(
+                exhaustionSignals.length + absorptionSignals.length
+            ).toBeGreaterThanOrEqual(0);
 
             // All signals should be high quality
             allSignals.forEach(({ signal }) => {
@@ -611,13 +729,18 @@ describe('Market Data Replay Integration Tests', () => {
             });
         });
 
-        it('should detect manipulation patterns and generate appropriate signals', async () => {
+        it("should detect manipulation patterns and generate appropriate signals", async () => {
             const scenario = MarketScenarioBuilder.createManipulationScenario();
             replay.loadScenario(scenario);
 
             const absorptionDetector = new AbsorptionDetector(
-                'LTCUSDT',
-                { minAggVolume: 100, windowMs: 90000, zoneTicks: 3, absorptionThreshold: 0.6 },
+                "LTCUSDT",
+                {
+                    minAggVolume: 100,
+                    windowMs: 90000,
+                    zoneTicks: 3,
+                    absorptionThreshold: 0.6,
+                },
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
@@ -627,12 +750,15 @@ describe('Market Data Replay Integration Tests', () => {
             const detectedSignals: SignalCandidate[] = [];
             const phaseTimestamps: number[] = [];
 
-            absorptionDetector.on('signalCandidate', (signal: SignalCandidate) => {
-                detectedSignals.push(signal);
-                phaseTimestamps.push(Date.now());
-            });
+            absorptionDetector.on(
+                "signalCandidate",
+                (signal: SignalCandidate) => {
+                    detectedSignals.push(signal);
+                    phaseTimestamps.push(Date.now());
+                }
+            );
 
-            replay.on('trade', (trade: EnrichedTradeEvent) => {
+            replay.on("trade", (trade: EnrichedTradeEvent) => {
                 absorptionDetector.onEnrichedTrade(trade);
             });
 
@@ -640,7 +766,7 @@ describe('Market Data Replay Integration Tests', () => {
             await replay.startReplay({
                 speed: 75,
                 enableOrderBook: true,
-                enableTiming: false
+                enableTiming: false,
             });
 
             const metrics = replay.getMetrics();
@@ -651,25 +777,31 @@ describe('Market Data Replay Integration Tests', () => {
 
             // Manipulation scenarios may produce mixed signal quality
             // Validate all signals have proper structure
-            detectedSignals.forEach(signal => {
+            detectedSignals.forEach((signal) => {
                 expect(signal.confidence).toBeGreaterThanOrEqual(0);
                 expect(signal.confidence).toBeLessThanOrEqual(1);
                 expect(Number.isFinite(signal.confidence)).toBe(true);
-                expect(typeof signal.type).toBe('string');
+                expect(typeof signal.type).toBe("string");
             });
 
             // Should handle manipulation without crashing
             expect(phaseTimestamps.length).toBeGreaterThanOrEqual(0);
         });
 
-        it('should process complex multi-phase market cycle efficiently', async () => {
-            const scenario = MarketScenarioBuilder.createComplexMarketScenario();
+        it("should process complex multi-phase market cycle efficiently", async () => {
+            const scenario =
+                MarketScenarioBuilder.createComplexMarketScenario();
             replay.loadScenario(scenario);
 
             // Use multiple detector types for comprehensive analysis
             const absorptionDetector = new AbsorptionDetector(
-                'LTCUSDT',
-                { minAggVolume: 120, windowMs: 90000, zoneTicks: 3, absorptionThreshold: 0.65 },
+                "LTCUSDT",
+                {
+                    minAggVolume: 120,
+                    windowMs: 90000,
+                    zoneTicks: 3,
+                    absorptionThreshold: 0.65,
+                },
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
@@ -678,8 +810,13 @@ describe('Market Data Replay Integration Tests', () => {
 
             // Use another absorption detector with different parameters for complexity testing
             const complexDetector = new AbsorptionDetector(
-                'LTCUSDT',
-                { minAggVolume: 60, windowMs: 120000, zoneTicks: 4, absorptionThreshold: 0.5 },
+                "LTCUSDT",
+                {
+                    minAggVolume: 60,
+                    windowMs: 120000,
+                    zoneTicks: 4,
+                    absorptionThreshold: 0.5,
+                },
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
@@ -693,25 +830,28 @@ describe('Market Data Replay Integration Tests', () => {
                 timestamp: number;
             }> = [];
 
-            absorptionDetector.on('signalCandidate', (signal: SignalCandidate) => {
+            absorptionDetector.on(
+                "signalCandidate",
+                (signal: SignalCandidate) => {
+                    phaseSignals.push({
+                        phase: "absorption",
+                        detector: "absorption",
+                        signal,
+                        timestamp: Date.now(),
+                    });
+                }
+            );
+
+            complexDetector.on("signalCandidate", (signal: SignalCandidate) => {
                 phaseSignals.push({
-                    phase: 'absorption',
-                    detector: 'absorption',
+                    phase: "complex",
+                    detector: "complex",
                     signal,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
                 });
             });
 
-            complexDetector.on('signalCandidate', (signal: SignalCandidate) => {
-                phaseSignals.push({
-                    phase: 'complex',
-                    detector: 'complex',
-                    signal,
-                    timestamp: Date.now()
-                });
-            });
-
-            replay.on('trade', (trade: EnrichedTradeEvent) => {
+            replay.on("trade", (trade: EnrichedTradeEvent) => {
                 absorptionDetector.onEnrichedTrade(trade);
                 complexDetector.onEnrichedTrade(trade);
             });
@@ -721,7 +861,7 @@ describe('Market Data Replay Integration Tests', () => {
             await replay.startReplay({
                 speed: 100, // Fast execution for complex scenario
                 enableOrderBook: false, // Reduce complexity
-                enableTiming: false
+                enableTiming: false,
             });
             const testDuration = Date.now() - testStartTime;
 
@@ -733,11 +873,17 @@ describe('Market Data Replay Integration Tests', () => {
             expect(metrics.averageLatency).toBeLessThan(3); // Should be efficient
 
             // Validate signal generation across phases
-            const complexPhase = phaseSignals.filter(s => s.phase === 'complex');
-            const absorptionPhase = phaseSignals.filter(s => s.phase === 'absorption');
+            const complexPhase = phaseSignals.filter(
+                (s) => s.phase === "complex"
+            );
+            const absorptionPhase = phaseSignals.filter(
+                (s) => s.phase === "absorption"
+            );
 
             // Should detect activity in multi-phase scenario
-            expect(complexPhase.length + absorptionPhase.length).toBeGreaterThanOrEqual(0);
+            expect(
+                complexPhase.length + absorptionPhase.length
+            ).toBeGreaterThanOrEqual(0);
 
             // All generated signals should be valid
             phaseSignals.forEach(({ signal }) => {
@@ -747,17 +893,25 @@ describe('Market Data Replay Integration Tests', () => {
             });
 
             // Performance should remain stable throughout complex scenario
-            expect(metrics.memoryUsage.peak - metrics.memoryUsage.start).toBeLessThan(50 * 1024 * 1024); // < 50MB growth
+            expect(
+                metrics.memoryUsage.peak - metrics.memoryUsage.start
+            ).toBeLessThan(50 * 1024 * 1024); // < 50MB growth
         });
 
-        it('should handle high-frequency trading environment with minimal latency', async () => {
-            const scenario = MarketScenarioBuilder.createHighFrequencyScenario();
+        it("should handle high-frequency trading environment with minimal latency", async () => {
+            const scenario =
+                MarketScenarioBuilder.createHighFrequencyScenario();
             replay.loadScenario(scenario);
 
             // Use absorption detector optimized for HFT processing
             const hftDetector = new AbsorptionDetector(
-                'LTCUSDT',
-                { minAggVolume: 10, windowMs: 30000, zoneTicks: 2, absorptionThreshold: 0.2 },
+                "LTCUSDT",
+                {
+                    minAggVolume: 10,
+                    windowMs: 30000,
+                    zoneTicks: 2,
+                    absorptionThreshold: 0.2,
+                },
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
@@ -767,11 +921,11 @@ describe('Market Data Replay Integration Tests', () => {
             const hftSignals: SignalCandidate[] = [];
             const latencyMeasurements: number[] = [];
 
-            hftDetector.on('signalCandidate', (signal: SignalCandidate) => {
+            hftDetector.on("signalCandidate", (signal: SignalCandidate) => {
                 hftSignals.push(signal);
             });
 
-            replay.on('trade', (trade: EnrichedTradeEvent) => {
+            replay.on("trade", (trade: EnrichedTradeEvent) => {
                 const startTime = performance.now();
                 hftDetector.onEnrichedTrade(trade);
                 const latency = performance.now() - startTime;
@@ -783,7 +937,7 @@ describe('Market Data Replay Integration Tests', () => {
             await replay.startReplay({
                 speed: 2000, // Very fast for HFT testing
                 enableOrderBook: false,
-                enableTiming: false
+                enableTiming: false,
             });
             const hftDuration = Date.now() - hftStartTime;
 
@@ -795,31 +949,36 @@ describe('Market Data Replay Integration Tests', () => {
             expect(metrics.averageLatency).toBeLessThan(1); // Sub-millisecond average
 
             // Individual trade processing should be very fast
-            const avgProcessingLatency = latencyMeasurements.reduce((a, b) => a + b, 0) / latencyMeasurements.length;
+            const avgProcessingLatency =
+                latencyMeasurements.reduce((a, b) => a + b, 0) /
+                latencyMeasurements.length;
             expect(avgProcessingLatency).toBeLessThan(0.5); // < 0.5ms per trade
 
             const maxProcessingLatency = Math.max(...latencyMeasurements);
             expect(maxProcessingLatency).toBeLessThan(5); // < 5ms max spike
 
             // Memory should remain stable in HFT environment
-            const memoryGrowthMB = (metrics.memoryUsage.peak - metrics.memoryUsage.start) / (1024 * 1024);
+            const memoryGrowthMB =
+                (metrics.memoryUsage.peak - metrics.memoryUsage.start) /
+                (1024 * 1024);
             expect(memoryGrowthMB).toBeLessThan(20); // < 20MB growth for HFT
 
             // HFT detector should handle high-frequency data appropriately
-            hftSignals.forEach(signal => {
+            hftSignals.forEach((signal) => {
                 expect(signal.confidence).toBeGreaterThanOrEqual(0);
                 expect(signal.confidence).toBeLessThanOrEqual(1);
                 expect(Number.isFinite(signal.confidence)).toBe(true);
             });
 
             // Throughput validation for HFT requirements
-            const tradesPerSecond = metrics.eventsProcessed / (hftDuration / 1000);
+            const tradesPerSecond =
+                metrics.eventsProcessed / (hftDuration / 1000);
             expect(tradesPerSecond).toBeGreaterThan(50); // > 50 trades/second processing
         });
     });
 
-    describe('Comprehensive Integration Validation', () => {
-        it('should run all scenarios and generate comprehensive performance report', async () => {
+    describe("Comprehensive Integration Validation", () => {
+        it("should run all scenarios and generate comprehensive performance report", async () => {
             const scenarios = [
                 MarketScenarioBuilder.createAccumulationScenario(),
                 MarketScenarioBuilder.createExhaustionScenario(),
@@ -827,7 +986,7 @@ describe('Market Data Replay Integration Tests', () => {
                 MarketScenarioBuilder.createFlashCrashScenario(),
                 MarketScenarioBuilder.createManipulationScenario(),
                 MarketScenarioBuilder.createComplexMarketScenario(),
-                MarketScenarioBuilder.createHighFrequencyScenario()
+                MarketScenarioBuilder.createHighFrequencyScenario(),
             ];
 
             const overallResults: Array<{
@@ -843,11 +1002,16 @@ describe('Market Data Replay Integration Tests', () => {
             // Run all scenarios sequentially
             for (const scenario of scenarios) {
                 const testStartTime = Date.now();
-                
+
                 try {
                     const detector = new AbsorptionDetector(
-                        'LTCUSDT',
-                        { minAggVolume: 100, windowMs: 60000, zoneTicks: 3, absorptionThreshold: 0.6 },
+                        "LTCUSDT",
+                        {
+                            minAggVolume: 100,
+                            windowMs: 60000,
+                            zoneTicks: 3,
+                            absorptionThreshold: 0.6,
+                        },
                         mockOrderBookState,
                         mockLogger,
                         mockSpoofingDetector,
@@ -855,17 +1019,17 @@ describe('Market Data Replay Integration Tests', () => {
                     );
 
                     let signalCount = 0;
-                    detector.on('signalCandidate', () => signalCount++);
+                    detector.on("signalCandidate", () => signalCount++);
 
                     replay.loadScenario(scenario);
-                    replay.on('trade', (trade: EnrichedTradeEvent) => {
+                    replay.on("trade", (trade: EnrichedTradeEvent) => {
                         detector.onEnrichedTrade(trade);
                     });
 
                     await replay.startReplay({
                         speed: 200, // Fast execution for comprehensive test
                         enableOrderBook: false,
-                        enableTiming: false
+                        enableTiming: false,
                     });
 
                     const testDuration = Date.now() - testStartTime;
@@ -876,11 +1040,13 @@ describe('Market Data Replay Integration Tests', () => {
                         duration: testDuration,
                         eventsProcessed: metrics.eventsProcessed,
                         avgLatency: metrics.averageLatency,
-                        memoryGrowthMB: (metrics.memoryUsage.peak - metrics.memoryUsage.start) / (1024 * 1024),
+                        memoryGrowthMB:
+                            (metrics.memoryUsage.peak -
+                                metrics.memoryUsage.start) /
+                            (1024 * 1024),
                         signals: signalCount,
-                        success: true
+                        success: true,
                     });
-
                 } catch (error) {
                     overallResults.push({
                         scenario: scenario.name,
@@ -889,37 +1055,52 @@ describe('Market Data Replay Integration Tests', () => {
                         avgLatency: 0,
                         memoryGrowthMB: 0,
                         signals: 0,
-                        success: false
+                        success: false,
                     });
                 }
 
                 // Allow cleanup between scenarios
-                await new Promise(resolve => setTimeout(resolve, 100));
+                await new Promise((resolve) => setTimeout(resolve, 100));
                 if (global.gc) global.gc();
             }
 
             // Validate comprehensive results
-            const successfulTests = overallResults.filter(r => r.success);
-            expect(successfulTests.length).toBeGreaterThan(scenarios.length * 0.8); // > 80% success rate
+            const successfulTests = overallResults.filter((r) => r.success);
+            expect(successfulTests.length).toBeGreaterThan(
+                scenarios.length * 0.8
+            ); // > 80% success rate
 
             // Performance validation across all scenarios
-            const totalEvents = successfulTests.reduce((sum, r) => sum + r.eventsProcessed, 0);
+            const totalEvents = successfulTests.reduce(
+                (sum, r) => sum + r.eventsProcessed,
+                0
+            );
             expect(totalEvents).toBeGreaterThan(500); // Substantial data processing
 
-            const avgLatencyAcrossAll = successfulTests.reduce((sum, r) => sum + r.avgLatency, 0) / successfulTests.length;
+            const avgLatencyAcrossAll =
+                successfulTests.reduce((sum, r) => sum + r.avgLatency, 0) /
+                successfulTests.length;
             expect(avgLatencyAcrossAll).toBeLessThan(5); // Average latency across all scenarios
 
-            const maxMemoryGrowth = Math.max(...successfulTests.map(r => r.memoryGrowthMB));
+            const maxMemoryGrowth = Math.max(
+                ...successfulTests.map((r) => r.memoryGrowthMB)
+            );
             expect(maxMemoryGrowth).toBeLessThan(100); // Memory control across scenarios
 
             // Log comprehensive results (visible in test output)
-            console.log('\n=== Integration Test Suite - Comprehensive Results ===');
-            overallResults.forEach(result => {
-                console.log(`${result.scenario}: ${result.success ? 'PASS' : 'FAIL'} - ` +
-                    `${result.eventsProcessed} events, ${result.avgLatency.toFixed(2)}ms avg, ` +
-                    `${result.memoryGrowthMB.toFixed(1)}MB mem, ${result.signals} signals`);
+            console.log(
+                "\n=== Integration Test Suite - Comprehensive Results ==="
+            );
+            overallResults.forEach((result) => {
+                console.log(
+                    `${result.scenario}: ${result.success ? "PASS" : "FAIL"} - ` +
+                        `${result.eventsProcessed} events, ${result.avgLatency.toFixed(2)}ms avg, ` +
+                        `${result.memoryGrowthMB.toFixed(1)}MB mem, ${result.signals} signals`
+                );
             });
-            console.log('========================================================\n');
+            console.log(
+                "========================================================\n"
+            );
         });
     });
 });

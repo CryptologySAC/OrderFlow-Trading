@@ -2,14 +2,17 @@
 
 /**
  * Market Data Replay Framework
- * 
+ *
  * Provides realistic market data replay capabilities for integration testing.
  * Supports historical trade data replay with proper timing and order book simulation.
  */
 
-import { EventEmitter } from 'events';
-import type { EnrichedTradeEvent, PassiveLevel } from '../../src/types/marketEvents.js';
-import type { ILogger } from '../../src/infrastructure/loggerInterface.js';
+import { EventEmitter } from "events";
+import type {
+    EnrichedTradeEvent,
+    PassiveLevel,
+} from "../../src/types/marketEvents.js";
+import type { ILogger } from "../../src/infrastructure/loggerInterface.js";
 
 export interface MarketDataSnapshot {
     timestamp: number;
@@ -34,10 +37,15 @@ export interface MarketScenario {
     startTime: number;
     endTime: number;
     expectedEvents: Array<{
-        type: 'absorption' | 'exhaustion' | 'accumulation' | 'distribution' | 'deltaCVD';
+        type:
+            | "absorption"
+            | "exhaustion"
+            | "accumulation"
+            | "distribution"
+            | "deltaCVD";
         expectedTime: number;
         expectedPrice: number;
-        expectedSide: 'buy' | 'sell';
+        expectedSide: "buy" | "sell";
         minimumConfidence: number;
         description: string;
     }>;
@@ -69,7 +77,7 @@ export interface ReplayMetrics {
 
 /**
  * Market Data Replay Engine
- * 
+ *
  * Replays historical market data with realistic timing and order book simulation.
  * Designed for comprehensive integration testing of trading algorithms.
  */
@@ -93,15 +101,15 @@ export class MarketDataReplay extends EventEmitter {
     public loadScenario(scenario: MarketScenario): void {
         this.scenario = scenario;
         this.currentDataIndex = 0;
-        this.logger.info('Market scenario loaded', {
-            component: 'MarketDataReplay',
+        this.logger.info("Market scenario loaded", {
+            component: "MarketDataReplay",
             scenarioName: scenario.name,
             dataPoints: scenario.data.length,
             timeRange: {
                 start: scenario.startTime,
                 end: scenario.endTime,
-                duration: scenario.endTime - scenario.startTime
-            }
+                duration: scenario.endTime - scenario.startTime,
+            },
         });
     }
 
@@ -110,11 +118,11 @@ export class MarketDataReplay extends EventEmitter {
      */
     public async startReplay(options: ReplayOptions): Promise<void> {
         if (!this.scenario) {
-            throw new Error('No scenario loaded. Call loadScenario() first.');
+            throw new Error("No scenario loaded. Call loadScenario() first.");
         }
 
         if (this.isReplaying) {
-            throw new Error('Replay already in progress');
+            throw new Error("Replay already in progress");
         }
 
         this.isReplaying = true;
@@ -122,17 +130,17 @@ export class MarketDataReplay extends EventEmitter {
         this.metrics = this.initializeMetrics();
         this.currentDataIndex = 0;
 
-        this.logger.info('Starting market data replay', {
-            component: 'MarketDataReplay',
+        this.logger.info("Starting market data replay", {
+            component: "MarketDataReplay",
             scenario: this.scenario.name,
             options,
-            expectedEvents: this.scenario.expectedEvents.length
+            expectedEvents: this.scenario.expectedEvents.length,
         });
 
-        this.emit('replayStart', {
+        this.emit("replayStart", {
             scenario: this.scenario.name,
             options,
-            expectedDataPoints: this.scenario.data.length
+            expectedDataPoints: this.scenario.data.length,
         });
 
         try {
@@ -142,17 +150,17 @@ export class MarketDataReplay extends EventEmitter {
                 await this.replayFastForward(options);
             }
         } catch (error) {
-            this.logger.error('Replay failed', {
-                component: 'MarketDataReplay',
+            this.logger.error("Replay failed", {
+                component: "MarketDataReplay",
                 error: error instanceof Error ? error.message : String(error),
-                dataIndex: this.currentDataIndex
+                dataIndex: this.currentDataIndex,
             });
-            this.emit('replayError', error);
+            this.emit("replayError", error);
             throw error;
         } finally {
             this.isReplaying = false;
             this.finalizeMetrics();
-            this.emit('replayComplete', this.metrics);
+            this.emit("replayComplete", this.metrics);
         }
     }
 
@@ -163,11 +171,11 @@ export class MarketDataReplay extends EventEmitter {
         if (this.isReplaying) {
             this.isReplaying = false;
             this.finalizeMetrics();
-            this.logger.info('Market data replay stopped', {
-                component: 'MarketDataReplay',
-                metrics: this.metrics
+            this.logger.info("Market data replay stopped", {
+                component: "MarketDataReplay",
+                metrics: this.metrics,
             });
-            this.emit('replayStopped', this.metrics);
+            this.emit("replayStopped", this.metrics);
         }
     }
 
@@ -179,8 +187,8 @@ export class MarketDataReplay extends EventEmitter {
             ...this.metrics,
             memoryUsage: {
                 ...this.metrics.memoryUsage,
-                current: process.memoryUsage().heapUsed
-            }
+                current: process.memoryUsage().heapUsed,
+            },
         };
     }
 
@@ -248,13 +256,13 @@ export class MarketDataReplay extends EventEmitter {
             // Process trade data
             if (snapshot.trade) {
                 const enrichedTrade = this.createEnrichedTradeEvent(snapshot);
-                this.emit('trade', enrichedTrade);
+                this.emit("trade", enrichedTrade);
                 this.metrics.tradesProcessed++;
             }
 
             // Process order book data
             if (snapshot.orderBook) {
-                this.emit('orderBook', snapshot.orderBook);
+                this.emit("orderBook", snapshot.orderBook);
                 this.metrics.orderBookUpdates++;
             }
 
@@ -263,12 +271,11 @@ export class MarketDataReplay extends EventEmitter {
             // Track latency
             const processingTime = performance.now() - processingStart;
             this.updateLatencyMetrics(processingTime);
-
         } catch (error) {
-            this.logger.error('Failed to process snapshot', {
-                component: 'MarketDataReplay',
+            this.logger.error("Failed to process snapshot", {
+                component: "MarketDataReplay",
                 snapshot,
-                error: error instanceof Error ? error.message : String(error)
+                error: error instanceof Error ? error.message : String(error),
             });
             throw error;
         }
@@ -277,9 +284,13 @@ export class MarketDataReplay extends EventEmitter {
     /**
      * Create EnrichedTradeEvent from market data snapshot
      */
-    private createEnrichedTradeEvent(snapshot: MarketDataSnapshot): EnrichedTradeEvent {
+    private createEnrichedTradeEvent(
+        snapshot: MarketDataSnapshot
+    ): EnrichedTradeEvent {
         if (!snapshot.trade || !this.scenario) {
-            throw new Error('Invalid snapshot or scenario for trade event creation');
+            throw new Error(
+                "Invalid snapshot or scenario for trade event creation"
+            );
         }
 
         // Create basic trade event
@@ -290,11 +301,13 @@ export class MarketDataReplay extends EventEmitter {
             buyerIsMaker: snapshot.trade.buyerIsMaker,
             timestamp: snapshot.trade.timestamp,
             pair: this.scenario.symbol,
-            
+
             // Add enriched data (can be enhanced with actual order book analysis)
             zonePassiveBidVolume: 0,
             zonePassiveAskVolume: 0,
-            depthSnapshot: snapshot.orderBook ? this.createDepthSnapshot(snapshot.orderBook) : undefined
+            depthSnapshot: snapshot.orderBook
+                ? this.createDepthSnapshot(snapshot.orderBook)
+                : undefined,
         };
 
         return baseEvent;
@@ -303,23 +316,25 @@ export class MarketDataReplay extends EventEmitter {
     /**
      * Create depth snapshot from order book data
      */
-    private createDepthSnapshot(orderBook: NonNullable<MarketDataSnapshot['orderBook']>): Map<number, PassiveLevel> {
+    private createDepthSnapshot(
+        orderBook: NonNullable<MarketDataSnapshot["orderBook"]>
+    ): Map<number, PassiveLevel> {
         const depthSnapshot = new Map<number, PassiveLevel>();
 
         // Process bids
-        orderBook.bids.forEach(bid => {
+        orderBook.bids.forEach((bid) => {
             depthSnapshot.set(bid.price, {
                 bid: bid.quantity,
                 ask: 0,
                 addedBid: 0,
                 consumedBid: 0,
                 addedAsk: 0,
-                consumedAsk: 0
+                consumedAsk: 0,
             });
         });
 
         // Process asks (merge with bids if same price level exists)
-        orderBook.asks.forEach(ask => {
+        orderBook.asks.forEach((ask) => {
             const existing = depthSnapshot.get(ask.price);
             if (existing) {
                 existing.ask = ask.quantity;
@@ -330,7 +345,7 @@ export class MarketDataReplay extends EventEmitter {
                     addedBid: 0,
                     consumedBid: 0,
                     addedAsk: 0,
-                    consumedAsk: 0
+                    consumedAsk: 0,
                 });
             }
         });
@@ -341,17 +356,23 @@ export class MarketDataReplay extends EventEmitter {
     /**
      * Filter data by time range if specified
      */
-    private filterDataByTimeRange(options: ReplayOptions): MarketDataSnapshot[] {
+    private filterDataByTimeRange(
+        options: ReplayOptions
+    ): MarketDataSnapshot[] {
         if (!this.scenario) return [];
 
         let data = this.scenario.data;
 
         if (options.startTime) {
-            data = data.filter(snapshot => snapshot.timestamp >= options.startTime!);
+            data = data.filter(
+                (snapshot) => snapshot.timestamp >= options.startTime!
+            );
         }
 
         if (options.endTime) {
-            data = data.filter(snapshot => snapshot.timestamp <= options.endTime!);
+            data = data.filter(
+                (snapshot) => snapshot.timestamp <= options.endTime!
+            );
         }
 
         return data.sort((a, b) => a.timestamp - b.timestamp);
@@ -372,8 +393,8 @@ export class MarketDataReplay extends EventEmitter {
             memoryUsage: {
                 start: initialMemory,
                 current: initialMemory,
-                peak: initialMemory
-            }
+                peak: initialMemory,
+            },
         };
     }
 
@@ -382,11 +403,12 @@ export class MarketDataReplay extends EventEmitter {
      */
     private updateLatencyMetrics(latency: number): void {
         this.metrics.maxLatency = Math.max(this.metrics.maxLatency, latency);
-        
+
         // Update rolling average
         const totalEvents = this.metrics.eventsProcessed;
-        this.metrics.averageLatency = 
-            (this.metrics.averageLatency * (totalEvents - 1) + latency) / totalEvents;
+        this.metrics.averageLatency =
+            (this.metrics.averageLatency * (totalEvents - 1) + latency) /
+            totalEvents;
     }
 
     /**
@@ -395,7 +417,10 @@ export class MarketDataReplay extends EventEmitter {
     private updateMetrics(): void {
         const currentMemory = process.memoryUsage().heapUsed;
         this.metrics.memoryUsage.current = currentMemory;
-        this.metrics.memoryUsage.peak = Math.max(this.metrics.memoryUsage.peak, currentMemory);
+        this.metrics.memoryUsage.peak = Math.max(
+            this.metrics.memoryUsage.peak,
+            currentMemory
+        );
     }
 
     /**
@@ -404,12 +429,14 @@ export class MarketDataReplay extends EventEmitter {
     private finalizeMetrics(): void {
         this.metrics.endTime = Date.now();
         this.updateMetrics();
-        
-        this.logger.info('Replay metrics finalized', {
-            component: 'MarketDataReplay',
+
+        this.logger.info("Replay metrics finalized", {
+            component: "MarketDataReplay",
             metrics: this.metrics,
             duration: this.metrics.endTime - this.metrics.startTime,
-            eventsPerSecond: this.metrics.eventsProcessed / ((this.metrics.endTime - this.metrics.startTime) / 1000)
+            eventsPerSecond:
+                this.metrics.eventsProcessed /
+                ((this.metrics.endTime - this.metrics.startTime) / 1000),
         });
     }
 
@@ -417,13 +444,13 @@ export class MarketDataReplay extends EventEmitter {
      * Sleep utility for timing delays
      */
     private sleep(ms: number): Promise<void> {
-        return new Promise(resolve => setTimeout(resolve, ms));
+        return new Promise((resolve) => setTimeout(resolve, ms));
     }
 }
 
 /**
  * Market Scenario Builder
- * 
+ *
  * Provides utilities for creating realistic market scenarios for testing.
  */
 export class MarketScenarioBuilder {
@@ -431,13 +458,13 @@ export class MarketScenarioBuilder {
      * Create an accumulation scenario
      */
     public static createAccumulationScenario(): MarketScenario {
-        const basePrice = 65.50;
+        const basePrice = 65.5;
         const startTime = Date.now() - 300000; // 5 minutes ago
         const data: MarketDataSnapshot[] = [];
 
         // Generate accumulation pattern: consistent buying pressure with price stability
         for (let i = 0; i < 100; i++) {
-            const timestamp = startTime + (i * 3000); // Every 3 seconds
+            const timestamp = startTime + i * 3000; // Every 3 seconds
             const price = basePrice + (Math.random() - 0.5) * 0.02; // Small price variance
             const quantity = 20 + Math.random() * 80; // 20-100 LTC trades
             const buyerIsMaker = Math.random() > 0.7; // 70% selling pressure (accumulation)
@@ -449,26 +476,29 @@ export class MarketScenarioBuilder {
                     price,
                     quantity,
                     buyerIsMaker,
-                    timestamp
-                }
+                    timestamp,
+                },
             });
         }
 
         return {
-            name: 'Institutional Accumulation',
-            description: 'Large institution accumulating position with price stability despite selling pressure',
-            symbol: 'LTCUSDT',
+            name: "Institutional Accumulation",
+            description:
+                "Large institution accumulating position with price stability despite selling pressure",
+            symbol: "LTCUSDT",
             startTime,
             endTime: startTime + 300000,
-            expectedEvents: [{
-                type: 'accumulation',
-                expectedTime: startTime + 150000, // Middle of scenario
-                expectedPrice: basePrice,
-                expectedSide: 'buy',
-                minimumConfidence: 0.7,
-                description: 'Accumulation zone formation expected'
-            }],
-            data
+            expectedEvents: [
+                {
+                    type: "accumulation",
+                    expectedTime: startTime + 150000, // Middle of scenario
+                    expectedPrice: basePrice,
+                    expectedSide: "buy",
+                    minimumConfidence: 0.7,
+                    description: "Accumulation zone formation expected",
+                },
+            ],
+            data,
         };
     }
 
@@ -476,16 +506,16 @@ export class MarketScenarioBuilder {
      * Create an exhaustion scenario
      */
     public static createExhaustionScenario(): MarketScenario {
-        const basePrice = 66.00;
+        const basePrice = 66.0;
         const startTime = Date.now() - 180000; // 3 minutes ago
         const data: MarketDataSnapshot[] = [];
 
         // Generate exhaustion pattern: increasing buy pressure leading to liquidity depletion
         for (let i = 0; i < 60; i++) {
-            const timestamp = startTime + (i * 3000);
+            const timestamp = startTime + i * 3000;
             const priceIncrease = i * 0.01; // Gradual price increase
             const price = basePrice + priceIncrease;
-            const quantity = 30 + (i * 2); // Increasing trade sizes
+            const quantity = 30 + i * 2; // Increasing trade sizes
             const buyerIsMaker = Math.random() > 0.8; // 80% buying pressure
 
             data.push({
@@ -495,31 +525,45 @@ export class MarketScenarioBuilder {
                     price,
                     quantity,
                     buyerIsMaker,
-                    timestamp
+                    timestamp,
                 },
                 orderBook: {
-                    bids: [{ price: price - 0.01, quantity: Math.max(10, 100 - i) }], // Decreasing liquidity
-                    asks: [{ price: price + 0.01, quantity: Math.max(5, 50 - i * 0.8) }],
-                    timestamp
-                }
+                    bids: [
+                        {
+                            price: price - 0.01,
+                            quantity: Math.max(10, 100 - i),
+                        },
+                    ], // Decreasing liquidity
+                    asks: [
+                        {
+                            price: price + 0.01,
+                            quantity: Math.max(5, 50 - i * 0.8),
+                        },
+                    ],
+                    timestamp,
+                },
             });
         }
 
         return {
-            name: 'Liquidity Exhaustion',
-            description: 'Progressive liquidity depletion leading to exhaustion reversal',
-            symbol: 'LTCUSDT',
+            name: "Liquidity Exhaustion",
+            description:
+                "Progressive liquidity depletion leading to exhaustion reversal",
+            symbol: "LTCUSDT",
             startTime,
             endTime: startTime + 180000,
-            expectedEvents: [{
-                type: 'exhaustion',
-                expectedTime: startTime + 150000,
-                expectedPrice: basePrice + 0.50,
-                expectedSide: 'sell', // Expect reversal
-                minimumConfidence: 0.8,
-                description: 'Ask-side exhaustion expected near end of pattern'
-            }],
-            data
+            expectedEvents: [
+                {
+                    type: "exhaustion",
+                    expectedTime: startTime + 150000,
+                    expectedPrice: basePrice + 0.5,
+                    expectedSide: "sell", // Expect reversal
+                    minimumConfidence: 0.8,
+                    description:
+                        "Ask-side exhaustion expected near end of pattern",
+                },
+            ],
+            data,
         };
     }
 
@@ -527,13 +571,13 @@ export class MarketScenarioBuilder {
      * Create a volume surge scenario for absorption testing
      */
     public static createVolumeSurgeScenario(): MarketScenario {
-        const basePrice = 64.80;
+        const basePrice = 64.8;
         const startTime = Date.now() - 120000; // 2 minutes ago
         const data: MarketDataSnapshot[] = [];
 
         // Normal trading for first half
         for (let i = 0; i < 30; i++) {
-            const timestamp = startTime + (i * 2000);
+            const timestamp = startTime + i * 2000;
             const price = basePrice + (Math.random() - 0.5) * 0.01;
             const quantity = 5 + Math.random() * 15; // Normal volume
 
@@ -544,14 +588,14 @@ export class MarketScenarioBuilder {
                     price,
                     quantity,
                     buyerIsMaker: Math.random() > 0.5,
-                    timestamp
-                }
+                    timestamp,
+                },
             });
         }
 
         // Volume surge for second half with price efficiency test
         for (let i = 30; i < 60; i++) {
-            const timestamp = startTime + (i * 2000);
+            const timestamp = startTime + i * 2000;
             const price = basePrice + (Math.random() - 0.5) * 0.005; // Reduced price movement
             const quantity = 80 + Math.random() * 120; // 4x volume surge
 
@@ -562,26 +606,30 @@ export class MarketScenarioBuilder {
                     price,
                     quantity,
                     buyerIsMaker: Math.random() > 0.3, // More selling pressure
-                    timestamp
-                }
+                    timestamp,
+                },
             });
         }
 
         return {
-            name: 'Volume Surge Absorption',
-            description: 'High volume surge with minimal price movement indicating absorption',
-            symbol: 'LTCUSDT',
+            name: "Volume Surge Absorption",
+            description:
+                "High volume surge with minimal price movement indicating absorption",
+            symbol: "LTCUSDT",
             startTime,
             endTime: startTime + 120000,
-            expectedEvents: [{
-                type: 'absorption',
-                expectedTime: startTime + 90000,
-                expectedPrice: basePrice,
-                expectedSide: 'buy',
-                minimumConfidence: 0.85,
-                description: 'Price efficiency absorption expected during volume surge'
-            }],
-            data
+            expectedEvents: [
+                {
+                    type: "absorption",
+                    expectedTime: startTime + 90000,
+                    expectedPrice: basePrice,
+                    expectedSide: "buy",
+                    minimumConfidence: 0.85,
+                    description:
+                        "Price efficiency absorption expected during volume surge",
+                },
+            ],
+            data,
         };
     }
 
@@ -589,13 +637,13 @@ export class MarketScenarioBuilder {
      * Create a flash crash scenario with aggressive selling followed by absorption
      */
     public static createFlashCrashScenario(): MarketScenario {
-        const basePrice = 66.20;
+        const basePrice = 66.2;
         const startTime = Date.now() - 240000; // 4 minutes ago
         const data: MarketDataSnapshot[] = [];
 
         // Phase 1: Normal trading (60 seconds)
         for (let i = 0; i < 20; i++) {
-            const timestamp = startTime + (i * 3000);
+            const timestamp = startTime + i * 3000;
             const price = basePrice + (Math.random() - 0.5) * 0.01;
             const quantity = 8 + Math.random() * 12;
 
@@ -606,16 +654,16 @@ export class MarketScenarioBuilder {
                     price,
                     quantity,
                     buyerIsMaker: Math.random() > 0.5,
-                    timestamp
-                }
+                    timestamp,
+                },
             });
         }
 
         // Phase 2: Flash crash - aggressive selling (30 seconds)
         for (let i = 20; i < 30; i++) {
-            const timestamp = startTime + (i * 3000);
+            const timestamp = startTime + i * 3000;
             const crashProgress = (i - 20) / 10; // 0 to 1 progress
-            const price = basePrice - (crashProgress * 0.15); // Drop $0.15
+            const price = basePrice - crashProgress * 0.15; // Drop $0.15
             const quantity = 150 + Math.random() * 200; // Large sell orders
 
             data.push({
@@ -625,27 +673,33 @@ export class MarketScenarioBuilder {
                     price,
                     quantity,
                     buyerIsMaker: Math.random() > 0.85, // 85% selling pressure
-                    timestamp
+                    timestamp,
                 },
                 orderBook: {
                     bids: [
-                        { price: price - 0.01, quantity: Math.max(5, 50 - (i - 20) * 4) },
-                        { price: price - 0.02, quantity: Math.max(3, 30 - (i - 20) * 2) }
+                        {
+                            price: price - 0.01,
+                            quantity: Math.max(5, 50 - (i - 20) * 4),
+                        },
+                        {
+                            price: price - 0.02,
+                            quantity: Math.max(3, 30 - (i - 20) * 2),
+                        },
                     ],
                     asks: [
                         { price: price + 0.01, quantity: 200 + (i - 20) * 50 },
-                        { price: price + 0.02, quantity: 150 + (i - 20) * 30 }
+                        { price: price + 0.02, quantity: 150 + (i - 20) * 30 },
                     ],
-                    timestamp
-                }
+                    timestamp,
+                },
             });
         }
 
         // Phase 3: Institutional absorption - buying the dip (90 seconds)
         for (let i = 30; i < 60; i++) {
-            const timestamp = startTime + (i * 3000);
+            const timestamp = startTime + i * 3000;
             const absorptionProgress = (i - 30) / 30; // 0 to 1 progress
-            const price = (basePrice - 0.15) + (absorptionProgress * 0.08); // Partial recovery
+            const price = basePrice - 0.15 + absorptionProgress * 0.08; // Partial recovery
             const quantity = 80 + Math.random() * 120; // Institutional size
 
             data.push({
@@ -655,36 +709,39 @@ export class MarketScenarioBuilder {
                     price,
                     quantity,
                     buyerIsMaker: Math.random() > 0.25, // 75% buying pressure
-                    timestamp
-                }
+                    timestamp,
+                },
             });
         }
 
         return {
-            name: 'Flash Crash with Institutional Absorption',
-            description: 'Sudden price drop followed by institutional buying and absorption',
-            symbol: 'LTCUSDT',
+            name: "Flash Crash with Institutional Absorption",
+            description:
+                "Sudden price drop followed by institutional buying and absorption",
+            symbol: "LTCUSDT",
             startTime,
             endTime: startTime + 240000,
             expectedEvents: [
                 {
-                    type: 'exhaustion',
+                    type: "exhaustion",
                     expectedTime: startTime + 90000, // During crash
                     expectedPrice: basePrice - 0.12,
-                    expectedSide: 'sell',
+                    expectedSide: "sell",
                     minimumConfidence: 0.8,
-                    description: 'Sell-side exhaustion expected during flash crash'
+                    description:
+                        "Sell-side exhaustion expected during flash crash",
                 },
                 {
-                    type: 'absorption',
+                    type: "absorption",
                     expectedTime: startTime + 150000, // During recovery
                     expectedPrice: basePrice - 0.08,
-                    expectedSide: 'buy',
+                    expectedSide: "buy",
                     minimumConfidence: 0.85,
-                    description: 'Institutional absorption during price recovery'
-                }
+                    description:
+                        "Institutional absorption during price recovery",
+                },
             ],
-            data
+            data,
         };
     }
 
@@ -698,7 +755,7 @@ export class MarketScenarioBuilder {
 
         // Phase 1: Setup - normal trading (120 seconds)
         for (let i = 0; i < 40; i++) {
-            const timestamp = startTime + (i * 3000);
+            const timestamp = startTime + i * 3000;
             const price = basePrice + (Math.random() - 0.5) * 0.015;
             const quantity = 10 + Math.random() * 20;
 
@@ -709,20 +766,22 @@ export class MarketScenarioBuilder {
                     price,
                     quantity,
                     buyerIsMaker: Math.random() > 0.5,
-                    timestamp
-                }
+                    timestamp,
+                },
             });
         }
 
         // Phase 2: Manipulation attempt - fake breakout with spoof orders (60 seconds)
         for (let i = 40; i < 60; i++) {
-            const timestamp = startTime + (i * 3000);
+            const timestamp = startTime + i * 3000;
             const manipulationProgress = (i - 40) / 20;
-            const price = basePrice + (manipulationProgress * 0.05); // Fake upward move
-            
+            const price = basePrice + manipulationProgress * 0.05; // Fake upward move
+
             // Alternating pattern: small real trades and large spoof orders
             const isRealTrade = i % 3 !== 0;
-            const quantity = isRealTrade ? 5 + Math.random() * 10 : 300 + Math.random() * 500;
+            const quantity = isRealTrade
+                ? 5 + Math.random() * 10
+                : 300 + Math.random() * 500;
 
             data.push({
                 timestamp,
@@ -731,28 +790,40 @@ export class MarketScenarioBuilder {
                     price,
                     quantity,
                     buyerIsMaker: Math.random() > 0.7, // Fake buying pressure
-                    timestamp
+                    timestamp,
                 },
                 orderBook: {
                     bids: [
                         // Large fake bid orders that will be cancelled
-                        { price: price - 0.01, quantity: isRealTrade ? 50 : 1000 },
-                        { price: price - 0.02, quantity: isRealTrade ? 30 : 800 }
+                        {
+                            price: price - 0.01,
+                            quantity: isRealTrade ? 50 : 1000,
+                        },
+                        {
+                            price: price - 0.02,
+                            quantity: isRealTrade ? 30 : 800,
+                        },
                     ],
                     asks: [
-                        { price: price + 0.01, quantity: 20 + Math.random() * 30 },
-                        { price: price + 0.02, quantity: 15 + Math.random() * 25 }
+                        {
+                            price: price + 0.01,
+                            quantity: 20 + Math.random() * 30,
+                        },
+                        {
+                            price: price + 0.02,
+                            quantity: 15 + Math.random() * 25,
+                        },
                     ],
-                    timestamp
-                }
+                    timestamp,
+                },
             });
         }
 
         // Phase 3: Manipulation failure - real selling pressure emerges (120 seconds)
         for (let i = 60; i < 100; i++) {
-            const timestamp = startTime + (i * 3000);
+            const timestamp = startTime + i * 3000;
             const failureProgress = (i - 60) / 40;
-            const price = (basePrice + 0.05) - (failureProgress * 0.08); // Price collapse
+            const price = basePrice + 0.05 - failureProgress * 0.08; // Price collapse
             const quantity = 40 + Math.random() * 80; // Real selling volume
 
             data.push({
@@ -762,36 +833,38 @@ export class MarketScenarioBuilder {
                     price,
                     quantity,
                     buyerIsMaker: Math.random() > 0.8, // Heavy selling
-                    timestamp
-                }
+                    timestamp,
+                },
             });
         }
 
         return {
-            name: 'Market Manipulation with Failed Breakout',
-            description: 'Attempted price manipulation followed by genuine selling pressure',
-            symbol: 'LTCUSDT',
+            name: "Market Manipulation with Failed Breakout",
+            description:
+                "Attempted price manipulation followed by genuine selling pressure",
+            symbol: "LTCUSDT",
             startTime,
             endTime: startTime + 360000,
             expectedEvents: [
                 {
-                    type: 'absorption',
+                    type: "absorption",
                     expectedTime: startTime + 180000, // During manipulation
                     expectedPrice: basePrice + 0.03,
-                    expectedSide: 'buy',
+                    expectedSide: "buy",
                     minimumConfidence: 0.7, // Lower confidence due to manipulation
-                    description: 'Potential false absorption during manipulation phase'
+                    description:
+                        "Potential false absorption during manipulation phase",
                 },
                 {
-                    type: 'exhaustion',
+                    type: "exhaustion",
                     expectedTime: startTime + 280000, // During failure
                     expectedPrice: basePrice - 0.02,
-                    expectedSide: 'sell',
+                    expectedSide: "sell",
                     minimumConfidence: 0.85,
-                    description: 'Genuine exhaustion as manipulation fails'
-                }
+                    description: "Genuine exhaustion as manipulation fails",
+                },
             ],
-            data
+            data,
         };
     }
 
@@ -799,13 +872,13 @@ export class MarketScenarioBuilder {
      * Create a complex multi-phase scenario with multiple signal types
      */
     public static createComplexMarketScenario(): MarketScenario {
-        const basePrice = 64.90;
+        const basePrice = 64.9;
         const startTime = Date.now() - 480000; // 8 minutes ago
         const data: MarketDataSnapshot[] = [];
 
         // Phase 1: Accumulation phase (120 seconds)
         for (let i = 0; i < 40; i++) {
-            const timestamp = startTime + (i * 3000);
+            const timestamp = startTime + i * 3000;
             const price = basePrice + (Math.random() - 0.5) * 0.008; // Very tight range
             const quantity = 15 + Math.random() * 25;
 
@@ -816,16 +889,16 @@ export class MarketScenarioBuilder {
                     price,
                     quantity,
                     buyerIsMaker: Math.random() > 0.65, // 65% selling into accumulation
-                    timestamp
-                }
+                    timestamp,
+                },
             });
         }
 
         // Phase 2: Breakout with volume surge (60 seconds)
         for (let i = 40; i < 60; i++) {
-            const timestamp = startTime + (i * 3000);
+            const timestamp = startTime + i * 3000;
             const breakoutProgress = (i - 40) / 20;
-            const price = basePrice + (breakoutProgress * 0.06); // $0.06 breakout
+            const price = basePrice + breakoutProgress * 0.06; // $0.06 breakout
             const quantity = 100 + Math.random() * 150; // High volume breakout
 
             data.push({
@@ -835,16 +908,16 @@ export class MarketScenarioBuilder {
                     price,
                     quantity,
                     buyerIsMaker: Math.random() > 0.8, // Strong buying
-                    timestamp
-                }
+                    timestamp,
+                },
             });
         }
 
         // Phase 3: Failed breakout and exhaustion (60 seconds)
         for (let i = 60; i < 80; i++) {
-            const timestamp = startTime + (i * 3000);
+            const timestamp = startTime + i * 3000;
             const failureProgress = (i - 60) / 20;
-            const price = (basePrice + 0.06) - (failureProgress * 0.04); // Pullback
+            const price = basePrice + 0.06 - failureProgress * 0.04; // Pullback
             const quantity = 80 + Math.random() * 120;
 
             data.push({
@@ -854,14 +927,14 @@ export class MarketScenarioBuilder {
                     price,
                     quantity,
                     buyerIsMaker: Math.random() > 0.75, // Continued selling
-                    timestamp
-                }
+                    timestamp,
+                },
             });
         }
 
         // Phase 4: Support test and absorption (120 seconds)
         for (let i = 80; i < 120; i++) {
-            const timestamp = startTime + (i * 3000);
+            const timestamp = startTime + i * 3000;
             const supportLevel = basePrice + 0.01; // Near original level
             const price = supportLevel + (Math.random() - 0.5) * 0.006; // Testing support
             const quantity = 60 + Math.random() * 100;
@@ -873,52 +946,53 @@ export class MarketScenarioBuilder {
                     price,
                     quantity,
                     buyerIsMaker: Math.random() > 0.4, // Mixed but buying bias
-                    timestamp
-                }
+                    timestamp,
+                },
             });
         }
 
         return {
-            name: 'Complex Multi-Phase Market Cycle',
-            description: 'Complete market cycle: accumulation → breakout → failure → support test',
-            symbol: 'LTCUSDT',
+            name: "Complex Multi-Phase Market Cycle",
+            description:
+                "Complete market cycle: accumulation → breakout → failure → support test",
+            symbol: "LTCUSDT",
             startTime,
             endTime: startTime + 480000,
             expectedEvents: [
                 {
-                    type: 'accumulation',
+                    type: "accumulation",
                     expectedTime: startTime + 60000,
                     expectedPrice: basePrice,
-                    expectedSide: 'buy',
+                    expectedSide: "buy",
                     minimumConfidence: 0.75,
-                    description: 'Accumulation zone during tight range trading'
+                    description: "Accumulation zone during tight range trading",
                 },
                 {
-                    type: 'absorption',
+                    type: "absorption",
                     expectedTime: startTime + 150000,
                     expectedPrice: basePrice + 0.03,
-                    expectedSide: 'buy',
+                    expectedSide: "buy",
                     minimumConfidence: 0.8,
-                    description: 'Volume absorption during breakout attempt'
+                    description: "Volume absorption during breakout attempt",
                 },
                 {
-                    type: 'exhaustion',
+                    type: "exhaustion",
                     expectedTime: startTime + 240000,
                     expectedPrice: basePrice + 0.02,
-                    expectedSide: 'sell',
+                    expectedSide: "sell",
                     minimumConfidence: 0.85,
-                    description: 'Exhaustion as breakout fails'
+                    description: "Exhaustion as breakout fails",
                 },
                 {
-                    type: 'absorption',
+                    type: "absorption",
                     expectedTime: startTime + 360000,
                     expectedPrice: basePrice + 0.01,
-                    expectedSide: 'buy',
+                    expectedSide: "buy",
                     minimumConfidence: 0.9,
-                    description: 'Strong absorption at support retest'
-                }
+                    description: "Strong absorption at support retest",
+                },
             ],
-            data
+            data,
         };
     }
 
@@ -926,15 +1000,16 @@ export class MarketScenarioBuilder {
      * Create a high-frequency trading scenario with micro-movements
      */
     public static createHighFrequencyScenario(): MarketScenario {
-        const basePrice = 65.40;
+        const basePrice = 65.4;
         const startTime = Date.now() - 90000; // 1.5 minutes ago
         const data: MarketDataSnapshot[] = [];
 
         // Generate high-frequency data (500ms intervals)
         for (let i = 0; i < 180; i++) {
-            const timestamp = startTime + (i * 500); // Every 500ms
+            const timestamp = startTime + i * 500; // Every 500ms
             const microMovement = Math.sin(i / 10) * 0.001; // Small oscillations
-            const price = basePrice + microMovement + (Math.random() - 0.5) * 0.0005;
+            const price =
+                basePrice + microMovement + (Math.random() - 0.5) * 0.0005;
             const quantity = 1 + Math.random() * 5; // Small HFT sizes
 
             data.push({
@@ -944,8 +1019,8 @@ export class MarketScenarioBuilder {
                     price,
                     quantity,
                     buyerIsMaker: Math.random() > 0.5,
-                    timestamp
-                }
+                    timestamp,
+                },
             });
 
             // Occasionally inject larger institutional trades
@@ -957,29 +1032,30 @@ export class MarketScenarioBuilder {
                         price: price + (Math.random() - 0.5) * 0.002,
                         quantity: 50 + Math.random() * 100,
                         buyerIsMaker: Math.random() > 0.6,
-                        timestamp: timestamp + 100
-                    }
+                        timestamp: timestamp + 100,
+                    },
                 });
             }
         }
 
         return {
-            name: 'High-Frequency Trading Environment',
-            description: 'Dense HFT activity with occasional institutional trades',
-            symbol: 'LTCUSDT',
+            name: "High-Frequency Trading Environment",
+            description:
+                "Dense HFT activity with occasional institutional trades",
+            symbol: "LTCUSDT",
             startTime,
             endTime: startTime + 90000,
             expectedEvents: [
                 {
-                    type: 'deltaCVD',
+                    type: "deltaCVD",
                     expectedTime: startTime + 45000,
                     expectedPrice: basePrice,
-                    expectedSide: 'buy',
+                    expectedSide: "buy",
                     minimumConfidence: 0.6,
-                    description: 'CVD signals in high-frequency environment'
-                }
+                    description: "CVD signals in high-frequency environment",
+                },
             ],
-            data
+            data,
         };
     }
 }

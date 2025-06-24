@@ -389,12 +389,24 @@ const features = {
 
 ## 🔧 Technical Implementation
 
+### **Algorithm Complexity:**
+
+For detailed performance analysis and complexity metrics, see [Algorithm Complexity Analysis](./Algorithm-Complexity-Analysis.md#2-exhaustiondetector---12-factor-statistical-scoring).
+
+**Performance Summary:**
+
+- **Time Complexity**: `O(n·m)` where n = trade window, m = passive volume samples
+- **Space Complexity**: `O(n+m)` bounded by time windows
+- **CPU Intensity**: ⭐⭐⭐⭐ (High - 12-factor statistical operations)
+- **Target Latency**: < 2ms per trade for institutional requirements
+
 ### **Memory Management:**
 
 - **Circular buffers** for exhaustion zone tracking
 - **Time-based cleanup** for expired zones and depletion data
 - **Efficient depletion ratio calculations** with O(1) lookups
 - **Volume analyzer integration** with shared framework
+- **Bounded sample windows** prevent unbounded growth
 
 ### **Performance Optimizations:**
 
@@ -402,6 +414,7 @@ const features = {
 - **Batched depletion calculations** for efficiency
 - **Resource-conscious zone management** (max 50 active zones)
 - **Automatic cleanup** of aged exhaustion data (30-minute limit)
+- **12-factor scoring optimization** with weighted computation
 
 ## 🎯 Key Trading Insights
 
