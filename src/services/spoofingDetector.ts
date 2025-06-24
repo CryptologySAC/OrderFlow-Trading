@@ -20,6 +20,28 @@ export interface SpoofingDetectorConfig {
     algorithmicPatternThreshold?: number; // 0.9 = 90% pattern similarity for bot detection
     layeringDetectionLevels?: number; // 3 = number of price levels to check for layering
     ghostLiquidityThresholdMs?: number; // 200ms = time window for ghost liquidity detection
+
+    // Previously hardcoded values now configurable
+    passiveHistoryCacheTTL?: number; // Default: 300000 (5 minutes) - TTL for passive change history
+    orderPlacementCacheTTL?: number; // Default: 300000 (5 minutes) - TTL for order placement history
+    cancellationPatternCacheTTL?: number; // Default: 300000 (5 minutes) - TTL for cancellation patterns
+    maxPlacementHistoryPerPrice?: number; // Default: 20 - max placements tracked per price level
+    maxPassiveHistoryPerPrice?: number; // Default: 10 - max passive changes tracked per price level
+    wallPullThresholdRatio?: number; // Default: 0.6 - ratio of wall drop to consider as spoofing
+    wallPullTimeThresholdMs?: number; // Default: 1200 - max time for wall pull to be considered spoofing
+    canceledToExecutedRatio?: number; // Default: 0.7 - min ratio of canceled to executed for spoof confirmation
+    bandOffsetDivisor?: number; // Default: 2 - divisor for calculating band offset range
+    pricePrecisionDecimals?: number; // Default: 8 - decimal places for price normalization
+    priceScalingFactor?: number; // Default: 100000000 - factor for scaled price calculations
+    minConfidenceScore?: number; // Default: 0.95 - maximum confidence score cap
+    historyScanTimeWindowMs?: number; // Default: 2000 - time window to scan back in history
+    priceDeviationTickMultiplier?: number; // Default: 2 - multiplier for price deviation in zone creation
+    layeringMinCoordinatedLevels?: number; // Default: 2 - minimum coordinated levels for layering detection
+    layeringMaxConfidence?: number; // Default: 0.9 - maximum confidence for layering detection
+    ghostLiquidityDisappearanceRatio?: number; // Default: 0.85 - ratio of liquidity disappearance for ghost detection
+    ghostLiquidityConfidence?: number; // Default: 0.85 - confidence score for ghost liquidity detection
+    highSignificanceThreshold?: number; // Default: 0.8 - threshold for high significance events
+    mediumSignificanceThreshold?: number; // Default: 0.6 - threshold for medium significance events
 }
 
 export interface SpoofingEvent {
@@ -72,13 +94,13 @@ export interface SpoofingZone {
 }
 
 export class SpoofingDetector extends EventEmitter {
-    private passiveChangeHistory = new TimeAwareCache<
+    private passiveChangeHistory: TimeAwareCache<
         number,
         { time: number; bid: number; ask: number }[]
-    >(300000); // 5 minutes TTL
+    >;
 
     // Enhanced tracking for real spoofing detection
-    private orderPlacementHistory = new TimeAwareCache<
+    private orderPlacementHistory: TimeAwareCache<
         number,
         {
             time: number;
@@ -86,9 +108,9 @@ export class SpoofingDetector extends EventEmitter {
             quantity: number;
             placementId: string;
         }[]
-    >(300000); // Track order placements
+    >;
 
-    private cancellationPatterns = new TimeAwareCache<
+    private cancellationPatterns: TimeAwareCache<
         string,
         {
             placementTime: number;
@@ -97,7 +119,7 @@ export class SpoofingDetector extends EventEmitter {
             quantity: number;
             side: "bid" | "ask";
         }
-    >(300000); // Track cancellation patterns
+    >;
 
     private config: SpoofingDetectorConfig;
     private logger?: ILogger;
@@ -107,6 +129,37 @@ export class SpoofingDetector extends EventEmitter {
         super();
         this.config = config;
         this.logger = logger;
+
+        // Initialize caches with configurable TTLs
+        const passiveTTL = config.passiveHistoryCacheTTL ?? 300000;
+        const placementTTL = config.orderPlacementCacheTTL ?? 300000;
+        const cancellationTTL = config.cancellationPatternCacheTTL ?? 300000;
+
+        this.passiveChangeHistory = new TimeAwareCache<
+            number,
+            { time: number; bid: number; ask: number }[]
+        >(passiveTTL);
+
+        this.orderPlacementHistory = new TimeAwareCache<
+            number,
+            {
+                time: number;
+                side: "bid" | "ask";
+                quantity: number;
+                placementId: string;
+            }[]
+        >(placementTTL);
+
+        this.cancellationPatterns = new TimeAwareCache<
+            string,
+            {
+                placementTime: number;
+                cancellationTime: number;
+                price: number;
+                quantity: number;
+                side: "bid" | "ask";
+            }
+        >(cancellationTTL);
     }
 
     /**
@@ -184,7 +237,8 @@ export class SpoofingDetector extends EventEmitter {
      * This ensures consistent price keys and prevents memory bloat from slight precision differences.
      */
     private normalizePrice(price: number): number {
-        return Number(price.toFixed(8));
+        const precision = this.config.pricePrecisionDecimals ?? 8;
+        return Number(price.toFixed(precision));
     }
 
     /**
@@ -229,8 +283,9 @@ export class SpoofingDetector extends EventEmitter {
         const normalizedPrice = this.normalizePrice(validPrice);
         let history = this.orderPlacementHistory.get(normalizedPrice) || [];
         history.push({ time: now, side, quantity: validQuantity, placementId });
-        if (history.length > 20) {
-            history.shift(); // Keep last 20 placements per price level
+        const maxHistory = this.config.maxPlacementHistoryPerPrice ?? 20;
+        if (history.length > maxHistory) {
+            history.shift(); // Keep last N placements per price level
         }
         this.orderPlacementHistory.set(normalizedPrice, history);
     }
@@ -310,7 +365,8 @@ export class SpoofingDetector extends EventEmitter {
         const normalizedPrice = this.normalizePrice(validPrice);
         let history = this.passiveChangeHistory.get(normalizedPrice) || [];
         history.push({ time: now, bid: validBid, ask: validAsk });
-        if (history.length > 10) {
+        const maxHistory = this.config.maxPassiveHistoryPerPrice ?? 10;
+        if (history.length > maxHistory) {
             history.shift(); // Remove oldest item instead of creating new array
         }
         this.passiveChangeHistory.set(normalizedPrice, history);
@@ -381,16 +437,18 @@ export class SpoofingDetector extends EventEmitter {
         let maxSpoofEvent: SpoofingEvent | null = null;
 
         // Performance optimization: Pre-calculate all band prices to avoid repeated floating-point operations in hot path
-        const scaledPrice = Math.round(price * 100000000); // 8 decimal places
-        const scaledTickSize = Math.round(tickSize * 100000000);
+        const scalingFactor = this.config.priceScalingFactor ?? 100000000;
+        const scaledPrice = Math.round(price * scalingFactor);
+        const scaledTickSize = Math.round(tickSize * scalingFactor);
+        const bandOffsetDivisor = this.config.bandOffsetDivisor ?? 2;
         const bandPrices: number[] = [];
         for (
-            let offset = -Math.floor(wallBand / 2);
-            offset <= Math.floor(wallBand / 2);
+            let offset = -Math.floor(wallBand / bandOffsetDivisor);
+            offset <= Math.floor(wallBand / bandOffsetDivisor);
             offset++
         ) {
             const bandPrice =
-                (scaledPrice + offset * scaledTickSize) / 100000000;
+                (scaledPrice + offset * scaledTickSize) / scalingFactor;
             bandPrices.push(this.normalizePrice(bandPrice));
         }
 
@@ -440,10 +498,13 @@ export class SpoofingDetector extends EventEmitter {
                 }
                 const delta = prevQty - currQty;
                 if (prevQty < minWallSize) continue; // ignore small walls
+                const wallPullRatio = this.config.wallPullThresholdRatio ?? 0.6;
+                const wallPullTimeMs =
+                    this.config.wallPullTimeThresholdMs ?? 1200;
                 if (
                     prevQty > 0 &&
-                    delta / prevQty > 0.6 &&
-                    curr.time - prev.time < 1200
+                    delta / prevQty > wallPullRatio &&
+                    curr.time - prev.time < wallPullTimeMs
                 ) {
                     // Check what was actually executed
                     const executed = getAggressiveVolume(
@@ -483,9 +544,11 @@ export class SpoofingDetector extends EventEmitter {
 
                     // Only count as spoof if most was canceled, not executed
                     // 🔧 FIX: Use safe ratio to prevent division by zero
+                    const cancelRatio =
+                        this.config.canceledToExecutedRatio ?? 0.7;
                     if (
                         delta > 0 &&
-                        this.safeRatio(canceled, delta, 0) > 0.7 &&
+                        this.safeRatio(canceled, delta, 0) > cancelRatio &&
                         canceled >= minWallSize
                     ) {
                         spoofDetected = true;
@@ -517,7 +580,7 @@ export class SpoofingDetector extends EventEmitter {
                                             : "bid", // Fallback logic for backward compatibility
                                 spoofType: "fake_wall",
                                 confidence: Math.min(
-                                    0.95,
+                                    this.config.minConfidenceScore ?? 0.95,
                                     this.safeRatio(canceled, prevQty, 0)
                                 ),
                                 cancelTimeMs: curr.time - prev.time,
@@ -526,7 +589,8 @@ export class SpoofingDetector extends EventEmitter {
                         }
                     }
                 }
-                if (curr.time < tradeTime - 2000) break;
+                const scanWindow = this.config.historyScanTimeWindowMs ?? 2000;
+                if (curr.time < tradeTime - scanWindow) break;
             }
         }
 
@@ -560,9 +624,10 @@ export class SpoofingDetector extends EventEmitter {
         const priceRange = Math.abs(
             spoofingEvent.priceEnd - spoofingEvent.priceStart
         );
+        const tickMultiplier = this.config.priceDeviationTickMultiplier ?? 2;
         const priceDeviation = Math.max(
             priceRange / 2,
-            this.config.tickSize * 2
+            this.config.tickSize * tickMultiplier
         );
 
         const spoofingZone: SpoofingZone = {
@@ -596,9 +661,11 @@ export class SpoofingDetector extends EventEmitter {
                 updateType: "zone_created",
                 zone: spoofingZone,
                 significance:
-                    spoofingEvent.confidence > 0.8
+                    spoofingEvent.confidence >
+                    (this.config.highSignificanceThreshold ?? 0.8)
                         ? "high"
-                        : spoofingEvent.confidence > 0.6
+                        : spoofingEvent.confidence >
+                            (this.config.mediumSignificanceThreshold ?? 0.6)
                           ? "medium"
                           : "low",
             });
@@ -664,7 +731,7 @@ export class SpoofingDetector extends EventEmitter {
                     spoofedSide: side === "buy" ? "bid" : "ask",
                     spoofType: "fake_wall",
                     confidence: Math.min(
-                        0.95,
+                        this.config.minConfidenceScore ?? 0.95,
                         this.safeRatio(delta, prevQty, 0)
                     ),
                     cancelTimeMs: timeDiff,
@@ -711,7 +778,8 @@ export class SpoofingDetector extends EventEmitter {
         }
 
         // Layering requires coordinated cancellations across multiple levels
-        if (layeredCancellations >= 2) {
+        const minCoordinated = this.config.layeringMinCoordinatedLevels ?? 2;
+        if (layeredCancellations >= minCoordinated) {
             // 🔧 FIX: Use safe division to prevent division by zero
             avgCancelTime = this.safeDivision(
                 avgCancelTime,
@@ -730,7 +798,7 @@ export class SpoofingDetector extends EventEmitter {
                 spoofedSide: side === "buy" ? "bid" : "ask",
                 spoofType: "layering",
                 confidence: Math.min(
-                    0.9,
+                    this.config.layeringMaxConfidence ?? 0.9,
                     this.safeRatio(layeredCancellations, layeringLevels, 0)
                 ),
                 cancelTimeMs: avgCancelTime,
@@ -787,7 +855,8 @@ export class SpoofingDetector extends EventEmitter {
                 midQty >= this.config.minWallSize &&
                 lateQty < this.config.minWallSize &&
                 totalTimeMs < ghostThresholdMs &&
-                disappearanceRatio > 0.85
+                disappearanceRatio >
+                    (this.config.ghostLiquidityDisappearanceRatio ?? 0.85)
             ) {
                 // >85% of liquidity must disappear
 
@@ -802,7 +871,7 @@ export class SpoofingDetector extends EventEmitter {
                     timestamp: latest.time,
                     spoofedSide: side === "buy" ? "bid" : "ask",
                     spoofType: "ghost_liquidity",
-                    confidence: 0.85,
+                    confidence: this.config.ghostLiquidityConfidence ?? 0.85,
                     cancelTimeMs: latest.time - middle.time,
                     marketImpact: 0,
                 };
