@@ -38,6 +38,7 @@ export interface AbsorptionSettings extends BaseDetectorSettings {
 
     // Price efficiency and threshold parameters (previously hardcoded)
     priceEfficiencyThreshold?: number; // Price efficiency threshold for absorption detection (default 0.85)
+    priceEfficiencyScalingFactor?: number; // Scaling factor for price efficiency calculation (default 10)
 
     // Volume surge detection parameters for enhanced absorption analysis
     volumeSurgeMultiplier?: number; // Volume surge threshold for absorption validation
@@ -98,6 +99,7 @@ export class AbsorptionDetector
     private readonly icebergConfidenceMultiplier: number;
     private readonly maxAbsorptionRatio: number;
     private readonly priceEfficiencyThreshold: number;
+    private readonly priceEfficiencyScalingFactor: number;
 
     // Advanced tracking
     private readonly absorptionHistory = new Map<number, AbsorptionEvent[]>();
@@ -149,6 +151,8 @@ export class AbsorptionDetector
         this.maxAbsorptionRatio = settings.maxAbsorptionRatio ?? 0.5;
         this.priceEfficiencyThreshold =
             settings.priceEfficiencyThreshold ?? 0.85;
+        this.priceEfficiencyScalingFactor =
+            settings.priceEfficiencyScalingFactor ?? 10;
 
         // Initialize volume surge configuration
         this.volumeSurgeConfig = {
@@ -906,7 +910,8 @@ export class AbsorptionDetector
             1.0
         );
         const tickSize = Math.pow(10, -this.pricePrecision);
-        const expectedMovement = volumePressure * tickSize * 10; // Scaling factor
+        const expectedMovement =
+            volumePressure * tickSize * this.priceEfficiencyScalingFactor;
 
         if (expectedMovement === 0) return 1.0;
 

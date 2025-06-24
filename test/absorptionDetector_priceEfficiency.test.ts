@@ -14,12 +14,12 @@ import type { AbsorptionSettings } from "../src/indicators/absorptionDetector.js
 
 /**
  * 🔬 PRICE EFFICIENCY ANALYSIS VALIDATION TEST SUITE
- * 
+ *
  * This test suite validates the CORE mathematical model of the AbsorptionDetector:
- * 
+ *
  * Formula: priceEfficiency = actualPriceMovement / expectedPriceMovement
  * Where: expectedPriceMovement = (volume/passiveLiquidity) × tickSize × scalingFactor
- * 
+ *
  * BUSINESS LOGIC: Low price efficiency indicates institutional absorption
  * (large volume with minimal price impact = hidden large orders)
  */
@@ -29,11 +29,11 @@ describe("AbsorptionDetector - Price Efficiency Analysis Core", () => {
     let mockMetrics: MetricsCollector;
     let mockSpoofing: SpoofingDetector;
     let mockOrderBook: OrderBookState;
-    
+
     const TICK_SIZE = 0.01;
     const SCALING_FACTOR = 10; // Default scaling factor
     const BASE_PRICE = 50000;
-    
+
     beforeEach(() => {
         mockLogger = {
             info: vi.fn(),
@@ -46,7 +46,7 @@ describe("AbsorptionDetector - Price Efficiency Analysis Core", () => {
         } as ILogger;
 
         mockMetrics = new MetricsCollector();
-        
+
         mockSpoofing = {
             wasSpoofed: vi.fn().mockReturnValue(false),
         } as any;
@@ -77,6 +77,7 @@ describe("AbsorptionDetector - Price Efficiency Analysis Core", () => {
             absorptionThreshold: 0.6,
             minPassiveMultiplier: 1.2,
             maxAbsorptionRatio: 0.4,
+            priceEfficiencyScalingFactor: 10, // Explicit scaling factor
         };
 
         detector = new AbsorptionDetector(
@@ -91,12 +92,14 @@ describe("AbsorptionDetector - Price Efficiency Analysis Core", () => {
 
     describe("Mathematical Price Efficiency Formula Validation", () => {
         it("should calculate price efficiency correctly using the documented formula", () => {
-            console.log("🔬 TESTING: Price efficiency mathematical formula validation");
-            
+            console.log(
+                "🔬 TESTING: Price efficiency mathematical formula validation"
+            );
+
             // Test the exact formula from docs/Absorption-Detector.md
             // priceEfficiency = actualPriceMovement / expectedPriceMovement
             // expectedPriceMovement = (volume/passiveLiquidity) × tickSize × scalingFactor
-            
+
             const testScenarios = [
                 {
                     name: "High Efficiency (Normal Market)",
@@ -133,12 +136,12 @@ describe("AbsorptionDetector - Price Efficiency Analysis Core", () => {
                 },
             ];
 
-            testScenarios.forEach(scenario => {
+            testScenarios.forEach((scenario) => {
                 console.log(`\n🔬 Testing scenario: ${scenario.name}`);
-                
+
                 let signalGenerated = false;
                 const testDetector = new AbsorptionDetector(
-                    `test-${scenario.name.replace(/\s+/g, '-').toLowerCase()}`,
+                    `test-${scenario.name.replace(/\s+/g, "-").toLowerCase()}`,
                     {
                         minAggVolume: 40,
                         windowMs: 60000,
@@ -149,6 +152,7 @@ describe("AbsorptionDetector - Price Efficiency Analysis Core", () => {
                         absorptionThreshold: 0.6,
                         minPassiveMultiplier: 1.2,
                         maxAbsorptionRatio: 0.4,
+                        priceEfficiencyScalingFactor: 10,
                     },
                     mockOrderBook,
                     mockLogger,
@@ -161,60 +165,78 @@ describe("AbsorptionDetector - Price Efficiency Analysis Core", () => {
                 });
 
                 // Create trades for scenario
-                const trades: EnrichedTradeEvent[] = scenario.trades.map((trade, i) => ({
-                    price: trade.price,
-                    quantity: trade.quantity,
-                    timestamp: Date.now() + i * 1000,
-                    buyerIsMaker: false,
-                    pair: "BTCUSDT",
-                    tradeId: `${scenario.name}_${i}`,
-                    originalTrade: {} as any,
-                    passiveBidVolume: trade.passive,
-                    passiveAskVolume: trade.passive,
-                    zonePassiveBidVolume: 0,
-                    zonePassiveAskVolume: 0,
-                }));
+                const trades: EnrichedTradeEvent[] = scenario.trades.map(
+                    (trade, i) => ({
+                        price: trade.price,
+                        quantity: trade.quantity,
+                        timestamp: Date.now() + i * 1000,
+                        buyerIsMaker: false,
+                        pair: "BTCUSDT",
+                        tradeId: `${scenario.name}_${i}`,
+                        originalTrade: {} as any,
+                        passiveBidVolume: trade.passive,
+                        passiveAskVolume: trade.passive,
+                        zonePassiveBidVolume: 0,
+                        zonePassiveAskVolume: 0,
+                    })
+                );
 
                 // Process trades
-                trades.forEach(trade => {
+                trades.forEach((trade) => {
                     testDetector.onEnrichedTrade(trade);
                 });
 
                 // Calculate expected efficiency using the documented formula
-                const totalVolume = trades.reduce((sum, t) => sum + t.quantity, 0);
-                const avgPassive = trades.reduce((sum, t) => sum + t.passiveBidVolume, 0) / trades.length;
-                const actualPriceMovement = Math.max(...trades.map(t => t.price)) - 
-                                           Math.min(...trades.map(t => t.price));
-                
+                const totalVolume = trades.reduce(
+                    (sum, t) => sum + t.quantity,
+                    0
+                );
+                const avgPassive =
+                    trades.reduce((sum, t) => sum + t.passiveBidVolume, 0) /
+                    trades.length;
+                const actualPriceMovement =
+                    Math.max(...trades.map((t) => t.price)) -
+                    Math.min(...trades.map((t) => t.price));
+
                 const volumePressure = totalVolume / avgPassive;
-                const expectedPriceMovement = volumePressure * TICK_SIZE * SCALING_FACTOR;
-                const calculatedEfficiency = actualPriceMovement / expectedPriceMovement;
+                const expectedPriceMovement =
+                    volumePressure * TICK_SIZE * SCALING_FACTOR;
+                const calculatedEfficiency =
+                    actualPriceMovement / expectedPriceMovement;
 
                 console.log(`🔬 Formula breakdown:`);
                 console.log(`   Total Volume: ${totalVolume}`);
                 console.log(`   Avg Passive: ${avgPassive}`);
                 console.log(`   Volume Pressure: ${volumePressure.toFixed(3)}`);
-                console.log(`   Actual Price Movement: ${actualPriceMovement.toFixed(4)}`);
-                console.log(`   Expected Price Movement: ${expectedPriceMovement.toFixed(4)}`);
-                console.log(`   Calculated Efficiency: ${calculatedEfficiency.toFixed(3)}`);
+                console.log(
+                    `   Actual Price Movement: ${actualPriceMovement.toFixed(4)}`
+                );
+                console.log(
+                    `   Expected Price Movement: ${expectedPriceMovement.toFixed(4)}`
+                );
+                console.log(
+                    `   Calculated Efficiency: ${calculatedEfficiency.toFixed(3)}`
+                );
                 console.log(`   Signal Generated: ${signalGenerated}`);
 
                 // Validate mathematical correctness
                 expect(calculatedEfficiency).toBeGreaterThan(0); // Sanity check
-                
+
                 // Validate business logic
                 if (scenario.shouldDetectAbsorption) {
                     expect(calculatedEfficiency).toBeLessThan(0.85);
                     expect(signalGenerated).toBe(true);
                 } else {
-                    expect(signalGenerated).toBe(scenario.shouldDetectAbsorption);
+                    expect(signalGenerated).toBe(
+                        scenario.shouldDetectAbsorption
+                    );
                 }
             });
         });
 
         it("should handle edge cases in price efficiency calculation", () => {
             console.log("🔬 TESTING: Price efficiency edge cases");
-            
+
             const edgeCases = [
                 {
                     name: "Zero Price Movement",
@@ -223,7 +245,8 @@ describe("AbsorptionDetector - Price Efficiency Analysis Core", () => {
                         { price: 50000, quantity: 100, passive: 200 },
                         { price: 50000, quantity: 100, passive: 200 },
                     ],
-                    expectedBehavior: "Should detect maximum absorption (efficiency = 0)",
+                    expectedBehavior:
+                        "Should detect maximum absorption (efficiency = 0)",
                 },
                 {
                     name: "Very Large Volume Pressure",
@@ -232,7 +255,8 @@ describe("AbsorptionDetector - Price Efficiency Analysis Core", () => {
                         { price: 50001, quantity: 500, passive: 50 },
                         { price: 50002, quantity: 500, passive: 50 },
                     ],
-                    expectedBehavior: "Should detect strong absorption (very low efficiency)",
+                    expectedBehavior:
+                        "Should detect strong absorption (very low efficiency)",
                 },
                 {
                     name: "High Passive Liquidity",
@@ -241,16 +265,17 @@ describe("AbsorptionDetector - Price Efficiency Analysis Core", () => {
                         { price: 50010, quantity: 50, passive: 1000 },
                         { price: 50020, quantity: 50, passive: 1000 },
                     ],
-                    expectedBehavior: "Should show high efficiency (low volume pressure)",
+                    expectedBehavior:
+                        "Should show high efficiency (low volume pressure)",
                 },
             ];
 
-            edgeCases.forEach(edgeCase => {
+            edgeCases.forEach((edgeCase) => {
                 console.log(`\n🔬 Testing edge case: ${edgeCase.name}`);
-                
+
                 let edgeSignalGenerated = false;
                 const edgeDetector = new AbsorptionDetector(
-                    `test-edge-${edgeCase.name.replace(/\s+/g, '-').toLowerCase()}`,
+                    `test-edge-${edgeCase.name.replace(/\s+/g, "-").toLowerCase()}`,
                     {
                         minAggVolume: 40,
                         windowMs: 60000,
@@ -261,6 +286,7 @@ describe("AbsorptionDetector - Price Efficiency Analysis Core", () => {
                         absorptionThreshold: 0.6,
                         minPassiveMultiplier: 1.2,
                         maxAbsorptionRatio: 0.4,
+                        priceEfficiencyScalingFactor: 10,
                     },
                     mockOrderBook,
                     mockLogger,
@@ -272,32 +298,41 @@ describe("AbsorptionDetector - Price Efficiency Analysis Core", () => {
                     edgeSignalGenerated = true;
                 });
 
-                const edgeTrades: EnrichedTradeEvent[] = edgeCase.trades.map((trade, i) => ({
-                    price: trade.price,
-                    quantity: trade.quantity,
-                    timestamp: Date.now() + i * 1000,
-                    buyerIsMaker: false,
-                    pair: "BTCUSDT",
-                    tradeId: `edge_${edgeCase.name}_${i}`,
-                    originalTrade: {} as any,
-                    passiveBidVolume: trade.passive,
-                    passiveAskVolume: trade.passive,
-                    zonePassiveBidVolume: 0,
-                    zonePassiveAskVolume: 0,
-                }));
+                const edgeTrades: EnrichedTradeEvent[] = edgeCase.trades.map(
+                    (trade, i) => ({
+                        price: trade.price,
+                        quantity: trade.quantity,
+                        timestamp: Date.now() + i * 1000,
+                        buyerIsMaker: false,
+                        pair: "BTCUSDT",
+                        tradeId: `edge_${edgeCase.name}_${i}`,
+                        originalTrade: {} as any,
+                        passiveBidVolume: trade.passive,
+                        passiveAskVolume: trade.passive,
+                        zonePassiveBidVolume: 0,
+                        zonePassiveAskVolume: 0,
+                    })
+                );
 
-                edgeTrades.forEach(trade => {
+                edgeTrades.forEach((trade) => {
                     edgeDetector.onEnrichedTrade(trade);
                 });
 
                 // Calculate edge case efficiency
-                const totalVolume = edgeTrades.reduce((sum, t) => sum + t.quantity, 0);
-                const avgPassive = edgeTrades.reduce((sum, t) => sum + t.passiveBidVolume, 0) / edgeTrades.length;
-                const actualMovement = Math.max(...edgeTrades.map(t => t.price)) - 
-                                     Math.min(...edgeTrades.map(t => t.price));
-                
+                const totalVolume = edgeTrades.reduce(
+                    (sum, t) => sum + t.quantity,
+                    0
+                );
+                const avgPassive =
+                    edgeTrades.reduce((sum, t) => sum + t.passiveBidVolume, 0) /
+                    edgeTrades.length;
+                const actualMovement =
+                    Math.max(...edgeTrades.map((t) => t.price)) -
+                    Math.min(...edgeTrades.map((t) => t.price));
+
                 const volumePressure = totalVolume / avgPassive;
-                const expectedMovement = volumePressure * TICK_SIZE * SCALING_FACTOR;
+                const expectedMovement =
+                    volumePressure * TICK_SIZE * SCALING_FACTOR;
                 const efficiency = actualMovement / expectedMovement;
 
                 console.log(`🔬 Edge case results:`);
@@ -329,8 +364,10 @@ describe("AbsorptionDetector - Price Efficiency Analysis Core", () => {
 
     describe("Threshold Configuration Impact", () => {
         it("should respect priceEfficiencyThreshold for absorption detection", () => {
-            console.log("🔬 TESTING: Price efficiency threshold configuration impact");
-            
+            console.log(
+                "🔬 TESTING: Price efficiency threshold configuration impact"
+            );
+
             const thresholdTests = [
                 { threshold: 0.5, name: "Lenient", shouldDetect: true },
                 { threshold: 0.85, name: "Default", shouldDetect: false },
@@ -345,9 +382,11 @@ describe("AbsorptionDetector - Price Efficiency Analysis Core", () => {
                 { price: 50025, quantity: 75, passive: 150 },
             ];
 
-            thresholdTests.forEach(test => {
-                console.log(`\n🔬 Testing ${test.name} threshold: ${test.threshold}`);
-                
+            thresholdTests.forEach((test) => {
+                console.log(
+                    `\n🔬 Testing ${test.name} threshold: ${test.threshold}`
+                );
+
                 let thresholdSignalGenerated = false;
                 const thresholdDetector = new AbsorptionDetector(
                     `test-threshold-${test.name.toLowerCase()}`,
@@ -372,43 +411,55 @@ describe("AbsorptionDetector - Price Efficiency Analysis Core", () => {
                     thresholdSignalGenerated = true;
                 });
 
-                const thresholdTrades: EnrichedTradeEvent[] = moderateEfficiencyTrades.map((trade, i) => ({
-                    price: trade.price,
-                    quantity: trade.quantity,
-                    timestamp: Date.now() + i * 1000,
-                    buyerIsMaker: false,
-                    pair: "BTCUSDT",
-                    tradeId: `threshold_${test.name}_${i}`,
-                    originalTrade: {} as any,
-                    passiveBidVolume: trade.passive,
-                    passiveAskVolume: trade.passive,
-                    zonePassiveBidVolume: 0,
-                    zonePassiveAskVolume: 0,
-                }));
+                const thresholdTrades: EnrichedTradeEvent[] =
+                    moderateEfficiencyTrades.map((trade, i) => ({
+                        price: trade.price,
+                        quantity: trade.quantity,
+                        timestamp: Date.now() + i * 1000,
+                        buyerIsMaker: false,
+                        pair: "BTCUSDT",
+                        tradeId: `threshold_${test.name}_${i}`,
+                        originalTrade: {} as any,
+                        passiveBidVolume: trade.passive,
+                        passiveAskVolume: trade.passive,
+                        zonePassiveBidVolume: 0,
+                        zonePassiveAskVolume: 0,
+                    }));
 
-                thresholdTrades.forEach(trade => {
+                thresholdTrades.forEach((trade) => {
                     thresholdDetector.onEnrichedTrade(trade);
                 });
 
                 // Calculate actual efficiency for this scenario
-                const totalVolume = thresholdTrades.reduce((sum, t) => sum + t.quantity, 0);
-                const avgPassive = thresholdTrades.reduce((sum, t) => sum + t.passiveBidVolume, 0) / thresholdTrades.length;
-                const actualMovement = Math.max(...thresholdTrades.map(t => t.price)) - 
-                                     Math.min(...thresholdTrades.map(t => t.price));
-                
+                const totalVolume = thresholdTrades.reduce(
+                    (sum, t) => sum + t.quantity,
+                    0
+                );
+                const avgPassive =
+                    thresholdTrades.reduce(
+                        (sum, t) => sum + t.passiveBidVolume,
+                        0
+                    ) / thresholdTrades.length;
+                const actualMovement =
+                    Math.max(...thresholdTrades.map((t) => t.price)) -
+                    Math.min(...thresholdTrades.map((t) => t.price));
+
                 const volumePressure = totalVolume / avgPassive;
-                const expectedMovement = volumePressure * TICK_SIZE * SCALING_FACTOR;
+                const expectedMovement =
+                    volumePressure * TICK_SIZE * SCALING_FACTOR;
                 const efficiency = actualMovement / expectedMovement;
 
                 console.log(`🔬 Threshold test results:`);
-                console.log(`   Calculated Efficiency: ${efficiency.toFixed(3)}`);
+                console.log(
+                    `   Calculated Efficiency: ${efficiency.toFixed(3)}`
+                );
                 console.log(`   Threshold: ${test.threshold}`);
                 console.log(`   Expected Detection: ${test.shouldDetect}`);
                 console.log(`   Actual Detection: ${thresholdSignalGenerated}`);
 
                 // Validate threshold behavior
                 expect(thresholdSignalGenerated).toBe(test.shouldDetect);
-                
+
                 // Efficiency should be consistent across all tests (~0.75)
                 expect(efficiency).toBeGreaterThan(0.7);
                 expect(efficiency).toBeLessThan(0.8);

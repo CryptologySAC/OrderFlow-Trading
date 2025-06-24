@@ -266,6 +266,7 @@
                 "icebergConfidenceMultiplier": 1.0,
 
                 "priceEfficiencyThreshold": 0.85,
+                "priceEfficiencyScalingFactor": 10,
 
                 "volumeSurgeMultiplier": 4.0,
                 "imbalanceThreshold": 0.35,
