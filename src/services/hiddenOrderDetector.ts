@@ -43,6 +43,34 @@ export interface HiddenOrderDetectorConfig {
 
     /** Zone height as percentage of price */
     zoneHeightPercentage: number; // Default: 0.002 (0.2%)
+
+    // Confidence calculation parameters (previously hardcoded)
+    /** Large hidden volume threshold for confidence boost */
+    largeHiddenVolumeThreshold: number; // Default: 50
+
+    /** Medium hidden volume threshold for confidence boost */
+    mediumHiddenVolumeThreshold: number; // Default: 25
+
+    /** Large total volume threshold for confidence boost */
+    largeTotalVolumeThreshold: number; // Default: 100
+
+    /** Medium total volume threshold for confidence boost */
+    mediumTotalVolumeThreshold: number; // Default: 50
+
+    /** Small hidden volume penalty threshold */
+    smallHiddenVolumeThreshold: number; // Default: 20
+
+    /** Confidence boost for large volumes */
+    largeVolumeConfidenceBoost: number; // Default: 0.1
+
+    /** Confidence boost for medium volumes */
+    mediumVolumeConfidenceBoost: number; // Default: 0.05
+
+    /** Confidence penalty for small hidden volumes */
+    smallVolumeConfidencePenalty: number; // Default: 0.1
+
+    /** Maximum events to store in memory */
+    maxStoredEvents: number; // Default: 100
 }
 
 export interface HiddenOrderEvent {
@@ -84,6 +112,21 @@ export class HiddenOrderDetector extends Detector {
             maxDepthAgeMs: config.maxDepthAgeMs ?? 1000,
             minConfidence: config.minConfidence ?? 0.8,
             zoneHeightPercentage: config.zoneHeightPercentage ?? 0.002,
+
+            // Confidence calculation parameters
+            largeHiddenVolumeThreshold: config.largeHiddenVolumeThreshold ?? 50,
+            mediumHiddenVolumeThreshold:
+                config.mediumHiddenVolumeThreshold ?? 25,
+            largeTotalVolumeThreshold: config.largeTotalVolumeThreshold ?? 100,
+            mediumTotalVolumeThreshold: config.mediumTotalVolumeThreshold ?? 50,
+            smallHiddenVolumeThreshold: config.smallHiddenVolumeThreshold ?? 20,
+            largeVolumeConfidenceBoost:
+                config.largeVolumeConfidenceBoost ?? 0.1,
+            mediumVolumeConfidenceBoost:
+                config.mediumVolumeConfidenceBoost ?? 0.05,
+            smallVolumeConfidencePenalty:
+                config.smallVolumeConfidencePenalty ?? 0.1,
+            maxStoredEvents: config.maxStoredEvents ?? 100,
         };
 
         // Cleanup old events periodically
@@ -333,22 +376,22 @@ export class HiddenOrderDetector extends Detector {
         let confidence = hiddenPercentage;
 
         // Boost confidence for larger hidden volumes
-        if (hiddenVolume >= 50) {
-            confidence += 0.1;
-        } else if (hiddenVolume >= 25) {
-            confidence += 0.05;
+        if (hiddenVolume >= this.config.largeHiddenVolumeThreshold) {
+            confidence += this.config.largeVolumeConfidenceBoost;
+        } else if (hiddenVolume >= this.config.mediumHiddenVolumeThreshold) {
+            confidence += this.config.mediumVolumeConfidenceBoost;
         }
 
         // Boost confidence for larger total volumes
-        if (totalVolume >= 100) {
-            confidence += 0.1;
-        } else if (totalVolume >= 50) {
-            confidence += 0.05;
+        if (totalVolume >= this.config.largeTotalVolumeThreshold) {
+            confidence += this.config.largeVolumeConfidenceBoost;
+        } else if (totalVolume >= this.config.mediumTotalVolumeThreshold) {
+            confidence += this.config.mediumVolumeConfidenceBoost;
         }
 
         // Penalize if hidden volume is small in absolute terms
-        if (hiddenVolume < 20) {
-            confidence -= 0.1;
+        if (hiddenVolume < this.config.smallHiddenVolumeThreshold) {
+            confidence -= this.config.smallVolumeConfidencePenalty;
         }
 
         return Math.max(0, Math.min(1, confidence));
@@ -384,8 +427,8 @@ export class HiddenOrderDetector extends Detector {
 
         // Store detected event
         this.detectedEvents.push(hiddenOrderEvent);
-        if (this.detectedEvents.length > 100) {
-            this.detectedEvents.shift(); // Keep last 100
+        if (this.detectedEvents.length > this.config.maxStoredEvents) {
+            this.detectedEvents.shift(); // Keep last maxStoredEvents
         }
 
         // Emit signal candidate through base detector

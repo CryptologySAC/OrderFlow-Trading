@@ -1,8 +1,31 @@
-# 🔥 Absorption Detector - Enhanced with Volume Surge Integration
+# 🔥 Absorption Detector - Price Efficiency Analysis with Volume Surge Integration
 
 ## 🎯 Overview
 
-The `AbsorptionDetector` is a **production-ready institutional order flow detector** that identifies when aggressive market orders are absorbed by large passive liquidity walls, enhanced with **volume surge detection** for superior signal quality.
+The `AbsorptionDetector` is a **production-ready institutional order flow detector** that performs **price efficiency analysis** to identify when volume pressure doesn't result in proportional price movement, indicating potential institutional absorption at key levels. Enhanced with **volume surge detection** for superior signal quality.
+
+## 🔬 Core Algorithm: Price Efficiency Analysis
+
+**CRITICAL UNDERSTANDING:** This detector does NOT simply identify absorption patterns - it performs sophisticated **price efficiency analysis** using the following mathematical model:
+
+```typescript
+// Core calculation in calculatePriceEfficiency() (lines 876-922)
+const priceMovement = Math.max(...prices) - Math.min(...prices);
+const volumePressure = totalVolume / avgPassiveVolume;
+const expectedMovement = volumePressure * tickSize * scalingFactor;
+const priceEfficiency = priceMovement / expectedMovement;
+
+// Low efficiency indicates absorption
+if (priceEfficiency < priceEfficiencyThreshold) {
+    // Absorption detected - institutional players controlling price
+}
+```
+
+**What This Actually Detects:**
+
+- **Price Inefficiency:** When large volume doesn't move price proportionally
+- **Institutional Absorption:** Hidden large orders absorbing market flow
+- **Volume-Price Divergence:** Anomalous volume/price relationships indicating institutional activity
 
 **🚀 Enhanced Capabilities (Phase 2 Complete):**
 
@@ -21,23 +44,44 @@ The `AbsorptionDetector` is a **production-ready institutional order flow detect
 - **Primary Use**: Support/resistance confirmation & institutional accumulation detection
 - **Trade Type**: Range trading, institutional order following
 
-## 🔬 What Is Absorption?
+## 🔬 What Is Price Efficiency Analysis?
 
-**Absorption** occurs when aggressive market orders meet stable, continuously refilled passive liquidity, indicating the presence of institutional players willing to absorb flow at key levels.
+**Price Efficiency Analysis** measures how effectively volume pressure translates into price movement. **Low efficiency** indicates institutional absorption - when large volumes fail to move price proportionally due to hidden institutional orders.
 
-### **Enhanced Detection with Volume Surge:**
+### **Mathematical Foundation:**
 
-**🔥 Traditional Absorption:**
+**🧮 Price Efficiency Formula:**
 
-- Large sells hit strong bid walls → price holds → bullish reversal
-- Large buys hit strong ask walls → price holds → bearish reversal
+```
+Efficiency = ActualPriceMovement / ExpectedPriceMovement
+Where:
+- ActualPriceMovement = max(prices) - min(prices)
+- ExpectedPriceMovement = (Volume/PassiveLiquidity) × TickSize × ScalingFactor
+- Threshold = 0.85 (configurable)
+```
 
-**⚡ Volume-Enhanced Absorption:**
+**⚡ Enhanced Detection Logic:**
 
-- **4x volume surge validation** confirms institutional activity
-- **Order flow imbalance analysis** identifies directional bias (35% threshold)
-- **Large trade detection** confirms institutional participation (≥17.8 LTC)
-- **Signal confidence boosting** up to 40% for qualifying conditions
+- **Low Efficiency (< 0.85):** Institutional absorption detected
+- **Volume Surge Validation:** 4x volume confirms institutional activity
+- **Order Flow Analysis:** 35% imbalance identifies directional bias
+- **Large Trade Detection:** ≥17.8 LTC confirms institutional participation
+- **Confidence Boosting:** Up to 40% enhancement for qualifying conditions
+
+### **Absorption vs Price Efficiency:**
+
+**🔥 Traditional Absorption Detection:**
+
+- Identifies bid/ask wall interactions
+- Reactive pattern recognition
+- Limited to visible order book data
+
+**⚡ Price Efficiency Analysis:**
+
+- Proactive volume-price relationship analysis
+- Detects hidden institutional activity
+- Mathematical model-based approach
+- Configurable sensitivity thresholds
 
 ## 🚀 Current Implementation (2024)
 
@@ -60,11 +104,12 @@ const detector = new AbsorptionDetector(
 
 ```typescript
 const absorptionConfig = {
-    // Core absorption parameters
+    // Core price efficiency parameters
     minAggVolume: 400,
     windowMs: 60000,
     zoneTicks: 3,
     absorptionThreshold: 0.6,
+    priceEfficiencyThreshold: 0.85, // Key threshold for efficiency analysis
 
     // Volume surge integration (Phase 2)
     volumeSurgeMultiplier: 4.0, // 4x volume surge threshold

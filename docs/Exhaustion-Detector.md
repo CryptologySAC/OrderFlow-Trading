@@ -1,16 +1,16 @@
-# ⚡ Exhaustion Detector - Enhanced with Volume Surge Integration
+# ⚡ Exhaustion Detector - Advanced 12-Factor Scoring System
 
 ## 🎯 Overview
 
-The `ExhaustionDetector` is a **production-ready liquidity exhaustion detector** that identifies when aggressive market orders completely deplete passive liquidity, enhanced with **volume surge detection** for superior reversal signal quality.
+The `ExhaustionDetector` is a **production-ready liquidity exhaustion detector** that employs a sophisticated **12-factor weighted scoring algorithm** to identify high-probability momentum exhaustion and reversal points with institutional-grade precision.
 
-**🚀 Enhanced Capabilities (Phase 2 Complete):**
+**🧠 Advanced 12-Factor Scoring System:**
 
-- **2.5x volume surge detection** for institutional exhaustion validation
-- **25% order flow imbalance detection** for directional momentum confirmation
-- **17.8 LTC institutional trade detection** for large player activity
-- **Liquidity depletion analysis** with volume surge confirmation
-- **Up to 40% signal confidence boosting** for qualifying volume conditions
+- **6 Core Exhaustion Factors** with adaptive weight distribution (depletion, passive, continuity, imbalance, spread, velocity)
+- **3 Volume Enhancement Factors** for institutional validation (surge, imbalance, institutional activity)
+- **2 Data Quality Factors** for signal reliability (sample confidence, threshold validation)
+- **1 Adaptive Threshold Factor** for market regime adjustment
+- **Multi-dimensional confidence boosting** up to 40% for qualifying volume conditions
 
 ## 🏛️ Position in Trading Hierarchy
 
@@ -21,23 +21,177 @@ The `ExhaustionDetector` is a **production-ready liquidity exhaustion detector**
 - **Primary Use**: Reversal signals at momentum extremes
 - **Trade Type**: Counter-trend entries, swing reversals
 
+## 🧠 Advanced 12-Factor Scoring Algorithm
+
+The ExhaustionDetector employs a sophisticated multi-dimensional scoring system that analyzes exhaustion through 12 distinct factors, each contributing to the final confidence score with precise mathematical weighting.
+
+### **🔬 Core Algorithm Architecture:**
+
+```typescript
+// 12-Factor Weighted Scoring System
+const exhaustionScore =
+    (Factor1_Depletion × 0.40) +           // Primary exhaustion factor
+    (Factor2_Passive × 0.25) +             // Passive liquidity depletion
+    (Factor3_Continuity × 0.15) +          // Continuous depletion trend
+    (Factor4_Imbalance × 0.10) +           // Market order flow imbalance
+    (Factor5_Spread × 0.08) +              // Spread widening indicator
+    (Factor6_Velocity × 0.02) +            // Volume velocity analysis
+    (Factor7_VolumeSurge × 0.30) +         // Institutional volume surge
+    (Factor8_FlowImbalance × 0.20) +       // Enhanced order flow analysis
+    (Factor9_Institutional × 0.25) +       // Large trader activity detection
+    (Factor10_SampleQuality × 0.30) +      // Data quality penalty/boost
+    (Factor11_ThresholdAdaptive × Dynamic) + // Market regime adjustment
+    (Factor12_ConfidenceValidation × Gate)   // Minimum confidence gate
+```
+
+### **⚙️ Factor-by-Factor Analysis:**
+
+#### **🏗️ Core Exhaustion Factors (Weighted 100%)**
+
+**Factor 1: Depletion Ratio Analysis (Weight: 40%)**
+
+```typescript
+// Adaptive threshold-based scoring
+if (depletionRatio > extremeThreshold)
+    score = 1.0; // 100% depletion
+else if (depletionRatio > highThreshold)
+    score = 0.75; // 75% depletion
+else if (depletionRatio > moderateThreshold)
+    score = 0.5; // 50% depletion
+else score = proportional(depletionRatio, moderateThreshold);
+```
+
+**Factor 2: Passive Strength Depletion (Weight: 25%)**
+
+```typescript
+// Reverse scoring - lower passive = higher exhaustion
+if (passiveRatio < severeDepletion)
+    score = 1.0; // Severely depleted
+else if (passiveRatio < moderateDepletion)
+    score = 0.6; // Moderately depleted
+else if (passiveRatio < someDepletion)
+    score = 0.3; // Somewhat depleted
+else score = max(0, 1 - passiveRatio); // Proportional
+```
+
+**Factor 3: Continuous Depletion Trend (Weight: 15%)**
+
+```typescript
+// Measures sustained depletion vs refill gaps
+const depletionThreshold = avgPassive × 0.2 // 20% threshold
+if (refillGap < -depletionThreshold) score = 1.0       // Strong continuous
+else if (refillGap < 0) score = abs(refillGap) / depletionThreshold
+```
+
+**Factor 4: Market Imbalance Analysis (Weight: 10%)**
+
+```typescript
+// Configurable threshold-based imbalance scoring
+if (imbalance > imbalanceHighThreshold)
+    score = 1.0; // High imbalance
+else if (imbalance > imbalanceMediumThreshold)
+    score = 0.5; // Medium imbalance
+else score = max(0, (imbalance - 0.5) / 0.3); // Scaled from baseline
+```
+
+**Factor 5: Spread Widening Detection (Weight: 8%)**
+
+```typescript
+// Spread analysis with feature flag control
+if (spreadAdjustment enabled) {
+    if (spread > spreadHighThreshold) score = 1.0       // High spread stress
+    else if (spread > spreadMediumThreshold) score = 0.6 // Medium spread
+    else score = max(0, spread / spreadMediumThreshold)  // Proportional
+}
+```
+
+**Factor 6: Volume Velocity Analysis (Weight: 2%)**
+
+```typescript
+// Passive liquidity velocity decline measurement
+if (volumeVelocity enabled && passiveVelocity < -100) {
+    score = min(1.0, abs(passiveVelocity) / 200)       // Scale negative velocity
+}
+```
+
+#### **🚀 Volume Enhancement Factors (Boost +40%)**
+
+**Factor 7: Volume Surge Detection (Boost: +30%)**
+
+```typescript
+// Institutional volume surge validation
+const volumeSurgeBoost = min(
+    ((volumeMultiplier - surgeThreshold) / surgeThreshold) × 0.3,
+    0.3  // Maximum 30% boost
+);
+```
+
+**Factor 8: Enhanced Order Flow Imbalance (Boost: +20%)**
+
+```typescript
+// Advanced imbalance analysis beyond basic factor
+const imbalanceBoost = min(
+    ((imbalance - imbalanceThreshold) / (1 - imbalanceThreshold)) × 0.2,
+    0.2  // Maximum 20% boost
+);
+```
+
+**Factor 9: Institutional Activity Detection (Boost: +25%)**
+
+```typescript
+// Large trader participation confirmation
+const institutionalBoost = institutional.detected ? min(
+    (largestTradeSize / institutionalThreshold) × 0.15,
+    0.25  // Maximum 25% boost
+) : 0;
+```
+
+#### **🛡️ Quality & Validation Factors**
+
+**Factor 10: Data Quality Assessment (Penalty: -30%)**
+
+```typescript
+// Sample size confidence penalty
+if (sampleCount < 5) {
+    weightedScore *= 0.7; // 30% penalty for insufficient data
+}
+```
+
+**Factor 11: Adaptive Threshold System (Dynamic)**
+
+```typescript
+// Market regime-based threshold adjustment
+const thresholds = getAdaptiveThresholds();
+// Applied dynamically across all factor calculations
+```
+
+**Factor 12: Minimum Confidence Gate (Validation)**
+
+```typescript
+// Final confidence validation
+const finalScore = max(0, min(1, weightedScore));
+return finalScore >= thresholds.minimumConfidence ? finalScore : 0;
+```
+
 ## 🔬 What Is Exhaustion?
 
-**Exhaustion** occurs when aggressive market orders completely "clean out" passive liquidity on the opposite side, often signaling momentum depletion and impending reversals.
+**Exhaustion** occurs when aggressive market orders completely "clean out" passive liquidity on the opposite side, creating high-probability reversal conditions that the 12-factor system identifies with mathematical precision.
 
-### **Enhanced Detection with Volume Surge:**
+### **🎯 Enhanced Multi-Dimensional Detection:**
 
-**🔥 Traditional Exhaustion:**
+**Traditional Single-Factor Analysis:**
 
-- Aggressive buyers exhaust all ask liquidity → bullish exhaustion → bearish reversal
-- Aggressive sellers exhaust all bid liquidity → bearish exhaustion → bullish reversal
+- Simple depletion ratio calculation
+- Binary exhaustion detection
+- Fixed threshold validation
 
-**⚡ Volume-Enhanced Exhaustion:**
+**Advanced 12-Factor Analysis:**
 
-- **2.5x volume surge validation** confirms institutional activity during depletion
-- **Order flow imbalance analysis** validates momentum direction (25% threshold)
-- **Large trade detection** confirms institutional participation (≥17.8 LTC)
-- **Signal confidence boosting** up to 40% for qualifying exhaustion events
+- **Weighted multi-factor scoring** with adaptive thresholds
+- **Volume surge institutional validation** (factors 7-9)
+- **Continuous depletion trend analysis** with market regime adjustment
+- **Data quality assurance** with confidence gating
+- **Dynamic threshold adaptation** for varying market conditions
 
 ## 🚀 Current Implementation (2024)
 

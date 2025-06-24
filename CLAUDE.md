@@ -459,8 +459,9 @@ constructor(settings: DetectorSettings) {
 **VIOLATION DETECTION:**
 
 Code review will reject any occurrence of:
+
 - Hardcoded decimals (0.7, 0.85, 0.005) in detector logic
-- Hardcoded integers (100, 50, 1000) as thresholds or limits  
+- Hardcoded integers (100, 50, 1000) as thresholds or limits
 - Mathematical operations with literal numbers as thresholds
 - Conditional statements with hardcoded comparison values
 

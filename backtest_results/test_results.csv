@@ -1,11 +1,11 @@
 configId,detectorType,duration,totalSignals,totalMovements,success,error
-absorption_conservative,absorptionDetector,600015,0,0,false,Test timeout
-absorption_balanced,absorptionDetector,599974,0,0,false,Test timeout
-absorption_aggressive,absorptionDetector,599998,0,0,false,Test timeout
-absorption_backtesting_sensitive,absorptionDetector,600005,0,0,false,Test timeout
-absorption_backtesting_moderate,absorptionDetector,599999,0,0,false,Test timeout
-absorption_backtesting_strict,absorptionDetector,599998,0,0,false,Test timeout
-absorption_grid_0,absorptionDetector,600027,0,0,false,Test timeout
-absorption_grid_1,absorptionDetector,599993,0,0,false,Test timeout
-absorption_grid_2,absorptionDetector,599987,0,0,false,Test timeout
-absorption_grid_3,absorptionDetector,599963,0,0,false,Test timeout
+absorption_conservative,absorptionDetector,600030,0,0,false,Test timeout
+absorption_balanced,absorptionDetector,600003,0,0,false,Test timeout
+absorption_aggressive,absorptionDetector,600023,0,0,false,Test timeout
+absorption_backtesting_sensitive,absorptionDetector,600015,0,0,false,Test timeout
+absorption_backtesting_moderate,absorptionDetector,600006,0,0,false,Test timeout
+absorption_backtesting_strict,absorptionDetector,599981,0,0,false,Test timeout
+absorption_grid_0,absorptionDetector,599995,0,0,false,Test timeout
+absorption_grid_1,absorptionDetector,600002,0,0,false,Test timeout
+absorption_grid_2,absorptionDetector,600016,0,0,false,Test timeout
+absorption_grid_3,absorptionDetector,600003,0,0,false,Test timeout

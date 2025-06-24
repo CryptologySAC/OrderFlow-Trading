@@ -47,6 +47,75 @@ export interface IcebergDetectorConfig {
 
     /** Maximum number of active icebergs to track */
     maxActiveIcebergs: number; // Default: 20
+
+    // Pattern detection parameters (previously hardcoded)
+    /** Size ratio tolerance for pattern matching */
+    sizeRatioTolerance: number; // Default: 0.5 (minimum ratio to average size)
+
+    /** Maximum size ratio for pattern matching */
+    maxSizeRatio: number; // Default: 2.0 (maximum ratio to average size)
+
+    // Institutional scoring parameters
+    /** Large institutional size multiplier */
+    largeInstitutionalMultiplier: number; // Default: 2 (for avgSize >= threshold * 2)
+
+    /** Score boost for large institutional sizes */
+    largeInstitutionalScoreBoost: number; // Default: 0.4
+
+    /** Score boost for medium institutional sizes */
+    mediumInstitutionalScoreBoost: number; // Default: 0.2
+
+    /** Minimum pieces count for high consistency score */
+    highConsistencyPieceCount: number; // Default: 5
+
+    /** Score boost for high consistency */
+    highConsistencyScoreBoost: number; // Default: 0.3
+
+    /** Score boost for medium consistency */
+    mediumConsistencyScoreBoost: number; // Default: 0.2
+
+    /** Long duration threshold in milliseconds */
+    longDurationThreshold: number; // Default: 60000 (1 minute)
+
+    /** Medium duration threshold in milliseconds */
+    mediumDurationThreshold: number; // Default: 30000 (30 seconds)
+
+    /** Score boost for long duration activity */
+    longDurationScoreBoost: number; // Default: 0.3
+
+    /** Score boost for medium duration activity */
+    mediumDurationScoreBoost: number; // Default: 0.2
+
+    // Confidence calculation weights
+    /** Normalization factor for piece count scoring */
+    pieceCountNormalizationFactor: number; // Default: 10
+
+    /** Total size normalization multiplier */
+    totalSizeNormalizationMultiplier: number; // Default: 3
+
+    /** Weight for size consistency in confidence calculation */
+    sizeConsistencyWeight: number; // Default: 0.35
+
+    /** Weight for price stability in confidence calculation */
+    priceStabilityWeight: number; // Default: 0.2
+
+    /** Weight for institutional score in confidence calculation */
+    institutionalScoreWeight: number; // Default: 0.2
+
+    /** Weight for piece count score in confidence calculation */
+    pieceCountWeight: number; // Default: 0.1
+
+    /** Weight for total size score in confidence calculation */
+    totalSizeWeight: number; // Default: 0.1
+
+    /** Weight for temporal score in confidence calculation */
+    temporalScoreWeight: number; // Default: 0.05
+
+    /** Minimum confidence threshold for iceberg qualification */
+    minConfidenceThreshold: number; // Default: 0.6
+
+    /** Maximum completed icebergs to store in memory */
+    maxStoredIcebergs: number; // Default: 100
 }
 
 export interface IcebergEvent {
@@ -143,6 +212,40 @@ export class IcebergDetector extends Detector {
             institutionalSizeThreshold: config.institutionalSizeThreshold ?? 10,
             trackingWindowMs: config.trackingWindowMs ?? 300000,
             maxActiveIcebergs: config.maxActiveIcebergs ?? 20,
+
+            // Pattern detection parameters
+            sizeRatioTolerance: config.sizeRatioTolerance ?? 0.5,
+            maxSizeRatio: config.maxSizeRatio ?? 2.0,
+
+            // Institutional scoring parameters
+            largeInstitutionalMultiplier:
+                config.largeInstitutionalMultiplier ?? 2,
+            largeInstitutionalScoreBoost:
+                config.largeInstitutionalScoreBoost ?? 0.4,
+            mediumInstitutionalScoreBoost:
+                config.mediumInstitutionalScoreBoost ?? 0.2,
+            highConsistencyPieceCount: config.highConsistencyPieceCount ?? 5,
+            highConsistencyScoreBoost: config.highConsistencyScoreBoost ?? 0.3,
+            mediumConsistencyScoreBoost:
+                config.mediumConsistencyScoreBoost ?? 0.2,
+            longDurationThreshold: config.longDurationThreshold ?? 60000,
+            mediumDurationThreshold: config.mediumDurationThreshold ?? 30000,
+            longDurationScoreBoost: config.longDurationScoreBoost ?? 0.3,
+            mediumDurationScoreBoost: config.mediumDurationScoreBoost ?? 0.2,
+
+            // Confidence calculation weights
+            pieceCountNormalizationFactor:
+                config.pieceCountNormalizationFactor ?? 10,
+            totalSizeNormalizationMultiplier:
+                config.totalSizeNormalizationMultiplier ?? 3,
+            sizeConsistencyWeight: config.sizeConsistencyWeight ?? 0.35,
+            priceStabilityWeight: config.priceStabilityWeight ?? 0.2,
+            institutionalScoreWeight: config.institutionalScoreWeight ?? 0.2,
+            pieceCountWeight: config.pieceCountWeight ?? 0.1,
+            totalSizeWeight: config.totalSizeWeight ?? 0.1,
+            temporalScoreWeight: config.temporalScoreWeight ?? 0.05,
+            minConfidenceThreshold: config.minConfidenceThreshold ?? 0.6,
+            maxStoredIcebergs: config.maxStoredIcebergs ?? 100,
         };
 
         // Cleanup expired candidates periodically
@@ -409,7 +512,10 @@ export class IcebergDetector extends Detector {
             activity.averageSize,
             1
         );
-        return sizeRatio >= 0.5 && sizeRatio <= 2.0; // Similar to average size
+        return (
+            sizeRatio >= this.config.sizeRatioTolerance &&
+            sizeRatio <= this.config.maxSizeRatio
+        ); // Similar to average size
     }
 
     /**
@@ -566,27 +672,29 @@ export class IcebergDetector extends Detector {
         let score = 0;
 
         // Size-based scoring
-        if (avgSize >= this.config.institutionalSizeThreshold * 2) {
-            score += 0.4;
+        if (
+            avgSize >=
+            this.config.institutionalSizeThreshold *
+                this.config.largeInstitutionalMultiplier
+        ) {
+            score += this.config.largeInstitutionalScoreBoost;
         } else if (avgSize >= this.config.institutionalSizeThreshold) {
-            score += 0.2;
+            score += this.config.mediumInstitutionalScoreBoost;
         }
 
         // Consistency-based scoring
-        if (candidate.pieces.length >= 5) {
-            score += 0.3;
-        } else if (candidate.pieces.length >= 3) {
-            score += 0.2;
+        if (candidate.pieces.length >= this.config.highConsistencyPieceCount) {
+            score += this.config.highConsistencyScoreBoost;
+        } else if (candidate.pieces.length >= this.config.minRefillCount) {
+            score += this.config.mediumConsistencyScoreBoost;
         }
 
         // Duration-based scoring
         const duration = candidate.lastActivity - candidate.firstSeen;
-        if (duration >= 60000) {
-            // 1 minute+
-            score += 0.3;
-        } else if (duration >= 30000) {
-            // 30 seconds+
-            score += 0.2;
+        if (duration >= this.config.longDurationThreshold) {
+            score += this.config.longDurationScoreBoost;
+        } else if (duration >= this.config.mediumDurationThreshold) {
+            score += this.config.mediumDurationScoreBoost;
         }
 
         return Math.min(score, 1.0);
@@ -610,22 +718,27 @@ export class IcebergDetector extends Detector {
         );
 
         // Piece count component
-        const pieceCountScore = Math.min(pieceCount / 10, 1); // Normalize to 10 pieces
+        const pieceCountScore = Math.min(
+            pieceCount / this.config.pieceCountNormalizationFactor,
+            1
+        ); // Normalize to configurable factor
 
         // Total size component
         const sizeScore = Math.min(
-            totalSize / (this.config.minTotalSize * 3),
+            totalSize /
+                (this.config.minTotalSize *
+                    this.config.totalSizeNormalizationMultiplier),
             1
         );
 
         // Weighted average
         return (
-            sizeConsistency * 0.35 +
-            priceStability * 0.2 +
-            institutionalScore * 0.2 +
-            pieceCountScore * 0.1 +
-            sizeScore * 0.1 +
-            temporalScore * 0.05
+            sizeConsistency * this.config.sizeConsistencyWeight +
+            priceStability * this.config.priceStabilityWeight +
+            institutionalScore * this.config.institutionalScoreWeight +
+            pieceCountScore * this.config.pieceCountWeight +
+            sizeScore * this.config.totalSizeWeight +
+            temporalScore * this.config.temporalScoreWeight
         );
     }
 
@@ -641,7 +754,7 @@ export class IcebergDetector extends Detector {
             candidate.pieces.length >= this.config.minRefillCount &&
             candidate.totalExecuted >= this.config.minTotalSize &&
             sizeVariation <= this.config.maxSizeVariation &&
-            confidence >= 0.6 // Minimum confidence threshold
+            confidence >= this.config.minConfidenceThreshold // Minimum confidence threshold
         );
     }
 
@@ -676,8 +789,8 @@ export class IcebergDetector extends Detector {
 
         // Store completed iceberg
         this.completedIcebergs.push(icebergEvent);
-        if (this.completedIcebergs.length > 100) {
-            this.completedIcebergs.shift(); // Keep last 100
+        if (this.completedIcebergs.length > this.config.maxStoredIcebergs) {
+            this.completedIcebergs.shift(); // Keep last maxStoredIcebergs
         }
 
         // Emit signal candidate through base detector
