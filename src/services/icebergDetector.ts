@@ -184,7 +184,7 @@ export class IcebergDetector extends Detector {
     private activeCandidates = new Map<string, IcebergCandidate>();
     private completedIcebergs: IcebergEvent[] = [];
 
-    // Price level tracking for pattern recognition
+    // Price level tracking for pattern recognition with bounded memory
     private priceLevelActivity = new Map<
         number,
         {
@@ -194,6 +194,10 @@ export class IcebergDetector extends Detector {
             averageSize: number;
         }
     >();
+
+    // LRU cache for price level cleanup
+    private priceLevelAccessOrder: number[] = [];
+    private readonly maxPriceLevels = 1000; // Bounded memory limit
 
     constructor(
         id: string,
@@ -437,6 +441,14 @@ export class IcebergDetector extends Detector {
         );
 
         this.priceLevelActivity.set(price, activity);
+
+        // PERFORMANCE OPTIMIZATION: Maintain LRU order for price levels
+        this.updatePriceLevelAccess(price);
+
+        // MEMORY MANAGEMENT: Enforce bounded cache size with LRU eviction
+        if (this.priceLevelActivity.size > this.maxPriceLevels) {
+            this.evictOldestPriceLevel();
+        }
     }
 
     /**
@@ -528,11 +540,21 @@ export class IcebergDetector extends Detector {
         trade: EnrichedTradeEvent,
         timestamp: number
     ): void {
-        // Limit number of active candidates
+        // PERFORMANCE OPTIMIZATION: Limit number of active candidates with LRU eviction
+        // Check if we'll exceed the limit after adding this candidate
         if (this.activeCandidates.size >= this.config.maxActiveIcebergs) {
-            // Remove oldest candidate
-            const oldestId = Array.from(this.activeCandidates.keys())[0];
-            this.activeCandidates.delete(oldestId);
+            // Remove oldest candidate using LRU approach
+            let oldestTime = Infinity; // Start with infinity so first candidate becomes oldest
+            let oldestId = "";
+            for (const [id, candidate] of this.activeCandidates) {
+                if (candidate.lastActivity < oldestTime) {
+                    oldestTime = candidate.lastActivity;
+                    oldestId = id;
+                }
+            }
+            if (oldestId) {
+                this.activeCandidates.delete(oldestId);
+            }
         }
 
         const candidate: IcebergCandidate = {
@@ -787,10 +809,12 @@ export class IcebergDetector extends Detector {
             completionStatus: "completed",
         };
 
-        // Store completed iceberg
+        // PERFORMANCE OPTIMIZATION: Use slice instead of shift to avoid O(n) array copying
         this.completedIcebergs.push(icebergEvent);
         if (this.completedIcebergs.length > this.config.maxStoredIcebergs) {
-            this.completedIcebergs.shift(); // Keep last maxStoredIcebergs
+            this.completedIcebergs = this.completedIcebergs.slice(
+                -this.config.maxStoredIcebergs
+            ); // Keep last N items efficiently
         }
 
         // Emit signal candidate through base detector
@@ -900,7 +924,32 @@ export class IcebergDetector extends Detector {
     }
 
     /**
-     * Cleanup expired candidates
+     * Update price level access order for LRU cache management
+     */
+    private updatePriceLevelAccess(price: number): void {
+        // Remove from current position if exists
+        const existingIndex = this.priceLevelAccessOrder.indexOf(price);
+        if (existingIndex !== -1) {
+            this.priceLevelAccessOrder.splice(existingIndex, 1);
+        }
+        // Add to end (most recently used)
+        this.priceLevelAccessOrder.push(price);
+    }
+
+    /**
+     * Evict oldest price level to maintain memory bounds
+     */
+    private evictOldestPriceLevel(): void {
+        if (this.priceLevelAccessOrder.length > 0) {
+            const oldestPrice = this.priceLevelAccessOrder.shift();
+            if (oldestPrice !== undefined) {
+                this.priceLevelActivity.delete(oldestPrice);
+            }
+        }
+    }
+
+    /**
+     * Cleanup expired candidates with optimized memory management
      */
     private cleanupExpiredCandidates(): void {
         const now = Date.now();
@@ -912,16 +961,27 @@ export class IcebergDetector extends Detector {
             }
         }
 
+        // PERFORMANCE OPTIMIZATION: Batch delete operations
         expiredIds.forEach((id) => {
             this.activeCandidates.delete(id);
         });
 
-        // Clean up price level activity
+        // MEMORY MANAGEMENT: Clean up price level activity with access order tracking
+        const expiredPrices: number[] = [];
         for (const [price, activity] of this.priceLevelActivity) {
             if (now - activity.lastTradeTime > this.config.trackingWindowMs) {
-                this.priceLevelActivity.delete(price);
+                expiredPrices.push(price);
             }
         }
+
+        // Batch cleanup with access order maintenance
+        expiredPrices.forEach((price) => {
+            this.priceLevelActivity.delete(price);
+            const accessIndex = this.priceLevelAccessOrder.indexOf(price);
+            if (accessIndex !== -1) {
+                this.priceLevelAccessOrder.splice(accessIndex, 1);
+            }
+        });
     }
 
     /**

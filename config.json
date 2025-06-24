@@ -305,7 +305,29 @@
                 "priceStabilityTolerance": 0.005,
                 "institutionalSizeThreshold": 10,
                 "trackingWindowMs": 300000,
-                "maxActiveIcebergs": 20
+                "maxActiveIcebergs": 20,
+                "maxStoredIcebergs": 100,
+                "sizeRatioTolerance": 0.5,
+                "maxSizeRatio": 2.0,
+                "largeInstitutionalMultiplier": 2,
+                "largeInstitutionalScoreBoost": 0.4,
+                "mediumInstitutionalScoreBoost": 0.2,
+                "highConsistencyPieceCount": 5,
+                "highConsistencyScoreBoost": 0.3,
+                "mediumConsistencyScoreBoost": 0.2,
+                "longDurationThreshold": 60000,
+                "mediumDurationThreshold": 30000,
+                "longDurationScoreBoost": 0.3,
+                "mediumDurationScoreBoost": 0.2,
+                "pieceCountNormalizationFactor": 10,
+                "totalSizeNormalizationMultiplier": 3,
+                "sizeConsistencyWeight": 0.35,
+                "priceStabilityWeight": 0.2,
+                "institutionalScoreWeight": 0.2,
+                "pieceCountWeight": 0.1,
+                "totalSizeWeight": 0.1,
+                "temporalScoreWeight": 0.05,
+                "minConfidenceThreshold": 0.6
             },
 
             "spoofingDetector": {
@@ -338,7 +360,8 @@
                 "ghostLiquidityDisappearanceRatio": 0.85,
                 "ghostLiquidityConfidence": 0.85,
                 "highSignificanceThreshold": 0.8,
-                "mediumSignificanceThreshold": 0.6
+                "mediumSignificanceThreshold": 0.6,
+                "spoofingDetectionWindowMs": 5000
             },
 
             "hiddenOrderDetector": {

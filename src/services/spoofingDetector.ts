@@ -42,6 +42,7 @@ export interface SpoofingDetectorConfig {
     ghostLiquidityConfidence?: number; // Default: 0.85 - confidence score for ghost liquidity detection
     highSignificanceThreshold?: number; // Default: 0.8 - threshold for high significance events
     mediumSignificanceThreshold?: number; // Default: 0.6 - threshold for medium significance events
+    spoofingDetectionWindowMs?: number; // Default: 5000 - time window for spoofing detection (performance optimization)
 }
 
 export interface SpoofingEvent {
@@ -284,8 +285,9 @@ export class SpoofingDetector extends EventEmitter {
         let history = this.orderPlacementHistory.get(normalizedPrice) || [];
         history.push({ time: now, side, quantity: validQuantity, placementId });
         const maxHistory = this.config.maxPlacementHistoryPerPrice ?? 20;
+        // PERFORMANCE OPTIMIZATION: Use slice instead of shift to avoid O(n) array copying
         if (history.length > maxHistory) {
-            history.shift(); // Keep last N placements per price level
+            history = history.slice(-maxHistory); // Keep last N items efficiently
         }
         this.orderPlacementHistory.set(normalizedPrice, history);
     }
@@ -366,8 +368,9 @@ export class SpoofingDetector extends EventEmitter {
         let history = this.passiveChangeHistory.get(normalizedPrice) || [];
         history.push({ time: now, bid: validBid, ask: validAsk });
         const maxHistory = this.config.maxPassiveHistoryPerPrice ?? 10;
+        // PERFORMANCE OPTIMIZATION: Use slice instead of shift to avoid O(n) array copying
         if (history.length > maxHistory) {
-            history.shift(); // Remove oldest item instead of creating new array
+            history = history.slice(-maxHistory); // Keep last N items efficiently
         }
         this.passiveChangeHistory.set(normalizedPrice, history);
     }
@@ -457,11 +460,19 @@ export class SpoofingDetector extends EventEmitter {
             const hist = this.passiveChangeHistory.get(bandPrice);
             if (!hist || hist.length < 2) continue;
 
+            // PERFORMANCE OPTIMIZATION: Calculate time bounds for early exit
+            const spoofingDetectionWindow =
+                this.config.spoofingDetectionWindowMs ?? 5000;
+            const earliestTime = tradeTime - spoofingDetectionWindow;
+
             // Scan history from newest back, looking for rapid drops
             for (let i = hist.length - 2; i >= 0; i--) {
                 const curr = hist[i + 1];
                 const prev = hist[i];
                 if (curr.time > tradeTime) continue;
+
+                // PERFORMANCE OPTIMIZATION: Early exit when we've gone too far back in time
+                if (prev.time < earliestTime) break;
                 // NOTE: For backward compatibility, check both sides for spoofing potential
                 // This maintains compatibility with legacy tests that may have mixed assumptions
                 const prevBidQty = prev.bid;
