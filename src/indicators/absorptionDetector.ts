@@ -41,6 +41,15 @@ export interface AbsorptionSettings extends BaseDetectorSettings {
     velocityIncreaseThreshold?: number; // Threshold for velocity increase detection (default 1.5)
     priceEfficiencyThreshold?: number; // Threshold for price efficiency validation (default 0.7)
     significantChangeThreshold?: number; // Threshold for significant threshold changes (default 0.1)
+
+    // ✅ NEW: Magic number elimination - configurable calculation parameters
+    liquidityGradientRange?: number; // Range for liquidity gradient calculation (default 5)
+    recentEventsNormalizer?: number; // Normalizer for recent events velocity (default 10)
+    contextTimeWindowMs?: number; // Time window for context analysis (default 300000)
+    historyMultiplier?: number; // Multiplier for history cleanup window (default 2)
+    refillThreshold?: number; // Threshold for passive refill detection (default 1.1)
+    consistencyThreshold?: number; // Threshold for consistency calculation (default 0.7)
+    passiveStrengthPeriods?: number; // Number of periods for passive strength calculation (default 3)
 }
 
 /**
@@ -102,6 +111,15 @@ export class AbsorptionDetector
     private readonly priceEfficiencyThreshold: number;
     private readonly significantChangeThreshold: number;
 
+    // ✅ NEW: Magic number elimination - configurable calculation parameters
+    private readonly liquidityGradientRange: number;
+    private readonly recentEventsNormalizer: number;
+    private readonly contextTimeWindowMs: number;
+    private readonly historyMultiplier: number;
+    private readonly refillThreshold: number;
+    private readonly consistencyThreshold: number;
+    private readonly passiveStrengthPeriods: number;
+
     // Advanced tracking
     private readonly absorptionHistory = new Map<number, AbsorptionEvent[]>();
     private readonly liquidityLayers = new Map<number, LiquidityLayer[]>();
@@ -131,7 +149,7 @@ export class AbsorptionDetector
         );
 
         // 🚨 CRITICAL FIX: OrderBook should now be guaranteed to be initialized
-        if (!orderBook) {
+        if (orderBook === null || orderBook === undefined) {
             throw new Error(
                 `AbsorptionDetector[${id}]: orderBook is unexpectedly null. This indicates an initialization order bug.`
             );
@@ -202,6 +220,50 @@ export class AbsorptionDetector
             "significantChangeThreshold",
             0.01,
             1.0
+        );
+
+        // ✅ NEW: Initialize magic number elimination - configurable calculation parameters
+        this.liquidityGradientRange = this.validateThreshold(
+            settings.liquidityGradientRange ?? 5,
+            "liquidityGradientRange",
+            1,
+            20
+        );
+        this.recentEventsNormalizer = this.validateThreshold(
+            settings.recentEventsNormalizer ?? 10,
+            "recentEventsNormalizer",
+            1,
+            100
+        );
+        this.contextTimeWindowMs = this.validateThreshold(
+            settings.contextTimeWindowMs ?? 300000,
+            "contextTimeWindowMs",
+            60000,
+            1800000
+        );
+        this.historyMultiplier = this.validateThreshold(
+            settings.historyMultiplier ?? 2,
+            "historyMultiplier",
+            1,
+            10
+        );
+        this.refillThreshold = this.validateThreshold(
+            settings.refillThreshold ?? 1.1,
+            "refillThreshold",
+            1.01,
+            2.0
+        );
+        this.consistencyThreshold = this.validateThreshold(
+            settings.consistencyThreshold ?? 0.7,
+            "consistencyThreshold",
+            0.1,
+            1.0
+        );
+        this.passiveStrengthPeriods = this.validateThreshold(
+            settings.passiveStrengthPeriods ?? 3,
+            "passiveStrengthPeriods",
+            1,
+            10
         );
 
         // Merge absorption-specific features
@@ -284,8 +346,12 @@ export class AbsorptionDetector
         }
 
         // Track zone passive volumes
-        const zoneHistory = this.zonePassiveHistory.get(zone)!;
-        const last = zoneHistory.count() ? zoneHistory.toArray().at(-1)! : null;
+        const zoneHistory = this.zonePassiveHistory.get(zone);
+        const zoneArray = zoneHistory?.toArray() ?? [];
+        const last =
+            zoneHistory && zoneHistory.count() > 0 && zoneArray.length > 0
+                ? zoneArray[zoneArray.length - 1]
+                : null;
 
         // Use object pool to reduce GC pressure
         const snap = SharedPools.getInstance().zoneSamples.acquire();
@@ -300,7 +366,10 @@ export class AbsorptionDetector
                 : event.zonePassiveAskVolume // aggressive buy  → tests ASK
         );
 
-        if (!last || last.bid !== snap.bid || last.ask !== snap.ask) {
+        if (
+            zoneHistory &&
+            (!last || last.bid !== snap.bid || last.ask !== snap.ask)
+        ) {
             // Use pool-aware push to handle evicted objects
             this.pushToZoneHistoryWithPoolCleanup(zoneHistory, snap);
         } else {
@@ -336,12 +405,12 @@ export class AbsorptionDetector
      */
     protected onEnrichedTradeSpecific(event: EnrichedTradeEvent): void {
         // Track absorption events for advanced analysis
-        if (this.features.absorptionVelocity) {
+        if (this.features.absorptionVelocity === true) {
             this.trackAbsorptionEvent(event);
         }
 
         // Update liquidity layers for gradient analysis
-        if (this.features.liquidityGradient) {
+        if (this.features.liquidityGradient === true) {
             this.updateLiquidityLayers(event);
         }
         void event;
@@ -432,7 +501,10 @@ export class AbsorptionDetector
             signal.aggressive
         );
         this.metricsCollector.incrementMetric("absorptionSignalsGenerated");
-        if (this.metricsCollector.recordHistogram) {
+        if (
+            this.metricsCollector.recordHistogram !== undefined &&
+            this.metricsCollector.recordHistogram !== null
+        ) {
             this.metricsCollector.recordHistogram(
                 "absorption.score",
                 signal.confidence
@@ -445,7 +517,7 @@ export class AbsorptionDetector
     /**
      * Override cleanup to properly clear interval timers and prevent memory leaks
      */
-    public cleanup(): void {
+    public override cleanup(): void {
         // Clear absorption detector specific intervals
         if (this.thresholdUpdateInterval) {
             clearInterval(this.thresholdUpdateInterval);
@@ -498,7 +570,7 @@ export class AbsorptionDetector
             }
         } catch (error) {
             this.handleError(
-                error as Error,
+                error instanceof Error ? error : new Error(String(error)),
                 "AbsorptionDetector.checkForSignal"
             );
             this.metricsCollector.incrementMetric("absorptionDetectionErrors");
@@ -524,7 +596,7 @@ export class AbsorptionDetector
         if (!zoneHistory || zoneHistory.count() === 0) return false;
 
         // 🚨 CRITICAL FIX: Add null safety guard for orderBook
-        if (!this.orderBook) {
+        if (this.orderBook === null || this.orderBook === undefined) {
             this.logger.warn("OrderBook unavailable for absorption analysis", {
                 price,
                 side,
@@ -548,25 +620,9 @@ export class AbsorptionDetector
 
         if (relevantPassive.length === 0) return false;
 
-        // Calculate rolling statistics
-        const currentPassive = relevantPassive[relevantPassive.length - 1] || 0;
-        const avgPassive = FinancialMath.calculateMean(relevantPassive);
-        const minPassive = Math.min(...relevantPassive);
+        // Calculate rolling statistics - removed unused variables
 
-        // Get recent aggressive volume
-        const recentAggressive =
-            side === "bid"
-                ? this.aggrSellEWMA.get() // “buy” absorption: compare to buy aggression
-                : this.aggrBuyEWMA.get(); // “sell” absorption: compare to sell aggression
-
-        // Pure absorption checks:
-        // 1. Passive maintained despite hits (liquidity resilience under pressure)
-        const maintainedPassive =
-            minPassive > avgPassive * 0.7 && // Simple threshold
-            recentAggressive > avgPassive;
-
-        // 2. Passive growing (liquidity replenishment)
-        const growingPassive = currentPassive > avgPassive * 1.2; // Simple threshold
+        // Pure absorption checks removed - using simple absorption ratio instead
 
         // ✅ SIMPLE: Use simple absorption ratio instead of complex iceberg logic
         const simpleAvgPassive = FinancialMath.calculateMean(relevantPassive);
@@ -579,7 +635,10 @@ export class AbsorptionDetector
 
         if (simpleAggressive === 0) return false;
 
-        const absorptionRatio = simpleAggressive / simpleAvgPassive;
+        const absorptionRatio = FinancialMath.divideQuantities(
+            simpleAggressive,
+            simpleAvgPassive
+        );
 
         return absorptionRatio <= this.weakAbsorptionRatio;
     }
@@ -596,7 +655,11 @@ export class AbsorptionDetector
         const tickSize = Math.pow(10, -this.pricePrecision);
         const nearbyLevels = [];
 
-        for (let offset = -5; offset <= 5; offset++) {
+        for (
+            let offset = -this.liquidityGradientRange;
+            offset <= this.liquidityGradientRange;
+            offset++
+        ) {
             // Use FinancialMath for precise price calculations
             const offsetAmount = Math.abs(offset) * tickSize;
             const testPrice =
@@ -615,9 +678,11 @@ export class AbsorptionDetector
         // Calculate gradient strength (higher = more liquidity depth)
         const avgVolume = FinancialMath.calculateMean(nearbyLevels);
         const centerIndex = Math.floor(nearbyLevels.length / 2);
-        const centerVolume = nearbyLevels[centerIndex] || 0;
+        const centerVolume = nearbyLevels[centerIndex] ?? 0;
 
-        return avgVolume > 0 ? Math.min(1, centerVolume / avgVolume) : 0;
+        return avgVolume !== null && avgVolume > 0
+            ? Math.min(1, centerVolume / avgVolume)
+            : 0;
     }
 
     /**
@@ -627,14 +692,14 @@ export class AbsorptionDetector
         zone: number,
         side: "buy" | "sell"
     ): number {
-        const events = this.absorptionHistory.get(zone) || [];
+        const events = this.absorptionHistory.get(zone) ?? [];
         if (events.length < 2) return 0;
 
         const recentEvents = events.filter(
             (e) => Date.now() - e.timestamp < 30000 && e.side === side
         );
 
-        return Math.min(1, recentEvents.length / 10); // Normalize to 0-1
+        return Math.min(1, recentEvents.length / this.recentEventsNormalizer); // Normalize to 0-1
     }
 
     /**
@@ -649,7 +714,7 @@ export class AbsorptionDetector
             this.absorptionHistory.set(zone, []);
         }
 
-        const events = this.absorptionHistory.get(zone)!;
+        const events = this.absorptionHistory.get(zone) ?? [];
         events.push({
             timestamp: event.timestamp,
             price: event.price,
@@ -766,8 +831,9 @@ export class AbsorptionDetector
             return "ask";
         }
         if (bidAbsorption && askAbsorption) {
-            // Both showing absorption - return stronger one
-            return this.resolveConflictingAbsorption(zone);
+            // Both showing absorption - try to resolve by strength
+            const resolvedSide = this.resolveConflictingAbsorption(zone);
+            return resolvedSide; // May be null if resolution fails
         }
 
         return null; // No clear absorption
@@ -839,10 +905,13 @@ export class AbsorptionDetector
      * @param zone Zone number
      * @returns The side with stronger absorption based on passive strength
      */
-    private resolveConflictingAbsorption(zone: number): "bid" | "ask" {
+    private resolveConflictingAbsorption(zone: number): "bid" | "ask" | null {
         const zoneHistory = this.zonePassiveHistory.get(zone);
-        if (!zoneHistory || zoneHistory.count() < 6) {
-            return "bid"; // Default to bid if insufficient data
+        if (
+            !zoneHistory ||
+            zoneHistory.count() < this.passiveStrengthPeriods * 2
+        ) {
+            return null; // CLAUDE.md: Cannot resolve without sufficient data
         }
 
         const snapshots = zoneHistory.toArray();
@@ -854,6 +923,11 @@ export class AbsorptionDetector
             snapshots,
             "ask"
         );
+
+        // CLAUDE.md: Return null if calculations failed
+        if (recentBidStrength === null || recentAskStrength === null) {
+            return null;
+        }
 
         // Return the side with stronger passive liquidity growth
         return recentBidStrength > recentAskStrength ? "bid" : "ask";
@@ -869,20 +943,34 @@ export class AbsorptionDetector
     private calculatePassiveStrength(
         snapshots: ZoneSample[],
         side: "bid" | "ask"
-    ): number {
-        if (snapshots.length < 3) return 1; // Neutral if insufficient data
+    ): number | null {
+        // CLAUDE.md: Return null when calculations cannot be performed with valid data
+        if (snapshots.length < this.passiveStrengthPeriods * 2) {
+            return null; // Cannot calculate strength with insufficient snapshots
+        }
 
         const values = snapshots.map((s) => s[side]);
-        const recent = values.slice(-3); // Last 3 snapshots
-        const earlier = values.slice(-6, -3); // Previous 3 snapshots
+        const recent = values.slice(-this.passiveStrengthPeriods); // Last N snapshots
+        const earlier = values.slice(
+            -this.passiveStrengthPeriods * 2,
+            -this.passiveStrengthPeriods
+        ); // Previous N snapshots
 
-        if (earlier.length === 0) return 1;
+        // CLAUDE.md: Return null for insufficient data
+        if (earlier.length === 0) {
+            return null;
+        }
 
         const recentAvg = FinancialMath.calculateMean(recent);
         const earlierAvg = FinancialMath.calculateMean(earlier);
 
+        // CLAUDE.md: Return null when calculation inputs are invalid
+        if (recentAvg === null || earlierAvg === null || earlierAvg <= 0) {
+            return null;
+        }
+
         // Return growth ratio (>1 means growing passive liquidity = stronger absorption)
-        return earlierAvg > 0 ? recentAvg / earlierAvg : 1;
+        return FinancialMath.divideQuantities(recentAvg, earlierAvg);
     }
 
     /**
@@ -970,11 +1058,10 @@ export class AbsorptionDetector
      * Get recent price range for context analysis
      */
     private getRecentPriceRange(): number[] {
-        const windowMs = 300000; // 5 minutes
         const now = Date.now();
 
         return this.trades
-            .filter((t) => now - t.timestamp < windowMs)
+            .filter((t) => now - t.timestamp < this.contextTimeWindowMs)
             .map((t) => t.price);
     }
 
@@ -1003,7 +1090,7 @@ export class AbsorptionDetector
             this.liquidityLayers.set(zone, []);
         }
 
-        const layers = this.liquidityLayers.get(zone)!;
+        const layers = this.liquidityLayers.get(zone) ?? [];
         layers.push({
             timestamp: event.timestamp,
             price: event.price,
@@ -1023,7 +1110,7 @@ export class AbsorptionDetector
      * Cleanup absorption tracking data
      */
     private cleanupAbsorptionHistory(): void {
-        const cutoff = Date.now() - this.windowMs * 2;
+        const cutoff = Date.now() - this.windowMs * this.historyMultiplier;
 
         for (const [zone, events] of this.absorptionHistory) {
             const filtered = events.filter((e) => e.timestamp > cutoff);
@@ -1054,6 +1141,10 @@ export class AbsorptionDetector
         zoneTicks: number
     ): void {
         const latestTrade = tradesAtZone[tradesAtZone.length - 1];
+        if (latestTrade?.price === undefined || latestTrade?.price === null) {
+            return;
+        }
+
         const price = +latestTrade.price.toFixed(this.pricePrecision);
 
         // ✅ ENHANCED: Use proper absorption detection logic based on dominant flow
@@ -1167,7 +1258,7 @@ export class AbsorptionDetector
 
         // ✅ ENHANCED: Apply microstructure confidence and urgency adjustments
         let finalConfidence = score;
-        let signalUrgency = "medium" as "low" | "medium" | "high";
+        let signalUrgency: "low" | "medium" | "high" = "medium";
 
         // Apply context-aware confidence adjustments
         if (absorptionContext.isReversal) {
@@ -1340,7 +1431,7 @@ export class AbsorptionDetector
                             price
                         );
                         return result;
-                    } catch (error) {
+                    } catch {
                         return "error-fallback";
                     }
                 })(),
@@ -1508,7 +1599,12 @@ export class AbsorptionDetector
             const now = Date.now();
             const snapshots = zoneHistory
                 .toArray()
-                .filter((s) => now - s.timestamp < this.windowMs);
+                .filter(
+                    (s) =>
+                        s.timestamp !== undefined &&
+                        s.timestamp !== null &&
+                        now - s.timestamp < this.windowMs
+                );
 
             if (snapshots.length === 0) {
                 sharedPools.absorptionConditions.release(conditions);
@@ -1525,7 +1621,7 @@ export class AbsorptionDetector
                 }
 
                 const currentPassive =
-                    relevantPassiveValues[relevantPassiveValues.length - 1] ||
+                    relevantPassiveValues[relevantPassiveValues.length - 1] ??
                     0;
 
                 const avgPassive = FinancialMath.calculateMean(
@@ -1552,26 +1648,33 @@ export class AbsorptionDetector
                 const icebergSignal = 0; // Always 0 for pure absorption detection
 
                 // ✅ FIX 4: Properly implement liquidity gradient
-                const liquidityGradient = this.features.liquidityGradient
-                    ? this.calculateLiquidityGradient(zone, price, side)
-                    : 0;
+                const liquidityGradient =
+                    this.features.liquidityGradient === true
+                        ? this.calculateLiquidityGradient(zone, price, side)
+                        : 0;
 
                 // ✅ FIX 5: Properly implement absorption velocity
-                const absorptionVelocity = this.features.absorptionVelocity
-                    ? this.calculateAbsorptionVelocity(zone, side)
-                    : 0;
+                const absorptionVelocity =
+                    this.features.absorptionVelocity === true
+                        ? this.calculateAbsorptionVelocity(zone, side)
+                        : 0;
 
-                // ✅ FIX 6: Properly calculate consistency
+                // ✅ CLAUDE.md COMPLIANT: Handle null calculation results properly
                 const consistency = this.calculateAbsorptionConsistency(
                     relevantPassiveValues
                 );
 
-                // ✅ FIX 7: Properly calculate velocity increase
                 const velocityIncrease = this.calculateVelocityIncrease(
                     zone,
                     side,
                     snapshots
                 );
+
+                // CLAUDE.md: Return null if critical calculations fail
+                if (consistency === null || velocityIncrease === null) {
+                    sharedPools.absorptionConditions.release(conditions);
+                    return null; // Cannot proceed without valid consistency and velocity data
+                }
 
                 // ✅ FIX 8: Properly get spread information
                 const spreadInfo = this.getCurrentSpread();
@@ -1603,8 +1706,9 @@ export class AbsorptionDetector
                 conditions.velocityIncrease = velocityIncrease;
                 conditions.spread = spread;
 
-                // Calculate hasRefill: maxPassive > avgPassive * 1.1 indicates refill activity
-                conditions.hasRefill = maxPassive > avgPassive * 1.1;
+                // Calculate hasRefill: maxPassive > avgPassive * threshold indicates refill activity
+                conditions.hasRefill =
+                    maxPassive > avgPassive * this.refillThreshold;
 
                 // Release imbalance result back to pool
                 sharedPools.imbalanceResults.release(imbalanceResult);
@@ -1616,7 +1720,7 @@ export class AbsorptionDetector
             }
         } catch (error) {
             this.handleError(
-                error as Error,
+                error instanceof Error ? error : new Error(String(error)),
                 "AbsorptionDetector.analyzeAbsorptionConditions"
             );
             // Cannot provide valid analysis on error - return null
@@ -1626,104 +1730,61 @@ export class AbsorptionDetector
     }
 
     /**
-     * ✅ FIX: Proper consistency calculation with safety checks
+     * ✅ CLAUDE.md COMPLIANT: Proper consistency calculation - returns null for insufficient data
      */
-    private calculateAbsorptionConsistency(passiveValues: number[]): number {
+    private calculateAbsorptionConsistency(
+        passiveValues: number[]
+    ): number | null {
+        // CLAUDE.md: Return null when calculations cannot be performed with valid data
         if (passiveValues.length < 2) {
-            // For insufficient data, calculate consistency from current EWMA state
-            const passiveEWMA = this.passiveEWMA.get();
-            const aggressiveEWMA = this.aggressiveEWMA.get();
-
-            if (passiveEWMA > 0 && aggressiveEWMA > 0) {
-                // Use ratio stability as consistency proxy
-                const ratio =
-                    Math.min(passiveEWMA, aggressiveEWMA) /
-                    Math.max(passiveEWMA, aggressiveEWMA);
-                return Math.max(0.1, Math.min(0.9, ratio)); // Scale to reasonable consistency range
-            }
-
-            // Last resort: use spread tightness as consistency indicator
-            const spreadInfo = this.getCurrentSpread();
-            if (spreadInfo?.spread) {
-                // Tighter spreads = higher consistency (inverted relationship)
-                const normalizedSpread = Math.min(spreadInfo.spread * 100, 1); // Cap at 1%
-                return Math.max(0.1, 1 - normalizedSpread);
-            }
-
-            return 0.5; // True fallback when no market data available
+            return null; // Cannot calculate consistency with insufficient data
         }
 
         try {
             // Check how consistently passive liquidity is maintained
             const avgPassive = FinancialMath.calculateMean(passiveValues);
-            if (avgPassive === 0) {
-                // Calculate consistency from value distribution instead
-                const nonZeroValues = passiveValues.filter((v) => v > 0);
-                if (nonZeroValues.length === 0) return 0.5;
 
-                // Measure how consistently values are non-zero
-                return nonZeroValues.length / passiveValues.length;
+            // CLAUDE.md: Return null when calculation inputs are invalid
+            if (avgPassive === null || avgPassive === 0) {
+                return null; // Cannot calculate consistency without valid average
             }
 
             let consistentPeriods = 0;
             for (const value of passiveValues) {
-                // Count periods where passive stays above 70% of average
-                if (value >= avgPassive * 0.7) {
+                // Count periods where passive stays above threshold of average
+                if (value >= avgPassive * this.consistencyThreshold) {
                     consistentPeriods++;
                 }
             }
 
             const consistency = consistentPeriods / passiveValues.length;
 
-            // Safety checks
-            if (!isFinite(consistency)) return 0.5;
+            // CLAUDE.md: Return null for invalid calculations
+            if (!isFinite(consistency)) {
+                return null;
+            }
+
             return Math.max(0, Math.min(1, consistency));
         } catch (error) {
             this.logger.warn(
-                `[AbsorptionDetector] Error calculating consistency: ${(error as Error).message}`
+                `[AbsorptionDetector] Error calculating consistency: ${error instanceof Error ? error.message : String(error)}`
             );
-            // Calculate from market spread as fallback
-            const spreadInfo = this.getCurrentSpread();
-            if (spreadInfo?.spread) {
-                const normalizedSpread = Math.min(spreadInfo.spread * 100, 1);
-                return Math.max(0.1, 1 - normalizedSpread);
-            }
-            return 0.5;
+            // CLAUDE.md: Return null on calculation errors, no fallback values
+            return null;
         }
     }
 
     /**
-     * ✅ FIX: Proper velocity increase calculation with safety checks
+     * ✅ CLAUDE.md COMPLIANT: Velocity increase calculation - returns null for insufficient data
      */
     private calculateVelocityIncrease(
         zone: number,
         side: "buy" | "sell",
         snapshots: ZoneSample[]
-    ): number {
+    ): number | null {
+        // CLAUDE.md: Return null when calculations cannot be performed with valid data
         if (snapshots.length < 3) {
-            // Calculate velocity from current EWMA momentum instead of hardcoded default
-            const currentAggressive =
-                side === "buy"
-                    ? this.aggrBuyEWMA.get()
-                    : this.aggrSellEWMA.get();
-            const currentPassive = this.passiveEWMA.get();
-
-            if (currentAggressive > 0 && currentPassive > 0) {
-                // Use current aggression vs passive ratio as velocity proxy
-                const ratio = currentAggressive / currentPassive;
-                // Scale ratio to velocity increase factor (0.5 to 2.0 range)
-                return Math.max(0.5, Math.min(2.0, ratio));
-            }
-
-            // Use market spread momentum as velocity indicator
-            const spreadInfo = this.getCurrentSpread();
-            if (spreadInfo?.spread) {
-                // Wider spreads = higher velocity (more volatility)
-                const spreadFactor = Math.min(spreadInfo.spread * 50, 1); // Scale spread to factor
-                return 1.0 + spreadFactor; // 1.0 to 2.0 range
-            }
-
-            return 1.0; // True neutral when no market data
+            return null; // Cannot calculate velocity increase with insufficient snapshots
         }
 
         try {
@@ -1731,71 +1792,55 @@ export class AbsorptionDetector
             const recent = snapshots.slice(-3); // Last 3 snapshots
             const earlier = snapshots.slice(-6, -3); // Previous 3 snapshots
 
+            // CLAUDE.md: Return null for insufficient data
             if (recent.length < 2 || earlier.length < 2) {
-                // Calculate from current momentum instead of hardcoded neutral
-                const currentAggressive =
-                    side === "buy"
-                        ? this.aggrBuyEWMA.get()
-                        : this.aggrSellEWMA.get();
-                const currentPassive = this.passiveEWMA.get();
-
-                if (currentAggressive > 0 && currentPassive > 0) {
-                    const momentumRatio = currentAggressive / currentPassive;
-                    return Math.max(0.5, Math.min(2.0, momentumRatio));
-                }
-                return 1.0; // True neutral only when no data available
+                return null; // Need at least 2 snapshots in each period
             }
 
             // Calculate velocity for recent period
             const recentVelocity = this.calculatePeriodVelocity(recent, side);
             const earlierVelocity = this.calculatePeriodVelocity(earlier, side);
 
-            // Return velocity increase ratio with safety checks
-            if (earlierVelocity <= 0) {
-                // Use recent velocity as increase indicator instead of hardcoded 1.0
-                return recentVelocity > 0
-                    ? Math.max(1.0, Math.min(2.0, recentVelocity))
-                    : 1.0;
+            // CLAUDE.md: Return null when calculation inputs are invalid
+            if (
+                recentVelocity === null ||
+                earlierVelocity === null ||
+                earlierVelocity <= 0
+            ) {
+                return null; // Cannot calculate ratio with invalid velocities
             }
 
-            const velocityRatio = recentVelocity / earlierVelocity;
+            const velocityRatio = FinancialMath.divideQuantities(
+                recentVelocity,
+                earlierVelocity
+            );
 
-            // Safety checks and bounds
+            // CLAUDE.md: Return null for invalid calculations
             if (!isFinite(velocityRatio)) {
-                // Calculate from recent velocity instead of hardcoded 1.0
-                return recentVelocity > 0
-                    ? Math.max(1.0, Math.min(2.0, recentVelocity))
-                    : 1.0;
+                return null;
             }
+
             return Math.max(0.1, Math.min(10, velocityRatio)); // Reasonable bounds
         } catch (error) {
             this.logger.warn(
-                `[AbsorptionDetector] Error calculating velocity increase: ${(error as Error).message}`
+                `[AbsorptionDetector] Error calculating velocity increase: ${error instanceof Error ? error.message : String(error)}`
             );
-            // Calculate fallback from current market state instead of hardcoded 1.0
-            const currentAggressive =
-                side === "buy"
-                    ? this.aggrBuyEWMA.get()
-                    : this.aggrSellEWMA.get();
-            const currentPassive = this.passiveEWMA.get();
-
-            if (currentAggressive > 0 && currentPassive > 0) {
-                const ratio = currentAggressive / currentPassive;
-                return Math.max(0.5, Math.min(2.0, ratio));
-            }
-
-            return 1.0; // True safe default when no market data
+            // CLAUDE.md: Return null on calculation errors, no fallback values
+            return null;
         }
     }
 
     /**
-     * ✅ FIX: Enhanced period velocity calculation with safety checks
+     * ✅ CLAUDE.md COMPLIANT: Period velocity calculation - returns null for insufficient data
      */
     private calculatePeriodVelocity(
         snapshots: ZoneSample[],
         side: "buy" | "sell"
-    ): number {
-        if (snapshots.length < 2) return 0;
+    ): number | null {
+        // CLAUDE.md: Return null when calculations cannot be performed with valid data
+        if (snapshots.length < 2) {
+            return null; // Cannot calculate velocity with insufficient snapshots
+        }
 
         try {
             const relevantSide = side === "buy" ? "ask" : "bid";
@@ -1809,9 +1854,15 @@ export class AbsorptionDetector
 
                 if (timeDelta > 0) {
                     const volumeChange = Math.abs(
-                        current[relevantSide] - previous[relevantSide]
+                        FinancialMath.safeSubtract(
+                            current[relevantSide],
+                            previous[relevantSide]
+                        )
                     );
-                    const velocity = volumeChange / (timeDelta / 1000); // per second
+                    const velocity = FinancialMath.divideQuantities(
+                        volumeChange,
+                        timeDelta / 1000
+                    ); // per second
 
                     if (isFinite(velocity)) {
                         totalVelocity += velocity;
@@ -1820,14 +1871,28 @@ export class AbsorptionDetector
                 }
             }
 
-            const avgVelocity =
-                validPeriods > 0 ? totalVelocity / validPeriods : 0;
-            return isFinite(avgVelocity) ? avgVelocity : 0;
+            // CLAUDE.md: Return null when no valid periods available
+            if (validPeriods === 0) {
+                return null; // Cannot calculate average without valid data points
+            }
+
+            const avgVelocity = FinancialMath.divideQuantities(
+                totalVelocity,
+                validPeriods
+            );
+
+            // CLAUDE.md: Return null for invalid calculations
+            if (!isFinite(avgVelocity)) {
+                return null;
+            }
+
+            return avgVelocity;
         } catch (error) {
             this.logger.warn(
-                `[AbsorptionDetector] Error calculating period velocity: ${(error as Error).message}`
+                `[AbsorptionDetector] Error calculating period velocity: ${error instanceof Error ? error.message : String(error)}`
             );
-            return 0;
+            // CLAUDE.md: Return null on calculation errors, no fallback values
+            return null;
         }
     }
 
@@ -1835,73 +1900,9 @@ export class AbsorptionDetector
      * ✅ FIX: Add validation to ensure all required fields are present
      */
 
-    /**
-     * ✅ FIX: Enhanced default conditions with all required fields
-     */
-    private getDefaultConditions(): AbsorptionConditions {
-        // Calculate real-time defaults from current market state instead of hardcoded values
-        const currentPassive = this.passiveEWMA.get();
-        const currentAggressive = this.aggressiveEWMA.get();
-        const spreadInfo = this.getCurrentSpread();
-
-        // Calculate consistency from EWMA stability
-        let calculatedConsistency = 0.5;
-        if (currentPassive > 0 && currentAggressive > 0) {
-            const ratio =
-                Math.min(currentPassive, currentAggressive) /
-                Math.max(currentPassive, currentAggressive);
-            calculatedConsistency = Math.max(0.1, Math.min(0.9, ratio));
-        } else if (spreadInfo?.spread) {
-            const normalizedSpread = Math.min(spreadInfo.spread * 100, 1);
-            calculatedConsistency = Math.max(0.1, 1 - normalizedSpread);
-        }
-
-        // Calculate velocity from current momentum
-        let calculatedVelocity = 1.0;
-        if (currentAggressive > 0 && currentPassive > 0) {
-            const momentumRatio = currentAggressive / currentPassive;
-            calculatedVelocity = Math.max(0.5, Math.min(2.0, momentumRatio));
-        } else if (spreadInfo?.spread) {
-            const spreadFactor = Math.min(spreadInfo.spread * 50, 1);
-            calculatedVelocity = 1.0 + spreadFactor;
-        }
-
-        // Use real spread or calculate reasonable estimate
-        const calculatedSpread =
-            spreadInfo?.spread ??
-            (currentPassive > 0 ? Math.min(0.01, 100 / currentPassive) : 0.002);
-
-        return {
-            absorptionRatio:
-                currentPassive > 0 ? currentAggressive / currentPassive : 1,
-            passiveStrength: 0,
-            hasRefill: false,
-            icebergSignal: 0,
-            liquidityGradient: 0,
-            absorptionVelocity: 0,
-            currentPassive: currentPassive,
-            avgPassive: currentPassive,
-            maxPassive: currentPassive,
-            minPassive: currentPassive,
-            aggressiveVolume: currentAggressive,
-            imbalance:
-                currentPassive > 0 && currentAggressive > 0
-                    ? Math.abs(currentAggressive - currentPassive) /
-                      (currentAggressive + currentPassive)
-                    : 0,
-            sampleCount: 0,
-            dominantSide:
-                currentAggressive > currentPassive
-                    ? "ask"
-                    : currentPassive > currentAggressive
-                      ? "bid"
-                      : "neutral",
-            consistency: calculatedConsistency,
-            velocityIncrease: calculatedVelocity,
-            spread: calculatedSpread,
-            microstructure: undefined,
-        };
-    }
+    // ✅ CLAUDE.md COMPLIANT: getDefaultConditions() method removed
+    // CLAUDE.md Violation: "When calculations cannot be performed with valid data, return null - NEVER use default numbers"
+    // This method created fake calculation results instead of returning null when data was insufficient
 
     /**
      * Detect potential absorption spoofing patterns
@@ -2021,7 +2022,9 @@ export class AbsorptionDetector
         // Analyze recent microstructure events in this zone
         const recentEvents = zoneEvents.filter(
             (event) =>
-                event.microstructure && event.timestamp > Date.now() - 300000 // Last 5 minutes
+                event.microstructure !== undefined &&
+                event.microstructure !== null &&
+                event.timestamp > Date.now() - 300000 // Last 5 minutes
         );
 
         if (recentEvents.length === 0) {
@@ -2030,28 +2033,28 @@ export class AbsorptionDetector
 
         // Calculate aggregate microstructure metrics
         const avgFragmentation = FinancialMath.calculateMean(
-            recentEvents.map((e) => e.microstructure!.fragmentationScore)
+            recentEvents.map((e) => e.microstructure?.fragmentationScore ?? 0)
         );
         const avgEfficiency = FinancialMath.calculateMean(
-            recentEvents.map((e) => e.microstructure!.executionEfficiency)
+            recentEvents.map((e) => e.microstructure?.executionEfficiency ?? 0)
         );
         const avgToxicity = FinancialMath.calculateMean(
-            recentEvents.map((e) => e.microstructure!.toxicityScore)
+            recentEvents.map((e) => e.microstructure?.toxicityScore ?? 0)
         );
         const totalCoordination = recentEvents.reduce(
-            (sum, e) => sum + e.microstructure!.coordinationIndicators,
+            (sum, e) => sum + (e.microstructure?.coordinationIndicators ?? 0),
             0
         );
 
         // Determine dominant algorithm type
         const algoTypes = recentEvents.map(
-            (e) => e.microstructure!.suspectedAlgoType
+            (e) => e.microstructure?.suspectedAlgoType ?? "unknown"
         );
         const dominantAlgoType = this.findMostFrequent(algoTypes);
 
         // Determine dominant timing pattern
         const timingPatterns = recentEvents.map(
-            (e) => e.microstructure!.timingPattern
+            (e) => e.microstructure?.timingPattern ?? "unknown"
         );
         const dominantTimingPattern = this.findMostFrequent(timingPatterns);
 
@@ -2283,7 +2286,7 @@ export class AbsorptionDetector
     private findMostFrequent<T>(array: T[]): T {
         const frequency = new Map<T, number>();
         for (const item of array) {
-            frequency.set(item, (frequency.get(item) || 0) + 1);
+            frequency.set(item, (frequency.get(item) ?? 0) + 1);
         }
 
         let maxCount = 0;
@@ -2314,7 +2317,10 @@ export class AbsorptionDetector
             this.absorptionHistory.set(zone, []);
         }
 
-        const zoneEvents = this.absorptionHistory.get(zone)!;
+        const zoneEvents = this.absorptionHistory.get(zone);
+        if (zoneEvents === undefined) {
+            return;
+        }
 
         // Enhanced absorption event with microstructure data
         const enhancedEvent: AbsorptionEvent & {
@@ -2368,7 +2374,7 @@ export class AbsorptionDetector
         if (!microstructure) return;
 
         // Get recent absorption events in this zone
-        const zoneEvents = this.absorptionHistory.get(zone) || [];
+        const zoneEvents = this.absorptionHistory.get(zone) ?? [];
         if (zoneEvents.length < 2) return;
 
         // Analyze iceberg behavior enhancement

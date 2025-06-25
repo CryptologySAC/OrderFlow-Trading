@@ -239,9 +239,14 @@ export class FailureAnalyzer {
             const marketContextAtFailure =
                 this.estimateMarketContextAtFailure(signalOutcome);
 
+            // Validate signal type
+            const signalType = this.validateSignalType(
+                signalOutcome.signalType
+            );
+
             const analysis: FailedSignalAnalysis = {
                 signalId: signalOutcome.signalId,
-                signalType: signalOutcome.signalType as SignalType,
+                signalType: signalType,
                 detectorId: signalOutcome.detectorId,
                 failureReason,
                 warningSignals,
@@ -285,7 +290,8 @@ export class FailureAnalyzer {
         const cacheKey = "failure_patterns";
         const cached = this.getFromCache(cacheKey);
         if (
-            cached &&
+            cached !== undefined &&
+            cached !== null &&
             Date.now() - this.lastPatternUpdate < this.config.cacheExpirationMs
         ) {
             return cached as FailurePatterns;
@@ -294,16 +300,15 @@ export class FailureAnalyzer {
         try {
             this.logger.debug("Detecting failure patterns", {
                 component: "FailureAnalyzer",
-                providedFailures: failedSignals?.length || 0,
+                providedFailures: failedSignals?.length ?? 0,
             });
 
             // Get failed signals if not provided
-            let failures = failedSignals;
-            if (!failures) {
-                failures = await this.storage.getFailedSignalAnalyses(
+            let failures =
+                failedSignals ??
+                (await this.storage.getFailedSignalAnalyses(
                     this.config.lookbackPeriodMs
-                );
-            }
+                ));
 
             if (failures.length < this.config.minFailuresForPattern) {
                 this.logger.warn(
@@ -379,7 +384,7 @@ export class FailureAnalyzer {
     ): Promise<PreventionMethod[]> {
         const cacheKey = `prevention_methods_${failurePattern}`;
         const cached = this.getFromCache(cacheKey);
-        if (cached) {
+        if (cached !== undefined && cached !== null) {
             return cached as PreventionMethod[];
         }
 
@@ -445,7 +450,7 @@ export class FailureAnalyzer {
     ): Promise<WarningSignals> {
         const cacheKey = "warning_signals";
         const cached = this.getFromCache(cacheKey);
-        if (cached) {
+        if (cached !== undefined && cached !== null) {
             return cached as WarningSignals;
         }
 
@@ -498,7 +503,7 @@ export class FailureAnalyzer {
     ): FailedSignalAnalysis["failureReason"] {
         const marketContext = signalOutcome.marketContext;
         const maxAdverseMove = Math.abs(signalOutcome.maxAdverseMove);
-        const timeToFailure = signalOutcome.timeToMaxAdverse || 0;
+        const timeToFailure = signalOutcome.timeToMaxAdverse ?? 0;
 
         // Analyze market conditions at failure
         if (
@@ -574,7 +579,7 @@ export class FailureAnalyzer {
         return {
             direction,
             magnitude: Math.max(maxFavorable, maxAdverse),
-            timeToFailure: signalOutcome.timeToMaxAdverse || 0,
+            timeToFailure: signalOutcome.timeToMaxAdverse ?? 0,
             maxDrawdown: maxAdverse,
         };
     }
@@ -674,7 +679,7 @@ export class FailureAnalyzer {
 
         // Count failures by reason and accumulate metrics
         for (const failure of failures) {
-            const existing = reasonCounts.get(failure.failureReason) || {
+            const existing = reasonCounts.get(failure.failureReason) ?? {
                 count: 0,
                 totalTimeToFailure: 0,
                 totalLoss: 0,
@@ -726,7 +731,10 @@ export class FailureAnalyzer {
             if (!clusters.has(signature)) {
                 clusters.set(signature, []);
             }
-            clusters.get(signature)!.push(failure);
+            const cluster = clusters.get(signature);
+            if (cluster) {
+                cluster.push(failure);
+            }
         }
 
         // Convert to cluster analysis format
@@ -1370,7 +1378,7 @@ export class FailureAnalyzer {
             actualPriceAction: {
                 direction: "choppy",
                 magnitude: Math.abs(signalOutcome.maxAdverseMove),
-                timeToFailure: signalOutcome.timeToMaxAdverse || 0,
+                timeToFailure: signalOutcome.timeToMaxAdverse ?? 0,
                 maxDrawdown: Math.abs(signalOutcome.maxAdverseMove),
             },
             avoidability: {
@@ -1496,5 +1504,34 @@ export class FailureAnalyzer {
             generatedAt: Date.now(),
             expiresAt: Date.now() + this.config.cacheExpirationMs,
         });
+    }
+
+    private validateSignalType(signalType: string): SignalType {
+        // List of valid signal types from SignalType union
+        const validTypes: SignalType[] = [
+            "absorption",
+            "exhaustion",
+            "accumulation",
+            "distribution",
+            "absorption_confirmed",
+            "exhaustion_confirmed",
+            "accumulation_confirmed",
+            "distribution_confirmed",
+            "flow",
+            "swingHigh",
+            "swingLow",
+            "cvd_confirmation",
+            "cvd_confirmation_confirmed",
+            "support_resistance_level",
+            "generic",
+        ];
+
+        if (validTypes.includes(signalType as SignalType)) {
+            return signalType as SignalType;
+        }
+
+        // Fallback for invalid signal types
+        this.logger.warn("Invalid signal type encountered", { signalType });
+        return "generic";
     }
 }

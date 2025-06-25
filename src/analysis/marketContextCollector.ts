@@ -688,13 +688,15 @@ export class MarketContextCollector extends EventEmitter {
         const nearestSupport = supportLevels[0];
         const nearestResistance = resistanceLevels[0];
 
-        const distanceFromSupport = nearestSupport
-            ? (currentPrice - nearestSupport.price) / currentPrice
-            : 0.05; // Default 5% if no support found
+        const distanceFromSupport =
+            nearestSupport !== undefined && nearestSupport !== null
+                ? (currentPrice - nearestSupport.price) / currentPrice
+                : 0.05; // Default 5% if no support found
 
-        const distanceFromResistance = nearestResistance
-            ? (nearestResistance.price - currentPrice) / currentPrice
-            : 0.05; // Default 5% if no resistance found
+        const distanceFromResistance =
+            nearestResistance !== undefined && nearestResistance !== null
+                ? (nearestResistance.price - currentPrice) / currentPrice
+                : 0.05; // Default 5% if no resistance found
 
         const nearKeyLevel =
             distanceFromSupport < nearbyThreshold ||

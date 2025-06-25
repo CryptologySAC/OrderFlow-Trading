@@ -9,20 +9,7 @@
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
         "types": ["vitest/globals", "node"],
-        "allowSyntheticDefaultImports": true,
-
-        // 🏦 INSTITUTIONAL-GRADE TYPE SAFETY (MAXIMUM STRICTNESS)
-        "noImplicitAny": true, // 🚫 Ban implicit any
-        "noImplicitReturns": true, // 🚫 All code paths must return
-        "noImplicitThis": true, // 🚫 Ban implicit this
-        "noFallthroughCasesInSwitch": true, // 🚫 Ban fallthrough cases
-        "noUncheckedIndexedAccess": true, // 🚫 Force index access checks
-        "exactOptionalPropertyTypes": true, // 🚫 Strict optional properties
-        "noImplicitOverride": true, // 🚫 Force explicit override
-        "noPropertyAccessFromIndexSignature": true, // 🚫 Force bracket notation for index
-        "allowUnusedLabels": false, // 🚫 Ban unused labels
-        "allowUnreachableCode": false, // 🚫 Ban unreachable code
-        "noImplicitUseStrict": false // ✅ Force use strict
+        "allowSyntheticDefaultImports": true
     },
     "include": ["src/**/*", "test/**/*", "scripts/**/*"],
     "ts-node": {

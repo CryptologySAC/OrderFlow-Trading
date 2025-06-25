@@ -133,7 +133,6 @@ export abstract class BaseDetector extends Detector implements IDetector {
 
         // Initialize features with defaults
         this.features = {
-            spoofingDetection: true,
             adaptiveZone: true,
             passiveHistory: true,
             multiZone: true,

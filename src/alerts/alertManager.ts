@@ -1,5 +1,5 @@
 // src/alerts/alertManager.ts
-import { Signal, SwingSignalData } from "../types/signalTypes.js";
+import { Signal } from "../types/signalTypes.js";
 import { AlertMessage } from "../utils/types.js";
 import {
     calculateBreakeven,
@@ -50,7 +50,11 @@ export class AlertManager {
         });
 
         // Webhook alert if configured
-        if (this.webhookUrl) {
+        if (
+            this.webhookUrl !== undefined &&
+            this.webhookUrl !== null &&
+            this.webhookUrl !== ""
+        ) {
             try {
                 await this.sendWebhook(alert);
             } catch (error) {
@@ -76,18 +80,41 @@ export class AlertManager {
         const reasoning: string[] = [];
 
         // Type-safe access to signalData
-        if (signal.signalData && typeof signal.signalData === "object") {
-            const data = signal.signalData as SwingSignalData;
+        if (
+            signal.signalData &&
+            typeof signal.signalData === "object" &&
+            "accumulation" in signal.signalData &&
+            "divergence" in signal.signalData
+        ) {
+            const data = signal.signalData;
 
-            if (data.accumulation?.isAccumulating) {
+            if (
+                data.accumulation !== undefined &&
+                data.accumulation !== null &&
+                typeof data.accumulation === "object" &&
+                "isAccumulating" in data.accumulation &&
+                data.accumulation.isAccumulating === true
+            ) {
                 reasoning.push("Accumulation detected");
             }
 
-            if (data.divergence?.type === "bullish") {
+            if (
+                data.divergence !== undefined &&
+                data.divergence !== null &&
+                typeof data.divergence === "object" &&
+                "type" in data.divergence &&
+                data.divergence.type === "bullish"
+            ) {
                 reasoning.push("Bullish divergence");
             }
 
-            if (data.divergence?.type === "bearish") {
+            if (
+                data.divergence !== undefined &&
+                data.divergence !== null &&
+                typeof data.divergence === "object" &&
+                "type" in data.divergence &&
+                data.divergence.type === "bearish"
+            ) {
                 reasoning.push("Bearish divergence");
             }
         }
@@ -102,7 +129,7 @@ export class AlertManager {
                 breakeven,
                 profit1: profit1.price,
                 profit2: profit2.price,
-                stopLoss: signal.stopLoss || signal.price * 0.98,
+                stopLoss: signal.stopLoss ?? signal.price * 0.98,
             },
             reasoning,
             timestamp: new Date().toISOString(),
@@ -110,7 +137,11 @@ export class AlertManager {
     }
 
     private async sendWebhook(alert: AlertMessage): Promise<void> {
-        if (!this.webhookUrl) {
+        if (
+            this.webhookUrl === undefined ||
+            this.webhookUrl === null ||
+            this.webhookUrl === ""
+        ) {
             throw new Error("Webhook URL not configured");
         }
 

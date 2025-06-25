@@ -78,8 +78,8 @@ export class DeltaCVDABMonitor extends EventEmitter {
      */
     private initializeProfiles(): void {
         for (const profile of Object.values(DeltaCVDTestProfile)) {
-            this.performances.set(profile as DeltaCVDTestProfile, {
-                profile: profile as DeltaCVDTestProfile,
+            this.performances.set(profile, {
+                profile: profile,
                 signalCount: 0,
                 processingTimes: [],
                 confidences: [],
@@ -138,17 +138,16 @@ export class DeltaCVDABMonitor extends EventEmitter {
         switch (this.allocationStrategy) {
             case AllocationStrategy.ROUND_ROBIN:
                 const profiles = Object.values(DeltaCVDTestProfile);
-                profile = profiles[
-                    this.rotationCounter % profiles.length
-                ] as DeltaCVDTestProfile;
+                profile = profiles[this.rotationCounter % profiles.length];
                 this.rotationCounter++;
                 break;
 
             case AllocationStrategy.RANDOM:
                 const randomProfiles = Object.values(DeltaCVDTestProfile);
-                profile = randomProfiles[
-                    Math.floor(Math.random() * randomProfiles.length)
-                ] as DeltaCVDTestProfile;
+                profile =
+                    randomProfiles[
+                        Math.floor(Math.random() * randomProfiles.length)
+                    ];
                 break;
 
             case AllocationStrategy.PERFORMANCE_WEIGHTED:
@@ -159,9 +158,7 @@ export class DeltaCVDABMonitor extends EventEmitter {
                 // Rotate every hour
                 const hour = new Date().getHours();
                 const timeProfiles = Object.values(DeltaCVDTestProfile);
-                profile = timeProfiles[
-                    hour % timeProfiles.length
-                ] as DeltaCVDTestProfile;
+                profile = timeProfiles[hour % timeProfiles.length];
                 break;
 
             default:
@@ -200,7 +197,7 @@ export class DeltaCVDABMonitor extends EventEmitter {
             performance.confidences.push(signal.confidence);
         }
 
-        if (error) {
+        if (error !== undefined && error !== null) {
             performance.errors++;
         }
 
@@ -331,11 +328,11 @@ export class DeltaCVDABMonitor extends EventEmitter {
         const noPassiveQuality =
             comparison.metrics.signalQuality.get(
                 DeltaCVDTestProfile.SIMPLIFIED_NO_PASSIVE
-            ) || 0;
+            ) ?? 0;
         const withPassiveQuality =
             comparison.metrics.signalQuality.get(
                 DeltaCVDTestProfile.SIMPLIFIED_WITH_PASSIVE
-            ) || 0;
+            ) ?? 0;
 
         if (withPassiveQuality > noPassiveQuality * 1.1) {
             insights.push(
@@ -351,11 +348,11 @@ export class DeltaCVDABMonitor extends EventEmitter {
         const simplifiedSpeed =
             comparison.metrics.processingSpeed.get(
                 DeltaCVDTestProfile.SIMPLIFIED_WITH_PASSIVE
-            ) || 0;
+            ) ?? 0;
         const complexSpeed =
             comparison.metrics.processingSpeed.get(
                 DeltaCVDTestProfile.CURRENT_COMPLEX
-            ) || 0;
+            ) ?? 0;
 
         if (simplifiedSpeed > complexSpeed * 1.4) {
             insights.push(
@@ -369,11 +366,11 @@ export class DeltaCVDABMonitor extends EventEmitter {
         const simplifiedMemory =
             comparison.metrics.memoryEfficiency.get(
                 DeltaCVDTestProfile.SIMPLIFIED_WITH_PASSIVE
-            ) || 0;
+            ) ?? 0;
         const complexMemory =
             comparison.metrics.memoryEfficiency.get(
                 DeltaCVDTestProfile.CURRENT_COMPLEX
-            ) || 0;
+            ) ?? 0;
 
         if (simplifiedMemory > complexMemory * 1.5) {
             insights.push(
@@ -386,11 +383,11 @@ export class DeltaCVDABMonitor extends EventEmitter {
         // Leader recommendation
         if (comparison.leader !== DeltaCVDTestProfile.CURRENT_COMPLEX) {
             const leaderScore =
-                comparison.metrics.overallScore.get(comparison.leader) || 0;
+                comparison.metrics.overallScore.get(comparison.leader) ?? 0;
             const complexScore =
                 comparison.metrics.overallScore.get(
                     DeltaCVDTestProfile.CURRENT_COMPLEX
-                ) || 0;
+                ) ?? 0;
 
             if (leaderScore > complexScore * 1.05) {
                 insights.push(
@@ -473,9 +470,9 @@ export class DeltaCVDABMonitor extends EventEmitter {
             }
         >;
     } {
-        const data = {
-            timestamp: new Date().toISOString(),
-            profiles: {} as Record<
+        const data: {
+            timestamp: string;
+            profiles: Record<
                 string,
                 {
                     signalCount: number;
@@ -485,7 +482,10 @@ export class DeltaCVDABMonitor extends EventEmitter {
                     errorRate: number;
                     sampleSize: number;
                 }
-            >,
+            >;
+        } = {
+            timestamp: new Date().toISOString(),
+            profiles: {},
         };
 
         for (const [profile, performance] of this.performances) {

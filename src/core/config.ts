@@ -414,9 +414,6 @@ export class Config {
                 cfg.symbols[cfg.symbol].absorption?.maxRevisitTicks ?? 5
             ),
             features: {
-                spoofingDetection:
-                    cfg.symbols[cfg.symbol].absorption?.features
-                        ?.spoofingDetection ?? false,
                 adaptiveZone:
                     cfg.symbols[cfg.symbol].absorption?.features
                         ?.adaptiveZone ?? false,
@@ -429,9 +426,7 @@ export class Config {
                 autoCalibrate:
                     cfg.symbols[cfg.symbol].absorption?.features
                         ?.autoCalibrate ?? false,
-                icebergDetection:
-                    cfg.symbols[cfg.symbol].absorption?.features
-                        ?.icebergDetection ?? false,
+
                 liquidityGradient:
                     cfg.symbols[cfg.symbol].absorption?.features
                         ?.liquidityGradient ?? false,
@@ -475,9 +470,7 @@ export class Config {
                 spreadAdjustment:
                     cfg.symbols[cfg.symbol].exhaustion?.features
                         ?.spreadAdjustment ?? false,
-                spoofingDetection:
-                    cfg.symbols[cfg.symbol].exhaustion?.features
-                        ?.spoofingDetection ?? false,
+
                 autoCalibrate:
                     cfg.symbols[cfg.symbol].exhaustion?.features
                         ?.autoCalibrate ?? false,

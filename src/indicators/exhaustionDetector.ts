@@ -655,16 +655,6 @@ export class ExhaustionDetector
             return;
         }
 
-        // Check for spoofing if enabled (includes layering detection)
-        if (
-            this.features.spoofingDetection &&
-            (this.isSpoofed(price, side, triggerTrade.timestamp) ||
-                this.detectLayeringAttack(price, side, triggerTrade.timestamp))
-        ) {
-            this.metricsCollector.incrementMetric("exhaustionSpoofingRejected");
-            return;
-        }
-
         // ✅ ENHANCED: Volume surge validation for exhaustion confirmation
         const volumeValidation =
             this.volumeAnalyzer.validateVolumeSurgeConditions(

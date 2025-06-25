@@ -711,7 +711,6 @@ export class DetectorFactory {
 
                 // Production-specific defaults
                 features: {
-                    spoofingDetection: true,
                     adaptiveZone: true,
                     passiveHistory: true,
                     multiZone: true,
@@ -727,7 +726,6 @@ export class DetectorFactory {
                     ...settings,
                     features: {
                         ...baseDefaults.features,
-                        icebergDetection: true,
                         liquidityGradient: true,
                         absorptionVelocity: false,
                         layeredAbsorption: false,
