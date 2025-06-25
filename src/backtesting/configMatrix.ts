@@ -295,13 +295,40 @@ export class ConfigMatrix {
             case "absorptionDetector":
                 configurations.push(
                     {
+                        id: `absorption_production`,
+                        detectorType,
+                        config: {
+                            // REAL PRODUCTION VALUES from config.json
+                            minAggVolume: 400,
+                            windowMs: 60000,
+                            zoneTicks: 5,
+                            absorptionThreshold: 0.6,
+                            minPassiveMultiplier: 1.2,
+                            maxAbsorptionRatio: 0.4,
+                            priceEfficiencyThreshold: 0.02,
+                            eventCooldownMs: 15000,
+                            // Include new time-based parameters
+                            dominantSideAnalysisWindowMs: 45000,
+                            dominantSideFallbackTradeCount: 10,
+                            dominantSideMinTradesRequired: 3,
+                            dominantSideTemporalWeighting: true,
+                            dominantSideWeightDecayFactor: 0.3,
+                        },
+                        description: "Current production configuration",
+                        profile: "balanced",
+                    },
+                    {
                         id: `absorption_conservative`,
                         detectorType,
                         config: {
-                            minAggVolume: 1000,
-                            absorptionThreshold: 0.85,
-                            minPassiveMultiplier: 3.0,
-                            eventCooldownMs: 30000,
+                            minAggVolume: 600, // Higher than production
+                            windowMs: 75000,
+                            zoneTicks: 6,
+                            absorptionThreshold: 0.7, // Higher than production
+                            minPassiveMultiplier: 1.5, // Higher than production
+                            maxAbsorptionRatio: 0.3,
+                            priceEfficiencyThreshold: 0.025,
+                            eventCooldownMs: 20000,
                         },
                         description:
                             "Conservative absorption detection for strong signals",
@@ -311,10 +338,14 @@ export class ConfigMatrix {
                         id: `absorption_balanced`,
                         detectorType,
                         config: {
-                            minAggVolume: 600,
-                            absorptionThreshold: 0.75,
-                            minPassiveMultiplier: 2.0,
-                            eventCooldownMs: 15000,
+                            minAggVolume: 350, // Slightly lower than production
+                            windowMs: 50000,
+                            zoneTicks: 4,
+                            absorptionThreshold: 0.58, // Slightly lower than production
+                            minPassiveMultiplier: 1.3, // Slightly higher than production
+                            maxAbsorptionRatio: 0.5,
+                            priceEfficiencyThreshold: 0.018,
+                            eventCooldownMs: 12000,
                         },
                         description: "Balanced absorption detection",
                         profile: "balanced",
@@ -323,10 +354,14 @@ export class ConfigMatrix {
                         id: `absorption_aggressive`,
                         detectorType,
                         config: {
-                            minAggVolume: 300,
-                            absorptionThreshold: 0.65,
-                            minPassiveMultiplier: 1.5,
-                            eventCooldownMs: 5000,
+                            minAggVolume: 250, // Lower than production for more signals
+                            windowMs: 45000,
+                            zoneTicks: 3,
+                            absorptionThreshold: 0.5, // Lower than production
+                            minPassiveMultiplier: 1.1, // Lower than production
+                            maxAbsorptionRatio: 0.6,
+                            priceEfficiencyThreshold: 0.015,
+                            eventCooldownMs: 8000,
                         },
                         description:
                             "Aggressive absorption detection for early signals",
@@ -604,13 +639,17 @@ export class ConfigMatrix {
             case "absorptionDetector":
                 const absorptionConfigs = this.generateParameterGrid(
                     {
-                        // BACKTESTING-OPTIMIZED: Lower thresholds for LTCUSDT
-                        minAggVolume: [10, 25, 50, 100, 300, 600],
-                        absorptionThreshold: [0.4, 0.5, 0.6, 0.7, 0.75, 0.8],
-                        minPassiveMultiplier: [1.1, 1.2, 1.5, 2.0, 2.5],
-                        eventCooldownMs: [1000, 2000, 5000, 10000, 15000],
-                        maxAbsorptionRatio: [0.3, 0.4, 0.5, 0.6, 0.7],
-                        priceEfficiencyThreshold: [0.75, 0.8, 0.85, 0.9, 0.95],
+                        // REALISTIC VALUES based on production config (400 volume)
+                        minAggVolume: [250, 300, 350, 400, 500, 600],
+                        absorptionThreshold: [0.5, 0.55, 0.6, 0.65, 0.7],
+                        minPassiveMultiplier: [1.1, 1.2, 1.3, 1.4, 1.5],
+                        eventCooldownMs: [8000, 10000, 12000, 15000, 20000],
+                        maxAbsorptionRatio: [0.3, 0.4, 0.5, 0.6],
+                        priceEfficiencyThreshold: [
+                            0.015, 0.018, 0.02, 0.025, 0.03,
+                        ],
+                        zoneTicks: [3, 4, 5, 6],
+                        windowMs: [45000, 50000, 60000, 75000],
                     },
                     points
                 );

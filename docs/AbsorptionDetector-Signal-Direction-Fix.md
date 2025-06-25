@@ -28,15 +28,17 @@ dominantSideWeightDecayFactor?: number;     // Weight decay factor (default: 0.5
 #### 2. Updated getDominantAggressiveSide() Logic
 
 **Before:**
+
 ```typescript
 const recentTrades = trades.slice(-10); // Fixed 10 trades - magic number!
 ```
 
 **After:**
+
 ```typescript
 // Time-based analysis with configurable window
 const cutoff = Date.now() - this.dominantSideAnalysisWindowMs;
-const recentTrades = trades.filter(trade => trade.timestamp >= cutoff);
+const recentTrades = trades.filter((trade) => trade.timestamp >= cutoff);
 
 // Fallback to trade count if insufficient time data
 if (recentTrades.length < this.dominantSideMinTradesRequired) {
@@ -58,6 +60,7 @@ if (this.dominantSideTemporalWeighting) {
 ### Configuration Settings
 
 #### Production Configuration (config.json)
+
 ```json
 "absorption": {
     // ... existing settings ...
@@ -72,12 +75,14 @@ if (this.dominantSideTemporalWeighting) {
 ### Why This Works
 
 #### At Local Low (Example)
+
 1. **Time 0-30s**: Heavy selling drives price to local low
 2. **Time 30-45s**: Absorption buying begins (1,603 volume example)
 3. **Analysis**: 45s window captures both phases
 4. **Result**: Correctly identifies "sell" as dominant → signals "buy"
 
 #### Benefits
+
 - **Captures complete market sequence**: Both the drive and the absorption
 - **Configurable for different markets**: Adjust window for market characteristics
 - **Temporal weighting**: Prioritizes the flow that initiated the move
@@ -86,18 +91,21 @@ if (this.dominantSideTemporalWeighting) {
 ### Testing & Validation
 
 #### Expected Behavior
+
 - **Local Low + Absorption** → BUY signal (support forming)
 - **Local High + Absorption** → SELL signal (resistance forming)
 
 #### Debug Logging
+
 To verify correct operation, temporary debug logging can be added:
+
 ```typescript
 console.log("Dominant side analysis:", {
     windowMs: this.dominantSideAnalysisWindowMs,
     tradesInWindow: recentTrades.length,
     buyVolume,
     sellVolume,
-    dominantSide: buyVolume > sellVolume ? "buy" : "sell"
+    dominantSide: buyVolume > sellVolume ? "buy" : "sell",
 });
 ```
 
