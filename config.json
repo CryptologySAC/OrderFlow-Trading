@@ -253,10 +253,10 @@
             },
 
             "absorption": {
-                "minAggVolume": 40,
+                "minAggVolume": 400,
                 "windowMs": 60000,
                 "pricePrecision": 2,
-                "zoneTicks": 3,
+                "zoneTicks": 5,
                 "eventCooldownMs": 15000,
                 "minInitialMoveTicks": 4,
                 "confirmationTimeoutMs": 60000,
@@ -275,13 +275,19 @@
                 "velocityIncreaseThreshold": 1.5,
                 "significantChangeThreshold": 0.1,
 
+                "dominantSideAnalysisWindowMs": 45000,
+                "dominantSideFallbackTradeCount": 10,
+                "dominantSideMinTradesRequired": 3,
+                "dominantSideTemporalWeighting": true,
+                "dominantSideWeightDecayFactor": 0.3,
+
                 "features": {
                     "adaptiveZone": true,
                     "passiveHistory": true,
                     "multiZone": false,
                     "liquidityGradient": true,
-                    "absorptionVelocity": false,
-                    "layeredAbsorption": false,
+                    "absorptionVelocity": true,
+                    "layeredAbsorption": true,
                     "spreadImpact": true
                 }
             },

@@ -259,6 +259,93 @@ See [Zone-Based Architecture Documentation](docs/Zone-Based-Architecture.md) for
 
 All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 
+### 🎯 DETECTOR OPTIMIZATION GOALS
+
+#### AbsorptionDetector Turning Point Optimization
+
+**PRIMARY OBJECTIVE**: Detect local tops and bottoms that lead to **0.7%+ movement** until the next local top or bottom.
+
+**OPTIMIZATION CRITERIA**:
+
+- **Maximize detection rate** of significant turning points (0.7%+ moves)
+- **Minimize false signals** that don't lead to substantial movement
+- **Balance sensitivity vs precision** for optimal signal quality
+
+**STRATEGIC APPROACH**: 2-Phase Hierarchical Optimization
+
+##### Phase 1: Core Parameters (Most Influential)
+
+Focus on the parameters with highest impact on turning point detection:
+
+1. **Zone Size (`zoneTicks`)**:
+
+    - Range: 1-10 ticks
+    - Impact: Granularity of absorption detection
+    - Smaller zones = more precise, larger zones = broader institutional patterns
+
+2. **Time Window (`windowMs`)**:
+
+    - Range: 30-180 seconds
+    - Impact: Pattern formation timeframe
+    - Shorter windows = faster signals, longer windows = more context
+
+3. **Min Aggressive Volume (`minAggVolume`)**:
+    - Range: 15-150
+    - Impact: Signal significance threshold
+    - Lower volume = more signals, higher volume = higher quality
+
+**Phase 1 Expected Optimal Ranges** (for 0.7%+ moves):
+
+```javascript
+// High sensitivity for 0.7%+ detection
+zoneTicks: [2, 3, 4],           // Tight to medium zones
+windowMs: [45000, 60000],       // 45-60s responsive timing
+minAggVolume: [20, 30, 40],     // Sensitive to moderate volume
+```
+
+##### Phase 2: Refinement Parameters (False Signal Filtering)
+
+After identifying best Phase 1 combinations, refine with quality filters:
+
+1. **Absorption Quality**:
+
+    - `absorptionThreshold`: 0.45-0.75 (lower = more signals)
+    - `minPassiveMultiplier`: 1.1-1.8 (higher = stricter absorption)
+    - `maxAbsorptionRatio`: 0.4-0.7 (higher = allow more aggressive)
+
+2. **Price Movement Validation**:
+
+    - `priceEfficiencyThreshold`: 0.01-0.025 (lower = more price impact sensitive)
+    - `velocityIncreaseThreshold`: 1.2-2.0 (higher = require stronger acceleration)
+
+3. **Signal Timing & Filtering**:
+    - `eventCooldownMs`: 5000-20000 (longer = fewer duplicate signals)
+    - `spreadImpactThreshold`: 0.002-0.005 (market impact sensitivity)
+
+**EVALUATION METRICS FOR 0.7%+ MOVES**:
+
+- **Primary**: Detection Rate (% of 0.7%+ moves caught), False Signal Rate
+- **Secondary**: Precision, Timing accuracy, Average movement magnitude
+
+**BACKTESTING COMMANDS**:
+
+```bash
+# Phase 1: Core parameter optimization
+npx ts-node scripts/runBacktest.ts --detectors absorptionDetector \
+  --custom-grid '{"zoneTicks":[2,3,4],"windowMs":[45000,60000],"minAggVolume":[20,30,40]}' \
+  --speed 100 --verbose
+
+# Phase 2: Refinement based on Phase 1 winners
+npx ts-node scripts/runBacktest.ts --detectors absorptionDetector \
+  --custom-grid '{"absorptionThreshold":[0.45,0.55,0.65],"minPassiveMultiplier":[1.1,1.3,1.5]}' \
+  --speed 100 --verbose
+```
+
+**OPTIMIZATION FILES**:
+
+- `absorption_turning_point_optimization.js` - Detailed optimization strategies
+- `start_absorption_optimization.sh` - Automated optimization sequence
+
 ### Signal Processing Pipeline
 
 1. **SignalCoordinator** (`src/services/signalCoordinator.ts`) - Manages detector registration and signal queuing

@@ -329,7 +329,10 @@ describe("AbsorptionDetector - Specification Compliance", () => {
             let surgeSignalStrength = 0;
 
             // Helper function to create proper absorption test scenario
-            function createAbsorptionScenario(volumePerTrade: number, detectorName: string) {
+            function createAbsorptionScenario(
+                volumePerTrade: number,
+                detectorName: string
+            ) {
                 const testDetector = new AbsorptionDetector(
                     detectorName,
                     defaultSettings,
@@ -374,15 +377,27 @@ describe("AbsorptionDetector - Specification Compliance", () => {
             }
 
             // Test base scenario
-            const baseDetector = createAbsorptionScenario(normalVolume, "BASE_TEST");
+            const baseDetector = createAbsorptionScenario(
+                normalVolume,
+                "BASE_TEST"
+            );
             baseDetector.on("signal", (signal: any) => {
-                baseSignalStrength = Math.max(baseSignalStrength, signal.confidence || 0);
+                baseSignalStrength = Math.max(
+                    baseSignalStrength,
+                    signal.confidence || 0
+                );
             });
 
             // Test surge scenario
-            const surgeDetector = createAbsorptionScenario(surgeVolume, "SURGE_TEST");
+            const surgeDetector = createAbsorptionScenario(
+                surgeVolume,
+                "SURGE_TEST"
+            );
             surgeDetector.on("signal", (signal: any) => {
-                surgeSignalStrength = Math.max(surgeSignalStrength, signal.confidence || 0);
+                surgeSignalStrength = Math.max(
+                    surgeSignalStrength,
+                    signal.confidence || 0
+                );
             });
 
             // Wait for signal processing
@@ -495,7 +510,9 @@ describe("AbsorptionDetector - Specification Compliance", () => {
             // Note: If no signal, the imbalance detection may require different conditions
             if (signalData) {
                 expect(signalData).not.toBeNull();
-                expect(signalData.metadata?.orderFlowImbalance).toBeGreaterThan(0.35);
+                expect(signalData.metadata?.orderFlowImbalance).toBeGreaterThan(
+                    0.35
+                );
             } else {
                 // Pass for now - indicates order flow imbalance feature may need investigation
                 expect(true).toBe(true);

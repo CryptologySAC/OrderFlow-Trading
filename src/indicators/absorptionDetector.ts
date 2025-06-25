@@ -1,37 +1,37 @@
 // src/indicators/absorptionDetector.ts
 //
 // 🔒 PRODUCTION-CRITICAL FILE - INSTITUTIONAL TRADING SYSTEM
-// 
+//
 // ⚠️  CRITICAL PROTECTION PROTOCOLS (STRICT ENFORCEMENT)
-// 
-// This file is part of a PRODUCTION TRADING SYSTEM handling real financial data 
+//
+// This file is part of a PRODUCTION TRADING SYSTEM handling real financial data
 // and trading decisions. ALL modifications must meet institutional-grade standards.
-// 
+//
 // 🚫 MODIFICATION RESTRICTIONS:
 // - NO changes without explicit approval and validation
 // - ALL changes require comprehensive testing (>95% coverage)
 // - Risk assessment mandatory before any modification
 // - Rollback plan required for all changes
 // - Worker thread isolation must be maintained
-// 
+//
 // 🎯 PRODUCTION STATUS: FULLY COMPLIANT
 // - ✅ 39/39 tests passing (100% success rate)
 // - ✅ Complete FinancialMath compliance for precision
 // - ✅ Institutional-grade error handling
 // - ✅ Zero magic numbers - all thresholds configurable
 // - ✅ CLAUDE.md standards fully implemented
-// 
+//
 // 📊 PERFORMANCE CHARACTERISTICS:
 // - Sub-millisecond signal detection latency
 // - Memory-efficient object pooling
 // - Optimized zone-based analysis
 // - Real-time absorption detection
-// 
+//
 // 🔧 LAST MAJOR UPDATE: 2025-06-25
 // - Complete detector audit implementation
 // - FinancialMath precision compliance
 // - Production-ready signal generation
-// 
+//
 // 💡 CONTACT: Require approval for modifications
 //
 import { SpotWebsocketStreams } from "@binance/spot";
@@ -85,6 +85,13 @@ export interface AbsorptionSettings extends BaseDetectorSettings {
     refillThreshold?: number; // Threshold for passive refill detection (default 1.1)
     consistencyThreshold?: number; // Threshold for consistency calculation (default 0.7)
     passiveStrengthPeriods?: number; // Number of periods for passive strength calculation (default 3)
+
+    // ✅ NEW: Dominant side analysis configuration
+    dominantSideAnalysisWindowMs?: number; // Time window for dominant side analysis (default 45000)
+    dominantSideFallbackTradeCount?: number; // Fallback trade count when insufficient time data (default 10)
+    dominantSideMinTradesRequired?: number; // Minimum trades required for time-based analysis (default 3)
+    dominantSideTemporalWeighting?: boolean; // Enable temporal weighting for older trades (default false)
+    dominantSideWeightDecayFactor?: number; // Weight decay factor for temporal weighting (default 0.5)
 }
 
 /**
@@ -154,6 +161,13 @@ export class AbsorptionDetector
     private readonly refillThreshold: number;
     private readonly consistencyThreshold: number;
     private readonly passiveStrengthPeriods: number;
+
+    // ✅ NEW: Dominant side analysis configuration
+    private readonly dominantSideAnalysisWindowMs: number;
+    private readonly dominantSideFallbackTradeCount: number;
+    private readonly dominantSideMinTradesRequired: number;
+    private readonly dominantSideTemporalWeighting: boolean;
+    private readonly dominantSideWeightDecayFactor: number;
 
     // Advanced tracking
     private readonly absorptionHistory = new Map<number, AbsorptionEvent[]>();
@@ -299,6 +313,34 @@ export class AbsorptionDetector
             "passiveStrengthPeriods",
             1,
             10
+        );
+
+        // ✅ NEW: Initialize dominant side analysis parameters
+        this.dominantSideAnalysisWindowMs = this.validateThreshold(
+            settings.dominantSideAnalysisWindowMs ?? 45000,
+            "dominantSideAnalysisWindowMs",
+            10000,
+            300000
+        );
+        this.dominantSideFallbackTradeCount = this.validateThreshold(
+            settings.dominantSideFallbackTradeCount ?? 10,
+            "dominantSideFallbackTradeCount",
+            3,
+            50
+        );
+        this.dominantSideMinTradesRequired = this.validateThreshold(
+            settings.dominantSideMinTradesRequired ?? 3,
+            "dominantSideMinTradesRequired",
+            2,
+            20
+        );
+        this.dominantSideTemporalWeighting =
+            settings.dominantSideTemporalWeighting ?? false;
+        this.dominantSideWeightDecayFactor = this.validateThreshold(
+            settings.dominantSideWeightDecayFactor ?? 0.5,
+            "dominantSideWeightDecayFactor",
+            0.1,
+            1.0
         );
 
         // Merge absorption-specific features
@@ -807,21 +849,61 @@ export class AbsorptionDetector
      * @param trades Recent trades in the zone
      * @returns The dominant aggressive side based on volume analysis
      */
+    /**
+     * ✅ CLAUDE.md COMPLIANT: Determine dominant aggressive side using configurable time-based analysis
+     *
+     * Fixed signal direction issue: Uses time-based analysis to properly capture the flow sequence
+     * that drives price moves, rather than arbitrary trade counts that can miss the driving flow.
+     */
     private getDominantAggressiveSide(
         trades: AggressiveTrade[]
     ): "buy" | "sell" {
-        const recentTrades = trades.slice(-10); // Last 10 trades for pattern analysis
+        // ✅ CLAUDE.md COMPLIANT: Use configurable time window instead of magic number (10 trades)
+        const cutoff = Date.now() - this.dominantSideAnalysisWindowMs;
+        const recentTrades = trades.filter(
+            (trade) => trade.timestamp >= cutoff
+        );
 
+        // Fallback to trade count if insufficient time-based data
+        if (recentTrades.length < this.dominantSideMinTradesRequired) {
+            const fallbackTrades = trades.slice(
+                -this.dominantSideFallbackTradeCount
+            );
+            return this.calculateDominantSideFromTrades(fallbackTrades);
+        }
+
+        return this.calculateDominantSideFromTrades(recentTrades);
+    }
+
+    /**
+     * ✅ CLAUDE.md COMPLIANT: Calculate dominant side with optional temporal weighting
+     */
+    private calculateDominantSideFromTrades(
+        trades: AggressiveTrade[]
+    ): "buy" | "sell" {
         let buyVolume = 0;
         let sellVolume = 0;
 
-        for (const trade of recentTrades) {
+        for (let i = 0; i < trades.length; i++) {
+            const trade = trades[i];
+            let weight = 1;
+
+            // ✅ CLAUDE.md COMPLIANT: Use configurable temporal weighting
+            if (this.dominantSideTemporalWeighting) {
+                // Earlier trades get more weight (they drove the initial move)
+                const position = i / trades.length; // 0 = earliest, 1 = latest
+                weight =
+                    1 + (1 - position) * this.dominantSideWeightDecayFactor;
+            }
+
+            const volume = trade.quantity * weight;
+
             if (trade.buyerIsMaker) {
                 // buyerIsMaker = true → aggressive sell hitting bid
-                sellVolume += trade.quantity;
+                sellVolume = FinancialMath.safeAdd(sellVolume, volume);
             } else {
                 // buyerIsMaker = false → aggressive buy hitting ask
-                buyVolume += trade.quantity;
+                buyVolume = FinancialMath.safeAdd(buyVolume, volume);
             }
         }
 
@@ -1944,13 +2026,10 @@ export class AbsorptionDetector
             const earlierVelocity = this.calculatePeriodVelocity(earlier, side);
 
             // CLAUDE.md: Return null when calculation inputs are invalid
-            if (
-                recentVelocity === null ||
-                earlierVelocity === null
-            ) {
+            if (recentVelocity === null || earlierVelocity === null) {
                 return null; // Cannot calculate ratio with invalid velocities
             }
-            
+
             // Handle zero velocity case: if earlier velocity is 0, we can't calculate a ratio
             // But zero velocity is valid data, so we return a default ratio indicating steady absorption
             if (earlierVelocity === 0) {
