@@ -388,6 +388,17 @@ export class Config {
             maxAbsorptionRatio: Number(
                 cfg.symbols[cfg.symbol].absorption?.maxAbsorptionRatio ?? 0.3
             ),
+            // Magic number elimination - absorption level thresholds
+            strongAbsorptionRatio: Number(
+                cfg.symbols[cfg.symbol].absorption?.strongAbsorptionRatio ?? 0.1
+            ),
+            moderateAbsorptionRatio: Number(
+                cfg.symbols[cfg.symbol].absorption?.moderateAbsorptionRatio ??
+                    0.3
+            ),
+            weakAbsorptionRatio: Number(
+                cfg.symbols[cfg.symbol].absorption?.weakAbsorptionRatio ?? 0.5
+            ),
             pricePrecision: Number(
                 cfg.symbols[cfg.symbol].absorption?.pricePrecision ??
                     Config.PRICE_PRECISION

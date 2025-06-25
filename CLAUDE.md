@@ -814,6 +814,55 @@ interface IWorkerCircuitBreaker {
 - Multiple implementations of same functionality
 - Conditional logic choosing between worker/non-worker paths
 - Direct infrastructure imports in worker files (use shared proxies)
+- non Financial Math in any financial calculation (using price or quantity)
+
+#### 🚫 CALCULATION INTEGRITY (ZERO TOLERANCE)
+
+**CRITICAL RULE**: When calculations cannot be performed with valid data, return `null` - NEVER use default numbers, fallbacks, or arbitrary values.
+
+**PROHIBITED PATTERNS:**
+
+```typescript
+// ❌ NEVER: Default numbers when calculation is invalid
+const efficiency = calculateEfficiency(data) ?? 0.5; // FORBIDDEN
+const confidence = priceData.length < 3 ? 0.7 : calculate(priceData); // FORBIDDEN
+const result = isNaN(calculation) ? 1.0 : calculation; // FORBIDDEN
+
+// ❌ NEVER: Arbitrary fallbacks for insufficient data
+if (trades.length < 3) return 0.85; // FORBIDDEN - not based on real data
+```
+
+**REQUIRED PATTERNS:**
+
+```typescript
+// ✅ CORRECT: Return null for invalid calculations
+const efficiency = calculateEfficiency(data); // returns number | null
+if (efficiency === null) {
+    return; // Cannot proceed without valid calculation
+}
+
+// ✅ CORRECT: Early return when insufficient data
+if (trades.length < 3) {
+    return null; // Honest: cannot calculate with insufficient data
+}
+
+// ✅ CORRECT: Null propagation through calculation chain
+const priceEfficiency = this.calculatePriceEfficiency(trades, zone);
+if (priceEfficiency === null) {
+    return; // Cannot emit signal without valid efficiency
+}
+```
+
+**WHY THIS MATTERS:**
+
+- **Trading Integrity**: Fake numbers can cause wrong trading decisions
+- **Data Honesty**: Better to admit insufficient data than guess
+- **System Reliability**: Null values force proper error handling
+- **Debugging**: Real issues are visible, not masked by defaults
+
+**ENFORCEMENT:**
+
+Any use of default numbers, fallback values, or arbitrary constants when calculations fail is an **IMMEDIATE REJECTION**. All calculation methods must return `null` when they cannot produce valid results.
 
 #### Architecture Benefits (Why This Matters):
 

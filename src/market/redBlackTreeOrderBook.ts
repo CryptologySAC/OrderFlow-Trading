@@ -620,12 +620,7 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
                 1000
             );
 
-            if (
-                !snapshot ||
-                !snapshot.lastUpdateId ||
-                !snapshot.bids ||
-                !snapshot.asks
-            ) {
+            if (!snapshot?.lastUpdateId || !snapshot.bids || !snapshot.asks) {
                 throw new Error("Failed to fetch order book snapshot");
             }
 

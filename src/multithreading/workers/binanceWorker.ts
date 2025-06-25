@@ -261,7 +261,7 @@ parentPort?.on("message", (msg: unknown) => {
                             const metrics = manager.getDetailedMetrics();
 
                             // Validate metrics structure before sending
-                            if (!metrics || !metrics.connection) {
+                            if (!metrics?.connection) {
                                 logger.warn(
                                     "Invalid metrics structure from DataStreamManager",
                                     {

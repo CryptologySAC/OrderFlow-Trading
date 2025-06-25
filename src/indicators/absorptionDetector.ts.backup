@@ -139,70 +139,23 @@ export class AbsorptionDetector
         this.orderBook = orderBook;
 
         // 🚨 CRITICAL: Configuration parameter validation
-        this.absorptionThreshold = this.validateThreshold(
-            settings.absorptionThreshold ?? 0.7,
-            "absorptionThreshold",
-            0,
-            1
-        );
-        this.minPassiveMultiplier = this.validateThreshold(
-            settings.minPassiveMultiplier ?? 1.5,
-            "minPassiveMultiplier",
-            0.1,
-            10
-        );
-        this.maxAbsorptionRatio = this.validateThreshold(
-            settings.maxAbsorptionRatio ?? 0.5,
-            "maxAbsorptionRatio",
-            0.1,
-            2.0
-        );
+        this.absorptionThreshold = this.validateThreshold(settings.absorptionThreshold ?? 0.7, "absorptionThreshold", 0, 1);
+        this.minPassiveMultiplier = this.validateThreshold(settings.minPassiveMultiplier ?? 1.5, "minPassiveMultiplier", 0.1, 10);
+        this.maxAbsorptionRatio = this.validateThreshold(settings.maxAbsorptionRatio ?? 0.5, "maxAbsorptionRatio", 0.1, 2.0);
 
         // Initialize magic number elimination - absorption level thresholds
-        this.strongAbsorptionRatio = this.validateThreshold(
-            settings.strongAbsorptionRatio ?? 0.1,
-            "strongAbsorptionRatio",
-            0.01,
-            1.0
-        );
-        this.moderateAbsorptionRatio = this.validateThreshold(
-            settings.moderateAbsorptionRatio ?? 0.3,
-            "moderateAbsorptionRatio",
-            0.01,
-            1.0
-        );
-        this.weakAbsorptionRatio = this.validateThreshold(
-            settings.weakAbsorptionRatio ?? 0.5,
-            "weakAbsorptionRatio",
-            0.01,
-            1.0
-        );
+        this.strongAbsorptionRatio = this.validateThreshold(settings.strongAbsorptionRatio ?? 0.1, "strongAbsorptionRatio", 0.01, 1.0);
+        this.moderateAbsorptionRatio = this.validateThreshold(settings.moderateAbsorptionRatio ?? 0.3, "moderateAbsorptionRatio", 0.01, 1.0);
+        this.weakAbsorptionRatio = this.validateThreshold(settings.weakAbsorptionRatio ?? 0.5, "weakAbsorptionRatio", 0.01, 1.0);
 
         // Initialize magic number elimination - configurable thresholds with validation
-        this.spreadImpactThreshold = this.validateThreshold(
-            settings.spreadImpactThreshold ?? 0.003,
-            "spreadImpactThreshold",
-            0.0001,
-            0.1
-        );
+        this.spreadImpactThreshold = this.validateThreshold(settings.spreadImpactThreshold ?? 0.003, "spreadImpactThreshold", 0.0001, 0.1);
         this.velocityIncreaseThreshold = this.validateThreshold(
-            settings.velocityIncreaseThreshold ?? 1.5,
-            "velocityIncreaseThreshold",
-            0.1,
-            10
-        );
+            settings.velocityIncreaseThreshold ?? 1.5, "velocityIncreaseThreshold", 0.1, 10);
         this.priceEfficiencyThreshold = this.validateThreshold(
-            settings.priceEfficiencyThreshold ?? 0.7,
-            "priceEfficiencyThreshold",
-            0,
-            1
-        );
+            settings.priceEfficiencyThreshold ?? 0.7, "priceEfficiencyThreshold", 0, 1);
         this.significantChangeThreshold = this.validateThreshold(
-            settings.significantChangeThreshold ?? 0.1,
-            "significantChangeThreshold",
-            0.01,
-            1.0
-        );
+            settings.significantChangeThreshold ?? 0.1, "significantChangeThreshold", 0.01, 1.0);
 
         // Merge absorption-specific features
         this.features = {
@@ -230,35 +183,24 @@ export class AbsorptionDetector
     /**
      * 🚨 CRITICAL: Validate configuration threshold parameters
      */
-    private validateThreshold(
-        value: number,
-        name: string,
-        min: number,
-        max: number
-    ): number {
+    private validateThreshold(value: number, name: string, min: number, max: number): number {
         if (!Number.isFinite(value) || isNaN(value)) {
-            throw new Error(
-                `AbsorptionDetector[${this.id}]: Invalid ${name}: ${value}. Must be a finite number.`
-            );
+            throw new Error(`AbsorptionDetector[${this.id}]: Invalid ${name}: ${value}. Must be a finite number.`);
         }
         if (value < min || value > max) {
-            throw new Error(
-                `AbsorptionDetector[${this.id}]: Invalid ${name}: ${value}. Must be between ${min} and ${max}.`
-            );
+            throw new Error(`AbsorptionDetector[${this.id}]: Invalid ${name}: ${value}. Must be between ${min} and ${max}.`);
         }
         return value;
     }
 
-    public override onEnrichedTrade(
-        event: EnrichedTradeEvent | HybridTradeEvent
-    ): void {
+    public override onEnrichedTrade(event: EnrichedTradeEvent | HybridTradeEvent): void {
         // 🚨 CRITICAL: Input validation before FinancialMath calls
         if (!FinancialMath.isValidPrice(event.price)) {
             this.logger.warn("AbsorptionDetector: Invalid price received", {
                 price: event.price,
                 type: typeof event.price,
                 tradeId: event.tradeId,
-                correlationId: `abs_${Date.now()}_${Math.random()}`,
+                correlationId: `abs_${Date.now()}_${Math.random()}`
             });
             return;
         }
@@ -268,7 +210,7 @@ export class AbsorptionDetector
                 quantity: event.quantity,
                 type: typeof event.quantity,
                 tradeId: event.tradeId,
-                correlationId: `abs_${Date.now()}_${Math.random()}`,
+                correlationId: `abs_${Date.now()}_${Math.random()}`
             });
             return;
         }
@@ -286,6 +228,7 @@ export class AbsorptionDetector
         // Track zone passive volumes
         const zoneHistory = this.zonePassiveHistory.get(zone)!;
         const last = zoneHistory.count() ? zoneHistory.toArray().at(-1)! : null;
+
 
         // Use object pool to reduce GC pressure
         const snap = SharedPools.getInstance().zoneSamples.acquire();
@@ -349,24 +292,23 @@ export class AbsorptionDetector
 
     /**
      * ✅ SIMPLE: Pure boolean detection with mathematical confidence
-     *
+     * 
      * No magic numbers, no arbitrary points, just clean math:
      * - Detection: absorptionRatio <= threshold
      * - Confidence: how far below threshold (1.0 - ratio/threshold)
      */
     private calculateAbsorptionScore(conditions: AbsorptionConditions): number {
         // Boolean detection: is this absorption?
-        const isAbsorption =
-            conditions.absorptionRatio <= this.weakAbsorptionRatio;
-
+        const isAbsorption = conditions.absorptionRatio <= this.weakAbsorptionRatio;
+        
         if (!isAbsorption) {
             return 0; // No absorption detected
         }
 
         // Mathematical confidence: how strong is the absorption?
         // Lower ratios = stronger absorption = higher confidence
-        const confidence =
-            1.0 - conditions.absorptionRatio / this.weakAbsorptionRatio;
+        const confidence = 1.0 - (conditions.absorptionRatio / this.weakAbsorptionRatio);
+
 
         return Math.max(0, Math.min(1, confidence));
     }
@@ -468,6 +410,7 @@ export class AbsorptionDetector
         const now = Date.now();
         const zoneTicks = this.getEffectiveZoneTicks();
 
+
         try {
             // Record detection metrics once per trade
             this.metricsCollector.incrementMetric(
@@ -479,16 +422,30 @@ export class AbsorptionDetector
             );
 
             for (const [zone, bucket] of this.zoneAgg) {
+                console.log(`🔍 Processing zone ${zone}:`, {
+                    tradesBeforeFilter: bucket.trades.length,
+                    totalVolume: bucket.vol
+                });
+
                 // prune old trades
                 bucket.trades = bucket.trades.filter(
                     (t) => now - t.timestamp < this.windowMs
                 );
                 bucket.vol = bucket.trades.reduce((s, t) => s + t.quantity, 0);
 
+                console.log(`🔍 Zone ${zone} after filtering:`, {
+                    tradesAfterFilter: bucket.trades.length,
+                    totalVolumeAfterFilter: bucket.vol,
+                    minAggVolume: this.minAggVolume,
+                    passesVolumeCheck: bucket.vol >= this.minAggVolume
+                });
+
                 if (bucket.trades.length === 0) {
+                    console.log(`⚠️ Zone ${zone}: No trades after filtering - skipping`);
                     continue;
                 }
 
+                console.log(`🎯 Analyzing zone ${zone} for absorption...`);
                 this.analyzeZoneForAbsorption(
                     zone,
                     bucket.trades,
@@ -572,14 +529,22 @@ export class AbsorptionDetector
         const simpleAvgPassive = FinancialMath.calculateMean(relevantPassive);
         if (simpleAvgPassive === null || simpleAvgPassive === 0) return false;
 
-        const simpleAggressive =
-            side === "bid"
-                ? this.aggrSellEWMA.get() // Sells hit bid
-                : this.aggrBuyEWMA.get(); // Buys hit ask
+        const simpleAggressive = side === "bid" 
+            ? this.aggrSellEWMA.get()  // Sells hit bid
+            : this.aggrBuyEWMA.get();  // Buys hit ask
 
         if (simpleAggressive === 0) return false;
 
         const absorptionRatio = simpleAggressive / simpleAvgPassive;
+        
+        console.log(`📊 Simple absorption check for ${side}:`, {
+            zone,
+            avgPassive: simpleAvgPassive.toFixed(2),
+            recentAggressive: simpleAggressive.toFixed(2),
+            absorptionRatio: absorptionRatio.toFixed(3),
+            threshold: this.weakAbsorptionRatio,
+            isAbsorption: absorptionRatio <= this.weakAbsorptionRatio
+        });
 
         return absorptionRatio <= this.weakAbsorptionRatio;
     }
@@ -599,10 +564,9 @@ export class AbsorptionDetector
         for (let offset = -5; offset <= 5; offset++) {
             // Use FinancialMath for precise price calculations
             const offsetAmount = Math.abs(offset) * tickSize;
-            const testPrice =
-                offset >= 0
-                    ? FinancialMath.safeAdd(price, offsetAmount)
-                    : FinancialMath.safeSubtract(price, offsetAmount);
+            const testPrice = offset >= 0 
+                ? FinancialMath.safeAdd(price, offsetAmount)
+                : FinancialMath.safeSubtract(price, offsetAmount);
             const level = this.depth.get(testPrice);
             if (level) {
                 const relevantVolume = side === "buy" ? level.ask : level.bid;
@@ -739,15 +703,28 @@ export class AbsorptionDetector
             return null; // Cannot determine absorption without valid efficiency
         }
 
+        console.log(`🔍 Zone ${zone} getAbsorbingSideForZone:`, {
+            tradesCount: tradesAtZone.length,
+            dominantAggressiveSide,
+            priceEfficiency,
+            priceEfficiencyThreshold: this.priceEfficiencyThreshold,
+            priceEfficiencyBelowThreshold: priceEfficiency < this.priceEfficiencyThreshold,
+            priceRange: {
+                min: Math.min(...tradesAtZone.map(t => t.price)),
+                max: Math.max(...tradesAtZone.map(t => t.price))
+            }
+        });
+
         // If price efficiency below threshold, there's likely absorption happening
         if (priceEfficiency < this.priceEfficiencyThreshold) {
             // The PASSIVE side opposite to aggressive flow is absorbing
-            const absorbingSide =
-                dominantAggressiveSide === "buy" ? "ask" : "bid";
+            const absorbingSide = dominantAggressiveSide === "buy" ? "ask" : "bid";
+            console.log(`✅ Zone ${zone}: Price efficiency absorption detected - ${absorbingSide} side absorbing`);
             return absorbingSide;
         }
 
         // Fallback: Check explicit absorption conditions
+        console.log(`🔍 Zone ${zone}: Price efficiency above threshold, checking explicit absorption conditions...`);
         const bidAbsorption = this.checkAbsorptionConditions(
             price,
             "bid",
@@ -759,17 +736,26 @@ export class AbsorptionDetector
             zone
         );
 
+        console.log(`🔍 Zone ${zone} explicit absorption check:`, {
+            bidAbsorption,
+            askAbsorption
+        });
+
         if (bidAbsorption && !askAbsorption) {
+            console.log(`✅ Zone ${zone}: Bid absorption detected via explicit conditions`);
             return "bid";
         }
         if (askAbsorption && !bidAbsorption) {
+            console.log(`✅ Zone ${zone}: Ask absorption detected via explicit conditions`);
             return "ask";
         }
         if (bidAbsorption && askAbsorption) {
             // Both showing absorption - return stronger one
+            console.log(`✅ Zone ${zone}: Both sides show absorption, resolving conflict...`);
             return this.resolveConflictingAbsorption(zone);
         }
 
+        console.log(`❌ Zone ${zone}: No clear absorption detected via any method`);
         return null; // No clear absorption
     }
 
@@ -783,6 +769,7 @@ export class AbsorptionDetector
     ): number | null {
         // CLAUDE.md: Return null when insufficient data for valid calculation
         if (tradesAtZone.length < 3) {
+            console.log(`🔍 Zone ${zone} calculatePriceEfficiency: Insufficient trades (${tradesAtZone.length} < 3 required)`);
             return null;
         }
 
@@ -1053,14 +1040,31 @@ export class AbsorptionDetector
         triggerTrade: AggressiveTrade,
         zoneTicks: number
     ): void {
+        console.log(`🎯 analyzeZoneForAbsorption started for zone ${zone}`);
+        
         const latestTrade = tradesAtZone[tradesAtZone.length - 1];
         const price = +latestTrade.price.toFixed(this.pricePrecision);
+
+        console.log(`🔍 Zone ${zone} analysis:`, {
+            tradesCount: tradesAtZone.length,
+            latestPrice: price,
+            priceRange: {
+                min: Math.min(...tradesAtZone.map(t => t.price)),
+                max: Math.max(...tradesAtZone.map(t => t.price))
+            }
+        });
 
         // ✅ ENHANCED: Use proper absorption detection logic based on dominant flow
         const side = this.getAbsorbingSideForZone(tradesAtZone, zone, price);
 
+        console.log(`🔍 Zone ${zone} absorbing side analysis:`, {
+            absorbingSide: side,
+            priceEfficiencyThreshold: this.priceEfficiencyThreshold
+        });
+
         if (!side) {
             // No clear absorption detected - exit early
+            console.log(`❌ Zone ${zone}: No clear absorption detected - returning early`);
             return;
         }
 
@@ -1084,37 +1088,62 @@ export class AbsorptionDetector
         }
 
         // Check cooldown (only confirm updates later)
-        const cooldownPassed = this.checkCooldown(
-            zone,
-            side === "bid" ? "buy" : "sell",
-            false
-        );
+        const cooldownPassed = this.checkCooldown(zone, side === "bid" ? "buy" : "sell", false);
+        console.log(`🔍 Zone ${zone} cooldown check:`, { passed: cooldownPassed });
         if (!cooldownPassed) {
+            console.log(`❌ Zone ${zone}: Cooldown check failed - returning early`);
             return;
         }
 
         // Analyze absorption conditions using object pooling
+        console.log(`🔍 Zone ${zone}: Analyzing absorption conditions...`);
         const conditions = this.analyzeAbsorptionConditions(
             price,
             side === "bid" ? "buy" : "sell",
             zone
         );
 
+        console.log(`🔍 Zone ${zone} conditions result:`, { 
+            hasConditions: conditions !== null,
+            conditions: conditions ? {
+                absorptionRatio: conditions.absorptionRatio,
+                passiveStrength: conditions.passiveStrength,
+                aggressiveVolume: conditions.aggressiveVolume,
+                avgPassive: conditions.avgPassive
+            } : null
+        });
+
         // Cannot proceed without valid conditions - return early
         if (conditions === null) {
+            console.log(`❌ Zone ${zone}: No valid conditions - returning early`);
             return;
         }
 
         // Use conditions as-is without adding defaults
         const completeConditions = conditions;
 
+        console.log(`🔍 Zone ${zone}: Calculating absorption score...`);
         const score = this.calculateAbsorptionScore(completeConditions);
+
+        console.log(`🔍 Zone ${zone} score analysis:`, {
+            score,
+            absorptionThreshold: this.absorptionThreshold,
+            passesScoreCheck: score >= this.absorptionThreshold,
+            thresholds: {
+                strong: this.currentThresholds.absorptionLevels.strong,
+                moderate: this.currentThresholds.absorptionLevels.moderate,
+                weak: this.currentThresholds.absorptionLevels.weak,
+            },
+            absorptionRatio: conditions.absorptionRatio,
+            ratioTooHigh: conditions.absorptionRatio > this.currentThresholds.absorptionLevels.weak
+        });
 
         // Store conditions reference for later cleanup
         const conditionsToRelease = conditions;
 
         // Check score threshold
         if (score < this.absorptionThreshold) {
+            console.log(`❌ Zone ${zone}: Score ${score} below threshold ${this.absorptionThreshold} - returning early`);
             SharedPools.getInstance().absorptionConditions.release(
                 conditionsToRelease
             );
@@ -1122,14 +1151,23 @@ export class AbsorptionDetector
         }
 
         // Calculate volumes
+        console.log(`🔍 Zone ${zone}: Calculating zone volumes...`);
         const volumes = this.calculateZoneVolumes(
             zone,
             tradesAtZone,
             zoneTicks
         );
 
+        console.log(`🔍 Zone ${zone} volume analysis:`, {
+            aggressiveVolume: volumes.aggressive,
+            passiveVolume: volumes.passive,
+            minAggVolume: this.minAggVolume,
+            passesVolumeCheck: volumes.aggressive >= this.minAggVolume
+        });
+
         // Volume threshold check
         if (volumes.aggressive < this.minAggVolume) {
+            console.log(`❌ Zone ${zone}: Aggressive volume ${volumes.aggressive} below minimum ${this.minAggVolume} - returning early`);
             // Release pooled conditions object before early return
 
             SharedPools.getInstance().absorptionConditions.release(
@@ -1147,8 +1185,15 @@ export class AbsorptionDetector
                       volumes.passive
                   )
                 : 1;
-
+        
+        console.log(`🔍 Zone ${zone} absorption ratio check:`, {
+            absorptionRatio: absorptionRatio.toFixed(3),
+            maxAbsorptionRatio: this.maxAbsorptionRatio,
+            passes: absorptionRatio <= this.maxAbsorptionRatio
+        });
+        
         if (absorptionRatio > this.maxAbsorptionRatio) {
+            console.log(`❌ Zone ${zone}: Absorption ratio ${absorptionRatio.toFixed(3)} > max ${this.maxAbsorptionRatio} - returning early`);
             // Release pooled conditions object before early return
 
             SharedPools.getInstance().absorptionConditions.release(
@@ -1163,9 +1208,12 @@ export class AbsorptionDetector
         // Absorption only cares about actual executed trades vs real passive liquidity
 
         // ✅ ENHANCED: Apply context-aware absorption logic for market structure
+        console.log(`🔍 Zone ${zone}: Calculating absorption context...`);
         const absorptionContext = this.calculateAbsorptionContext(price, side);
+        console.log(`✅ Zone ${zone}: Absorption context calculated:`, absorptionContext);
 
         // ✅ ENHANCED: Apply microstructure confidence and urgency adjustments
+        console.log(`🔍 Zone ${zone}: Starting confidence adjustments with score ${score}`);
         let finalConfidence = score;
         let signalUrgency = "medium" as "low" | "medium" | "high";
 
@@ -1207,10 +1255,15 @@ export class AbsorptionDetector
         if (absorptionContext.isReversal && absorptionContext.strength > 0.7) {
             signalUrgency = "high"; // High urgency for strong reversal signals
         }
+        
+        console.log(`🔍 Zone ${zone}: Completed confidence adjustments, finalConfidence: ${finalConfidence}`);
+        console.log(`🔍 Zone ${zone}: Moving to signal creation...`);
 
         // ✅ ENHANCED: Calculate flow analysis for comprehensive debugging
+        console.log(`🔍 Zone ${zone}: Starting flow analysis...`);
         const dominantAggressiveSide =
             this.getDominantAggressiveSide(tradesAtZone);
+        console.log(`✅ Zone ${zone}: Dominant aggressive side: ${dominantAggressiveSide}`);
         const buyVolume = tradesAtZone
             .filter((t) => !t.buyerIsMaker)
             .reduce((s, t) => s + t.quantity, 0);
@@ -1219,10 +1272,12 @@ export class AbsorptionDetector
             .reduce((s, t) => s + t.quantity, 0);
 
         // Calculate price efficiency for enhanced logging
+        console.log(`🔍 Zone ${zone}: Calculating price efficiency for logging...`);
         const priceEfficiency = this.calculatePriceEfficiency(
             tradesAtZone,
             zone
         );
+        console.log(`✅ Zone ${zone}: Price efficiency calculated: ${priceEfficiency}`);
 
         this.logger.info(
             `[AbsorptionDetector] 🎯 CORRECTED ABSORPTION SIGNAL!`,
@@ -1278,6 +1333,7 @@ export class AbsorptionDetector
             }
         );
 
+        console.log(`🔍 Zone ${zone}: About to create signal object...`);
         const signal: AbsorptionSignalData = {
             zone,
             price,
@@ -1309,38 +1365,33 @@ export class AbsorptionDetector
                 marketContext: {
                     // Debug: Add logging for each calculation step
                     priceEfficiency: (() => {
-                        const result = this.calculatePriceEfficiency(
-                            tradesAtZone,
-                            zone
-                        );
+                        console.log(`🔍 Zone ${zone}: Calculating marketContext.priceEfficiency...`);
+                        const result = this.calculatePriceEfficiency(tradesAtZone, zone);
+                        console.log(`✅ Zone ${zone}: marketContext.priceEfficiency result: ${result}`);
                         return result;
                     })(),
                     expectedPriceMovement: (() => {
-                        const result = this.calculateExpectedMovement(
-                            volumes.aggressive,
-                            volumes.passive
-                        );
+                        console.log(`🔍 Zone ${zone}: Calculating marketContext.expectedPriceMovement...`);
+                        const result = this.calculateExpectedMovement(volumes.aggressive, volumes.passive);
+                        console.log(`✅ Zone ${zone}: marketContext.expectedPriceMovement result: ${result}`);
                         return result;
                     })(),
                     actualPriceMovement: Math.abs(
                         price - tradesAtZone[0].price
                     ),
                     absorptionStrength: (() => {
-                        const efficiency = this.calculatePriceEfficiency(
-                            tradesAtZone,
-                            zone
-                        );
+                        const efficiency = this.calculatePriceEfficiency(tradesAtZone, zone);
                         return efficiency !== null ? 1 - efficiency : null; // null if calculation invalid
                     })(),
                 },
                 absorptionMethod: (() => {
+                    console.log(`🔍 Zone ${zone}: Calculating absorptionMethod...`);
                     try {
-                        const result = this.determineAbsorptionMethod(
-                            zone,
-                            price
-                        );
+                        const result = this.determineAbsorptionMethod(zone, price);
+                        console.log(`✅ Zone ${zone}: absorptionMethod result: ${result}`);
                         return result;
                     } catch (error) {
+                        console.log(`❌ Zone ${zone}: absorptionMethod failed with error:`, error);
                         return "error-fallback";
                     }
                 })(),
@@ -1388,6 +1439,8 @@ export class AbsorptionDetector
             },
         };
 
+        console.log(`🔍 Zone ${zone}: Signal object created successfully`);
+        console.log(`🎯 EMITTING ABSORPTION SIGNAL for zone ${zone} with confidence ${finalConfidence}`);
         this.handleDetection(signal);
 
         this.metricsCollector.updateMetric(
@@ -1498,8 +1551,14 @@ export class AbsorptionDetector
 
         try {
             const zoneHistory = this.zonePassiveHistory.get(zone);
-
+            console.log(`🔍 analyzeAbsorptionConditions for zone ${zone}:`, {
+                hasZoneHistory: !!zoneHistory,
+                historyCount: zoneHistory?.count() || 0,
+                windowMs: this.windowMs
+            });
+            
             if (!zoneHistory || zoneHistory.count() === 0) {
+                console.log(`❌ Zone ${zone}: No zone history or empty history`);
                 // Cannot analyze with insufficient data - return null
                 sharedPools.absorptionConditions.release(conditions);
                 return null;
@@ -1510,7 +1569,17 @@ export class AbsorptionDetector
                 .toArray()
                 .filter((s) => now - s.timestamp < this.windowMs);
 
+            console.log(`🔍 Zone ${zone} snapshots after time filtering:`, {
+                totalSnapshots: zoneHistory.count(),
+                filteredSnapshots: snapshots.length,
+                timeWindow: this.windowMs,
+                oldestSnapshot: snapshots[0]?.timestamp,
+                newestSnapshot: snapshots[snapshots.length - 1]?.timestamp,
+                currentTime: now
+            });
+
             if (snapshots.length === 0) {
+                console.log(`❌ Zone ${zone}: No snapshots within time window`);
                 sharedPools.absorptionConditions.release(conditions);
                 return null;
             }
@@ -1518,35 +1587,43 @@ export class AbsorptionDetector
             // Use pooled array for relevant passive values calculation
             const relevantPassiveValues = sharedPools.numberArrays.acquire();
             try {
+                console.log(`🔍 Zone ${zone} starting calculations...`);
+                
                 for (const snapshot of snapshots) {
                     relevantPassiveValues.push(
                         side === "buy" ? snapshot.ask : snapshot.bid
                     );
                 }
+                console.log(`✅ Zone ${zone} relevantPassiveValues populated:`, relevantPassiveValues.length);
 
                 const currentPassive =
                     relevantPassiveValues[relevantPassiveValues.length - 1] ||
                     0;
-
+                console.log(`✅ Zone ${zone} currentPassive:`, currentPassive);
+                
                 const avgPassive = FinancialMath.calculateMean(
                     relevantPassiveValues
                 );
-
+                console.log(`✅ Zone ${zone} avgPassive:`, avgPassive);
+                
                 const maxPassive = Math.max(...relevantPassiveValues);
                 const minPassive = Math.min(...relevantPassiveValues);
+                console.log(`✅ Zone ${zone} maxPassive:`, maxPassive, 'minPassive:', minPassive);
 
                 /* ── Aligned 15-second ratio ──────────────────────────────────────────── */
                 const ewmaAgg = this.aggressiveEWMA.get(); // 15 s aggressive
                 const ewmaPas = this.passiveEWMA.get(); // 15 s passive (opposite side)
+                console.log(`✅ Zone ${zone} EWMA values - agg:`, ewmaAgg, 'pas:', ewmaPas);
 
                 // ✅ FIXED: Absorption ratio should be aggressive/passive, where < 1.0 indicates absorption
                 // Lower ratios = stronger absorption (less aggressive volume relative to passive)
-                const absorptionRatio =
-                    ewmaPas > 0 ? ewmaAgg / ewmaPas : Number.MAX_VALUE;
+                const absorptionRatio = ewmaPas > 0 ? ewmaAgg / ewmaPas : Number.MAX_VALUE;
+                console.log(`✅ Zone ${zone} absorptionRatio:`, absorptionRatio);
 
                 // ✅ FIX 1: Properly calculate passive strength
                 const passiveStrength =
                     avgPassive > 0 ? currentPassive / avgPassive : 0;
+                console.log(`✅ Zone ${zone} passiveStrength:`, passiveStrength);
 
                 // ✅ REMOVED: Iceberg detection handled by dedicated IcebergDetector service
                 const icebergSignal = 0; // Always 0 for pure absorption detection
@@ -1555,16 +1632,19 @@ export class AbsorptionDetector
                 const liquidityGradient = this.features.liquidityGradient
                     ? this.calculateLiquidityGradient(zone, price, side)
                     : 0;
+                console.log(`✅ Zone ${zone} liquidityGradient:`, liquidityGradient);
 
                 // ✅ FIX 5: Properly implement absorption velocity
                 const absorptionVelocity = this.features.absorptionVelocity
                     ? this.calculateAbsorptionVelocity(zone, side)
                     : 0;
+                console.log(`✅ Zone ${zone} absorptionVelocity:`, absorptionVelocity);
 
                 // ✅ FIX 6: Properly calculate consistency
                 const consistency = this.calculateAbsorptionConsistency(
                     relevantPassiveValues
                 );
+                console.log(`✅ Zone ${zone} consistency:`, consistency);
 
                 // ✅ FIX 7: Properly calculate velocity increase
                 const velocityIncrease = this.calculateVelocityIncrease(
@@ -1572,19 +1652,24 @@ export class AbsorptionDetector
                     side,
                     snapshots
                 );
+                console.log(`✅ Zone ${zone} velocityIncrease:`, velocityIncrease);
 
                 // ✅ FIX 8: Properly get spread information
                 const spreadInfo = this.getCurrentSpread();
                 const spread = spreadInfo?.spread ?? 0;
+                console.log(`✅ Zone ${zone} spread:`, spread);
 
                 // ✅ FIX 9: Properly calculate imbalance
                 const imbalanceResult = this.checkPassiveImbalance(zone);
+                console.log(`✅ Zone ${zone} imbalanceResult:`, imbalanceResult);
 
                 // ✅ FIX 10: Properly integrate microstructure insights
                 const microstructureInsights =
                     this.integrateMicrostructureInsights(zone);
+                console.log(`✅ Zone ${zone} microstructureInsights:`, microstructureInsights);
 
                 // ✅ POPULATE ALL FIELDS: Ensure every field is properly set
+                console.log(`✅ Zone ${zone} populating conditions object...`);
                 conditions.absorptionRatio = absorptionRatio;
                 conditions.passiveStrength = passiveStrength;
                 conditions.icebergSignal = icebergSignal;
@@ -1605,9 +1690,15 @@ export class AbsorptionDetector
 
                 // Calculate hasRefill: maxPassive > avgPassive * 1.1 indicates refill activity
                 conditions.hasRefill = maxPassive > avgPassive * 1.1;
+                console.log(`✅ Zone ${zone} conditions populated successfully!`);
 
                 // Release imbalance result back to pool
                 sharedPools.imbalanceResults.release(imbalanceResult);
+                console.log(`✅ Zone ${zone} returning conditions object:`, {
+                    absorptionRatio: conditions.absorptionRatio,
+                    passiveStrength: conditions.passiveStrength,
+                    sampleCount: conditions.sampleCount
+                });
 
                 return conditions;
             } finally {
@@ -1615,6 +1706,7 @@ export class AbsorptionDetector
                 sharedPools.numberArrays.release(relevantPassiveValues);
             }
         } catch (error) {
+            console.log(`❌ Zone ${zone} EXCEPTION in analyzeAbsorptionConditions:`, error);
             this.handleError(
                 error as Error,
                 "AbsorptionDetector.analyzeAbsorptionConditions"
@@ -1902,6 +1994,7 @@ export class AbsorptionDetector
             microstructure: undefined,
         };
     }
+
 
     /**
      * Detect potential absorption spoofing patterns

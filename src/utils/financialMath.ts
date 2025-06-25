@@ -96,6 +96,31 @@ export class FinancialMath {
     }
 
     /**
+     * Safe price addition avoiding floating point errors
+     */
+    static addAmounts(
+        amount1: number,
+        amount2: number,
+        precision: number
+    ): number {
+        if (
+            isNaN(amount1) ||
+            isNaN(amount2) ||
+            !Number.isFinite(amount1) ||
+            !Number.isFinite(amount2)
+        ) {
+            throw new Error(
+                `Invalid amounts for addition: ${amount1}, ${amount2}`
+            );
+        }
+        const amount1Int = this.priceToInt(amount1);
+        const amount2Int = this.priceToInt(amount2);
+        const resultInt = amount1Int + amount2Int;
+        const result = this.intToPrice(resultInt);
+        return this.normalizeQuantity(result, precision);
+    }
+
+    /**
      * Validate if a price value is valid for trading
      */
     static isValidPrice(price: number): boolean {

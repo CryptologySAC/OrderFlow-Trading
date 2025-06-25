@@ -133,7 +133,7 @@ export class ZoneManager extends EventEmitter {
         trade: EnrichedTradeEvent
     ): ZoneUpdate | null {
         const zone = this.activeZones.get(zoneId);
-        if (!zone || !zone.isActive) return null;
+        if (!zone?.isActive) return null;
 
         // Check if trade is within zone
         if (!this.isTradeInZone(trade, zone)) return null;

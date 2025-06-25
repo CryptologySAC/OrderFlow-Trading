@@ -97,7 +97,6 @@ export interface AccumulationSettings extends BaseDetectorSettings {
 
 export interface AbsorptionFeatures extends DetectorFeatures {
     // Absorption-specific features
-    icebergDetection?: boolean; // Detect iceberg orders
     liquidityGradient?: boolean; // Analyze liquidity depth gradient
     absorptionVelocity?: boolean; // Track rate of absorption
     layeredAbsorption?: boolean; // Detect multi-level absorption
@@ -123,7 +122,6 @@ export interface AccumulationFeatures extends DetectorFeatures {
  * Common feature flags
  */
 export interface DetectorFeatures {
-    spoofingDetection?: boolean;
     adaptiveZone?: boolean;
     passiveHistory?: boolean;
     multiZone?: boolean;

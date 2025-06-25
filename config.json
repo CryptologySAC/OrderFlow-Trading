@@ -258,39 +258,28 @@
                 "pricePrecision": 2,
                 "zoneTicks": 3,
                 "eventCooldownMs": 15000,
-
-                "absorptionThreshold": 0.6,
-                "minPassiveMultiplier": 1.2,
-                "maxAbsorptionRatio": 0.4,
-                "icebergDetectionSensitivity": 1.0,
-                "icebergConfidenceMultiplier": 1.0,
-
-                "priceEfficiencyThreshold": 0.85,
-                "priceEfficiencyScalingFactor": 10,
-
-                "volumeSurgeMultiplier": 4.0,
-                "imbalanceThreshold": 0.35,
-                "institutionalThreshold": 17.8,
-                "burstDetectionMs": 1000,
-                "sustainedVolumeMs": 30000,
-                "medianTradeSize": 0.6,
-
-                "ewmaHalfLifeSec": 20,
-                "passiveWindowSec": 60,
-
-                "signalCooldownMs": 120000,
                 "minInitialMoveTicks": 4,
                 "confirmationTimeoutMs": 60000,
                 "maxRevisitTicks": 5,
 
+                "absorptionThreshold": 0.6,
+                "minPassiveMultiplier": 1.2,
+                "maxAbsorptionRatio": 0.4,
+
+                "strongAbsorptionRatio": 0.6,
+                "moderateAbsorptionRatio": 0.8,
+                "weakAbsorptionRatio": 1.0,
+
+                "priceEfficiencyThreshold": 0.02,
+                "spreadImpactThreshold": 0.003,
+                "velocityIncreaseThreshold": 1.5,
+                "significantChangeThreshold": 0.1,
+
                 "features": {
-                    "spoofingDetection": true,
                     "adaptiveZone": true,
                     "passiveHistory": true,
                     "multiZone": false,
-                    "icebergDetection": true,
                     "liquidityGradient": true,
-                    "spreadAdjustment": true,
                     "absorptionVelocity": false,
                     "layeredAbsorption": false,
                     "spreadImpact": true

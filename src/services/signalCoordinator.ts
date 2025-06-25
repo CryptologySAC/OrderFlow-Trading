@@ -368,7 +368,7 @@ export class SignalCoordinator extends EventEmitter {
         detector: Detector
     ): void {
         const reg = this.detectors.get(detector.getId());
-        if (!reg || !reg.enabled) return;
+        if (!reg?.enabled) return;
 
         // Track signal candidates received by type
         this.metrics.incrementCounter(
