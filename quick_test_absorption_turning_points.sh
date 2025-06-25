@@ -31,11 +31,11 @@ echo ""
 echo "🔬 Testing Core Parameters for 0.7%+ Turning Point Detection"
 echo "------------------------------------------------------------"
 echo "Parameters:"
-echo "  • zoneTicks: [2, 3, 4] (tight to medium zones)"
-echo "  • windowMs: [45000, 60000] (45-60s response time)"  
-echo "  • minAggVolume: [20, 30, 40] (sensitive to moderate volume)"
+echo "  • zoneTicks: [3, 4, 5, 6] (realistic zone sizes)"
+echo "  • windowMs: [45000, 60000, 75000] (realistic time windows)"  
+echo "  • minAggVolume: [300, 400, 500] (realistic volume thresholds)"
 echo ""
-echo "Expected: ~24 configurations (2×3×3)"
+echo "Expected: ~36 configurations (4×3×3)"
 echo ""
 
 # Try the compiled JS version first, fallback to ts-node
@@ -55,7 +55,7 @@ else
     echo "Running core parameter grid search..."
     npx ts-node scripts/runBacktest.ts \
         --detectors absorptionDetector \
-        --custom-grid '{"zoneTicks":[2,3,4],"windowMs":[45000,60000],"minAggVolume":[20,30,40]}' \
+        --custom-grid '{"zoneTicks":[3,4,5,6],"windowMs":[45000,60000,75000],"minAggVolume":[300,400,500]}' \
         --speed 150 \
         --parallel 1 \
         --verbose \
