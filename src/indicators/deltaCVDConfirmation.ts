@@ -119,6 +119,16 @@ export interface DeltaCVDConfirmationSettings extends BaseDetectorSettings {
     strongCorrelationThreshold?: number; // Strong correlation threshold (default 0.7)
     weakCorrelationThreshold?: number; // Weak correlation threshold (default 0.3)
     depthImbalanceThreshold?: number; // Depth imbalance signal threshold (default 0.2)
+
+    // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 parameters)
+    minTradesForAnalysis?: number; // Minimum trades required for analysis (default: 20)
+    minVolumeRatio?: number; // Minimum volume ratio for calculations (default: 0.1)
+    maxVolumeRatio?: number; // Maximum volume ratio cap (default: 5.0)
+    priceChangeThreshold?: number; // Price change threshold for direction detection (default: 0.001)
+    minZScoreBound?: number; // Minimum z-score bound (default: -20)
+    maxZScoreBound?: number; // Maximum z-score bound (default: 20)
+    minCorrelationBound?: number; // Minimum correlation bound (default: -0.999)
+    maxCorrelationBound?: number; // Maximum correlation bound (default: 0.999)
 }
 
 interface WindowState {
@@ -148,6 +158,37 @@ interface WindowState {
 const MIN_SAMPLES_FOR_STATS = 30;
 const VOLATILITY_LOOKBACK_DEFAULT = 3600; // 1 hour
 const CLEANUP_INTERVAL_DEFAULT = 300; // 5 minutes
+
+// Algorithm constants - internal implementation details
+const _MIN_VOLATILITY_SAMPLES = 50;
+const _MAX_VOLATILITY_SAMPLES = 500;
+const _PRICE_RETURN_OUTLIER_CAP = 0.5;
+const _BASELINE_VOLATILITY_SMOOTHING_WEIGHT = 0.99;
+const _NEW_VOLATILITY_WEIGHT = 0.01;
+const _MAX_VOLATILITY_CAP = 0.1;
+const _MIN_VOLATILITY_FLOOR = 0.0001;
+const _EMERGENCY_VOLATILITY_RESET = 0.001;
+const _VOLUME_WEIGHTING_FACTOR = 0.1;
+const _ABSORPTION_BONUS_MULTIPLIER = 0.15;
+const _MAX_CONFIDENCE_CAP = 0.98;
+const _TEMPORAL_CONSISTENCY_WEIGHT = 0.15;
+const _DIVERGENCE_PENALTY_WEIGHT = 0.1;
+
+// Memory management constants
+const _MAX_VOLUME_PROFILE_SIZE = 1000;
+const _VOLUME_PROFILE_KEEP_COUNT = 500;
+const _MAX_INSTITUTIONAL_ZONES = 20;
+const _MEMORY_PRESSURE_THRESHOLD_MB = 1000;
+const _MEMORY_WARNING_THRESHOLD_MB = 500;
+const _MIN_CLEANUP_ENTRIES = 50;
+
+// Technical constants
+const _ICEBERG_REFILL_MULTIPLIER = 1.3;
+const _SAFETY_MARGIN_MULTIPLIER = 2.0;
+const _BURST_HISTORY_CLEANUP_MS = 300000;
+const _INSTITUTIONAL_ZONE_MULTIPLIER_LOW = 10;
+const _INSTITUTIONAL_ZONE_MULTIPLIER_HIGH = 20;
+const _TICK_SIZE_THRESHOLDS = [0.0001, 0.001, 0.01, 0.1, 1.0];
 
 /* ------------------------------------------------------------------ */
 /*  Enhanced Detector Implementation                                  */
@@ -207,6 +248,16 @@ export class DeltaCVDConfirmation extends BaseDetector {
     private readonly strongCorrelationThreshold: number;
     private readonly weakCorrelationThreshold: number;
     private readonly depthImbalanceThreshold: number;
+
+    // ESSENTIAL CONFIGURABLE PARAMETERS - Property declarations
+    private readonly minTradesForAnalysis: number;
+    private readonly minVolumeRatio: number;
+    private readonly maxVolumeRatio: number;
+    private readonly priceChangeThreshold: number;
+    private readonly minZScoreBound: number;
+    private readonly maxZScoreBound: number;
+    private readonly minCorrelationBound: number;
+    private readonly maxCorrelationBound: number;
 
     /* ---- enhanced mutable state --------------------------------- */
     private readonly states = new Map<number, WindowState>();
@@ -322,6 +373,16 @@ export class DeltaCVDConfirmation extends BaseDetector {
         this.weakCorrelationThreshold =
             settings.weakCorrelationThreshold ?? 0.3;
         this.depthImbalanceThreshold = settings.depthImbalanceThreshold ?? 0.2;
+
+        // ESSENTIAL CONFIGURABLE PARAMETERS - Initialize with defaults
+        this.minTradesForAnalysis = settings.minTradesForAnalysis ?? 20;
+        this.minVolumeRatio = settings.minVolumeRatio ?? 0.1;
+        this.maxVolumeRatio = settings.maxVolumeRatio ?? 5.0;
+        this.priceChangeThreshold = settings.priceChangeThreshold ?? 0.001;
+        this.minZScoreBound = settings.minZScoreBound ?? -20;
+        this.maxZScoreBound = settings.maxZScoreBound ?? 20;
+        this.minCorrelationBound = settings.minCorrelationBound ?? -0.999;
+        this.maxCorrelationBound = settings.maxCorrelationBound ?? 0.999;
 
         // Initialize window states
         for (const w of this.windows) {
@@ -511,7 +572,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
     } {
         const state = this.states.get(windowSec)!;
 
-        if (state.trades.length < 20) {
+        if (state.trades.length < this.minTradesForAnalysis) {
             return {
                 detected: false,
                 type: "none",
@@ -563,12 +624,13 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
                     // ENHANCED: Cap volume ratio to prevent extreme multipliers
                     const cappedRatio = Math.min(
-                        5.0,
-                        Math.max(0.1, volumeRatio)
+                        this.maxVolumeRatio,
+                        Math.max(this.minVolumeRatio, volumeRatio)
                     );
 
                     // ENHANCED: Apply weighting with bounds checking
-                    const weightingFactor = 1 + cappedRatio * 0.1;
+                    const weightingFactor =
+                        1 + cappedRatio * _VOLUME_WEIGHTING_FACTOR;
                     effectiveQuantity = validQuantity * weightingFactor;
 
                     // CRITICAL FIX: Validate final effective quantity
@@ -862,7 +924,10 @@ export class DeltaCVDConfirmation extends BaseDetector {
             const existing = this.icebergTracking.get(levelKey);
             if (existing) {
                 // Detect refill (size suddenly increased)
-                if (event.quantity > existing.maxSize * 1.3) {
+                if (
+                    event.quantity >
+                    existing.maxSize * _ICEBERG_REFILL_MULTIPLIER
+                ) {
                     existing.refillCount++;
                     existing.maxSize = event.quantity;
                     existing.totalVolume += event.quantity;
@@ -937,8 +1002,11 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
                 // ENHANCED: More conservative bounds checking
                 const maxLength = Math.max(
-                    50, // Reduced from 100 for better performance
-                    Math.min(500, this.volatilityLookbackSec / 10) // Cap at 500
+                    _MIN_VOLATILITY_SAMPLES, // Reduced from 100 for better performance
+                    Math.min(
+                        _MAX_VOLATILITY_SAMPLES,
+                        this.volatilityLookbackSec / 10
+                    ) // Cap at 500
                 );
                 while (this.recentPriceChanges.length > maxLength) {
                     this.recentPriceChanges.shift();
@@ -966,7 +1034,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
                         );
 
                         // ENHANCED: Additional bounds checking for returns
-                        if (Math.abs(priceReturn) < 0.5) {
+                        if (Math.abs(priceReturn) < _PRICE_RETURN_OUTLIER_CAP) {
                             // Cap at 50% move to prevent outliers
                             returns.push(priceReturn);
                         }
@@ -1007,11 +1075,12 @@ export class DeltaCVDConfirmation extends BaseDetector {
                             } else {
                                 const newBaseline =
                                     this.marketRegime.baselineVolatility *
-                                        0.99 +
-                                    this.marketRegime.volatility * 0.01;
+                                        _BASELINE_VOLATILITY_SMOOTHING_WEIGHT +
+                                    this.marketRegime.volatility *
+                                        _NEW_VOLATILITY_WEIGHT;
                                 this.marketRegime.baselineVolatility = Math.min(
-                                    0.1,
-                                    Math.max(0.0001, newBaseline)
+                                    _MAX_VOLATILITY_CAP,
+                                    Math.max(_MIN_VOLATILITY_FLOOR, newBaseline)
                                 );
                             }
 
@@ -1037,8 +1106,8 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 }
             );
             // ENHANCED: Reset to safe state on error
-            this.marketRegime.volatility = 0.001;
-            this.marketRegime.baselineVolatility = 0.001;
+            this.marketRegime.volatility = _EMERGENCY_VOLATILITY_RESET;
+            this.marketRegime.baselineVolatility = _EMERGENCY_VOLATILITY_RESET;
         }
     }
 
@@ -1054,11 +1123,11 @@ export class DeltaCVDConfirmation extends BaseDetector {
         state.volumeProfile.set(roundedPrice, currentVolume + event.quantity);
 
         // Cleanup old volume profile entries periodically
-        if (state.volumeProfile.size > 1000) {
-            // Keep only top 500 volume levels
+        if (state.volumeProfile.size > _MAX_VOLUME_PROFILE_SIZE) {
+            // Keep only top volume levels
             const sortedEntries = Array.from(state.volumeProfile.entries())
                 .sort((a, b) => b[1] - a[1])
-                .slice(0, 500);
+                .slice(0, _VOLUME_PROFILE_KEEP_COUNT);
             state.volumeProfile.clear();
             sortedEntries.forEach(([price, volume]) => {
                 state.volumeProfile.set(price, volume);
@@ -1128,8 +1197,10 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
             // Only create zone if there's significant activity
             if (
-                Math.abs(netCVD) > this.minVPS * 10 ||
-                buyVolume + sellVolume > this.minVPS * 20
+                Math.abs(netCVD) >
+                    this.minVPS * _INSTITUTIONAL_ZONE_MULTIPLIER_LOW ||
+                buyVolume + sellVolume >
+                    this.minVPS * _INSTITUTIONAL_ZONE_MULTIPLIER_HIGH
             ) {
                 zone = {
                     priceLevel,
@@ -1161,8 +1232,11 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
         // Sort zones by strength and keep only top institutional zones
         state.institutionalZones.sort((a, b) => b.strength - a.strength);
-        if (state.institutionalZones.length > 20) {
-            state.institutionalZones = state.institutionalZones.slice(0, 20);
+        if (state.institutionalZones.length > _MAX_INSTITUTIONAL_ZONES) {
+            state.institutionalZones = state.institutionalZones.slice(
+                0,
+                _MAX_INSTITUTIONAL_ZONES
+            );
         }
     }
 
@@ -1197,10 +1271,10 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
             // ENHANCED: Adaptive cleanup thresholds based on memory pressure
             let cleanupThreshold = 2000; // Default
-            if (heapUsedMB > 1000) {
+            if (heapUsedMB > _MEMORY_PRESSURE_THRESHOLD_MB) {
                 // Above 1GB
                 cleanupThreshold = 1000; // More aggressive
-            } else if (heapUsedMB > 500) {
+            } else if (heapUsedMB > _MEMORY_WARNING_THRESHOLD_MB) {
                 // Above 500MB
                 cleanupThreshold = 1500; // Moderately aggressive
             }
@@ -1209,7 +1283,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 // ENHANCED: More intelligent cleanup strategy
                 const entriesToKeep = Math.min(
                     200,
-                    Math.max(50, cleanupThreshold / 10)
+                    Math.max(_MIN_CLEANUP_ENTRIES, cleanupThreshold / 10)
                 );
 
                 const sortedCVDEntries = Array.from(state.cvdProfile.entries())
@@ -1307,7 +1381,10 @@ export class DeltaCVDConfirmation extends BaseDetector {
     ): void {
         if (state.trades.length > 1) {
             const prevTrade = state.trades[state.trades.length - 2];
-            const priceChange = event.price - prevTrade.price;
+            const priceChange = FinancialMath.safeSubtract(
+                event.price,
+                prevTrade.price
+            );
 
             // Update price rolling statistics using Welford's algorithm
             const delta = priceChange - state.priceRollingMean;
@@ -1378,7 +1455,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
         );
 
         // Clean old burst history (keep last 5 minutes for pattern analysis)
-        const burstCutoff = now - 300000; // 5 minutes
+        const burstCutoff = now - _BURST_HISTORY_CLEANUP_MS; // 5 minutes
         state.burstHistory = state.burstHistory.filter(
             (bh) => bh.timestamp > burstCutoff
         );
@@ -1646,8 +1723,12 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
         // STEP 6: Apply absorption enhancement bonus (if applicable)
         if (enhancedConfidence) {
-            const absorptionBonus = absorption.strength * 0.15; // 15% max bonus
-            finalConfidence = Math.min(0.98, finalConfidence + absorptionBonus);
+            const absorptionBonus =
+                absorption.strength * _ABSORPTION_BONUS_MULTIPLIER; // 15% max bonus
+            finalConfidence = Math.min(
+                _MAX_CONFIDENCE_CAP,
+                finalConfidence + absorptionBonus
+            );
         }
 
         // STEP 7: Build the signal with proper CVD data (no more hardcoded zeros!)
@@ -1744,11 +1825,12 @@ export class DeltaCVDConfirmation extends BaseDetector {
                             1.0
                         );
                         const cappedRatio = Math.min(
-                            5.0,
-                            Math.max(0.1, volumeRatio)
+                            this.maxVolumeRatio,
+                            Math.max(this.minVolumeRatio, volumeRatio)
                         );
                         effectiveQuantity =
-                            validQuantity * (1 + cappedRatio * 0.1);
+                            validQuantity *
+                            (1 + cappedRatio * _VOLUME_WEIGHTING_FACTOR);
 
                         // Validate final quantity
                         if (
@@ -1904,7 +1986,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
     ): number {
         try {
             // ENHANCED: More conservative minimum data requirement
-            if (state.trades.length < 20) return 0;
+            if (state.trades.length < this.minTradesForAnalysis) return 0;
 
             const prices = state.trades.map((tr) =>
                 this.validateNumeric(tr.price, 0)
@@ -1912,7 +1994,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
             const validPrices = prices.filter((p) => p !== 0);
 
             // CRITICAL FIX: Ensure we have valid price data
-            if (validPrices.length < 20) {
+            if (validPrices.length < this.minTradesForAnalysis) {
                 this.logger.warn(
                     "[DeltaCVDConfirmation] Insufficient valid price data for correlation",
                     {
@@ -1924,7 +2006,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
             }
 
             const n = Math.min(validPrices.length, cvdSeries.length);
-            if (n < 20) return 0;
+            if (n < this.minTradesForAnalysis) return 0;
 
             const priceSlice = validPrices.slice(-n);
             const cvdSlice = cvdSeries.slice(-n);
@@ -2027,7 +2109,10 @@ export class DeltaCVDConfirmation extends BaseDetector {
             }
 
             // Clamp to valid correlation range with tolerance for floating point errors
-            return Math.max(-0.999, Math.min(0.999, correlation));
+            return Math.max(
+                this.minCorrelationBound,
+                Math.min(this.maxCorrelationBound, correlation)
+            );
         } catch (error) {
             this.logger.error(
                 "[DeltaCVDConfirmation] Price correlation calculation failed",
@@ -2097,7 +2182,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
             Math.max(
                 0.5,
                 Math.min(
-                    2.0,
+                    _SAFETY_MARGIN_MULTIPLIER,
                     volatilityRatio * this.adaptiveThresholdMultiplier
                 )
             )
@@ -2148,7 +2233,10 @@ export class DeltaCVDConfirmation extends BaseDetector {
         const zScore = FinancialMath.safeDivide(validSlope - validMean, std, 0);
 
         // ENHANCED: Cap Z-score to prevent extreme values
-        const cappedZScore = Math.max(-20, Math.min(20, zScore));
+        const cappedZScore = Math.max(
+            this.minZScoreBound,
+            Math.min(this.maxZScoreBound, zScore)
+        );
 
         if (Math.abs(cappedZScore) !== Math.abs(zScore)) {
             this.logger.debug(
@@ -2312,7 +2400,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
     private calculateRecentPriceDirection(
         state: WindowState
     ): "up" | "down" | "sideways" {
-        if (state.trades.length < 20) return "sideways";
+        if (state.trades.length < this.minTradesForAnalysis) return "sideways";
 
         // Look at price movement over the divergence lookback period
         const lookbackMs = this.divergenceLookbackSec * 1000;
@@ -2324,10 +2412,14 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
         const startPrice = recentTrades[0].price;
         const endPrice = recentTrades[recentTrades.length - 1].price;
-        const priceChange = (endPrice - startPrice) / startPrice;
+        const priceChange = FinancialMath.safeDivide(
+            FinancialMath.safeSubtract(endPrice, startPrice),
+            startPrice,
+            0
+        );
 
-        if (priceChange > 0.001) return "up"; // 0.1% threshold
-        if (priceChange < -0.001) return "down";
+        if (priceChange > this.priceChangeThreshold) return "up"; // 0.1% threshold
+        if (priceChange < -this.priceChangeThreshold) return "down";
         return "sideways";
     }
 
@@ -2473,8 +2565,8 @@ export class DeltaCVDConfirmation extends BaseDetector {
             magnitudeStrength: 0.2,
             priceCorrelation: this.priceCorrelationWeight,
             volumeConcentration: this.volumeConcentrationWeight,
-            temporalConsistency: 0.15,
-            divergencePenalty: 0.1,
+            temporalConsistency: _TEMPORAL_CONSISTENCY_WEIGHT,
+            divergencePenalty: _DIVERGENCE_PENALTY_WEIGHT,
         };
 
         // Ensure weights sum to 1
@@ -2645,13 +2737,16 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
         const firstPrice = state.trades[0].price;
         const lastPrice = state.trades[state.trades.length - 1].price;
-        const absoluteMove = lastPrice - firstPrice;
-        const percentMove = (absoluteMove / firstPrice) * 100;
+        const absoluteMove = FinancialMath.safeSubtract(lastPrice, firstPrice);
+        const percentMove = FinancialMath.multiplyQuantities(
+            FinancialMath.safeDivide(absoluteMove, firstPrice, 0),
+            100
+        );
 
         const direction =
-            absoluteMove > 0.001
+            absoluteMove > this.priceChangeThreshold
                 ? "up"
-                : absoluteMove < -0.001
+                : absoluteMove < -this.priceChangeThreshold
                   ? "down"
                   : "flat";
 
@@ -2678,11 +2773,20 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 if (passiveVolume > 0) {
                     // Weight trade by passive volume ratio (capped at 5x multiplier)
                     const volumeRatio = Math.min(
-                        5.0,
-                        passiveVolume / trade.quantity
+                        this.maxVolumeRatio,
+                        FinancialMath.divideQuantities(
+                            passiveVolume,
+                            trade.quantity
+                        )
                     );
-                    effectiveQuantity =
-                        trade.quantity * (1 + volumeRatio * 0.1);
+                    effectiveQuantity = FinancialMath.multiplyQuantities(
+                        trade.quantity,
+                        1 +
+                            FinancialMath.multiplyQuantities(
+                                volumeRatio,
+                                _VOLUME_WEIGHTING_FACTOR
+                            )
+                    );
                 }
             }
 
@@ -2717,11 +2821,11 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
     private calculateTickSize(price: number): number {
         // Simple tick size calculation - adjust based on your market
-        if (price < 1) return 0.0001;
-        if (price < 10) return 0.001;
-        if (price < 100) return 0.01;
-        if (price < 1000) return 0.1;
-        return 1.0;
+        if (price < 1) return _TICK_SIZE_THRESHOLDS[0]; // 0.0001
+        if (price < 10) return _TICK_SIZE_THRESHOLDS[1]; // 0.001
+        if (price < 100) return _TICK_SIZE_THRESHOLDS[2]; // 0.01
+        if (price < 1000) return _TICK_SIZE_THRESHOLDS[3]; // 0.1
+        return _TICK_SIZE_THRESHOLDS[4]; // 1.0
     }
 
     private getDominantInstitutionalSide(
@@ -2972,8 +3076,10 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 this.priceCorrelationWeight,
             volumeConcentration:
                 factors.volumeConcentration * this.volumeConcentrationWeight,
-            temporalConsistency: factors.temporalConsistency * 0.15,
-            divergencePenalty: factors.divergencePenalty * 0.1,
+            temporalConsistency:
+                factors.temporalConsistency * _TEMPORAL_CONSISTENCY_WEIGHT,
+            divergencePenalty:
+                factors.divergencePenalty * _DIVERGENCE_PENALTY_WEIGHT,
         };
 
         return { factors, finalConfidence, breakdown };
