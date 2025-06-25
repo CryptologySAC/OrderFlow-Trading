@@ -253,7 +253,7 @@
             },
 
             "absorption": {
-                "minAggVolume": 400,
+                "minAggVolume": 175,
                 "windowMs": 60000,
                 "pricePrecision": 2,
                 "zoneTicks": 5,

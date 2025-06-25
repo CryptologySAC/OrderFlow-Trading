@@ -106,14 +106,27 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
 
             // Set up signal capture for this detector instance (CORRECT event name)
             detector.on("signalCandidate", (signal) => {
-                console.log("🎯 SIGNAL CAPTURED:", signal.side, signal.confidence);
+                console.log(
+                    "🎯 SIGNAL CAPTURED:",
+                    signal.side,
+                    signal.confidence
+                );
                 emittedSignals.push(signal);
-                console.log("📊 Array length after push:", emittedSignals.length);
+                console.log(
+                    "📊 Array length after push:",
+                    emittedSignals.length
+                );
             });
-            
+
             // Debug: Check if detector has event listeners
-            console.log("Event listeners count:", detector.listenerCount("signalCandidate"));
-            console.log("Initial emittedSignals length:", emittedSignals.length);
+            console.log(
+                "Event listeners count:",
+                detector.listenerCount("signalCandidate")
+            );
+            console.log(
+                "Initial emittedSignals length:",
+                emittedSignals.length
+            );
 
             const baseTime = Date.now();
             const basePrice = 85.0;
@@ -244,9 +257,14 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
             );
 
             // Process all trades
-            strongBuyingTrades.forEach((trade) => detector.onEnrichedTrade(trade));
-            
-            console.log("\n🔍 After processing all trades, emittedSignals.length:", emittedSignals.length);
+            strongBuyingTrades.forEach((trade) =>
+                detector.onEnrichedTrade(trade)
+            );
+
+            console.log(
+                "\n🔍 After processing all trades, emittedSignals.length:",
+                emittedSignals.length
+            );
 
             // Access internal state directly since getDetailedState() doesn't expose volumeHistory
             const internalStates = (detector as any).states; // Map<number, WindowState>
@@ -506,7 +524,10 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
             }
 
             // CRITICAL: Must actually emit a BUY signal
-            console.log("🔴 FINAL CHECK - emittedSignals.length:", emittedSignals.length);
+            console.log(
+                "🔴 FINAL CHECK - emittedSignals.length:",
+                emittedSignals.length
+            );
             console.log("🔴 FINAL CHECK - emittedSignals:", emittedSignals);
             expect(emittedSignals.length).toBeGreaterThan(0);
         });
@@ -532,7 +553,11 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
 
             // Set up signal capture for this detector instance
             detector.on("signalCandidate", (signal) => {
-                console.log("🎯 SELL TEST - SIGNAL CAPTURED:", signal.side, signal.confidence);
+                console.log(
+                    "🎯 SELL TEST - SIGNAL CAPTURED:",
+                    signal.side,
+                    signal.confidence
+                );
                 emittedSignals.push(signal);
             });
 
@@ -597,14 +622,25 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
             strongSellingTrades.forEach((trade) =>
                 detector.onEnrichedTrade(trade)
             );
-            
 
             // CRITICAL: Must actually emit a SELL signal
-            console.log("🔴 SELL TEST - emittedSignals.length:", emittedSignals.length);
-            console.log("🔴 SELL TEST - emittedSignals:", emittedSignals.map(s => `${s.side} ${s.confidence}`));
+            console.log(
+                "🔴 SELL TEST - emittedSignals.length:",
+                emittedSignals.length
+            );
+            console.log(
+                "🔴 SELL TEST - emittedSignals:",
+                emittedSignals.map((s) => `${s.side} ${s.confidence}`)
+            );
             console.log("🔴 SELL TEST - first signal:", emittedSignals[0]);
-            console.log("🔴 SELL TEST - first signal side:", emittedSignals[0]?.side);
-            console.log("🔴 SELL TEST - side === 'SELL':", emittedSignals[0]?.side === "SELL");
+            console.log(
+                "🔴 SELL TEST - first signal side:",
+                emittedSignals[0]?.side
+            );
+            console.log(
+                "🔴 SELL TEST - side === 'SELL':",
+                emittedSignals[0]?.side === "SELL"
+            );
             expect(emittedSignals.length).toBeGreaterThan(0);
 
             const sellSignal = emittedSignals.find(
@@ -1005,8 +1041,14 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
             const divergenceSignal = emittedSignals.find(
                 (signal) => signal.side === "sell"
             );
-            console.log("🔍 DIVERGENCE TEST - divergenceSignal:", divergenceSignal);
-            console.log("🔍 DIVERGENCE TEST - metadata:", divergenceSignal?.metadata);
+            console.log(
+                "🔍 DIVERGENCE TEST - divergenceSignal:",
+                divergenceSignal
+            );
+            console.log(
+                "🔍 DIVERGENCE TEST - metadata:",
+                divergenceSignal?.metadata
+            );
             expect(divergenceSignal).toBeDefined();
             expect(divergenceSignal.side).toBe("sell");
         });
@@ -1384,7 +1426,9 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 "cvd_signals_rejected_total",
                 expect.any(Number),
                 expect.objectContaining({
-                    reason: expect.stringMatching(/insufficient_imbalance|zscore_calculation_failed/),
+                    reason: expect.stringMatching(
+                        /insufficient_imbalance|zscore_calculation_failed/
+                    ),
                 })
             );
         });
