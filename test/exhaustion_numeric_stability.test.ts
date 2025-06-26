@@ -14,7 +14,7 @@ describe("ExhaustionDetector Numeric Stability Fixes", () => {
     let mockMetrics: IMetricsCollector;
     let mockSpoofingDetector: SpoofingDetector;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         mockLogger = {
             info: vi.fn(),
             warn: vi.fn(),
@@ -25,72 +25,9 @@ describe("ExhaustionDetector Numeric Stability Fixes", () => {
             removeCorrelationId: vi.fn(),
         };
 
-        mockMetrics = {
-            registerMetric: vi.fn(),
-            recordHistogram: vi.fn(),
-            getHistogramPercentiles: vi.fn().mockReturnValue(null),
-            getHistogramSummary: vi.fn().mockReturnValue(null),
-            recordGauge: vi.fn(),
-            getGaugeValue: vi.fn().mockReturnValue(null),
-            createGauge: vi.fn().mockReturnValue({
-                increment: vi.fn(),
-                decrement: vi.fn(),
-                set: vi.fn(),
-                get: vi.fn().mockReturnValue(0),
-            }),
-            setGauge: vi.fn(),
-            incrementCounter: vi.fn(),
-            decrementCounter: vi.fn(),
-            getCounterRate: vi.fn().mockReturnValue(0),
-            createCounter: vi.fn().mockReturnValue({
-                increment: vi.fn(),
-                get: vi.fn().mockReturnValue(0),
-            }),
-            createHistogram: vi
-                .fn()
-                .mockReturnValue({ observe: vi.fn(), reset: vi.fn() }),
-            updateMetric: vi.fn(),
-            incrementMetric: vi.fn(),
-            getMetrics: vi.fn().mockReturnValue({
-                legacy: {
-                    signalsGenerated: 0,
-                    connectionsActive: 0,
-                    processingLatency: [],
-                    errorsCount: 0,
-                    circuitBreakerState: "closed",
-                    uptime: 0,
-                },
-                enhanced: {
-                    signalsGenerated: 0,
-                    connectionsActive: 0,
-                    processingLatency: [],
-                    errorsCount: 0,
-                    circuitBreakerState: "closed",
-                    uptime: 0,
-                },
-                counters: {},
-                gauges: {},
-                histograms: {},
-                metadata: {},
-            }),
-            getAverageLatency: vi.fn().mockReturnValue(0),
-            getLatencyPercentiles: vi.fn().mockReturnValue({}),
-            exportPrometheus: vi.fn().mockReturnValue(""),
-            exportJSON: vi.fn().mockReturnValue(""),
-            getHealthSummary: vi.fn().mockReturnValue({
-                status: "healthy",
-                details: {},
-                healthy: true,
-                uptime: 0,
-                errorRate: 0,
-                avgLatency: 0,
-                memoryUsage: 0,
-                cpuUsage: 0,
-                activeConnections: 0,
-            }),
-            reset: vi.fn(),
-            cleanup: vi.fn(),
-        };
+        // Use proper mock from __mocks__/ directory per CLAUDE.md
+        const { MetricsCollector: MockMetricsCollector } = await import("../__mocks__/src/infrastructure/metricsCollector.js");
+        mockMetrics = new MockMetricsCollector() as any;
 
         mockSpoofingDetector = new SpoofingDetector(
             {
@@ -198,12 +135,12 @@ describe("ExhaustionDetector Numeric Stability Fixes", () => {
     it("should validate numeric values correctly", () => {
         const detector_internal = detector as any;
 
-        // Test validateNumeric method
-        expect(detector_internal.validateNumeric(5, 1)).toBe(5);
-        expect(detector_internal.validateNumeric(NaN, 1)).toBe(1);
-        expect(detector_internal.validateNumeric(Infinity, 1)).toBe(1);
-        expect(detector_internal.validateNumeric(-Infinity, 1)).toBe(1);
-        expect(detector_internal.validateNumeric(0, 1)).toBe(1); // Zero is considered invalid
+        // Test validateNumeric method - returns null for invalid values per CLAUDE.md
+        expect(detector_internal.validateNumeric(5)).toBe(5);
+        expect(detector_internal.validateNumeric(NaN)).toBe(null); // CORRECT: return null for invalid NaN
+        expect(detector_internal.validateNumeric(Infinity)).toBe(null); // CORRECT: return null for invalid Infinity
+        expect(detector_internal.validateNumeric(-Infinity)).toBe(null); // CORRECT: return null for invalid -Infinity
+        expect(detector_internal.validateNumeric(0)).toBe(null); // CORRECT: return null for invalid zero
     });
 
     it("should handle safe division correctly", () => {

@@ -31,7 +31,7 @@ describe("AbsorptionDetector - FinancialMath Compliance", () => {
         priceEfficiencyThreshold: 0.85,
     };
 
-    beforeEach(() => {
+    beforeEach(async () => {
         mockOrderBook = {
             getBestBid: vi.fn().mockReturnValue(100.5),
             getBestAsk: vi.fn().mockReturnValue(100.6),
@@ -53,10 +53,9 @@ describe("AbsorptionDetector - FinancialMath Compliance", () => {
             debug: vi.fn(),
         } as any;
 
-        mockMetrics = {
-            updateMetric: vi.fn(),
-            incrementMetric: vi.fn(),
-        } as any;
+        // Use proper mock from __mocks__/ directory per CLAUDE.md  
+        const { MetricsCollector: MockMetricsCollector } = await import("../__mocks__/src/infrastructure/metricsCollector.js");
+        mockMetrics = new MockMetricsCollector() as any;
 
         mockSpoofingDetector = {
             isLikelySpoof: vi.fn().mockReturnValue(false),

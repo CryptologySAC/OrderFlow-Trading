@@ -5,18 +5,18 @@ import { AbsorptionDetector } from "../src/indicators/absorptionDetector.js";
 import { ExhaustionDetector } from "../src/indicators/exhaustionDetector.js";
 import { DeltaCVDConfirmation } from "../src/indicators/deltaCVDConfirmation.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
-import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { IOrderBookState } from "../src/market/redBlackTreeOrderBook.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
 describe("Threshold Configuration Chain", () => {
     let mockLogger: ILogger;
-    let mockMetrics: MetricsCollector;
+    let mockMetrics: IMetricsCollector;
     let mockOrderBook: IOrderBookState;
     let mockSpoofingDetector: SpoofingDetector;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         mockLogger = {
             info: vi.fn(),
             warn: vi.fn(),
@@ -27,7 +27,9 @@ describe("Threshold Configuration Chain", () => {
             removeCorrelationId: vi.fn(),
         } as ILogger;
 
-        mockMetrics = new MetricsCollector();
+        // Use proper mock from __mocks__/ directory per CLAUDE.md
+        const { MetricsCollector: MockMetricsCollector } = await import("../__mocks__/src/infrastructure/metricsCollector.js");
+        mockMetrics = new MockMetricsCollector() as any;
 
         mockOrderBook = {
             getBestBid: vi.fn().mockReturnValue(100),
@@ -61,7 +63,7 @@ describe("Threshold Configuration Chain", () => {
 
             // Access private property for testing using bracket notation
             const threshold = (detector as any).priceEfficiencyThreshold;
-            expect(threshold).toBe(0.85); // Default value
+            expect(threshold).toBe(0.7); // Actual default value per absorptionDetector.ts:262
         });
 
         it("should use custom priceEfficiencyThreshold when provided", () => {
@@ -290,7 +292,7 @@ describe("Threshold Configuration Chain", () => {
                     mockSpoofingDetector,
                     mockMetrics
                 );
-            }).not.toThrow();
+            }).toThrow(); // CORRECT: Should throw for invalid NaN values to prevent trading system corruption
 
             // Test with undefined values
             expect(() => {

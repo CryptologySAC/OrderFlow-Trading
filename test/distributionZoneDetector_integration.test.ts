@@ -2,20 +2,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock dependencies
 vi.mock("../src/multithreading/workerLogger");
-vi.mock("../src/infrastructure/metricsCollector");
 
 import { DistributionZoneDetector } from "../src/indicators/distributionZoneDetector.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
-import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
 
 describe("DistributionZoneDetector - Integration and Performance Tests", () => {
     let detector: DistributionZoneDetector;
     let mockLogger: ILogger;
-    let mockMetrics: MetricsCollector;
+    let mockMetrics: IMetricsCollector;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         mockLogger = {
             info: vi.fn(),
             warn: vi.fn(),
@@ -26,7 +25,9 @@ describe("DistributionZoneDetector - Integration and Performance Tests", () => {
             removeCorrelationId: vi.fn(),
         } as ILogger;
 
-        mockMetrics = new MetricsCollector();
+        // Use proper mock from __mocks__/ directory per CLAUDE.md
+        const { MetricsCollector: MockMetricsCollector } = await import("../__mocks__/src/infrastructure/metricsCollector.js");
+        mockMetrics = new MockMetricsCollector() as any;
 
         const config: Partial<ZoneDetectorConfig> = {
             minCandidateDuration: 120000, // 2 minutes

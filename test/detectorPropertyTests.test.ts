@@ -3,7 +3,6 @@
 import { describe, it, beforeEach, vi, expect } from "vitest";
 import {
     PropertyTestRunner,
-    MockFactoryHelpers,
 } from "./framework/mathematicalPropertyTesting.js";
 import { AbsorptionDetector } from "../src/indicators/absorptionDetector.js";
 import { ExhaustionDetector } from "../src/indicators/exhaustionDetector.js";
@@ -16,14 +15,42 @@ import type { SignalCandidate } from "../src/types/signalTypes.js";
 
 describe("Mathematical Property Testing for All Detectors", () => {
     let propertyTestRunner: PropertyTestRunner;
+    let mockLogger: any;
+    let mockMetrics: any;
+    let mockOrderBook: any;
+    let mockSpoofingDetector: any;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         propertyTestRunner = new PropertyTestRunner({
             maxIterations: 100, // Reduced for faster tests
             tolerance: 1e-8,
             confidenceInterval: 0.95,
             randomSeed: 42,
         });
+
+        // Use proper mock from __mocks__/ directory per CLAUDE.md
+        const { MetricsCollector: MockMetricsCollector } = await import("../__mocks__/src/infrastructure/metricsCollector.js");
+        mockMetrics = new MockMetricsCollector() as any;
+        
+        mockLogger = {
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            debug: vi.fn(),
+        } as any;
+
+        mockOrderBook = {
+            getBestBid: vi.fn().mockReturnValue(100.5),
+            getBestAsk: vi.fn().mockReturnValue(100.6),
+            getSpread: vi.fn().mockReturnValue({ spread: 0.1, spreadBps: 10 }),
+            getDepth: vi.fn().mockReturnValue(new Map()),
+            isHealthy: vi.fn().mockReturnValue(true),
+            getLastUpdate: vi.fn().mockReturnValue(Date.now()),
+        } as any;
+
+        mockSpoofingDetector = {
+            isLikelySpoof: vi.fn().mockReturnValue(false),
+        } as any;
     });
 
     describe("AbsorptionDetector Properties", () => {
@@ -50,8 +77,10 @@ describe("Mathematical Property Testing for All Detectors", () => {
                         sustainedVolumeMs: 30000,
                         medianTradeSize: 0.6,
                     },
-                    MockFactoryHelpers.createMockLogger(),
-                    MockFactoryHelpers.createMockMetrics()
+                    mockOrderBook,
+                    mockLogger,
+                    mockSpoofingDetector,
+                    mockMetrics
                 );
 
                 detector.on("signalCandidate", (signal: SignalCandidate) => {
@@ -85,8 +114,10 @@ describe("Mathematical Property Testing for All Detectors", () => {
                     priceEfficiencyThreshold: 0.85,
                     priceEfficiencyScalingFactor: 10,
                 },
-                MockFactoryHelpers.createMockLogger(),
-                MockFactoryHelpers.createMockMetrics()
+                mockOrderBook,
+                mockLogger,
+                mockSpoofingDetector,
+                mockMetrics
             );
 
             // Test monotonicity: larger volume pressure should generally decrease efficiency
@@ -140,8 +171,9 @@ describe("Mathematical Property Testing for All Detectors", () => {
                         sustainedVolumeMs: 30000,
                         medianTradeSize: 0.6,
                     },
-                    MockFactoryHelpers.createMockLogger(),
-                    MockFactoryHelpers.createMockMetrics()
+                    mockLogger,
+                    mockSpoofingDetector,
+                    mockMetrics
                 );
 
                 detector.on("signalCandidate", (signal: SignalCandidate) => {
@@ -226,8 +258,9 @@ describe("Mathematical Property Testing for All Detectors", () => {
                         sustainedVolumeMs: 20000,
                         medianTradeSize: 0.6,
                     },
-                    MockFactoryHelpers.createMockLogger(),
-                    MockFactoryHelpers.createMockMetrics()
+                    mockLogger,
+                    mockSpoofingDetector,
+                    mockMetrics
                 );
 
                 detector.on("signalCandidate", (signal: SignalCandidate) => {
@@ -297,8 +330,8 @@ describe("Mathematical Property Testing for All Detectors", () => {
                         maxActiveIcebergs: 20,
                         minConfidenceThreshold: 0.6,
                     },
-                    MockFactoryHelpers.createMockLogger(),
-                    MockFactoryHelpers.createMockMetrics()
+                    mockLogger,
+                    mockMetrics
                 );
 
                 return detector;
@@ -347,7 +380,7 @@ describe("Mathematical Property Testing for All Detectors", () => {
                         maxPlacementHistoryPerPrice: 20,
                         wallPullThresholdRatio: 0.6,
                     },
-                    MockFactoryHelpers.createMockLogger()
+                    mockLogger
                 );
             };
 
@@ -384,8 +417,8 @@ describe("Mathematical Property Testing for All Detectors", () => {
                         minConfidence: 0.8,
                         zoneHeightPercentage: 0.002,
                     },
-                    MockFactoryHelpers.createMockLogger(),
-                    MockFactoryHelpers.createMockMetrics()
+                    mockLogger,
+                    mockMetrics
                 );
 
                 detector.on("signalCandidate", (signal: SignalCandidate) => {
