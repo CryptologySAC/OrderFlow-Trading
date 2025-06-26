@@ -1665,9 +1665,59 @@ export class OrderFlowDashboard {
             const correlationId = randomUUID();
             this.logger.info("Starting scheduled purge", {}, correlationId);
 
+            // 🔧 FIX: Use 1.5 hours (90 minutes) retention instead of default 24 hours
+            const retentionHours = 1.5; // Match Config.maxStorageTime (5400000ms = 90 minutes)
+
             this.threadManager
-                .callStorage("purgeOldEntries")
-                .then()
+                .callStorage("purgeOldEntries", correlationId, retentionHours)
+                .then((deletedCount) => {
+                    this.logger.info("Scheduled purge completed successfully", {
+                        deletedRecords: deletedCount,
+                        retentionHours,
+                        correlationId,
+                    });
+
+                    // 🔧 FIX: Run VACUUM after purge to reclaim disk space
+                    if (deletedCount > 0) {
+                        return this.threadManager.callStorage(
+                            "vacuumDatabase",
+                            correlationId
+                        );
+                    }
+                })
+                .then(() => {
+                    // 🔧 FIX: Monitor database size after cleanup
+                    return this.threadManager.callStorage(
+                        "getDatabaseSize",
+                        correlationId
+                    );
+                })
+                .then((sizeInfo) => {
+                    if (sizeInfo) {
+                        const { sizeMB } = sizeInfo as {
+                            sizeBytes: number;
+                            sizeMB: number;
+                        };
+
+                        // Alert on database size thresholds
+                        if (sizeMB > 200) {
+                            this.logger.warn(
+                                "Database size exceeds warning threshold",
+                                {
+                                    sizeMB,
+                                    threshold: "200MB",
+                                    correlationId,
+                                }
+                            );
+                        } else if (sizeMB > 100) {
+                            this.logger.info("Database size monitoring", {
+                                sizeMB,
+                                status: "normal",
+                                correlationId,
+                            });
+                        }
+                    }
+                })
                 .catch((error) => {
                     this.handleError(
                         error as Error,

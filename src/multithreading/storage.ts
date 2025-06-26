@@ -42,6 +42,7 @@
 //   - WAL mode for concurrent read/write operations
 
 import { Database, Statement } from "better-sqlite3";
+import { statSync } from "fs";
 import { SpotWebsocketAPI } from "@binance/spot";
 import { ILogger } from "../infrastructure/loggerInterface.js";
 import {
@@ -92,6 +93,13 @@ export interface IStorage extends IPipelineStorage {
     ): number;
 
     purgeOldEntries(correlationId: string, hours?: number): number;
+
+    vacuumDatabase(correlationId: string): void;
+
+    getDatabaseSize(correlationId: string): {
+        sizeBytes: number;
+        sizeMB: number;
+    };
 
     clearAllTradeData(correlationId: string): number;
 
@@ -517,6 +525,73 @@ export class Storage implements IStorage {
             );
             return typeof info.changes === "number" ? info.changes : 0;
         } catch (error) {
+            throw error;
+        }
+    }
+
+    /**
+     * Run VACUUM operation to reclaim space after purging old data
+     */
+    public vacuumDatabase(correlationId: string): void {
+        try {
+            const startTime = Date.now();
+            this.db.exec("VACUUM");
+            const duration = Date.now() - startTime;
+
+            this.logger.info(
+                "Database VACUUM completed successfully",
+                {
+                    durationMs: duration,
+                },
+                correlationId
+            );
+        } catch (error) {
+            this.logger.error(
+                "Error during database VACUUM operation",
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                },
+                correlationId
+            );
+            throw error;
+        }
+    }
+
+    /**
+     * Get current database file size
+     */
+    public getDatabaseSize(correlationId: string): {
+        sizeBytes: number;
+        sizeMB: number;
+    } {
+        try {
+            const stats = statSync(this.db.name);
+            const sizeBytes: number = stats.size;
+            const sizeMB: number =
+                Math.round((sizeBytes / (1024 * 1024)) * 100) / 100;
+
+            this.logger.debug(
+                "Database size retrieved",
+                {
+                    sizeBytes,
+                    sizeMB,
+                    path: this.db.name,
+                },
+                correlationId
+            );
+
+            return { sizeBytes, sizeMB };
+        } catch (error) {
+            this.logger.error(
+                "Error getting database size",
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    path: this.db.name,
+                },
+                correlationId
+            );
             throw error;
         }
     }

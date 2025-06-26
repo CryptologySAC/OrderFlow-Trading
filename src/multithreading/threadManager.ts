@@ -481,6 +481,8 @@ export class ThreadManager {
             | "getLatestAggregatedTrades"
             | "saveAggregatedTradesBulk"
             | "purgeOldEntries"
+            | "vacuumDatabase"
+            | "getDatabaseSize"
             | "clearAllTradeData"
             | "getLastTradeTimestamp"
             | "close"

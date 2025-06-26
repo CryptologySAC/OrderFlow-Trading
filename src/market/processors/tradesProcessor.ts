@@ -214,7 +214,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         this.maxMemoryTrades = options.maxMemoryTrades ?? 200000;
         this.saveQueueSize = options.saveQueueSize ?? 5000;
         this.healthCheckInterval = options.healthCheckInterval ?? 30000; // 30 s
-        this.bufferRetentionMs = 100 * 60 * 1000; // 100 minutes in milliseconds
+        this.bufferRetentionMs = 90 * 60 * 1000; // 90 minutes in milliseconds (aligned with storage retention)
         this.maxErrorWindowSize = Math.max(
             10,
             options.maxErrorWindowSize ?? 1000
@@ -398,7 +398,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     /**
      * Smart ID-based backlog fill: Dynamically fetch trades until target time coverage is achieved.
      * Uses a two-step approach: first gets recent trades for baseline, then fetches older trades
-     * by jumping backwards in trade ID chunks until 100 minutes of coverage is reached.
+     * by jumping backwards in trade ID chunks until 90 minutes of coverage is reached.
      */
     public async fillBacklog(): Promise<void> {
         const startWall = Date.now();
@@ -1253,7 +1253,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     }
 
     /**
-     * Remove trades older than bufferRetentionMs (100 minutes) from memory buffer
+     * Remove trades older than bufferRetentionMs (90 minutes) from memory buffer
      */
     private cleanupOldTradesFromBuffer(): void {
         const cutoffTime = Date.now() - this.bufferRetentionMs;

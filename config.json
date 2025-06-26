@@ -174,7 +174,7 @@
             "tradesProcessor": {
                 "maxBacklogRetries": 3,
                 "backlogBatchSize": 500,
-                "maxMemoryTrades": 120000,
+                "maxMemoryTrades": 20000,
                 "saveQueueSize": 1000,
                 "healthCheckInterval": 45000
             },
