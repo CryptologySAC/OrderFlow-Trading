@@ -9,7 +9,12 @@ describe("utils/DetectorFactory", () => {
             { features: { spoofingDetection: false } },
             "absorption"
         );
-        expect(result.features.icebergDetection).toBe(true);
-        expect(result.features.spoofingDetection).toBe(false);
+        // Check features that are actually set by applyProductionDefaults
+        expect(result.features.adaptiveZone).toBe(true);
+        expect(result.features.passiveHistory).toBe(true);
+        expect(result.features.multiZone).toBe(true);
+        expect(result.features.autoCalibrate).toBe(true);
+        expect(result.features.liquidityGradient).toBe(true);
+        expect(result.features.spoofingDetection).toBe(false); // Should preserve input
     });
 });

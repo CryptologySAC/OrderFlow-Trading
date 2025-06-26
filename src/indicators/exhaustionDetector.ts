@@ -12,7 +12,7 @@
 //
 // 🚫  STRICTLY FORBIDDEN without approval:
 //     - Algorithm logic modifications
-//     - Threshold or scoring changes  
+//     - Threshold or scoring changes
 //     - Signal generation modifications
 //     - Data processing pipeline changes
 //

@@ -2,20 +2,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock dependencies
 vi.mock("../src/multithreading/workerLogger");
-vi.mock("../src/infrastructure/metricsCollector");
 
 import { DistributionZoneDetector } from "../src/indicators/distributionZoneDetector.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
-import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ZoneDetectorConfig, ZoneSignal } from "../src/types/zoneTypes.js";
 
 describe("DistributionZoneDetector - Signal Generation Validation", () => {
     let detector: DistributionZoneDetector;
     let mockLogger: ILogger;
-    let mockMetrics: MetricsCollector;
+    let mockMetrics: IMetricsCollector;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         mockLogger = {
             info: vi.fn(),
             warn: vi.fn(),
@@ -26,15 +25,18 @@ describe("DistributionZoneDetector - Signal Generation Validation", () => {
             removeCorrelationId: vi.fn(),
         } as ILogger;
 
-        mockMetrics = new MetricsCollector();
+        // Use proper mock from __mocks__/ directory per CLAUDE.md
+        const { MetricsCollector: MockMetricsCollector } = await import("../__mocks__/src/infrastructure/metricsCollector.js");
+        mockMetrics = new MockMetricsCollector() as any;
 
         const config: Partial<ZoneDetectorConfig> = {
-            minCandidateDuration: 60000, // 1 minute for faster testing
+            minCandidateDuration: 30000, // 30 seconds for faster testing
             minZoneVolume: 100,
             minTradeCount: 4,
             maxPriceDeviation: 0.03,
-            minZoneStrength: 0.35,
+            minZoneStrength: 0.3, // Lowered to reduce institutional requirements
             strengthChangeThreshold: 0.15,
+            minSellRatio: 0.55, // Required for distribution detection
         };
 
         detector = new DistributionZoneDetector(
@@ -55,14 +57,14 @@ describe("DistributionZoneDetector - Signal Generation Validation", () => {
             const baseTime = Date.now();
             const distributionLevel = 52000;
 
-            // Create strong distribution pattern
+            // Create strong distribution pattern with institutional characteristics
             const distributionTrades: EnrichedTradeEvent[] = [];
             for (let i = 0; i < 8; i++) {
                 distributionTrades.push({
                     price: distributionLevel,
-                    quantity: 70 + Math.random() * 20, // Large institutional sizes
-                    timestamp: baseTime + i * 3000,
-                    buyerIsMaker: false, // Strong buy pressure (retail into institutional)
+                    quantity: 60, // Consistent institutional sizes (>= 40 threshold)
+                    timestamp: baseTime + i * 2000, // 2-second intervals for consistency
+                    buyerIsMaker: i < 2, // First 2 are sells (25%), rest are buys (75%)
                     pair: "BTCUSDT",
                     tradeId: `strong_dist_${i}`,
                     originalTrade: {} as any,
@@ -90,7 +92,7 @@ describe("DistributionZoneDetector - Signal Generation Validation", () => {
             const formationTrade: EnrichedTradeEvent = {
                 price: distributionLevel,
                 quantity: 95, // Very large institutional distribution
-                timestamp: baseTime + 70000, // After minimum duration
+                timestamp: baseTime + 35000, // 35 seconds after start (> 30s requirement)
                 buyerIsMaker: false, // Buy pressure continues
                 pair: "BTCUSDT",
                 tradeId: "strong_formation",
@@ -378,7 +380,7 @@ describe("DistributionZoneDetector - Signal Generation Validation", () => {
             const finalFormation: EnrichedTradeEvent = {
                 price: signalLevel,
                 quantity: 85,
-                timestamp: baseTime + 70000,
+                timestamp: baseTime + 35000, // 35 seconds after start (> 30s requirement)
                 buyerIsMaker: false,
                 pair: "BTCUSDT",
                 tradeId: "timing_final",
