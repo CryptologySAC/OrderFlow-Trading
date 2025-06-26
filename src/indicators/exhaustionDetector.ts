@@ -1,4 +1,30 @@
 // src/indicators/exhaustionDetector.ts
+//
+// 🔒 PRODUCTION-CRITICAL FILE - PATTERN DETECTION ALGORITHM
+//
+// ⚠️  WARNING: This file contains core trading algorithm logic that directly impacts
+//              signal generation and trading decisions. Any modifications require:
+//
+//     1. MANDATORY: User approval with explicit risk assessment
+//     2. MANDATORY: Comprehensive testing and validation
+//     3. MANDATORY: Performance benchmarking against baseline
+//     4. MANDATORY: Rollback plan preparation
+//
+// 🚫  STRICTLY FORBIDDEN without approval:
+//     - Algorithm logic modifications
+//     - Threshold or scoring changes  
+//     - Signal generation modifications
+//     - Data processing pipeline changes
+//
+// 📋  CHANGE VALIDATION PROTOCOL:
+//     - Risk Assessment: Evaluate trading operation impact
+//     - Dependency Analysis: Identify affected components
+//     - Test Coverage: Ensure >95% test coverage
+//     - User Approval: Get explicit approval for changes
+//
+// 🎯  This detector implements liquidity exhaustion pattern detection for
+//     institutional-grade trading signal generation in live market conditions.
+//
 import { BaseDetector, ZoneSample } from "./base/baseDetector.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
