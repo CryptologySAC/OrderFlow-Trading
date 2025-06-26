@@ -43,6 +43,30 @@ export interface ExhaustionSettings extends BaseDetectorSettings {
     burstDetectionMs?: number; // Burst detection window
     sustainedVolumeMs?: number; // Sustained volume analysis window
     medianTradeSize?: number; // Baseline trade size for volume analysis
+
+    // Scoring weight parameters (previously hardcoded)
+    scoringWeights?: {
+        depletion?: number; // Primary exhaustion factor (default 0.4)
+        passive?: number; // Passive liquidity depletion (default 0.25)
+        continuity?: number; // Continuous depletion trend (default 0.15)
+        imbalance?: number; // Market imbalance (default 0.1)
+        spread?: number; // Spread widening (default 0.08)
+        velocity?: number; // Volume velocity (default 0.02)
+    };
+
+    // Depletion calculation parameters (previously hardcoded)
+    depletionThresholdRatio?: number; // Ratio of avgPassive for depletion threshold (default 0.2)
+
+    // Data quality assessment parameters (previously hardcoded)
+    significantChangeThreshold?: number; // Significant change threshold (default 0.1)
+    highQualitySampleCount?: number; // High quality minimum sample count (default 8)
+    highQualityDataAge?: number; // High quality maximum data age (default 45000ms)
+    mediumQualitySampleCount?: number; // Medium quality minimum sample count (default 3)
+    mediumQualityDataAge?: number; // Medium quality maximum data age (default 90000ms)
+
+    // Circuit breaker configuration (previously hardcoded)
+    circuitBreakerMaxErrors?: number; // Maximum errors before circuit breaker opens (default 5)
+    circuitBreakerWindowMs?: number; // Error count reset window (default 60000ms)
 }
 
 type DetectorResult<T> =
@@ -96,8 +120,8 @@ export class ExhaustionDetector
         errorCount: 0,
         lastErrorTime: 0,
         isOpen: false,
-        maxErrors: 5,
-        errorWindowMs: 60000, // 1 minute
+        maxErrors: 5, // Will be overridden in constructor
+        errorWindowMs: 60000, // Will be overridden in constructor
     };
 
     // Exhaustion-specific configuration
@@ -108,6 +132,26 @@ export class ExhaustionDetector
     private readonly imbalanceMediumThreshold: number;
     private readonly spreadHighThreshold: number;
     private readonly spreadMediumThreshold: number;
+
+    // Scoring weights configuration
+    private readonly scoringWeights: {
+        depletion: number;
+        passive: number;
+        continuity: number;
+        imbalance: number;
+        spread: number;
+        velocity: number;
+    };
+
+    // Depletion calculation configuration
+    private readonly depletionThresholdRatio: number;
+
+    // Data quality assessment configuration
+    private readonly significantChangeThreshold: number;
+    private readonly highQualitySampleCount: number;
+    private readonly highQualityDataAge: number;
+    private readonly mediumQualitySampleCount: number;
+    private readonly mediumQualityDataAge: number;
 
     // Volume surge analysis integration
     private readonly volumeAnalyzer: VolumeAnalyzer;
@@ -185,6 +229,112 @@ export class ExhaustionDetector
             "spreadMediumThreshold"
         );
 
+        // Initialize scoring weights configuration with validation
+        this.scoringWeights = {
+            depletion: this.validateConfigValue(
+                settings.scoringWeights?.depletion ?? 0.4,
+                0.1,
+                0.8,
+                0.4,
+                "scoringWeights.depletion"
+            ),
+            passive: this.validateConfigValue(
+                settings.scoringWeights?.passive ?? 0.25,
+                0.05,
+                0.5,
+                0.25,
+                "scoringWeights.passive"
+            ),
+            continuity: this.validateConfigValue(
+                settings.scoringWeights?.continuity ?? 0.15,
+                0.05,
+                0.3,
+                0.15,
+                "scoringWeights.continuity"
+            ),
+            imbalance: this.validateConfigValue(
+                settings.scoringWeights?.imbalance ?? 0.1,
+                0.05,
+                0.2,
+                0.1,
+                "scoringWeights.imbalance"
+            ),
+            spread: this.validateConfigValue(
+                settings.scoringWeights?.spread ?? 0.08,
+                0.01,
+                0.15,
+                0.08,
+                "scoringWeights.spread"
+            ),
+            velocity: this.validateConfigValue(
+                settings.scoringWeights?.velocity ?? 0.02,
+                0.01,
+                0.1,
+                0.02,
+                "scoringWeights.velocity"
+            ),
+        };
+
+        // Validate that weights sum to approximately 1.0 using FinancialMath
+        const weights = [
+            this.scoringWeights.depletion,
+            this.scoringWeights.passive,
+            this.scoringWeights.continuity,
+            this.scoringWeights.imbalance,
+            this.scoringWeights.spread,
+            this.scoringWeights.velocity,
+        ];
+        const weightSum = weights.reduce(
+            (sum, weight) => FinancialMath.safeAdd(sum, weight),
+            0
+        );
+
+        if (
+            FinancialMath.calculateAbs(
+                FinancialMath.safeSubtract(weightSum, 1.0)
+            ) > 0.01
+        ) {
+            this.logger.warn(
+                `[ExhaustionDetector] Scoring weights sum to ${weightSum.toFixed(3)}, expected 1.0. Normalizing weights.`,
+                { originalWeights: this.scoringWeights, weightSum }
+            );
+
+            // Normalize weights to sum to 1.0 using FinancialMath
+            this.scoringWeights.depletion = FinancialMath.safeDivide(
+                this.scoringWeights.depletion,
+                weightSum
+            );
+            this.scoringWeights.passive = FinancialMath.safeDivide(
+                this.scoringWeights.passive,
+                weightSum
+            );
+            this.scoringWeights.continuity = FinancialMath.safeDivide(
+                this.scoringWeights.continuity,
+                weightSum
+            );
+            this.scoringWeights.imbalance = FinancialMath.safeDivide(
+                this.scoringWeights.imbalance,
+                weightSum
+            );
+            this.scoringWeights.spread = FinancialMath.safeDivide(
+                this.scoringWeights.spread,
+                weightSum
+            );
+            this.scoringWeights.velocity = FinancialMath.safeDivide(
+                this.scoringWeights.velocity,
+                weightSum
+            );
+        }
+
+        // Initialize depletion threshold ratio
+        this.depletionThresholdRatio = this.validateConfigValue(
+            settings.depletionThresholdRatio ?? 0.2,
+            0.05,
+            0.5,
+            0.2,
+            "depletionThresholdRatio"
+        );
+
         // Initialize volume surge configuration
         this.volumeSurgeConfig = {
             volumeSurgeMultiplier: settings.volumeSurgeMultiplier ?? 3.0,
@@ -194,6 +344,64 @@ export class ExhaustionDetector
             sustainedVolumeMs: settings.sustainedVolumeMs ?? 25000,
             medianTradeSize: settings.medianTradeSize ?? 0.8,
         };
+
+        // Initialize data quality assessment thresholds
+        this.significantChangeThreshold = this.validateConfigValue(
+            settings.significantChangeThreshold ?? 0.1,
+            0.01,
+            0.5,
+            0.1,
+            "significantChangeThreshold"
+        );
+
+        this.highQualitySampleCount = this.validateConfigValue(
+            settings.highQualitySampleCount ?? 8,
+            3,
+            20,
+            8,
+            "highQualitySampleCount"
+        );
+
+        this.highQualityDataAge = this.validateConfigValue(
+            settings.highQualityDataAge ?? 45000,
+            10000,
+            120000,
+            45000,
+            "highQualityDataAge"
+        );
+
+        this.mediumQualitySampleCount = this.validateConfigValue(
+            settings.mediumQualitySampleCount ?? 3,
+            1,
+            10,
+            3,
+            "mediumQualitySampleCount"
+        );
+
+        this.mediumQualityDataAge = this.validateConfigValue(
+            settings.mediumQualityDataAge ?? 90000,
+            20000,
+            300000,
+            90000,
+            "mediumQualityDataAge"
+        );
+
+        // Initialize circuit breaker configuration
+        this.circuitBreakerState.maxErrors = this.validateConfigValue(
+            settings.circuitBreakerMaxErrors ?? 5,
+            2,
+            20,
+            5,
+            "circuitBreakerMaxErrors"
+        );
+
+        this.circuitBreakerState.errorWindowMs = this.validateConfigValue(
+            settings.circuitBreakerWindowMs ?? 60000,
+            10000,
+            300000,
+            60000,
+            "circuitBreakerWindowMs"
+        );
 
         // Initialize volume analyzer for enhanced exhaustion detection
         this.volumeAnalyzer = new VolumeAnalyzer(
@@ -247,16 +455,9 @@ export class ExhaustionDetector
     /**
      * 🔧 FIX: Numeric validation helper to prevent NaN/Infinity propagation
      */
-    private validateNumeric(value: number, fallback: number): number {
-        return isFinite(value) && !isNaN(value) && value !== 0
-            ? value
-            : fallback;
+    private validateNumeric(value: number): number | null {
+        return isFinite(value) && !isNaN(value) && value !== 0 ? value : null;
     }
-
-    /**
-     * @deprecated Use FinancialMath.safeDivide() directly for institutional-grade precision
-     */
-    // Deprecated safeDivision method removed - use FinancialMath.safeDivide() directly
 
     /**
      * 🔧 FIX: Safe mean calculation to replace DetectorUtils.calculateMean
@@ -286,8 +487,8 @@ export class ExhaustionDetector
     /* ------------------------------------------------------------------ */
     public onEnrichedTrade(event: EnrichedTradeEvent): void {
         // 🔧 FIX: Add comprehensive input validation to prevent NaN/Infinity propagation
-        const validPrice = this.validateNumeric(event.price, 0);
-        if (validPrice === 0) {
+        const validPrice = this.validateNumeric(event.price);
+        if (validPrice === null) {
             this.logger.warn(
                 "[ExhaustionDetector] Invalid price detected, skipping trade",
                 {
@@ -300,8 +501,8 @@ export class ExhaustionDetector
             return;
         }
 
-        const validQuantity = this.validateNumeric(event.quantity, 0);
-        if (validQuantity === 0) {
+        const validQuantity = this.validateNumeric(event.quantity);
+        if (validQuantity === null) {
             this.logger.warn(
                 "[ExhaustionDetector] Invalid quantity detected, skipping trade",
                 {
@@ -314,9 +515,15 @@ export class ExhaustionDetector
             return;
         }
 
-        // Validate passive volume values
-        const validBidVolume = Math.max(0, event.zonePassiveBidVolume || 0);
-        const validAskVolume = Math.max(0, event.zonePassiveAskVolume || 0);
+        // Validate passive volume values using FinancialMath
+        const validBidVolume = FinancialMath.calculateMax([
+            0,
+            event.zonePassiveBidVolume || 0,
+        ]);
+        const validAskVolume = FinancialMath.calculateMax([
+            0,
+            event.zonePassiveAskVolume || 0,
+        ]);
 
         const zone = this.calculateZone(validPrice);
 
@@ -373,19 +580,14 @@ export class ExhaustionDetector
         }
     }
 
-    private calculateExhaustionScore(conditions: ExhaustionConditions): number {
+    private calculateExhaustionScore(
+        conditions: ExhaustionConditions
+    ): number | null {
         // 🔧 FIX: Use BaseDetector's threshold management instead of duplicate calls
         const thresholds = this.getAdaptiveThresholds();
 
-        // 🔧 FIX: Define normalized weight constants to prevent score overflow
-        const weights = {
-            depletion: 0.4, // Primary exhaustion factor
-            passive: 0.25, // Passive liquidity depletion
-            continuity: 0.15, // Continuous depletion trend
-            imbalance: 0.1, // Market imbalance
-            spread: 0.08, // Spread widening
-            velocity: 0.02, // Volume velocity
-        };
+        // 🔧 FIX: Use configurable scoring weights instead of hardcoded constants
+        const weights = this.scoringWeights;
 
         let weightedScore = 0;
 
@@ -433,8 +635,9 @@ export class ExhaustionDetector
         }
         weightedScore += passiveScore * weights.passive;
 
-        // Factor 3: Normalized continuous depletion - 🔧 FIX: Fixed impossible threshold
-        const depletionThreshold = conditions.avgPassive * 0.2; // 20% of average passive (FIXED)
+        // Factor 3: Normalized continuous depletion - 🔧 FIX: Use configurable threshold ratio
+        const depletionThreshold =
+            conditions.avgPassive * this.depletionThresholdRatio;
         let continuityScore = 0;
         if (conditions.refillGap < -depletionThreshold) {
             continuityScore = 1.0; // Strong continuous depletion
@@ -488,7 +691,8 @@ export class ExhaustionDetector
 
         // 🔧 FIX: Ensure score never exceeds 1.0 and meets minimum confidence
         const finalScore = Math.max(0, Math.min(1, weightedScore));
-        return finalScore >= thresholds.minimumConfidence ? finalScore : 0;
+
+        return finalScore >= thresholds.minimumConfidence ? finalScore : null;
     }
 
     /**
@@ -505,7 +709,7 @@ export class ExhaustionDetector
         old: AdaptiveThresholds,
         current: AdaptiveThresholds
     ): boolean {
-        const threshold = 0.1; // 10% change threshold
+        const threshold = this.significantChangeThreshold;
 
         return (
             Math.abs(
@@ -535,13 +739,17 @@ export class ExhaustionDetector
      * Main detection loop for exhaustion patterns
      */
     protected checkForSignal(triggerTrade: AggressiveTrade): void {
-        const now = Date.now();
+        // 🔧 FIX: Use trigger trade timestamp as reference instead of Date.now()
+        // This prevents issues with network latency, processing delays, and historical data
+        const referenceTime = triggerTrade.timestamp;
         const zoneTicks = this.getEffectiveZoneTicks();
 
         try {
-            // Get recent trades within window
+            // Get recent trades within window relative to the trigger trade
             const recentTrades = this.trades.filter(
-                (t) => now - t.timestamp < this.windowMs
+                (t) =>
+                    referenceTime - t.timestamp < this.windowMs &&
+                    t.timestamp <= referenceTime
             );
 
             if (recentTrades.length === 0) {
@@ -631,6 +839,9 @@ export class ExhaustionDetector
 
         // Calculate score with confidence adjustment
         const baseScore = this.calculateExhaustionScore(conditions);
+        if (baseScore === null) {
+            return; // Cannot proceed without valid exhaustion score
+        }
         const adjustedScore = baseScore * conditions.confidence;
 
         // Apply stricter threshold for low-quality data
@@ -1080,9 +1291,17 @@ export class ExhaustionDetector
         const sampleCount = samples.length;
 
         //TODO
-        // 🔧 FIX: More lenient thresholds
-        if (sampleCount >= 8 && dataAge < 45000) return "high"; // Relaxed from 10 samples & 30s
-        if (sampleCount >= 3 && dataAge < 90000) return "medium"; // Relaxed from 5 samples & 60s
+        // Use configurable data quality thresholds
+        if (
+            sampleCount >= this.highQualitySampleCount &&
+            dataAge < this.highQualityDataAge
+        )
+            return "high";
+        if (
+            sampleCount >= this.mediumQualitySampleCount &&
+            dataAge < this.mediumQualityDataAge
+        )
+            return "medium";
         if (sampleCount >= 1) return "low"; // Relaxed from 2 samples
 
         return "insufficient";
@@ -1095,7 +1314,7 @@ export class ExhaustionDetector
         samples: ZoneSample[],
         quality: "high" | "medium" | "low" | "insufficient",
         avgLiquidity: number
-    ): number {
+    ): number | null {
         let confidence = 0;
 
         // Base confidence from data quality
@@ -1110,8 +1329,7 @@ export class ExhaustionDetector
                 confidence = 0.5;
                 break;
             case "insufficient":
-                confidence = 0.2;
-                break;
+                return null; // Cannot calculate confidence with insufficient data
         }
 
         // Adjust for sample consistency
@@ -1127,10 +1345,13 @@ export class ExhaustionDetector
         if (samples.length > 0) {
             const latestAge = Date.now() - samples.at(-1)!.timestamp;
             const freshness = Math.exp(-latestAge / 30000); // Decay over 30 seconds
+
             confidence *= freshness;
         }
 
-        return Math.max(0, Math.min(1, confidence));
+        const finalConfidence = Math.max(0, Math.min(1, confidence));
+
+        return finalConfidence;
     }
 
     // Deprecated calculateSafeRatio and calculateSafeMean methods removed - use FinancialMath directly
@@ -1138,8 +1359,8 @@ export class ExhaustionDetector
     /**
      * Safe velocity calculation
      */
-    private calculateSafeVelocity(samples: ZoneSample[]): number {
-        if (!this.features.volumeVelocity || samples.length < 2) return 0;
+    private calculateSafeVelocity(samples: ZoneSample[]): number | null {
+        if (!this.features.volumeVelocity || samples.length < 2) return null;
 
         try {
             const recent = samples.slice(-5);
@@ -1163,9 +1384,9 @@ export class ExhaustionDetector
 
             return velocities.length > 0
                 ? FinancialMath.calculateMean(velocities)
-                : 0;
+                : null;
         } catch {
-            return 0;
+            return null;
         }
     }
 
@@ -1218,7 +1439,10 @@ export class ExhaustionDetector
         if (values.length < 2) return 0;
 
         const mean = FinancialMath.calculateMean(values);
-        const squaredDiffs = values.map((val) => Math.pow(val - mean, 2));
+        const squaredDiffs = values.map((val) => {
+            const diff = FinancialMath.safeSubtract(val, mean);
+            return FinancialMath.safeMultiply(diff, diff); // Square using multiply
+        });
         return FinancialMath.calculateMean(squaredDiffs);
     }
 
@@ -1363,10 +1587,9 @@ export class ExhaustionDetector
             const avgPassive = FinancialMath.calculateMean(
                 samples.map((s) => s.total)
             );
-            const minPassive =
-                samples.length > 0
-                    ? Math.min(...samples.map((s) => s.total))
-                    : 0;
+            const minPassive = FinancialMath.calculateMin(
+                samples.map((s) => s.total)
+            );
 
             // Safe ratio calculations with bounds
             const passiveRatio = FinancialMath.safeDivide(
@@ -1378,13 +1601,25 @@ export class ExhaustionDetector
                 avgPassive
             );
 
-            // Calculate velocity with validation
+            // Calculate velocity with validation (only fail if feature is enabled but calculation fails)
             const passiveVelocity = this.calculateSafeVelocity(samples);
+            if (passiveVelocity === null && this.features.volumeVelocity) {
+                // Only fail if velocity feature is enabled but we can't calculate it
+                return {
+                    success: false,
+                    error: new Error(
+                        "Cannot calculate passive velocity - insufficient data for enabled feature"
+                    ),
+                    fallbackSafe: true,
+                };
+            }
+            // Use 0 as default when velocity feature is disabled or insufficient data
+            const safePassiveVelocity = passiveVelocity ?? 0;
 
             // Check passive imbalance with error handling
             const imbalanceResult = this.checkPassiveImbalanceSafe(zone);
             const imbalance = imbalanceResult.success
-                ? Math.abs(imbalanceResult.data.imbalance)
+                ? FinancialMath.calculateAbs(imbalanceResult.data.imbalance)
                 : 0;
 
             // Calculate confidence based on data quality and completeness (ADJUSTED)
@@ -1394,20 +1629,41 @@ export class ExhaustionDetector
                 avgLiquidity
             );
 
+            // Handle null confidence (insufficient data)
+            if (confidence === null) {
+                return {
+                    success: false,
+                    error: new Error(
+                        "Insufficient data quality for confidence calculation"
+                    ),
+                    fallbackSafe: true,
+                };
+            }
+
             // 🔧 FIX: Don't let confidence go too low for reasonable data
             if (samples.length > 2 && avgLiquidity > 0) {
                 confidence = Math.max(0.3, confidence); // Minimum 30% confidence for any reasonable data
             }
 
             // Calculate additional fields for compatibility
-            const maxPassive =
-                samples.length > 0
-                    ? Math.max(...samples.map((s) => s.total))
-                    : 0;
+            const maxPassive = FinancialMath.calculateMax(
+                samples.map((s) => s.total)
+            );
             const consistency = this.calculateConsistency(
                 samples.map((s) => s.total)
             );
             const velocityIncrease = this.calculateVelocityIncrease(samples);
+
+            // Handle null returns from calculations - return early if critical calculations fail
+            if (consistency === null || velocityIncrease === null) {
+                return {
+                    success: false,
+                    error: new Error(
+                        "Critical calculation returned null - insufficient data"
+                    ),
+                    fallbackSafe: true,
+                };
+            }
 
             // Determine dominant side based on imbalance
             const dominantSide = imbalanceResult.success
@@ -1441,7 +1697,7 @@ export class ExhaustionDetector
                         : 0,
                 imbalance,
                 spread: spreadInfo?.spread ?? 0,
-                passiveVelocity,
+                passiveVelocity: safePassiveVelocity,
                 sampleCount: samples.length,
                 isValid: true,
                 confidence,
@@ -1490,14 +1746,14 @@ export class ExhaustionDetector
     /**
      * Calculate consistency (how consistently passive is maintained)
      */
-    private calculateConsistency(passiveValues: number[]): number {
+    private calculateConsistency(passiveValues: number[]): number | null {
         if (passiveValues.length < 3) {
-            return 0.7; // Default reasonable consistency for small samples
+            return null; // Cannot calculate consistency with insufficient data
         }
 
         try {
             const avgPassive = FinancialMath.calculateMean(passiveValues);
-            if (avgPassive === 0) return 0.5; // Neutral consistency if no passive volume
+            if (avgPassive === 0) return null; // Cannot calculate consistency with no passive volume
 
             let consistentPeriods = 0;
             for (const value of passiveValues) {
@@ -1510,22 +1766,22 @@ export class ExhaustionDetector
             const consistency = consistentPeriods / passiveValues.length;
 
             // Safety checks
-            if (!isFinite(consistency)) return 0.5;
+            if (!isFinite(consistency)) return null;
             return Math.max(0, Math.min(1, consistency));
         } catch (error) {
             this.logger?.warn(
                 `[ExhaustionDetector] Error calculating consistency: ${(error as Error).message}`
             );
-            return 0.5; // Safe default
+            return null; // Cannot calculate consistency due to error
         }
     }
 
     /**
      * Calculate velocity increase over time
      */
-    private calculateVelocityIncrease(samples: ZoneSample[]): number {
+    private calculateVelocityIncrease(samples: ZoneSample[]): number | null {
         if (samples.length < 5) {
-            return 1.0; // Neutral velocity for insufficient data
+            return null; // Cannot calculate velocity with insufficient data
         }
 
         try {
@@ -1534,7 +1790,7 @@ export class ExhaustionDetector
             const earlier = samples.slice(-6, -3); // Previous 3 snapshots
 
             if (recent.length < 2 || earlier.length < 2) {
-                return 1.0; // Neutral velocity
+                return null; // Cannot calculate velocity with insufficient periods
             }
 
             // Calculate velocity for recent period
@@ -1549,13 +1805,13 @@ export class ExhaustionDetector
             );
 
             // Safety checks and bounds
-            if (!isFinite(velocityRatio)) return 1.0;
+            if (!isFinite(velocityRatio)) return null;
             return Math.max(0.1, Math.min(10, velocityRatio)); // Reasonable bounds
         } catch (error) {
             this.logger?.warn(
                 `[ExhaustionDetector] Error calculating velocity increase: ${(error as Error).message}`
             );
-            return 1.0; // Safe default
+            return null; // Cannot calculate velocity due to error
         }
     }
 
@@ -1575,8 +1831,11 @@ export class ExhaustionDetector
                 const timeDelta = current.timestamp - previous.timestamp;
 
                 if (timeDelta > 0) {
-                    const volumeChange = Math.abs(
-                        current.total - previous.total
+                    const volumeChange = FinancialMath.calculateAbs(
+                        FinancialMath.safeSubtract(
+                            current.total,
+                            previous.total
+                        )
                     );
                     const velocity = FinancialMath.safeDivide(
                         volumeChange,
@@ -1661,7 +1920,10 @@ export class ExhaustionDetector
                     }
                 }
 
-                previousLevel = Math.max(previousLevel, currentLevel);
+                previousLevel = FinancialMath.calculateMax([
+                    previousLevel,
+                    currentLevel,
+                ]);
             }
 
             // Calculate iceberg confidence
