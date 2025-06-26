@@ -688,4 +688,53 @@ export class FinancialMath {
             Math.abs(value) >= Number.MIN_VALUE
         );
     }
+
+    /**
+     * Find minimum value in array with financial number validation
+     * Returns 0 if array is empty or contains no valid values
+     */
+    static calculateMin(values: number[]): number {
+        if (!values || values.length === 0) {
+            return 0;
+        }
+
+        const validValues = values.filter((v) =>
+            this.isValidFinancialNumber(v)
+        );
+        if (validValues.length === 0) {
+            return 0;
+        }
+
+        return Math.min(...validValues);
+    }
+
+    /**
+     * Find maximum value in array with financial number validation
+     * Returns 0 if array is empty or contains no valid values
+     */
+    static calculateMax(values: number[]): number {
+        if (!values || values.length === 0) {
+            return 0;
+        }
+
+        const validValues = values.filter((v) =>
+            this.isValidFinancialNumber(v)
+        );
+        if (validValues.length === 0) {
+            return 0;
+        }
+
+        return Math.max(...validValues);
+    }
+
+    /**
+     * Calculate absolute value with financial number validation
+     * Returns 0 if value is not a valid financial number
+     */
+    static calculateAbs(value: number): number {
+        if (!this.isValidFinancialNumber(value)) {
+            return 0;
+        }
+        return Math.abs(value);
+    }
 }

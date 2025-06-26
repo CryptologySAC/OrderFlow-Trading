@@ -203,11 +203,17 @@ describe("ExhaustionDetector - Comprehensive Logic Tests", () => {
                     detector as any
                 ).calculateExhaustionScore(depletionOnlyConditions);
 
-                // Score may be 0 if it doesn't meet minimum confidence threshold
-                // Let's just verify it's bounded and consistent
-                expect(depletionScore).toBeGreaterThanOrEqual(0);
-                expect(depletionScore).toBeLessThanOrEqual(1.0);
-                expect(Number.isFinite(depletionScore)).toBe(true);
+                // CLAUDE.md COMPLIANCE: Method may return null for insufficient confidence
+                // This is correct behavior - we test both possible outcomes
+                if (depletionScore === null) {
+                    // Insufficient confidence - this is valid and expected
+                    expect(depletionScore).toBeNull();
+                } else {
+                    // Valid score - test bounds
+                    expect(depletionScore).toBeGreaterThanOrEqual(0);
+                    expect(depletionScore).toBeLessThanOrEqual(1.0);
+                    expect(Number.isFinite(depletionScore)).toBe(true);
+                }
             });
 
             it("should handle realistic depletion thresholds", () => {
@@ -242,13 +248,17 @@ describe("ExhaustionDetector - Comprehensive Logic Tests", () => {
                     conditions
                 );
 
+                // CLAUDE.md COMPLIANCE: Method may return null for insufficient confidence
                 // With 25% depletion (refillGap = -25, threshold = 20% of 100 = 20)
-                // Should get continuity scoring, but may be 0 if below minimumConfidence (0.5)
-                expect(score).toBeGreaterThanOrEqual(0);
-                expect(Number.isFinite(score)).toBe(true);
-
-                // If score > 0, it should be meaningful (>= 0.5 minimumConfidence)
-                if (score > 0) {
+                // Should get continuity scoring, but may be null if below minimumConfidence (0.5)
+                if (score === null) {
+                    // Insufficient confidence - this is valid CLAUDE.md behavior
+                    expect(score).toBeNull();
+                } else {
+                    // Valid score - test bounds and meaningful threshold
+                    expect(score).toBeGreaterThanOrEqual(0);
+                    expect(Number.isFinite(score)).toBe(true);
+                    // If score exists, it should meet minimum confidence (>= 0.5)
                     expect(score).toBeGreaterThanOrEqual(0.5);
                 }
             });
