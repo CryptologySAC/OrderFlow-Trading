@@ -130,6 +130,7 @@ export class DistributionZoneDetector extends ZoneDetector {
     private readonly symbol: string;
     private readonly pricePrecision: number;
     private readonly zoneTicks: number;
+    private readonly strongZoneThreshold: number;
 
     // Enhanced zone formation analyzer (identical)
     private readonly enhancedZoneFormation: EnhancedZoneFormation;
@@ -150,6 +151,7 @@ export class DistributionZoneDetector extends ZoneDetector {
         this.symbol = symbol;
         this.pricePrecision = 2; // Fixed precision for distribution
         this.zoneTicks = 5; // Fixed zone ticks for distribution
+        this.strongZoneThreshold = config.strongZoneThreshold ?? 0.7;
 
         // Enhanced zone formation with distribution-specific settings
         this.enhancedZoneFormation = new EnhancedZoneFormation(
@@ -429,14 +431,38 @@ export class DistributionZoneDetector extends ZoneDetector {
 
             // Must meet minimum duration requirement (identical)
             if (duration < this.config.minCandidateDuration) {
+                this.logger.debug(
+                    `[DistributionZoneDetector] Candidate rejected: insufficient duration`,
+                    {
+                        duration,
+                        required: this.config.minCandidateDuration,
+                        priceLevel: candidate.priceLevel,
+                    }
+                );
                 continue;
             }
 
             // Must have minimum volume and trade count (identical)
             if (candidate.totalVolume < this.config.minZoneVolume) {
+                this.logger.debug(
+                    `[DistributionZoneDetector] Candidate rejected: insufficient volume`,
+                    {
+                        totalVolume: candidate.totalVolume,
+                        required: this.config.minZoneVolume,
+                        priceLevel: candidate.priceLevel,
+                    }
+                );
                 continue;
             }
             if (candidate.trades.length < this.config.minTradeCount) {
+                this.logger.debug(
+                    `[DistributionZoneDetector] Candidate rejected: insufficient trade count`,
+                    {
+                        tradeCount: candidate.trades.length,
+                        required: this.config.minTradeCount,
+                        priceLevel: candidate.priceLevel,
+                    }
+                );
                 continue;
             }
 
@@ -451,12 +477,28 @@ export class DistributionZoneDetector extends ZoneDetector {
             // This is the inverse of accumulation's high sell ratios
             const minBuyRatio = this.config.minSellRatio ?? 0.55; // Config uses minSellRatio, we invert the logic
             if (buyRatio < minBuyRatio) {
+                this.logger.debug(
+                    `[DistributionZoneDetector] Candidate rejected: insufficient buy ratio`,
+                    {
+                        buyRatio: buyRatio.toFixed(3),
+                        required: minBuyRatio,
+                        priceLevel: candidate.priceLevel,
+                    }
+                );
                 continue;
             }
 
             // Check price stability using maxPriceDeviation from config (identical)
             const requiredStability = 1 - this.config.maxPriceDeviation;
             if (candidate.priceStability < requiredStability) {
+                this.logger.debug(
+                    `[DistributionZoneDetector] Candidate rejected: insufficient price stability`,
+                    {
+                        priceStability: candidate.priceStability.toFixed(3),
+                        required: requiredStability.toFixed(3),
+                        priceLevel: candidate.priceLevel,
+                    }
+                );
                 continue;
             }
 
@@ -470,6 +512,14 @@ export class DistributionZoneDetector extends ZoneDetector {
             // For distribution, limit aggressive selling to avoid dump patterns
             const maxSellRatio = 1 - (this.config.minSellRatio ?? 0.55); // Complement of minBuyRatio
             if (aggressiveSellRatio > maxSellRatio) {
+                this.logger.debug(
+                    `[DistributionZoneDetector] Candidate rejected: excessive aggressive selling`,
+                    {
+                        aggressiveSellRatio: aggressiveSellRatio.toFixed(3),
+                        maxAllowed: maxSellRatio.toFixed(3),
+                        priceLevel: candidate.priceLevel,
+                    }
+                );
                 continue;
             }
 
@@ -487,6 +537,14 @@ export class DistributionZoneDetector extends ZoneDetector {
                 this.config.minZoneStrength * 0.3
             );
             if (institutionalScore < minInstitutionalScore) {
+                this.logger.debug(
+                    `[DistributionZoneDetector] Candidate rejected: insufficient institutional score`,
+                    {
+                        institutionalScore: institutionalScore.toFixed(3),
+                        required: minInstitutionalScore.toFixed(3),
+                        priceLevel: candidate.priceLevel,
+                    }
+                );
                 continue;
             }
 
@@ -496,10 +554,24 @@ export class DistributionZoneDetector extends ZoneDetector {
                 trade.timestamp
             );
 
+            this.logger.debug(`[DistributionZoneDetector] Candidate scoring`, {
+                priceLevel: candidate.priceLevel,
+                score: score.toFixed(3),
+                minRequired: this.config.minZoneStrength,
+                currentBest: bestScore.toFixed(3),
+            });
+
             // Use configurable minZoneStrength (identical)
             if (score > bestScore && score > this.config.minZoneStrength) {
                 bestScore = score;
                 bestCandidate = candidate;
+                this.logger.debug(
+                    `[DistributionZoneDetector] New best candidate found`,
+                    {
+                        priceLevel: candidate.priceLevel,
+                        score: score.toFixed(3),
+                    }
+                );
             }
         }
 
@@ -550,30 +622,61 @@ export class DistributionZoneDetector extends ZoneDetector {
                 trade.timestamp
             );
 
+        // 🔧 FIX: Make volume surge validation advisory rather than mandatory
+        // Volume surge should enhance zone strength but not block zone formation
+        let volumeBoostApplied = false;
         if (!volumeValidation.valid) {
-            // Clean up candidate and return without creating zone
-            this.candidates.delete(bestCandidate.priceLevel);
-            this.candidatePool.release(bestCandidate);
-            return null;
+            this.logger.debug(
+                `[DistributionZoneDetector] Volume surge validation failed - proceeding with reduced confidence`,
+                {
+                    priceLevel: bestCandidate.priceLevel,
+                    reason: volumeValidation.reason,
+                    volumeSurge: volumeValidation.volumeSurge,
+                    imbalance: volumeValidation.imbalance,
+                    institutional: volumeValidation.institutional,
+                }
+            );
+            // Don't return null - proceed with zone creation but without volume boost
+        } else {
+            volumeBoostApplied = true;
+            this.logger.debug(
+                `[DistributionZoneDetector] Volume surge validation passed - applying confidence boost`,
+                {
+                    priceLevel: bestCandidate.priceLevel,
+                }
+            );
         }
 
         // Create new zone only if no conflicts (identical)
         const zoneDetection = this.createZoneDetectionData(bestCandidate);
 
-        // ✅ ENHANCED: Apply volume surge confidence boost to zone strength
-        const volumeBoost = this.volumeAnalyzer.calculateVolumeConfidenceBoost(
-            volumeValidation.volumeSurge,
-            volumeValidation.imbalance,
-            volumeValidation.institutional
-        );
+        // ✅ ENHANCED: Apply volume surge confidence boost to zone strength (only if validation passed)
+        if (volumeBoostApplied) {
+            const volumeBoost =
+                this.volumeAnalyzer.calculateVolumeConfidenceBoost(
+                    volumeValidation.volumeSurge,
+                    volumeValidation.imbalance,
+                    volumeValidation.institutional
+                );
 
-        if (volumeBoost.isValid) {
-            // Enhance zone detection data with volume confidence
-            const originalStrength = zoneDetection.initialStrength;
-            zoneDetection.initialStrength = Math.min(
-                1.0,
-                originalStrength + volumeBoost.confidence
-            );
+            if (volumeBoost.isValid) {
+                // Enhance zone detection data with volume confidence
+                const originalStrength = zoneDetection.initialStrength;
+                zoneDetection.initialStrength = Math.min(
+                    1.0,
+                    originalStrength + volumeBoost.confidence
+                );
+                this.logger.debug(
+                    `[DistributionZoneDetector] Volume boost applied`,
+                    {
+                        priceLevel: bestCandidate.priceLevel,
+                        originalStrength: originalStrength.toFixed(3),
+                        boostedStrength:
+                            zoneDetection.initialStrength.toFixed(3),
+                        boost: volumeBoost.confidence.toFixed(3),
+                    }
+                );
+            }
         }
 
         const zone = this.zoneManager.createZone(

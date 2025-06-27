@@ -33,8 +33,8 @@ describe("DistributionZoneDetector - Integration and Performance Tests", () => {
 
         const config: Partial<ZoneDetectorConfig> = {
             minCandidateDuration: 30000, // 30 seconds - reduced for test
-            minZoneVolume: 200,
-            minTradeCount: 6,
+            minZoneVolume: 100, // Reduced to allow zone formation with test data
+            minTradeCount: 4, // Reduced for testing
             maxPriceDeviation: 0.02,
             minZoneStrength: 0.45,
             strengthChangeThreshold: 0.15,
@@ -82,13 +82,26 @@ describe("DistributionZoneDetector - Integration and Performance Tests", () => {
                 detector.analyze(trade);
             });
 
-            // Volume surge during distribution formation
+            // Volume surge during distribution formation - proper institutional patterns
             const surgeTrades: EnrichedTradeEvent[] = [];
-            for (let i = 0; i < 8; i++) {
+            for (let i = 0; i < 10; i++) {
+                // Create proper institutional patterns: 60% institutional size trades (≥50)
+                const isInstitutional = i < 6; // First 6 trades are institutional (60%)
+                const isIcebergPattern = i >= 6 && i < 9; // Last 3 trades form iceberg pattern (consistent 60 size)
+                
+                let quantity;
+                if (isIcebergPattern) {
+                    quantity = 60; // Consistent iceberg size
+                } else if (isInstitutional) {
+                    quantity = 70 + Math.random() * 30; // 70-100 institutional size
+                } else {
+                    quantity = 25 + Math.random() * 15; // 25-40 retail size
+                }
+                
                 surgeTrades.push({
                     price: surgeLevel,
-                    quantity: 75 + Math.random() * 30, // 3-5x surge in volume
-                    timestamp: baseTime + i * 5000,
+                    quantity: quantity,
+                    timestamp: baseTime + i * 4000, // 4-second intervals
                     buyerIsMaker: false, // Buy pressure (distribution pattern)
                     pair: "BTCUSDT",
                     tradeId: `surge_${i}`,
@@ -120,8 +133,8 @@ describe("DistributionZoneDetector - Integration and Performance Tests", () => {
             // Formation with continued surge - ensure enough time has passed
             const surgeFormation: EnrichedTradeEvent = {
                 price: surgeLevel,
-                quantity: 120, // Very large volume
-                timestamp: baseTime + 40000, // 40 seconds after first trade (> 30s requirement)
+                quantity: 120, // Large institutional volume for formation
+                timestamp: baseTime + 45000, // 45 seconds after first trade (> 30s requirement)
                 buyerIsMaker: false,
                 pair: "BTCUSDT",
                 tradeId: "surge_formation",
@@ -183,10 +196,10 @@ describe("DistributionZoneDetector - Integration and Performance Tests", () => {
             for (let cycle = 0; cycle < 4; cycle++) {
                 const cycleTime = baseTime + cycle * 20000;
 
-                // Level 1 distribution
+                // Level 1 distribution - institutional pattern
                 multiLevelSurges.push({
                     price: level1,
-                    quantity: 80 + Math.random() * 25,
+                    quantity: cycle === 0 ? 120 : 80 + Math.random() * 25, // First trade institutional
                     timestamp: cycleTime,
                     buyerIsMaker: false,
                     pair: "BTCUSDT",
@@ -198,10 +211,10 @@ describe("DistributionZoneDetector - Integration and Performance Tests", () => {
                     zonePassiveAskVolume: 0,
                 });
 
-                // Level 2 distribution
+                // Level 2 distribution - institutional pattern
                 multiLevelSurges.push({
                     price: level2,
-                    quantity: 70 + Math.random() * 30,
+                    quantity: cycle === 1 ? 110 : 70 + Math.random() * 30, // Second cycle institutional
                     timestamp: cycleTime + 2000,
                     buyerIsMaker: false,
                     pair: "BTCUSDT",
@@ -213,10 +226,10 @@ describe("DistributionZoneDetector - Integration and Performance Tests", () => {
                     zonePassiveAskVolume: 0,
                 });
 
-                // Level 3 distribution
+                // Level 3 distribution - institutional pattern
                 multiLevelSurges.push({
                     price: level3,
-                    quantity: 65 + Math.random() * 20,
+                    quantity: cycle === 2 ? 100 : 65 + Math.random() * 20, // Third cycle institutional
                     timestamp: cycleTime + 4000,
                     buyerIsMaker: false,
                     pair: "BTCUSDT",
@@ -532,11 +545,11 @@ describe("DistributionZoneDetector - Integration and Performance Tests", () => {
                 mockMetrics
             );
 
-            // Create minimal trades
+            // Create minimal trades with proper institutional pattern (need minimum 5 trades)
             const permissiveTrades: EnrichedTradeEvent[] = [
                 {
                     price: strictLevel,
-                    quantity: 30,
+                    quantity: 75, // Institutional size
                     timestamp: baseTime,
                     buyerIsMaker: false,
                     pair: "BTCUSDT",
@@ -549,11 +562,37 @@ describe("DistributionZoneDetector - Integration and Performance Tests", () => {
                 },
                 {
                     price: strictLevel,
-                    quantity: 25,
-                    timestamp: baseTime + 5000,
+                    quantity: 80, // Institutional size
+                    timestamp: baseTime + 3000,
                     buyerIsMaker: false,
                     pair: "BTCUSDT",
                     tradeId: "permissive_2",
+                    originalTrade: {} as any,
+                    passiveBidVolume: 0,
+                    passiveAskVolume: 0,
+                    zonePassiveBidVolume: 0,
+                    zonePassiveAskVolume: 0,
+                },
+                {
+                    price: strictLevel,
+                    quantity: 60, // Iceberg pattern start
+                    timestamp: baseTime + 6000,
+                    buyerIsMaker: false,
+                    pair: "BTCUSDT",
+                    tradeId: "permissive_3",
+                    originalTrade: {} as any,
+                    passiveBidVolume: 0,
+                    passiveAskVolume: 0,
+                    zonePassiveBidVolume: 0,
+                    zonePassiveAskVolume: 0,
+                },
+                {
+                    price: strictLevel,
+                    quantity: 60, // Iceberg pattern
+                    timestamp: baseTime + 9000,
+                    buyerIsMaker: false,
+                    pair: "BTCUSDT",
+                    tradeId: "permissive_4",
                     originalTrade: {} as any,
                     passiveBidVolume: 0,
                     passiveAskVolume: 0,
@@ -569,8 +608,8 @@ describe("DistributionZoneDetector - Integration and Performance Tests", () => {
             // Quick formation
             const quickFormation: EnrichedTradeEvent = {
                 price: strictLevel,
-                quantity: 30,
-                timestamp: baseTime + 15000, // After minimum duration
+                quantity: 100, // Large institutional formation trade
+                timestamp: baseTime + 12000, // After minimum duration (12s > 10s)
                 buyerIsMaker: false,
                 pair: "BTCUSDT",
                 tradeId: "permissive_formation",

@@ -133,18 +133,53 @@ describe("AbsorptionDetector - Signal Direction Accuracy", () => {
             // This should generate a SELL signal because institutions are distributing to retail
             const events: EnrichedTradeEvent[] = [];
 
-            // ✅ EXACT WORKING PATTERN from realistic scenarios test  
+            // ✅ EXACT WORKING PATTERN from realistic scenarios test
             // Pattern: Heavy buying with ask refills (should generate SELL signal)
             const trades = [
-                { quantity: 80, bidVol: 4500, askVol: 5000, desc: "Initial buy" },
-                { quantity: 120, bidVol: 4600, askVol: 4800, desc: "Ask hit but holding" },
-                { quantity: 180, bidVol: 4700, askVol: 4600, desc: "More buying" },
-                { quantity: 220, bidVol: 4500, askVol: 4900, desc: "Ask REFILLS!" }, // ABSORPTION!
-                { quantity: 280, bidVol: 4300, askVol: 5200, desc: "Strong ask supply" },
-                { quantity: 300, bidVol: 4100, askVol: 5500, desc: "Ask strengthening" },
-                { quantity: 320, bidVol: 3900, askVol: 5300, desc: "Final FOMO absorbed" },
+                {
+                    quantity: 80,
+                    bidVol: 4500,
+                    askVol: 5000,
+                    desc: "Initial buy",
+                },
+                {
+                    quantity: 120,
+                    bidVol: 4600,
+                    askVol: 4800,
+                    desc: "Ask hit but holding",
+                },
+                {
+                    quantity: 180,
+                    bidVol: 4700,
+                    askVol: 4600,
+                    desc: "More buying",
+                },
+                {
+                    quantity: 220,
+                    bidVol: 4500,
+                    askVol: 4900,
+                    desc: "Ask REFILLS!",
+                }, // ABSORPTION!
+                {
+                    quantity: 280,
+                    bidVol: 4300,
+                    askVol: 5200,
+                    desc: "Strong ask supply",
+                },
+                {
+                    quantity: 300,
+                    bidVol: 4100,
+                    askVol: 5500,
+                    desc: "Ask strengthening",
+                },
+                {
+                    quantity: 320,
+                    bidVol: 3900,
+                    askVol: 5300,
+                    desc: "Final FOMO absorbed",
+                },
             ];
-            
+
             for (const [i, trade] of trades.entries()) {
                 const event = createAbsorptionEvent(
                     resistanceLevel, // Price stable despite buying
@@ -199,15 +234,50 @@ describe("AbsorptionDetector - Signal Direction Accuracy", () => {
             // ✅ EXACT WORKING PATTERN from realistic scenarios test
             // Pattern: Same as resistance test (buying pressure with ask refills)
             const trades = [
-                { quantity: 80, bidVol: 4500, askVol: 5000, desc: "Initial buy" },
-                { quantity: 120, bidVol: 4600, askVol: 4800, desc: "Ask hit but holding" },
-                { quantity: 180, bidVol: 4700, askVol: 4600, desc: "More buying" },
-                { quantity: 220, bidVol: 4500, askVol: 4900, desc: "Ask REFILLS!" }, // ABSORPTION!
-                { quantity: 280, bidVol: 4300, askVol: 5200, desc: "Strong ask supply" },
-                { quantity: 300, bidVol: 4100, askVol: 5500, desc: "Ask strengthening" },
-                { quantity: 320, bidVol: 3900, askVol: 5300, desc: "Final FOMO absorbed" },
+                {
+                    quantity: 80,
+                    bidVol: 4500,
+                    askVol: 5000,
+                    desc: "Initial buy",
+                },
+                {
+                    quantity: 120,
+                    bidVol: 4600,
+                    askVol: 4800,
+                    desc: "Ask hit but holding",
+                },
+                {
+                    quantity: 180,
+                    bidVol: 4700,
+                    askVol: 4600,
+                    desc: "More buying",
+                },
+                {
+                    quantity: 220,
+                    bidVol: 4500,
+                    askVol: 4900,
+                    desc: "Ask REFILLS!",
+                }, // ABSORPTION!
+                {
+                    quantity: 280,
+                    bidVol: 4300,
+                    askVol: 5200,
+                    desc: "Strong ask supply",
+                },
+                {
+                    quantity: 300,
+                    bidVol: 4100,
+                    askVol: 5500,
+                    desc: "Ask strengthening",
+                },
+                {
+                    quantity: 320,
+                    bidVol: 3900,
+                    askVol: 5300,
+                    desc: "Final FOMO absorbed",
+                },
             ];
-            
+
             for (const [i, trade] of trades.entries()) {
                 const event = createAbsorptionEvent(
                     breakoutLevel + i * 2,
@@ -266,15 +336,50 @@ describe("AbsorptionDetector - Signal Direction Accuracy", () => {
             // ✅ EXACT WORKING PATTERN from realistic scenarios test
             // Pattern: Heavy selling with bid refills (should generate BUY signal)
             const trades = [
-                { quantity: 100, bidVol: 5000, askVol: 4500, desc: "Initial sell" },
-                { quantity: 150, bidVol: 4800, askVol: 4600, desc: "Bid hit but holding" },
-                { quantity: 200, bidVol: 4600, askVol: 4700, desc: "More selling" },
-                { quantity: 250, bidVol: 4900, askVol: 4500, desc: "Bid REFILLS!" }, // ABSORPTION!
-                { quantity: 300, bidVol: 5200, askVol: 4300, desc: "Strong bid support" },
-                { quantity: 280, bidVol: 5500, askVol: 4100, desc: "Bid strengthening" },
-                { quantity: 350, bidVol: 5300, askVol: 3900, desc: "Final capitulation absorbed" },
+                {
+                    quantity: 100,
+                    bidVol: 5000,
+                    askVol: 4500,
+                    desc: "Initial sell",
+                },
+                {
+                    quantity: 150,
+                    bidVol: 4800,
+                    askVol: 4600,
+                    desc: "Bid hit but holding",
+                },
+                {
+                    quantity: 200,
+                    bidVol: 4600,
+                    askVol: 4700,
+                    desc: "More selling",
+                },
+                {
+                    quantity: 250,
+                    bidVol: 4900,
+                    askVol: 4500,
+                    desc: "Bid REFILLS!",
+                }, // ABSORPTION!
+                {
+                    quantity: 300,
+                    bidVol: 5200,
+                    askVol: 4300,
+                    desc: "Strong bid support",
+                },
+                {
+                    quantity: 280,
+                    bidVol: 5500,
+                    askVol: 4100,
+                    desc: "Bid strengthening",
+                },
+                {
+                    quantity: 350,
+                    bidVol: 5300,
+                    askVol: 3900,
+                    desc: "Final capitulation absorbed",
+                },
             ];
-            
+
             for (const [i, trade] of trades.entries()) {
                 const event = createAbsorptionEvent(
                     supportLevel, // Price stable despite selling
@@ -332,15 +437,50 @@ describe("AbsorptionDetector - Signal Direction Accuracy", () => {
             // ✅ EXACT WORKING PATTERN from realistic scenarios test
             // Pattern: Same as support test (selling pressure with bid refills)
             const trades = [
-                { quantity: 100, bidVol: 5000, askVol: 4500, desc: "Initial sell" },
-                { quantity: 150, bidVol: 4800, askVol: 4600, desc: "Bid hit but holding" },
-                { quantity: 200, bidVol: 4600, askVol: 4700, desc: "More selling" },
-                { quantity: 250, bidVol: 4900, askVol: 4500, desc: "Bid REFILLS!" }, // ABSORPTION!
-                { quantity: 300, bidVol: 5200, askVol: 4300, desc: "Strong bid support" },
-                { quantity: 280, bidVol: 5500, askVol: 4100, desc: "Bid strengthening" },
-                { quantity: 350, bidVol: 5300, askVol: 3900, desc: "Final capitulation absorbed" },
+                {
+                    quantity: 100,
+                    bidVol: 5000,
+                    askVol: 4500,
+                    desc: "Initial sell",
+                },
+                {
+                    quantity: 150,
+                    bidVol: 4800,
+                    askVol: 4600,
+                    desc: "Bid hit but holding",
+                },
+                {
+                    quantity: 200,
+                    bidVol: 4600,
+                    askVol: 4700,
+                    desc: "More selling",
+                },
+                {
+                    quantity: 250,
+                    bidVol: 4900,
+                    askVol: 4500,
+                    desc: "Bid REFILLS!",
+                }, // ABSORPTION!
+                {
+                    quantity: 300,
+                    bidVol: 5200,
+                    askVol: 4300,
+                    desc: "Strong bid support",
+                },
+                {
+                    quantity: 280,
+                    bidVol: 5500,
+                    askVol: 4100,
+                    desc: "Bid strengthening",
+                },
+                {
+                    quantity: 350,
+                    bidVol: 5300,
+                    askVol: 3900,
+                    desc: "Final capitulation absorbed",
+                },
             ];
-            
+
             for (const [i, trade] of trades.entries()) {
                 const event = createAbsorptionEvent(
                     capitulationLevel - i * 1,
@@ -470,12 +610,42 @@ describe("AbsorptionDetector - Signal Direction Accuracy", () => {
                         // Aggressive buying hitting passive selling
                         // ALL BUYS with ask refill pattern
                         const buyTrades = [
-                            { quantity: 70, bidVol: 900, askVol: 1200, desc: "Initial" },
-                            { quantity: 90, bidVol: 870, askVol: 1160, desc: "Hit" },
-                            { quantity: 110, bidVol: 840, askVol: 1120, desc: "More" },
-                            { quantity: 130, bidVol: 810, askVol: 1300, desc: "REFILL!" },
-                            { quantity: 150, bidVol: 780, askVol: 1400, desc: "Strong" },
-                            { quantity: 170, bidVol: 750, askVol: 1500, desc: "Final" },
+                            {
+                                quantity: 70,
+                                bidVol: 900,
+                                askVol: 1200,
+                                desc: "Initial",
+                            },
+                            {
+                                quantity: 90,
+                                bidVol: 870,
+                                askVol: 1160,
+                                desc: "Hit",
+                            },
+                            {
+                                quantity: 110,
+                                bidVol: 840,
+                                askVol: 1120,
+                                desc: "More",
+                            },
+                            {
+                                quantity: 130,
+                                bidVol: 810,
+                                askVol: 1300,
+                                desc: "REFILL!",
+                            },
+                            {
+                                quantity: 150,
+                                bidVol: 780,
+                                askVol: 1400,
+                                desc: "Strong",
+                            },
+                            {
+                                quantity: 170,
+                                bidVol: 750,
+                                askVol: 1500,
+                                desc: "Final",
+                            },
                         ];
                         for (let i = 0; i < buyTrades.length; i++) {
                             const trade = buyTrades[i];
@@ -516,12 +686,42 @@ describe("AbsorptionDetector - Signal Direction Accuracy", () => {
                         // Aggressive selling hitting passive buying
                         // ALL SELLS with bid refill pattern
                         const sellTrades = [
-                            { quantity: 75, bidVol: 1300, askVol: 850, desc: "Initial" },
-                            { quantity: 93, bidVol: 1255, askVol: 815, desc: "Hit" },
-                            { quantity: 111, bidVol: 1210, askVol: 780, desc: "More" },
-                            { quantity: 129, bidVol: 1420, askVol: 745, desc: "REFILL!" },
-                            { quantity: 147, bidVol: 1540, askVol: 710, desc: "Strong" },
-                            { quantity: 165, bidVol: 1660, askVol: 675, desc: "Final" },
+                            {
+                                quantity: 75,
+                                bidVol: 1300,
+                                askVol: 850,
+                                desc: "Initial",
+                            },
+                            {
+                                quantity: 93,
+                                bidVol: 1255,
+                                askVol: 815,
+                                desc: "Hit",
+                            },
+                            {
+                                quantity: 111,
+                                bidVol: 1210,
+                                askVol: 780,
+                                desc: "More",
+                            },
+                            {
+                                quantity: 129,
+                                bidVol: 1420,
+                                askVol: 745,
+                                desc: "REFILL!",
+                            },
+                            {
+                                quantity: 147,
+                                bidVol: 1540,
+                                askVol: 710,
+                                desc: "Strong",
+                            },
+                            {
+                                quantity: 165,
+                                bidVol: 1660,
+                                askVol: 675,
+                                desc: "Final",
+                            },
                         ];
                         for (let i = 0; i < sellTrades.length; i++) {
                             const trade = sellTrades[i];
@@ -562,11 +762,36 @@ describe("AbsorptionDetector - Signal Direction Accuracy", () => {
                         // Breakout attempt with aggressive buying
                         // ALL BUYS with ask refill pattern
                         const breakoutBuyTrades = [
-                            { quantity: 85, bidVol: 1000, askVol: 900, desc: "Initial" },
-                            { quantity: 110, bidVol: 980, askVol: 830, desc: "Hit" },
-                            { quantity: 135, bidVol: 960, askVol: 760, desc: "More" },
-                            { quantity: 160, bidVol: 940, askVol: 1100, desc: "REFILL!" },
-                            { quantity: 185, bidVol: 920, askVol: 1200, desc: "Strong" },
+                            {
+                                quantity: 85,
+                                bidVol: 1000,
+                                askVol: 900,
+                                desc: "Initial",
+                            },
+                            {
+                                quantity: 110,
+                                bidVol: 980,
+                                askVol: 830,
+                                desc: "Hit",
+                            },
+                            {
+                                quantity: 135,
+                                bidVol: 960,
+                                askVol: 760,
+                                desc: "More",
+                            },
+                            {
+                                quantity: 160,
+                                bidVol: 940,
+                                askVol: 1100,
+                                desc: "REFILL!",
+                            },
+                            {
+                                quantity: 185,
+                                bidVol: 920,
+                                askVol: 1200,
+                                desc: "Strong",
+                            },
                         ];
                         for (let i = 0; i < breakoutBuyTrades.length; i++) {
                             const trade = breakoutBuyTrades[i];
