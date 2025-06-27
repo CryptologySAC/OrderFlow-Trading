@@ -186,7 +186,7 @@
                 "enableAlerts": true,
 
                 "detectorThresholds": {
-                    "exhaustion": 0.8,
+                    "exhaustion": 0.45,
                     "cvd_confirmation": 0.4,
                     "distribution": 0.8,
                     "distribution_zone": 0.8,
@@ -215,7 +215,7 @@
             },
 
             "exhaustion": {
-                "minAggVolume": 25,
+                "minAggVolume": 20,
                 "windowMs": 45000,
                 "pricePrecision": 2,
                 "zoneTicks": 3,
@@ -226,9 +226,9 @@
                 "burstDetectionMs": 2000,
                 "sustainedVolumeMs": 20000,
                 "medianTradeSize": 0.8,
-                "exhaustionThreshold": 0.45,
+                "exhaustionThreshold": 0.4,
                 "maxPassiveRatio": 0.35,
-                "minDepletionFactor": 0.25,
+                "minDepletionFactor": 0.3,
 
                 "imbalanceHighThreshold": 0.75,
                 "imbalanceMediumThreshold": 0.55,
