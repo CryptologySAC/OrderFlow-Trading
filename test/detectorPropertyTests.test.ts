@@ -1,9 +1,7 @@
 // test/detectorPropertyTests.test.ts - Property tests for all detectors
 
 import { describe, it, beforeEach, vi, expect } from "vitest";
-import {
-    PropertyTestRunner,
-} from "./framework/mathematicalPropertyTesting.js";
+import { PropertyTestRunner } from "./framework/mathematicalPropertyTesting.js";
 import { AbsorptionDetector } from "../src/indicators/absorptionDetector.js";
 import { ExhaustionDetector } from "../src/indicators/exhaustionDetector.js";
 import { DeltaCVDConfirmation } from "../src/indicators/deltaCVDConfirmation.js";
@@ -29,9 +27,11 @@ describe("Mathematical Property Testing for All Detectors", () => {
         });
 
         // Use proper mock from __mocks__/ directory per CLAUDE.md
-        const { MetricsCollector: MockMetricsCollector } = await import("../__mocks__/src/infrastructure/metricsCollector.js");
+        const { MetricsCollector: MockMetricsCollector } = await import(
+            "../__mocks__/src/infrastructure/metricsCollector.js"
+        );
         mockMetrics = new MockMetricsCollector() as any;
-        
+
         mockLogger = {
             info: vi.fn(),
             warn: vi.fn(),

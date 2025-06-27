@@ -26,7 +26,9 @@ describe("ExhaustionDetector Numeric Stability Fixes", () => {
         };
 
         // Use proper mock from __mocks__/ directory per CLAUDE.md
-        const { MetricsCollector: MockMetricsCollector } = await import("../__mocks__/src/infrastructure/metricsCollector.js");
+        const { MetricsCollector: MockMetricsCollector } = await import(
+            "../__mocks__/src/infrastructure/metricsCollector.js"
+        );
         mockMetrics = new MockMetricsCollector() as any;
 
         mockSpoofingDetector = new SpoofingDetector(

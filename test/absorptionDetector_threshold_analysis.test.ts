@@ -2,7 +2,10 @@
 // 🔬 THRESHOLD ANALYSIS: Find exactly why normal scenarios don't generate signals
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { AbsorptionDetector, type AbsorptionSettings } from "../src/indicators/absorptionDetector.js";
+import {
+    AbsorptionDetector,
+    type AbsorptionSettings,
+} from "../src/indicators/absorptionDetector.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
@@ -82,7 +85,7 @@ describe("AbsorptionDetector - Threshold Analysis", () => {
                     layeredAbsorption: false,
                     spreadImpact: true,
                 },
-            } as AbsorptionSettings
+            } as AbsorptionSettings,
         },
         {
             name: "Ultra Permissive Settings",
@@ -105,28 +108,30 @@ describe("AbsorptionDetector - Threshold Analysis", () => {
                     layeredAbsorption: false,
                     spreadImpact: false,
                 },
-            } as AbsorptionSettings
-        }
+            } as AbsorptionSettings,
+        },
     ];
 
     describe("🔬 Threshold Configuration Testing", () => {
-        
         thresholdConfigurations.forEach((config) => {
-            
             describe(`Testing with: ${config.name}`, () => {
-                
                 beforeEach(async () => {
                     mockLogger = createDebugLogger();
-                    
-                    const { MetricsCollector: MockMetricsCollector } = await import("../__mocks__/src/infrastructure/metricsCollector.js");
+
+                    const { MetricsCollector: MockMetricsCollector } =
+                        await import(
+                            "../__mocks__/src/infrastructure/metricsCollector.js"
+                        );
                     mockMetrics = new MockMetricsCollector() as any;
-                    
+
                     mockSpoofingDetector = createMockSpoofingDetector();
-                    
+
                     mockOrderBook = {
                         getBestBid: vi.fn().mockReturnValue(50000),
                         getBestAsk: vi.fn().mockReturnValue(50001),
-                        getSpread: vi.fn().mockReturnValue({ spread: 1, spreadBps: 2 }),
+                        getSpread: vi
+                            .fn()
+                            .mockReturnValue({ spread: 1, spreadBps: 2 }),
                         getDepth: vi.fn().mockReturnValue(new Map()),
                         isHealthy: vi.fn().mockReturnValue(true),
                         getLastUpdate: vi.fn().mockReturnValue(Date.now()),
@@ -142,283 +147,376 @@ describe("AbsorptionDetector - Threshold Analysis", () => {
                     );
                 });
 
-                it("should detect simple 80/20 selling pressure", { timeout: 5000 }, () => {
-                    console.log(`\n🔬 ===== THRESHOLD TEST: Simple 80/20 Selling =====`);
-                    console.log(`Configuration: ${config.name}`);
-                    console.log(`Settings:`, JSON.stringify(config.settings, null, 2));
-                    
-                    let signalEmitted = false;
-                    let actualSignal: string | undefined;
-                    let signalData: any = null;
+                it(
+                    "should detect simple 80/20 selling pressure",
+                    { timeout: 5000 },
+                    () => {
+                        console.log(
+                            `\n🔬 ===== THRESHOLD TEST: Simple 80/20 Selling =====`
+                        );
+                        console.log(`Configuration: ${config.name}`);
+                        console.log(
+                            `Settings:`,
+                            JSON.stringify(config.settings, null, 2)
+                        );
 
-                    detector.on("signalCandidate", (data) => {
-                        signalEmitted = true;
-                        actualSignal = data.side;
-                        signalData = data;
-                        
-                        console.log(`🎯 SIGNAL EMITTED WITH ${config.name}:`);
-                        console.log(`  Side: ${data.side}`);
-                        console.log(`  Confidence: ${data.confidence}`);
-                        console.log(`  Internal Data:`, {
-                            absorbingSide: data.data?.metrics?.absorbingSide,
-                            aggressiveSide: data.data?.metrics?.aggressiveSide,
-                            absorptionScore: data.data?.metrics?.absorptionScore,
-                            absorptionRatio: data.data?.metrics?.absorptionRatio,
+                        let signalEmitted = false;
+                        let actualSignal: string | undefined;
+                        let signalData: any = null;
+
+                        detector.on("signalCandidate", (data) => {
+                            signalEmitted = true;
+                            actualSignal = data.side;
+                            signalData = data;
+
+                            console.log(
+                                `🎯 SIGNAL EMITTED WITH ${config.name}:`
+                            );
+                            console.log(`  Side: ${data.side}`);
+                            console.log(`  Confidence: ${data.confidence}`);
+                            console.log(`  Internal Data:`, {
+                                absorbingSide:
+                                    data.data?.metrics?.absorbingSide,
+                                aggressiveSide:
+                                    data.data?.metrics?.aggressiveSide,
+                                absorptionScore:
+                                    data.data?.metrics?.absorptionScore,
+                                absorptionRatio:
+                                    data.data?.metrics?.absorptionRatio,
+                            });
                         });
-                    });
 
-                    const baseTime = Date.now() - 60000;
-                    const basePrice = 50000;
-                    
-                    // Simple 80/20 selling pressure pattern
-                    const trades = [
-                        // 8 aggressive sells (buyerIsMaker=true)
-                        { buyerIsMaker: true, quantity: 60 },
-                        { buyerIsMaker: true, quantity: 65 },
-                        { buyerIsMaker: true, quantity: 70 },
-                        { buyerIsMaker: true, quantity: 60 },
-                        { buyerIsMaker: true, quantity: 75 },
-                        { buyerIsMaker: true, quantity: 65 },
-                        { buyerIsMaker: true, quantity: 70 },
-                        { buyerIsMaker: true, quantity: 65 },
-                        // 2 aggressive buys (buyerIsMaker=false)
-                        { buyerIsMaker: false, quantity: 50 },
-                        { buyerIsMaker: false, quantity: 55 },
-                    ];
+                        const baseTime = Date.now() - 60000;
+                        const basePrice = 50000;
 
-                    console.log(`\n📊 PROCESSING TRADES:`);
-                    let sellVolume = 0, buyVolume = 0;
-                    
-                    trades.forEach((trade, i) => {
-                        const event = createDebugTestEvent(
-                            basePrice,
-                            trade.quantity,
-                            baseTime + i * 3000,
-                            trade.buyerIsMaker
+                        // Simple 80/20 selling pressure pattern
+                        const trades = [
+                            // 8 aggressive sells (buyerIsMaker=true)
+                            { buyerIsMaker: true, quantity: 60 },
+                            { buyerIsMaker: true, quantity: 65 },
+                            { buyerIsMaker: true, quantity: 70 },
+                            { buyerIsMaker: true, quantity: 60 },
+                            { buyerIsMaker: true, quantity: 75 },
+                            { buyerIsMaker: true, quantity: 65 },
+                            { buyerIsMaker: true, quantity: 70 },
+                            { buyerIsMaker: true, quantity: 65 },
+                            // 2 aggressive buys (buyerIsMaker=false)
+                            { buyerIsMaker: false, quantity: 50 },
+                            { buyerIsMaker: false, quantity: 55 },
+                        ];
+
+                        console.log(`\n📊 PROCESSING TRADES:`);
+                        let sellVolume = 0,
+                            buyVolume = 0;
+
+                        trades.forEach((trade, i) => {
+                            const event = createDebugTestEvent(
+                                basePrice,
+                                trade.quantity,
+                                baseTime + i * 3000,
+                                trade.buyerIsMaker
+                            );
+
+                            if (trade.buyerIsMaker) {
+                                sellVolume += trade.quantity;
+                                console.log(
+                                    `  ${i + 1}. SELL ${trade.quantity} (aggressive seller)`
+                                );
+                            } else {
+                                buyVolume += trade.quantity;
+                                console.log(
+                                    `  ${i + 1}. BUY ${trade.quantity} (aggressive buyer)`
+                                );
+                            }
+
+                            detector.onEnrichedTrade(event);
+                        });
+
+                        console.log(`\n📈 VOLUME SUMMARY:`);
+                        console.log(`  Total Sell Volume: ${sellVolume}`);
+                        console.log(`  Total Buy Volume: ${buyVolume}`);
+                        console.log(
+                            `  Sell Ratio: ${((sellVolume / (sellVolume + buyVolume)) * 100).toFixed(1)}%`
                         );
-                        
-                        if (trade.buyerIsMaker) {
-                            sellVolume += trade.quantity;
-                            console.log(`  ${i + 1}. SELL ${trade.quantity} (aggressive seller)`);
-                        } else {
-                            buyVolume += trade.quantity;
-                            console.log(`  ${i + 1}. BUY ${trade.quantity} (aggressive buyer)`);
-                        }
-                        
-                        detector.onEnrichedTrade(event);
-                    });
+                        console.log(
+                            `  Expected: BUY signal (bid side absorbing selling pressure)`
+                        );
 
-                    console.log(`\n📈 VOLUME SUMMARY:`);
-                    console.log(`  Total Sell Volume: ${sellVolume}`);
-                    console.log(`  Total Buy Volume: ${buyVolume}`);
-                    console.log(`  Sell Ratio: ${(sellVolume / (sellVolume + buyVolume) * 100).toFixed(1)}%`);
-                    console.log(`  Expected: BUY signal (bid side absorbing selling pressure)`);
+                        return new Promise<void>((resolve) => {
+                            setTimeout(() => {
+                                console.log(`\n🎯 RESULT WITH ${config.name}:`);
+                                console.log(
+                                    `  Signal Emitted: ${signalEmitted}`
+                                );
+                                console.log(
+                                    `  Signal Side: ${actualSignal || "None"}`
+                                );
 
-                    return new Promise<void>((resolve) => {
-                        setTimeout(() => {
-                            console.log(`\n🎯 RESULT WITH ${config.name}:`);
-                            console.log(`  Signal Emitted: ${signalEmitted}`);
-                            console.log(`  Signal Side: ${actualSignal || "None"}`);
-                            
-                            if (signalEmitted) {
-                                console.log(`  ✅ SUCCESS: Signal generated with ${config.name}`);
-                                console.log(`  Expected BUY, Got: ${actualSignal}`);
-                                
-                                if (actualSignal?.toUpperCase() === "BUY") {
-                                    console.log(`  ✅ CORRECT DIRECTION: BUY signal for selling pressure`);
+                                if (signalEmitted) {
+                                    console.log(
+                                        `  ✅ SUCCESS: Signal generated with ${config.name}`
+                                    );
+                                    console.log(
+                                        `  Expected BUY, Got: ${actualSignal}`
+                                    );
+
+                                    if (actualSignal?.toUpperCase() === "BUY") {
+                                        console.log(
+                                            `  ✅ CORRECT DIRECTION: BUY signal for selling pressure`
+                                        );
+                                    } else {
+                                        console.log(
+                                            `  ❌ WRONG DIRECTION: Expected BUY, got ${actualSignal}`
+                                        );
+                                    }
                                 } else {
-                                    console.log(`  ❌ WRONG DIRECTION: Expected BUY, got ${actualSignal}`);
+                                    console.log(
+                                        `  ❌ BLOCKED: No signal generated - thresholds too restrictive`
+                                    );
                                 }
-                            } else {
-                                console.log(`  ❌ BLOCKED: No signal generated - thresholds too restrictive`);
-                            }
-                            
-                            console.log(`🔬 ================================================\n`);
-                            resolve();
-                        }, 100);
-                    });
-                });
 
-                it("should detect simple 80/20 buying pressure", { timeout: 5000 }, () => {
-                    console.log(`\n🔬 ===== THRESHOLD TEST: Simple 80/20 Buying =====`);
-                    console.log(`Configuration: ${config.name}`);
-                    
-                    let signalEmitted = false;
-                    let actualSignal: string | undefined;
+                                console.log(
+                                    `🔬 ================================================\n`
+                                );
+                                resolve();
+                            }, 100);
+                        });
+                    }
+                );
 
-                    detector.on("signalCandidate", (data) => {
-                        signalEmitted = true;
-                        actualSignal = data.side;
-                        console.log(`🎯 SIGNAL: ${data.side} (confidence: ${data.confidence})`);
-                    });
-
-                    const baseTime = Date.now() - 60000;
-                    const basePrice = 50000;
-                    
-                    // Simple 80/20 buying pressure pattern
-                    const trades = [
-                        // 8 aggressive buys (buyerIsMaker=false)
-                        { buyerIsMaker: false, quantity: 60 },
-                        { buyerIsMaker: false, quantity: 65 },
-                        { buyerIsMaker: false, quantity: 70 },
-                        { buyerIsMaker: false, quantity: 60 },
-                        { buyerIsMaker: false, quantity: 75 },
-                        { buyerIsMaker: false, quantity: 65 },
-                        { buyerIsMaker: false, quantity: 70 },
-                        { buyerIsMaker: false, quantity: 65 },
-                        // 2 aggressive sells (buyerIsMaker=true)
-                        { buyerIsMaker: true, quantity: 50 },
-                        { buyerIsMaker: true, quantity: 55 },
-                    ];
-
-                    let sellVolume = 0, buyVolume = 0;
-                    trades.forEach((trade, i) => {
-                        const event = createDebugTestEvent(
-                            basePrice,
-                            trade.quantity,
-                            baseTime + i * 3000,
-                            trade.buyerIsMaker
+                it(
+                    "should detect simple 80/20 buying pressure",
+                    { timeout: 5000 },
+                    () => {
+                        console.log(
+                            `\n🔬 ===== THRESHOLD TEST: Simple 80/20 Buying =====`
                         );
-                        
-                        if (trade.buyerIsMaker) sellVolume += trade.quantity;
-                        else buyVolume += trade.quantity;
-                        
-                        detector.onEnrichedTrade(event);
-                    });
+                        console.log(`Configuration: ${config.name}`);
 
-                    console.log(`  Buy Volume: ${buyVolume}, Sell Volume: ${sellVolume}`);
-                    console.log(`  Buy Ratio: ${(buyVolume / (buyVolume + sellVolume) * 100).toFixed(1)}%`);
-                    console.log(`  Expected: SELL signal (ask side absorbing buying pressure)`);
+                        let signalEmitted = false;
+                        let actualSignal: string | undefined;
 
-                    return new Promise<void>((resolve) => {
-                        setTimeout(() => {
-                            console.log(`\n🎯 RESULT: ${signalEmitted ? actualSignal : "No Signal"}`);
-                            
-                            if (signalEmitted && actualSignal?.toUpperCase() === "SELL") {
-                                console.log(`  ✅ CORRECT: SELL signal for buying pressure with ${config.name}`);
-                            } else if (signalEmitted) {
-                                console.log(`  ❌ WRONG: Expected SELL, got ${actualSignal} with ${config.name}`);
-                            } else {
-                                console.log(`  ❌ BLOCKED: No signal with ${config.name}`);
-                            }
-                            
-                            console.log(`🔬 ================================================\n`);
-                            resolve();
-                        }, 100);
-                    });
-                });
+                        detector.on("signalCandidate", (data) => {
+                            signalEmitted = true;
+                            actualSignal = data.side;
+                            console.log(
+                                `🎯 SIGNAL: ${data.side} (confidence: ${data.confidence})`
+                            );
+                        });
+
+                        const baseTime = Date.now() - 60000;
+                        const basePrice = 50000;
+
+                        // Simple 80/20 buying pressure pattern
+                        const trades = [
+                            // 8 aggressive buys (buyerIsMaker=false)
+                            { buyerIsMaker: false, quantity: 60 },
+                            { buyerIsMaker: false, quantity: 65 },
+                            { buyerIsMaker: false, quantity: 70 },
+                            { buyerIsMaker: false, quantity: 60 },
+                            { buyerIsMaker: false, quantity: 75 },
+                            { buyerIsMaker: false, quantity: 65 },
+                            { buyerIsMaker: false, quantity: 70 },
+                            { buyerIsMaker: false, quantity: 65 },
+                            // 2 aggressive sells (buyerIsMaker=true)
+                            { buyerIsMaker: true, quantity: 50 },
+                            { buyerIsMaker: true, quantity: 55 },
+                        ];
+
+                        let sellVolume = 0,
+                            buyVolume = 0;
+                        trades.forEach((trade, i) => {
+                            const event = createDebugTestEvent(
+                                basePrice,
+                                trade.quantity,
+                                baseTime + i * 3000,
+                                trade.buyerIsMaker
+                            );
+
+                            if (trade.buyerIsMaker)
+                                sellVolume += trade.quantity;
+                            else buyVolume += trade.quantity;
+
+                            detector.onEnrichedTrade(event);
+                        });
+
+                        console.log(
+                            `  Buy Volume: ${buyVolume}, Sell Volume: ${sellVolume}`
+                        );
+                        console.log(
+                            `  Buy Ratio: ${((buyVolume / (buyVolume + sellVolume)) * 100).toFixed(1)}%`
+                        );
+                        console.log(
+                            `  Expected: SELL signal (ask side absorbing buying pressure)`
+                        );
+
+                        return new Promise<void>((resolve) => {
+                            setTimeout(() => {
+                                console.log(
+                                    `\n🎯 RESULT: ${signalEmitted ? actualSignal : "No Signal"}`
+                                );
+
+                                if (
+                                    signalEmitted &&
+                                    actualSignal?.toUpperCase() === "SELL"
+                                ) {
+                                    console.log(
+                                        `  ✅ CORRECT: SELL signal for buying pressure with ${config.name}`
+                                    );
+                                } else if (signalEmitted) {
+                                    console.log(
+                                        `  ❌ WRONG: Expected SELL, got ${actualSignal} with ${config.name}`
+                                    );
+                                } else {
+                                    console.log(
+                                        `  ❌ BLOCKED: No signal with ${config.name}`
+                                    );
+                                }
+
+                                console.log(
+                                    `🔬 ================================================\n`
+                                );
+                                resolve();
+                            }, 100);
+                        });
+                    }
+                );
             });
         });
     });
 
     describe("🎯 Minimal Signal Generation Test", () => {
-        
-        it("should find the absolute minimum scenario that generates ANY signal", { timeout: 5000 }, () => {
-            console.log(`\n🎯 ===== MINIMAL SIGNAL TEST =====`);
-            
-            // Use ultra permissive settings
-            const ultraPermissive: AbsorptionSettings = {
-                windowMs: 60000,
-                minAggVolume: 1, // Absolutely minimal
-                pricePrecision: 2,
-                zoneTicks: 3,
-                absorptionThreshold: 0.01, // Almost zero
-                priceEfficiencyThreshold: 0.99, // Almost no price efficiency required
-                maxAbsorptionRatio: 0.99, // Almost no limit
-                strongAbsorptionRatio: 0.01,
-                moderateAbsorptionRatio: 0.01,
-                weakAbsorptionRatio: 1.0,
-                spreadImpactThreshold: 0.1, // Very permissive
-                velocityIncreaseThreshold: 0.1, // Very low
-                features: {
-                    liquidityGradient: false, // All features off
-                    absorptionVelocity: false,
-                    layeredAbsorption: false,
-                    spreadImpact: false,
-                },
-            };
+        it(
+            "should find the absolute minimum scenario that generates ANY signal",
+            { timeout: 5000 },
+            () => {
+                console.log(`\n🎯 ===== MINIMAL SIGNAL TEST =====`);
 
-            return new Promise<void>(async (resolve) => {
-                mockLogger = createDebugLogger();
-                
-                const { MetricsCollector: MockMetricsCollector } = await import("../__mocks__/src/infrastructure/metricsCollector.js");
-                mockMetrics = new MockMetricsCollector() as any;
-                
-                mockSpoofingDetector = createMockSpoofingDetector();
-                
-                mockOrderBook = {
-                    getBestBid: vi.fn().mockReturnValue(50000),
-                    getBestAsk: vi.fn().mockReturnValue(50001),
-                    getSpread: vi.fn().mockReturnValue({ spread: 1, spreadBps: 2 }),
-                    getDepth: vi.fn().mockReturnValue(new Map()),
-                    isHealthy: vi.fn().mockReturnValue(true),
-                    getLastUpdate: vi.fn().mockReturnValue(Date.now()),
+                // Use ultra permissive settings
+                const ultraPermissive: AbsorptionSettings = {
+                    windowMs: 60000,
+                    minAggVolume: 1, // Absolutely minimal
+                    pricePrecision: 2,
+                    zoneTicks: 3,
+                    absorptionThreshold: 0.01, // Almost zero
+                    priceEfficiencyThreshold: 0.99, // Almost no price efficiency required
+                    maxAbsorptionRatio: 0.99, // Almost no limit
+                    strongAbsorptionRatio: 0.01,
+                    moderateAbsorptionRatio: 0.01,
+                    weakAbsorptionRatio: 1.0,
+                    spreadImpactThreshold: 0.1, // Very permissive
+                    velocityIncreaseThreshold: 0.1, // Very low
+                    features: {
+                        liquidityGradient: false, // All features off
+                        absorptionVelocity: false,
+                        layeredAbsorption: false,
+                        spreadImpact: false,
+                    },
                 };
 
-                detector = new AbsorptionDetector(
-                    "minimal-test",
-                    ultraPermissive,
-                    mockOrderBook,
-                    mockLogger,
-                    mockSpoofingDetector,
-                    mockMetrics
-                );
+                return new Promise<void>(async (resolve) => {
+                    mockLogger = createDebugLogger();
 
-                let signalEmitted = false;
-                let actualSignal: string | undefined;
+                    const { MetricsCollector: MockMetricsCollector } =
+                        await import(
+                            "../__mocks__/src/infrastructure/metricsCollector.js"
+                        );
+                    mockMetrics = new MockMetricsCollector() as any;
 
-                detector.on("signalCandidate", (data) => {
-                    signalEmitted = true;
-                    actualSignal = data.side;
-                    console.log(`🎯 MINIMAL SIGNAL ACHIEVED: ${data.side}`);
-                    console.log(`  Confidence: ${data.confidence}`);
-                    console.log(`  Settings that worked: Ultra Permissive`);
-                });
+                    mockSpoofingDetector = createMockSpoofingDetector();
 
-                const baseTime = Date.now() - 60000;
-                const basePrice = 50000;
-                
-                // Extreme scenario - should definitely generate signal with ultra permissive settings
-                const extremeTrades = [
-                    // 20 sells
-                    ...Array.from({ length: 20 }, (_, i) => ({
-                        buyerIsMaker: true,
-                        quantity: 100,
-                        timestampOffset: i * 1000,
-                    })),
-                    // 1 buy
-                    { buyerIsMaker: false, quantity: 50, timestampOffset: 21000 },
-                ];
+                    mockOrderBook = {
+                        getBestBid: vi.fn().mockReturnValue(50000),
+                        getBestAsk: vi.fn().mockReturnValue(50001),
+                        getSpread: vi
+                            .fn()
+                            .mockReturnValue({ spread: 1, spreadBps: 2 }),
+                        getDepth: vi.fn().mockReturnValue(new Map()),
+                        isHealthy: vi.fn().mockReturnValue(true),
+                        getLastUpdate: vi.fn().mockReturnValue(Date.now()),
+                    };
 
-                console.log(`Processing ${extremeTrades.length} trades with ultra permissive settings...`);
-                
-                extremeTrades.forEach((trade) => {
-                    const event = createDebugTestEvent(
-                        basePrice,
-                        trade.quantity,
-                        baseTime + trade.timestampOffset,
-                        trade.buyerIsMaker
+                    detector = new AbsorptionDetector(
+                        "minimal-test",
+                        ultraPermissive,
+                        mockOrderBook,
+                        mockLogger,
+                        mockSpoofingDetector,
+                        mockMetrics
                     );
-                    detector.onEnrichedTrade(event);
-                });
 
-                setTimeout(() => {
-                    console.log(`\n🎯 MINIMAL TEST RESULT:`);
-                    console.log(`  Signal Generated: ${signalEmitted}`);
-                    
-                    if (signalEmitted) {
-                        console.log(`  ✅ SUCCESS: Found settings that generate signals!`);
-                        console.log(`  Signal: ${actualSignal}`);
-                        console.log(`  This proves the detector CAN work with proper thresholds`);
-                    } else {
-                        console.log(`  ❌ CRITICAL: Even ultra permissive settings don't generate signals`);
-                        console.log(`  This indicates a fundamental bug in detection logic`);
-                    }
-                    
-                    console.log(`🎯 =============================================\n`);
-                    resolve();
-                }, 100);
-            });
-        });
+                    let signalEmitted = false;
+                    let actualSignal: string | undefined;
+
+                    detector.on("signalCandidate", (data) => {
+                        signalEmitted = true;
+                        actualSignal = data.side;
+                        console.log(`🎯 MINIMAL SIGNAL ACHIEVED: ${data.side}`);
+                        console.log(`  Confidence: ${data.confidence}`);
+                        console.log(`  Settings that worked: Ultra Permissive`);
+                    });
+
+                    const baseTime = Date.now() - 60000;
+                    const basePrice = 50000;
+
+                    // Extreme scenario - should definitely generate signal with ultra permissive settings
+                    const extremeTrades = [
+                        // 20 sells
+                        ...Array.from({ length: 20 }, (_, i) => ({
+                            buyerIsMaker: true,
+                            quantity: 100,
+                            timestampOffset: i * 1000,
+                        })),
+                        // 1 buy
+                        {
+                            buyerIsMaker: false,
+                            quantity: 50,
+                            timestampOffset: 21000,
+                        },
+                    ];
+
+                    console.log(
+                        `Processing ${extremeTrades.length} trades with ultra permissive settings...`
+                    );
+
+                    extremeTrades.forEach((trade) => {
+                        const event = createDebugTestEvent(
+                            basePrice,
+                            trade.quantity,
+                            baseTime + trade.timestampOffset,
+                            trade.buyerIsMaker
+                        );
+                        detector.onEnrichedTrade(event);
+                    });
+
+                    setTimeout(() => {
+                        console.log(`\n🎯 MINIMAL TEST RESULT:`);
+                        console.log(`  Signal Generated: ${signalEmitted}`);
+
+                        if (signalEmitted) {
+                            console.log(
+                                `  ✅ SUCCESS: Found settings that generate signals!`
+                            );
+                            console.log(`  Signal: ${actualSignal}`);
+                            console.log(
+                                `  This proves the detector CAN work with proper thresholds`
+                            );
+                        } else {
+                            console.log(
+                                `  ❌ CRITICAL: Even ultra permissive settings don't generate signals`
+                            );
+                            console.log(
+                                `  This indicates a fundamental bug in detection logic`
+                            );
+                        }
+
+                        console.log(
+                            `🎯 =============================================\n`
+                        );
+                        resolve();
+                    }, 100);
+                });
+            }
+        );
     });
 });

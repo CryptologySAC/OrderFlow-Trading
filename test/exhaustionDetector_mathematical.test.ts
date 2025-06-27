@@ -172,9 +172,14 @@ describe("ExhaustionDetector - Mathematical Correctness", () => {
                 expect(moderateScore).toBeGreaterThanOrEqual(0);
                 expect(moderateScore).toBeLessThanOrEqual(1.0);
             }
-            
+
             // If both scores are valid, extreme should be higher than moderate
-            if (extremeScore !== null && moderateScore !== null && extremeScore > 0 && moderateScore > 0) {
+            if (
+                extremeScore !== null &&
+                moderateScore !== null &&
+                extremeScore > 0 &&
+                moderateScore > 0
+            ) {
                 expect(extremeScore).toBeGreaterThan(moderateScore);
             }
 
@@ -223,7 +228,7 @@ describe("ExhaustionDetector - Mathematical Correctness", () => {
             if (score !== null) {
                 expect(score).toBeGreaterThanOrEqual(0);
                 expect(score).toBeLessThanOrEqual(1.0);
-                
+
                 // If score > 0, it meets minimum confidence
                 if (score > 0) {
                     expect(score).toBeGreaterThanOrEqual(0.5);
@@ -245,10 +250,15 @@ describe("ExhaustionDetector - Mathematical Correctness", () => {
                 expect(smallDepletionScore).toBeGreaterThanOrEqual(0);
                 expect(smallDepletionScore).toBeLessThanOrEqual(1.0);
             }
-            
+
             // Both scores may be 0 if below minimumConfidence
             // But if both are > 0, bigger depletion should have higher score
-            if (score !== null && smallDepletionScore !== null && score > 0 && smallDepletionScore > 0) {
+            if (
+                score !== null &&
+                smallDepletionScore !== null &&
+                score > 0 &&
+                smallDepletionScore > 0
+            ) {
                 expect(score).toBeGreaterThan(smallDepletionScore);
             }
         });

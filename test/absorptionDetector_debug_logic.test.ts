@@ -2,7 +2,10 @@
 // Focused debugging to trace exact signal direction logic
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { AbsorptionDetector, type AbsorptionSettings } from "../src/indicators/absorptionDetector.js";
+import {
+    AbsorptionDetector,
+    type AbsorptionSettings,
+} from "../src/indicators/absorptionDetector.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
@@ -77,12 +80,14 @@ describe("AbsorptionDetector - Debug Logic Chain", () => {
 
     beforeEach(async () => {
         mockLogger = createMockLogger();
-        
-        const { MetricsCollector: MockMetricsCollector } = await import("../__mocks__/src/infrastructure/metricsCollector.js");
+
+        const { MetricsCollector: MockMetricsCollector } = await import(
+            "../__mocks__/src/infrastructure/metricsCollector.js"
+        );
         mockMetrics = new MockMetricsCollector() as any;
-        
+
         mockSpoofingDetector = createMockSpoofingDetector();
-        
+
         mockOrderBook = {
             getBestBid: vi.fn().mockReturnValue(50000),
             getBestAsk: vi.fn().mockReturnValue(50001),
@@ -104,10 +109,10 @@ describe("AbsorptionDetector - Debug Logic Chain", () => {
 
     it("should trace aggressive buying pattern with clear buyerIsMaker flags", () => {
         console.log("\n=== DEBUGGING: Aggressive Buying Pattern ===");
-        
+
         const baseTime = Date.now() - 60000;
         const basePrice = 50000;
-        
+
         let signalEmitted = false;
         let signalData: any = null;
 
@@ -118,13 +123,21 @@ describe("AbsorptionDetector - Debug Logic Chain", () => {
             console.log(`  Signal Side: ${data.side}`);
             console.log(`  Signal Price: ${data.price}`);
             console.log(`  Signal Confidence: ${data.confidence}`);
-            console.log(`  Absorbing Side: ${data.data?.metrics?.absorbingSide}`);
-            console.log(`  Aggressive Side: ${data.data?.metrics?.aggressiveSide}`);
-            console.log(`  Signal Interpretation: ${data.data?.metrics?.signalInterpretation}`);
+            console.log(
+                `  Absorbing Side: ${data.data?.metrics?.absorbingSide}`
+            );
+            console.log(
+                `  Aggressive Side: ${data.data?.metrics?.aggressiveSide}`
+            );
+            console.log(
+                `  Signal Interpretation: ${data.data?.metrics?.signalInterpretation}`
+            );
         });
 
         // Create 8 aggressive BUY trades (buyerIsMaker = false)
-        console.log("\n📊 Creating 8 aggressive BUY trades (buyerIsMaker = false):");
+        console.log(
+            "\n📊 Creating 8 aggressive BUY trades (buyerIsMaker = false):"
+        );
         for (let i = 0; i < 8; i++) {
             const trade = createSimpleTestEvent(
                 basePrice,
@@ -132,10 +145,12 @@ describe("AbsorptionDetector - Debug Logic Chain", () => {
                 baseTime + i * 3000,
                 false, // buyerIsMaker = false → aggressive buy hitting ask
                 900 - i * 20, // Weakening bids
-                1200 + i * 50  // Building asks (institutional)
+                1200 + i * 50 // Building asks (institutional)
             );
-            
-            console.log(`  Trade ${i + 1}: buyerIsMaker=${trade.buyerIsMaker}, side=${trade.side}, quantity=${trade.quantity}`);
+
+            console.log(
+                `  Trade ${i + 1}: buyerIsMaker=${trade.buyerIsMaker}, side=${trade.side}, quantity=${trade.quantity}`
+            );
             detector.onEnrichedTrade(trade);
         }
 
@@ -146,10 +161,12 @@ describe("AbsorptionDetector - Debug Logic Chain", () => {
             200, // Large institutional sell
             baseTime + 25000,
             true, // buyerIsMaker = true → buyer is maker, seller is taker (passive sell)
-            750,  // Weakened bids
-            1500  // Strong ask wall
+            750, // Weakened bids
+            1500 // Strong ask wall
         );
-        console.log(`  Passive Trade: buyerIsMaker=${passiveSell.buyerIsMaker}, side=${passiveSell.side}, quantity=${passiveSell.quantity}`);
+        console.log(
+            `  Passive Trade: buyerIsMaker=${passiveSell.buyerIsMaker}, side=${passiveSell.side}, quantity=${passiveSell.quantity}`
+        );
         detector.onEnrichedTrade(passiveSell);
 
         // Wait for processing
@@ -158,18 +175,31 @@ describe("AbsorptionDetector - Debug Logic Chain", () => {
                 console.log("\n📋 ANALYSIS RESULTS:");
                 console.log(`Signal Emitted: ${signalEmitted}`);
                 if (signalEmitted) {
-                    console.log(`Expected: SELL (institutional selling direction)`);
+                    console.log(
+                        `Expected: SELL (institutional selling direction)`
+                    );
                     console.log(`Actual: ${signalData.side}`);
-                    console.log(`Match: ${signalData.side.toUpperCase() === "SELL" ? "✅" : "❌"}`);
-                    
+                    console.log(
+                        `Match: ${signalData.side.toUpperCase() === "SELL" ? "✅" : "❌"}`
+                    );
+
                     console.log("\n🔍 DETAILED DEBUG INFO:");
-                    console.log(`absorbingSide: ${signalData.data?.metrics?.absorbingSide}`);
-                    console.log(`aggressiveSide: ${signalData.data?.metrics?.aggressiveSide}`);
-                    console.log(`flowAnalysis:`, signalData.data?.metrics?.flowAnalysis);
+                    console.log(
+                        `absorbingSide: ${signalData.data?.metrics?.absorbingSide}`
+                    );
+                    console.log(
+                        `aggressiveSide: ${signalData.data?.metrics?.aggressiveSide}`
+                    );
+                    console.log(
+                        `flowAnalysis:`,
+                        signalData.data?.metrics?.flowAnalysis
+                    );
                 } else {
-                    console.log("No signal generated - check threshold conditions");
+                    console.log(
+                        "No signal generated - check threshold conditions"
+                    );
                 }
-                
+
                 console.log("\n============================================");
                 resolve();
             }, 100);
@@ -178,10 +208,10 @@ describe("AbsorptionDetector - Debug Logic Chain", () => {
 
     it("should trace aggressive selling pattern with clear buyerIsMaker flags", () => {
         console.log("\n=== DEBUGGING: Aggressive Selling Pattern ===");
-        
+
         const baseTime = Date.now() - 60000;
         const basePrice = 50000;
-        
+
         let signalEmitted = false;
         let signalData: any = null;
 
@@ -190,12 +220,18 @@ describe("AbsorptionDetector - Debug Logic Chain", () => {
             signalData = data;
             console.log("\n🎯 SIGNAL EMITTED:");
             console.log(`  Signal Side: ${data.side}`);
-            console.log(`  Absorbing Side: ${data.data?.metrics?.absorbingSide}`);
-            console.log(`  Aggressive Side: ${data.data?.metrics?.aggressiveSide}`);
+            console.log(
+                `  Absorbing Side: ${data.data?.metrics?.absorbingSide}`
+            );
+            console.log(
+                `  Aggressive Side: ${data.data?.metrics?.aggressiveSide}`
+            );
         });
 
         // Create 8 aggressive SELL trades (buyerIsMaker = true)
-        console.log("\n📊 Creating 8 aggressive SELL trades (buyerIsMaker = true):");
+        console.log(
+            "\n📊 Creating 8 aggressive SELL trades (buyerIsMaker = true):"
+        );
         for (let i = 0; i < 8; i++) {
             const trade = createSimpleTestEvent(
                 basePrice,
@@ -203,10 +239,12 @@ describe("AbsorptionDetector - Debug Logic Chain", () => {
                 baseTime + i * 3500,
                 true, // buyerIsMaker = true → aggressive sell hitting bid
                 1300 + i * 60, // Building bids (institutional)
-                900 - i * 25   // Weakening asks
+                900 - i * 25 // Weakening asks
             );
-            
-            console.log(`  Trade ${i + 1}: buyerIsMaker=${trade.buyerIsMaker}, side=${trade.side}, quantity=${trade.quantity}`);
+
+            console.log(
+                `  Trade ${i + 1}: buyerIsMaker=${trade.buyerIsMaker}, side=${trade.side}, quantity=${trade.quantity}`
+            );
             detector.onEnrichedTrade(trade);
         }
 
@@ -217,10 +255,12 @@ describe("AbsorptionDetector - Debug Logic Chain", () => {
             220, // Large institutional buy
             baseTime + 30000,
             false, // buyerIsMaker = false → buyer is taker, seller is maker (passive buy)
-            1800,  // Strong bid wall
-            650    // Weakened asks
+            1800, // Strong bid wall
+            650 // Weakened asks
         );
-        console.log(`  Passive Trade: buyerIsMaker=${passiveBuy.buyerIsMaker}, side=${passiveBuy.side}, quantity=${passiveBuy.quantity}`);
+        console.log(
+            `  Passive Trade: buyerIsMaker=${passiveBuy.buyerIsMaker}, side=${passiveBuy.side}, quantity=${passiveBuy.quantity}`
+        );
         detector.onEnrichedTrade(passiveBuy);
 
         // Wait for processing
@@ -229,13 +269,19 @@ describe("AbsorptionDetector - Debug Logic Chain", () => {
                 console.log("\n📋 ANALYSIS RESULTS:");
                 console.log(`Signal Emitted: ${signalEmitted}`);
                 if (signalEmitted) {
-                    console.log(`Expected: BUY (institutional buying direction)`);
+                    console.log(
+                        `Expected: BUY (institutional buying direction)`
+                    );
                     console.log(`Actual: ${signalData.side}`);
-                    console.log(`Match: ${signalData.side.toUpperCase() === "BUY" ? "✅" : "❌"}`);
+                    console.log(
+                        `Match: ${signalData.side.toUpperCase() === "BUY" ? "✅" : "❌"}`
+                    );
                 } else {
-                    console.log("No signal generated - check threshold conditions");
+                    console.log(
+                        "No signal generated - check threshold conditions"
+                    );
                 }
-                
+
                 console.log("\n============================================");
                 resolve();
             }, 100);

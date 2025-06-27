@@ -147,15 +147,17 @@ describe("ExhaustionDetector - Historical Market Patterns", () => {
             // This is correct behavior per CLAUDE.md requirements
             const stats = detector.getStats();
             console.log("Flash crash test completed. Stats:", stats);
-            
+
             // Verify detector is functioning properly
             expect(stats.status).toBe("healthy");
-            
+
             // Log signal generation status
             if (signalEmitted) {
                 console.log("✅ Flash crash signal was generated");
             } else {
-                console.log("ℹ️ Flash crash signal not generated - may be expected if thresholds not met");
+                console.log(
+                    "ℹ️ Flash crash signal not generated - may be expected if thresholds not met"
+                );
             }
         });
 
@@ -188,8 +190,11 @@ describe("ExhaustionDetector - Historical Market Patterns", () => {
 
             const stats = detector.getStats();
             expect(stats.status).toBe("healthy");
-            
-            console.log("Pre-crash exhaustion test completed. Signal generated:", signalEmitted);
+
+            console.log(
+                "Pre-crash exhaustion test completed. Signal generated:",
+                signalEmitted
+            );
         });
     });
 
@@ -224,8 +229,11 @@ describe("ExhaustionDetector - Historical Market Patterns", () => {
 
             const stats = detector.getStats();
             expect(stats.status).toBe("healthy");
-            
-            console.log("Accumulation test completed. Signal generated:", signalEmitted);
+
+            console.log(
+                "Accumulation test completed. Signal generated:",
+                signalEmitted
+            );
         });
 
         it("should differentiate between normal buying and exhaustion", () => {
@@ -257,7 +265,7 @@ describe("ExhaustionDetector - Historical Market Patterns", () => {
 
             const stats = detector.getStats();
             expect(stats.status).toBe("healthy");
-            
+
             // Normal buying should not trigger exhaustion signals
             expect(signalEmitted).toBe(false);
             console.log("Normal buying correctly did not trigger exhaustion");
@@ -297,8 +305,11 @@ describe("ExhaustionDetector - Historical Market Patterns", () => {
 
             const stats = detector.getStats();
             expect(stats.status).toBe("healthy");
-            
-            console.log("Distribution test completed. Signal generated:", signalEmitted);
+
+            console.log(
+                "Distribution test completed. Signal generated:",
+                signalEmitted
+            );
         });
     });
 
@@ -333,8 +344,11 @@ describe("ExhaustionDetector - Historical Market Patterns", () => {
 
             const stats = detector.getStats();
             expect(stats.status).toBe("healthy");
-            
-            console.log("Short squeeze test completed. Signal generated:", signalEmitted);
+
+            console.log(
+                "Short squeeze test completed. Signal generated:",
+                signalEmitted
+            );
         });
     });
 
@@ -342,9 +356,21 @@ describe("ExhaustionDetector - Historical Market Patterns", () => {
         it("should provide consistent confidence levels across patterns", () => {
             // Test multiple patterns and ensure consistent signal quality
             const testPatterns = [
-                { name: "Flash Crash", priceDirection: -1, exhaustionSide: "bid" },
-                { name: "Accumulation", priceDirection: 1, exhaustionSide: "ask" },
-                { name: "Distribution", priceDirection: -0.5, exhaustionSide: "bid" },
+                {
+                    name: "Flash Crash",
+                    priceDirection: -1,
+                    exhaustionSide: "bid",
+                },
+                {
+                    name: "Accumulation",
+                    priceDirection: 1,
+                    exhaustionSide: "ask",
+                },
+                {
+                    name: "Distribution",
+                    priceDirection: -0.5,
+                    exhaustionSide: "bid",
+                },
             ];
 
             for (const pattern of testPatterns) {
@@ -354,13 +380,15 @@ describe("ExhaustionDetector - Historical Market Patterns", () => {
 
                 for (let i = 0; i < 15; i++) {
                     currentPrice += pattern.priceDirection * i * 0.02;
-                    
-                    const bidVolume = pattern.exhaustionSide === "bid" 
-                        ? Math.max(20, 1000 - i * 50) 
-                        : 1000 + i * 20;
-                    const askVolume = pattern.exhaustionSide === "ask" 
-                        ? Math.max(20, 1000 - i * 50) 
-                        : 1000 + i * 20;
+
+                    const bidVolume =
+                        pattern.exhaustionSide === "bid"
+                            ? Math.max(20, 1000 - i * 50)
+                            : 1000 + i * 20;
+                    const askVolume =
+                        pattern.exhaustionSide === "ask"
+                            ? Math.max(20, 1000 - i * 50)
+                            : 1000 + i * 20;
 
                     events.push(
                         createTestEvent(
@@ -381,7 +409,9 @@ describe("ExhaustionDetector - Historical Market Patterns", () => {
 
                 events.forEach((event) => detector.onEnrichedTrade(event));
 
-                console.log(`${pattern.name} pattern test completed. Signal: ${signalEmitted}`);
+                console.log(
+                    `${pattern.name} pattern test completed. Signal: ${signalEmitted}`
+                );
             }
 
             // All patterns should maintain detector health
@@ -434,8 +464,11 @@ describe("ExhaustionDetector - Historical Market Patterns", () => {
 
             const stats = detector.getStats();
             expect(stats.status).toBe("healthy");
-            
-            console.log("Pattern interruption test completed. Signal generated:", signalEmitted);
+
+            console.log(
+                "Pattern interruption test completed. Signal generated:",
+                signalEmitted
+            );
         });
     });
 });

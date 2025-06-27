@@ -229,7 +229,9 @@ describe("ExhaustionDetector - Real Market Scenarios", () => {
                 expect(result.confidence).toBeGreaterThan(0.4); // Lowered expectation
             } else {
                 // Log debug info to understand why signal wasn't generated
-                console.log("Signal not generated for institutional selling scenario");
+                console.log(
+                    "Signal not generated for institutional selling scenario"
+                );
                 console.log("This may be expected if thresholds aren't met");
             }
         });

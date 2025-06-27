@@ -46,8 +46,10 @@ describe("AbsorptionDetector - Error Handling & Edge Cases", () => {
             debug: vi.fn(),
         } as any;
 
-        // Use proper mock from __mocks__/ directory per CLAUDE.md  
-        const { MetricsCollector: MockMetricsCollector } = await import("../__mocks__/src/infrastructure/metricsCollector.js");
+        // Use proper mock from __mocks__/ directory per CLAUDE.md
+        const { MetricsCollector: MockMetricsCollector } = await import(
+            "../__mocks__/src/infrastructure/metricsCollector.js"
+        );
         mockMetrics = new MockMetricsCollector() as any;
 
         mockSpoofingDetector = {
