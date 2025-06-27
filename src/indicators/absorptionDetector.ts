@@ -1535,8 +1535,8 @@ export class AbsorptionDetector
                     priceContext: absorptionContext.priceContext,
                     interpretation:
                         side === "bid"
-                            ? "Bid liquidity absorbing sell pressure → Support forming"
-                            : "Ask liquidity absorbing buy pressure → Resistance forming",
+                            ? "Institutions buying: bid liquidity absorbing retail selling"
+                            : "Institutions selling: ask liquidity absorbing retail buying",
                     tradeCount: tradesAtZone.length,
                     latestTradeWasMaker: latestTrade.buyerIsMaker,
                     flowAnalysis: {
@@ -1562,16 +1562,16 @@ export class AbsorptionDetector
                 priceEfficiency,
                 interpretation:
                     side === "bid"
-                        ? "Bid liquidity absorbing sell pressure → Support level forming"
-                        : "Ask liquidity absorbing buy pressure → Resistance level forming",
-                marketLogic: `Heavy ${dominantAggressiveSide} flow → ${side} side absorbing → Price rejection expected`,
+                        ? "Institutions buying: bid liquidity absorbing retail selling pressure"
+                        : "Institutions selling: ask liquidity absorbing retail buying pressure",
+                marketLogic: `Heavy retail ${dominantAggressiveSide} flow → institutional ${side} side absorbing → Follow institutional direction`,
             }
         );
 
         const signal: AbsorptionSignalData = {
             zone,
             price,
-            side: side === "bid" ? "buy" : "sell", // Convert to expected interface format
+            side: side === "bid" ? "buy" : "sell", // ✅ FIXED: bid absorbing = institutions buying = BUY signal, ask absorbing = institutions selling = SELL signal
             aggressive: volumes.aggressive,
             passive: volumes.passive,
             refilled: conditions.hasRefill,
@@ -1583,17 +1583,17 @@ export class AbsorptionDetector
                 conditions,
                 detectorVersion: "6.0-corrected-absorption-logic", // CORRECTED: Perfect absorption logic
 
-                // CORRECTED: Proper signal interpretation
+                // ✅ FIXED: Institutional direction interpretation
                 absorbingSide: side,
                 aggressiveSide: dominantAggressiveSide,
                 signalInterpretation:
                     side === "bid"
-                        ? "bid_liquidity_absorbing_sell_pressure_support_forming"
-                        : "ask_liquidity_absorbing_buy_pressure_resistance_forming",
+                        ? "institutions_buying_absorbing_retail_selling_signal_buy"
+                        : "institutions_selling_absorbing_retail_buying_signal_sell",
                 absorptionType:
                     side === "bid"
-                        ? "support_absorption"
-                        : "resistance_absorption",
+                        ? "institutional_buying"
+                        : "institutional_selling",
 
                 // Enhanced context
                 marketContext: {
