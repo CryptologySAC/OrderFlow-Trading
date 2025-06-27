@@ -1571,7 +1571,7 @@ export class AbsorptionDetector
         const signal: AbsorptionSignalData = {
             zone,
             price,
-            side: side === "bid" ? "buy" : "sell", // ✅ FIXED: bid absorbing = institutions buying = BUY signal, ask absorbing = institutions selling = SELL signal
+            side: side === "bid" ? "buy" : "sell", // bid absorbing = institutions buying = BUY signal, ask absorbing = institutions selling = SELL signal
             aggressive: volumes.aggressive,
             passive: volumes.passive,
             refilled: conditions.hasRefill,
