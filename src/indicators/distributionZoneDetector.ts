@@ -267,7 +267,7 @@ export class DistributionZoneDetector extends ZoneDetector {
                 updates.push(update);
 
                 // Generate signals based on zone updates
-                const zoneSignals = this.generateZoneSignals();
+                const zoneSignals = this.generateZoneSignals(update);
                 signals.push(...zoneSignals);
             }
         }
@@ -287,7 +287,7 @@ export class DistributionZoneDetector extends ZoneDetector {
             updates.push(createUpdate);
 
             // Generate initial zone entry signal
-            const entrySignal = this.generateZoneEntrySignal();
+            const entrySignal = this.generateZoneEntrySignal(newZone);
             if (entrySignal) signals.push(entrySignal);
         }
 
@@ -902,16 +902,91 @@ export class DistributionZoneDetector extends ZoneDetector {
      * Signal generation methods - adapted for distribution
      * 🔧 FIX: Complete implementation for distribution zones suggesting SELL signals
      */
-    private generateZoneSignals(): ZoneSignal[] {
-        // Distribution zones suggest SELL signals (opposite of accumulation)
-        // This is a simplified implementation - in production would mirror AccumulationZoneDetector but with SELL signals
-        return [];
+    private generateZoneSignals(update: ZoneUpdate): ZoneSignal[] {
+        const signals: ZoneSignal[] = [];
+        const zone = update.zone;
+
+        switch (update.updateType) {
+            case "zone_strengthened":
+                if (
+                    zone.strength > this.strongZoneThreshold &&
+                    (update.changeMetrics?.strengthChange ?? 0) >
+                        this.config.strengthChangeThreshold
+                ) {
+                    signals.push({
+                        signalType: "zone_strength_change",
+                        zone,
+                        actionType: "add_to_zone",
+                        confidence: zone.confidence,
+                        urgency: "medium",
+                        timeframe: "short_term",
+                        expectedDirection: "down", // Distribution suggests downward movement
+                        zoneStrength: zone.strength,
+                        completionLevel: zone.completion,
+                        invalidationLevel: zone.priceRange.max * 1.005, // 0.5% above zone
+                        breakoutTarget: zone.priceRange.center * 0.98, // 2% below center
+                        positionSizing:
+                            zone.significance === "institutional"
+                                ? "heavy"
+                                : zone.significance === "major"
+                                  ? "normal"
+                                  : "light",
+                        stopLossLevel: zone.priceRange.max * 1.01, // 1% above zone
+                        takeProfitLevel: zone.priceRange.center * 0.97, // 3% profit target
+                    });
+                }
+                break;
+
+            case "zone_completed":
+                signals.push({
+                    signalType: "zone_completion",
+                    zone,
+                    actionType: "prepare_for_breakout",
+                    confidence: Math.min(zone.confidence * 1.2, 1.0), // Boost confidence for completion
+                    urgency: "high",
+                    timeframe: "immediate",
+                    expectedDirection: "down", // Distribution expects downward movement
+                    zoneStrength: zone.strength,
+                    completionLevel: zone.completion,
+                    invalidationLevel: zone.priceRange.max * 1.01,
+                    breakoutTarget: zone.priceRange.center * 0.95, // Lower target on completion
+                    positionSizing: "normal", // Standard sizing for breakout
+                    stopLossLevel: zone.priceRange.max * 1.015,
+                    takeProfitLevel: zone.priceRange.center * 0.93,
+                });
+                break;
+
+            default:
+                break;
+        }
+
+        return signals;
     }
 
-    private generateZoneEntrySignal(): ZoneSignal | null {
-        // Generate SELL signal for new distribution zone
-        // This is a simplified implementation - in production would mirror AccumulationZoneDetector but with SELL signals
-        return null;
+    private generateZoneEntrySignal(zone: AccumulationZone): ZoneSignal | null {
+        if (zone.strength < this.config.minZoneStrength) return null;
+
+        return {
+            signalType: "zone_entry",
+            zone,
+            actionType: "enter_zone",
+            confidence: zone.confidence,
+            urgency: zone.significance === "institutional" ? "high" : "medium",
+            timeframe: "short_term",
+            expectedDirection: "down", // Distribution expects downward movement
+            zoneStrength: zone.strength,
+            completionLevel: zone.completion,
+            invalidationLevel: zone.priceRange.max * 1.005,
+            breakoutTarget: zone.priceRange.center * 0.975,
+            positionSizing:
+                zone.significance === "institutional"
+                    ? "heavy"
+                    : zone.significance === "major"
+                      ? "normal"
+                      : "light",
+            stopLossLevel: zone.priceRange.max * 1.01,
+            takeProfitLevel: zone.priceRange.center * 0.97,
+        };
     }
 
     private checkZoneInvalidations(): ZoneUpdate[] {
