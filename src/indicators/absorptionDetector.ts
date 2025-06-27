@@ -878,7 +878,7 @@ export class AbsorptionDetector
         }
 
         // ✅ CRITICAL FIX: Use trade timestamps instead of Date.now() for consistent analysis
-        const latestTimestamp = Math.max(...trades.map(t => t.timestamp));
+        const latestTimestamp = Math.max(...trades.map((t) => t.timestamp));
         const cutoff = latestTimestamp - this.dominantSideAnalysisWindowMs;
         const recentTrades = trades.filter(
             (trade) => trade.timestamp >= cutoff
@@ -886,7 +886,9 @@ export class AbsorptionDetector
 
         // ✅ CLAUDE.md COMPLIANT: Return null when insufficient recent data
         if (recentTrades.length < this.dominantSideMinTradesRequired) {
-            const fallbackTrades = trades.slice(-this.dominantSideFallbackTradeCount);
+            const fallbackTrades = trades.slice(
+                -this.dominantSideFallbackTradeCount
+            );
             if (fallbackTrades.length === 0) {
                 return null; // Cannot calculate without any trades
             }
@@ -948,7 +950,8 @@ export class AbsorptionDetector
         price: number
     ): "bid" | "ask" | null {
         // ✅ CLAUDE.md COMPLIANT: Determine dominant aggressive flow with null handling
-        const dominantAggressiveSide = this.getDominantAggressiveSide(tradesAtZone);
+        const dominantAggressiveSide =
+            this.getDominantAggressiveSide(tradesAtZone);
         if (dominantAggressiveSide === null) {
             return null; // Cannot determine absorption without dominant flow
         }
@@ -1015,7 +1018,7 @@ export class AbsorptionDetector
         // Get price range during this period
         const prices = tradesAtZone.map((t) => t.price);
         const priceMovement = Math.max(...prices) - Math.min(...prices);
-        
+
         // ✅ CLAUDE.md COMPLIANT: Zero price movement is valid - indicates perfect absorption
         // When price doesn't move despite volume, that's the strongest absorption signal
 
@@ -1050,12 +1053,14 @@ export class AbsorptionDetector
             });
 
             // Filter out nulls before calculating mean
-            const validPassiveVolumes = passiveVolumes.filter((v): v is number => v !== null);
-            
+            const validPassiveVolumes = passiveVolumes.filter(
+                (v): v is number => v !== null
+            );
+
             if (validPassiveVolumes.length === 0) {
                 return null; // ✅ CLAUDE.md COMPLIANT: Cannot calculate without data
             }
-            
+
             avgPassive = FinancialMath.calculateMean(validPassiveVolumes);
         }
 
@@ -1087,7 +1092,7 @@ export class AbsorptionDetector
         if (priceMovement === 0) {
             return 0; // Perfect absorption - price didn't move at all despite volume
         }
-        
+
         // Efficiency = actual movement / expected movement
         // Low efficiency = absorption (price didn't move as much as expected)
         const efficiency = FinancialMath.divideQuantities(
