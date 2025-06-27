@@ -164,12 +164,12 @@ describe("AbsorptionDetector - Signal Direction Accuracy", () => {
                 console.log(`Event ${i}: ${event.side} ${event.quantity} at $${event.price} (aggressive: ${event.aggression > 0.5})`);
             });
 
-            // Validation: Should generate SELL signal
+            // Validation: Should generate sell signal
             expect(signalEmitted).toBe(true);
             if (signalEmitted) {
-                expect(signalSide).toBe("SELL");
+                expect(signalSide).toBe("sell");
                 expect(signalPrice).toBe(resistanceLevel);
-                console.log("✅ Correct SELL signal generated for institutional selling absorption");
+                console.log("✅ Correct sell signal generated for institutional selling absorption");
             }
         });
 
@@ -220,11 +220,11 @@ describe("AbsorptionDetector - Signal Direction Accuracy", () => {
 
             events.forEach((event) => detector.onEnrichedTrade(event));
 
-            // Should generate SELL signal for distribution
+            // Should generate sell signal for distribution
             expect(signalEmitted).toBe(true);
             if (signalEmitted) {
-                expect(signalSide).toBe("SELL");
-                console.log("✅ Correct SELL signal for smart money distribution");
+                expect(signalSide).toBe("sell");
+                console.log("✅ Correct sell signal for smart money distribution");
             }
         });
     });
@@ -284,12 +284,12 @@ describe("AbsorptionDetector - Signal Direction Accuracy", () => {
                 console.log(`Event ${i}: ${event.side} ${event.quantity} at $${event.price} (aggressive: ${event.aggression > 0.5})`);
             });
 
-            // Validation: Should generate BUY signal
+            // Validation: Should generate buy signal
             expect(signalEmitted).toBe(true);
             if (signalEmitted) {
-                expect(signalSide).toBe("BUY");
+                expect(signalSide).toBe("buy");
                 expect(signalPrice).toBe(supportLevel);
-                console.log("✅ Correct BUY signal generated for institutional buying absorption");
+                console.log("✅ Correct buy signal generated for institutional buying absorption");
             }
         });
 
@@ -340,11 +340,11 @@ describe("AbsorptionDetector - Signal Direction Accuracy", () => {
 
             events.forEach((event) => detector.onEnrichedTrade(event));
 
-            // Should generate BUY signal for accumulation
+            // Should generate buy signal for accumulation
             expect(signalEmitted).toBe(true);
             if (signalEmitted) {
-                expect(signalSide).toBe("BUY");
-                console.log("✅ Correct BUY signal for smart money accumulation");
+                expect(signalSide).toBe("buy");
+                console.log("✅ Correct buy signal for smart money accumulation");
             }
         });
     });
@@ -432,7 +432,7 @@ describe("AbsorptionDetector - Signal Direction Accuracy", () => {
             const scenarios = [
                 {
                     name: "Resistance Rejection",
-                    expectedSignal: "SELL",
+                    expectedSignal: "sell",
                     description: "Heavy buying into institutional selling at resistance",
                     setup: (baseTime: number, level: number) => {
                         const events: EnrichedTradeEvent[] = [];
@@ -459,7 +459,7 @@ describe("AbsorptionDetector - Signal Direction Accuracy", () => {
                 },
                 {
                     name: "Support Hold",
-                    expectedSignal: "BUY", 
+                    expectedSignal: "buy", 
                     description: "Heavy selling into institutional buying at support",
                     setup: (baseTime: number, level: number) => {
                         const events: EnrichedTradeEvent[] = [];
@@ -486,7 +486,7 @@ describe("AbsorptionDetector - Signal Direction Accuracy", () => {
                 },
                 {
                     name: "False Breakout",
-                    expectedSignal: "SELL",
+                    expectedSignal: "sell",
                     description: "Retail breakout attempt absorbed by institutions",
                     setup: (baseTime: number, level: number) => {
                         const events: EnrichedTradeEvent[] = [];

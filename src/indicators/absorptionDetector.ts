@@ -92,6 +92,9 @@ export interface AbsorptionSettings extends BaseDetectorSettings {
     dominantSideMinTradesRequired?: number; // Minimum trades required for time-based analysis (default 3)
     dominantSideTemporalWeighting?: boolean; // Enable temporal weighting for older trades (default false)
     dominantSideWeightDecayFactor?: number; // Weight decay factor for temporal weighting (default 0.5)
+
+    // ✅ CLAUDE.md COMPLIANT: Critical calculation integrity fixes (NO magic numbers)
+    expectedMovementScalingFactor?: number; // Ticks per unit volume pressure for expected movement calculation (default 10)
 }
 
 /**
@@ -178,6 +181,9 @@ export class AbsorptionDetector
     // Interval handles for proper cleanup
     private thresholdUpdateInterval?: NodeJS.Timeout;
     private historyCleanupInterval?: NodeJS.Timeout;
+
+    // ✅ CLAUDE.md COMPLIANT: Critical calculation integrity parameter
+    private readonly expectedMovementScalingFactor: number;
 
     constructor(
         id: string,
@@ -341,6 +347,14 @@ export class AbsorptionDetector
             "dominantSideWeightDecayFactor",
             0.1,
             1.0
+        );
+
+        // ✅ CLAUDE.md COMPLIANT: Initialize critical calculation integrity parameter
+        this.expectedMovementScalingFactor = this.validateThreshold(
+            settings.expectedMovementScalingFactor ?? 10,
+            "expectedMovementScalingFactor",
+            1,
+            100
         );
 
         // Merge absorption-specific features
@@ -857,18 +871,25 @@ export class AbsorptionDetector
      */
     private getDominantAggressiveSide(
         trades: AggressiveTrade[]
-    ): "buy" | "sell" {
-        // ✅ CLAUDE.md COMPLIANT: Use configurable time window instead of magic number (10 trades)
-        const cutoff = Date.now() - this.dominantSideAnalysisWindowMs;
+    ): "buy" | "sell" | null {
+        // ✅ CLAUDE.md COMPLIANT: Return null when insufficient data
+        if (trades.length === 0) {
+            return null; // Cannot calculate without trades
+        }
+
+        // ✅ CRITICAL FIX: Use trade timestamps instead of Date.now() for consistent analysis
+        const latestTimestamp = Math.max(...trades.map(t => t.timestamp));
+        const cutoff = latestTimestamp - this.dominantSideAnalysisWindowMs;
         const recentTrades = trades.filter(
             (trade) => trade.timestamp >= cutoff
         );
 
-        // Fallback to trade count if insufficient time-based data
+        // ✅ CLAUDE.md COMPLIANT: Return null when insufficient recent data
         if (recentTrades.length < this.dominantSideMinTradesRequired) {
-            const fallbackTrades = trades.slice(
-                -this.dominantSideFallbackTradeCount
-            );
+            const fallbackTrades = trades.slice(-this.dominantSideFallbackTradeCount);
+            if (fallbackTrades.length === 0) {
+                return null; // Cannot calculate without any trades
+            }
             return this.calculateDominantSideFromTrades(fallbackTrades);
         }
 
@@ -926,9 +947,11 @@ export class AbsorptionDetector
         zone: number,
         price: number
     ): "bid" | "ask" | null {
-        // Determine dominant aggressive flow
-        const dominantAggressiveSide =
-            this.getDominantAggressiveSide(tradesAtZone);
+        // ✅ CLAUDE.md COMPLIANT: Determine dominant aggressive flow with null handling
+        const dominantAggressiveSide = this.getDominantAggressiveSide(tradesAtZone);
+        if (dominantAggressiveSide === null) {
+            return null; // Cannot determine absorption without dominant flow
+        }
 
         // Calculate price efficiency for absorption detection
         const priceEfficiency = this.calculatePriceEfficiency(
@@ -992,6 +1015,9 @@ export class AbsorptionDetector
         // Get price range during this period
         const prices = tradesAtZone.map((t) => t.price);
         const priceMovement = Math.max(...prices) - Math.min(...prices);
+        
+        // ✅ CLAUDE.md COMPLIANT: Zero price movement is valid - indicates perfect absorption
+        // When price doesn't move despite volume, that's the strongest absorption signal
 
         // Get total aggressive volume
         const volumes = tradesAtZone.map((t) => t.quantity);
@@ -1010,19 +1036,27 @@ export class AbsorptionDetector
             );
         }
 
-        // Fallback: Use trade passive volume data if no zone history
+        // ✅ CLAUDE.md COMPLIANT: Enhanced fallback with proper null handling
         if (avgPassive === null || avgPassive === 0) {
-            const passiveVolumes = tradesAtZone.map((t) => {
+            const passiveVolumes: (number | null)[] = tradesAtZone.map((t) => {
                 if ("passiveBidVolume" in t && "passiveAskVolume" in t) {
                     const enrichedTrade = t as EnrichedTradeEvent;
-                    return (
-                        enrichedTrade.passiveBidVolume +
+                    return FinancialMath.safeAdd(
+                        enrichedTrade.passiveBidVolume,
                         enrichedTrade.passiveAskVolume
                     );
                 }
-                return 1000; // Default fallback
+                return null; // ✅ CLAUDE.md COMPLIANT: No passive data available - don't fabricate
             });
-            avgPassive = FinancialMath.calculateMean(passiveVolumes);
+
+            // Filter out nulls before calculating mean
+            const validPassiveVolumes = passiveVolumes.filter((v): v is number => v !== null);
+            
+            if (validPassiveVolumes.length === 0) {
+                return null; // ✅ CLAUDE.md COMPLIANT: Cannot calculate without data
+            }
+            
+            avgPassive = FinancialMath.calculateMean(validPassiveVolumes);
         }
 
         // CLAUDE.md: Return null when calculation inputs are invalid
@@ -1037,12 +1071,23 @@ export class AbsorptionDetector
         const tickSize = Math.pow(10, -this.pricePrecision);
         const expectedMovement = FinancialMath.multiplyQuantities(
             FinancialMath.multiplyQuantities(volumePressure, tickSize),
-            10
-        ); // Scaling factor
+            this.expectedMovementScalingFactor // ✅ CLAUDE.md COMPLIANT: Configurable scaling factor
+        );
 
-        // CLAUDE.md: Return null when expected movement calculation is unreliable
-        if (expectedMovement === 0 || expectedMovement < 0.0001) return null;
+        // ✅ CLAUDE.md COMPLIANT: Handle edge case where expected movement is very small
+        // In this case, any price containment indicates strong absorption
+        if (expectedMovement === 0 || expectedMovement < tickSize) {
+            // With minimal expected movement, check if price was contained
+            // If price movement is also minimal, that's absorption
+            return priceMovement <= tickSize ? 0 : 1; // 0 = perfect absorption, 1 = no absorption
+        }
 
+        // ✅ CLAUDE.md COMPLIANT: Special handling for zero price movement
+        // Zero price movement with volume pressure = perfect absorption (efficiency = 0)
+        if (priceMovement === 0) {
+            return 0; // Perfect absorption - price didn't move at all despite volume
+        }
+        
         // Efficiency = actual movement / expected movement
         // Low efficiency = absorption (price didn't move as much as expected)
         const efficiency = FinancialMath.divideQuantities(
@@ -1489,9 +1534,13 @@ export class AbsorptionDetector
             signalUrgency = "high"; // High urgency for strong reversal signals
         }
 
-        // ✅ ENHANCED: Calculate flow analysis for comprehensive debugging
+        // ✅ CLAUDE.md COMPLIANT: Handle null dominant side (insufficient data)
         const dominantAggressiveSide =
             this.getDominantAggressiveSide(tradesAtZone);
+        if (dominantAggressiveSide === null) {
+            // Cannot emit signal without valid dominant side calculation
+            return;
+        }
         const buyVolumes = tradesAtZone
             .filter((t) => !t.buyerIsMaker)
             .map((t) => t.quantity);
