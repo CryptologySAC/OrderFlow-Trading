@@ -206,6 +206,63 @@ export class AbsorptionDetector
     // ✅ CLAUDE.md COMPLIANT: Critical calculation integrity parameter
     private readonly expectedMovementScalingFactor: number;
 
+    // 🔢 MICROSTRUCTURE SCORING CONSTANTS - Eliminate magic numbers
+    private static readonly SUSTAINABILITY_BONUS = 0.05;
+    private static readonly MARKET_MAKER_BOOST = 0.08;
+    private static readonly ICEBERG_BOOST = 0.06;
+    private static readonly ARBITRAGE_PENALTY = 0.03;
+    private static readonly EFFICIENCY_BONUS = 0.03;
+    private static readonly FRAGMENTATION_BONUS = 0.04;
+    private static readonly COORDINATION_PENALTY = 0.04;
+    private static readonly COORDINATION_THRESHOLD = 3;
+
+    // 🔢 SUSTAINABILITY CALCULATION CONSTANTS
+    private static readonly BASE_SUSTAINABILITY = 0.5;
+    private static readonly MARKET_MAKER_SUSTAINABILITY = 0.3;
+    private static readonly ICEBERG_SUSTAINABILITY = 0.2;
+    private static readonly SPLITTING_SUSTAINABILITY = 0.1;
+    private static readonly ARBITRAGE_SUSTAINABILITY_PENALTY = 0.2;
+    private static readonly EFFICIENCY_IMPACT_MULTIPLIER = 0.4;
+    private static readonly EFFICIENCY_BASELINE = 0.5;
+    private static readonly TOXICITY_IMPACT_MULTIPLIER = 0.3;
+
+    // 🔢 RISK ADJUSTMENT CONSTANTS
+    private static readonly HIGH_TOXICITY_THRESHOLD = 0.8;
+    private static readonly HIGH_TOXICITY_PENALTY = 0.15;
+    private static readonly MEDIUM_TOXICITY_THRESHOLD = 0.6;
+    private static readonly MEDIUM_TOXICITY_PENALTY = 0.08;
+    private static readonly LOW_TOXICITY_THRESHOLD = 0.3;
+    private static readonly LOW_TOXICITY_BONUS = 0.05;
+    private static readonly BURST_PATTERN_PENALTY = 0.08;
+    private static readonly UNIFORM_PATTERN_BONUS = 0.03;
+    private static readonly HIGH_COORDINATION_THRESHOLD = 5;
+    private static readonly HIGH_COORDINATION_PENALTY = 0.05;
+    private static readonly RISK_CAP_MIN = -0.3;
+    private static readonly RISK_CAP_MAX = 0.3;
+
+    // 🔢 CONFIDENCE BOOST CONSTANTS
+    private static readonly BASE_CONFIDENCE = 1.0;
+    private static readonly HIGH_FRAGMENTATION_THRESHOLD = 0.7;
+    private static readonly HIGH_EFFICIENCY_THRESHOLD = 0.7;
+    private static readonly INSTITUTIONAL_QUALITY_BOOST = 0.2;
+    private static readonly HIGH_CONFIDENCE_ALGO_BOOST = 0.15;
+    private static readonly SPLITTING_CONFIDENCE_BOOST = 0.08;
+    private static readonly UNKNOWN_ALGO_PENALTY = 0.05;
+    private static readonly HIGH_EFFICIENCY_BOOST = 0.1;
+    private static readonly HIGH_EFFICIENCY_CONFIDENCE_THRESHOLD = 0.8;
+    private static readonly CONFIDENCE_BOOST_MIN = 0.8;
+    private static readonly CONFIDENCE_BOOST_MAX = 1.5;
+
+    // 🔢 URGENCY FACTOR CONSTANTS
+    private static readonly BASE_URGENCY = 1.0;
+    private static readonly BURST_URGENCY_BOOST = 0.5;
+    private static readonly COORDINATED_URGENCY_BOOST = 0.3;
+    private static readonly UNIFORM_URGENCY_PENALTY = 0.2;
+    private static readonly HIGH_TOXICITY_URGENCY_THRESHOLD = 0.8;
+    private static readonly HIGH_TOXICITY_URGENCY_BOOST = 0.3;
+    private static readonly URGENCY_MIN = 0.5;
+    private static readonly URGENCY_MAX = 2.0;
+
     // ✅ CRITICAL: Magic number elimination - confidence and urgency thresholds
     private readonly contextConfidenceBoostMultiplier: number;
     private readonly highUrgencyThreshold: number;
@@ -2589,36 +2646,48 @@ export class AbsorptionDetector
         adjustedScore += microstructure.riskAdjustment;
 
         // 2. Sustainability bonuses for favorable patterns
-        if (microstructure.sustainabilityScore > 0.7) {
-            adjustedScore += 0.05; // Sustainability bonus
+        if (
+            microstructure.sustainabilityScore >
+            this.microstructureSustainabilityThreshold
+        ) {
+            adjustedScore += AbsorptionDetector.SUSTAINABILITY_BONUS;
         }
 
         // 3. Algorithm type adjustments
         switch (microstructure.suspectedAlgoType) {
             case "market_making":
-                adjustedScore += 0.08; // Market makers enhance absorption
+                adjustedScore += AbsorptionDetector.MARKET_MAKER_BOOST;
                 break;
             case "iceberg":
-                adjustedScore += 0.06; // Icebergs provide deep liquidity
+                adjustedScore += AbsorptionDetector.ICEBERG_BOOST;
                 break;
             case "arbitrage":
-                adjustedScore -= 0.03; // May indicate temporary opportunity
+                adjustedScore -= AbsorptionDetector.ARBITRAGE_PENALTY;
                 break;
         }
 
         // 4. Execution efficiency bonus
-        if (microstructure.executionEfficiency > 0.8) {
-            adjustedScore += 0.03; // High efficiency suggests institutional quality
+        if (
+            microstructure.executionEfficiency >
+            this.microstructureEfficiencyThreshold
+        ) {
+            adjustedScore += AbsorptionDetector.EFFICIENCY_BONUS;
         }
 
         // 5. Fragmentation-based adjustments
-        if (microstructure.fragmentationScore > 0.7) {
-            adjustedScore += 0.04; // High fragmentation suggests iceberg behavior
+        if (
+            microstructure.fragmentationScore >
+            this.microstructureFragmentationThreshold
+        ) {
+            adjustedScore += AbsorptionDetector.FRAGMENTATION_BONUS;
         }
 
         // 6. Coordination penalty (may indicate manipulation)
-        if (microstructure.coordinationIndicators > 3) {
-            adjustedScore -= 0.04; // Too much coordination is suspicious
+        if (
+            microstructure.coordinationIndicators >
+            AbsorptionDetector.COORDINATION_THRESHOLD
+        ) {
+            adjustedScore -= AbsorptionDetector.COORDINATION_PENALTY;
         }
 
         return Math.max(0, Math.min(1, adjustedScore));
@@ -2632,21 +2701,23 @@ export class AbsorptionDetector
         efficiency: number,
         toxicity: number
     ): number {
-        let sustainability = 0.5; // Base sustainability
+        let sustainability = AbsorptionDetector.BASE_SUSTAINABILITY;
 
         // Algorithm type impact
         switch (algoType) {
             case "market_making":
-                sustainability += 0.3; // Highly sustainable
+                sustainability +=
+                    AbsorptionDetector.MARKET_MAKER_SUSTAINABILITY;
                 break;
             case "iceberg":
-                sustainability += 0.2; // Generally sustainable
+                sustainability += AbsorptionDetector.ICEBERG_SUSTAINABILITY;
                 break;
             case "splitting":
-                sustainability += 0.1; // Moderately sustainable
+                sustainability += AbsorptionDetector.SPLITTING_SUSTAINABILITY;
                 break;
             case "arbitrage":
-                sustainability -= 0.2; // Temporary by nature
+                sustainability -=
+                    AbsorptionDetector.ARBITRAGE_SUSTAINABILITY_PENALTY;
                 break;
         }
 
@@ -2654,15 +2725,21 @@ export class AbsorptionDetector
         sustainability = FinancialMath.safeAdd(
             sustainability,
             FinancialMath.multiplyQuantities(
-                FinancialMath.safeSubtract(efficiency, 0.5),
-                0.4
+                FinancialMath.safeSubtract(
+                    efficiency,
+                    AbsorptionDetector.EFFICIENCY_BASELINE
+                ),
+                AbsorptionDetector.EFFICIENCY_IMPACT_MULTIPLIER
             )
         );
 
         // Toxicity impact (inverse relationship)
         sustainability = FinancialMath.safeSubtract(
             sustainability,
-            FinancialMath.multiplyQuantities(toxicity, 0.3)
+            FinancialMath.multiplyQuantities(
+                toxicity,
+                AbsorptionDetector.TOXICITY_IMPACT_MULTIPLIER
+            )
         );
 
         return Math.max(0, Math.min(1, sustainability));
@@ -2679,30 +2756,33 @@ export class AbsorptionDetector
         let risk = 0;
 
         // Toxicity-based risk
-        if (toxicity > 0.8) {
-            risk -= 0.15; // High toxicity = high risk
-        } else if (toxicity > 0.6) {
-            risk -= 0.08;
-        } else if (toxicity < 0.3) {
-            risk += 0.05; // Low toxicity = low risk
+        if (toxicity > AbsorptionDetector.HIGH_TOXICITY_THRESHOLD) {
+            risk -= AbsorptionDetector.HIGH_TOXICITY_PENALTY;
+        } else if (toxicity > AbsorptionDetector.MEDIUM_TOXICITY_THRESHOLD) {
+            risk -= AbsorptionDetector.MEDIUM_TOXICITY_PENALTY;
+        } else if (toxicity < AbsorptionDetector.LOW_TOXICITY_THRESHOLD) {
+            risk += AbsorptionDetector.LOW_TOXICITY_BONUS;
         }
 
         // Timing pattern risk
         switch (timingPattern) {
             case "burst":
-                risk -= 0.08; // Burst patterns suggest instability
+                risk -= AbsorptionDetector.BURST_PATTERN_PENALTY;
                 break;
             case "uniform":
-                risk += 0.03; // Uniform patterns suggest stability
+                risk += AbsorptionDetector.UNIFORM_PATTERN_BONUS;
                 break;
         }
 
         // Coordination risk (too much coordination is suspicious)
-        if (coordination > 5) {
-            risk -= 0.05;
+        if (coordination > AbsorptionDetector.HIGH_COORDINATION_THRESHOLD) {
+            risk -= AbsorptionDetector.HIGH_COORDINATION_PENALTY;
         }
 
-        return Math.max(-0.3, Math.min(0.3, risk));
+        return Math.max(
+            AbsorptionDetector.RISK_CAP_MIN,
+            Math.min(AbsorptionDetector.RISK_CAP_MAX, risk)
+        );
     }
 
     /**
@@ -2713,33 +2793,41 @@ export class AbsorptionDetector
         algoType: string,
         efficiency: number
     ): number {
-        let boost = 1.0; // Base confidence
+        let boost = AbsorptionDetector.BASE_CONFIDENCE;
 
         // High fragmentation with high efficiency suggests institutional quality
-        if (fragmentation > 0.7 && efficiency > 0.7) {
-            boost += 0.2;
+        if (
+            fragmentation > AbsorptionDetector.HIGH_FRAGMENTATION_THRESHOLD &&
+            efficiency > AbsorptionDetector.HIGH_EFFICIENCY_THRESHOLD
+        ) {
+            boost += AbsorptionDetector.INSTITUTIONAL_QUALITY_BOOST;
         }
 
         // Algorithm type confidence impact
         switch (algoType) {
             case "market_making":
             case "iceberg":
-                boost += 0.15; // High confidence algorithms
+                boost += AbsorptionDetector.HIGH_CONFIDENCE_ALGO_BOOST;
                 break;
             case "splitting":
-                boost += 0.08;
+                boost += AbsorptionDetector.SPLITTING_CONFIDENCE_BOOST;
                 break;
             case "unknown":
-                boost -= 0.05; // Unknown patterns reduce confidence
+                boost -= AbsorptionDetector.UNKNOWN_ALGO_PENALTY;
                 break;
         }
 
         // Efficiency-based boost
-        if (efficiency > 0.8) {
-            boost += 0.1;
+        if (
+            efficiency > AbsorptionDetector.HIGH_EFFICIENCY_CONFIDENCE_THRESHOLD
+        ) {
+            boost += AbsorptionDetector.HIGH_EFFICIENCY_BOOST;
         }
 
-        return Math.max(0.8, Math.min(1.5, boost));
+        return Math.max(
+            AbsorptionDetector.CONFIDENCE_BOOST_MIN,
+            Math.min(AbsorptionDetector.CONFIDENCE_BOOST_MAX, boost)
+        );
     }
 
     /**
@@ -2749,27 +2837,30 @@ export class AbsorptionDetector
         timingPattern: string,
         toxicity: number
     ): number {
-        let urgency = 1.0; // Base urgency
+        let urgency = AbsorptionDetector.BASE_URGENCY;
 
         // Timing pattern urgency
         switch (timingPattern) {
             case "burst":
-                urgency += 0.5; // Burst patterns suggest immediate action needed
+                urgency += AbsorptionDetector.BURST_URGENCY_BOOST;
                 break;
             case "coordinated":
-                urgency += 0.3; // Coordinated patterns need quick response
+                urgency += AbsorptionDetector.COORDINATED_URGENCY_BOOST;
                 break;
             case "uniform":
-                urgency -= 0.2; // Uniform patterns are less urgent
+                urgency -= AbsorptionDetector.UNIFORM_URGENCY_PENALTY;
                 break;
         }
 
         // High toxicity increases urgency
-        if (toxicity > 0.8) {
-            urgency += 0.3;
+        if (toxicity > AbsorptionDetector.HIGH_TOXICITY_URGENCY_THRESHOLD) {
+            urgency += AbsorptionDetector.HIGH_TOXICITY_URGENCY_BOOST;
         }
 
-        return Math.max(0.5, Math.min(2.0, urgency));
+        return Math.max(
+            AbsorptionDetector.URGENCY_MIN,
+            Math.min(AbsorptionDetector.URGENCY_MAX, urgency)
+        );
     }
 
     /**
