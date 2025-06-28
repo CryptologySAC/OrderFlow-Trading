@@ -1,3 +1,19 @@
+# 🎯 **Complete Detector Reference Guide**
+
+## 📋 **Quick Reference Table**
+
+| Detector | Tier | Confidence | Position Size | Primary Use Case | Key Strength |
+|----------|------|------------|---------------|------------------|--------------|
+| **DeltaCVD** ⭐ | 1 | 0.7 | 0.7 | Momentum/Entry | Speed + 0.7%+ accuracy |
+| **Exhaustion** | 1 | 0.8 | 1.0 | Reversal | High-probability turns |
+| **Absorption** | 2 | 0.85 | 0.5 | Support/Resistance | Institutional accumulation |
+| **Accumulation Zone** | 2 | 0.95 | 0.0 | Long-term zones | Multi-timeframe evolution |
+| **Distribution Zone** | 2 | 0.8 | 0.7 | Short signals | Selling pressure |
+| **Support/Resistance** | 3 | N/A | N/A | Level validation | Dynamic levels |
+| **Market Regime** | 3 | N/A | N/A | Context | Volatility classification |
+
+---
+
 # 🎯 **DeltaCVD Detector: The System's Momentum Engine**
 
 ## 🚀 **Why DeltaCVD Is Now #1 Most Important**
@@ -98,6 +114,37 @@
 ### **3. Absorption Detector**
 
 - **Purpose**: Support/resistance confirmation & institutional accumulation
+- **File**: `src/indicators/absorptionDetector.ts`
+- **Configuration**: `config.json → symbols.LTCUSDT.absorption`
+
+#### **How It Works**
+Detects large order absorption at key price levels by analyzing:
+- **Passive vs Aggressive Volume**: Identifies when large passive orders absorb aggressive market orders
+- **Price Efficiency**: Measures how much price moves relative to volume traded
+- **Zone Formation**: Tracks absorption zones over time windows (60 seconds default)
+- **Institutional Signatures**: Detects patterns consistent with large player activity
+
+#### **Key Parameters**
+```json
+{
+    "minAggVolume": 175,           // Minimum aggressive volume for signal
+    "windowMs": 60000,             // Analysis window (60 seconds)
+    "zoneTicks": 5,                // Price zone size in ticks
+    "absorptionThreshold": 0.6,    // Passive/aggressive ratio threshold
+    "priceEfficiencyThreshold": 0.02  // Maximum price movement per volume
+}
+```
+
+#### **Signal Conditions**
+1. **High passive volume** relative to aggressive volume (>60% ratio)
+2. **Low price efficiency** (price doesn't move much despite volume)
+3. **Sustained activity** within the time window
+4. **Institutional volume** presence (>175 LTC threshold)
+
+#### **Optimization Focus**
+- **Turning Point Detection**: Optimized for 0.7%+ moves
+- **False Signal Reduction**: Strict efficiency and volume requirements
+- **Multi-zone Tracking**: Can track multiple absorption zones simultaneously
 - **Confidence Threshold**: 0.85 (extremely high)
 - **Position Sizing**: 0.5 (moderate allocation)
 - **Key Strength**: Iceberg order detection, passive liquidity analysis
