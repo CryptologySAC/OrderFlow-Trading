@@ -95,6 +95,27 @@ export interface AbsorptionSettings extends BaseDetectorSettings {
 
     // ✅ CLAUDE.md COMPLIANT: Critical calculation integrity fixes (NO magic numbers)
     expectedMovementScalingFactor?: number; // Ticks per unit volume pressure for expected movement calculation (default 10)
+
+    // ✅ CRITICAL: Magic number elimination - confidence and urgency thresholds
+    contextConfidenceBoostMultiplier?: number; // Multiplier for context-based confidence boost (default 0.3)
+    highUrgencyThreshold?: number; // Threshold for high urgency classification (default 1.3)
+    lowUrgencyThreshold?: number; // Threshold for low urgency classification (default 0.8)
+    reversalStrengthThreshold?: number; // Threshold for reversal strength urgency (default 0.7)
+    pricePercentileHighThreshold?: number; // Threshold for high price percentile (default 0.8)
+
+    // ✅ CRITICAL: Magic number elimination - microstructure thresholds
+    microstructureSustainabilityThreshold?: number; // Threshold for sustainability score (default 0.7)
+    microstructureEfficiencyThreshold?: number; // Threshold for execution efficiency (default 0.8)
+    microstructureFragmentationThreshold?: number; // Threshold for fragmentation score (default 0.7)
+    microstructureSustainabilityBonus?: number; // Bonus for high sustainability (default 0.3)
+    microstructureToxicityMultiplier?: number; // Multiplier for toxicity adjustment (default 0.3)
+    microstructureHighToxicityThreshold?: number; // Threshold for high toxicity (default 0.8)
+    microstructureLowToxicityThreshold?: number; // Threshold for low toxicity (default 0.3)
+    microstructureRiskCapMin?: number; // Minimum risk adjustment cap (default -0.3)
+    microstructureRiskCapMax?: number; // Maximum risk adjustment cap (default 0.3)
+    microstructureCoordinationBonus?: number; // Bonus for coordination patterns (default 0.3)
+    microstructureConfidenceBoostMin?: number; // Minimum confidence boost (default 0.8)
+    microstructureConfidenceBoostMax?: number; // Maximum confidence boost (default 1.5)
 }
 
 /**
@@ -184,6 +205,27 @@ export class AbsorptionDetector
 
     // ✅ CLAUDE.md COMPLIANT: Critical calculation integrity parameter
     private readonly expectedMovementScalingFactor: number;
+
+    // ✅ CRITICAL: Magic number elimination - confidence and urgency thresholds
+    private readonly contextConfidenceBoostMultiplier: number;
+    private readonly highUrgencyThreshold: number;
+    private readonly lowUrgencyThreshold: number;
+    private readonly reversalStrengthThreshold: number;
+    private readonly pricePercentileHighThreshold: number;
+
+    // ✅ CRITICAL: Magic number elimination - microstructure thresholds
+    private readonly microstructureSustainabilityThreshold: number;
+    private readonly microstructureEfficiencyThreshold: number;
+    private readonly microstructureFragmentationThreshold: number;
+    private readonly microstructureSustainabilityBonus: number;
+    private readonly microstructureToxicityMultiplier: number;
+    private readonly microstructureHighToxicityThreshold: number;
+    private readonly microstructureLowToxicityThreshold: number;
+    private readonly microstructureRiskCapMin: number;
+    private readonly microstructureRiskCapMax: number;
+    private readonly microstructureCoordinationBonus: number;
+    private readonly microstructureConfidenceBoostMin: number;
+    private readonly microstructureConfidenceBoostMax: number;
 
     constructor(
         id: string,
@@ -355,6 +397,112 @@ export class AbsorptionDetector
             "expectedMovementScalingFactor",
             1,
             100
+        );
+
+        // ✅ CRITICAL: Initialize magic number elimination - confidence and urgency thresholds
+        this.contextConfidenceBoostMultiplier = this.validateThreshold(
+            settings.contextConfidenceBoostMultiplier ?? 0.3,
+            "contextConfidenceBoostMultiplier",
+            0.1,
+            1.0
+        );
+        this.highUrgencyThreshold = this.validateThreshold(
+            settings.highUrgencyThreshold ?? 1.3,
+            "highUrgencyThreshold",
+            1.0,
+            3.0
+        );
+        this.lowUrgencyThreshold = this.validateThreshold(
+            settings.lowUrgencyThreshold ?? 0.8,
+            "lowUrgencyThreshold",
+            0.1,
+            1.0
+        );
+        this.reversalStrengthThreshold = this.validateThreshold(
+            settings.reversalStrengthThreshold ?? 0.7,
+            "reversalStrengthThreshold",
+            0.1,
+            1.0
+        );
+        this.pricePercentileHighThreshold = this.validateThreshold(
+            settings.pricePercentileHighThreshold ?? 0.8,
+            "pricePercentileHighThreshold",
+            0.5,
+            1.0
+        );
+
+        // ✅ CRITICAL: Initialize magic number elimination - microstructure thresholds
+        this.microstructureSustainabilityThreshold = this.validateThreshold(
+            settings.microstructureSustainabilityThreshold ?? 0.7,
+            "microstructureSustainabilityThreshold",
+            0.1,
+            1.0
+        );
+        this.microstructureEfficiencyThreshold = this.validateThreshold(
+            settings.microstructureEfficiencyThreshold ?? 0.8,
+            "microstructureEfficiencyThreshold",
+            0.1,
+            1.0
+        );
+        this.microstructureFragmentationThreshold = this.validateThreshold(
+            settings.microstructureFragmentationThreshold ?? 0.7,
+            "microstructureFragmentationThreshold",
+            0.1,
+            1.0
+        );
+        this.microstructureSustainabilityBonus = this.validateThreshold(
+            settings.microstructureSustainabilityBonus ?? 0.3,
+            "microstructureSustainabilityBonus",
+            0.1,
+            1.0
+        );
+        this.microstructureToxicityMultiplier = this.validateThreshold(
+            settings.microstructureToxicityMultiplier ?? 0.3,
+            "microstructureToxicityMultiplier",
+            0.1,
+            1.0
+        );
+        this.microstructureHighToxicityThreshold = this.validateThreshold(
+            settings.microstructureHighToxicityThreshold ?? 0.8,
+            "microstructureHighToxicityThreshold",
+            0.1,
+            1.0
+        );
+        this.microstructureLowToxicityThreshold = this.validateThreshold(
+            settings.microstructureLowToxicityThreshold ?? 0.3,
+            "microstructureLowToxicityThreshold",
+            0.1,
+            1.0
+        );
+        this.microstructureRiskCapMin = this.validateThreshold(
+            settings.microstructureRiskCapMin ?? -0.3,
+            "microstructureRiskCapMin",
+            -1.0,
+            0.0
+        );
+        this.microstructureRiskCapMax = this.validateThreshold(
+            settings.microstructureRiskCapMax ?? 0.3,
+            "microstructureRiskCapMax",
+            0.0,
+            1.0
+        );
+        this.microstructureCoordinationBonus = this.validateThreshold(
+            settings.microstructureCoordinationBonus ?? 0.3,
+            "microstructureCoordinationBonus",
+            0.1,
+            1.0
+        );
+        this.microstructureConfidenceBoostMin = this.validateThreshold(
+            settings.microstructureConfidenceBoostMin ?? 0.8,
+            "microstructureConfidenceBoostMin",
+            0.1,
+            1.0
+        );
+        this.microstructureConfidenceBoostMax = this.validateThreshold(
+            settings.microstructureConfidenceBoostMax ?? 1.5,
+            "microstructureConfidenceBoostMax",
+            1.0,
+            3.0
         );
 
         // Merge absorption-specific features
@@ -1237,7 +1385,7 @@ export class AbsorptionDetector
         );
 
         const priceContext =
-            pricePercentile > 0.8
+            pricePercentile > this.pricePercentileHighThreshold
                 ? "high"
                 : pricePercentile < 0.2
                   ? "low"
@@ -1247,7 +1395,8 @@ export class AbsorptionDetector
         // At highs + ask absorption = likely resistance/reversal down
         // At lows + bid absorption = likely support/bounce up
         const isLogicalReversal =
-            (side === "ask" && pricePercentile > 0.8) || // Ask absorption at highs
+            (side === "ask" &&
+                pricePercentile > this.pricePercentileHighThreshold) || // Ask absorption at highs
             (side === "bid" && pricePercentile < 0.2); // Bid absorption at lows
 
         // Strength increases at price extremes
@@ -1491,7 +1640,7 @@ export class AbsorptionDetector
                 1,
                 FinancialMath.multiplyQuantities(
                     absorptionContext.strength,
-                    0.3
+                    this.contextConfidenceBoostMultiplier
                 )
             ); // Up to 30% boost
             finalConfidence = FinancialMath.multiplyQuantities(
@@ -1508,7 +1657,7 @@ export class AbsorptionDetector
                     reversalStrength: absorptionContext.strength,
                     confidenceBoost: FinancialMath.multiplyQuantities(
                         absorptionContext.strength,
-                        0.3
+                        this.contextConfidenceBoostMultiplier
                     ),
                 }
             );
@@ -1527,15 +1676,24 @@ export class AbsorptionDetector
             );
 
             // Adjust urgency based on microstructure insights
-            if (conditions.microstructure.urgencyFactor > 1.3) {
+            if (
+                conditions.microstructure.urgencyFactor >
+                this.highUrgencyThreshold
+            ) {
                 signalUrgency = "high";
-            } else if (conditions.microstructure.urgencyFactor < 0.8) {
+            } else if (
+                conditions.microstructure.urgencyFactor <
+                this.lowUrgencyThreshold
+            ) {
                 signalUrgency = "low";
             }
         }
 
         // Context-based urgency adjustments
-        if (absorptionContext.isReversal && absorptionContext.strength > 0.7) {
+        if (
+            absorptionContext.isReversal &&
+            absorptionContext.strength > this.reversalStrengthThreshold
+        ) {
             signalUrgency = "high"; // High urgency for strong reversal signals
         }
 
