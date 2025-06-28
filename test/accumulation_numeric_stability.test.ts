@@ -334,11 +334,11 @@ describe("AccumulationZoneDetector Numeric Stability Fixes", () => {
         // Test getPriceLevel method with valid values
         expect(detector_internal.getPriceLevel(100.5)).toBeGreaterThan(0);
 
-        // Test with edge cases
-        expect(detector_internal.getPriceLevel(0)).toBe(0); // Invalid price
-        expect(detector_internal.getPriceLevel(-1)).toBe(0); // Negative price
-        expect(detector_internal.getPriceLevel(NaN)).toBe(0); // NaN price
-        expect(detector_internal.getPriceLevel(Infinity)).toBe(0); // Infinity price
+        // ✅ CLAUDE.md COMPLIANCE: Invalid calculations should return null, not 0
+        expect(detector_internal.getPriceLevel(0)).toBe(null); // Invalid price
+        expect(detector_internal.getPriceLevel(-1)).toBe(null); // Negative price
+        expect(detector_internal.getPriceLevel(NaN)).toBe(null); // NaN price
+        expect(detector_internal.getPriceLevel(Infinity)).toBe(null); // Infinity price
 
         // Should log warnings for invalid parameters
         expect(mockLogger.warn).toHaveBeenCalledWith(

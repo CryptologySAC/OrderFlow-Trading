@@ -640,6 +640,44 @@ export class Config {
             maxPriceDeviation: cfgObj.maxPriceDeviation ?? 0.005,
             minTradeCount: cfgObj.minTradeCount ?? 10,
             minBuyRatio: cfgObj.minBuyRatio ?? 0.65,
+            minSellRatio: cfgObj.minSellRatio ?? 0.55,
+
+            // Zone strength threshold parameters
+            priceStabilityThreshold: cfgObj.priceStabilityThreshold ?? 0.98,
+            strongZoneThreshold: cfgObj.strongZoneThreshold ?? 0.7,
+            weakZoneThreshold: cfgObj.weakZoneThreshold ?? 0.4,
+
+            // Volume surge detection parameters
+            volumeSurgeMultiplier: cfgObj.volumeSurgeMultiplier ?? 3.0,
+            imbalanceThreshold: cfgObj.imbalanceThreshold ?? 0.35,
+            institutionalThreshold: cfgObj.institutionalThreshold ?? 17.8,
+            burstDetectionMs: cfgObj.burstDetectionMs ?? 1500,
+            sustainedVolumeMs: cfgObj.sustainedVolumeMs ?? 25000,
+            medianTradeSize: cfgObj.medianTradeSize ?? 0.8,
+
+            // ✅ CLAUDE.md COMPLIANCE: Business-critical configurable parameters
+            pricePrecision: cfgObj.pricePrecision ?? 2,
+            zoneTicks: cfgObj.zoneTicks ?? 2,
+
+            // Enhanced zone formation parameters (business configurable)
+            enhancedInstitutionalSizeThreshold:
+                cfgObj.enhancedInstitutionalSizeThreshold ?? 50,
+            enhancedIcebergDetectionWindow:
+                cfgObj.enhancedIcebergDetectionWindow ?? 15,
+            enhancedMinInstitutionalRatio:
+                cfgObj.enhancedMinInstitutionalRatio ?? 0.4,
+
+            // Signal generation parameters (business configurable)
+            invalidationPercentBelow: cfgObj.invalidationPercentBelow ?? 0.005,
+            breakoutTargetPercentAbove:
+                cfgObj.breakoutTargetPercentAbove ?? 0.02,
+            stopLossPercentBelow: cfgObj.stopLossPercentBelow ?? 0.01,
+            takeProfitPercentAbove: cfgObj.takeProfitPercentAbove ?? 0.03,
+            completionBreakoutTargetPercent:
+                cfgObj.completionBreakoutTargetPercent ?? 0.05,
+            completionStopLossPercent:
+                cfgObj.completionStopLossPercent ?? 0.015,
+            completionConfidenceBoost: cfgObj.completionConfidenceBoost ?? 0.2,
         };
     }
 

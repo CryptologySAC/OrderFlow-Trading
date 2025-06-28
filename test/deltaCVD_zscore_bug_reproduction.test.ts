@@ -105,7 +105,8 @@ describe("DeltaCVD Z-Score Bug Reproduction", () => {
         // This creates the diverse CVD slopes needed for statistical accumulation
         for (let i = 0; i < 50; i++) {
             const timeOffset = baseTime - 45000 + i * 900; // 45 seconds, 900ms apart
-            const priceVariation = basePrice + Math.sin(i * 0.2) * 0.01; // Small price variation
+            const priceVariation =
+                basePrice + Math.round(Math.sin(i * 0.2) * 100) * 0.01; // Small price variation (tick-aligned)
             const isBuy = i % 3 !== 0; // 67% buy, 33% sell for slight positive CVD
             const quantity = 1.0 + Math.random() * 0.5; // 1.0-1.5 baseline size
 
@@ -123,7 +124,7 @@ describe("DeltaCVD Z-Score Bug Reproduction", () => {
         // Phase 2: Build strong directional CVD over 10 seconds (create slope pattern)
         for (let i = 50; i < 70; i++) {
             const timeOffset = baseTime - 10000 + (i - 50) * 500; // Last 10 seconds
-            const priceIncrement = basePrice + (i - 50) * 0.0005; // Gradual price rise
+            const priceIncrement = basePrice + (i - 50) * 0.01; // Gradual price rise (tick-aligned)
             const quantity = 2.0 + (i - 50) * 0.1; // Increasing trade sizes
 
             const trade = createTradeEvent(
@@ -140,7 +141,7 @@ describe("DeltaCVD Z-Score Bug Reproduction", () => {
         // Phase 3: Volume surge pattern (5 large trades in last 2 seconds)
         for (let i = 70; i < 75; i++) {
             const trade = createTradeEvent(
-                basePrice + (i - 65) * 0.001, // Continuing price rise
+                basePrice + (i - 65) * 0.01, // Continuing price rise (tick-aligned)
                 20.0, // Large aggressive trades (10x baseline)
                 false, // All market buys (strong buy pressure)
                 baseTime - 2000 + (i - 70) * 400, // Last 2 seconds

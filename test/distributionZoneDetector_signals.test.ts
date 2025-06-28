@@ -134,7 +134,9 @@ describe("DistributionZoneDetector - Signal Generation Validation", () => {
 
                 expect(strongestSignal.expectedDirection).toBe("down");
                 expect(strongestSignal.confidence).toBeGreaterThan(0.5);
-                expect(strongestSignal.zone.priceRange.center).toBe(distributionLevel);
+                expect(strongestSignal.zone.priceRange.center).toBe(
+                    distributionLevel
+                );
                 expect(strongestSignal.zone.type).toBe("distribution");
             }
         });

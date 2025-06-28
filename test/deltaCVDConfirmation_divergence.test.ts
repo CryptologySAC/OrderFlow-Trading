@@ -32,7 +32,9 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
         price: number,
         quantity: number,
         buyerIsMaker: boolean,
-        timestamp: number
+        timestamp: number,
+        passiveBidVol: number = 50,
+        passiveAskVol: number = 50
     ): EnrichedTradeEvent => ({
         symbol: "LTCUSDT",
         price,
@@ -40,8 +42,17 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
         buyerIsMaker,
         timestamp,
         tradeId: Math.floor(Math.random() * 1000000),
-        isBuyerMaker: buyerIsMaker, // Legacy field compatibility
+        isBuyerMaker: buyerIsMaker,
         quoteQty: price * quantity,
+        passiveBidVolume: passiveBidVol,
+        passiveAskVolume: passiveAskVol,
+        zonePassiveBidVolume: passiveBidVol * 2,
+        zonePassiveAskVolume: passiveAskVol * 2,
+        depthSnapshot: new Map(),
+        bestBid: price - 0.01,
+        bestAsk: price + 0.01,
+        pair: "LTCUSDT",
+        originalTrade: {} as any,
     });
 
     beforeEach(() => {
@@ -180,32 +191,65 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
         });
 
         it("should detect price/CVD direction mismatch", () => {
+            // Initialize detector for this specific test
+            detector = new DeltaCVDConfirmation(
+                "test_price_cvd_mismatch",
+                {
+                    windowsSec: [60],
+                    detectionMode: "divergence",
+                    minZ: 1.0,
+                    minTradesPerSec: 0.1,
+                    minVolPerSec: 0.5,
+                },
+                mockLogger,
+                mockSpoofing,
+                mockMetrics
+            );
+
             const baseTime = Date.now();
 
-            // Create a price-up scenario: trades showing upward price movement
-            const upwardPriceTrades = [
-                createTradeEvent(100.0, 1.0, true, baseTime - 50000),
-                createTradeEvent(100.05, 1.0, false, baseTime - 40000),
-                createTradeEvent(100.1, 1.0, true, baseTime - 30000),
-                createTradeEvent(100.15, 1.0, false, baseTime - 20000),
-                createTradeEvent(100.2, 1.0, true, baseTime - 10000),
-                createTradeEvent(100.25, 1.0, false, baseTime), // Final higher price
-            ];
+            // Create a price-up scenario with sufficient trades for statistical analysis
+            // FIXED: Generate 35+ trades to meet MIN_SAMPLES_FOR_STATS requirement
+            const upwardPriceTrades = [];
+
+            // Generate baseline trades showing gradual price increase
+            // CRITICAL FIX: All trades must be within 60-second window from LATEST trade timestamp
+            for (let i = 0; i < 35; i++) {
+                const timeOffset = baseTime - 45000 + i * 1200; // Spread over 42 seconds (well within 60s window)
+                const price = 100.0 + (i / 10) * 0.01; // Gradual price increase
+                const buyerIsMaker = i % 3 === 0; // Mix of buy/sell for realistic pattern
+
+                upwardPriceTrades.push(
+                    createTradeEvent(price, 1.0, buyerIsMaker, timeOffset)
+                );
+            }
 
             // Process trades to build price history
-            upwardPriceTrades.forEach((trade) => {
+            console.log("Processing upward price trades...");
+            upwardPriceTrades.forEach((trade, i) => {
+                console.log(
+                    `Processing upward trade ${i}: price=${trade.price}, time=${trade.timestamp}, age=${Date.now() - trade.timestamp}ms`
+                );
                 detector.onEnrichedTrade(trade);
             });
 
             // Now add CVD-down trades (sell aggression) to create divergence
             // Price went up, but CVD should go down (divergence condition)
-            const sellAggressionTrades = [
-                createTradeEvent(100.25, 2.0, true, baseTime + 1000), // Sell aggression
-                createTradeEvent(100.24, 2.0, true, baseTime + 2000), // Sell aggression
-                createTradeEvent(100.23, 2.0, true, baseTime + 3000), // Sell aggression
-            ];
+            const sellAggressionTrades = [];
+            for (let i = 0; i < 5; i++) {
+                const timeOffset = baseTime - 1500 + i * 250; // Last 1 second (definitely within window)
+                const price = 100.35 - i * 0.01; // Slight price decline with selling
 
-            sellAggressionTrades.forEach((trade) => {
+                sellAggressionTrades.push(
+                    createTradeEvent(price, 2.0, true, timeOffset)
+                );
+            }
+
+            console.log("Processing sell aggression trades...");
+            sellAggressionTrades.forEach((trade, i) => {
+                console.log(
+                    `Processing sell trade ${i}: price=${trade.price}, time=${trade.timestamp}, age=${Date.now() - trade.timestamp}ms`
+                );
                 detector.onEnrichedTrade(trade);
             });
 
@@ -213,7 +257,16 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
             // Price up + CVD down = valid divergence
             const detailedState = detector.getDetailedState();
             expect(detailedState.windows).toContain(60);
-            expect(detailedState.states[0].tradesCount).toBeGreaterThan(5);
+
+            // Debug: Check how many trades were actually processed
+            console.log(
+                "Actual trades processed:",
+                detailedState.states[0]?.tradesCount || 0
+            );
+            console.log("Expected at least:", 35); // Should process most of the 40 trades provided
+
+            // Test that sufficient trades are processed for statistical analysis (real-world scenario)
+            expect(detailedState.states[0].tradesCount).toBeGreaterThan(30);
         });
     });
 
@@ -324,7 +377,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
             const sidewaysTrades = [
                 ...Array.from({ length: 20 }, (_, i) =>
                     createTradeEvent(
-                        100.0 + Math.sin(i) * 0.02,
+                        100.0 + Math.round(Math.sin(i) * 200) * 0.01, // Tick-aligned price movement
                         1.0,
                         i % 2 === 0,
                         baseTime - 60000 + i * 3000
@@ -538,7 +591,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
             const sidewaysTrades = [
                 ...Array.from({ length: 25 }, (_, i) =>
                     createTradeEvent(
-                        100.0 + Math.sin(i * 0.5) * 0.005,
+                        100.0 + Math.round(Math.sin(i * 0.5) * 50) * 0.01, // Tick-aligned oscillations
                         1.0,
                         i % 2 === 0,
                         baseTime - 30000 + i * 1000

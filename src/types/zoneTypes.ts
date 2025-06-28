@@ -146,6 +146,24 @@ export interface ZoneDetectorConfig {
     burstDetectionMs?: number; // Burst detection window
     sustainedVolumeMs?: number; // Sustained volume analysis window
     medianTradeSize?: number; // Baseline trade size for volume analysis
+
+    // ✅ CLAUDE.md COMPLIANCE: Business-critical configurable parameters
+    pricePrecision?: number; // Price precision for zone calculations (default 2)
+    zoneTicks?: number; // Price levels that define a zone (default 2)
+
+    // Enhanced zone formation parameters (business configurable)
+    enhancedInstitutionalSizeThreshold?: number; // Institutional size threshold (default 50)
+    enhancedIcebergDetectionWindow?: number; // Iceberg detection window (default 15)
+    enhancedMinInstitutionalRatio?: number; // Min institutional ratio (default 0.4)
+
+    // Signal generation parameters (business configurable)
+    invalidationPercentBelow?: number; // Invalidation percentage below zone (default 0.005)
+    breakoutTargetPercentAbove?: number; // Breakout target percentage above center (default 0.02)
+    stopLossPercentBelow?: number; // Stop loss percentage below zone (default 0.01)
+    takeProfitPercentAbove?: number; // Take profit percentage above center (default 0.03)
+    completionBreakoutTargetPercent?: number; // Higher breakout target on completion (default 0.05)
+    completionStopLossPercent?: number; // Stop loss on completion (default 0.015)
+    completionConfidenceBoost?: number; // Confidence boost on completion (default 0.2)
 }
 
 export interface ZoneQueryOptions {

@@ -453,6 +453,20 @@ export class DeltaCVDConfirmation extends BaseDetector {
     }
 
     protected onEnrichedTradeSpecific(event: EnrichedTradeEvent): void {
+        // CRITICAL: Tick size validation - reject sub-tick price movements
+        if (!this.validateTickSizeCompliance(event)) {
+            this.logger.warn(
+                "[DeltaCVDConfirmation] Sub-tick price movement rejected",
+                {
+                    detector: this.getId(),
+                    price: event.price,
+                    requiredTickSize: this.calculateTickSize(event.price),
+                    reason: "price_not_tick_aligned",
+                }
+            );
+            return;
+        }
+
         // Update market regime
         this.updateMarketRegime(event);
 
@@ -675,9 +689,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 }
             }
 
-            const delta = trade.buyerIsMaker
-                ? effectiveQuantity
-                : -effectiveQuantity;
+            const delta = this.calculateCVDDelta(trade, effectiveQuantity);
 
             // ENHANCED: Validate delta before adding to CVD
             if (isFinite(delta)) {
@@ -1523,6 +1535,20 @@ export class DeltaCVDConfirmation extends BaseDetector {
         // Check for volume surge (4x baseline)
         const volumeMultiplier =
             recentVolume / (baselineVolume || this.medianTradeSize);
+
+        // DEBUG: Add logging for volume surge detection
+        this.logger.debug("[DeltaCVDConfirmation] Volume surge debug", {
+            volumeHistoryLength: state.volumeHistory.length,
+            recentVolume,
+            baselineVolume,
+            baselineHistoryLength: baselineHistory.length,
+            volumeMultiplier,
+            threshold: this.volumeSurgeMultiplier,
+            detected: volumeMultiplier >= this.volumeSurgeMultiplier,
+            burstDetectionMs: this.burstDetectionMs,
+            sustainedVolumeMs: this.sustainedVolumeMs,
+        });
+
         return volumeMultiplier >= this.volumeSurgeMultiplier;
     }
 
@@ -1550,6 +1576,19 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
         // Calculate imbalance (positive = buy imbalance, negative = sell imbalance)
         const imbalance = Math.abs(buyVolume - sellVolume) / totalVolume;
+
+        // DEBUG: Add logging for imbalance detection
+        this.logger.debug("[DeltaCVDConfirmation] Order flow imbalance debug", {
+            recentTradesCount: recentTrades.length,
+            buyVolume,
+            sellVolume,
+            totalVolume,
+            imbalance,
+            threshold: this.imbalanceThreshold,
+            detected: imbalance >= this.imbalanceThreshold,
+            burstDetectionMs: this.burstDetectionMs,
+            timeSinceRecent: now - recentCutoff,
+        });
 
         return {
             detected: imbalance >= this.imbalanceThreshold,
@@ -1940,9 +1979,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
                     }
                 }
 
-                const delta = tr.buyerIsMaker
-                    ? -effectiveQuantity // buyerIsMaker = true = aggressive sell = negative CVD
-                    : effectiveQuantity; // buyerIsMaker = false = aggressive buy = positive CVD
+                const delta = this.calculateCVDDelta(tr, effectiveQuantity);
 
                 // ENHANCED: Validate delta before accumulation
                 if (isFinite(delta)) {
@@ -2201,6 +2238,29 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 0
             );
 
+            // DEBUG: Log correlation calculation details
+            console.log(
+                "[DeltaCVDConfirmation] Price correlation calculation",
+                {
+                    n,
+                    priceMean,
+                    cvdMean,
+                    numerator,
+                    priceSSQ,
+                    cvdSSQ,
+                    denominator,
+                    correlation,
+                    priceRange: {
+                        min: Math.min(...priceSlice),
+                        max: Math.max(...priceSlice),
+                    },
+                    cvdRange: {
+                        min: Math.min(...cvdSlice),
+                        max: Math.max(...cvdSlice),
+                    },
+                }
+            );
+
             // ENHANCED: Validate and clamp final result
             if (!isFinite(correlation)) {
                 return null;
@@ -2288,8 +2348,18 @@ export class DeltaCVDConfirmation extends BaseDetector {
     }
 
     private calculateZScore(state: WindowState, slope: number): number | null {
-        // ENHANCED: Require more samples for stable statistics
-        if (state.count < 5) return null;
+        // ENHANCED: Require more samples for stable statistics (temporarily lowered for debugging)
+        if (state.count < 3) {
+            this.logger.debug(
+                "[DeltaCVDConfirmation] Insufficient samples for Z-score",
+                {
+                    count: state.count,
+                    required: 3,
+                    slope,
+                }
+            );
+            return null;
+        }
 
         // CRITICAL FIX: Enhanced variance calculation with validation
         const variance = FinancialMath.safeDivide(
@@ -2306,6 +2376,8 @@ export class DeltaCVDConfirmation extends BaseDetector {
                     variance,
                     count: state.count,
                     rollingVar: state.rollingVar,
+                    slope,
+                    rollingMean: state.rollingMean,
                 }
             );
             return null;
@@ -2343,6 +2415,17 @@ export class DeltaCVDConfirmation extends BaseDetector {
             this.minZScoreBound,
             Math.min(this.maxZScoreBound, zScore)
         );
+
+        // DEBUG: Log calculated z-score
+        console.log("[DeltaCVDConfirmation] Z-score calculated", {
+            slope: validSlope,
+            rollingMean: validMean,
+            std,
+            zScore,
+            cappedZScore,
+            count: state.count,
+            variance,
+        });
 
         if (Math.abs(cappedZScore) !== Math.abs(zScore)) {
             this.logger.debug(
@@ -2476,6 +2559,16 @@ export class DeltaCVDConfirmation extends BaseDetector {
         }
 
         const shortestWindowZ = Math.abs(zScores[this.windows[0]]);
+
+        // DEBUG: Log adaptive threshold check
+        console.log("[DeltaCVDConfirmation] Adaptive threshold check", {
+            shortestWindowZ,
+            adaptiveMinZ,
+            rawZScore: zScores[this.windows[0]],
+            windows: this.windows,
+            passes: shortestWindowZ >= adaptiveMinZ,
+        });
+
         if (shortestWindowZ < adaptiveMinZ) {
             return { valid: false, reason: "below_adaptive_threshold" };
         }
@@ -2500,6 +2593,22 @@ export class DeltaCVDConfirmation extends BaseDetector {
         }
 
         return { valid: true, reason: "momentum_confirmed" };
+    }
+
+    /**
+     * Centralized CVD delta calculation - ensures consistent logic across all methods
+     * @param trade - Trade object with buyerIsMaker flag
+     * @param effectiveQuantity - The effective quantity after any volume weighting
+     * @returns CVD delta (positive for buys, negative for sells)
+     */
+    private calculateCVDDelta(
+        trade: { buyerIsMaker: boolean },
+        effectiveQuantity: number
+    ): number {
+        // CORRECT LOGIC:
+        // buyerIsMaker = true  → aggressive sell → negative CVD delta
+        // buyerIsMaker = false → aggressive buy  → positive CVD delta
+        return trade.buyerIsMaker ? -effectiveQuantity : effectiveQuantity;
     }
 
     // NEW: RECENT PRICE DIRECTION HELPER
@@ -2653,6 +2762,20 @@ export class DeltaCVDConfirmation extends BaseDetector {
         // Penalty increases as correlation decreases
         const absCorrelation = Math.abs(avgPriceCorrelation);
 
+        console.log("[DeltaCVDConfirmation] Divergence penalty calculation", {
+            avgPriceCorrelation,
+            absCorrelation,
+            strongCorrelationThreshold: this.strongCorrelationThreshold,
+            weakCorrelationThreshold: this.weakCorrelationThreshold,
+            penalty:
+                absCorrelation > this.strongCorrelationThreshold
+                    ? 1.0
+                    : absCorrelation > this.weakCorrelationThreshold
+                      ? 0.5 +
+                        (absCorrelation - this.weakCorrelationThreshold) * 1.25
+                      : 0.1,
+        });
+
         if (absCorrelation > this.strongCorrelationThreshold) return 1.0; // No penalty for good correlation
         if (absCorrelation > this.weakCorrelationThreshold)
             return (
@@ -2702,6 +2825,21 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 imbalanceAnalysis.strength * this.imbalanceWeight;
             confidence = Math.min(1.0, confidence + imbalanceBonus);
         }
+
+        // DEBUG: Log confidence calculation
+        console.log("[DeltaCVDConfirmation] Final confidence calculation", {
+            factors,
+            weights,
+            baseConfidence:
+                factors.zScoreAlignment * weights.zScoreAlignment +
+                factors.magnitudeStrength * weights.magnitudeStrength +
+                Math.abs(factors.priceCorrelation) * weights.priceCorrelation +
+                factors.volumeConcentration * weights.volumeConcentration +
+                factors.temporalConsistency * weights.temporalConsistency,
+            afterDivergencePenalty: confidence,
+            finalConfidence: Math.max(0.0, Math.min(1.0, confidence)),
+            requiredThreshold: this.finalConfidenceRequired,
+        });
 
         // Ensure confidence is in [0, 1] range
         return Math.max(0.0, Math.min(1.0, confidence));
@@ -2896,9 +3034,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 }
             }
 
-            const delta = trade.buyerIsMaker
-                ? effectiveQuantity
-                : -effectiveQuantity;
+            const delta = this.calculateCVDDelta(trade, effectiveQuantity);
             cvd += delta;
             totalVolume += effectiveQuantity;
         }
@@ -2932,6 +3068,16 @@ export class DeltaCVDConfirmation extends BaseDetector {
         if (price < 100) return _TICK_SIZE_THRESHOLDS[2]; // 0.01
         if (price < 1000) return _TICK_SIZE_THRESHOLDS[3]; // 0.1
         return _TICK_SIZE_THRESHOLDS[4]; // 1.0
+    }
+
+    private validateTickSizeCompliance(event: EnrichedTradeEvent): boolean {
+        const tickSize = this.calculateTickSize(event.price);
+
+        // Check if price is aligned to tick size (within floating-point tolerance)
+        const remainder = event.price % tickSize;
+        const tolerance = tickSize * 1e-10; // Very small tolerance for floating-point errors
+
+        return remainder < tolerance || remainder > tickSize - tolerance;
     }
 
     private getDominantInstitutionalSide(

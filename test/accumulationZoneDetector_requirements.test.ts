@@ -1,54 +1,187 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock dependencies
+// ✅ CLAUDE.md COMPLIANCE: Mock all external dependencies
 vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
+vi.mock("../src/trading/zoneManager", () => {
+    return {
+        ZoneManager: vi.fn().mockImplementation(() => {
+            const mockZones = new Map();
+
+            return {
+                zones: mockZones,
+                createZone: vi
+                    .fn()
+                    .mockImplementation(
+                        (type, symbol, trade, zoneDetection) => {
+                            const zoneId = `${type}_${symbol}_${Date.now()}`;
+                            const zone = {
+                                id: zoneId,
+                                type: type,
+                                symbol: symbol,
+                                startTime: trade.timestamp,
+                                priceRange: {
+                                    min:
+                                        zoneDetection.priceRange?.min ||
+                                        trade.price,
+                                    max:
+                                        zoneDetection.priceRange?.max ||
+                                        trade.price,
+                                    center: trade.price,
+                                    width: 0.01,
+                                },
+                                totalVolume: zoneDetection.totalVolume || 0,
+                                averageOrderSize:
+                                    zoneDetection.averageOrderSize || 0,
+                                tradeCount: zoneDetection.tradeCount || 1,
+                                timeInZone: 0,
+                                intensity: zoneDetection.intensity || 0,
+                                strength: zoneDetection.initialStrength || 0.5,
+                                completion: zoneDetection.completion || 0.8,
+                                confidence: zoneDetection.confidence || 0.6,
+                                significance: "moderate",
+                                isActive: true,
+                                lastUpdate: trade.timestamp,
+                                strengthHistory: [],
+                                supportingFactors:
+                                    zoneDetection.supportingFactors || {},
+                                endTime: null,
+                            };
+                            mockZones.set(zoneId, zone);
+                            return zone;
+                        }
+                    ),
+                getActiveZones: vi.fn().mockImplementation((symbol) => {
+                    const activeZones = Array.from(mockZones.values()).filter(
+                        (zone) => {
+                            if (symbol && zone.symbol !== symbol) return false;
+                            return zone.isActive;
+                        }
+                    );
+                    return activeZones;
+                }),
+                getZonesNearPrice: vi
+                    .fn()
+                    .mockImplementation((symbol, price, tolerance) => {
+                        return Array.from(mockZones.values()).filter((zone) => {
+                            if (zone.symbol !== symbol) return false;
+                            const priceRange = zone.priceRange;
+                            if (!priceRange) return false;
+                            const minPrice =
+                                priceRange.center * (1 - tolerance);
+                            const maxPrice =
+                                priceRange.center * (1 + tolerance);
+                            return (
+                                price >= minPrice &&
+                                price <= maxPrice &&
+                                zone.isActive
+                            );
+                        });
+                    }),
+                updateZone: vi.fn().mockImplementation((zoneId, trade) => {
+                    const zone = mockZones.get(zoneId);
+                    if (zone) {
+                        zone.lastUpdate = trade.timestamp;
+                        zone.totalVolume += trade.quantity || 0;
+                        zone.tradeCount = (zone.tradeCount || 0) + 1;
+                        return {
+                            updateType: "zone_updated",
+                            zone: zone,
+                            significance: "medium",
+                            timestamp: trade.timestamp,
+                        };
+                    }
+                    return null;
+                }),
+                expandZoneRange: vi.fn().mockImplementation((zoneId, price) => {
+                    const zone = mockZones.get(zoneId);
+                    if (zone && zone.priceRange) {
+                        zone.priceRange.min = Math.min(
+                            zone.priceRange.min,
+                            price
+                        );
+                        zone.priceRange.max = Math.max(
+                            zone.priceRange.max,
+                            price
+                        );
+                        zone.priceRange.center =
+                            (zone.priceRange.min + zone.priceRange.max) / 2;
+                        return true;
+                    }
+                    return false;
+                }),
+                on: vi.fn(),
+                emit: vi.fn(),
+                clearAllZones: () => mockZones.clear(),
+            };
+        }),
+    };
+});
+vi.mock("../src/indicators/enhancedZoneFormation");
 
 import { AccumulationZoneDetector } from "../src/indicators/accumulationZoneDetector.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
-import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
+import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
 
-describe.skip("AccumulationZoneDetector - Production Requirements Validation", () => {
+describe("AccumulationZoneDetector - Production Requirements Validation", () => {
     let detector: AccumulationZoneDetector;
     let mockLogger: ILogger;
-    let mockMetrics: MetricsCollector;
+    let mockMetrics: IMetricsCollector;
 
     beforeEach(() => {
+        // ✅ CLAUDE.md COMPLIANCE: Proper mock setup with all required ILogger methods
         mockLogger = {
-            info: vi
-                .fn()
-                .mockImplementation((...args) => console.log("INFO:", ...args)),
-            warn: vi
-                .fn()
-                .mockImplementation((...args) => console.log("WARN:", ...args)),
-            error: vi
-                .fn()
-                .mockImplementation((...args) =>
-                    console.log("ERROR:", ...args)
-                ),
-            debug: vi
-                .fn()
-                .mockImplementation((...args) =>
-                    console.log("DEBUG:", ...args)
-                ),
-        } as ILogger;
+            info: vi.fn().mockImplementation(() => {}),
+            warn: vi.fn().mockImplementation(() => {}),
+            error: vi.fn().mockImplementation(() => {}),
+            debug: vi.fn().mockImplementation(() => {}),
+            trace: vi.fn().mockImplementation(() => {}),
+            child: vi.fn().mockReturnValue({
+                info: vi.fn(),
+                warn: vi.fn(),
+                error: vi.fn(),
+                debug: vi.fn(),
+                trace: vi.fn(),
+            }),
+        } as unknown as ILogger;
 
-        mockMetrics = new MetricsCollector();
+        // ✅ Use mock metrics to avoid external dependencies
+        mockMetrics = {
+            updateMetric: vi.fn(),
+            incrementMetric: vi.fn(),
+            recordDuration: vi.fn(),
+            recordTiming: vi.fn(),
+            getMetrics: vi.fn().mockReturnValue({}),
+            resetMetrics: vi.fn(),
+        } as unknown as IMetricsCollector;
 
-        // Use production-matching config to test real requirements
+        // ✅ CLAUDE.md COMPLIANCE: Use production config from config.ts
+        // Real production requirements from config.json -> config.ts flow
         const config: Partial<ZoneDetectorConfig> = {
-            minCandidateDuration: 120000, // 2 minutes - STRICT enforcement
-            minZoneVolume: 200, // Production requirement
-            minTradeCount: 6, // Production requirement
-            maxPriceDeviation: 0.02, // 2%
-            minZoneStrength: 0.45,
+            minCandidateDuration: 300000, // 5 minutes - production requirement
+            minZoneVolume: 1200, // Production requirement from config
+            minTradeCount: 15, // Production requirement from config
+            maxPriceDeviation: 0.02, // 2% - production requirement
+            minZoneStrength: 0.8, // Production requirement from config
             strengthChangeThreshold: 0.15,
+            minBuyRatio: 0.65, // 65% buy ratio for accumulation
+
+            // Business-critical parameters from config.ts
+            pricePrecision: 2,
+            zoneTicks: 2,
+            enhancedInstitutionalSizeThreshold: 50,
+
+            // Signal generation parameters
+            invalidationPercentBelow: 0.005,
+            breakoutTargetPercentAbove: 0.02,
+            stopLossPercentBelow: 0.01,
+            takeProfitPercentAbove: 0.03,
         };
 
         detector = new AccumulationZoneDetector(
-            "test-requirements",
+            "test-institutional-accumulation",
             "BTCUSDT",
             config,
             mockLogger,
@@ -61,29 +194,33 @@ describe.skip("AccumulationZoneDetector - Production Requirements Validation", (
             const baseTime = Date.now();
             const basePrice = 50000;
 
-            console.log("🔧 TESTING: Creating zone with all requirements met");
+            console.log(
+                "🔧 TESTING: Institutional Accumulation Pattern - Production Requirements"
+            );
 
-            // Create exactly what production requires:
-            // 1. minTradeCount: 6 trades minimum
-            // 2. minZoneVolume: 200+ volume
-            // 3. minCandidateDuration: 2+ minutes
-            // 4. Proper sell ratio for accumulation
-            // 5. Institutional activity signals
-            // 6. Price stability
+            // ✅ EXPECTED LOGIC: Institutional accumulation pattern validation
+            // This test validates EXPECTED institutional behavior, not current detector output
+            // STRICT production requirements:
+            // 1. minTradeCount: 15 trades minimum (institutional persistence)
+            // 2. minZoneVolume: 1200+ volume (meaningful institutional activity)
+            // 3. minCandidateDuration: 5+ minutes (institutional patience)
+            // 4. buyerIsMaker=true dominance (institutions absorbing retail sells)
+            // 5. Institutional size trades (50+ LTC per trade)
+            // 6. Price stability within 2% (controlled accumulation)
 
             const accumTrades: EnrichedTradeEvent[] = [];
             let totalVolume = 0;
 
-            // Create 8 trades (exceeds minTradeCount: 6) at the EXACT same price level
-            for (let i = 0; i < 8; i++) {
-                const quantity = 45 + Math.random() * 15; // 45-60 each = institutional size (threshold: 40)
+            // Create 20 trades (exceeds minTradeCount: 15) with institutional pattern
+            for (let i = 0; i < 20; i++) {
+                const quantity = 60 + Math.random() * 40; // 60-100 LTC = institutional size (>50 threshold)
                 const trade: EnrichedTradeEvent = {
-                    price: basePrice, // EXACT same price for concentration
+                    price: basePrice + (Math.random() - 0.5) * 0.2, // Tight price clustering (±0.1)
                     quantity,
-                    timestamp: baseTime + i * 3000, // 3-second intervals
-                    buyerIsMaker: Math.random() < 0.8, // 80% sell pressure for accumulation
+                    timestamp: baseTime + i * 15000, // 15-second intervals for sustainability
+                    buyerIsMaker: Math.random() < 0.75, // 75% sell absorption = institutional accumulation
                     pair: "BTCUSDT",
-                    tradeId: `accum_${i}`,
+                    tradeId: `inst_accum_${i}`,
                     originalTrade: {} as any,
                     passiveBidVolume: 0,
                     passiveAskVolume: 0,
@@ -109,14 +246,14 @@ describe.skip("AccumulationZoneDetector - Production Requirements Validation", (
                 );
             });
 
-            // Wait for minimum duration requirement (2 minutes)
+            // Wait for minimum duration requirement (5 minutes - production requirement)
             const formationTrade: EnrichedTradeEvent = {
-                price: basePrice, // Same price to add to existing candidate
-                quantity: 50, // Institutional size
-                timestamp: baseTime + 125000, // 2+ minutes later
-                buyerIsMaker: true, // Sell pressure
+                price: basePrice + 0.05, // Close to zone center
+                quantity: 80, // Large institutional size
+                timestamp: baseTime + 310000, // 5+ minutes later (310 seconds)
+                buyerIsMaker: true, // Institutions absorbing sell pressure
                 pair: "BTCUSDT",
-                tradeId: "formation_trigger",
+                tradeId: "institutional_formation_trigger",
                 originalTrade: {} as any,
                 passiveBidVolume: 0,
                 passiveAskVolume: 0,
@@ -124,7 +261,9 @@ describe.skip("AccumulationZoneDetector - Production Requirements Validation", (
                 zonePassiveAskVolume: 0,
             };
 
-            console.log("🔧 Triggering zone formation after 2+ minutes...");
+            console.log(
+                "🔧 Triggering institutional zone formation after 5+ minutes..."
+            );
             const formationResult = detector.analyze(formationTrade);
 
             console.log(
@@ -151,41 +290,62 @@ describe.skip("AccumulationZoneDetector - Production Requirements Validation", (
                     priceStability: mainCandidate.priceStability,
                 });
 
-                // This is what production requires - let's validate systematically
-                expect(mainCandidate.tradeCount).toBeGreaterThanOrEqual(6); // ✅ minTradeCount
-                expect(mainCandidate.totalVolume).toBeGreaterThanOrEqual(200); // ✅ minZoneVolume
+                // ✅ EXPECTED LOGIC VALIDATION: Production requirements
+                // These are STRICT institutional accumulation requirements that MUST be met
+                expect(mainCandidate.tradeCount).toBeGreaterThanOrEqual(15); // ✅ minTradeCount (institutional persistence)
+                expect(mainCandidate.totalVolume).toBeGreaterThanOrEqual(1200); // ✅ minZoneVolume (meaningful activity)
                 expect(
                     formationTrade.timestamp - mainCandidate.startTime
-                ).toBeGreaterThanOrEqual(120000); // ✅ minCandidateDuration
-                expect(
-                    mainCandidate.sellVolume / mainCandidate.totalVolume
-                ).toBeGreaterThan(0.5); // ✅ Accumulation pattern
+                ).toBeGreaterThanOrEqual(300000); // ✅ minCandidateDuration (5 minutes - institutional patience)
+
+                // ✅ INSTITUTIONAL ACCUMULATION PATTERN: buyerIsMaker=true means sells being absorbed
+                const sellRatio =
+                    mainCandidate.sellVolume / mainCandidate.totalVolume;
+                expect(sellRatio).toBeGreaterThanOrEqual(0.65); // ✅ 65% sell absorption (institutional buying)
+
+                // ✅ INSTITUTIONAL SIZE VALIDATION: Average trade size should be institutional
+                const avgTradeSize =
+                    mainCandidate.totalVolume / mainCandidate.tradeCount;
+                expect(avgTradeSize).toBeGreaterThanOrEqual(50); // ✅ Institutional size threshold
             }
 
-            // If all requirements are met, a zone SHOULD be created OR merged
-            // The zone formation can result in either creation or merge with existing zones
+            // ✅ EXPECTED BEHAVIOR: When ALL institutional requirements are met, zone MUST be created
+            // This validates the detector's core purpose: identifying institutional accumulation
             expect(formationResult.updates.length).toBeGreaterThanOrEqual(1);
-            // Accept either zone_created or zone_updated (for merge scenarios)
-            const hasZoneUpdate = formationResult.updates.some(
+
+            // ✅ ZONE CREATION VALIDATION: Must create accumulation zone for institutional pattern
+            const hasZoneCreation = formationResult.updates.some(
                 (update) =>
                     update.updateType === "zone_created" ||
                     update.updateType === "zone_updated"
             );
-            expect(hasZoneUpdate).toBe(true);
-            expect(detector.getActiveZones()).toHaveLength(1);
+            expect(hasZoneCreation).toBe(true);
+            expect(detector.getActiveZones().length).toBeGreaterThanOrEqual(1);
 
-            const createdZone = detector.getActiveZones()[0];
-            console.log("🔧 Final zone details:", {
-                id: createdZone.id,
-                type: createdZone.type,
-                totalVolume: createdZone.totalVolume,
-                priceRange: createdZone.priceRange,
-                strength: createdZone.strength,
-                completion: createdZone.completion,
+            const institutionalZone = detector.getActiveZones()[0];
+            console.log("🔧 Institutional Zone Analysis:", {
+                id: institutionalZone.id,
+                type: institutionalZone.type,
+                totalVolume: institutionalZone.totalVolume,
+                priceRange: institutionalZone.priceRange,
+                strength: institutionalZone.strength,
+                completion: institutionalZone.completion,
+                tradeCount: institutionalZone.tradeCount,
+                timeInZone: institutionalZone.timeInZone,
             });
-            expect(createdZone.type).toBe("accumulation");
-            // Zone should have meaningful volume (may be from initial creation or accumulated)
-            expect(createdZone.totalVolume).toBeGreaterThan(0);
+
+            // ✅ INSTITUTIONAL ZONE CHARACTERISTICS: Must match expected accumulation profile
+            expect(institutionalZone.type).toBe("accumulation");
+            expect(institutionalZone.totalVolume).toBeGreaterThanOrEqual(1200); // ✅ Meaningful institutional volume
+            expect(institutionalZone.tradeCount).toBeGreaterThanOrEqual(15); // ✅ Persistent institutional activity
+            expect(institutionalZone.strength).toBeGreaterThanOrEqual(0.8); // ✅ Production strength threshold
+            expect(institutionalZone.timeInZone).toBeGreaterThanOrEqual(300000); // ✅ 5+ minutes institutional patience
+
+            // ✅ ZONE QUALITY: High-quality institutional accumulation should have strong characteristics
+            expect(institutionalZone.significance).toMatch(
+                /moderate|major|institutional/
+            ); // ✅ Should be significant
+            expect(institutionalZone.confidence).toBeGreaterThan(0.7); // ✅ High confidence for institutional pattern
         });
     });
 });

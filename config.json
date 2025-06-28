@@ -55,7 +55,21 @@
                 "institutionalThreshold": 17.8,
                 "burstDetectionMs": 1500,
                 "sustainedVolumeMs": 25000,
-                "medianTradeSize": 0.8
+                "medianTradeSize": 0.8,
+
+                "pricePrecision": 2,
+                "zoneTicks": 2,
+                "enhancedInstitutionalSizeThreshold": 50,
+                "enhancedIcebergDetectionWindow": 15,
+                "enhancedMinInstitutionalRatio": 0.4,
+
+                "invalidationPercentBelow": 0.005,
+                "breakoutTargetPercentAbove": 0.02,
+                "stopLossPercentBelow": 0.01,
+                "takeProfitPercentAbove": 0.03,
+                "completionBreakoutTargetPercent": 0.05,
+                "completionStopLossPercent": 0.015,
+                "completionConfidenceBoost": 0.2
             },
             "distribution": {
                 "minZoneStrength": 0.8,

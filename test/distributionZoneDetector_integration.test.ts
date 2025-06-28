@@ -88,7 +88,7 @@ describe("DistributionZoneDetector - Integration and Performance Tests", () => {
                 // Create proper institutional patterns: 60% institutional size trades (≥50)
                 const isInstitutional = i < 6; // First 6 trades are institutional (60%)
                 const isIcebergPattern = i >= 6 && i < 9; // Last 3 trades form iceberg pattern (consistent 60 size)
-                
+
                 let quantity;
                 if (isIcebergPattern) {
                     quantity = 60; // Consistent iceberg size
@@ -97,7 +97,7 @@ describe("DistributionZoneDetector - Integration and Performance Tests", () => {
                 } else {
                     quantity = 25 + Math.random() * 15; // 25-40 retail size
                 }
-                
+
                 surgeTrades.push({
                     price: surgeLevel,
                     quantity: quantity,
@@ -155,8 +155,13 @@ describe("DistributionZoneDetector - Integration and Performance Tests", () => {
 
             // Validation: Volume surge should enhance distribution detection
             const zones = detector.getActiveZones();
-            const allSignals = [...surgeResults.flatMap(r => Array.isArray(r.signals) ? r.signals : []), ...formationResult.signals];
-            
+            const allSignals = [
+                ...surgeResults.flatMap((r) =>
+                    Array.isArray(r.signals) ? r.signals : []
+                ),
+                ...formationResult.signals,
+            ];
+
             // Primary validation: Should generate distribution signals
             expect(allSignals.length).toBeGreaterThan(0);
             console.log(`🌊 Total signals generated: ${allSignals.length}`);
@@ -289,7 +294,8 @@ describe("DistributionZoneDetector - Integration and Performance Tests", () => {
             console.log(`  - Total signals: ${totalSignals}`);
 
             // Should handle multiple zones efficiently (zones created clean up candidates)
-            const totalActivity = detector.getCandidateCount() + detector.getActiveZones().length;
+            const totalActivity =
+                detector.getCandidateCount() + detector.getActiveZones().length;
             expect(totalActivity).toBeGreaterThanOrEqual(1);
 
             // Should form zones at multiple levels

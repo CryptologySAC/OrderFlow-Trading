@@ -459,6 +459,48 @@ const mean = values.reduce((a, b) => a + b) / values.length;
 
 **RATIONALE**: FinancialMath provides institutional-grade precision while DetectorUtils may have floating-point precision issues affecting live trading.
 
+#### 📏 TICK SIZE COMPLIANCE (MANDATORY)
+
+**CRITICAL REQUIREMENT**: ALL price movements in tests and calculations MUST respect minimum tick sizes for realistic market behavior.
+
+**TICK SIZE RULES:**
+
+- **Price < $1**: Minimum tick = 0.0001
+- **$1 ≤ Price < $10**: Minimum tick = 0.001
+- **$10 ≤ Price < $100**: Minimum tick = 0.01
+- **$100 ≤ Price < $1000**: Minimum tick = 0.1
+- **Price ≥ $1000**: Minimum tick = 1.0
+
+**✅ REQUIRED: Tick-compliant price movements**
+
+```typescript
+// ✅ CORRECT: Use proper tick sizes
+const basePrice = 89.0; // Price ~$89
+const tickSize = 0.01; // Correct tick for $10-$100 range
+const newPrice = basePrice + tickSize; // 89.01 - valid
+
+// ✅ CORRECT: Multiple tick movements
+const priceChange = basePrice + i * 0.01; // Valid 1-cent increments
+```
+
+**❌ PROHIBITED: Sub-tick price movements**
+
+```typescript
+// ❌ NEVER: Sub-tick movements create invalid market data
+const basePrice = 89.0;
+const invalidPrice = basePrice + 0.0005; // FORBIDDEN - half-cent on 1-cent tick
+const wrongPrice = basePrice + 0.001; // FORBIDDEN - tenth-cent on 1-cent tick
+```
+
+**WHY THIS MATTERS:**
+
+- **Market Realism**: Sub-tick movements cannot occur in real markets
+- **Correlation Accuracy**: Invalid price movements corrupt price/volume correlation calculations
+- **Test Validity**: Tests with sub-tick movements provide false results
+- **Signal Quality**: Detectors trained on invalid data produce unreliable signals
+
+**ENFORCEMENT**: Any test or calculation using sub-tick price movements will be **IMMEDIATELY REJECTED** as creating unrealistic market conditions.
+
 ### Database
 
 - SQLite database with migrations in `src/infrastructure/migrate.ts`

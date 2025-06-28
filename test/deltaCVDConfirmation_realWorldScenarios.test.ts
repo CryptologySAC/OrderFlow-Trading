@@ -99,7 +99,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
             const baselineTrades = [];
             for (let i = 0; i < 45; i++) {
                 const trade = createRealisticTrade(
-                    basePrice + Math.random() * 0.05 - 0.025, // ±2.5 cents
+                    basePrice + Math.round(Math.random() * 5 - 2.5) * 0.01, // ±2.5 cents (tick-aligned)
                     0.5 + Math.random() * 2.0, // 0.5-2.5 LTC (retail sizes)
                     Math.random() > 0.5,
                     baseTime - 60000 + i * 1200, // Over 54 seconds
@@ -187,7 +187,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
             // Phase 1: Build baseline with some upward momentum
             const momentumTrades = [];
             for (let i = 0; i < 40; i++) {
-                const priceIncrement = i * 0.001; // Gradual upward movement
+                const priceIncrement = i * 0.01; // Gradual upward movement (tick-aligned)
                 const trade = createRealisticTrade(
                     basePrice + priceIncrement,
                     1.0 + Math.random() * 1.5,
@@ -283,7 +283,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
             const retailTrades = [];
             for (let i = 0; i < 80; i++) {
                 const trade = createRealisticTrade(
-                    basePrice + Math.random() * 0.1 - 0.05, // ±5 cents
+                    basePrice + Math.round(Math.random() * 10 - 5) * 0.01, // ±5 cents (tick-aligned)
                     0.1 + Math.random() * 2.0, // 0.1-2.1 LTC (all retail)
                     Math.random() > 0.5,
                     baseTime - 60000 + i * 750, // High frequency
@@ -727,7 +727,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
             const baselineTrades = [];
             for (let i = 0; i < 25; i++) {
                 const trade = createRealisticTrade(
-                    basePrice + Math.random() * 0.02 - 0.01,
+                    basePrice + Math.round(Math.random() * 2 - 1) * 0.01, // ±1 cent (tick-aligned)
                     1.0 + Math.random() * 2.0,
                     Math.random() > 0.5,
                     baseTime - 30000 + i * 1000,
@@ -859,7 +859,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
             const stuffingTrades = [];
             for (let i = 0; i < 40; i++) {
                 const trade = createRealisticTrade(
-                    basePrice + Math.random() * 0.006 - 0.003, // ±0.3 cents
+                    basePrice + Math.round(Math.random() * 0.6 - 0.3) * 0.01, // ±0.3 cents (tick-aligned)
                     0.05 + Math.random() * 0.1, // Tiny sizes 0.05-0.15 LTC
                     Math.random() > 0.5,
                     baseTime - 8000 + i * 200, // Very rapid (every 200ms)
@@ -1199,7 +1199,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
             const sustainedBuying = [];
             for (let i = 0; i < 150; i++) {
                 const timeOffset = i * 800; // Every 800ms for 2 minutes
-                const priceProgress = i * 0.0005; // Gradual price increase
+                const priceProgress = i * 0.001; // Gradual price increase (tick-aligned)
 
                 let size = 2.0 + Math.random() * 3.0; // Base retail size
 
@@ -1240,7 +1240,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
             const longTermTrend = [];
             for (let i = 0; i < 80; i++) {
                 const timeOffset = i * 1400; // Sparse, every 1.4s for long term context
-                const priceDecline = -i * 0.001; // Gradual decline
+                const priceDecline = -i * 0.01; // Gradual decline (tick-aligned)
 
                 const trade = createRealisticTrade(
                     basePrice + priceDecline,
