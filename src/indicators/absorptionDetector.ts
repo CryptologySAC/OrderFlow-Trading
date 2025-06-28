@@ -1732,6 +1732,42 @@ export class AbsorptionDetector
             },
         };
 
+        // ✅ CRITICAL: Final confidence validation (matches SignalManager threshold)
+        // Prevents wasted computation cycles from generating signals that will be rejected
+        const finalConfidenceRequired = 0.85; // Match SignalManager absorption threshold
+        if (finalConfidence < finalConfidenceRequired) {
+            // Release pooled objects before early return
+            SharedPools.getInstance().volumeResults.release(volumes);
+            SharedPools.getInstance().absorptionConditions.release(
+                conditionsToRelease
+            );
+
+            // Track rejection metrics for monitoring (using counter like DeltaCVD)
+            this.metricsCollector.incrementCounter(
+                "absorption_signals_rejected_total",
+                1,
+                {
+                    reason: "insufficient_final_confidence",
+                    finalConfidence: finalConfidence.toFixed(3),
+                    required: finalConfidenceRequired.toFixed(3),
+                }
+            );
+
+            // Debug logging for threshold analysis
+            this.logger.debug(
+                "[AbsorptionDetector] Signal blocked - insufficient final confidence",
+                {
+                    finalConfidence: finalConfidence.toFixed(3),
+                    required: finalConfidenceRequired.toFixed(3),
+                    zone,
+                    side,
+                    absorptionScore: score.toFixed(3),
+                }
+            );
+
+            return; // Early return - do not emit signal
+        }
+
         this.handleDetection(signal);
 
         this.metricsCollector.updateMetric(
