@@ -1806,6 +1806,29 @@ export class DeltaCVDConfirmation extends BaseDetector {
             );
         }
 
+        // STEP 6.5: CRITICAL - Validate final confidence meets required threshold
+        if (finalConfidence < this.finalConfidenceRequired) {
+            this.metricsCollector.incrementCounter(
+                "cvd_signals_rejected_total",
+                1,
+                {
+                    reason: "insufficient_final_confidence",
+                    finalConfidence: finalConfidence.toFixed(3),
+                    required: this.finalConfidenceRequired.toFixed(3),
+                }
+            );
+            this.logger.debug(
+                "[DeltaCVDConfirmation] Signal blocked - insufficient final confidence",
+                {
+                    finalConfidence: finalConfidence.toFixed(3),
+                    required: this.finalConfidenceRequired.toFixed(3),
+                    signalType,
+                    cvdZScore: zScores[this.windows[0]].toFixed(3),
+                }
+            );
+            return;
+        }
+
         // STEP 7: Build the signal with proper CVD data (no more hardcoded zeros!)
         const candidate = this.buildEnhancedSignalCandidate(
             slopes,
