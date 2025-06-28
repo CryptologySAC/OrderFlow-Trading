@@ -1069,10 +1069,16 @@ export class AbsorptionDetector
      * @returns The dominant aggressive side based on volume analysis
      */
     /**
-     * ✅ CLAUDE.md COMPLIANT: Determine dominant aggressive side using configurable time-based analysis
+     * ✅ CAUSALITY FIX: Identify absorption event by analyzing pre-bounce flow
      *
-     * Fixed signal direction issue: Uses time-based analysis to properly capture the flow sequence
-     * that drives price moves, rather than arbitrary trade counts that can miss the driving flow.
+     * CRITICAL BUG FIX: Separates trigger detection from absorption analysis to prevent
+     * causality inversion where bounce effects are confused with absorption causes.
+     *
+     * At support bounce:
+     * - T+0: Heavy selling hits support (CAUSE - this is what we need to detect)
+     * - T+2: Bid absorption occurs (absorption event)
+     * - T+5: Price bounces with buying (EFFECT - this triggers analysis)
+     * - T+8: Algorithm looks BACKWARDS to find the original absorbed flow
      */
     private getDominantAggressiveSide(
         trades: AggressiveTrade[]
@@ -1082,25 +1088,88 @@ export class AbsorptionDetector
             return null; // Cannot calculate without trades
         }
 
-        // ✅ CRITICAL FIX: Use trade timestamps instead of Date.now() for consistent analysis
-        const latestTimestamp = Math.max(...trades.map((t) => t.timestamp));
-        const cutoff = latestTimestamp - this.dominantSideAnalysisWindowMs;
-        const recentTrades = trades.filter(
-            (trade) => trade.timestamp >= cutoff
-        );
-
-        // ✅ CLAUDE.md COMPLIANT: Return null when insufficient recent data
-        if (recentTrades.length < this.dominantSideMinTradesRequired) {
-            const fallbackTrades = trades.slice(
-                -this.dominantSideFallbackTradeCount
-            );
-            if (fallbackTrades.length === 0) {
-                return null; // Cannot calculate without any trades
-            }
-            return this.calculateDominantSideFromTrades(fallbackTrades);
+        // ✅ CAUSALITY FIX: Identify absorption event by temporal separation
+        const absorptionEvent = this.identifyAbsorptionEvent(trades);
+        if (absorptionEvent === null) {
+            return null; // Cannot identify absorption without valid event
         }
 
-        return this.calculateDominantSideFromTrades(recentTrades);
+        return absorptionEvent.originalAggressiveFlow;
+    }
+
+    /**
+     * ✅ NEW: Identify absorption event with temporal separation
+     *
+     * Separates the absorbed flow (cause) from the bounce flow (effect)
+     * by analyzing volume patterns and timing to find the original absorption event.
+     */
+    private identifyAbsorptionEvent(trades: AggressiveTrade[]): {
+        originalAggressiveFlow: "buy" | "sell";
+        absorptionTimestamp: number;
+    } | null {
+        if (trades.length < 3) {
+            return null; // Need minimum trades for pattern analysis
+        }
+
+        // Sort trades by timestamp to analyze chronologically
+        const sortedTrades = [...trades].sort(
+            (a, b) => a.timestamp - b.timestamp
+        );
+
+        // Look for volume surge followed by price containment pattern
+        // This indicates absorption: heavy flow hits passive liquidity but price doesn't move proportionally
+
+        // Split trades into early (potential absorption) and late (potential bounce) periods
+        const midpoint = Math.floor(sortedTrades.length / 2);
+        const earlyTrades = sortedTrades.slice(0, midpoint);
+        const lateTrades = sortedTrades.slice(midpoint);
+
+        if (earlyTrades.length === 0) {
+            return null;
+        }
+
+        // Calculate flow in early period (this should be the absorbed flow)
+        const earlyFlow = this.calculateDominantSideFromTrades(earlyTrades);
+
+        // Validate this looks like absorption by checking price efficiency
+        const earlyPrices = earlyTrades.map((t) => t.price);
+        const earlyPriceRange =
+            Math.max(...earlyPrices) - Math.min(...earlyPrices);
+        const earlyVolume = earlyTrades.reduce(
+            (sum, t) => FinancialMath.safeAdd(sum, t.quantity),
+            0
+        );
+
+        // If we have late trades, check for bounce pattern
+        if (lateTrades.length > 0) {
+            const lateFlow = this.calculateDominantSideFromTrades(lateTrades);
+
+            // Classic absorption pattern: early flow gets absorbed, late flow bounces opposite direction
+            if (earlyFlow !== lateFlow) {
+                // This looks like absorption followed by bounce - return the absorbed flow
+                return {
+                    originalAggressiveFlow: earlyFlow,
+                    absorptionTimestamp:
+                        earlyTrades[earlyTrades.length - 1].timestamp,
+                };
+            }
+        }
+
+        // Fallback: if no clear bounce pattern, check if early flow shows absorption characteristics
+        // (high volume with contained price movement)
+        const tickSize = Math.pow(10, -this.pricePrecision);
+        const expectedMovement = earlyVolume * tickSize * 0.1; // Rough heuristic
+
+        if (earlyPriceRange < expectedMovement) {
+            // Price was contained despite volume - likely absorption
+            return {
+                originalAggressiveFlow: earlyFlow,
+                absorptionTimestamp:
+                    earlyTrades[earlyTrades.length - 1].timestamp,
+            };
+        }
+
+        return null; // No clear absorption pattern identified
     }
 
     /**
