@@ -989,7 +989,8 @@ export class OrderFlowDashboard {
         // Accumulation Zone Events
         this.accumulationZoneDetector.on(
             "zoneCreated",
-            (zone: AccumulationZone) => {
+            (...args: unknown[]) => {
+                const zone = args[0] as AccumulationZone;
                 this.logger.info("Accumulation zone created", {
                     zoneId: zone.id,
                     priceCenter: zone.priceRange.center,
@@ -1001,7 +1002,8 @@ export class OrderFlowDashboard {
 
         this.accumulationZoneDetector.on(
             "zoneCompleted",
-            (zone: AccumulationZone) => {
+            (...args: unknown[]) => {
+                const zone = args[0] as AccumulationZone;
                 this.logger.info("Accumulation zone completed", {
                     zoneId: zone.id,
                     finalStrength: zone.strength.toFixed(3),

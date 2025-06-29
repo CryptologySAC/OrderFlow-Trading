@@ -404,9 +404,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
      */
 
     // Required interface methods for compatibility with Detector interface
-    public get id(): string {
-        return (this.originalDetector as { id: string }).id;
-    }
+    // Note: id is inherited from Detector base class
 
     public onEnrichedTrade(event: EnrichedTradeEvent): void {
         this.analyze(event);
@@ -421,10 +419,10 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     }
 
     public getId(): string {
-        return this.originalDetector.getId();
+        return this.id || `${this.constructor.name}_${Date.now()}`;
     }
 
-    // Forward events from original detector
+    // Forward events from original detector with proper typing
     public on(event: string, listener: (...args: unknown[]) => void): this {
         const detector = this.originalDetector as {
             on?: (

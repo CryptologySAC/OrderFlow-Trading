@@ -937,7 +937,7 @@ export class ExhaustionDetector
                     side,
                     score: adjustedScore,
                     reason: volumeValidation.reason,
-                    confidenceAdjustment: volumeConfidenceAdjustment,
+                    confidenceAdjustment: volumeSurgeConfidenceAdjustment,
                 }
             );
         }
@@ -959,25 +959,32 @@ export class ExhaustionDetector
         );
 
         // ✅ CLAUDE.md COMPLIANCE: Apply all confidence adjustments
-        let finalConfidence = adjustedScore * thresholdConfidenceAdjustment * volumeConfidenceAdjustment * volumeSurgeConfidenceAdjustment;
-        
+        let finalConfidence =
+            adjustedScore *
+            thresholdConfidenceAdjustment *
+            volumeConfidenceAdjustment *
+            volumeSurgeConfidenceAdjustment;
+
         // 🔍 DEBUG: Log signal generation attempt
-        this.logger.info(`[ExhaustionDetector] 🔍 ATTEMPTING SIGNAL GENERATION`, {
-            zone,
-            price,
-            side,
-            baseScore,
-            adjustedScore,
-            finalConfidence,
-            thresholdConfidenceAdjustment,
-            volumeConfidenceAdjustment,
-            volumeSurgeConfidenceAdjustment,
-            effectiveThreshold,
-            aggressiveVolume: volumes.aggressive,
-            minAggVolume: this.minAggVolume,
-            exhaustionThreshold: this.exhaustionThreshold,
-        });
-        
+        this.logger.info(
+            `[ExhaustionDetector] 🔍 ATTEMPTING SIGNAL GENERATION`,
+            {
+                zone,
+                price,
+                side,
+                baseScore,
+                adjustedScore,
+                finalConfidence,
+                thresholdConfidenceAdjustment,
+                volumeConfidenceAdjustment,
+                volumeSurgeConfidenceAdjustment,
+                effectiveThreshold,
+                aggressiveVolume: volumes.aggressive,
+                minAggVolume: this.minAggVolume,
+                exhaustionThreshold: this.exhaustionThreshold,
+            }
+        );
+
         if (volumeBoost.isValid) {
             finalConfidence += volumeBoost.confidence;
 

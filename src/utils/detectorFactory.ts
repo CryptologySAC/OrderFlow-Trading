@@ -23,7 +23,6 @@ import {
 import type {
     BaseDetectorSettings,
     DetectorStats,
-    IDetector,
     IBaseDetector,
 } from "../indicators/interfaces/detectorInterfaces.js";
 import { SignalType } from "../types/signalTypes.js";
@@ -430,7 +429,7 @@ export class DetectorFactory {
     /**
      * Get all active detectors
      */
-    public static getAllDetectors(): Map<string, IDetector> {
+    public static getAllDetectors(): Map<string, IBaseDetector> {
         return new Map(this.instances);
     }
 
@@ -452,12 +451,12 @@ export class DetectorFactory {
                 this.healthChecks.delete(id);
             }
 
-            // Cleanup detector
+            // Cleanup detector if it supports cleanup
             if (
                 "cleanup" in detector &&
                 typeof detector.cleanup === "function"
             ) {
-                detector.cleanup();
+                (detector as { cleanup: () => void }).cleanup();
             }
             this.instances.delete(id);
 
@@ -499,7 +498,10 @@ export class DetectorFactory {
                 "getStats" in detector &&
                 typeof detector.getStats === "function"
             ) {
-                detectorStats.set(id, detector.getStats());
+                const stats = (
+                    detector as { getStats: () => DetectorStats }
+                ).getStats();
+                detectorStats.set(id, stats);
             }
         }
 
@@ -581,7 +583,7 @@ export class DetectorFactory {
                         "cleanup" in detector &&
                         typeof detector.cleanup === "function"
                     ) {
-                        detector.cleanup();
+                        (detector as { cleanup: () => void }).cleanup();
                     }
 
                     // Wait a bit before restart
@@ -795,7 +797,7 @@ export class DetectorFactory {
 
     private static registerDetector(
         id: string,
-        detector: IDetector,
+        detector: IBaseDetector,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions
     ): void {
@@ -845,7 +847,7 @@ class HealthChecker {
 
     constructor(
         private readonly detectorId: string,
-        private readonly detector: IDetector,
+        private readonly detector: IBaseDetector,
         private readonly dependencies: DetectorDependencies,
         private readonly config: HealthCheckConfig
     ) {}
@@ -902,12 +904,14 @@ class HealthChecker {
         this.lastHealthCheck = Date.now();
 
         try {
-            //TODO implement getStats and cleanup in zne detectors
+            //TODO implement getStats and cleanup in zone detectors
             if (
                 "getStats" in this.detector &&
                 typeof this.detector.getStats === "function"
             ) {
-                const stats = this.detector.getStats();
+                const stats = (
+                    this.detector as { getStats: () => DetectorStats }
+                ).getStats();
                 const memoryUsage = DetectorFactory["getMemoryUsage"]();
 
                 // Check memory usage
@@ -974,7 +978,7 @@ export interface DetectorDependencies {
 export interface DetectorFactoryOptions {
     id?: string;
     customMonitoring?: (
-        detector: IDetector,
+        detector: IBaseDetector,
         metrics: IMetricsCollector
     ) => void;
 }
