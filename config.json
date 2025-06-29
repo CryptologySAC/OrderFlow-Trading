@@ -56,7 +56,7 @@
             "accumulation": {
                 "minZoneStrength": 0.8,
                 "maxZoneWidth": 0.008,
-                "minZoneVolume": 1200,
+                "minZoneVolume": 500,
 
                 "maxActiveZones": 3,
                 "zoneTimeoutMs": 600000,
@@ -304,6 +304,14 @@
                 "mediumQualityDataAge": 70000,
                 "circuitBreakerMaxErrors": 8,
                 "circuitBreakerWindowMs": 90000,
+
+                "lowScoreConfidenceAdjustment": 0.7,
+                "lowVolumeConfidenceAdjustment": 0.8,
+                "invalidSurgeConfidenceAdjustment": 0.8,
+                "passiveConsistencyThreshold": 0.7,
+                "imbalanceNeutralThreshold": 0.1,
+                "velocityMinBound": 0.1,
+                "velocityMaxBound": 10.0,
 
                 "minInitialMoveTicks": 1,
                 "confirmationTimeoutMs": 40000,

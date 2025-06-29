@@ -93,6 +93,17 @@ export interface ExhaustionSettings extends BaseDetectorSettings {
     // Circuit breaker configuration (previously hardcoded)
     circuitBreakerMaxErrors?: number; // Maximum errors before circuit breaker opens (default 5)
     circuitBreakerWindowMs?: number; // Error count reset window (default 60000ms)
+
+    // 🔧 CLAUDE.md COMPLIANCE: Confidence adjustment parameters (previously hardcoded)
+    lowScoreConfidenceAdjustment?: number; // Confidence reduction for low scores (default 0.7)
+    lowVolumeConfidenceAdjustment?: number; // Confidence reduction for low volume (default 0.8)
+    invalidSurgeConfidenceAdjustment?: number; // Confidence reduction for invalid surge (default 0.8)
+
+    // 🔧 CLAUDE.md COMPLIANCE: Calculation threshold parameters (previously hardcoded)
+    passiveConsistencyThreshold?: number; // Threshold for passive consistency calculation (default 0.7)
+    imbalanceNeutralThreshold?: number; // Threshold for neutral imbalance detection (default 0.1)
+    velocityMinBound?: number; // Minimum velocity ratio bound (default 0.1)
+    velocityMaxBound?: number; // Maximum velocity ratio bound (default 10.0)
 }
 
 type DetectorResult<T> =
@@ -182,6 +193,17 @@ export class ExhaustionDetector
     // Volume surge analysis integration
     private readonly volumeAnalyzer: VolumeAnalyzer;
     private readonly volumeSurgeConfig: VolumeSurgeConfig;
+
+    // 🔧 CLAUDE.md COMPLIANCE: Configurable confidence adjustment parameters
+    private readonly lowScoreConfidenceAdjustment: number;
+    private readonly lowVolumeConfidenceAdjustment: number;
+    private readonly invalidSurgeConfidenceAdjustment: number;
+
+    // 🔧 CLAUDE.md COMPLIANCE: Configurable calculation threshold parameters
+    private readonly passiveConsistencyThreshold: number;
+    private readonly imbalanceNeutralThreshold: number;
+    private readonly velocityMinBound: number;
+    private readonly velocityMaxBound: number;
 
     // 🔧 FIX: Remove duplicate threshold update interval (already handled by BaseDetector)
     // Interval handle for periodic threshold updates - REMOVED to eliminate race condition
@@ -427,6 +449,64 @@ export class ExhaustionDetector
             300000,
             60000,
             "circuitBreakerWindowMs"
+        );
+
+        // 🔧 CLAUDE.md COMPLIANCE: Initialize configurable confidence adjustment parameters
+        this.lowScoreConfidenceAdjustment = this.validateConfigValue(
+            settings.lowScoreConfidenceAdjustment ?? 0.7,
+            0.1,
+            1.0,
+            0.7,
+            "lowScoreConfidenceAdjustment"
+        );
+
+        this.lowVolumeConfidenceAdjustment = this.validateConfigValue(
+            settings.lowVolumeConfidenceAdjustment ?? 0.8,
+            0.1,
+            1.0,
+            0.8,
+            "lowVolumeConfidenceAdjustment"
+        );
+
+        this.invalidSurgeConfidenceAdjustment = this.validateConfigValue(
+            settings.invalidSurgeConfidenceAdjustment ?? 0.8,
+            0.1,
+            1.0,
+            0.8,
+            "invalidSurgeConfidenceAdjustment"
+        );
+
+        // 🔧 CLAUDE.md COMPLIANCE: Initialize configurable calculation threshold parameters
+        this.passiveConsistencyThreshold = this.validateConfigValue(
+            settings.passiveConsistencyThreshold ?? 0.7,
+            0.1,
+            1.0,
+            0.7,
+            "passiveConsistencyThreshold"
+        );
+
+        this.imbalanceNeutralThreshold = this.validateConfigValue(
+            settings.imbalanceNeutralThreshold ?? 0.1,
+            0.01,
+            0.5,
+            0.1,
+            "imbalanceNeutralThreshold"
+        );
+
+        this.velocityMinBound = this.validateConfigValue(
+            settings.velocityMinBound ?? 0.1,
+            0.01,
+            1.0,
+            0.1,
+            "velocityMinBound"
+        );
+
+        this.velocityMaxBound = this.validateConfigValue(
+            settings.velocityMaxBound ?? 10.0,
+            2.0,
+            100.0,
+            10.0,
+            "velocityMaxBound"
         );
 
         // Initialize volume analyzer for enhanced exhaustion detection
@@ -875,9 +955,9 @@ export class ExhaustionDetector
                 ? this.exhaustionThreshold * 1.2
                 : this.exhaustionThreshold;
 
-        // Threshold check now advisory - affects confidence but doesn't block signals
+        // 🔧 CLAUDE.md COMPLIANCE: Use configurable confidence adjustment instead of magic number
         const thresholdConfidenceAdjustment =
-            adjustedScore >= effectiveThreshold ? 1.0 : 0.7;
+            adjustedScore >= effectiveThreshold ? 1.0 : this.lowScoreConfidenceAdjustment;
         if (adjustedScore < effectiveThreshold) {
             this.logger.debug(
                 `[ExhaustionDetector] Score below threshold - reducing confidence`,
@@ -900,9 +980,9 @@ export class ExhaustionDetector
             zoneTicks
         );
 
-        // ✅ CLAUDE.md COMPLIANCE: Make volume check advisory, not blocking
+        // 🔧 CLAUDE.md COMPLIANCE: Use configurable confidence adjustment instead of magic number
         const volumeConfidenceAdjustment =
-            volumes.aggressive >= this.minAggVolume ? 1.0 : 0.8;
+            volumes.aggressive >= this.minAggVolume ? 1.0 : this.lowVolumeConfidenceAdjustment;
         if (volumes.aggressive < this.minAggVolume) {
             this.logger.debug(
                 `[ExhaustionDetector] Low aggressive volume - reducing confidence`,
@@ -924,10 +1004,10 @@ export class ExhaustionDetector
                 triggerTrade.timestamp
             );
 
-        // Volume surge validation now advisory - affects confidence but doesn't block signals
+        // 🔧 CLAUDE.md COMPLIANCE: Use configurable confidence adjustment instead of magic number
         const volumeSurgeConfidenceAdjustment = volumeValidation.valid
             ? 1.0
-            : 0.8;
+            : this.invalidSurgeConfidenceAdjustment;
         if (!volumeValidation.valid) {
             this.logger.debug(
                 `[ExhaustionDetector] Volume surge validation failed - reducing confidence`,
@@ -1751,11 +1831,11 @@ export class ExhaustionDetector
                 };
             }
 
-            // Determine dominant side based on imbalance
+            // 🔧 CLAUDE.md COMPLIANCE: Use configurable threshold instead of magic numbers
             const dominantSide = imbalanceResult.success
-                ? imbalanceResult.data.imbalance > 0.1
+                ? imbalanceResult.data.imbalance > this.imbalanceNeutralThreshold
                     ? "sell"
-                    : imbalanceResult.data.imbalance < -0.1
+                    : imbalanceResult.data.imbalance < -this.imbalanceNeutralThreshold
                       ? "buy"
                       : "neutral"
                 : ("neutral" as const);
@@ -1843,8 +1923,8 @@ export class ExhaustionDetector
 
             let consistentPeriods = 0;
             for (const value of passiveValues) {
-                // Count periods where passive stays above 70% of average
-                if (value >= avgPassive * 0.7) {
+                // 🔧 CLAUDE.md COMPLIANCE: Use configurable threshold instead of magic number
+                if (value >= avgPassive * this.passiveConsistencyThreshold) {
                     consistentPeriods++;
                 }
             }
@@ -1879,9 +1959,14 @@ export class ExhaustionDetector
                 return null; // Cannot calculate velocity with insufficient periods
             }
 
-            // Calculate velocity for recent period
+            // 🔧 CLAUDE.md COMPLIANCE: Handle null returns from velocity calculations
             const recentVelocity = this.calculatePeriodVelocity(recent);
             const earlierVelocity = this.calculatePeriodVelocity(earlier);
+
+            // Return null if either velocity calculation failed
+            if (recentVelocity === null || earlierVelocity === null) {
+                return null; // Cannot calculate ratio with invalid velocity data
+            }
 
             // Return velocity increase ratio with safety checks using safeDivision
             const velocityRatio = FinancialMath.safeDivide(
@@ -1890,9 +1975,9 @@ export class ExhaustionDetector
                 1.0
             );
 
-            // Safety checks and bounds
+            // 🔧 CLAUDE.md COMPLIANCE: Use configurable bounds instead of magic numbers
             if (!isFinite(velocityRatio)) return null;
-            return Math.max(0.1, Math.min(10, velocityRatio)); // Reasonable bounds
+            return Math.max(this.velocityMinBound, Math.min(this.velocityMaxBound, velocityRatio));
         } catch (error) {
             this.logger?.warn(
                 `[ExhaustionDetector] Error calculating velocity increase: ${(error as Error).message}`
@@ -1903,9 +1988,10 @@ export class ExhaustionDetector
 
     /**
      * Calculate period velocity
+     * 🔧 CLAUDE.md COMPLIANCE: Return null when calculation cannot be performed
      */
-    private calculatePeriodVelocity(samples: ZoneSample[]): number {
-        if (samples.length < 2) return 0;
+    private calculatePeriodVelocity(samples: ZoneSample[]): number | null {
+        if (samples.length < 2) return null; // Cannot calculate velocity with insufficient data
 
         try {
             let totalVelocity = 0;
@@ -1936,17 +2022,21 @@ export class ExhaustionDetector
                 }
             }
 
+            // 🔧 CLAUDE.md COMPLIANCE: Return null when calculation cannot be performed
+            if (validPeriods === 0) {
+                return null; // No valid velocity periods found
+            }
+
             const avgVelocity = FinancialMath.safeDivide(
                 totalVelocity,
-                validPeriods,
-                0
+                validPeriods
             );
-            return isFinite(avgVelocity) ? avgVelocity : 0;
+            return isFinite(avgVelocity) ? avgVelocity : null;
         } catch (error) {
             this.logger?.warn(
                 `[ExhaustionDetector] Error calculating period velocity: ${(error as Error).message}`
             );
-            return 0;
+            return null; // Cannot calculate velocity due to error
         }
     }
 
