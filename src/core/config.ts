@@ -291,13 +291,13 @@ export class Config {
         return (
             (cfg.symbols[cfg.symbol].signalManager
                 ?.detectorThresholds as Record<string, number>) ?? {
-                exhaustion: 0.8,
-                cvd_confirmation: 0.7,
-                distribution: 0.8,
-                distribution_zone: 0.8,
-                absorption: 0.85,
-                accumulation: 0.95,
-                accumulation_zone: 0.95,
+                exhaustion: 0.4,
+                cvd_confirmation: 0.4,
+                distribution: 0.4,
+                distribution_zone: 0.4,
+                absorption: 0.4,
+                accumulation: 0.4,
+                accumulation_zone: 0.4,
             }
         );
     }
