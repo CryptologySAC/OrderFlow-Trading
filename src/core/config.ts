@@ -17,7 +17,7 @@ import type {
 } from "../types/configTypes.js";
 import type { ZoneDetectorConfig } from "../types/zoneTypes.js";
 import type { ExhaustionSettings } from "../indicators/exhaustionDetector.js";
-import type { AbsorptionSettings } from "../indicators/absorptionDetector.js";
+import type { AbsorptionEnhancedSettings } from "../indicators/absorptionDetectorEnhanced.js";
 import type { OrderflowPreprocessorOptions } from "../market/orderFlowPreprocessor.js";
 import type { DataStreamConfig } from "../trading/dataStreamManager.js";
 import type {
@@ -366,7 +366,7 @@ export class Config {
         };
     }
 
-    static get ABSORPTION_DETECTOR(): AbsorptionSettings {
+    static get ABSORPTION_DETECTOR(): AbsorptionEnhancedSettings {
         return {
             symbol: Config.SYMBOL,
             minAggVolume: Number(
@@ -436,6 +436,26 @@ export class Config {
                 absorptionVelocity:
                     cfg.symbols[cfg.symbol].absorption?.features
                         ?.absorptionVelocity ?? false,
+            },
+
+            // Standardized zone enhancement configuration
+            useStandardizedZones: Boolean(
+                (cfg.symbols[cfg.symbol].absorption as any)
+                    ?.useStandardizedZones ?? false
+            ),
+            standardizedZoneConfig: {
+                minZoneConfluenceCount: 2,
+                maxZoneConfluenceDistance: 3,
+                institutionalVolumeThreshold: 50,
+                institutionalVolumeRatioThreshold: 0.3,
+                enableZoneConfluenceFilter: true,
+                enableInstitutionalVolumeFilter: false,
+                enableCrossTimeframeAnalysis: false,
+                confluenceConfidenceBoost: 0.15,
+                institutionalVolumeBoost: 0.1,
+                crossTimeframeBoost: 0.05,
+                enhancementMode: "disabled" as const,
+                minEnhancedConfidenceThreshold: 0.3,
             },
         };
     }

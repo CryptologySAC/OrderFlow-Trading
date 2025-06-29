@@ -3,10 +3,11 @@ import { randomUUID } from "crypto";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
+import { AbsorptionDetector } from "../indicators/absorptionDetector.js";
 import {
-    AbsorptionDetector,
-    AbsorptionSettings,
-} from "../indicators/absorptionDetector.js";
+    AbsorptionDetectorEnhanced,
+    AbsorptionEnhancedSettings,
+} from "../indicators/absorptionDetectorEnhanced.js";
 import {
     ExhaustionDetector,
     ExhaustionSettings,
@@ -63,14 +64,14 @@ export class DetectorFactory {
     }
 
     /**
-     * Create production-ready absorption detector
+     * Create production-ready absorption detector (original or enhanced)
      */
     public static createAbsorptionDetector(
-        settings: AbsorptionSettings,
+        settings: AbsorptionEnhancedSettings,
         orderBook: IOrderBookState,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
-    ): AbsorptionDetector {
+    ): AbsorptionDetector | AbsorptionDetectorEnhanced {
         const id = options.id || `absorption-${Date.now()}`;
 
         // 🚨 CRITICAL FIX: Validate orderBook since it should be initialized by now
@@ -86,28 +87,60 @@ export class DetectorFactory {
         const productionSettings = this.applyProductionDefaults(
             settings,
             "absorption"
-        ) as BaseDetectorSettings;
+        ) as AbsorptionEnhancedSettings;
 
-        const detector = new AbsorptionDetector(
-            id,
-            productionSettings,
-            orderBook,
-            dependencies.logger,
-            dependencies.spoofingDetector,
-            dependencies.metricsCollector,
-            dependencies.signalLogger
-        );
+        // Check if standardized zones are enabled to determine detector type
+        const useEnhanced =
+            productionSettings.useStandardizedZones &&
+            productionSettings.standardizedZoneConfig?.enhancementMode !==
+                "disabled";
+
+        let detector: AbsorptionDetector | AbsorptionDetectorEnhanced;
+
+        if (useEnhanced) {
+            detector = new AbsorptionDetectorEnhanced(
+                id,
+                productionSettings,
+                orderBook,
+                dependencies.logger,
+                dependencies.spoofingDetector,
+                dependencies.metricsCollector,
+                dependencies.signalLogger
+            );
+
+            dependencies.logger.info(
+                `[DetectorFactory] Created Enhanced AbsorptionDetector`,
+                {
+                    id,
+                    enhancementMode:
+                        productionSettings.standardizedZoneConfig
+                            ?.enhancementMode,
+                    standardizedZoneConfig:
+                        productionSettings.standardizedZoneConfig,
+                }
+            );
+        } else {
+            detector = new AbsorptionDetector(
+                id,
+                productionSettings,
+                orderBook,
+                dependencies.logger,
+                dependencies.spoofingDetector,
+                dependencies.metricsCollector,
+                dependencies.signalLogger
+            );
+
+            dependencies.logger.info(
+                `[DetectorFactory] Created Original AbsorptionDetector`,
+                {
+                    id,
+                    settings: productionSettings,
+                    features: productionSettings.features,
+                }
+            );
+        }
 
         this.registerDetector(id, detector, dependencies, options);
-
-        dependencies.logger.info(
-            `[DetectorFactory] Created AbsorptionDetector`,
-            {
-                id,
-                settings: productionSettings,
-                features: productionSettings.features,
-            }
-        );
 
         return detector;
     }

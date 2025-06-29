@@ -367,6 +367,22 @@
                     "absorptionVelocity": true,
                     "layeredAbsorption": true,
                     "spreadImpact": true
+                },
+
+                "useStandardizedZones": false,
+                "standardizedZoneConfig": {
+                    "minZoneConfluenceCount": 2,
+                    "maxZoneConfluenceDistance": 3,
+                    "institutionalVolumeThreshold": 50,
+                    "institutionalVolumeRatioThreshold": 0.3,
+                    "enableZoneConfluenceFilter": true,
+                    "enableInstitutionalVolumeFilter": false,
+                    "enableCrossTimeframeAnalysis": false,
+                    "confluenceConfidenceBoost": 0.15,
+                    "institutionalVolumeBoost": 0.1,
+                    "crossTimeframeBoost": 0.05,
+                    "enhancementMode": "disabled",
+                    "minEnhancedConfidenceThreshold": 0.3
                 }
             },
 
@@ -448,10 +464,10 @@
 
             "deltaCvdConfirmation": {
                 "windowsSec": [60, 300],
-                "minZ": 0.6,
+                "minZ": 0.4,
                 "priceCorrelationWeight": 0.3,
                 "volumeConcentrationWeight": 0.2,
-                "adaptiveThresholdMultiplier": 1.0,
+                "adaptiveThresholdMultiplier": 0.7,
                 "eventCooldownMs": 15000,
                 "maxZones": 50,
                 "zoneAgeLimit": 1800000,
@@ -480,7 +496,7 @@
                 "divergenceLookbackSec": 60,
 
                 "enableDepthAnalysis": false,
-                "usePassiveVolume": false,
+                "usePassiveVolume": true,
                 "maxOrderbookAge": 5000,
 
                 "absorptionCVDThreshold": 75,

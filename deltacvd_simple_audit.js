@@ -40,7 +40,7 @@ const createMetrics = () => {
                 current.push(value);
                 store.set(key, current);
             },
-            get: () => store.get(`${name}_histogram`) || []
+            get: () => store.get(`${name}_histogram`) || [],
         }),
         createGauge: (name, help, labelNames = []) => ({
             set: (labels = {}, value = 0) => {
@@ -54,7 +54,7 @@ const createMetrics = () => {
                 const current = store.get(`${name}_gauge`) || 0;
                 store.set(`${name}_gauge`, current - value);
             },
-            get: () => store.get(`${name}_gauge`) || 0
+            get: () => store.get(`${name}_gauge`) || 0,
         }),
         getMetrics: () => Object.fromEntries(store),
     };
