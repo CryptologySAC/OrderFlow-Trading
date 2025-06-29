@@ -156,6 +156,8 @@ export interface ZoneAnalysisResult {
 }
 
 export interface ZoneDetectorConfig {
+    // Core zone detector configuration
+    symbol?: string; // Trading symbol
     maxActiveZones: number; // Max concurrent zones per symbol
     zoneTimeoutMs: number; // Max zone lifetime
     minZoneVolume: number; // Minimum volume for valid zone
@@ -168,6 +170,12 @@ export interface ZoneDetectorConfig {
     minTradeCount: number; // Minimum trades before forming zone
     minBuyRatio?: number; // Minimum buy ratio for accumulation
     minSellRatio?: number; // Minimum sell ratio for distribution
+
+    // Accumulation-specific configuration from AccumulationSettings
+    minDurationMs?: number; // Minimum accumulation duration
+    minRatio?: number; // Min passive/aggressive ratio
+    minRecentActivityMs?: number; // Trade staleness threshold
+    threshold?: number; // Confidence threshold (0-1)
 
     // Zone strength threshold parameters (previously hardcoded)
     priceStabilityThreshold?: number; // Price stability threshold for accumulation (default 0.98)

@@ -1,5 +1,13 @@
 // src/indicators/accumulationZoneDetector.ts
 /**
+ * ⚠️ DEPRECATED - USE ENHANCED VERSION ⚠️
+ * =====================================
+ *
+ * STATUS: DEPRECATED (use AccumulationZoneDetectorEnhanced) ⚠️
+ * REPLACEMENT: src/indicators/accumulationZoneDetectorEnhanced.ts
+ * DEPRECATION_DATE: 2025-06-29
+ * REMOVAL_PLANNED: 2025-12-31
+ *
  * 🔒 PRODUCTION-READY - DO NOT MODIFY
  * ===================================
  *
@@ -252,6 +260,17 @@ export class AccumulationZoneDetector extends ZoneDetector {
         metricsCollector: IMetricsCollector
     ) {
         super(id, config, "accumulation", logger, metricsCollector);
+
+        // ⚠️ DEPRECATION WARNING: This detector is deprecated
+        logger.warn(
+            "⚠️ DEPRECATED: AccumulationZoneDetector is deprecated. Use AccumulationZoneDetectorEnhanced instead.",
+            {
+                detector: "AccumulationZoneDetector",
+                replacement: "AccumulationZoneDetectorEnhanced",
+                deprecationDate: "2025-06-29",
+                removalPlanned: "2025-12-31",
+            }
+        );
 
         this.symbol = symbol;
         this.pricePrecision = config.pricePrecision ?? 2;

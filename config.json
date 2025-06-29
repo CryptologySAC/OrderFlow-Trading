@@ -93,19 +93,19 @@
                 "completionStopLossPercent": 0.015,
                 "completionConfidenceBoost": 0.2,
 
-                "useStandardizedZones": false,
-                "enhancementMode": "disabled",
+                "useStandardizedZones": true,
+                "enhancementMode": "production",
                 "standardizedZoneConfig": {
                     "minZoneConfluenceCount": 2,
                     "maxZoneConfluenceDistance": 3,
                     "institutionalVolumeThreshold": 50,
                     "passiveVolumeRatioThreshold": 1.5,
                     "enableZoneConfluenceFilter": true,
-                    "enableInstitutionalVolumeFilter": true,
-                    "enableCrossTimeframeAnalysis": true,
-                    "confluenceConfidenceBoost": 0.2,
-                    "institutionalVolumeBoost": 0.15,
-                    "crossTimeframeBoost": 0.1
+                    "enableInstitutionalVolumeFilter": false,
+                    "enableCrossTimeframeAnalysis": false,
+                    "confluenceConfidenceBoost": 0.1,
+                    "institutionalVolumeBoost": 0.1,
+                    "crossTimeframeBoost": 0.05
                 },
                 "minEnhancedConfidenceThreshold": 0.3,
                 "enhancementSignificanceBoost": true
@@ -279,9 +279,9 @@
                 "burstDetectionMs": 2000,
                 "sustainedVolumeMs": 20000,
                 "medianTradeSize": 0.8,
-                "exhaustionThreshold": 0.4,
+                "exhaustionThreshold": 0.3,
                 "maxPassiveRatio": 0.35,
-                "minDepletionFactor": 0.3,
+                "minDepletionFactor": 0.2,
 
                 "imbalanceHighThreshold": 0.75,
                 "imbalanceMediumThreshold": 0.55,
@@ -322,7 +322,7 @@
                 "features": {
                     "depletionTracking": true,
                     "spreadAdjustment": true,
-                    "volumeVelocity": true,
+                    "volumeVelocity": false,
                     "spoofingDetection": true,
                     "adaptiveZone": true,
                     "multiZone": false,

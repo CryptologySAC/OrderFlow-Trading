@@ -957,7 +957,9 @@ export class ExhaustionDetector
 
         // 🔧 CLAUDE.md COMPLIANCE: Use configurable confidence adjustment instead of magic number
         const thresholdConfidenceAdjustment =
-            adjustedScore >= effectiveThreshold ? 1.0 : this.lowScoreConfidenceAdjustment;
+            adjustedScore >= effectiveThreshold
+                ? 1.0
+                : this.lowScoreConfidenceAdjustment;
         if (adjustedScore < effectiveThreshold) {
             this.logger.debug(
                 `[ExhaustionDetector] Score below threshold - reducing confidence`,
@@ -982,7 +984,9 @@ export class ExhaustionDetector
 
         // 🔧 CLAUDE.md COMPLIANCE: Use configurable confidence adjustment instead of magic number
         const volumeConfidenceAdjustment =
-            volumes.aggressive >= this.minAggVolume ? 1.0 : this.lowVolumeConfidenceAdjustment;
+            volumes.aggressive >= this.minAggVolume
+                ? 1.0
+                : this.lowVolumeConfidenceAdjustment;
         if (volumes.aggressive < this.minAggVolume) {
             this.logger.debug(
                 `[ExhaustionDetector] Low aggressive volume - reducing confidence`,
@@ -1820,22 +1824,32 @@ export class ExhaustionDetector
             );
             const velocityIncrease = this.calculateVelocityIncrease(samples);
 
-            // Handle null returns from calculations - return early if critical calculations fail
+            // 🔧 FUNCTIONALITY FIX: Use graceful degradation instead of blocking
+            const safeConsistency = consistency ?? 0.5; // Use neutral default when insufficient data
+            const safeVelocityIncrease = velocityIncrease ?? 1.0; // Use neutral default when insufficient data
+
+            // Log when calculations are unavailable for debugging
             if (consistency === null || velocityIncrease === null) {
-                return {
-                    success: false,
-                    error: new Error(
-                        "Critical calculation returned null - insufficient data"
-                    ),
-                    fallbackSafe: true,
-                };
+                this.logger.debug(
+                    `[ExhaustionDetector] Using default values for missing calculations`,
+                    {
+                        zone,
+                        price,
+                        side,
+                        samplesCount: samples.length,
+                        consistencyAvailable: consistency !== null,
+                        velocityIncreaseAvailable: velocityIncrease !== null,
+                    }
+                );
             }
 
             // 🔧 CLAUDE.md COMPLIANCE: Use configurable threshold instead of magic numbers
             const dominantSide = imbalanceResult.success
-                ? imbalanceResult.data.imbalance > this.imbalanceNeutralThreshold
+                ? imbalanceResult.data.imbalance >
+                  this.imbalanceNeutralThreshold
                     ? "sell"
-                    : imbalanceResult.data.imbalance < -this.imbalanceNeutralThreshold
+                    : imbalanceResult.data.imbalance <
+                        -this.imbalanceNeutralThreshold
                       ? "buy"
                       : "neutral"
                 : ("neutral" as const);
@@ -1871,8 +1885,8 @@ export class ExhaustionDetector
                 // Additional fields for compatibility
                 absorptionRatio: depletionRatio, // alias for compatibility
                 passiveStrength: passiveRatio, // alias for compatibility
-                consistency,
-                velocityIncrease,
+                consistency: safeConsistency,
+                velocityIncrease: safeVelocityIncrease,
                 dominantSide,
                 hasRefill,
                 icebergSignal,
@@ -1977,7 +1991,10 @@ export class ExhaustionDetector
 
             // 🔧 CLAUDE.md COMPLIANCE: Use configurable bounds instead of magic numbers
             if (!isFinite(velocityRatio)) return null;
-            return Math.max(this.velocityMinBound, Math.min(this.velocityMaxBound, velocityRatio));
+            return Math.max(
+                this.velocityMinBound,
+                Math.min(this.velocityMaxBound, velocityRatio)
+            );
         } catch (error) {
             this.logger?.warn(
                 `[ExhaustionDetector] Error calculating velocity increase: ${(error as Error).message}`

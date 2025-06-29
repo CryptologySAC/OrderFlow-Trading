@@ -629,6 +629,12 @@ export class Config {
     static get ACCUMULATION_ZONE_DETECTOR(): ZoneDetectorConfig {
         const cfgObj = ZONE_CFG?.accumulation ?? {};
         return {
+            symbol: Config.SYMBOL,
+            minDurationMs: (cfgObj.minDurationMs as number) ?? 30000,
+            minRatio: (cfgObj.minRatio as number) ?? 0.7,
+            minRecentActivityMs:
+                (cfgObj.minRecentActivityMs as number) ?? 120000,
+            threshold: (cfgObj.threshold as number) ?? 0.85,
             maxActiveZones: cfgObj.maxActiveZones ?? 3,
             zoneTimeoutMs: cfgObj.zoneTimeoutMs ?? 3_600_000,
             minZoneVolume: cfgObj.minZoneVolume ?? 100,
@@ -678,6 +684,26 @@ export class Config {
             completionStopLossPercent:
                 cfgObj.completionStopLossPercent ?? 0.015,
             completionConfidenceBoost: cfgObj.completionConfidenceBoost ?? 0.2,
+
+            // Standardized zone enhancement configuration
+            useStandardizedZones: cfgObj.useStandardizedZones ?? false,
+            enhancementMode: cfgObj.enhancementMode ?? "disabled",
+            standardizedZoneConfig: cfgObj.standardizedZoneConfig ?? {
+                minZoneConfluenceCount: 2,
+                maxZoneConfluenceDistance: 3,
+                institutionalVolumeThreshold: 50,
+                passiveVolumeRatioThreshold: 1.5,
+                enableZoneConfluenceFilter: true,
+                enableInstitutionalVolumeFilter: false,
+                enableCrossTimeframeAnalysis: false,
+                confluenceConfidenceBoost: 0.1,
+                institutionalVolumeBoost: 0.1,
+                crossTimeframeBoost: 0.05,
+            },
+            minEnhancedConfidenceThreshold:
+                cfgObj.minEnhancedConfidenceThreshold ?? 0.3,
+            enhancementSignificanceBoost:
+                cfgObj.enhancementSignificanceBoost ?? true,
         };
     }
 
