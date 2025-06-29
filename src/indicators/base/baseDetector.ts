@@ -16,6 +16,8 @@ import {
 import type {
     EnrichedTradeEvent,
     AggressiveTrade,
+    StandardZoneData,
+    ZoneSnapshot,
 } from "../../types/marketEvents.js";
 
 import { DepthLevel } from "../../utils/interfaces.js";
@@ -1118,6 +1120,195 @@ export abstract class BaseDetector extends Detector implements IDetector {
             `[${this.constructor.name}] Reset adaptive thresholds`,
             { detectorId: this.id }
         );
+    }
+
+    // ========================================================================
+    // STANDARDIZED ZONE API METHODS (Phase 2.1)
+    // ========================================================================
+
+    /**
+     * Get standardized zone data from the most recent enriched trade event
+     * This provides access to the centralized zone calculations from OrderFlowPreprocessor
+     */
+    protected getStandardizedZones(
+        event: EnrichedTradeEvent
+    ): StandardZoneData | null {
+        return event.zoneData || null;
+    }
+
+    /**
+     * Get 5-tick zones (base zone size) for detector analysis
+     * @param event - The enriched trade event containing zone data
+     * @returns Array of 5-tick zone snapshots or empty array if not available
+     */
+    protected get5TickZones(event: EnrichedTradeEvent): ZoneSnapshot[] {
+        const zoneData = this.getStandardizedZones(event);
+        return zoneData?.zones5Tick || [];
+    }
+
+    /**
+     * Get 10-tick zones (2x base zone size) for detector analysis
+     * @param event - The enriched trade event containing zone data
+     * @returns Array of 10-tick zone snapshots or empty array if not available
+     */
+    protected get10TickZones(event: EnrichedTradeEvent): ZoneSnapshot[] {
+        const zoneData = this.getStandardizedZones(event);
+        return zoneData?.zones10Tick || [];
+    }
+
+    /**
+     * Get 20-tick zones (4x base zone size) for detector analysis
+     * @param event - The enriched trade event containing zone data
+     * @returns Array of 20-tick zone snapshots or empty array if not available
+     */
+    protected get20TickZones(event: EnrichedTradeEvent): ZoneSnapshot[] {
+        const zoneData = this.getStandardizedZones(event);
+        return zoneData?.zones20Tick || [];
+    }
+
+    /**
+     * Get adaptive zones (market-condition adjusted) for detector analysis
+     * @param event - The enriched trade event containing zone data
+     * @returns Array of adaptive zone snapshots or empty array if not available
+     */
+    protected getAdaptiveZones(event: EnrichedTradeEvent): ZoneSnapshot[] {
+        const zoneData = this.getStandardizedZones(event);
+        return zoneData?.adaptiveZones || [];
+    }
+
+    /**
+     * Find the zone snapshot that contains a specific price
+     * @param zones - Array of zone snapshots to search
+     * @param price - The price to locate within zones
+     * @returns Zone snapshot containing the price, or null if not found
+     */
+    protected findZoneContainingPrice(
+        zones: ZoneSnapshot[],
+        price: number
+    ): ZoneSnapshot | null {
+        for (const zone of zones) {
+            if (price >= zone.boundaries.min && price <= zone.boundaries.max) {
+                return zone;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Get zones within a specified distance from a center price
+     * @param zones - Array of zone snapshots to filter
+     * @param centerPrice - The center price to measure distance from
+     * @param maxDistance - Maximum distance in price units
+     * @returns Array of zones within the specified distance
+     */
+    protected getZonesNearPrice(
+        zones: ZoneSnapshot[],
+        centerPrice: number,
+        maxDistance: number
+    ): ZoneSnapshot[] {
+        return zones.filter((zone) => {
+            const zoneDistance = Math.abs(zone.priceLevel - centerPrice);
+            return zoneDistance <= maxDistance;
+        });
+    }
+
+    /**
+     * Get zones with volume above a specified threshold
+     * @param zones - Array of zone snapshots to filter
+     * @param minVolume - Minimum total volume threshold
+     * @param volumeType - Type of volume to check ('aggressive', 'passive', or 'total')
+     * @returns Array of zones meeting the volume criteria
+     */
+    protected getZonesByVolume(
+        zones: ZoneSnapshot[],
+        minVolume: number,
+        volumeType: "aggressive" | "passive" | "total" = "total"
+    ): ZoneSnapshot[] {
+        return zones.filter((zone) => {
+            let volume: number;
+            switch (volumeType) {
+                case "aggressive":
+                    volume = zone.aggressiveVolume;
+                    break;
+                case "passive":
+                    volume = zone.passiveVolume;
+                    break;
+                case "total":
+                    volume = zone.aggressiveVolume + zone.passiveVolume;
+                    break;
+            }
+            return volume >= minVolume;
+        });
+    }
+
+    /**
+     * Calculate volume imbalance for a zone (bid vs ask)
+     * @param zone - Zone snapshot to analyze
+     * @returns Imbalance ratio (-1 to 1, negative = ask dominant, positive = bid dominant), or null if no passive volume
+     */
+    protected calculateZoneImbalance(zone: ZoneSnapshot): number | null {
+        const totalPassive = zone.passiveBidVolume + zone.passiveAskVolume;
+        if (totalPassive === 0) return null; // Cannot calculate without passive volume data
+
+        return (zone.passiveBidVolume - zone.passiveAskVolume) / totalPassive;
+    }
+
+    /**
+     * Calculate aggressive buy/sell ratio for a zone
+     * @param zone - Zone snapshot to analyze
+     * @returns Buy ratio (0 to 1, where 1 = all buy volume, 0 = all sell volume), or null if no aggressive volume
+     */
+    protected calculateZoneBuyRatio(zone: ZoneSnapshot): number | null {
+        const totalAggressive =
+            zone.aggressiveBuyVolume + zone.aggressiveSellVolume;
+        if (totalAggressive === 0) return null; // Cannot calculate without aggressive volume data
+
+        return zone.aggressiveBuyVolume / totalAggressive;
+    }
+
+    /**
+     * Get zone configuration from standardized zone data
+     * @param event - The enriched trade event containing zone data
+     * @returns Zone configuration object or null if not available
+     */
+    protected getZoneConfig(event: EnrichedTradeEvent): {
+        baseTicks: number;
+        tickValue: number;
+        timeWindow: number;
+    } | null {
+        const zoneData = this.getStandardizedZones(event);
+        return zoneData?.zoneConfig || null;
+    }
+
+    /**
+     * Check if standardized zones are available in the trade event
+     * @param event - The enriched trade event to check
+     * @returns True if zone data is available, false otherwise
+     */
+    protected hasStandardizedZones(event: EnrichedTradeEvent): boolean {
+        return !!event.zoneData;
+    }
+
+    /**
+     * Get the most relevant zone size for this detector's current configuration
+     * Automatically selects between 5-tick, 10-tick, or 20-tick zones based on detector's zoneTicks setting
+     * @param event - The enriched trade event containing zone data
+     * @returns Array of zone snapshots matching the detector's preferred size
+     */
+    protected getPreferredZones(event: EnrichedTradeEvent): ZoneSnapshot[] {
+        const zoneData = this.getStandardizedZones(event);
+        if (!zoneData) return [];
+
+        const effectiveZoneTicks = this.getEffectiveZoneTicks();
+
+        // Map detector's zone ticks to standardized zone sizes
+        if (effectiveZoneTicks <= 5) {
+            return zoneData.zones5Tick;
+        } else if (effectiveZoneTicks <= 10) {
+            return zoneData.zones10Tick;
+        } else {
+            return zoneData.zones20Tick;
+        }
     }
 
     /**

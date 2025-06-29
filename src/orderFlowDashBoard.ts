@@ -48,6 +48,7 @@ import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
 
 // Zone-based Detector imports
 import { AccumulationZoneDetector } from "./indicators/accumulationZoneDetector.js";
+import { AccumulationZoneDetectorEnhanced } from "./indicators/accumulationZoneDetectorEnhanced.js";
 import { DistributionZoneDetector } from "./indicators/distributionZoneDetector.js";
 import type {
     AccumulationZone,
@@ -123,7 +124,9 @@ export class OrderFlowDashboard {
     // private supportResistanceDetector!: SupportResistanceDetector;
 
     // Zone-based Detectors (initialized in initializeDetectors)
-    private accumulationZoneDetector!: AccumulationZoneDetector;
+    private accumulationZoneDetector!:
+        | AccumulationZoneDetector
+        | AccumulationZoneDetectorEnhanced;
     private distributionZoneDetector!: DistributionZoneDetector;
 
     // Legacy detectors removed - replaced by zone-based architecture

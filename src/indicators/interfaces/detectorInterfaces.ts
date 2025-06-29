@@ -9,16 +9,23 @@ import { MarketRegime } from "../../types/signalTypes.js";
 import { RollingWindow } from "../../utils/rollingWindow.js";
 
 /**
- * Base detector interface
+ * Base detector interface - minimal common interface
  */
-export interface IDetector {
+export interface IBaseDetector {
+    readonly logger: import("../../infrastructure/loggerInterface.js").ILogger;
     onEnrichedTrade(event: EnrichedTradeEvent): void;
-    addTrade(tradeData: AggressiveTrade): void;
-    getStats(): DetectorStats;
-    cleanup(): void;
     markSignalConfirmed(zone: number, side: "buy" | "sell"): void;
     getStatus(): string;
     getId(): string;
+}
+
+/**
+ * Full detector interface - for BaseDetector implementations
+ */
+export interface IDetector extends IBaseDetector {
+    addTrade(tradeData: AggressiveTrade): void;
+    getStats(): DetectorStats;
+    cleanup(): void;
 }
 
 /**

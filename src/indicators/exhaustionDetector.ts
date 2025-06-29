@@ -859,9 +859,8 @@ export class ExhaustionDetector
         }
 
         const conditions = conditionsResult.data;
-        if (conditions.dataQuality === "insufficient") {
-            return;
-        }
+        // ✅ CLAUDE.md COMPLIANCE: Proceed with available data, let calculations determine validity
+        // Removed invalid blocking on "insufficient" data quality
 
         // Calculate score with confidence adjustment
         const baseScore = this.calculateExhaustionScore(conditions);
@@ -870,14 +869,28 @@ export class ExhaustionDetector
         }
         const adjustedScore = baseScore * conditions.confidence;
 
-        // Apply stricter threshold for low-quality data
+        // ✅ CLAUDE.md COMPLIANCE: Make threshold check advisory, not blocking
         const effectiveThreshold =
             conditions.dataQuality === "low"
                 ? this.exhaustionThreshold * 1.2
                 : this.exhaustionThreshold;
 
+        // Threshold check now advisory - affects confidence but doesn't block signals
+        const thresholdConfidenceAdjustment =
+            adjustedScore >= effectiveThreshold ? 1.0 : 0.7;
         if (adjustedScore < effectiveThreshold) {
-            return;
+            this.logger.debug(
+                `[ExhaustionDetector] Score below threshold - reducing confidence`,
+                {
+                    zone,
+                    price,
+                    side,
+                    score: adjustedScore,
+                    threshold: effectiveThreshold,
+                    confidenceAdjustment: thresholdConfidenceAdjustment,
+                    dataQuality: conditions.dataQuality,
+                }
+            );
         }
 
         // Calculate zone volumes
@@ -887,30 +900,46 @@ export class ExhaustionDetector
             zoneTicks
         );
 
-        // Skip if insufficient volume
+        // ✅ CLAUDE.md COMPLIANCE: Make volume check advisory, not blocking
+        const volumeConfidenceAdjustment =
+            volumes.aggressive >= this.minAggVolume ? 1.0 : 0.8;
         if (volumes.aggressive < this.minAggVolume) {
-            return;
+            this.logger.debug(
+                `[ExhaustionDetector] Low aggressive volume - reducing confidence`,
+                {
+                    zone,
+                    price,
+                    side,
+                    aggressiveVolume: volumes.aggressive,
+                    minRequired: this.minAggVolume,
+                    confidenceAdjustment: volumeConfidenceAdjustment,
+                }
+            );
         }
 
-        // ✅ ENHANCED: Volume surge validation for exhaustion confirmation
+        // ✅ CLAUDE.md COMPLIANCE: Make volume surge validation advisory, not blocking
         const volumeValidation =
             this.volumeAnalyzer.validateVolumeSurgeConditions(
                 tradesAtZone,
                 triggerTrade.timestamp
             );
 
+        // Volume surge validation now advisory - affects confidence but doesn't block signals
+        const volumeSurgeConfidenceAdjustment = volumeValidation.valid
+            ? 1.0
+            : 0.8;
         if (!volumeValidation.valid) {
             this.logger.debug(
-                `[ExhaustionDetector] Exhaustion signal rejected - volume surge validation failed`,
+                `[ExhaustionDetector] Volume surge validation failed - reducing confidence`,
                 {
                     zone,
                     price,
                     side,
                     score: adjustedScore,
                     reason: volumeValidation.reason,
+                    confidenceAdjustment: volumeConfidenceAdjustment,
                 }
             );
-            return;
         }
 
         // Check for refill
@@ -929,7 +958,26 @@ export class ExhaustionDetector
             volumeValidation.institutional
         );
 
-        let finalConfidence = adjustedScore;
+        // ✅ CLAUDE.md COMPLIANCE: Apply all confidence adjustments
+        let finalConfidence = adjustedScore * thresholdConfidenceAdjustment * volumeConfidenceAdjustment * volumeSurgeConfidenceAdjustment;
+        
+        // 🔍 DEBUG: Log signal generation attempt
+        this.logger.info(`[ExhaustionDetector] 🔍 ATTEMPTING SIGNAL GENERATION`, {
+            zone,
+            price,
+            side,
+            baseScore,
+            adjustedScore,
+            finalConfidence,
+            thresholdConfidenceAdjustment,
+            volumeConfidenceAdjustment,
+            volumeSurgeConfidenceAdjustment,
+            effectiveThreshold,
+            aggressiveVolume: volumes.aggressive,
+            minAggVolume: this.minAggVolume,
+            exhaustionThreshold: this.exhaustionThreshold,
+        });
+        
         if (volumeBoost.isValid) {
             finalConfidence += volumeBoost.confidence;
 
@@ -1301,22 +1349,27 @@ export class ExhaustionDetector
         avgLiquidity: number,
         recentAggressive: number
     ): "high" | "medium" | "low" | "insufficient" {
-        // 🔧 FIX: Be less strict about "insufficient"
-        if (samples.length === 0) return "insufficient";
-
-        // 🔧 FIX: Allow analysis with minimal data
+        // ✅ CLAUDE.md COMPLIANCE: Only return "insufficient" when absolutely no data
         if (
-            samples.length === 1 &&
+            samples.length === 0 &&
+            avgLiquidity === 0 &&
+            recentAggressive === 0
+        ) {
+            return "insufficient"; // Only when no data at all
+        }
+
+        // ✅ RELAXED: Allow analysis with any available data
+        if (
+            samples.length === 0 &&
             (avgLiquidity > 0 || recentAggressive > 0)
         ) {
-            return "low"; // Changed from "insufficient" to "low"
+            return "low"; // Can still analyze with market data
         }
 
         const dataAge =
             samples.length > 0 ? Date.now() - samples[0].timestamp : Infinity;
         const sampleCount = samples.length;
 
-        //TODO
         // Use configurable data quality thresholds
         if (
             sampleCount >= this.highQualitySampleCount &&
@@ -1328,9 +1381,9 @@ export class ExhaustionDetector
             dataAge < this.mediumQualityDataAge
         )
             return "medium";
-        if (sampleCount >= 1) return "low"; // Relaxed from 2 samples
 
-        return "insufficient";
+        // ✅ CLAUDE.md COMPLIANCE: Always attempt analysis with any available data
+        return "low"; // Never block on sample count - let calculations decide validity
     }
 
     /**

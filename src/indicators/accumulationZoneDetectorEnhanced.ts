@@ -14,16 +14,14 @@
 
 import { AccumulationZoneDetector } from "./accumulationZoneDetector.js";
 import { AccumulationZoneStandardizedEnhancement } from "./accumulationZoneDetector_standardizedEnhancement.js";
-import { EventEmitter } from "events";
+import { Detector } from "./base/detectorEnrichedTrade.js";
 import type {
     ZoneAnalysisResult,
     ZoneDetectorConfig,
     ZoneSignal,
     AccumulationZone,
 } from "../types/zoneTypes.js";
-import type {
-    EnrichedTradeEvent,
-} from "../types/marketEvents.js";
+import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type { StandardizedZoneAnalysisResult } from "./accumulationZoneDetector_standardizedEnhancement.js";
@@ -35,12 +33,10 @@ import type { StandardizedZoneAnalysisResult } from "./accumulationZoneDetector_
  * standardized zone enhancement capabilities without modifying the original
  * production-critical implementation.
  */
-export class AccumulationZoneDetectorEnhanced extends EventEmitter {
+export class AccumulationZoneDetectorEnhanced extends Detector {
     private readonly originalDetector: AccumulationZoneDetector;
     private readonly standardizedEnhancement?: AccumulationZoneStandardizedEnhancement;
     private readonly config: ZoneDetectorConfig;
-    private readonly logger: ILogger;
-    private readonly metrics: IMetricsCollector;
 
     // Feature flag and control
     private readonly useStandardizedZones: boolean;
@@ -58,10 +54,8 @@ export class AccumulationZoneDetectorEnhanced extends EventEmitter {
         logger: ILogger,
         metricsCollector: IMetricsCollector
     ) {
-        super();
+        super(id, logger, metricsCollector);
         this.config = config;
-        this.logger = logger;
-        this.metrics = metricsCollector;
 
         // Initialize original detector with original config
         this.originalDetector = new AccumulationZoneDetector(
@@ -144,7 +138,7 @@ export class AccumulationZoneDetectorEnhanced extends EventEmitter {
 
         try {
             this.enhancementCallCount++;
-            this.metrics.incrementMetric("signalsGenerated");
+            this.metricsCollector.incrementMetric("signalsGenerated");
 
             // Apply standardized zone enhancement
             const enhancedResult = this.enhanceWithStandardizedZones(
@@ -153,12 +147,12 @@ export class AccumulationZoneDetectorEnhanced extends EventEmitter {
             );
 
             this.enhancementSuccessCount++;
-            this.metrics.incrementMetric("signalsGenerated");
+            this.metricsCollector.incrementMetric("signalsGenerated");
 
             return enhancedResult;
         } catch (error) {
             this.enhancementErrorCount++;
-            this.metrics.incrementMetric("signalsGenerated");
+            this.metricsCollector.incrementMetric("signalsGenerated");
 
             this.logger.error(
                 "Standardized zone enhancement failed, falling back to original",
@@ -274,7 +268,7 @@ export class AccumulationZoneDetectorEnhanced extends EventEmitter {
                 (signal) => signal.confidence >= minConfidence
             );
 
-            this.metrics.incrementMetric("signalsGenerated");
+            this.metricsCollector.incrementMetric("signalsGenerated");
             this.logger.debug(
                 "Filtered signals based on standardized zone analysis",
                 {
@@ -287,7 +281,7 @@ export class AccumulationZoneDetectorEnhanced extends EventEmitter {
 
         // Track enhancement metrics
         if (enhancement.recommendedAction === "enhance") {
-            this.metrics.incrementMetric("signalsGenerated");
+            this.metricsCollector.incrementMetric("signalsGenerated");
         }
 
         return enhancedResult;
@@ -408,43 +402,48 @@ export class AccumulationZoneDetectorEnhanced extends EventEmitter {
     /**
      * Delegate all other methods to original detector for full compatibility
      */
-    
+
     // Required interface methods for compatibility with Detector interface
     public get id(): string {
-        return (this.originalDetector as any).id;
+        return (this.originalDetector as { id: string }).id;
     }
-    
-    public get metricsCollector(): IMetricsCollector {
-        return this.metrics;
-    }
-    
+
     public onEnrichedTrade(event: EnrichedTradeEvent): void {
         this.analyze(event);
     }
-    
+
     public getStatus(): string {
         return this.originalDetector.getStatus();
     }
-    
+
     public markSignalConfirmed(zone: number, side: "buy" | "sell"): void {
         return this.originalDetector.markSignalConfirmed(zone, side);
     }
-    
+
     public getId(): string {
         return this.originalDetector.getId();
     }
-    
+
     // Forward events from original detector
-    public on(event: string, listener: (...args: any[]) => void): this {
-        if (typeof (this.originalDetector as any).on === 'function') {
-            (this.originalDetector as any).on(event, listener);
+    public on(event: string, listener: (...args: unknown[]) => void): this {
+        const detector = this.originalDetector as {
+            on?: (
+                event: string,
+                listener: (...args: unknown[]) => void
+            ) => void;
+        };
+        if (typeof detector.on === "function") {
+            detector.on(event, listener);
         }
         return super.on(event, listener);
     }
-    
-    public emit(event: string, ...args: any[]): boolean {
-        if (typeof (this.originalDetector as any).emit === 'function') {
-            (this.originalDetector as any).emit(event, ...args);
+
+    public emit(event: string, ...args: unknown[]): boolean {
+        const detector = this.originalDetector as {
+            emit?: (event: string, ...args: unknown[]) => boolean;
+        };
+        if (typeof detector.emit === "function") {
+            detector.emit(event, ...args);
         }
         return super.emit(event, ...args);
     }

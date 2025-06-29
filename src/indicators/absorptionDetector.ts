@@ -1448,13 +1448,11 @@ export class AbsorptionDetector
      *
      * @param tradesAtZone Recent trades in the zone
      * @param zone Zone number
-     * @param price Current price level
      * @returns The absorbing side or null if no clear absorption
      */
     private getAbsorbingSideForZone(
         tradesAtZone: AggressiveTrade[],
-        zone: number,
-        price: number
+        zone: number
     ): "bid" | "ask" | null {
         // ✅ CLAUDE.md COMPLIANT: Determine dominant aggressive flow with null handling
         const dominantAggressiveSide =
@@ -1856,7 +1854,7 @@ export class AbsorptionDetector
         const price = +latestTrade.price.toFixed(this.pricePrecision);
 
         // ✅ ENHANCED: Use proper absorption detection logic based on dominant flow
-        const side = this.getAbsorbingSideForZone(tradesAtZone, zone, price);
+        const side = this.getAbsorbingSideForZone(tradesAtZone, zone);
 
         if (!side) {
             // No clear absorption detected - exit early

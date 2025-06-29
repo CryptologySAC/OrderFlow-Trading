@@ -3,7 +3,6 @@ import { randomUUID } from "crypto";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
-import { BaseDetector } from "../indicators/base/baseDetector.js";
 import {
     AbsorptionDetector,
     AbsorptionSettings,
@@ -24,12 +23,15 @@ import {
 import type {
     BaseDetectorSettings,
     DetectorStats,
+    IDetector,
+    IBaseDetector,
 } from "../indicators/interfaces/detectorInterfaces.js";
 import { SignalType } from "../types/signalTypes.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
 import { Config } from "../core/config.js";
 
 import { AccumulationZoneDetector } from "../indicators/accumulationZoneDetector.js";
+import { AccumulationZoneDetectorEnhanced } from "../indicators/accumulationZoneDetectorEnhanced.js";
 import { DistributionZoneDetector } from "../indicators/distributionZoneDetector.js";
 import { ZoneDetectorConfig } from "../types/zoneTypes.js";
 import { IOrderBookState } from "../market/orderBookState";
@@ -38,10 +40,7 @@ import { IOrderBookState } from "../market/orderBookState";
  * Production detector factory with monitoring, validation, and lifecycle management
  */
 export class DetectorFactory {
-    private static readonly instances = new Map<
-        string,
-        BaseDetector | AccumulationZoneDetector | DistributionZoneDetector
-    >();
+    private static readonly instances = new Map<string, IBaseDetector>();
     private static readonly healthChecks = new Map<string, HealthChecker>();
     private static globalConfig: ProductionConfig = {
         maxDetectors: 10,
@@ -162,7 +161,7 @@ export class DetectorFactory {
         settings: ZoneDetectorConfig,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
-    ): AccumulationZoneDetector {
+    ): AccumulationZoneDetector | AccumulationZoneDetectorEnhanced {
         const id = options.id || `accumulation-${Date.now()}`;
 
         this.validateCreationLimits();
@@ -173,23 +172,52 @@ export class DetectorFactory {
             "accumulation"
         ) as ZoneDetectorConfig;
 
-        const detector = new AccumulationZoneDetector(
-            id,
-            Config.SYMBOL,
-            Config.ACCUMULATION_ZONE_DETECTOR,
-            dependencies.logger,
-            dependencies.metricsCollector
-        );
+        // Check if standardized zones are enabled to determine detector type
+        const useEnhanced =
+            productionSettings.useStandardizedZones &&
+            productionSettings.enhancementMode !== "disabled";
+
+        let detector:
+            | AccumulationZoneDetector
+            | AccumulationZoneDetectorEnhanced;
+
+        if (useEnhanced) {
+            detector = new AccumulationZoneDetectorEnhanced(
+                id,
+                Config.SYMBOL,
+                productionSettings,
+                dependencies.logger,
+                dependencies.metricsCollector
+            );
+
+            dependencies.logger.info(
+                `[DetectorFactory] Created Enhanced AccumulationDetector`,
+                {
+                    id,
+                    enhancementMode: productionSettings.enhancementMode,
+                    standardizedZoneConfig:
+                        productionSettings.standardizedZoneConfig,
+                }
+            );
+        } else {
+            detector = new AccumulationZoneDetector(
+                id,
+                Config.SYMBOL,
+                productionSettings,
+                dependencies.logger,
+                dependencies.metricsCollector
+            );
+
+            dependencies.logger.info(
+                `[DetectorFactory] Created Standard AccumulationDetector`,
+                {
+                    id,
+                    settings: productionSettings,
+                }
+            );
+        }
 
         this.registerDetector(id, detector, dependencies, options);
-
-        dependencies.logger.info(
-            `[DetectorFactory] Created AccumulationDetector`,
-            {
-                id,
-                settings: productionSettings,
-            }
-        );
 
         return detector;
     }
@@ -395,23 +423,14 @@ export class DetectorFactory {
     /**
      * Get detector by ID
      */
-    public static getDetector(
-        id: string
-    ):
-        | BaseDetector
-        | AccumulationZoneDetector
-        | DistributionZoneDetector
-        | undefined {
+    public static getDetector(id: string): IBaseDetector | undefined {
         return this.instances.get(id);
     }
 
     /**
      * Get all active detectors
      */
-    public static getAllDetectors(): Map<
-        string,
-        BaseDetector | AccumulationZoneDetector | DistributionZoneDetector
-    > {
+    public static getAllDetectors(): Map<string, IDetector> {
         return new Map(this.instances);
     }
 
@@ -442,12 +461,17 @@ export class DetectorFactory {
             }
             this.instances.delete(id);
 
-            detector.logger?.info(`[DetectorFactory] Destroyed detector ${id}`);
+            // Safe logger access - guaranteed by IDetector interface
+            detector.logger.info(`[DetectorFactory] Destroyed detector ${id}`);
             return true;
         } catch (error) {
-            detector.logger?.error(
+            // Safe logger access - guaranteed by IDetector interface
+            detector.logger.error(
                 `[DetectorFactory] Error destroying detector ${id}`,
-                { error }
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
             );
             return false;
         }
@@ -526,6 +550,7 @@ export class DetectorFactory {
 
             const healthChecker = this.healthChecks.get(id);
             if (!healthChecker) {
+                // Safe logger access - guaranteed by IDetector interface
                 detector.logger.warn(
                     "Health checker not found for detector restart",
                     {
@@ -610,6 +635,9 @@ export class DetectorFactory {
                             },
                             correlationId
                         );
+                    }
+
+                    if (attempt === maxAttempts) {
                         return false;
                     }
                 }
@@ -767,10 +795,7 @@ export class DetectorFactory {
 
     private static registerDetector(
         id: string,
-        detector:
-            | BaseDetector
-            | AccumulationZoneDetector
-            | DistributionZoneDetector,
+        detector: IDetector,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions
     ): void {
@@ -820,10 +845,7 @@ class HealthChecker {
 
     constructor(
         private readonly detectorId: string,
-        private readonly detector:
-            | BaseDetector
-            | AccumulationZoneDetector
-            | DistributionZoneDetector,
+        private readonly detector: IDetector,
         private readonly dependencies: DetectorDependencies,
         private readonly config: HealthCheckConfig
     ) {}
@@ -937,7 +959,7 @@ class HealthChecker {
 export interface DetectorSuite {
     absorption: AbsorptionDetector;
     exhaustion: ExhaustionDetector;
-    accumulation: AccumulationZoneDetector;
+    accumulation: AccumulationZoneDetector | AccumulationZoneDetectorEnhanced;
     distribution: DistributionZoneDetector;
     cvd_confirmation: DeltaCVDConfirmation;
 }
@@ -952,10 +974,7 @@ export interface DetectorDependencies {
 export interface DetectorFactoryOptions {
     id?: string;
     customMonitoring?: (
-        detector:
-            | BaseDetector
-            | AccumulationZoneDetector
-            | DistributionZoneDetector,
+        detector: IDetector,
         metrics: IMetricsCollector
     ) => void;
 }

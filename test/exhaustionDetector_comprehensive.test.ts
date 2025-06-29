@@ -772,8 +772,13 @@ describe("ExhaustionDetector - Comprehensive Logic Tests", () => {
                 detectorAny.assessDataQuality(lowQualitySamples, 100, 50)
             ).toBe("low");
 
-            // Insufficient: no samples
+            // ✅ CLAUDE.md COMPLIANCE: Empty samples with market data should return "low", not "insufficient"
             expect(detectorAny.assessDataQuality([], 100, 50)).toBe(
+                "low" // Can still analyze with available market data
+            );
+
+            // Insufficient: only when absolutely no data at all
+            expect(detectorAny.assessDataQuality([], 0, 0)).toBe(
                 "insufficient"
             );
         });

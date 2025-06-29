@@ -64,10 +64,13 @@ describe("AccumulationZoneDetector - Integration Tests", () => {
                 mockLogger,
                 mockMetrics
             );
-            
+
             // Clear zone state in the detector's zone manager to prevent test pollution
             const detectorAny = detector as any;
-            if (detectorAny.zoneManager && detectorAny.zoneManager.clearAllZones) {
+            if (
+                detectorAny.zoneManager &&
+                detectorAny.zoneManager.clearAllZones
+            ) {
                 detectorAny.zoneManager.clearAllZones();
             }
 
