@@ -24,6 +24,37 @@ export interface PassiveLevel {
     addedBid?: number;
 }
 
+// Standardized zone data for unified detector access
+export interface ZoneSnapshot {
+    zoneId: string; // Unique zone identifier
+    priceLevel: number; // Zone center price
+    tickSize: number; // Tick size for this zone
+    aggressiveVolume: number; // Total aggressive volume in zone
+    passiveVolume: number; // Total passive volume in zone
+    aggressiveBuyVolume: number; // Aggressive buy volume
+    aggressiveSellVolume: number; // Aggressive sell volume
+    passiveBidVolume: number; // Passive bid volume
+    passiveAskVolume: number; // Passive ask volume
+    tradeCount: number; // Number of trades in zone
+    timespan: number; // Time span of zone data (ms)
+    boundaries: { min: number; max: number }; // Zone price boundaries
+    lastUpdate: number; // Last update timestamp
+    volumeWeightedPrice: number; // Volume weighted average price
+}
+
+// Zone data collection for multiple zone sizes
+export interface StandardZoneData {
+    zones5Tick: ZoneSnapshot[]; // 5-tick zones (base size)
+    zones10Tick: ZoneSnapshot[]; // 10-tick zones (2x base)
+    zones20Tick: ZoneSnapshot[]; // 20-tick zones (4x base)
+    adaptiveZones?: ZoneSnapshot[]; // Market-condition adapted zones
+    zoneConfig: {
+        baseTicks: number; // Base zone size in ticks
+        tickValue: number; // Value of one tick
+        timeWindow: number; // Time window for zone calculations
+    };
+}
+
 export interface EnrichedTradeEvent extends AggressiveTrade {
     passiveBidVolume: number;
     passiveAskVolume: number;
@@ -32,6 +63,9 @@ export interface EnrichedTradeEvent extends AggressiveTrade {
     depthSnapshot?: Map<number, PassiveLevel>;
     bestBid?: number;
     bestAsk?: number;
+
+    // NEW: Standardized zone data for all detectors
+    zoneData?: StandardZoneData;
 }
 
 export interface IndividualTrade {

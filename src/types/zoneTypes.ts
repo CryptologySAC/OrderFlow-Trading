@@ -1,5 +1,40 @@
 // src/types/zoneTypes.ts
 
+// NEW: Standardized zone configuration for all detectors
+export interface StandardZoneConfig {
+    baseTicks: number; // Base zone size in ticks (e.g., 5)
+    zoneMultipliers: number[]; // Zone size multipliers [1, 2, 4] for 5, 10, 20 tick zones
+    timeWindows: number[]; // Time windows for zone analysis [30s, 60s, 300s]
+    adaptiveMode: boolean; // Enable dynamic zone sizing based on market conditions
+    volumeThresholds: {
+        aggressive: number; // Volume threshold for aggressive classification
+        passive: number; // Volume threshold for passive classification
+        institutional: number; // Volume threshold for institutional classification
+    };
+    priceThresholds: {
+        tickValue: number; // Value of one tick in price units
+        minZoneWidth: number; // Minimum zone width in price units
+        maxZoneWidth: number; // Maximum zone width in price units
+    };
+    performanceConfig: {
+        maxZoneHistory: number; // Maximum number of zones to keep in history
+        cleanupInterval: number; // Cleanup interval for old zones (ms)
+        maxMemoryMB: number; // Maximum memory usage for zone cache
+    };
+}
+
+// Zone data cache for efficient detector access
+export interface ZoneHistory {
+    zoneId: string;
+    snapshots: ZoneSnapshot[];
+    createdAt: number;
+    lastAccess: number;
+    memoryUsage: number; // Estimated memory usage in bytes
+}
+
+// Import ZoneSnapshot from marketEvents to avoid circular dependency
+import type { ZoneSnapshot } from "./marketEvents.js";
+
 export interface AccumulationZone {
     // Zone identification
     id: string;
@@ -164,6 +199,29 @@ export interface ZoneDetectorConfig {
     completionBreakoutTargetPercent?: number; // Higher breakout target on completion (default 0.05)
     completionStopLossPercent?: number; // Stop loss on completion (default 0.015)
     completionConfidenceBoost?: number; // Confidence boost on completion (default 0.2)
+
+    // NEW: Reference to standardized zone configuration
+    useStandardizedZones?: boolean; // Whether to use centralized zone data
+    preferredZoneSize?: 1 | 2 | 4; // Preferred zone multiplier (1=base, 2=2x, 4=4x)
+
+    // Enhanced AccumulationZoneDetector standardized zone integration
+    standardizedZoneConfig?: {
+        minZoneConfluenceCount?: number; // Minimum zones overlapping for confluence (default: 2)
+        maxZoneConfluenceDistance?: number; // Max distance for zone confluence in ticks (default: 3)
+        institutionalVolumeThreshold?: number; // Threshold for institutional volume detection (default: 50)
+        passiveVolumeRatioThreshold?: number; // Min passive/aggressive ratio for accumulation (default: 1.5)
+        enableZoneConfluenceFilter?: boolean; // Filter signals by zone confluence (default: true)
+        enableInstitutionalVolumeFilter?: boolean; // Filter by institutional volume presence (default: true)
+        enableCrossTimeframeAnalysis?: boolean; // Analyze across multiple zone timeframes (default: true)
+        confluenceConfidenceBoost?: number; // Confidence boost for zone confluence (default: 0.2)
+        institutionalVolumeBoost?: number; // Confidence boost for institutional volume (default: 0.15)
+        crossTimeframeBoost?: number; // Confidence boost for cross-timeframe confirmation (default: 0.1)
+    };
+
+    // Enhancement control parameters
+    minEnhancedConfidenceThreshold?: number; // Minimum confidence for enhanced signals (default: 0.3)
+    enhancementSignificanceBoost?: boolean; // Whether to boost signal significance (default: true)
+    enhancementMode?: "disabled" | "testing" | "production"; // Enhancement mode control (default: 'disabled')
 }
 
 export interface ZoneQueryOptions {

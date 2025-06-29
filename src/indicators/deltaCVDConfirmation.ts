@@ -179,7 +179,7 @@ interface WindowState {
     burstHistory: { timestamp: number; volume: number; imbalance: number }[]; // detected bursts
 }
 
-const MIN_SAMPLES_FOR_STATS = 30;
+// MIN_SAMPLES_FOR_STATS constant removed - now configurable via minSamplesForStats setting
 const VOLATILITY_LOOKBACK_DEFAULT = 3600; // 1 hour
 const CLEANUP_INTERVAL_DEFAULT = 300; // 5 minutes
 
@@ -229,6 +229,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
     private readonly volatilityLookbackSec: number;
     private readonly priceCorrelationWeight: number;
     private readonly volumeConcentrationWeight: number;
+    private readonly minSamplesForStats: number;
     private readonly adaptiveThresholdMultiplier: number;
     private readonly maxDivergenceAllowed: number;
     private readonly stateCleanupIntervalSec: number;
@@ -340,6 +341,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
         this.priceCorrelationWeight = settings.priceCorrelationWeight ?? 0.3;
         this.volumeConcentrationWeight =
             settings.volumeConcentrationWeight ?? 0.2;
+        this.minSamplesForStats = settings.minSamplesForStats ?? 30;
         this.adaptiveThresholdMultiplier =
             settings.adaptiveThresholdMultiplier ?? 1.5;
         this.maxDivergenceAllowed = settings.maxDivergenceAllowed ?? 0.7;
@@ -1488,7 +1490,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
             }
 
             // Reset statistics if we don't have enough recent data
-            if (state.trades.length < MIN_SAMPLES_FOR_STATS) {
+            if (state.trades.length < this.minSamplesForStats) {
                 state.rollingMean = 0;
                 state.rollingVar = 0;
                 state.count = 0;
@@ -1725,6 +1727,13 @@ export class DeltaCVDConfirmation extends BaseDetector {
     /* ------------------------------------------------------------------ */
 
     private tryEmitSignal(now: number): void {
+        // 🔍 DEBUG: Log signal emission attempt
+        console.log("[DeltaCVD DEBUG] Signal emission attempt started:", {
+            windows: this.windows,
+            detectorId: this.getId(),
+            timestamp: now,
+        });
+
         // CRITICAL FIX: Always record that signal processing was attempted
         this.metricsCollector.incrementCounter(
             "cvd_signal_processing_attempts_total",
@@ -1739,7 +1748,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
         // Calculate CVD for all windows
         for (const w of this.windows) {
             const state = this.states.get(w)!;
-            if (state.trades.length < MIN_SAMPLES_FOR_STATS) {
+            if (state.trades.length < this.minSamplesForStats) {
                 this.metricsCollector.incrementCounter(
                     "cvd_signal_processing_insufficient_samples_total",
                     1
@@ -1750,6 +1759,16 @@ export class DeltaCVDConfirmation extends BaseDetector {
             // Enhanced trade/volume validation
             const result = this.validateTradeActivity(state, w);
             if (!result.valid) {
+                // 🔍 DEBUG: Log validation failures to identify early blockers
+                console.log(
+                    `[DeltaCVD DEBUG] Validation Failed for ${w}s window:`,
+                    {
+                        reason: result.reason,
+                        tradesCount: state.trades.length,
+                        windowSec: w,
+                        detectorId: this.getId(),
+                    }
+                );
                 this.metricsCollector.incrementCounter(
                     "cvd_signals_rejected_total",
                     1,
@@ -2636,6 +2655,23 @@ export class DeltaCVDConfirmation extends BaseDetector {
         }
 
         const shortestWindowZ = Math.abs(zScores[this.windows[0]]);
+
+        // 🔍 DEBUG: Log z-score threshold comparison to identify blocking
+        console.log("[DeltaCVD DEBUG] Z-Score Threshold Check:", {
+            shortestWindowZ: shortestWindowZ.toFixed(3),
+            adaptiveMinZ: adaptiveMinZ.toFixed(3),
+            minZ: this.minZ,
+            adaptiveMultiplier: this.adaptiveThresholdMultiplier,
+            volatilityRatio: (
+                this.marketRegime.volatility /
+                Math.max(this.marketRegime.baselineVolatility, 0.001)
+            ).toFixed(3),
+            passes: shortestWindowZ >= adaptiveMinZ,
+            blockerReason:
+                shortestWindowZ < adaptiveMinZ
+                    ? "Z_SCORE_TOO_LOW"
+                    : "Z_SCORE_OK",
+        });
 
         if (shortestWindowZ < adaptiveMinZ) {
             return { valid: false, reason: "below_adaptive_threshold" };

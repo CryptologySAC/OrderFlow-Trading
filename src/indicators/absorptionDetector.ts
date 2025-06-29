@@ -1061,6 +1061,225 @@ export class AbsorptionDetector
     }
 
     /**
+     * 🎯 PROOF OF CONCEPT: Enhanced zone analysis using standardized zone data (Phase 2.4)
+     *
+     * This method demonstrates how AbsorptionDetector can leverage centralized zone data
+     * to enhance signal quality while maintaining existing functionality.
+     *
+     * Key benefits:
+     * - Access to cross-detector zone insights
+     * - Rich volume data aggregated across multiple timeframes
+     * - Standardized zone boundaries for consistent analysis
+     * - Performance optimized zone calculations
+     *
+     * @param event - The enriched trade event with standardized zone data
+     */
+    private enhanceAnalysisWithStandardizedZones(
+        event: EnrichedTradeEvent
+    ): void {
+        // Only proceed if standardized zones are available
+        if (!this.hasStandardizedZones(event)) {
+            return;
+        }
+
+        try {
+            // Get zones that match our current detector configuration (5-tick zones by default)
+            const preferredZones = this.getPreferredZones(event);
+
+            // Find the zone containing the current trade price
+            const currentZone = this.findZoneContainingPrice(
+                preferredZones,
+                event.price
+            );
+
+            if (!currentZone) {
+                return; // No zone data available for this price
+            }
+
+            // 🎯 ENHANCED ANALYSIS: Calculate improved absorption metrics using standardized data
+            const zoneImbalance = this.calculateZoneImbalance(currentZone);
+            const zoneBuyRatio = this.calculateZoneBuyRatio(currentZone);
+
+            // Store enhanced metrics for potential signal enhancement (proof of concept)
+            if (zoneImbalance !== null && zoneBuyRatio !== null) {
+                // Calculate enhanced absorption score combining traditional and standardized metrics
+                const enhancedScore = this.calculateEnhancedAbsorptionScore(
+                    currentZone,
+                    zoneImbalance,
+                    zoneBuyRatio,
+                    event
+                );
+
+                // Store for potential use in signal generation
+                this.storeEnhancedZoneMetrics(
+                    currentZone,
+                    enhancedScore,
+                    event
+                );
+            }
+
+            // 🎯 MULTI-ZONE INSIGHT: Analyze neighboring zones for context
+            const nearbyZones = this.getZonesNearPrice(
+                preferredZones,
+                event.price,
+                0.05
+            );
+            if (nearbyZones.length > 1) {
+                this.analyzeZoneClusterPatterns(nearbyZones, event);
+            }
+        } catch (error) {
+            // Fail gracefully - enhanced analysis is supplementary
+            this.logger.warn("Enhanced zone analysis failed", {
+                error: error instanceof Error ? error.message : String(error),
+                price: event.price,
+                timestamp: event.timestamp,
+            });
+        }
+    }
+
+    /**
+     * Calculate enhanced absorption score using both traditional and standardized zone metrics
+     */
+    private calculateEnhancedAbsorptionScore(
+        zone: import("../types/marketEvents.js").ZoneSnapshot,
+        imbalance: number,
+        buyRatio: number,
+        event: EnrichedTradeEvent
+    ): number {
+        // Traditional absorption logic (maintain existing behavior)
+        const traditionalZone = this.calculateZone(event.price);
+        const traditionalMetrics =
+            this.getTraditionalAbsorptionMetrics(traditionalZone);
+
+        // Enhanced scoring using standardized zone data
+        const volumeWeight = FinancialMath.safeDivide(
+            zone.aggressiveVolume,
+            zone.passiveVolume,
+            0
+        );
+
+        const imbalanceWeight = FinancialMath.calculateAbs(imbalance);
+        const buyRatioDeviation = FinancialMath.calculateAbs(buyRatio - 0.5); // Deviation from neutral
+
+        // Combine traditional score with enhanced metrics (weighted approach)
+        const enhancedComponent = FinancialMath.safeMultiply(
+            FinancialMath.safeAdd(volumeWeight, imbalanceWeight),
+            buyRatioDeviation
+        );
+
+        // Weight: 80% traditional (production stability) + 20% enhanced (supplementary insight)
+        const traditionalWeight = 0.8;
+        const enhancedWeight = 0.2;
+
+        return FinancialMath.safeAdd(
+            FinancialMath.safeMultiply(
+                traditionalMetrics.score,
+                traditionalWeight
+            ),
+            FinancialMath.safeMultiply(enhancedComponent, enhancedWeight)
+        );
+    }
+
+    /**
+     * Get traditional absorption metrics for comparison with enhanced metrics
+     */
+    private getTraditionalAbsorptionMetrics(zone: number): {
+        score: number;
+        confidence: number;
+    } {
+        // Access existing zone data structures
+        const zoneHistory = this.zonePassiveHistory.get(zone);
+        const zoneArray = zoneHistory?.toArray() ?? [];
+
+        if (zoneArray.length === 0) {
+            return { score: 0, confidence: 0 };
+        }
+
+        // Calculate traditional absorption score based on passive volume changes
+        const recent = zoneArray.slice(-3); // Last 3 samples
+        if (recent.length < 2) {
+            return { score: 0, confidence: 0 };
+        }
+
+        const volumeChange = FinancialMath.safeSubtract(
+            recent[recent.length - 1].total,
+            recent[0].total
+        );
+
+        const score = FinancialMath.safeDivide(
+            volumeChange,
+            recent[0].total,
+            0
+        );
+        const confidence = FinancialMath.safeDivide(recent.length, 3, 0);
+
+        return { score: FinancialMath.calculateAbs(score), confidence };
+    }
+
+    /**
+     * Store enhanced zone metrics for potential signal enhancement
+     */
+    private storeEnhancedZoneMetrics(
+        zone: import("../types/marketEvents.js").ZoneSnapshot,
+        enhancedScore: number,
+        event: EnrichedTradeEvent
+    ): void {
+        // Store in a simple tracking structure (proof of concept)
+        // In production, this could be integrated with existing signal scoring logic
+        const enhancedMetric = {
+            zoneId: zone.zoneId,
+            enhancedScore,
+            timestamp: event.timestamp,
+            price: event.price,
+            aggressiveVolume: zone.aggressiveVolume,
+            passiveVolume: zone.passiveVolume,
+        };
+
+        // Log for analysis (proof of concept - could be stored in detector state)
+        if (enhancedScore > 0.5) {
+            // Only log significant scores
+            this.logger.debug("Enhanced absorption metric", enhancedMetric);
+        }
+    }
+
+    /**
+     * Analyze patterns across multiple nearby zones
+     */
+    private analyzeZoneClusterPatterns(
+        zones: import("../types/marketEvents.js").ZoneSnapshot[],
+        event: EnrichedTradeEvent
+    ): void {
+        if (zones.length < 2) return;
+
+        // Calculate cluster-wide metrics
+        const totalAggressive = zones.reduce(
+            (sum, z) => FinancialMath.safeAdd(sum, z.aggressiveVolume),
+            0
+        );
+        const totalPassive = zones.reduce(
+            (sum, z) => FinancialMath.safeAdd(sum, z.passiveVolume),
+            0
+        );
+
+        const clusterRatio = FinancialMath.safeDivide(
+            totalAggressive,
+            totalPassive,
+            0
+        );
+
+        // Log cluster insights (proof of concept)
+        if (clusterRatio > 1.5 || clusterRatio < 0.5) {
+            // Significant imbalance
+            this.logger.debug("Zone cluster imbalance detected", {
+                zoneCount: zones.length,
+                clusterRatio,
+                price: event.price,
+                timestamp: event.timestamp,
+            });
+        }
+    }
+
+    /**
      * Get absorbing (passive) side for absorption signals - LEGACY METHOD
      *
      * @deprecated Use getAbsorbingSideForZone() for proper flow analysis
@@ -1263,31 +1482,8 @@ export class AbsorptionDetector
             return absorbingSide;
         }
 
-        // Fallback: Check explicit absorption conditions
-        const bidAbsorption = this.checkAbsorptionConditions(
-            price,
-            "bid",
-            zone
-        );
-        const askAbsorption = this.checkAbsorptionConditions(
-            price,
-            "ask",
-            zone
-        );
-
-        if (bidAbsorption && !askAbsorption) {
-            return "bid";
-        }
-        if (askAbsorption && !bidAbsorption) {
-            return "ask";
-        }
-        if (bidAbsorption && askAbsorption) {
-            // Both showing absorption - try to resolve by strength
-            const resolvedSide = this.resolveConflictingAbsorption(zone);
-            return resolvedSide; // May be null if resolution fails
-        }
-
-        return null; // No clear absorption
+        // ✅ CLAUDE.md COMPLIANT: No fallbacks - either primary logic works or return null
+        return null; // No absorption detected via price efficiency
     }
 
     /**

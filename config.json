@@ -18,6 +18,28 @@
     "alertCooldownMs": 300000,
     "maxStorageTime": 5400000,
 
+    "standardZoneConfig": {
+        "baseTicks": 5,
+        "zoneMultipliers": [1, 2, 4],
+        "timeWindows": [30000, 60000, 300000],
+        "adaptiveMode": false,
+        "volumeThresholds": {
+            "aggressive": 20,
+            "passive": 40,
+            "institutional": 50
+        },
+        "priceThresholds": {
+            "tickValue": 0.01,
+            "minZoneWidth": 0.01,
+            "maxZoneWidth": 0.2
+        },
+        "performanceConfig": {
+            "maxZoneHistory": 1000,
+            "cleanupInterval": 300000,
+            "maxMemoryMB": 50
+        }
+    },
+
     "marketDataStorage": {
         "enabled": true,
         "dataDirectory": "./backtesting_data",
@@ -69,7 +91,24 @@
                 "takeProfitPercentAbove": 0.03,
                 "completionBreakoutTargetPercent": 0.05,
                 "completionStopLossPercent": 0.015,
-                "completionConfidenceBoost": 0.2
+                "completionConfidenceBoost": 0.2,
+
+                "useStandardizedZones": false,
+                "enhancementMode": "disabled",
+                "standardizedZoneConfig": {
+                    "minZoneConfluenceCount": 2,
+                    "maxZoneConfluenceDistance": 3,
+                    "institutionalVolumeThreshold": 50,
+                    "passiveVolumeRatioThreshold": 1.5,
+                    "enableZoneConfluenceFilter": true,
+                    "enableInstitutionalVolumeFilter": true,
+                    "enableCrossTimeframeAnalysis": true,
+                    "confluenceConfidenceBoost": 0.2,
+                    "institutionalVolumeBoost": 0.15,
+                    "crossTimeframeBoost": 0.1
+                },
+                "minEnhancedConfidenceThreshold": 0.3,
+                "enhancementSignificanceBoost": true
             },
             "distribution": {
                 "minZoneStrength": 0.8,
@@ -401,16 +440,17 @@
 
             "deltaCvdConfirmation": {
                 "windowsSec": [60, 300],
-                "minZ": 1.2,
+                "minZ": 0.6,
                 "priceCorrelationWeight": 0.3,
                 "volumeConcentrationWeight": 0.2,
-                "adaptiveThresholdMultiplier": 1.5,
+                "adaptiveThresholdMultiplier": 1.0,
                 "eventCooldownMs": 15000,
                 "maxZones": 50,
                 "zoneAgeLimit": 1800000,
 
-                "minTradesPerSec": 0.15,
-                "minVolPerSec": 0.7,
+                "minTradesPerSec": 0.1,
+                "minVolPerSec": 0.5,
+                "minSamplesForStats": 15,
                 "pricePrecision": 2,
 
                 "volatilityLookbackSec": 3600,
@@ -431,8 +471,8 @@
                 "divergenceThreshold": 0.3,
                 "divergenceLookbackSec": 60,
 
-                "enableDepthAnalysis": true,
-                "usePassiveVolume": true,
+                "enableDepthAnalysis": false,
+                "usePassiveVolume": false,
                 "maxOrderbookAge": 5000,
 
                 "absorptionCVDThreshold": 75,
