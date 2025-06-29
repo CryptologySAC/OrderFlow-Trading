@@ -1199,7 +1199,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
             const sustainedBuying = [];
             for (let i = 0; i < 150; i++) {
                 const timeOffset = i * 800; // Every 800ms for 2 minutes
-                const priceProgress = i * 0.001; // Gradual price increase (tick-aligned)
+                const priceProgress = Math.floor(i / 10) * 0.01; // Gradual price increase (FIXED: properly tick-aligned to 0.01, slower progression)
 
                 let size = 2.0 + Math.random() * 3.0; // Base retail size
 
@@ -1212,7 +1212,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                     basePrice + priceProgress,
                     size,
                     false, // Consistent buying
-                    baseTime - 120000 + timeOffset,
+                    baseTime - 119200 + timeOffset, // FIXED: End at baseTime (now) instead of 800ms ago
                     100 + i, // Increasing passive absorption
                     50 - i * 0.3 // Decreasing ask liquidity
                 );
@@ -1227,8 +1227,15 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
             expect(detailedState.states).toHaveLength(3);
 
             // All timeframes should have substantial trade counts
-            detailedState.states.forEach((state) => {
-                expect(state.tradesCount).toBeGreaterThan(30);
+            // Note: Shortest window (30s) may have fewer trades due to time distribution
+            detailedState.states.forEach((state, index) => {
+                if (index === 0) {
+                    // 30-second window - should have ~37 trades (30s / 0.8s = 37.5)
+                    expect(state.tradesCount).toBeGreaterThan(30);
+                } else {
+                    // 60s and 120s windows should have more trades
+                    expect(state.tradesCount).toBeGreaterThan(30);
+                }
             });
         });
 

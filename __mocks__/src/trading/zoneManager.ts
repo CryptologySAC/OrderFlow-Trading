@@ -112,32 +112,7 @@ export class ZoneManager {
         return this.zones.get(zoneId) || null;
     });
 
-    getActiveZones(symbol?: string) {
-        try {
-            const activeZones = Array.from(this.zones.values()).filter(
-                (zone) => {
-                    // If symbol is provided, filter by symbol
-                    if (symbol && zone.symbol !== symbol) {
-                        return false;
-                    }
-                    return zone.isActive;
-                }
-            );
-            console.log(
-                `[MOCK] getActiveZones called for symbol ${symbol}, found ${activeZones.length} active zones`
-            );
-            console.log(`[MOCK] Total zones in manager: ${this.zones.size}`);
-            Array.from(this.zones.values()).forEach((zone, index) => {
-                console.log(
-                    `[MOCK] Zone ${index}: id=${zone.id}, symbol=${zone.symbol}, isActive=${zone.isActive}`
-                );
-            });
-            return activeZones;
-        } catch (error) {
-            console.log(`[MOCK] Error in getActiveZones:`, error);
-            return [];
-        }
-    }
+    getActiveZones = vi.fn().mockReturnValue([]);
 
     getActiveZoneCount = vi.fn().mockImplementation(() => {
         return this.getActiveZones().length;

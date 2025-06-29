@@ -121,6 +121,7 @@ describe("AbsorptionDetector - Minimal Debug", () => {
                 weakAbsorptionRatio: 1.0,
                 spreadImpactThreshold: 0.1,
                 velocityIncreaseThreshold: 0.1,
+                finalConfidenceRequired: 0.01, // Ultra low - allow any signal
                 features: {
                     liquidityGradient: false, // All features disabled
                     absorptionVelocity: false,

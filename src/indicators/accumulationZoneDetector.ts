@@ -1056,9 +1056,29 @@ export class AccumulationZoneDetector extends ZoneDetector {
             // Update zone with new candidate data through zone manager
             const candidateTrades = candidate.trades.getAll();
 
+            // 🔧 FIX: Exclude trigger trade to prevent double-counting
+            // The trigger trade has already been processed via updateZone() before merge
+            const tradesToMerge = candidateTrades.filter(
+                (candidateTrade) =>
+                    !(
+                        candidateTrade.timestamp === trade.timestamp &&
+                        candidateTrade.price === trade.price &&
+                        candidateTrade.quantity === trade.quantity
+                    )
+            );
+
+            this.logger.debug("Filtering trades for merge", {
+                component: "AccumulationZoneDetector",
+                totalCandidateTrades: candidateTrades.length,
+                tradesAfterFiltering: tradesToMerge.length,
+                triggerTradeTimestamp: trade.timestamp,
+                triggerTradePrice: trade.price,
+                triggerTradeQuantity: trade.quantity,
+            });
+
             // 🔧 FIX: Expand zone price range to accommodate candidate trades BEFORE adding them
             // This prevents isTradeInZone() from rejecting trades from overlapping candidates
-            const candidatePrices = candidateTrades.map((t) => t.price);
+            const candidatePrices = tradesToMerge.map((t) => t.price);
             const allPrices = [...candidatePrices, trade.price];
 
             // Expand zone range for each unique price level in the candidate
@@ -1080,8 +1100,8 @@ export class AccumulationZoneDetector extends ZoneDetector {
                 }
             }
 
-            // Add candidate trades to existing zone
-            for (const candidateTrade of candidateTrades) {
+            // Add candidate trades to existing zone (excluding trigger trade)
+            for (const candidateTrade of tradesToMerge) {
                 const updateResult = this.zoneManager.updateZone(
                     existingZone.id,
                     candidateTrade

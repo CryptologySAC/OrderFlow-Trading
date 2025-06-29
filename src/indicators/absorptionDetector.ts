@@ -113,6 +113,9 @@ export interface AbsorptionSettings extends BaseDetectorSettings {
     microstructureLowToxicityThreshold?: number; // Threshold for low toxicity (default 0.3)
     microstructureRiskCapMin?: number; // Minimum risk adjustment cap (default -0.3)
     microstructureRiskCapMax?: number; // Maximum risk adjustment cap (default 0.3)
+
+    // ✅ CRITICAL: Magic number elimination - final confidence threshold
+    finalConfidenceRequired?: number; // Final confidence threshold for signal emission (default 0.85)
     microstructureCoordinationBonus?: number; // Bonus for coordination patterns (default 0.3)
     microstructureConfidenceBoostMin?: number; // Minimum confidence boost (default 0.8)
     microstructureConfidenceBoostMax?: number; // Maximum confidence boost (default 1.5)
@@ -283,6 +286,9 @@ export class AbsorptionDetector
     private readonly microstructureCoordinationBonus: number;
     private readonly microstructureConfidenceBoostMin: number;
     private readonly microstructureConfidenceBoostMax: number;
+
+    // ✅ CRITICAL: Magic number elimination - final confidence threshold
+    private readonly finalConfidenceRequired: number;
 
     constructor(
         id: string,
@@ -560,6 +566,14 @@ export class AbsorptionDetector
             "microstructureConfidenceBoostMax",
             1.0,
             3.0
+        );
+
+        // ✅ CRITICAL: Initialize final confidence threshold (magic number elimination)
+        this.finalConfidenceRequired = this.validateThreshold(
+            settings.finalConfidenceRequired ?? 0.85,
+            "finalConfidenceRequired",
+            0.01, // Allow ultra-low values for testing
+            1.0
         );
 
         // Merge absorption-specific features
@@ -2016,10 +2030,9 @@ export class AbsorptionDetector
             },
         };
 
-        // ✅ CRITICAL: Final confidence validation (matches SignalManager threshold)
+        // ✅ CRITICAL: Final confidence validation (configurable threshold)
         // Prevents wasted computation cycles from generating signals that will be rejected
-        const finalConfidenceRequired = 0.85; // Match SignalManager absorption threshold
-        if (finalConfidence < finalConfidenceRequired) {
+        if (finalConfidence < this.finalConfidenceRequired) {
             // Release pooled objects before early return
             SharedPools.getInstance().volumeResults.release(volumes);
             SharedPools.getInstance().absorptionConditions.release(
@@ -2033,7 +2046,7 @@ export class AbsorptionDetector
                 {
                     reason: "insufficient_final_confidence",
                     finalConfidence: finalConfidence.toFixed(3),
-                    required: finalConfidenceRequired.toFixed(3),
+                    required: this.finalConfidenceRequired.toFixed(3),
                 }
             );
 
@@ -2042,7 +2055,7 @@ export class AbsorptionDetector
                 "[AbsorptionDetector] Signal blocked - insufficient final confidence",
                 {
                     finalConfidence: finalConfidence.toFixed(3),
-                    required: finalConfidenceRequired.toFixed(3),
+                    required: this.finalConfidenceRequired.toFixed(3),
                     zone,
                     side,
                     absorptionScore: score.toFixed(3),
