@@ -35,7 +35,7 @@
         "update": "npx npm-check-updates -u",
         "prepare": "husky",
         "build": "yarn format && tsc -p tsconfig.build.json",
-        "test": "vitest --run --silent",
+        "test": "vitest --run",
         "test:coverage": "vitest run --coverage",
         "test:deltacvd-ab": "tsx scripts/runDeltaCVDABTest.ts",
         "test:deltacvd-ab:all": "tsx scripts/runDeltaCVDABTest.ts --profile all --parallel",
