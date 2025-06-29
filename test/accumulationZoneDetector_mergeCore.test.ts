@@ -216,8 +216,12 @@ describe("AccumulationZoneDetector - Core Merge Functionality", () => {
             mockMetrics
         );
 
-        // Clear any existing zones from previous tests
-        // Zones are cleared by vi.clearAllMocks() above
+        // Clear zone state in the detector's zone manager to prevent test pollution
+        // Access the detector's internal zoneManager and clear zones
+        const detectorAny = detector as any;
+        if (detectorAny.zoneManager && detectorAny.zoneManager.clearAllZones) {
+            detectorAny.zoneManager.clearAllZones();
+        }
     });
 
     describe("Zone Merge Logic Validation", () => {

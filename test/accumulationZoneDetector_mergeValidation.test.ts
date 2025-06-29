@@ -145,6 +145,9 @@ describe("AccumulationZoneDetector - Zone Merge Validation", () => {
     let mockMetrics: MetricsCollector;
 
     beforeEach(() => {
+        // Clear all mocks and reset state to prevent test pollution
+        vi.clearAllMocks();
+        
         mockLogger = {
             info: vi.fn(),
             warn: vi.fn(),
@@ -188,6 +191,13 @@ describe("AccumulationZoneDetector - Zone Merge Validation", () => {
             mockLogger,
             mockMetrics
         );
+        
+        // Clear zone state in the detector's zone manager to prevent test pollution
+        // Access the detector's internal zoneManager and clear zones
+        const detectorAny = detector as any;
+        if (detectorAny.zoneManager && detectorAny.zoneManager.clearAllZones) {
+            detectorAny.zoneManager.clearAllZones();
+        }
     });
 
     describe("Zone Conflict Resolution and Merge Logic", () => {
