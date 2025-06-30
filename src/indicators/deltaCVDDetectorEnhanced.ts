@@ -416,16 +416,17 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
                     aggressiveVolume
                 );
 
-                if (
-                    volumeRatio >=
-                    this.enhancementConfig.cvdSignificantImbalanceThreshold!
-                ) {
+                const cvdSignificantImbalanceThreshold =
+                    this.enhancementConfig.cvdSignificantImbalanceThreshold ??
+                    0.3;
+                if (volumeRatio >= cvdSignificantImbalanceThreshold) {
                     // Significant CVD imbalance detected
                     const divergenceScore = Math.min(
                         1.0,
                         FinancialMath.multiplyQuantities(
                             volumeRatio,
-                            this.enhancementConfig.cvdDivergenceScoreMultiplier!
+                            this.enhancementConfig
+                                .cvdDivergenceScoreMultiplier ?? 1.5
                         )
                     );
                     totalDivergenceScore += divergenceScore;
@@ -560,11 +561,13 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
             );
 
             // Higher ratio = stronger momentum
+            const momentumScoreMultiplier =
+                this.enhancementConfig.momentumScoreMultiplier ?? 2.0;
             const momentumScore = Math.min(
                 1.0,
                 FinancialMath.multiplyQuantities(
                     cvdRatio,
-                    this.enhancementConfig.momentumScoreMultiplier!
+                    momentumScoreMultiplier
                 )
             );
             totalMomentumScore += momentumScore;

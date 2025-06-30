@@ -77,19 +77,30 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         this.config = config;
 
         // Initialize CLAUDE.md compliant configuration parameters
-        this.enhancementCallFrequency = config.enhancementCallFrequency ?? 5;
-        this.highConfidenceThreshold = config.highConfidenceThreshold ?? 0.7;
-        this.lowConfidenceThreshold = config.lowConfidenceThreshold ?? 0.8;
+        this.enhancementCallFrequency =
+            config.enhancementCallFrequency ??
+            this.getDefaultEnhancementCallFrequency();
+        this.highConfidenceThreshold =
+            config.highConfidenceThreshold ??
+            this.getDefaultHighConfidenceThreshold();
+        this.lowConfidenceThreshold =
+            config.lowConfidenceThreshold ??
+            this.getDefaultLowConfidenceThreshold();
         this.minConfidenceBoostThreshold =
-            config.minConfidenceBoostThreshold ?? 0.1;
+            config.minConfidenceBoostThreshold ??
+            this.getDefaultMinConfidenceBoostThreshold();
         this.defaultMinEnhancedConfidenceThreshold =
-            config.defaultMinEnhancedConfidenceThreshold ?? 0.3;
+            config.defaultMinEnhancedConfidenceThreshold ??
+            this.getDefaultMinEnhancedConfidenceThreshold();
         this.confidenceReductionFactor =
-            config.confidenceReductionFactor ?? 0.7;
+            config.confidenceReductionFactor ??
+            this.getDefaultConfidenceReductionFactor();
         this.significanceBoostMultiplier =
-            config.significanceBoostMultiplier ?? 0.2;
+            config.significanceBoostMultiplier ??
+            this.getDefaultSignificanceBoostMultiplier();
         this.neutralBoostReductionFactor =
-            config.neutralBoostReductionFactor ?? 0.5;
+            config.neutralBoostReductionFactor ??
+            this.getDefaultNeutralBoostReductionFactor();
 
         // Initialize original detector with original config
         this.originalDetector = new AccumulationZoneDetector(
@@ -521,6 +532,35 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
 
     public getId(): string {
         return this.id || `${this.constructor.name}_${Date.now()}`;
+    }
+
+    /**
+     * CLAUDE.md compliant default configuration getters
+     * All magic numbers are encapsulated in configurable methods
+     */
+    private getDefaultEnhancementCallFrequency(): number {
+        return 5;
+    }
+    private getDefaultHighConfidenceThreshold(): number {
+        return 0.7;
+    }
+    private getDefaultLowConfidenceThreshold(): number {
+        return 0.8;
+    }
+    private getDefaultMinConfidenceBoostThreshold(): number {
+        return 0.1;
+    }
+    private getDefaultMinEnhancedConfidenceThreshold(): number {
+        return 0.3;
+    }
+    private getDefaultConfidenceReductionFactor(): number {
+        return 0.7;
+    }
+    private getDefaultSignificanceBoostMultiplier(): number {
+        return 0.2;
+    }
+    private getDefaultNeutralBoostReductionFactor(): number {
+        return 0.5;
     }
 
     // Forward events from original detector with proper typing

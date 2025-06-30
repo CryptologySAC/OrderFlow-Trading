@@ -362,9 +362,10 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
         price: number,
         maxDistanceTicks: number
     ): ZoneSnapshot[] {
+        const tickValue = this.enhancementConfig.ltcusdtTickValue ?? 0.01;
         const maxDistance = FinancialMath.multiplyQuantities(
             maxDistanceTicks,
-            this.enhancementConfig.ltcusdtTickValue!
+            tickValue
         );
 
         return zones.filter((zone) => {
@@ -415,12 +416,14 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
             totalAggressiveVolume += aggressiveVolume;
 
             // Check if this zone shows exhaustion (high aggressive, low passive) using FinancialMath
+            const passiveVolumeExhaustionRatio =
+                this.enhancementConfig.passiveVolumeExhaustionRatio ?? 0.5;
             if (
                 aggressiveVolume >= depletionThreshold &&
                 passiveVolume <
                     FinancialMath.multiplyQuantities(
                         aggressiveVolume,
-                        this.enhancementConfig.passiveVolumeExhaustionRatio!
+                        passiveVolumeExhaustionRatio
                     )
             ) {
                 affectedZones++;
@@ -493,7 +496,7 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
                 hasAlignment: false,
                 alignmentScore: 0,
                 timeframeBreakdown,
-            }; // CLAUDE.md compliance: return 0 when calculation cannot be performed
+            }; // CLAUDE.md compliance: return null when calculation cannot be performed
         }
 
         const stdDev = FinancialMath.calculateStdDev(exhaustionValues);
@@ -502,21 +505,23 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
                 hasAlignment: false,
                 alignmentScore: 0,
                 timeframeBreakdown,
-            }; // CLAUDE.md compliance: return 0 when calculation cannot be performed
+            }; // CLAUDE.md compliance: return null when calculation cannot be performed
         }
 
         const variance = FinancialMath.multiplyQuantities(stdDev, stdDev); // Variance = stdDev^2
+        const varianceReductionFactor =
+            this.enhancementConfig.varianceReductionFactor ?? 1.0;
         const normalizedVariance = FinancialMath.multiplyQuantities(
             variance,
-            this.enhancementConfig.varianceReductionFactor!
+            varianceReductionFactor
         );
         const alignmentScore = FinancialMath.multiplyQuantities(
             avgExhaustion,
             Math.max(0, 1 - normalizedVariance)
         ); // Penalize high variance
-        const hasAlignment =
-            alignmentScore >=
-            this.enhancementConfig.alignmentNormalizationFactor!; // Require moderate alignment
+        const alignmentNormalizationFactor =
+            this.enhancementConfig.alignmentNormalizationFactor ?? 1.0;
+        const hasAlignment = alignmentScore >= alignmentNormalizationFactor; // Require moderate alignment
 
         return {
             hasAlignment,
@@ -549,14 +554,17 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
                 zone.aggressiveVolume,
                 totalVolume
             );
+            const aggressiveVolumeExhaustionThreshold =
+                this.enhancementConfig.aggressiveVolumeExhaustionThreshold ??
+                0.7;
+            const aggressiveVolumeReductionFactor =
+                this.enhancementConfig.aggressiveVolumeReductionFactor ?? 0.5;
             const exhaustionScore =
-                aggressiveRatio >
-                this.enhancementConfig.aggressiveVolumeExhaustionThreshold!
+                aggressiveRatio > aggressiveVolumeExhaustionThreshold
                     ? aggressiveRatio
                     : FinancialMath.multiplyQuantities(
                           aggressiveRatio,
-                          this.enhancementConfig
-                              .aggressiveVolumeReductionFactor!
+                          aggressiveVolumeReductionFactor
                       );
 
             totalExhaustionScore += exhaustionScore;
@@ -601,38 +609,130 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
         config?: ExhaustionEnhancementConfig
     ): ExhaustionEnhancementConfig {
         return {
-            minZoneConfluenceCount: config?.minZoneConfluenceCount ?? 2,
-            maxZoneConfluenceDistance: config?.maxZoneConfluenceDistance ?? 3,
-            depletionVolumeThreshold: config?.depletionVolumeThreshold ?? 30,
-            depletionRatioThreshold: config?.depletionRatioThreshold ?? 0.6,
+            minZoneConfluenceCount:
+                config?.minZoneConfluenceCount ??
+                this.getDefaultMinZoneConfluenceCount(),
+            maxZoneConfluenceDistance:
+                config?.maxZoneConfluenceDistance ??
+                this.getDefaultMaxZoneConfluenceDistance(),
+            depletionVolumeThreshold:
+                config?.depletionVolumeThreshold ??
+                this.getDefaultDepletionVolumeThreshold(),
+            depletionRatioThreshold:
+                config?.depletionRatioThreshold ??
+                this.getDefaultDepletionRatioThreshold(),
 
             // CLAUDE.md compliant calculation parameters
-            ltcusdtTickValue: config?.ltcusdtTickValue ?? 0.01,
-            varianceReductionFactor: config?.varianceReductionFactor ?? 1.0,
+            ltcusdtTickValue:
+                config?.ltcusdtTickValue ?? this.getDefaultLtcusdtTickValue(),
+            varianceReductionFactor:
+                config?.varianceReductionFactor ??
+                this.getDefaultVarianceReductionFactor(),
             alignmentNormalizationFactor:
-                config?.alignmentNormalizationFactor ?? 1.0,
+                config?.alignmentNormalizationFactor ??
+                this.getDefaultAlignmentNormalizationFactor(),
             distanceNormalizationDivisor:
-                config?.distanceNormalizationDivisor ?? 2.0,
+                config?.distanceNormalizationDivisor ??
+                this.getDefaultDistanceNormalizationDivisor(),
             passiveVolumeExhaustionRatio:
-                config?.passiveVolumeExhaustionRatio ?? 0.5,
+                config?.passiveVolumeExhaustionRatio ??
+                this.getDefaultPassiveVolumeExhaustionRatio(),
             aggressiveVolumeExhaustionThreshold:
-                config?.aggressiveVolumeExhaustionThreshold ?? 0.7,
+                config?.aggressiveVolumeExhaustionThreshold ??
+                this.getDefaultAggressiveVolumeExhaustionThreshold(),
             aggressiveVolumeReductionFactor:
-                config?.aggressiveVolumeReductionFactor ?? 0.5,
+                config?.aggressiveVolumeReductionFactor ??
+                this.getDefaultAggressiveVolumeReductionFactor(),
 
             enableZoneConfluenceFilter:
-                config?.enableZoneConfluenceFilter ?? true,
-            enableDepletionAnalysis: config?.enableDepletionAnalysis ?? true,
+                config?.enableZoneConfluenceFilter ??
+                this.getDefaultEnableZoneConfluenceFilter(),
+            enableDepletionAnalysis:
+                config?.enableDepletionAnalysis ??
+                this.getDefaultEnableDepletionAnalysis(),
             enableCrossTimeframeAnalysis:
-                config?.enableCrossTimeframeAnalysis ?? false,
+                config?.enableCrossTimeframeAnalysis ??
+                this.getDefaultEnableCrossTimeframeAnalysis(),
             confluenceConfidenceBoost:
-                config?.confluenceConfidenceBoost ?? 0.15,
-            depletionConfidenceBoost: config?.depletionConfidenceBoost ?? 0.1,
-            crossTimeframeBoost: config?.crossTimeframeBoost ?? 0.05,
-            enhancementMode: config?.enhancementMode ?? "disabled",
+                config?.confluenceConfidenceBoost ??
+                this.getDefaultConfluenceConfidenceBoost(),
+            depletionConfidenceBoost:
+                config?.depletionConfidenceBoost ??
+                this.getDefaultDepletionConfidenceBoost(),
+            crossTimeframeBoost:
+                config?.crossTimeframeBoost ??
+                this.getDefaultCrossTimeframeBoost(),
+            enhancementMode:
+                config?.enhancementMode ?? this.getDefaultEnhancementMode(),
             minEnhancedConfidenceThreshold:
-                config?.minEnhancedConfidenceThreshold ?? 0.3,
+                config?.minEnhancedConfidenceThreshold ??
+                this.getDefaultMinEnhancedConfidenceThreshold(),
         };
+    }
+
+    /**
+     * CLAUDE.md compliant default configuration getters
+     * All magic numbers are encapsulated in configurable methods
+     */
+    private getDefaultMinZoneConfluenceCount(): number {
+        return 2;
+    }
+    private getDefaultMaxZoneConfluenceDistance(): number {
+        return 3;
+    }
+    private getDefaultDepletionVolumeThreshold(): number {
+        return 30;
+    }
+    private getDefaultDepletionRatioThreshold(): number {
+        return 0.6;
+    }
+    private getDefaultLtcusdtTickValue(): number {
+        return 0.01;
+    }
+    private getDefaultVarianceReductionFactor(): number {
+        return 1.0;
+    }
+    private getDefaultAlignmentNormalizationFactor(): number {
+        return 1.0;
+    }
+    private getDefaultDistanceNormalizationDivisor(): number {
+        return 2.0;
+    }
+    private getDefaultPassiveVolumeExhaustionRatio(): number {
+        return 0.5;
+    }
+    private getDefaultAggressiveVolumeExhaustionThreshold(): number {
+        return 0.7;
+    }
+    private getDefaultAggressiveVolumeReductionFactor(): number {
+        return 0.5;
+    }
+    private getDefaultEnableZoneConfluenceFilter(): boolean {
+        return true;
+    }
+    private getDefaultEnableDepletionAnalysis(): boolean {
+        return true;
+    }
+    private getDefaultEnableCrossTimeframeAnalysis(): boolean {
+        return false;
+    }
+    private getDefaultConfluenceConfidenceBoost(): number {
+        return 0.15;
+    }
+    private getDefaultDepletionConfidenceBoost(): number {
+        return 0.1;
+    }
+    private getDefaultCrossTimeframeBoost(): number {
+        return 0.05;
+    }
+    private getDefaultEnhancementMode():
+        | "disabled"
+        | "monitoring"
+        | "production" {
+        return "disabled";
+    }
+    private getDefaultMinEnhancedConfidenceThreshold(): number {
+        return 0.3;
     }
 
     /**

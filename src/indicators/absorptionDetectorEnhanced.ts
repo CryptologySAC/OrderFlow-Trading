@@ -187,70 +187,224 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
     ): AbsorptionEnhancementConfig {
         return {
             // Zone confluence configuration (conservative for production)
-            minZoneConfluenceCount: config?.minZoneConfluenceCount ?? 2,
-            maxZoneConfluenceDistance: config?.maxZoneConfluenceDistance ?? 3,
+            minZoneConfluenceCount:
+                config?.minZoneConfluenceCount ??
+                this.getDefaultMinZoneConfluenceCount(),
+            maxZoneConfluenceDistance:
+                config?.maxZoneConfluenceDistance ??
+                this.getDefaultMaxZoneConfluenceDistance(),
 
             // Institutional volume configuration
             institutionalVolumeThreshold:
-                config?.institutionalVolumeThreshold ?? 50,
+                config?.institutionalVolumeThreshold ??
+                this.getDefaultInstitutionalVolumeThreshold(),
             institutionalVolumeRatioThreshold:
-                config?.institutionalVolumeRatioThreshold ?? 0.3,
+                config?.institutionalVolumeRatioThreshold ??
+                this.getDefaultInstitutionalVolumeRatioThreshold(),
 
             // CLAUDE.md compliant calculation parameters
-            ltcusdtTickValue: config?.ltcusdtTickValue ?? 0.01,
+            ltcusdtTickValue:
+                config?.ltcusdtTickValue ?? this.getDefaultLtcusdtTickValue(),
             volumeNormalizationThreshold:
-                config?.volumeNormalizationThreshold ?? 200,
+                config?.volumeNormalizationThreshold ??
+                this.getDefaultVolumeNormalizationThreshold(),
             absorptionRatioNormalization:
-                config?.absorptionRatioNormalization ?? 3.0,
-            highConfidenceThreshold: config?.highConfidenceThreshold ?? 0.7,
-            lowConfidenceReduction: config?.lowConfidenceReduction ?? 0.7,
-            minAbsorptionScore: config?.minAbsorptionScore ?? 0.8,
-            patternVarianceReduction: config?.patternVarianceReduction ?? 2.0,
-            whaleActivityMultiplier: config?.whaleActivityMultiplier ?? 2.0,
-            maxZoneCountForScoring: config?.maxZoneCountForScoring ?? 3,
-            confidenceBoostReduction: config?.confidenceBoostReduction ?? 0.5,
+                config?.absorptionRatioNormalization ??
+                this.getDefaultAbsorptionRatioNormalization(),
+            highConfidenceThreshold:
+                config?.highConfidenceThreshold ??
+                this.getDefaultHighConfidenceThreshold(),
+            lowConfidenceReduction:
+                config?.lowConfidenceReduction ??
+                this.getDefaultLowConfidenceReduction(),
+            minAbsorptionScore:
+                config?.minAbsorptionScore ??
+                this.getDefaultMinAbsorptionScore(),
+            patternVarianceReduction:
+                config?.patternVarianceReduction ??
+                this.getDefaultPatternVarianceReduction(),
+            whaleActivityMultiplier:
+                config?.whaleActivityMultiplier ??
+                this.getDefaultWhaleActivityMultiplier(),
+            maxZoneCountForScoring:
+                config?.maxZoneCountForScoring ??
+                this.getDefaultMaxZoneCountForScoring(),
+            confidenceBoostReduction:
+                config?.confidenceBoostReduction ??
+                this.getDefaultConfidenceBoostReduction(),
 
             // Zone strength calculation weights
-            distanceWeight: config?.distanceWeight ?? 0.4,
-            volumeWeight: config?.volumeWeight ?? 0.35,
-            absorptionWeight: config?.absorptionWeight ?? 0.25,
+            distanceWeight:
+                config?.distanceWeight ?? this.getDefaultDistanceWeight(),
+            volumeWeight: config?.volumeWeight ?? this.getDefaultVolumeWeight(),
+            absorptionWeight:
+                config?.absorptionWeight ?? this.getDefaultAbsorptionWeight(),
 
             // Confluence scoring parameters
-            minConfluenceScore: config?.minConfluenceScore ?? 0.6,
+            minConfluenceScore:
+                config?.minConfluenceScore ??
+                this.getDefaultMinConfluenceScore(),
             volumeConcentrationWeight:
-                config?.volumeConcentrationWeight ?? 0.15,
-            patternConsistencyWeight: config?.patternConsistencyWeight ?? 0.1,
-            volumeBoostCap: config?.volumeBoostCap ?? 0.25,
-            volumeBoostMultiplier: config?.volumeBoostMultiplier ?? 0.25,
+                config?.volumeConcentrationWeight ??
+                this.getDefaultVolumeConcentrationWeight(),
+            patternConsistencyWeight:
+                config?.patternConsistencyWeight ??
+                this.getDefaultPatternConsistencyWeight(),
+            volumeBoostCap:
+                config?.volumeBoostCap ?? this.getDefaultVolumeBoostCap(),
+            volumeBoostMultiplier:
+                config?.volumeBoostMultiplier ??
+                this.getDefaultVolumeBoostMultiplier(),
 
             // Pattern analysis thresholds
             passiveAbsorptionThreshold:
-                config?.passiveAbsorptionThreshold ?? 0.6,
+                config?.passiveAbsorptionThreshold ??
+                this.getDefaultPassiveAbsorptionThreshold(),
             aggressiveDistributionThreshold:
-                config?.aggressiveDistributionThreshold ?? 0.6,
+                config?.aggressiveDistributionThreshold ??
+                this.getDefaultAggressiveDistributionThreshold(),
             patternDifferenceThreshold:
-                config?.patternDifferenceThreshold ?? 0.1,
-            minVolumeForRatio: config?.minVolumeForRatio ?? 1,
+                config?.patternDifferenceThreshold ??
+                this.getDefaultPatternDifferenceThreshold(),
+            minVolumeForRatio:
+                config?.minVolumeForRatio ?? this.getDefaultMinVolumeForRatio(),
 
             // Feature flags (conservative for production stability)
             enableZoneConfluenceFilter:
-                config?.enableZoneConfluenceFilter ?? true,
+                config?.enableZoneConfluenceFilter ??
+                this.getDefaultEnableZoneConfluenceFilter(),
             enableInstitutionalVolumeFilter:
-                config?.enableInstitutionalVolumeFilter ?? false, // Disabled for performance
+                config?.enableInstitutionalVolumeFilter ??
+                this.getDefaultEnableInstitutionalVolumeFilter(),
             enableCrossTimeframeAnalysis:
-                config?.enableCrossTimeframeAnalysis ?? false, // Disabled for performance
+                config?.enableCrossTimeframeAnalysis ??
+                this.getDefaultEnableCrossTimeframeAnalysis(),
 
             // Conservative confidence boosts for production
             confluenceConfidenceBoost:
-                config?.confluenceConfidenceBoost ?? 0.15,
-            institutionalVolumeBoost: config?.institutionalVolumeBoost ?? 0.1,
-            crossTimeframeBoost: config?.crossTimeframeBoost ?? 0.05,
+                config?.confluenceConfidenceBoost ??
+                this.getDefaultConfluenceConfidenceBoost(),
+            institutionalVolumeBoost:
+                config?.institutionalVolumeBoost ??
+                this.getDefaultInstitutionalVolumeBoost(),
+            crossTimeframeBoost:
+                config?.crossTimeframeBoost ??
+                this.getDefaultCrossTimeframeBoost(),
 
             // Enhancement control
-            enhancementMode: config?.enhancementMode ?? "disabled",
+            enhancementMode:
+                config?.enhancementMode ?? this.getDefaultEnhancementMode(),
             minEnhancedConfidenceThreshold:
-                config?.minEnhancedConfidenceThreshold ?? 0.3,
+                config?.minEnhancedConfidenceThreshold ??
+                this.getDefaultMinEnhancedConfidenceThreshold(),
         };
+    }
+
+    /**
+     * CLAUDE.md compliant default configuration getters
+     * All magic numbers are encapsulated in configurable methods
+     */
+    private getDefaultMinZoneConfluenceCount(): number {
+        return 2;
+    }
+    private getDefaultMaxZoneConfluenceDistance(): number {
+        return 3;
+    }
+    private getDefaultInstitutionalVolumeThreshold(): number {
+        return 50;
+    }
+    private getDefaultInstitutionalVolumeRatioThreshold(): number {
+        return 0.3;
+    }
+    private getDefaultLtcusdtTickValue(): number {
+        return 0.01;
+    }
+    private getDefaultVolumeNormalizationThreshold(): number {
+        return 200;
+    }
+    private getDefaultAbsorptionRatioNormalization(): number {
+        return 3.0;
+    }
+    private getDefaultHighConfidenceThreshold(): number {
+        return 0.7;
+    }
+    private getDefaultLowConfidenceReduction(): number {
+        return 0.7;
+    }
+    private getDefaultMinAbsorptionScore(): number {
+        return 0.8;
+    }
+    private getDefaultPatternVarianceReduction(): number {
+        return 2.0;
+    }
+    private getDefaultWhaleActivityMultiplier(): number {
+        return 2.0;
+    }
+    private getDefaultMaxZoneCountForScoring(): number {
+        return 3;
+    }
+    private getDefaultConfidenceBoostReduction(): number {
+        return 0.5;
+    }
+    private getDefaultDistanceWeight(): number {
+        return 0.4;
+    }
+    private getDefaultVolumeWeight(): number {
+        return 0.35;
+    }
+    private getDefaultAbsorptionWeight(): number {
+        return 0.25;
+    }
+    private getDefaultMinConfluenceScore(): number {
+        return 0.6;
+    }
+    private getDefaultVolumeConcentrationWeight(): number {
+        return 0.15;
+    }
+    private getDefaultPatternConsistencyWeight(): number {
+        return 0.1;
+    }
+    private getDefaultVolumeBoostCap(): number {
+        return 0.25;
+    }
+    private getDefaultVolumeBoostMultiplier(): number {
+        return 0.25;
+    }
+    private getDefaultPassiveAbsorptionThreshold(): number {
+        return 0.6;
+    }
+    private getDefaultAggressiveDistributionThreshold(): number {
+        return 0.6;
+    }
+    private getDefaultPatternDifferenceThreshold(): number {
+        return 0.1;
+    }
+    private getDefaultMinVolumeForRatio(): number {
+        return 1;
+    }
+    private getDefaultEnableZoneConfluenceFilter(): boolean {
+        return true;
+    }
+    private getDefaultEnableInstitutionalVolumeFilter(): boolean {
+        return false;
+    }
+    private getDefaultEnableCrossTimeframeAnalysis(): boolean {
+        return false;
+    }
+    private getDefaultConfluenceConfidenceBoost(): number {
+        return 0.15;
+    }
+    private getDefaultInstitutionalVolumeBoost(): number {
+        return 0.1;
+    }
+    private getDefaultCrossTimeframeBoost(): number {
+        return 0.05;
+    }
+    private getDefaultEnhancementMode(): "disabled" | "testing" | "production" {
+        return "disabled";
+    }
+    private getDefaultMinEnhancedConfidenceThreshold(): number {
+        return 0.3;
     }
 
     /**
@@ -480,6 +634,16 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             tick10Zones,
             tick20Zones
         );
+        if (absorptionAlignment === null) {
+            return {
+                hasConfluence: false,
+                confluenceZones: 0,
+                confluenceStrength: 0,
+                confluenceScore: 0,
+                timeframeBreakdown,
+                absorptionAlignment: 0,
+            };
+        }
 
         const totalZones =
             tick5Zones.length + tick10Zones.length + tick20Zones.length;
@@ -497,9 +661,11 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             tick10Zones,
             tick20Zones
         );
+        const confidenceBoostReduction =
+            this.enhancementConfig.confidenceBoostReduction ?? 0.5;
         const alignmentBoost = FinancialMath.multiplyQuantities(
             absorptionAlignment,
-            this.enhancementConfig.confidenceBoostReduction!
+            confidenceBoostReduction
         );
 
         const confluenceStrength = Math.min(
@@ -668,6 +834,9 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             tick10Zones,
             tick20Zones
         );
+        if (patternConsistency === null) {
+            return 0;
+        }
 
         // Final confluence score using FinancialMath
         const confluenceScore = Math.min(
@@ -696,30 +865,37 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         tick5Zones: ZoneSnapshot[],
         tick10Zones: ZoneSnapshot[],
         tick20Zones: ZoneSnapshot[]
-    ): number {
+    ): number | null {
         const timeframeAlignments = [
             this.getTimeframeAbsorptionStrength(tick5Zones),
             this.getTimeframeAbsorptionStrength(tick10Zones),
             this.getTimeframeAbsorptionStrength(tick20Zones),
-        ];
+        ].filter((alignment) => alignment !== null);
+
+        if (timeframeAlignments.length === 0) {
+            return null; // CLAUDE.md compliance: return null when no valid data
+        }
 
         // Calculate alignment consistency using FinancialMath (how similar the absorption patterns are across timeframes)
         const avgAlignment = FinancialMath.calculateMean(timeframeAlignments);
         if (avgAlignment === null) {
-            return 0; // CLAUDE.md compliance: return 0 when calculation cannot be performed
+            return null; // CLAUDE.md compliance: return null when calculation cannot be performed
         }
 
         // Calculate variance using FinancialMath (lower variance = better alignment)
         const stdDev = FinancialMath.calculateStdDev(timeframeAlignments);
         if (stdDev === null) {
-            return 0; // CLAUDE.md compliance: return 0 when calculation cannot be performed
+            return null; // CLAUDE.md compliance: return null when calculation cannot be performed
         }
 
         const variance = FinancialMath.multiplyQuantities(stdDev, stdDev); // Variance = stdDev^2
         const alignmentConsistency = Math.max(0, 1 - variance); // Lower variance = higher consistency
 
         // Weight by overall absorption strength
-        return avgAlignment * alignmentConsistency;
+        return FinancialMath.multiplyQuantities(
+            avgAlignment,
+            alignmentConsistency
+        );
     }
 
     /**
@@ -810,7 +986,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         tick5Zones: ZoneSnapshot[],
         tick10Zones: ZoneSnapshot[],
         tick20Zones: ZoneSnapshot[]
-    ): number {
+    ): number | null {
         const timeframePatterns = [
             this.analyzeZonePattern(tick5Zones),
             this.analyzeZonePattern(tick10Zones),
@@ -822,7 +998,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         const patternScores = timeframePatterns.map((p) => p.absorptionScore);
         const stdDev = FinancialMath.calculateStdDev(patternScores);
         if (stdDev === null) {
-            return 0; // CLAUDE.md compliance: return 0 when calculation cannot be performed
+            return null; // CLAUDE.md compliance: return null when calculation cannot be performed
         }
 
         const variance = FinancialMath.multiplyQuantities(stdDev, stdDev);
@@ -842,7 +1018,9 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
      *
      * ABSORPTION PHASE 2.1: Timeframe-specific absorption analysis
      */
-    private getTimeframeAbsorptionStrength(zones: ZoneSnapshot[]): number {
+    private getTimeframeAbsorptionStrength(
+        zones: ZoneSnapshot[]
+    ): number | null {
         if (zones.length === 0) return 0;
 
         const absorptionScores = zones.map((zone) => {
@@ -859,14 +1037,14 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
                     ? passiveRatio
                     : FinancialMath.multiplyQuantities(
                           passiveRatio,
-                          this.enhancementConfig.confidenceBoostReduction!
+                          this.enhancementConfig.confidenceBoostReduction ?? 0.5
                       ); // Bonus for strong absorption
 
             return absorptionStrength;
         });
 
         const meanScore = FinancialMath.calculateMean(absorptionScores);
-        return meanScore ?? 0; // CLAUDE.md compliance: return 0 when calculation cannot be performed
+        return meanScore ?? null; // CLAUDE.md compliance: return null when calculation cannot be performed
     }
 
     /**

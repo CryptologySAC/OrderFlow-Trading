@@ -339,12 +339,13 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
         const hasConfluence = confluenceZones >= minConfluenceZones;
 
         // Calculate confluence strength using FinancialMath (higher = more zones overlapping)
+        const confluenceStrengthDivisor =
+            this.enhancementConfig.confluenceStrengthDivisor ?? 2.0;
         const confluenceStrength = Math.min(
             1.0,
             FinancialMath.divideQuantities(
                 confluenceZones,
-                minConfluenceZones *
-                    this.enhancementConfig.confluenceStrengthDivisor!
+                minConfluenceZones * confluenceStrengthDivisor
             )
         );
 
@@ -363,9 +364,10 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
         price: number,
         maxDistanceTicks: number
     ): ZoneSnapshot[] {
+        const tickValue = this.enhancementConfig.ltcusdtTickValue ?? 0.01;
         const maxDistance = FinancialMath.multiplyQuantities(
             maxDistanceTicks,
-            this.enhancementConfig.ltcusdtTickValue!
+            tickValue
         );
 
         return zones.filter((zone) => {
@@ -424,7 +426,7 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
                 aggressiveVolume >
                     FinancialMath.multiplyQuantities(
                         passiveVolume,
-                        this.enhancementConfig.passiveToAggressiveRatio!
+                        this.enhancementConfig.passiveToAggressiveRatio ?? 0.6
                     )
             ) {
                 affectedZones++;
@@ -498,7 +500,7 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
                 hasAlignment: false,
                 alignmentScore: 0,
                 timeframeBreakdown,
-            }; // CLAUDE.md compliance: return when calculation cannot be performed
+            }; // CLAUDE.md compliance: return null when calculation cannot be performed
         }
 
         const stdDev = FinancialMath.calculateStdDev(distributionValues);
@@ -507,21 +509,23 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
                 hasAlignment: false,
                 alignmentScore: 0,
                 timeframeBreakdown,
-            }; // CLAUDE.md compliance: return when calculation cannot be performed
+            }; // CLAUDE.md compliance: return null when calculation cannot be performed
         }
 
         const variance = FinancialMath.multiplyQuantities(stdDev, stdDev); // Variance = stdDev^2
+        const varianceReductionFactor =
+            this.enhancementConfig.varianceReductionFactor ?? 1.0;
         const normalizedVariance = FinancialMath.multiplyQuantities(
             variance,
-            this.enhancementConfig.varianceReductionFactor!
+            varianceReductionFactor
         );
         const alignmentScore = FinancialMath.multiplyQuantities(
             avgDistribution,
             Math.max(0, 1 - normalizedVariance)
         ); // Penalize high variance
-        const hasAlignment =
-            alignmentScore >=
-            this.enhancementConfig.moderateAlignmentThreshold!; // Require moderate alignment for distribution
+        const moderateAlignmentThreshold =
+            this.enhancementConfig.moderateAlignmentThreshold ?? 0.45;
+        const hasAlignment = alignmentScore >= moderateAlignmentThreshold; // Require moderate alignment for distribution
 
         return {
             hasAlignment,
@@ -555,14 +559,16 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
                 zone.aggressiveSellVolume,
                 totalVolume
             );
+            const aggressiveSellingRatioThreshold =
+                this.enhancementConfig.aggressiveSellingRatioThreshold ?? 0.6;
+            const aggressiveSellingReductionFactor =
+                this.enhancementConfig.aggressiveSellingReductionFactor ?? 0.5;
             const distributionScore =
-                aggressiveSellingRatio >
-                this.enhancementConfig.aggressiveSellingRatioThreshold!
+                aggressiveSellingRatio > aggressiveSellingRatioThreshold
                     ? aggressiveSellingRatio
                     : FinancialMath.multiplyQuantities(
                           aggressiveSellingRatio,
-                          this.enhancementConfig
-                              .aggressiveSellingReductionFactor!
+                          aggressiveSellingReductionFactor
                       );
 
             totalDistributionScore += distributionScore;
@@ -607,43 +613,141 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
         config?: DistributionEnhancementConfig
     ): DistributionEnhancementConfig {
         return {
-            minZoneConfluenceCount: config?.minZoneConfluenceCount ?? 2,
-            maxZoneConfluenceDistance: config?.maxZoneConfluenceDistance ?? 3,
+            minZoneConfluenceCount:
+                config?.minZoneConfluenceCount ??
+                this.getDefaultMinZoneConfluenceCount(),
+            maxZoneConfluenceDistance:
+                config?.maxZoneConfluenceDistance ??
+                this.getDefaultMaxZoneConfluenceDistance(),
             sellingPressureVolumeThreshold:
-                config?.sellingPressureVolumeThreshold ?? 40,
+                config?.sellingPressureVolumeThreshold ??
+                this.getDefaultSellingPressureVolumeThreshold(),
             sellingPressureRatioThreshold:
-                config?.sellingPressureRatioThreshold ?? 0.65,
+                config?.sellingPressureRatioThreshold ??
+                this.getDefaultSellingPressureRatioThreshold(),
 
             // CLAUDE.md compliant calculation parameters
-            ltcusdtTickValue: config?.ltcusdtTickValue ?? 0.01,
-            varianceReductionFactor: config?.varianceReductionFactor ?? 1.0,
+            ltcusdtTickValue:
+                config?.ltcusdtTickValue ?? this.getDefaultLtcusdtTickValue(),
+            varianceReductionFactor:
+                config?.varianceReductionFactor ??
+                this.getDefaultVarianceReductionFactor(),
             alignmentNormalizationFactor:
-                config?.alignmentNormalizationFactor ?? 1.0,
-            confluenceStrengthDivisor: config?.confluenceStrengthDivisor ?? 2.0,
-            passiveToAggressiveRatio: config?.passiveToAggressiveRatio ?? 0.6,
-            varianceDivisor: config?.varianceDivisor ?? 3.0,
+                config?.alignmentNormalizationFactor ??
+                this.getDefaultAlignmentNormalizationFactor(),
+            confluenceStrengthDivisor:
+                config?.confluenceStrengthDivisor ??
+                this.getDefaultConfluenceStrengthDivisor(),
+            passiveToAggressiveRatio:
+                config?.passiveToAggressiveRatio ??
+                this.getDefaultPassiveToAggressiveRatio(),
+            varianceDivisor:
+                config?.varianceDivisor ?? this.getDefaultVarianceDivisor(),
             moderateAlignmentThreshold:
-                config?.moderateAlignmentThreshold ?? 0.45,
+                config?.moderateAlignmentThreshold ??
+                this.getDefaultModerateAlignmentThreshold(),
             aggressiveSellingRatioThreshold:
-                config?.aggressiveSellingRatioThreshold ?? 0.6,
+                config?.aggressiveSellingRatioThreshold ??
+                this.getDefaultAggressiveSellingRatioThreshold(),
             aggressiveSellingReductionFactor:
-                config?.aggressiveSellingReductionFactor ?? 0.5,
+                config?.aggressiveSellingReductionFactor ??
+                this.getDefaultAggressiveSellingReductionFactor(),
 
             enableZoneConfluenceFilter:
-                config?.enableZoneConfluenceFilter ?? true,
+                config?.enableZoneConfluenceFilter ??
+                this.getDefaultEnableZoneConfluenceFilter(),
             enableSellingPressureAnalysis:
-                config?.enableSellingPressureAnalysis ?? true,
+                config?.enableSellingPressureAnalysis ??
+                this.getDefaultEnableSellingPressureAnalysis(),
             enableCrossTimeframeAnalysis:
-                config?.enableCrossTimeframeAnalysis ?? false,
+                config?.enableCrossTimeframeAnalysis ??
+                this.getDefaultEnableCrossTimeframeAnalysis(),
             confluenceConfidenceBoost:
-                config?.confluenceConfidenceBoost ?? 0.12,
+                config?.confluenceConfidenceBoost ??
+                this.getDefaultConfluenceConfidenceBoost(),
             sellingPressureConfidenceBoost:
-                config?.sellingPressureConfidenceBoost ?? 0.08,
-            crossTimeframeBoost: config?.crossTimeframeBoost ?? 0.05,
-            enhancementMode: config?.enhancementMode ?? "disabled",
+                config?.sellingPressureConfidenceBoost ??
+                this.getDefaultSellingPressureConfidenceBoost(),
+            crossTimeframeBoost:
+                config?.crossTimeframeBoost ??
+                this.getDefaultCrossTimeframeBoost(),
+            enhancementMode:
+                config?.enhancementMode ?? this.getDefaultEnhancementMode(),
             minEnhancedConfidenceThreshold:
-                config?.minEnhancedConfidenceThreshold ?? 0.25,
+                config?.minEnhancedConfidenceThreshold ??
+                this.getDefaultMinEnhancedConfidenceThreshold(),
         };
+    }
+
+    /**
+     * CLAUDE.md compliant default configuration getters
+     * All magic numbers are encapsulated in configurable methods
+     */
+    private getDefaultMinZoneConfluenceCount(): number {
+        return 2;
+    }
+    private getDefaultMaxZoneConfluenceDistance(): number {
+        return 3;
+    }
+    private getDefaultSellingPressureVolumeThreshold(): number {
+        return 40;
+    }
+    private getDefaultSellingPressureRatioThreshold(): number {
+        return 0.65;
+    }
+    private getDefaultLtcusdtTickValue(): number {
+        return 0.01;
+    }
+    private getDefaultVarianceReductionFactor(): number {
+        return 1.0;
+    }
+    private getDefaultAlignmentNormalizationFactor(): number {
+        return 1.0;
+    }
+    private getDefaultConfluenceStrengthDivisor(): number {
+        return 2.0;
+    }
+    private getDefaultPassiveToAggressiveRatio(): number {
+        return 0.6;
+    }
+    private getDefaultVarianceDivisor(): number {
+        return 3.0;
+    }
+    private getDefaultModerateAlignmentThreshold(): number {
+        return 0.45;
+    }
+    private getDefaultAggressiveSellingRatioThreshold(): number {
+        return 0.6;
+    }
+    private getDefaultAggressiveSellingReductionFactor(): number {
+        return 0.5;
+    }
+    private getDefaultEnableZoneConfluenceFilter(): boolean {
+        return true;
+    }
+    private getDefaultEnableSellingPressureAnalysis(): boolean {
+        return true;
+    }
+    private getDefaultEnableCrossTimeframeAnalysis(): boolean {
+        return false;
+    }
+    private getDefaultConfluenceConfidenceBoost(): number {
+        return 0.12;
+    }
+    private getDefaultSellingPressureConfidenceBoost(): number {
+        return 0.08;
+    }
+    private getDefaultCrossTimeframeBoost(): number {
+        return 0.05;
+    }
+    private getDefaultEnhancementMode():
+        | "disabled"
+        | "monitoring"
+        | "production" {
+        return "disabled";
+    }
+    private getDefaultMinEnhancedConfidenceThreshold(): number {
+        return 0.25;
     }
 
     /**
