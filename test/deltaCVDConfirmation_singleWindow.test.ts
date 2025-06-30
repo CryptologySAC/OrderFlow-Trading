@@ -4,13 +4,13 @@ vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
 vi.mock("../src/services/spoofingDetector");
 
-import { DeltaCVDConfirmation } from "../src/indicators/deltaCVDConfirmation";
+import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced";
 import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { SpoofingDetector } from "../src/services/spoofingDetector";
 
-describe("DeltaCVDConfirmation single window", () => {
-    let detector: DeltaCVDConfirmation;
+describe("DeltaCVDDetectorEnhanced single window", () => {
+    let detector: DeltaCVDDetectorEnhanced;
     let mockLogger: WorkerLogger;
     let mockMetrics: MetricsCollector;
     let mockSpoofing: SpoofingDetector;
@@ -26,7 +26,7 @@ describe("DeltaCVDConfirmation single window", () => {
             testLogMinSpoof: 50,
         });
 
-        detector = new DeltaCVDConfirmation(
+        detector = new DeltaCVDDetectorEnhanced(
             "cvd_single_window",
             {
                 windowsSec: [60],

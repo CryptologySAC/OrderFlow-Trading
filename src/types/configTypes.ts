@@ -1,8 +1,8 @@
 export type AllowedSymbols = "LTCUSDT";
 import type { ZoneDetectorConfig } from "./zoneTypes.js";
 import type { DeltaCVDEnhancedSettings } from "../indicators/deltaCVDDetectorEnhanced.js";
-import type { ExhaustionSettings } from "../indicators/exhaustionDetector.js";
-import type { AbsorptionSettings } from "../indicators/absorptionDetector.js";
+import type { ExhaustionEnhancedSettings } from "../indicators/exhaustionDetectorEnhanced.js";
+import type { AbsorptionEnhancedSettings } from "../indicators/absorptionDetectorEnhanced.js";
 import type { SupportResistanceConfig } from "../indicators/supportResistanceDetector.js";
 import type { TradesProcessorOptions } from "../market/processors/tradesProcessor.js";
 import type { SignalManagerConfig } from "../trading/signalManager.js";
@@ -81,8 +81,8 @@ type SymbolConfig = {
     spoofingDetector?: SpoofingDetectorConfig;
     icebergDetector?: Partial<IcebergDetectorConfig>;
     hiddenOrderDetector?: Partial<HiddenOrderDetectorConfig>;
-    exhaustion?: ExhaustionSettings;
-    absorption?: AbsorptionSettings;
+    exhaustion?: ExhaustionEnhancedSettings;
+    absorption?: AbsorptionEnhancedSettings;
     deltaCvdConfirmation?: DeltaCVDEnhancedSettings;
     accumulationDetector?: AccumulationSettings;
     distributionDetector?: SuperiorFlowSettings;

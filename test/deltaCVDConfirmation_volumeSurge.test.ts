@@ -6,13 +6,13 @@ vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
 vi.mock("../src/services/spoofingDetector");
 
-import { DeltaCVDConfirmation } from "../src/indicators/deltaCVDConfirmation";
+import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
 import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { SpoofingDetector } from "../src/services/spoofingDetector";
 
 describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
-    let detector: DeltaCVDConfirmation;
+    let detector: DeltaCVDDetectorEnhanced;
     let mockLogger: WorkerLogger;
     let mockMetrics: MetricsCollector;
     let mockSpoofing: SpoofingDetector;
@@ -29,7 +29,7 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
             testLogMinSpoof: 50,
         });
 
-        detector = new DeltaCVDConfirmation(
+        detector = new DeltaCVDDetectorEnhanced(
             "test_cvd_surge",
             {
                 windowsSec: [60],

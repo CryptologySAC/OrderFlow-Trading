@@ -2,9 +2,9 @@
 
 import { describe, it, beforeEach, vi, expect } from "vitest";
 import { PropertyTestRunner } from "./framework/mathematicalPropertyTesting.js";
-import { AbsorptionDetector } from "../src/indicators/absorptionDetector.js";
-import { ExhaustionDetector } from "../src/indicators/exhaustionDetector.js";
-import { DeltaCVDConfirmation } from "../src/indicators/deltaCVDConfirmation.js";
+import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
+import { ExhaustionDetectorEnhanced } from "../src/indicators/exhaustionDetectorEnhanced.js";
+import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
 import { IcebergDetector } from "../src/services/icebergDetector.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import { HiddenOrderDetector } from "../src/services/hiddenOrderDetector.js";
@@ -59,7 +59,7 @@ describe("Mathematical Property Testing for All Detectors", () => {
 
             const detectorFactory = () => {
                 signals.length = 0; // Clear signals for each test
-                const detector = new AbsorptionDetector(
+                const detector = new AbsorptionDetectorEnhanced(
                     "test-absorption",
                     {
                         minAggVolume: 40,
@@ -108,7 +108,7 @@ describe("Mathematical Property Testing for All Detectors", () => {
         });
 
         it("should maintain price efficiency calculation properties", () => {
-            const detector = new AbsorptionDetector(
+            const detector = new AbsorptionDetectorEnhanced(
                 "test-efficiency",
                 {
                     priceEfficiencyThreshold: 0.85,
@@ -151,7 +151,7 @@ describe("Mathematical Property Testing for All Detectors", () => {
 
             const detectorFactory = () => {
                 signals.length = 0;
-                const detector = new ExhaustionDetector(
+                const detector = new ExhaustionDetectorEnhanced(
                     "test-exhaustion",
                     {
                         minAggVolume: 40,
@@ -232,7 +232,7 @@ describe("Mathematical Property Testing for All Detectors", () => {
 
             const detectorFactory = () => {
                 signals.length = 0;
-                const detector = new DeltaCVDConfirmation(
+                const detector = new DeltaCVDDetectorEnhanced(
                     "test-deltacvd",
                     {
                         windowsSec: [60],

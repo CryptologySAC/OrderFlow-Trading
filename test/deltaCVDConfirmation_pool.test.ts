@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
 
-import { DeltaCVDConfirmation } from "../src/indicators/deltaCVDConfirmation.js";
+import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
@@ -12,7 +12,7 @@ import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
 describe("DeltaCVDConfirmation memory management", () => {
-    let detector: DeltaCVDConfirmation;
+    let detector: DeltaCVDDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
     let mockSpoofing: SpoofingDetector;
@@ -26,7 +26,7 @@ describe("DeltaCVDConfirmation memory management", () => {
         } as ILogger;
         mockMetrics = new MetricsCollector();
         mockSpoofing = {} as any;
-        detector = new DeltaCVDConfirmation(
+        detector = new DeltaCVDDetectorEnhanced(
             "test-cvd",
             {},
             mockLogger,

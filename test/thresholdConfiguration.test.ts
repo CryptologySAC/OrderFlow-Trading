@@ -1,9 +1,9 @@
 // test/thresholdConfiguration.test.ts
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { AbsorptionDetector } from "../src/indicators/absorptionDetector.js";
-import { ExhaustionDetector } from "../src/indicators/exhaustionDetector.js";
-import { DeltaCVDConfirmation } from "../src/indicators/deltaCVDConfirmation.js";
+import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
+import { ExhaustionDetectorEnhanced } from "../src/indicators/exhaustionDetectorEnhanced.js";
+import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { IOrderBookState } from "../src/market/redBlackTreeOrderBook.js";
@@ -54,7 +54,7 @@ describe("Threshold Configuration Chain", () => {
 
     describe("AbsorptionDetector Threshold Configuration", () => {
         it("should use default priceEfficiencyThreshold when not provided", () => {
-            const detector = new AbsorptionDetector(
+            const detector = new AbsorptionDetectorEnhanced(
                 "test-absorption",
                 {}, // No threshold provided
                 mockOrderBook,
@@ -70,7 +70,7 @@ describe("Threshold Configuration Chain", () => {
 
         it("should use custom priceEfficiencyThreshold when provided", () => {
             const customThreshold = 0.92;
-            const detector = new AbsorptionDetector(
+            const detector = new AbsorptionDetectorEnhanced(
                 "test-absorption",
                 {
                     priceEfficiencyThreshold: customThreshold,
@@ -87,7 +87,7 @@ describe("Threshold Configuration Chain", () => {
 
         it("should properly use priceEfficiencyThreshold in getAbsorbingSideForZone", () => {
             const customThreshold = 0.95;
-            const detector = new AbsorptionDetector(
+            const detector = new AbsorptionDetectorEnhanced(
                 "test-absorption",
                 {
                     priceEfficiencyThreshold: customThreshold,
@@ -138,7 +138,7 @@ describe("Threshold Configuration Chain", () => {
 
         it("should validate threshold boundaries", () => {
             // Test with extreme values
-            const detector1 = new AbsorptionDetector(
+            const detector1 = new AbsorptionDetectorEnhanced(
                 "test-absorption-1",
                 {
                     priceEfficiencyThreshold: 0.1, // Very low
@@ -149,7 +149,7 @@ describe("Threshold Configuration Chain", () => {
                 mockMetrics
             );
 
-            const detector2 = new AbsorptionDetector(
+            const detector2 = new AbsorptionDetectorEnhanced(
                 "test-absorption-2",
                 {
                     priceEfficiencyThreshold: 0.99, // Very high
@@ -167,7 +167,7 @@ describe("Threshold Configuration Chain", () => {
 
     describe("ExhaustionDetector Threshold Configuration", () => {
         it("should use default threshold values when not provided", () => {
-            const detector = new ExhaustionDetector(
+            const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 {}, // No thresholds provided
                 mockLogger,
@@ -190,7 +190,7 @@ describe("Threshold Configuration Chain", () => {
                 spreadMediumThreshold: 0.003,
             };
 
-            const detector = new ExhaustionDetector(
+            const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 customSettings,
                 mockLogger,
@@ -210,7 +210,7 @@ describe("Threshold Configuration Chain", () => {
                 "validateConfigValue"
             );
 
-            new ExhaustionDetector(
+            new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 {
                     imbalanceHighThreshold: 0.85,
@@ -242,7 +242,7 @@ describe("Threshold Configuration Chain", () => {
                 absorptionThreshold: 0.65,
             };
 
-            const detector = new AbsorptionDetector(
+            const detector = new AbsorptionDetectorEnhanced(
                 "integration-test",
                 absorptionSettings,
                 mockOrderBook,
@@ -284,7 +284,7 @@ describe("Threshold Configuration Chain", () => {
         it("should handle invalid threshold values gracefully", () => {
             // Test with NaN values
             expect(() => {
-                new AbsorptionDetector(
+                new AbsorptionDetectorEnhanced(
                     "test-nan",
                     {
                         priceEfficiencyThreshold: NaN,
@@ -298,7 +298,7 @@ describe("Threshold Configuration Chain", () => {
 
             // Test with undefined values
             expect(() => {
-                new AbsorptionDetector(
+                new AbsorptionDetectorEnhanced(
                     "test-undefined",
                     {
                         priceEfficiencyThreshold: undefined,
@@ -322,7 +322,7 @@ describe("Threshold Configuration Chain", () => {
                 imbalanceMediumThreshold: 0.6, // From config.json
             };
 
-            const absorptionDetector = new AbsorptionDetector(
+            const absorptionDetector = new AbsorptionDetectorEnhanced(
                 "config-test-absorption",
                 configValues,
                 mockOrderBook,
@@ -331,7 +331,7 @@ describe("Threshold Configuration Chain", () => {
                 mockMetrics
             );
 
-            const exhaustionDetector = new ExhaustionDetector(
+            const exhaustionDetector = new ExhaustionDetectorEnhanced(
                 "config-test-exhaustion",
                 configValues,
                 mockLogger,
@@ -359,7 +359,7 @@ describe("Threshold Configuration Chain", () => {
             };
 
             expect(() => {
-                new AbsorptionDetector(
+                new AbsorptionDetectorEnhanced(
                     "edge-case-absorption",
                     edgeCaseSettings,
                     mockOrderBook,
@@ -374,7 +374,7 @@ describe("Threshold Configuration Chain", () => {
 
         it("should maintain threshold order relationships", () => {
             // Ensure medium thresholds are lower than high thresholds
-            const detector = new ExhaustionDetector(
+            const detector = new ExhaustionDetectorEnhanced(
                 "threshold-order-test",
                 {
                     imbalanceHighThreshold: 0.8,

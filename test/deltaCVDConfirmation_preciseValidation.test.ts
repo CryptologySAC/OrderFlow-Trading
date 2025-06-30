@@ -5,7 +5,7 @@ vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
 vi.mock("../src/services/spoofingDetector");
 
-import { DeltaCVDConfirmation } from "../src/indicators/deltaCVDConfirmation";
+import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced";
 import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { SpoofingDetector } from "../src/services/spoofingDetector";
@@ -23,7 +23,7 @@ import type { EnrichedTradeEvent } from "../src/types/marketEvents";
  */
 
 describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
-    let detector: DeltaCVDConfirmation;
+    let detector: DeltaCVDDetectorEnhanced;
     let mockLogger: WorkerLogger;
     let mockMetrics: MetricsCollector;
     let mockSpoofing: SpoofingDetector;
@@ -86,7 +86,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
 
     describe("🎯 Actual Signal Generation Validation", () => {
         it("should GENERATE BUY signal for strong institutional buying with correct CVD", () => {
-            detector = new DeltaCVDConfirmation(
+            detector = new DeltaCVDDetectorEnhanced(
                 "precise_buy_test",
                 {
                     windowsSec: [60],
@@ -551,7 +551,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
         });
 
         it("should GENERATE SELL signal for institutional distribution with correct CVD", () => {
-            detector = new DeltaCVDConfirmation(
+            detector = new DeltaCVDDetectorEnhanced(
                 "precise_sell_test",
                 {
                     windowsSec: [60],
@@ -735,7 +735,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
         });
 
         it("should REJECT signals when CVD is insufficient (z-score < threshold)", () => {
-            detector = new DeltaCVDConfirmation(
+            detector = new DeltaCVDDetectorEnhanced(
                 "rejection_test",
                 {
                     windowsSec: [60],
@@ -882,7 +882,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
         });
 
         it("should calculate correct CVD values and z-scores", () => {
-            const lowThresholdDetector = new DeltaCVDConfirmation(
+            const lowThresholdDetector = new DeltaCVDDetectorEnhanced(
                 "cvd_calculation_test",
                 {
                     windowsSec: [60],
@@ -1033,7 +1033,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
     describe("🔍 Divergence Mode Signal Precision", () => {
         it("should validate detection mode configuration", () => {
             // Test that divergence mode is properly configured and behaves differently from momentum mode
-            const divergenceDetector = new DeltaCVDConfirmation(
+            const divergenceDetector = new DeltaCVDDetectorEnhanced(
                 "divergence_mode_test",
                 {
                     windowsSec: [60],
@@ -1053,7 +1053,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 mockMetrics
             );
 
-            const momentumDetector = new DeltaCVDConfirmation(
+            const momentumDetector = new DeltaCVDDetectorEnhanced(
                 "momentum_mode_test",
                 {
                     windowsSec: [60],
@@ -1081,7 +1081,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
         });
 
         it("should REJECT divergence when correlation is too high", () => {
-            const strictDivergenceDetector = new DeltaCVDConfirmation(
+            const strictDivergenceDetector = new DeltaCVDDetectorEnhanced(
                 "strict_divergence_test",
                 {
                     windowsSec: [60],
@@ -1225,7 +1225,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
     describe("⚡ Threshold Boundary Testing", () => {
         it("should validate minimum threshold requirements", () => {
             // Test detector properly validates minimum requirements
-            const detector = new DeltaCVDConfirmation(
+            const detector = new DeltaCVDDetectorEnhanced(
                 "threshold_validation_test",
                 {
                     windowsSec: [60],
@@ -1283,7 +1283,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
         });
 
         it("should NOT emit signal when z-score is just below threshold", () => {
-            const strictDetector = new DeltaCVDConfirmation(
+            const strictDetector = new DeltaCVDDetectorEnhanced(
                 "strict_threshold_test",
                 {
                     windowsSec: [60],
@@ -1433,7 +1433,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
 
     describe("📊 Volume and Trade Rate Validation", () => {
         it("should REJECT signals when volume rate is insufficient", () => {
-            const volumeDetector = new DeltaCVDConfirmation(
+            const volumeDetector = new DeltaCVDDetectorEnhanced(
                 "volume_rate_test",
                 {
                     windowsSec: [60],
@@ -1562,7 +1562,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
         });
 
         it("should REJECT signals when trade rate is insufficient", () => {
-            const tradeRateDetector = new DeltaCVDConfirmation(
+            const tradeRateDetector = new DeltaCVDDetectorEnhanced(
                 "trade_rate_test",
                 {
                     windowsSec: [60],
@@ -1710,7 +1710,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
 
         it("should validate early rejection for insufficient data", () => {
             // Test that detector properly rejects signals when there's insufficient data
-            const detector = new DeltaCVDConfirmation(
+            const detector = new DeltaCVDDetectorEnhanced(
                 "insufficient_data_test",
                 {
                     windowsSec: [60],
@@ -1767,7 +1767,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
 
         it("should validate detector works with different confidence settings", () => {
             // Test that detector can be created with various confidence requirements
-            const lowConfidenceDetector = new DeltaCVDConfirmation(
+            const lowConfidenceDetector = new DeltaCVDDetectorEnhanced(
                 "low_confidence_test",
                 {
                     windowsSec: [60],
@@ -1791,7 +1791,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
             expect(lowConfidenceDetector).toBeDefined();
 
             // Create high confidence detector for comparison
-            const highConfidenceDetector = new DeltaCVDConfirmation(
+            const highConfidenceDetector = new DeltaCVDDetectorEnhanced(
                 "high_confidence_test",
                 {
                     windowsSec: [60],
@@ -1816,7 +1816,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
 
         it("should validate production configuration initialization", () => {
             // Simple test to validate production configuration can be initialized properly
-            const productionDetector = new DeltaCVDConfirmation(
+            const productionDetector = new DeltaCVDDetectorEnhanced(
                 "production_validation_test",
                 {
                     windowsSec: [60, 300], // Production windows

@@ -3,14 +3,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock dependencies
 vi.mock("../src/multithreading/workerLogger");
 
-import { DistributionZoneDetector } from "../src/indicators/distributionZoneDetector.js";
+import { DistributionDetectorEnhanced } from "../src/indicators/distributionDetectorEnhanced.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
 
-describe("DistributionZoneDetector - Integration and Performance Tests", () => {
-    let detector: DistributionZoneDetector;
+describe("DistributionDetectorEnhanced - Integration and Performance Tests", () => {
+    let detector: DistributionDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
 
@@ -41,7 +41,7 @@ describe("DistributionZoneDetector - Integration and Performance Tests", () => {
             minSellRatio: 0.55, // Required for distribution detection
         };
 
-        detector = new DistributionZoneDetector(
+        detector = new DistributionDetectorEnhanced(
             "test-integration",
             "BTCUSDT",
             config,
@@ -478,7 +478,7 @@ describe("DistributionZoneDetector - Integration and Performance Tests", () => {
                 strengthChangeThreshold: 0.05, // Small strength changes
             };
 
-            const strictDetector = new DistributionZoneDetector(
+            const strictDetector = new DistributionDetectorEnhanced(
                 "test-strict",
                 "BTCUSDT",
                 strictConfig,
@@ -549,7 +549,7 @@ describe("DistributionZoneDetector - Integration and Performance Tests", () => {
                 minSellRatio: 0.5, // Lower requirement for easier zone formation
             };
 
-            const permissiveDetector = new DistributionZoneDetector(
+            const permissiveDetector = new DistributionDetectorEnhanced(
                 "test-permissive",
                 "BTCUSDT",
                 permissiveConfig,

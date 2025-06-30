@@ -28,17 +28,17 @@ import { type TestConfiguration } from "./configMatrix.js";
 import { HiddenOrderDetector } from "../services/hiddenOrderDetector.js";
 import { IcebergDetector } from "../services/icebergDetector.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
-import { AbsorptionDetector } from "../indicators/absorptionDetector.js";
-import { ExhaustionDetector } from "../indicators/exhaustionDetector.js";
-import { DeltaCVDConfirmation } from "../indicators/deltaCVDConfirmation.js";
+import { AbsorptionDetectorEnhanced } from "../indicators/absorptionDetectorEnhanced.js";
+import { ExhaustionDetectorEnhanced } from "../indicators/exhaustionDetectorEnhanced.js";
+import { DeltaCVDDetectorEnhanced } from "../indicators/deltaCVDDetectorEnhanced.js";
 
 // Import type definitions
 import type { HiddenOrderDetectorConfig } from "../services/hiddenOrderDetector.js";
 import type { IcebergDetectorConfig } from "../services/icebergDetector.js";
 import type { SpoofingDetectorConfig } from "../services/spoofingDetector.js";
-import type { AbsorptionSettings } from "../indicators/absorptionDetector.js";
-import type { ExhaustionSettings } from "../indicators/exhaustionDetector.js";
-import type { DeltaCVDConfirmationSettings } from "../indicators/deltaCVDConfirmation.js";
+import type { AbsorptionEnhancedSettings } from "../indicators/absorptionDetectorEnhanced.js";
+import type { ExhaustionEnhancedSettings } from "../indicators/exhaustionDetectorEnhanced.js";
+import type { DeltaCVDEnhancedSettings } from "../indicators/deltaCVDDetectorEnhanced.js";
 
 // Import real production components for authentic testing
 import { RedBlackTreeOrderBook } from "../market/redBlackTreeOrderBook.js";
@@ -986,11 +986,11 @@ export class DetectorTestRunner extends EventEmitter {
                 // Use real spoofing detector for authentic testing
                 if (!this.realSpoofingDetector) {
                     throw new Error(
-                        "Real SpoofingDetector not initialized for ExhaustionDetector testing"
+                        "Real SpoofingDetector not initialized for ExhaustionDetectorEnhanced testing"
                     );
                 }
 
-                return new ExhaustionDetector(
+                return new ExhaustionDetectorEnhanced(
                     testConfig.id,
                     testConfig.config as ExhaustionSettings,
                     realLogger,
@@ -1003,13 +1003,13 @@ export class DetectorTestRunner extends EventEmitter {
                 // Use real spoofing detector for authentic DeltaCVD testing
                 if (!this.realSpoofingDetector) {
                     throw new Error(
-                        "Real SpoofingDetector not initialized for DeltaCVDDetector testing"
+                        "Real SpoofingDetector not initialized for DeltaCVDDetectorEnhanced testing"
                     );
                 }
 
-                return new DeltaCVDConfirmation(
+                return new DeltaCVDDetectorEnhanced(
                     testConfig.id,
-                    testConfig.config as DeltaCVDConfirmationSettings,
+                    testConfig.config as DeltaCVDEnhancedSettings,
                     realLogger,
                     this.realSpoofingDetector, // Use real spoofing detector with actual config
                     mockMetrics

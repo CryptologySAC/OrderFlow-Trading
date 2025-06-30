@@ -39,17 +39,16 @@ import { SignalManager } from "./trading/signalManager.js";
 import { SignalCoordinator } from "./services/signalCoordinator.js";
 import { AnomalyDetector, AnomalyEvent } from "./services/anomalyDetector.js";
 
-// Indicator imports
-import { AbsorptionDetector } from "./indicators/absorptionDetector.js";
-import { ExhaustionDetector } from "./indicators/exhaustionDetector.js";
-import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
+// Enhanced Indicator imports
+import { AbsorptionDetectorEnhanced } from "./indicators/absorptionDetectorEnhanced.js";
+import { ExhaustionDetectorEnhanced } from "./indicators/exhaustionDetectorEnhanced.js";
+import { DeltaCVDDetectorEnhanced } from "./indicators/deltaCVDDetectorEnhanced.js";
 // Support/Resistance detector import removed - detector disabled
 // import { SupportResistanceDetector } from "./indicators/supportResistanceDetector.js";
 
-// Zone-based Detector imports
-import { AccumulationZoneDetector } from "./indicators/accumulationZoneDetector.js";
+// Enhanced Zone-based Detector imports
 import { AccumulationZoneDetectorEnhanced } from "./indicators/accumulationZoneDetectorEnhanced.js";
-import { DistributionZoneDetector } from "./indicators/distributionZoneDetector.js";
+import { DistributionDetectorEnhanced } from "./indicators/distributionDetectorEnhanced.js";
 import type {
     AccumulationZone,
     ZoneUpdate,
@@ -118,21 +117,19 @@ export class OrderFlowDashboard {
     private marketDataStorage?: MarketDataStorageService;
 
     // Event-based Detectors (initialized in initializeDetectors)
-    private absorptionDetector!: AbsorptionDetector;
-    private exhaustionDetector!: ExhaustionDetector;
+    private absorptionDetector!: AbsorptionDetectorEnhanced;
+    private exhaustionDetector!: ExhaustionDetectorEnhanced;
     // Support/Resistance detector disabled - generating too many useless signals
     // private supportResistanceDetector!: SupportResistanceDetector;
 
     // Zone-based Detectors (initialized in initializeDetectors)
-    private accumulationZoneDetector!:
-        | AccumulationZoneDetector
-        | AccumulationZoneDetectorEnhanced;
-    private distributionZoneDetector!: DistributionZoneDetector;
+    private accumulationZoneDetector!: AccumulationZoneDetectorEnhanced;
+    private distributionZoneDetector!: DistributionDetectorEnhanced;
 
     // Legacy detectors removed - replaced by zone-based architecture
 
     // Indicators (initialized in initializeDetectors)
-    private deltaCVDConfirmation!: DeltaCVDConfirmation;
+    private deltaCVDConfirmation!: DeltaCVDDetectorEnhanced;
 
     // Time context
     private timeContext: TimeContext = {

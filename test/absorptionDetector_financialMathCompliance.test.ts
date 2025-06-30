@@ -1,7 +1,7 @@
 // test/absorptionDetector_financialMathCompliance.test.ts
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { AbsorptionDetector } from "../src/indicators/absorptionDetector.js";
-import type { AbsorptionSettings } from "../src/indicators/absorptionDetector.js";
+import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
+import type { AbsorptionEnhancedSettings } from "../src/indicators/absorptionDetectorEnhanced.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
@@ -16,7 +16,7 @@ import { FinancialMath } from "../src/utils/financialMath.js";
  */
 
 describe("AbsorptionDetector - FinancialMath Compliance", () => {
-    let detector: AbsorptionDetector;
+    let detector: AbsorptionDetectorEnhanced;
     let mockOrderBook: IOrderBookState;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
@@ -63,7 +63,7 @@ describe("AbsorptionDetector - FinancialMath Compliance", () => {
             isLikelySpoof: vi.fn().mockReturnValue(false),
         } as any;
 
-        detector = new AbsorptionDetector(
+        detector = new AbsorptionDetectorEnhanced(
             "TEST",
             defaultSettings,
             mockOrderBook,

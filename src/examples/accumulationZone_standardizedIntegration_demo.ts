@@ -12,7 +12,7 @@
 // 4. Signal filtering to reduce false positives
 //
 
-import type { AccumulationZoneDetector } from "../indicators/accumulationZoneDetector.js";
+import type { AccumulationZoneDetectorEnhanced } from "../indicators/accumulationZoneDetectorEnhanced.js";
 import { AccumulationZoneStandardizedEnhancement } from "../indicators/accumulationZoneDetector_standardizedEnhancement.js";
 import type {
     EnrichedTradeEvent,
@@ -51,7 +51,7 @@ export interface EnhancedAccumulationSignal {
  * with standardized zone enhancement
  */
 export class AccumulationZoneEnhancedDemo {
-    private readonly accumulationDetector: AccumulationZoneDetector;
+    private readonly accumulationDetector: AccumulationZoneDetectorEnhanced;
     private readonly standardizedEnhancement: AccumulationZoneStandardizedEnhancement;
 
     // Demo metrics
@@ -62,7 +62,7 @@ export class AccumulationZoneEnhancedDemo {
     private confidenceBoostedSignals = 0;
 
     constructor(
-        accumulationDetector: AccumulationZoneDetector,
+        accumulationDetector: AccumulationZoneDetectorEnhanced,
         standardizedEnhancement: AccumulationZoneStandardizedEnhancement
     ) {
         this.accumulationDetector = accumulationDetector;

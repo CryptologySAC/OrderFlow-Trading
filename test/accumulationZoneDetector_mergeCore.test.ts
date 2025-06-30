@@ -135,14 +135,14 @@ vi.mock("../src/trading/zoneManager", () => {
     };
 });
 
-import { AccumulationZoneDetector } from "../src/indicators/accumulationZoneDetector.js";
+import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
 
-describe("AccumulationZoneDetector - Core Merge Functionality", () => {
-    let detector: AccumulationZoneDetector;
+describe("AccumulationZoneDetectorEnhanced - Core Merge Functionality", () => {
+    let detector: AccumulationZoneDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
 
@@ -208,7 +208,7 @@ describe("AccumulationZoneDetector - Core Merge Functionality", () => {
             minSellRatio: 0.4, // 40% sell ratio - more permissive than 50%
         };
 
-        detector = new AccumulationZoneDetector(
+        detector = new AccumulationZoneDetectorEnhanced(
             "test-merge-core",
             "BTCUSDT",
             config,

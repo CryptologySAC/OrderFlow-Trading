@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { AccumulationZoneDetector } from "../src/indicators/accumulationZoneDetector";
+import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced";
 import { MetricsCollector } from "../__mocks__/src/infrastructure/metricsCollector";
 import type {
     AccumulationZone,
@@ -9,10 +9,10 @@ import type {
 
 const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
 
-describe("AccumulationZoneDetector neutral signal", () => {
+describe("AccumulationZoneDetectorEnhanced neutral signal", () => {
     it("returns neutral expectedDirection on weakened zone", () => {
         const metrics = new MetricsCollector();
-        const detector = new AccumulationZoneDetector(
+        const detector = new AccumulationZoneDetectorEnhanced(
             "test",
             "BTCUSDT",
             {},

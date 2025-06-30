@@ -1,14 +1,14 @@
 // test/distribution_numeric_stability.test.ts
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { DistributionZoneDetector } from "../src/indicators/distributionZoneDetector.js";
+import { DistributionDetectorEnhanced } from "../src/indicators/distributionDetectorEnhanced.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import { FinancialMath } from "../src/utils/financialMath.js";
 
 describe("DistributionZoneDetector Numeric Stability Fixes", () => {
-    let detector: DistributionZoneDetector;
+    let detector: DistributionDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
 
@@ -90,7 +90,7 @@ describe("DistributionZoneDetector Numeric Stability Fixes", () => {
             cleanup: vi.fn(),
         };
 
-        detector = new DistributionZoneDetector(
+        detector = new DistributionDetectorEnhanced(
             "test_distribution",
             "LTCUSDT",
             {

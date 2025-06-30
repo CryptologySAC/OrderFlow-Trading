@@ -4,14 +4,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
 
-import { AccumulationZoneDetector } from "../src/indicators/accumulationZoneDetector.js";
+import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
 
 describe("Debug Zone Formation", () => {
-    let detector: AccumulationZoneDetector;
+    let detector: AccumulationZoneDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
     let debugOutput: string[] = [];
@@ -56,7 +56,7 @@ describe("Debug Zone Formation", () => {
         console.log("=== CREATING DETECTOR WITH ULTRA PERMISSIVE CONFIG ===");
         console.log(JSON.stringify(config, null, 2));
 
-        detector = new AccumulationZoneDetector(
+        detector = new AccumulationZoneDetectorEnhanced(
             "debug-test",
             "BTCUSDT",
             config,

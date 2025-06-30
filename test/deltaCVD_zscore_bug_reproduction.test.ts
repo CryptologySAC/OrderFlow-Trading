@@ -5,7 +5,7 @@ vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
 vi.mock("../src/services/spoofingDetector");
 
-import { DeltaCVDConfirmation } from "../src/indicators/deltaCVDConfirmation";
+import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced";
 import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { SpoofingDetector } from "../src/services/spoofingDetector";
@@ -21,7 +21,7 @@ import type { EnrichedTradeEvent } from "../src/types/marketEvents";
  */
 
 describe("DeltaCVD Z-Score Bug Reproduction", () => {
-    let detector: DeltaCVDConfirmation;
+    let detector: DeltaCVDDetectorEnhanced;
     let mockLogger: WorkerLogger;
     let mockMetrics: MetricsCollector;
     let mockSpoofing: SpoofingDetector;
@@ -64,7 +64,7 @@ describe("DeltaCVD Z-Score Bug Reproduction", () => {
             testLogMinSpoof: 50,
         });
 
-        detector = new DeltaCVDConfirmation(
+        detector = new DeltaCVDDetectorEnhanced(
             "zscore_bug_test",
             {
                 windowsSec: [60],

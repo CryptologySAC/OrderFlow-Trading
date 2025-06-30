@@ -1,7 +1,7 @@
 // test/absorptionDetector_errorHandling.test.ts
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { AbsorptionDetector } from "../src/indicators/absorptionDetector.js";
-import type { AbsorptionSettings } from "../src/indicators/absorptionDetector.js";
+import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
+import type { AbsorptionEnhancedSettings } from "../src/indicators/absorptionDetectorEnhanced.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
@@ -14,7 +14,7 @@ import { SpoofingDetector } from "../src/services/spoofingDetector.js";
  */
 
 describe("AbsorptionDetector - Error Handling & Edge Cases", () => {
-    let detector: AbsorptionDetector;
+    let detector: AbsorptionDetectorEnhanced;
     let mockOrderBook: IOrderBookState;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
@@ -56,7 +56,7 @@ describe("AbsorptionDetector - Error Handling & Edge Cases", () => {
             isLikelySpoof: vi.fn().mockReturnValue(false),
         } as any;
 
-        detector = new AbsorptionDetector(
+        detector = new AbsorptionDetectorEnhanced(
             "TEST",
             defaultSettings,
             mockOrderBook,
@@ -260,7 +260,7 @@ describe("AbsorptionDetector - Error Handling & Edge Cases", () => {
 
             invalidConfigs.forEach((config) => {
                 expect(() => {
-                    new AbsorptionDetector(
+                    new AbsorptionDetectorEnhanced(
                         "INVALID",
                         config,
                         mockOrderBook,
@@ -279,7 +279,7 @@ describe("AbsorptionDetector - Error Handling & Edge Cases", () => {
             };
 
             expect(() => {
-                const detector = new AbsorptionDetector(
+                const detector = new AbsorptionDetectorEnhanced(
                     "MINIMAL",
                     minimalSettings,
                     mockOrderBook,

@@ -3,8 +3,8 @@
 import { EventEmitter } from "events";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
-import type { DeltaCVDConfirmationSettings } from "../indicators/deltaCVDConfirmation.js";
-import { DeltaCVDConfirmation } from "../indicators/deltaCVDConfirmation.js";
+import type { DeltaCVDEnhancedSettings } from "../indicators/deltaCVDDetectorEnhanced.js";
+import { DeltaCVDDetectorEnhanced } from "../indicators/deltaCVDDetectorEnhanced.js";
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import type { SignalCandidate } from "../types/signalTypes.js";
 import { PerformanceAnalyzer } from "./performanceAnalyzer.js";
@@ -25,7 +25,7 @@ export enum DeltaCVDTestProfile {
  */
 export const TEST_PROFILE_CONFIGS: Record<
     DeltaCVDTestProfile,
-    Partial<DeltaCVDConfirmationSettings>
+    Partial<DeltaCVDEnhancedSettings>
 > = {
     [DeltaCVDTestProfile.SIMPLIFIED_NO_PASSIVE]: {
         usePassiveVolume: false,
@@ -84,7 +84,7 @@ export interface ABTestMetrics {
  */
 export interface ABTestResult {
     profile: DeltaCVDTestProfile;
-    config: Partial<DeltaCVDConfirmationSettings>;
+    config: Partial<DeltaCVDEnhancedSettings>;
     metrics: ABTestMetrics;
     startTime: number;
     endTime: number;
@@ -131,7 +131,7 @@ interface ProfileComparison {
  */
 export class DeltaCVDABTestFramework extends EventEmitter {
     private testResults: Map<DeltaCVDTestProfile, ABTestResult[]> = new Map();
-    private activeTests: Map<string, DeltaCVDConfirmation> = new Map();
+    private activeTests: Map<string, DeltaCVDDetectorEnhanced> = new Map();
     private performanceAnalyzers: Map<string, PerformanceAnalyzer> = new Map();
 
     constructor(
@@ -173,9 +173,9 @@ export class DeltaCVDABTestFramework extends EventEmitter {
             checkSpoof: () => ({ isSpoofed: false, confidence: 0 }),
         } as unknown as import("../services/spoofingDetector.js").SpoofingDetector;
 
-        const detector = new DeltaCVDConfirmation(
+        const detector = new DeltaCVDDetectorEnhanced(
             testId,
-            config as DeltaCVDConfirmationSettings,
+            config as DeltaCVDEnhancedSettings,
             this.logger,
             spoofingDetector,
             this.metricsCollector,

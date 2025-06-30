@@ -3,14 +3,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock dependencies
 vi.mock("../src/multithreading/workerLogger");
 
-import { DistributionZoneDetector } from "../src/indicators/distributionZoneDetector.js";
+import { DistributionDetectorEnhanced } from "../src/indicators/distributionDetectorEnhanced.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
 
-describe("DistributionZoneDetector - Real Distribution Scenarios", () => {
-    let detector: DistributionZoneDetector;
+describe("DistributionDetectorEnhanced - Real Distribution Scenarios", () => {
+    let detector: DistributionDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
 
@@ -41,7 +41,7 @@ describe("DistributionZoneDetector - Real Distribution Scenarios", () => {
             minSellRatio: 0.55, // Required for distribution detection
         };
 
-        detector = new DistributionZoneDetector(
+        detector = new DistributionDetectorEnhanced(
             "test-scenarios",
             "BTCUSDT",
             config,
@@ -435,7 +435,7 @@ describe("DistributionZoneDetector - Real Distribution Scenarios", () => {
             };
 
             // Reset detector for distribution test
-            detector = new DistributionZoneDetector(
+            detector = new DistributionDetectorEnhanced(
                 "test-scenarios-reset",
                 "BTCUSDT",
                 {

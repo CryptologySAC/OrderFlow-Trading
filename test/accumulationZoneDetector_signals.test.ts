@@ -2,14 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ✅ SIGNAL GENERATION TESTS: Test all zone lifecycle signals comprehensively
 
-import { AccumulationZoneDetector } from "../src/indicators/accumulationZoneDetector.js";
+import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
 
-describe("AccumulationZoneDetector - Signal Generation Tests", () => {
-    let detector: AccumulationZoneDetector;
+describe("AccumulationZoneDetectorEnhanced - Signal Generation Tests", () => {
+    let detector: AccumulationZoneDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
 
@@ -50,7 +50,7 @@ describe("AccumulationZoneDetector - Signal Generation Tests", () => {
                 takeProfitPercentAbove: 0.03,
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "signal-test",
                 "LTCUSDT",
                 config,
@@ -171,7 +171,7 @@ describe("AccumulationZoneDetector - Signal Generation Tests", () => {
                 takeProfitPercentAbove: 0.035, // 3.5% take profit
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "risk-management-test",
                 "LTCUSDT",
                 config,
@@ -221,7 +221,7 @@ describe("AccumulationZoneDetector - Signal Generation Tests", () => {
                 zoneTicks: 2,
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "strength-change-test",
                 "LTCUSDT",
                 config,
@@ -306,7 +306,7 @@ describe("AccumulationZoneDetector - Signal Generation Tests", () => {
                 invalidationPercentBelow: 0.01, // 1% invalidation threshold
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "invalidation-test",
                 "LTCUSDT",
                 config,
@@ -402,7 +402,7 @@ describe("AccumulationZoneDetector - Signal Generation Tests", () => {
                 zoneTicks: 2,
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "signal-filtering-test",
                 "LTCUSDT",
                 config,
@@ -474,7 +474,7 @@ describe("AccumulationZoneDetector - Signal Generation Tests", () => {
                 enhancedInstitutionalSizeThreshold: 60, // High institutional threshold
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "high-quality-test",
                 "LTCUSDT",
                 config,

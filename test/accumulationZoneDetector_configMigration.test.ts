@@ -19,12 +19,11 @@ vi.mock("../src/trading/zoneManager", () => {
 
 import { DetectorFactory } from "../src/utils/detectorFactory.js";
 import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced.js";
-import { AccumulationZoneDetector } from "../src/indicators/accumulationZoneDetector.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
 
-describe("AccumulationZoneDetector - Configuration Migration", () => {
+describe("AccumulationZoneDetectorEnhanced - Configuration Migration", () => {
     let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
     let mockDependencies: any;

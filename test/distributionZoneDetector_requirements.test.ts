@@ -3,14 +3,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock dependencies
 vi.mock("../src/multithreading/workerLogger");
 
-import { DistributionZoneDetector } from "../src/indicators/distributionZoneDetector.js";
+import { DistributionDetectorEnhanced } from "../src/indicators/distributionDetectorEnhanced.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
 
-describe("DistributionZoneDetector - Production Requirements Validation", () => {
-    let detector: DistributionZoneDetector;
+describe("DistributionDetectorEnhanced - Production Requirements Validation", () => {
+    let detector: DistributionDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
 
@@ -55,7 +55,7 @@ describe("DistributionZoneDetector - Production Requirements Validation", () => 
             minSellRatio: 0.55, // Config reused with inverted logic - we want low sell ratio (high buy ratio)
         };
 
-        detector = new DistributionZoneDetector(
+        detector = new DistributionDetectorEnhanced(
             "test-distribution-requirements",
             "BTCUSDT",
             config,
@@ -432,7 +432,7 @@ describe("DistributionZoneDetector - Production Requirements Validation", () => 
                 strengthChangeThreshold: 0.1, // Smaller strength changes
             };
 
-            const strictDetector = new DistributionZoneDetector(
+            const strictDetector = new DistributionDetectorEnhanced(
                 "test-strict-config",
                 "BTCUSDT",
                 strictConfig,

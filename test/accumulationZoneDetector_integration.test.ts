@@ -3,14 +3,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // ✅ INTEGRATION TEST: Test real zone formation without mocking core functionality
 // This tests the complete AccumulationZoneDetector workflow
 
-import { AccumulationZoneDetector } from "../src/indicators/accumulationZoneDetector.js";
+import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
 
-describe("AccumulationZoneDetector - Integration Tests", () => {
-    let detector: AccumulationZoneDetector;
+describe("AccumulationZoneDetectorEnhanced - Integration Tests", () => {
+    let detector: AccumulationZoneDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
 
@@ -57,7 +57,7 @@ describe("AccumulationZoneDetector - Integration Tests", () => {
                 enhancedInstitutionalSizeThreshold: 40, // Lower threshold
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "integration-test",
                 "LTCUSDT",
                 config,
@@ -187,7 +187,7 @@ describe("AccumulationZoneDetector - Integration Tests", () => {
                 zoneTicks: 2,
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "mixed-pattern-test",
                 "LTCUSDT",
                 config,
@@ -258,7 +258,7 @@ describe("AccumulationZoneDetector - Integration Tests", () => {
                 zoneTicks: 2,
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "institutional-test",
                 "LTCUSDT",
                 config,
@@ -370,7 +370,7 @@ describe("AccumulationZoneDetector - Integration Tests", () => {
                 zoneTicks: 2,
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "rapid-movement-test",
                 "LTCUSDT",
                 config,
@@ -431,7 +431,7 @@ describe("AccumulationZoneDetector - Integration Tests", () => {
                 zoneTicks: 2,
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "performance-test",
                 "LTCUSDT",
                 config,

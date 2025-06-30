@@ -1,19 +1,19 @@
-// Re-export all indicators and their types
+// Re-export all enhanced indicators and their types
 
-export { AccumulationZoneDetector } from "./accumulationZoneDetector.js";
+export { AccumulationZoneDetectorEnhanced } from "./accumulationZoneDetectorEnhanced.js";
 export {
-    AbsorptionDetector,
-    type AbsorptionSettings,
-} from "./absorptionDetector.js";
+    AbsorptionDetectorEnhanced,
+    type AbsorptionEnhancedSettings,
+} from "./absorptionDetectorEnhanced.js";
 export {
-    ExhaustionDetector,
-    type ExhaustionSettings,
-} from "./exhaustionDetector.js";
-export { DistributionZoneDetector } from "./distributionZoneDetector.js";
+    ExhaustionDetectorEnhanced,
+    type ExhaustionEnhancedSettings,
+} from "./exhaustionDetectorEnhanced.js";
+export { DistributionDetectorEnhanced } from "./distributionDetectorEnhanced.js";
 export {
-    DeltaCVDConfirmation,
-    type DeltaCVDConfirmationSettings,
-} from "./deltaCVDConfirmation.js";
+    DeltaCVDDetectorEnhanced,
+    type DeltaCVDEnhancedSettings,
+} from "./deltaCVDDetectorEnhanced.js";
 export { SupportResistanceDetector } from "./supportResistanceDetector.js";
 
 // Re-export types from interfaces

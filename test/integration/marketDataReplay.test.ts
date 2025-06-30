@@ -14,11 +14,11 @@ import {
     type MarketScenario,
     type ReplayMetrics,
 } from "../framework/marketDataReplay.js";
-import { AbsorptionDetector } from "../../src/indicators/absorptionDetector.js";
-import { ExhaustionDetector } from "../../src/indicators/exhaustionDetector.js";
-import { AccumulationZoneDetector } from "../../src/indicators/accumulationZoneDetector.js";
-import { DistributionZoneDetector } from "../../src/indicators/distributionZoneDetector.js";
-import { DeltaCVDConfirmation } from "../../src/indicators/deltaCVDConfirmation.js";
+import { AbsorptionDetectorEnhanced } from "../../src/indicators/absorptionDetectorEnhanced.js";
+import { ExhaustionDetectorEnhanced } from "../../src/indicators/exhaustionDetectorEnhanced.js";
+import { AccumulationZoneDetectorEnhanced } from "../../src/indicators/accumulationZoneDetectorEnhanced.js";
+import { DistributionDetectorEnhanced } from "../../src/indicators/distributionDetectorEnhanced.js";
+import { DeltaCVDDetectorEnhanced } from "../../src/indicators/deltaCVDDetectorEnhanced.js";
 import type { EnrichedTradeEvent } from "../../src/types/marketEvents.js";
 import type { SignalCandidate } from "../../src/types/signalTypes.js";
 
@@ -96,8 +96,8 @@ describe("Market Data Replay Integration Tests", () => {
     describe("AbsorptionDetector Integration", () => {
         it("should detect price efficiency absorption during volume surge scenario", async () => {
             // Create absorption detector with lower thresholds for testing
-            const absorptionDetector = new AbsorptionDetector(
-                "LTCUSDT",
+            const absorptionDetector = new AbsorptionDetectorEnhanced(
+                "test-absorption-enhanced",
                 {
                     minAggVolume: 50, // Lower volume threshold
                     windowMs: 60000,
@@ -106,11 +106,16 @@ describe("Market Data Replay Integration Tests", () => {
                     priceEfficiencyThreshold: 0.5, // Lower efficiency threshold
                     volumeSurgeMultiplier: 2.0, // Lower multiplier
                     imbalanceThreshold: 0.2, // Lower imbalance threshold
+                    useStandardizedZones: true,
+                    standardizedZoneConfig: {
+                        enhancementMode: "production",
+                    },
                 },
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
-                mockMetricsCollector
+                mockMetricsCollector,
+                mockSignalLogger
             );
 
             // Set up signal capture
@@ -188,8 +193,8 @@ describe("Market Data Replay Integration Tests", () => {
     describe("ExhaustionDetector Integration", () => {
         it("should detect 12-factor exhaustion during liquidity depletion scenario", async () => {
             // Create exhaustion detector with lower thresholds for testing
-            const exhaustionDetector = new ExhaustionDetector(
-                "LTCUSDT",
+            const exhaustionDetector = new ExhaustionDetectorEnhanced(
+                "test-exhaustion-enhanced",
                 {
                     minAggVolume: 50, // Lower volume threshold
                     windowMs: 90000,
@@ -197,10 +202,15 @@ describe("Market Data Replay Integration Tests", () => {
                     exhaustionThreshold: 0.3, // Lower exhaustion threshold
                     volumeSurgeMultiplier: 1.5, // Lower multiplier
                     imbalanceThreshold: 0.15, // Lower imbalance threshold
+                    useStandardizedZones: true,
+                    standardizedZoneConfig: {
+                        enhancementMode: "production",
+                    },
                 },
                 mockLogger,
                 mockSpoofingDetector,
-                mockMetricsCollector
+                mockMetricsCollector,
+                mockSignalLogger
             );
 
             // Set up signal capture
@@ -267,7 +277,7 @@ describe("Market Data Replay Integration Tests", () => {
     describe("Simplified Zone Detection Integration", () => {
         it("should handle zone-based detector concepts without complex dependencies", async () => {
             // Use simple AbsorptionDetector to simulate zone-based concepts
-            const zoneBasedDetector = new AbsorptionDetector(
+            const zoneBasedDetector = new AbsorptionDetectorEnhanced(
                 "LTCUSDT",
                 {
                     minAggVolume: 30,
@@ -333,7 +343,7 @@ describe("Market Data Replay Integration Tests", () => {
     describe("Multi-Detector Performance Test", () => {
         it("should handle multiple detectors processing same data stream efficiently", async () => {
             // Create multiple detectors
-            const absorptionDetector = new AbsorptionDetector(
+            const absorptionDetector = new AbsorptionDetectorEnhanced(
                 "LTCUSDT",
                 {
                     minAggVolume: 200,
@@ -347,7 +357,7 @@ describe("Market Data Replay Integration Tests", () => {
                 mockMetricsCollector
             );
 
-            const exhaustionDetector = new ExhaustionDetector(
+            const exhaustionDetector = new ExhaustionDetectorEnhanced(
                 "LTCUSDT",
                 {
                     minAggVolume: 200,
@@ -361,7 +371,7 @@ describe("Market Data Replay Integration Tests", () => {
             );
 
             // Use a third absorption detector with different settings to simulate multi-detector
-            const thirdDetector = new AbsorptionDetector(
+            const thirdDetector = new AbsorptionDetectorEnhanced(
                 "LTCUSDT",
                 {
                     minAggVolume: 80,
@@ -472,7 +482,7 @@ describe("Market Data Replay Integration Tests", () => {
             }
 
             // Create absorption detector for stress test
-            const detector = new AbsorptionDetector(
+            const detector = new AbsorptionDetectorEnhanced(
                 "LTCUSDT",
                 {
                     minAggVolume: 200,
@@ -565,7 +575,7 @@ describe("Market Data Replay Integration Tests", () => {
             }> = [];
 
             for (const scenario of scenarios) {
-                const detector = new AbsorptionDetector(
+                const detector = new AbsorptionDetectorEnhanced(
                     "LTCUSDT",
                     {
                         minAggVolume: 30,
@@ -635,7 +645,7 @@ describe("Market Data Replay Integration Tests", () => {
             replay.loadScenario(scenario);
 
             // Create multiple detectors to catch different phases
-            const absorptionDetector = new AbsorptionDetector(
+            const absorptionDetector = new AbsorptionDetectorEnhanced(
                 "LTCUSDT",
                 {
                     minAggVolume: 150,
@@ -649,7 +659,7 @@ describe("Market Data Replay Integration Tests", () => {
                 mockMetricsCollector
             );
 
-            const exhaustionDetector = new ExhaustionDetector(
+            const exhaustionDetector = new ExhaustionDetectorEnhanced(
                 "LTCUSDT",
                 {
                     minAggVolume: 150,
@@ -733,7 +743,7 @@ describe("Market Data Replay Integration Tests", () => {
             const scenario = MarketScenarioBuilder.createManipulationScenario();
             replay.loadScenario(scenario);
 
-            const absorptionDetector = new AbsorptionDetector(
+            const absorptionDetector = new AbsorptionDetectorEnhanced(
                 "LTCUSDT",
                 {
                     minAggVolume: 100,
@@ -794,7 +804,7 @@ describe("Market Data Replay Integration Tests", () => {
             replay.loadScenario(scenario);
 
             // Use multiple detector types for comprehensive analysis
-            const absorptionDetector = new AbsorptionDetector(
+            const absorptionDetector = new AbsorptionDetectorEnhanced(
                 "LTCUSDT",
                 {
                     minAggVolume: 120,
@@ -809,7 +819,7 @@ describe("Market Data Replay Integration Tests", () => {
             );
 
             // Use another absorption detector with different parameters for complexity testing
-            const complexDetector = new AbsorptionDetector(
+            const complexDetector = new AbsorptionDetectorEnhanced(
                 "LTCUSDT",
                 {
                     minAggVolume: 60,
@@ -904,7 +914,7 @@ describe("Market Data Replay Integration Tests", () => {
             replay.loadScenario(scenario);
 
             // Use absorption detector optimized for HFT processing
-            const hftDetector = new AbsorptionDetector(
+            const hftDetector = new AbsorptionDetectorEnhanced(
                 "LTCUSDT",
                 {
                     minAggVolume: 10,
@@ -1004,7 +1014,7 @@ describe("Market Data Replay Integration Tests", () => {
                 const testStartTime = Date.now();
 
                 try {
-                    const detector = new AbsorptionDetector(
+                    const detector = new AbsorptionDetectorEnhanced(
                         "LTCUSDT",
                         {
                             minAggVolume: 100,

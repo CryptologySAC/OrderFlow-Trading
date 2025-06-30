@@ -3,14 +3,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock dependencies
 vi.mock("../src/multithreading/workerLogger");
 
-import { DistributionZoneDetector } from "../src/indicators/distributionZoneDetector.js";
+import { DistributionDetectorEnhanced } from "../src/indicators/distributionDetectorEnhanced.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ZoneDetectorConfig, ZoneSignal } from "../src/types/zoneTypes.js";
 
-describe("DistributionZoneDetector - Signal Generation Validation", () => {
-    let detector: DistributionZoneDetector;
+describe("DistributionDetectorEnhanced - Signal Generation Validation", () => {
+    let detector: DistributionDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
 
@@ -41,7 +41,7 @@ describe("DistributionZoneDetector - Signal Generation Validation", () => {
             minSellRatio: 0.55, // Required for distribution detection
         };
 
-        detector = new DistributionZoneDetector(
+        detector = new DistributionDetectorEnhanced(
             "test-signals",
             "BTCUSDT",
             config,
@@ -242,7 +242,7 @@ describe("DistributionZoneDetector - Signal Generation Validation", () => {
                 );
 
                 // Reset detector for each scenario
-                detector = new DistributionZoneDetector(
+                detector = new DistributionDetectorEnhanced(
                     `test-${scenario.name}`,
                     "BTCUSDT",
                     {

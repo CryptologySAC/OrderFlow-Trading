@@ -5,7 +5,7 @@ vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
 vi.mock("../src/services/spoofingDetector");
 
-import { DeltaCVDConfirmation } from "../src/indicators/deltaCVDConfirmation";
+import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced";
 import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { SpoofingDetector } from "../src/services/spoofingDetector";
@@ -24,7 +24,7 @@ import type { EnrichedTradeEvent } from "../src/types/marketEvents";
  */
 
 describe("DeltaCVDConfirmation - Real World Scenarios", () => {
-    let detector: DeltaCVDConfirmation;
+    let detector: DeltaCVDDetectorEnhanced;
     let mockLogger: WorkerLogger;
     let mockMetrics: MetricsCollector;
     let mockSpoofing: SpoofingDetector;
@@ -72,7 +72,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
 
     describe("🚀 Institutional Volume Surge Scenarios", () => {
         beforeEach(() => {
-            detector = new DeltaCVDConfirmation(
+            detector = new DeltaCVDDetectorEnhanced(
                 "institutional_volume_test",
                 {
                     windowsSec: [60],
@@ -309,7 +309,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
 
     describe("📈 Momentum vs Divergence Detection", () => {
         it("should detect momentum continuation pattern", () => {
-            const momentumDetector = new DeltaCVDConfirmation(
+            const momentumDetector = new DeltaCVDDetectorEnhanced(
                 "momentum_test",
                 {
                     windowsSec: [60],
@@ -425,7 +425,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
         });
 
         it("should detect bearish divergence pattern", () => {
-            const divergenceDetector = new DeltaCVDConfirmation(
+            const divergenceDetector = new DeltaCVDDetectorEnhanced(
                 "divergence_test",
                 {
                     windowsSec: [60],
@@ -558,7 +558,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
         });
 
         it("should detect bullish divergence (price down, CVD up)", () => {
-            const divergenceDetector = new DeltaCVDConfirmation(
+            const divergenceDetector = new DeltaCVDDetectorEnhanced(
                 "bullish_divergence_test",
                 {
                     windowsSec: [60],
@@ -701,7 +701,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
 
     describe("⚡ High-Frequency Market Microstructure", () => {
         beforeEach(() => {
-            detector = new DeltaCVDConfirmation(
+            detector = new DeltaCVDDetectorEnhanced(
                 "microstructure_test",
                 {
                     windowsSec: [30, 60], // Multi-timeframe
@@ -933,7 +933,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
 
     describe("🎯 Edge Cases and Error Conditions", () => {
         beforeEach(() => {
-            detector = new DeltaCVDConfirmation(
+            detector = new DeltaCVDDetectorEnhanced(
                 "edge_case_test",
                 {
                     windowsSec: [60],
@@ -1174,7 +1174,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
 
     describe("🔬 Multi-Timeframe Analysis", () => {
         beforeEach(() => {
-            detector = new DeltaCVDConfirmation(
+            detector = new DeltaCVDDetectorEnhanced(
                 "multi_timeframe_test",
                 {
                     windowsSec: [30, 60, 120], // 30s, 1m, 2m analysis

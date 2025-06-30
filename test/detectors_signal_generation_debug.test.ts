@@ -13,17 +13,17 @@ import {
 import fs from "fs";
 import path from "path";
 import {
-    ExhaustionDetector,
-    type ExhaustionSettings,
-} from "../src/indicators/exhaustionDetector.js";
+    ExhaustionDetectorEnhanced,
+    type ExhaustionEnhancedSettings,
+} from "../src/indicators/exhaustionDetectorEnhanced.js";
 import {
-    AbsorptionDetector,
-    type AbsorptionSettings,
-} from "../src/indicators/absorptionDetector.js";
+    AbsorptionDetectorEnhanced,
+    type AbsorptionEnhancedSettings,
+} from "../src/indicators/absorptionDetectorEnhanced.js";
 import {
-    DeltaCVDConfirmation,
-    type DeltaCVDConfirmationSettings,
-} from "../src/indicators/deltaCVDConfirmation.js";
+    DeltaCVDDetectorEnhanced,
+    type DeltaCVDEnhancedSettings,
+} from "../src/indicators/deltaCVDDetectorEnhanced.js";
 import type {
     EnrichedTradeEvent,
     AggressiveTrade,
@@ -383,7 +383,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 ...exhaustionConfig,
             };
 
-            const detector = new ExhaustionDetector(
+            const detector = new ExhaustionDetectorEnhanced(
                 "debug-exhaustion",
                 settings,
                 mockLogger,
@@ -423,7 +423,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 ...exhaustionConfig,
             };
 
-            const detector = new ExhaustionDetector(
+            const detector = new ExhaustionDetectorEnhanced(
                 "debug-exhaustion",
                 settings,
                 mockLogger,
@@ -481,7 +481,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 ...absorptionConfig,
             };
 
-            const detector = new AbsorptionDetector(
+            const detector = new AbsorptionDetectorEnhanced(
                 "debug-absorption",
                 settings,
                 mockOrderBook,
@@ -519,7 +519,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 ...absorptionConfig,
             };
 
-            const detector = new AbsorptionDetector(
+            const detector = new AbsorptionDetectorEnhanced(
                 "debug-absorption",
                 settings,
                 mockOrderBook,
@@ -571,12 +571,12 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             console.log("Real DeltaCVD Config:", deltaCVDConfig);
 
-            const settings: DeltaCVDConfirmationSettings = {
+            const settings: DeltaCVDEnhancedSettings = {
                 symbol: "LTCUSDT",
                 ...deltaCVDConfig,
             };
 
-            const detector = new DeltaCVDConfirmation(
+            const detector = new DeltaCVDDetectorEnhanced(
                 "debug-deltacvd",
                 settings,
                 mockLogger,
@@ -612,12 +612,12 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
             const deltaCVDConfig =
                 realConfig.symbols.LTCUSDT.deltaCvdConfirmation;
 
-            const settings: DeltaCVDConfirmationSettings = {
+            const settings: DeltaCVDEnhancedSettings = {
                 symbol: "LTCUSDT",
                 ...deltaCVDConfig,
             };
 
-            const detector = new DeltaCVDConfirmation(
+            const detector = new DeltaCVDDetectorEnhanced(
                 "debug-deltacvd",
                 settings,
                 mockLogger,
@@ -662,7 +662,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
             const config = realConfig.symbols.LTCUSDT;
 
             // Create all detectors with real config
-            const exhaustionDetector = new ExhaustionDetector(
+            const exhaustionDetector = new ExhaustionDetectorEnhanced(
                 "compare-exhaustion",
                 { symbol: "LTCUSDT", ...config.exhaustion },
                 mockLogger,
@@ -671,7 +671,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 mockSignalLogger
             );
 
-            const absorptionDetector = new AbsorptionDetector(
+            const absorptionDetector = new AbsorptionDetectorEnhanced(
                 "compare-absorption",
                 { symbol: "LTCUSDT", ...config.absorption },
                 mockOrderBook,
@@ -681,7 +681,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 mockSignalLogger
             );
 
-            const deltaCVDDetector = new DeltaCVDConfirmation(
+            const deltaCVDDetector = new DeltaCVDDetectorEnhanced(
                 "compare-deltacvd",
                 { symbol: "LTCUSDT", ...config.deltaCvdConfirmation },
                 mockLogger,

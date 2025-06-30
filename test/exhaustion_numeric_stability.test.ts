@@ -1,7 +1,7 @@
 // test/exhaustion_numeric_stability.test.ts
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { ExhaustionDetector } from "../src/indicators/exhaustionDetector.js";
+import { ExhaustionDetectorEnhanced } from "../src/indicators/exhaustionDetectorEnhanced.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
@@ -9,7 +9,7 @@ import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import { FinancialMath } from "../src/utils/financialMath.js";
 
 describe("ExhaustionDetector Numeric Stability Fixes", () => {
-    let detector: ExhaustionDetector;
+    let detector: ExhaustionDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
     let mockSpoofingDetector: SpoofingDetector;
@@ -43,7 +43,7 @@ describe("ExhaustionDetector Numeric Stability Fixes", () => {
             mockLogger
         );
 
-        detector = new ExhaustionDetector(
+        detector = new ExhaustionDetectorEnhanced(
             "test_exhaustion",
             {
                 exhaustionThreshold: 0.7,

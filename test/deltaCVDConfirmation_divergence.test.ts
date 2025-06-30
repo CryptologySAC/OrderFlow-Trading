@@ -5,7 +5,7 @@ vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
 vi.mock("../src/services/spoofingDetector");
 
-import { DeltaCVDConfirmation } from "../src/indicators/deltaCVDConfirmation";
+import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced";
 import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { SpoofingDetector } from "../src/services/spoofingDetector";
@@ -22,7 +22,7 @@ import type { EnrichedTradeEvent } from "../src/types/marketEvents";
  */
 
 describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
-    let detector: DeltaCVDConfirmation;
+    let detector: DeltaCVDDetectorEnhanced;
     let mockLogger: WorkerLogger;
     let mockMetrics: MetricsCollector;
     let mockSpoofing: SpoofingDetector;
@@ -69,7 +69,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
 
     describe("Detection Mode Configuration", () => {
         it("should correctly configure divergence mode", () => {
-            detector = new DeltaCVDConfirmation(
+            detector = new DeltaCVDDetectorEnhanced(
                 "test_divergence_config",
                 {
                     windowsSec: [60],
@@ -90,7 +90,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
         });
 
         it("should default to momentum mode when detectionMode not specified", () => {
-            detector = new DeltaCVDConfirmation(
+            detector = new DeltaCVDDetectorEnhanced(
                 "test_default_mode",
                 {
                     windowsSec: [60],
@@ -107,7 +107,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
         });
 
         it("should accept hybrid mode configuration", () => {
-            detector = new DeltaCVDConfirmation(
+            detector = new DeltaCVDDetectorEnhanced(
                 "test_hybrid_mode",
                 {
                     windowsSec: [60],
@@ -127,7 +127,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
 
     describe("Divergence Validation Logic", () => {
         beforeEach(() => {
-            detector = new DeltaCVDConfirmation(
+            detector = new DeltaCVDDetectorEnhanced(
                 "test_divergence_validation",
                 {
                     windowsSec: [60],
@@ -192,7 +192,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
 
         it("should detect price/CVD direction mismatch", () => {
             // Initialize detector for this specific test
-            detector = new DeltaCVDConfirmation(
+            detector = new DeltaCVDDetectorEnhanced(
                 "test_price_cvd_mismatch",
                 {
                     windowsSec: [60],
@@ -274,7 +274,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
 
     describe("Signal Direction Logic in Divergence Mode", () => {
         beforeEach(() => {
-            detector = new DeltaCVDConfirmation(
+            detector = new DeltaCVDDetectorEnhanced(
                 "test_signal_direction",
                 {
                     windowsSec: [60],
@@ -398,8 +398,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
     });
 
     describe("Momentum vs Divergence Mode Comparison", () => {
-        let momentumDetector: DeltaCVDConfirmation;
-        let divergenceDetector: DeltaCVDConfirmation;
+        let momentumDetector: DeltaCVDDetectorEnhanced;
+        let divergenceDetector: DeltaCVDDetectorEnhanced;
 
         beforeEach(() => {
             const sharedConfig = {
@@ -411,7 +411,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 divergenceLookbackSec: 60,
             };
 
-            momentumDetector = new DeltaCVDConfirmation(
+            momentumDetector = new DeltaCVDDetectorEnhanced(
                 "momentum_detector",
                 { ...sharedConfig, detectionMode: "momentum" },
                 mockLogger,
@@ -419,7 +419,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 mockMetrics
             );
 
-            divergenceDetector = new DeltaCVDConfirmation(
+            divergenceDetector = new DeltaCVDDetectorEnhanced(
                 "divergence_detector",
                 { ...sharedConfig, detectionMode: "divergence" },
                 mockLogger,
@@ -470,10 +470,10 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
     });
 
     describe("Hybrid Mode Logic", () => {
-        let hybridDetector: DeltaCVDConfirmation;
+        let hybridDetector: DeltaCVDDetectorEnhanced;
 
         beforeEach(() => {
-            hybridDetector = new DeltaCVDConfirmation(
+            hybridDetector = new DeltaCVDDetectorEnhanced(
                 "hybrid_detector",
                 {
                     windowsSec: [60],
@@ -523,7 +523,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
 
     describe("Price Direction Calculation", () => {
         beforeEach(() => {
-            detector = new DeltaCVDConfirmation(
+            detector = new DeltaCVDDetectorEnhanced(
                 "test_price_direction",
                 {
                     windowsSec: [60],
@@ -631,7 +631,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
 
     describe("Edge Cases and Error Conditions", () => {
         beforeEach(() => {
-            detector = new DeltaCVDConfirmation(
+            detector = new DeltaCVDDetectorEnhanced(
                 "test_edge_cases",
                 {
                     windowsSec: [60],

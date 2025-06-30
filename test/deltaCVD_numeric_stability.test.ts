@@ -1,14 +1,14 @@
 // test/deltaCVD_numeric_stability.test.ts
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { DeltaCVDConfirmation } from "../src/indicators/deltaCVDConfirmation.js";
+import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
 describe("DeltaCVD Numeric Stability Fixes", () => {
-    let detector: DeltaCVDConfirmation;
+    let detector: DeltaCVDDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
     let mockSpoofingDetector: SpoofingDetector;
@@ -103,7 +103,7 @@ describe("DeltaCVD Numeric Stability Fixes", () => {
             mockLogger
         );
 
-        detector = new DeltaCVDConfirmation(
+        detector = new DeltaCVDDetectorEnhanced(
             "test_cvd",
             {
                 minZ: 3,

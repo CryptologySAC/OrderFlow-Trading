@@ -13,17 +13,17 @@ import {
 } from "vitest";
 import { Config } from "../src/core/config.js";
 import {
-    ExhaustionDetector,
-    type ExhaustionSettings,
-} from "../src/indicators/exhaustionDetector.js";
+    ExhaustionDetectorEnhanced,
+    type ExhaustionEnhancedSettings,
+} from "../src/indicators/exhaustionDetectorEnhanced.js";
 import {
-    AbsorptionDetector,
-    type AbsorptionSettings,
-} from "../src/indicators/absorptionDetector.js";
+    AbsorptionDetectorEnhanced,
+    type AbsorptionEnhancedSettings,
+} from "../src/indicators/absorptionDetectorEnhanced.js";
 import {
-    DeltaCVDConfirmation,
-    type DeltaCVDConfirmationSettings,
-} from "../src/indicators/deltaCVDConfirmation.js";
+    DeltaCVDDetectorEnhanced,
+    type DeltaCVDEnhancedSettings,
+} from "../src/indicators/deltaCVDDetectorEnhanced.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../src/infrastructure/signalLoggerInterface.js";
@@ -159,7 +159,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 eventCooldownMs: 10000,
             };
 
-            const detector = new ExhaustionDetector(
+            const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 settings,
                 mockLogger,
@@ -188,7 +188,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 eventCooldownMs: 10000,
             };
 
-            const detector = new ExhaustionDetector(
+            const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 settings,
                 mockLogger,
@@ -214,7 +214,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 eventCooldownMs: 10000,
             };
 
-            const detector = new ExhaustionDetector(
+            const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 settings,
                 mockLogger,
@@ -247,7 +247,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 eventCooldownMs: 10000,
             };
 
-            const detector = new ExhaustionDetector(
+            const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 settings,
                 mockLogger,
@@ -280,7 +280,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 eventCooldownMs: 15000,
             };
 
-            const detector = new AbsorptionDetector(
+            const detector = new AbsorptionDetectorEnhanced(
                 "test-absorption",
                 settings,
                 mockOrderBook,
@@ -306,7 +306,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 eventCooldownMs: 15000,
             };
 
-            const detector = new AbsorptionDetector(
+            const detector = new AbsorptionDetectorEnhanced(
                 "test-absorption",
                 settings,
                 mockOrderBook,
@@ -333,7 +333,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 eventCooldownMs: 15000,
             };
 
-            const detector = new AbsorptionDetector(
+            const detector = new AbsorptionDetectorEnhanced(
                 "test-absorption",
                 settings,
                 mockOrderBook,
@@ -360,7 +360,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 eventCooldownMs: 15000,
             };
 
-            const detector = new AbsorptionDetector(
+            const detector = new AbsorptionDetectorEnhanced(
                 "test-absorption",
                 settings,
                 mockOrderBook,
@@ -379,7 +379,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
         it("should use baseConfidenceRequired from config", () => {
             const configValue = 0.2; // From config.json
 
-            const settings: DeltaCVDConfirmationSettings = {
+            const settings: DeltaCVDEnhancedSettings = {
                 symbol: "LTCUSDT",
                 baseConfidenceRequired: configValue,
                 windowMs: 60000,
@@ -389,7 +389,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 eventCooldownMs: 15000,
             };
 
-            const detector = new DeltaCVDConfirmation(
+            const detector = new DeltaCVDDetectorEnhanced(
                 "test-deltacvd",
                 settings,
                 mockLogger,
@@ -405,7 +405,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
         it("should use finalConfidenceRequired from config", () => {
             const configValue = 0.35; // From config.json
 
-            const settings: DeltaCVDConfirmationSettings = {
+            const settings: DeltaCVDEnhancedSettings = {
                 symbol: "LTCUSDT",
                 finalConfidenceRequired: configValue,
                 windowMs: 60000,
@@ -415,7 +415,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 eventCooldownMs: 15000,
             };
 
-            const detector = new DeltaCVDConfirmation(
+            const detector = new DeltaCVDDetectorEnhanced(
                 "test-deltacvd",
                 settings,
                 mockLogger,
@@ -431,7 +431,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
         it("should use usePassiveVolume feature flag from config", () => {
             const configValue = true; // From config.json
 
-            const settings: DeltaCVDConfirmationSettings = {
+            const settings: DeltaCVDEnhancedSettings = {
                 symbol: "LTCUSDT",
                 usePassiveVolume: configValue,
                 windowMs: 60000,
@@ -441,7 +441,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 eventCooldownMs: 15000,
             };
 
-            const detector = new DeltaCVDConfirmation(
+            const detector = new DeltaCVDDetectorEnhanced(
                 "test-deltacvd",
                 settings,
                 mockLogger,
@@ -457,7 +457,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
         it("should use enableDepthAnalysis feature flag from config", () => {
             const configValue = true; // From config.json
 
-            const settings: DeltaCVDConfirmationSettings = {
+            const settings: DeltaCVDEnhancedSettings = {
                 symbol: "LTCUSDT",
                 enableDepthAnalysis: configValue,
                 windowMs: 60000,
@@ -467,7 +467,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 eventCooldownMs: 15000,
             };
 
-            const detector = new DeltaCVDConfirmation(
+            const detector = new DeltaCVDDetectorEnhanced(
                 "test-deltacvd",
                 settings,
                 mockLogger,
@@ -494,7 +494,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 eventCooldownMs: 10000,
             };
 
-            const detector = new ExhaustionDetector(
+            const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 configSettings,
                 mockLogger,
@@ -532,7 +532,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 eventCooldownMs: 10000,
             };
 
-            const detector = new ExhaustionDetector(
+            const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 settings,
                 mockLogger,
@@ -574,7 +574,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 eventCooldownMs: 10000,
             };
 
-            const detector = new ExhaustionDetector(
+            const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 settingsWithMissingValues,
                 mockLogger,
@@ -605,7 +605,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 eventCooldownMs: 10000,
             };
 
-            const detector = new ExhaustionDetector(
+            const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 settingsWithExplicitValue,
                 mockLogger,

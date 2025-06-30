@@ -1,7 +1,7 @@
 // test/absorptionDetector_specifications.test.ts
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { AbsorptionDetector } from "../src/indicators/absorptionDetector.js";
-import type { AbsorptionSettings } from "../src/indicators/absorptionDetector.js";
+import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
+import type { AbsorptionEnhancedSettings } from "../src/indicators/absorptionDetectorEnhanced.js";
 import type {
     EnrichedTradeEvent,
     AggressiveTrade,
@@ -85,7 +85,7 @@ describe("AbsorptionDetector - Specification Compliance", () => {
             isLikelySpoof: vi.fn().mockReturnValue(false),
         } as any;
 
-        detector = new AbsorptionDetector(
+        detector = new AbsorptionDetectorEnhanced(
             "TEST",
             defaultSettings,
             mockOrderBook,
@@ -334,7 +334,7 @@ describe("AbsorptionDetector - Specification Compliance", () => {
                 volumePerTrade: number,
                 detectorName: string
             ) {
-                const testDetector = new AbsorptionDetector(
+                const testDetector = new AbsorptionDetectorEnhanced(
                     detectorName,
                     defaultSettings,
                     mockOrderBook,
@@ -553,7 +553,7 @@ describe("AbsorptionDetector - Specification Compliance", () => {
                 velocityIncreaseThreshold: 2.0,
             };
 
-            const customDetector = new AbsorptionDetector(
+            const customDetector = new AbsorptionDetectorEnhanced(
                 "CUSTOM",
                 customSettings,
                 mockOrderBook,

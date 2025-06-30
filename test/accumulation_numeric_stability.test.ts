@@ -1,13 +1,13 @@
 // test/accumulation_numeric_stability.test.ts
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { AccumulationZoneDetector } from "../src/indicators/accumulationZoneDetector.js";
+import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
 describe("AccumulationZoneDetector Numeric Stability Fixes", () => {
-    let detector: AccumulationZoneDetector;
+    let detector: AccumulationZoneDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
 
@@ -89,7 +89,7 @@ describe("AccumulationZoneDetector Numeric Stability Fixes", () => {
             cleanup: vi.fn(),
         };
 
-        detector = new AccumulationZoneDetector(
+        detector = new AccumulationZoneDetectorEnhanced(
             "test_accumulation",
             "LTCUSDT",
             {

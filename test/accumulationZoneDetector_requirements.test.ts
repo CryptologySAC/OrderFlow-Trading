@@ -6,12 +6,12 @@ vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
 vi.mock("../src/trading/zoneManager");
 
-import { AccumulationZoneDetector } from "../src/indicators/accumulationZoneDetector";
+import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced";
 import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 
 describe("AccumulationZoneDetector Requirements", () => {
-    let detector: AccumulationZoneDetector;
+    let detector: AccumulationZoneDetectorEnhanced;
     let mockLogger: WorkerLogger;
     let mockMetrics: MetricsCollector;
 
@@ -22,7 +22,7 @@ describe("AccumulationZoneDetector Requirements", () => {
 
         // The AccumulationZoneDetector creates its own ZoneManager internally
         // The mock will be applied via the vi.mock() call at the top
-        detector = new AccumulationZoneDetector(
+        detector = new AccumulationZoneDetectorEnhanced(
             "test-detector",
             "LTCUSDT",
             {

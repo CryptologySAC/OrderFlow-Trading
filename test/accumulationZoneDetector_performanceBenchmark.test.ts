@@ -5,7 +5,7 @@
  */
 
 import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
-import { AccumulationZoneDetector } from "../src/indicators/accumulationZoneDetector.js";
+import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced.js";
 import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
@@ -54,7 +54,7 @@ describe("AccumulationZoneDetector Performance Benchmark", () => {
         };
 
         // Create test instances
-        originalDetector = new AccumulationZoneDetector(
+        originalDetector = new AccumulationZoneDetectorEnhanced(
             "test-original",
             "LTCUSDT",
             baseConfig,

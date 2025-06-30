@@ -3,14 +3,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ✅ CLAUDE.md COMPLIANCE: Complete test coverage for all AccumulationZoneDetector functionality
 // This test file provides comprehensive coverage for ALL functional logic and edge cases
 
-import { AccumulationZoneDetector } from "../src/indicators/accumulationZoneDetector.js";
+import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
 
-describe("AccumulationZoneDetector - Comprehensive Functional Testing", () => {
-    let detector: AccumulationZoneDetector;
+describe("AccumulationZoneDetectorEnhanced - Comprehensive Functional Testing", () => {
+    let detector: AccumulationZoneDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
 
@@ -42,7 +42,7 @@ describe("AccumulationZoneDetector - Comprehensive Functional Testing", () => {
                 zoneTicks: 2,
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "test-empty",
                 "LTCUSDT",
                 config,
@@ -63,7 +63,7 @@ describe("AccumulationZoneDetector - Comprehensive Functional Testing", () => {
                 zoneTicks: 2,
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "test-single",
                 "LTCUSDT",
                 config,
@@ -103,7 +103,7 @@ describe("AccumulationZoneDetector - Comprehensive Functional Testing", () => {
                 zoneTicks: 2,
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "test-accumulate",
                 "LTCUSDT",
                 config,
@@ -159,7 +159,7 @@ describe("AccumulationZoneDetector - Comprehensive Functional Testing", () => {
                 zoneTicks: 2,
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "test-institutional",
                 "LTCUSDT",
                 config,
@@ -231,7 +231,7 @@ describe("AccumulationZoneDetector - Comprehensive Functional Testing", () => {
                 zoneTicks: 2,
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "test-mixed",
                 "LTCUSDT",
                 config,
@@ -292,7 +292,7 @@ describe("AccumulationZoneDetector - Comprehensive Functional Testing", () => {
                 minTradeCount: 1,
             };
 
-            const detector = new AccumulationZoneDetector(
+            const detector = new AccumulationZoneDetectorEnhanced(
                 "test-tick-alignment",
                 "LTCUSDT",
                 config,
@@ -333,7 +333,7 @@ describe("AccumulationZoneDetector - Comprehensive Functional Testing", () => {
                 minTradeCount: 1,
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "test-edge-cases",
                 "LTCUSDT",
                 config,
@@ -379,7 +379,7 @@ describe("AccumulationZoneDetector - Comprehensive Functional Testing", () => {
                 zoneTicks: 2,
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "test-min-trades",
                 "LTCUSDT",
                 config,
@@ -422,7 +422,7 @@ describe("AccumulationZoneDetector - Comprehensive Functional Testing", () => {
                 zoneTicks: 2,
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "test-min-volume",
                 "LTCUSDT",
                 config,
@@ -469,7 +469,7 @@ describe("AccumulationZoneDetector - Comprehensive Functional Testing", () => {
                 zoneTicks: 2,
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "test-malformed",
                 "LTCUSDT",
                 config,
@@ -515,7 +515,7 @@ describe("AccumulationZoneDetector - Comprehensive Functional Testing", () => {
                 minTradeCount: 10,
             };
 
-            detector = new AccumulationZoneDetector(
+            detector = new AccumulationZoneDetectorEnhanced(
                 "test-performance",
                 "LTCUSDT",
                 config,

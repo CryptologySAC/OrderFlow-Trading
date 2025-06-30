@@ -3,12 +3,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ✅ CLAUDE.md COMPLIANCE: Test focused on audit fixes validation
 // This test validates that all CLAUDE.md compliance fixes are working correctly
 
-import { AccumulationZoneDetector } from "../src/indicators/accumulationZoneDetector.js";
+import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
 
-describe("AccumulationZoneDetector - CLAUDE.md Compliance Audit Validation", () => {
+describe("AccumulationZoneDetectorEnhanced - CLAUDE.md Compliance Audit Validation", () => {
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
 
@@ -68,7 +68,7 @@ describe("AccumulationZoneDetector - CLAUDE.md Compliance Audit Validation", () 
                 completionConfidenceBoost: 0.25,
             };
 
-            const detector = new AccumulationZoneDetector(
+            const detector = new AccumulationZoneDetectorEnhanced(
                 "audit-test",
                 "BTCUSDT",
                 config,
@@ -97,7 +97,7 @@ describe("AccumulationZoneDetector - CLAUDE.md Compliance Audit Validation", () 
                 zoneTicks: 2,
             };
 
-            const detector = new AccumulationZoneDetector(
+            const detector = new AccumulationZoneDetectorEnhanced(
                 "null-test",
                 "BTCUSDT",
                 config,
@@ -127,7 +127,7 @@ describe("AccumulationZoneDetector - CLAUDE.md Compliance Audit Validation", () 
                 zoneTicks: 2,
             };
 
-            const detector = new AccumulationZoneDetector(
+            const detector = new AccumulationZoneDetectorEnhanced(
                 "logic-test",
                 "BTCUSDT",
                 config,
@@ -155,7 +155,7 @@ describe("AccumulationZoneDetector - CLAUDE.md Compliance Audit Validation", () 
                 enhancedInstitutionalSizeThreshold: 50,
             };
 
-            const detector = new AccumulationZoneDetector(
+            const detector = new AccumulationZoneDetectorEnhanced(
                 "finmath-test",
                 "BTCUSDT",
                 config,
@@ -184,7 +184,7 @@ describe("AccumulationZoneDetector - CLAUDE.md Compliance Audit Validation", () 
             };
 
             expect(() => {
-                const detector = new AccumulationZoneDetector(
+                const detector = new AccumulationZoneDetectorEnhanced(
                     "error-test",
                     "BTCUSDT",
                     invalidConfig,
@@ -205,7 +205,7 @@ describe("AccumulationZoneDetector - CLAUDE.md Compliance Audit Validation", () 
                 enhancedInstitutionalSizeThreshold: 50,
             };
 
-            const detector = new AccumulationZoneDetector(
+            const detector = new AccumulationZoneDetectorEnhanced(
                 "performance-test",
                 "BTCUSDT",
                 config,
