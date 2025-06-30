@@ -4,20 +4,11 @@ import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 // DEPRECATED: import { AbsorptionDetector } from "../indicators/absorptionDetector.js";
-import {
-    AbsorptionDetectorEnhanced,
-    AbsorptionEnhancedSettings,
-} from "../indicators/absorptionDetectorEnhanced.js";
+import { AbsorptionDetectorEnhanced } from "../indicators/absorptionDetectorEnhanced.js";
 // DEPRECATED: import { ExhaustionDetector } from "../indicators/exhaustionDetector.js";
-import {
-    ExhaustionDetectorEnhanced,
-    ExhaustionEnhancedSettings,
-} from "../indicators/exhaustionDetectorEnhanced.js";
+import { ExhaustionDetectorEnhanced } from "../indicators/exhaustionDetectorEnhanced.js";
 // DEPRECATED: import { DeltaCVDConfirmation } from "../indicators/deltaCVDConfirmation.js";
-import {
-    DeltaCVDDetectorEnhanced,
-    DeltaCVDEnhancedSettings,
-} from "../indicators/deltaCVDDetectorEnhanced.js";
+import { DeltaCVDDetectorEnhanced } from "../indicators/deltaCVDDetectorEnhanced.js";
 import {
     SupportResistanceDetector,
     SupportResistanceConfig,
@@ -35,10 +26,7 @@ import { Config } from "../core/config.js";
 // DEPRECATED: import { AccumulationZoneDetector } from "../indicators/accumulationZoneDetector.js";
 import { AccumulationZoneDetectorEnhanced } from "../indicators/accumulationZoneDetectorEnhanced.js";
 // DEPRECATED: import { DistributionZoneDetector } from "../indicators/distributionZoneDetector.js";
-import {
-    DistributionDetectorEnhanced,
-    DistributionEnhancedSettings,
-} from "../indicators/distributionDetectorEnhanced.js";
+import { DistributionDetectorEnhanced } from "../indicators/distributionDetectorEnhanced.js";
 import { ZoneDetectorConfig } from "../types/zoneTypes.js";
 import { IOrderBookState } from "../market/orderBookState";
 
@@ -73,7 +61,6 @@ export class DetectorFactory {
      * Create production-ready absorption detector (original or enhanced)
      */
     public static createAbsorptionDetector(
-        settings: AbsorptionEnhancedSettings,
         orderBook: IOrderBookState,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
@@ -88,12 +75,8 @@ export class DetectorFactory {
         }
 
         this.validateCreationLimits();
-        this.validateProductionConfig(settings);
 
-        const productionSettings = this.applyProductionDefaults(
-            settings,
-            "absorption"
-        ) as AbsorptionEnhancedSettings;
+        const productionSettings = Config.ABSORPTION_DETECTOR;
 
         // Always use enhanced detector - originals are deprecated
         const detector = new AbsorptionDetectorEnhanced(
@@ -110,11 +93,8 @@ export class DetectorFactory {
             `[DetectorFactory] Created Enhanced AbsorptionDetector (deprecated originals)`,
             {
                 id,
-                enhancementMode:
-                    productionSettings.standardizedZoneConfig
-                        ?.enhancementMode || "production",
-                standardizedZoneConfig:
-                    productionSettings.standardizedZoneConfig,
+                enhancementMode: productionSettings.enhancementMode,
+                useStandardizedZones: productionSettings.useStandardizedZones,
             }
         );
 
@@ -127,19 +107,14 @@ export class DetectorFactory {
      * Create production-ready exhaustion detector with enhanced zone capabilities
      */
     public static createExhaustionDetector(
-        settings: ExhaustionEnhancedSettings,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
     ): ExhaustionDetectorEnhanced {
         const id = options.id || `exhaustion-${Date.now()}`;
 
         this.validateCreationLimits();
-        this.validateProductionConfig(settings);
 
-        const productionSettings = this.applyProductionDefaults(
-            settings,
-            "exhaustion"
-        ) as ExhaustionEnhancedSettings;
+        const productionSettings = Config.EXHAUSTION_DETECTOR;
 
         // Always use enhanced detector - originals are deprecated
         const detector = new ExhaustionDetectorEnhanced(
@@ -156,9 +131,7 @@ export class DetectorFactory {
             {
                 id,
                 settings: productionSettings,
-                enhancementMode:
-                    productionSettings.standardizedZoneConfig
-                        ?.enhancementMode || "production",
+                enhancementMode: productionSettings.enhancementMode,
                 features: productionSettings.features,
             }
         );
@@ -172,19 +145,14 @@ export class DetectorFactory {
      * Create production-ready accumulation detector
      */
     public static createAccumulationDetector(
-        settings: ZoneDetectorConfig,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
     ): AccumulationZoneDetectorEnhanced {
         const id = options.id || `accumulation-${Date.now()}`;
 
         this.validateCreationLimits();
-        this.validateProductionConfig(settings);
 
-        const productionSettings = this.applyProductionDefaults(
-            settings,
-            "accumulation"
-        ) as ZoneDetectorConfig;
+        const productionSettings = Config.ACCUMULATION_DETECTOR;
 
         // Always use enhanced detector - originals are deprecated
         const detector = new AccumulationZoneDetectorEnhanced(
@@ -199,10 +167,8 @@ export class DetectorFactory {
             `[DetectorFactory] Created Enhanced AccumulationDetector (deprecated originals)`,
             {
                 id,
-                enhancementMode:
-                    productionSettings.enhancementMode || "production",
-                standardizedZoneConfig:
-                    productionSettings.standardizedZoneConfig,
+                enhancementMode: productionSettings.enhancementMode,
+                useStandardizedZones: productionSettings.useStandardizedZones,
             }
         );
 
@@ -215,19 +181,14 @@ export class DetectorFactory {
      * Create production-ready distribution detector with enhanced zone capabilities
      */
     public static createDistributionDetector(
-        settings: DistributionEnhancedSettings,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
     ): DistributionDetectorEnhanced {
         const id = options.id || `distribution-${Date.now()}`;
 
         this.validateCreationLimits();
-        this.validateProductionConfig(settings);
 
-        const productionSettings = this.applyProductionDefaults(
-            settings,
-            "distribution"
-        ) as DistributionEnhancedSettings;
+        const productionSettings = Config.DISTRIBUTION_ZONE_DETECTOR;
 
         // Always use enhanced detector - originals are deprecated
         const detector = new DistributionDetectorEnhanced(
@@ -243,9 +204,7 @@ export class DetectorFactory {
             {
                 id,
                 settings: productionSettings,
-                enhancementMode:
-                    productionSettings.standardizedZoneConfig
-                        ?.enhancementMode || "production",
+                enhancementMode: productionSettings.enhancementMode,
             }
         );
 
@@ -302,19 +261,14 @@ export class DetectorFactory {
      * Create production-ready Delta CVD detector with enhanced zone capabilities
      */
     public static createDeltaCVDConfirmationDetector(
-        settings: DeltaCVDEnhancedSettings,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
     ): DeltaCVDDetectorEnhanced {
         const id = options.id || `cvd_confirmation-${Date.now()}`;
 
         this.validateCreationLimits();
-        this.validateProductionConfig(settings);
 
-        const productionSettings = this.applyProductionDefaults(
-            settings,
-            "cvd_confirmation"
-        ) as DeltaCVDEnhancedSettings;
+        const productionSettings = Config.DELTACVD_DETECTOR;
 
         // Always use enhanced detector - originals are deprecated
         const detector = new DeltaCVDDetectorEnhanced(
@@ -330,12 +284,8 @@ export class DetectorFactory {
             `[DetectorFactory] Created Enhanced DeltaCVDDetector (deprecated originals)`,
             {
                 id,
-                enhancementMode:
-                    productionSettings.standardizedZoneConfig
-                        ?.enhancementMode || "production",
+                enhancementMode: productionSettings.enhancementMode,
                 useStandardizedZones: productionSettings.useStandardizedZones,
-                standardizedZoneConfig:
-                    productionSettings.standardizedZoneConfig,
             }
         );
 
@@ -714,83 +664,6 @@ export class DetectorFactory {
             throw new Error(
                 `Production config validation failed: ${errors.join(", ")}`
             );
-        }
-    }
-
-    private static applyProductionDefaults(
-        settings: BaseDetectorSettings | ZoneDetectorConfig,
-        detectorType: SignalType
-    ): BaseDetectorSettings | ZoneDetectorConfig {
-        //TODO
-        if (
-            detectorType === "absorption" ||
-            detectorType === "exhaustion" ||
-            detectorType === "cvd_confirmation"
-        ) {
-            const detectorSettings = settings as BaseDetectorSettings;
-            const baseDefaults: BaseDetectorSettings = {
-                windowMs: 90000,
-                minAggVolume: 500,
-                pricePrecision: 2,
-                zoneTicks: 3,
-                eventCooldownMs: 15000,
-                minInitialMoveTicks: 10,
-                confirmationTimeoutMs: 60000,
-                maxRevisitTicks: 5,
-
-                // Production-specific defaults
-                features: {
-                    adaptiveZone: true,
-                    passiveHistory: true,
-                    multiZone: true,
-                    autoCalibrate: true,
-                    ...detectorSettings.features,
-                },
-            };
-
-            // Type-specific defaults
-            if (detectorType === "absorption") {
-                return {
-                    ...baseDefaults,
-                    ...settings,
-                    features: {
-                        ...baseDefaults.features,
-                        liquidityGradient: true,
-                        absorptionVelocity: false,
-                        layeredAbsorption: false,
-                        ...detectorSettings.features,
-                    },
-                };
-            }
-
-            if (detectorType === "exhaustion") {
-                return {
-                    ...baseDefaults,
-                    features: {
-                        ...baseDefaults.features,
-                        depletionTracking: true,
-                        spreadAdjustment: true,
-                        volumeVelocity: false,
-                    },
-                    ...detectorSettings,
-                };
-            }
-
-            if (detectorType === "cvd_confirmation") {
-                return {
-                    ...baseDefaults,
-                    ...detectorSettings,
-                };
-            }
-            return { ...baseDefaults, ...detectorSettings };
-        } else {
-            //TODO if (detectorType === "accumulation") {
-
-            //}
-
-            return {
-                ...settings,
-            } as ZoneDetectorConfig;
         }
     }
 

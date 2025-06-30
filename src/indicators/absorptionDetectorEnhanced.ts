@@ -24,8 +24,9 @@
  */
 
 import { AbsorptionDetector } from "./absorptionDetector.js";
-import type { AbsorptionSettings } from "./types/absorptionTypes.js";
+// AbsorptionSettings no longer used - enhanced detector uses Zod schema inference
 import { FinancialMath } from "../utils/financialMath.js";
+import { Config } from "../core/config.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
@@ -36,67 +37,13 @@ import type {
     ZoneSnapshot,
     StandardZoneData,
 } from "../types/marketEvents.js";
-import type { StandardZoneConfig } from "../types/zoneTypes.js";
+import { z } from "zod";
+import { AbsorptionDetectorSchema } from "../core/config.js";
 
-export interface AbsorptionEnhancementConfig {
-    // Zone confluence analysis configuration
-    minZoneConfluenceCount?: number; // Minimum zones overlapping for confluence (default: 2)
-    maxZoneConfluenceDistance?: number; // Max distance for zone confluence in ticks (default: 3)
-
-    // Institutional volume detection configuration
-    institutionalVolumeThreshold?: number; // Threshold for institutional volume detection (default: 50)
-    institutionalVolumeRatioThreshold?: number; // Min institutional/total ratio for enhancement (default: 0.3)
-
-    // CLAUDE.md compliant calculation parameters
-    ltcusdtTickValue?: number; // LTCUSDT tick value for distance calculations (default: 0.01)
-    volumeNormalizationThreshold?: number; // Volume normalization threshold (default: 200)
-    absorptionRatioNormalization?: number; // Absorption ratio normalization factor (default: 3.0)
-    highConfidenceThreshold?: number; // High confidence signal threshold (default: 0.7)
-    lowConfidenceReduction?: number; // Low confidence signal reduction factor (default: 0.7)
-    minAbsorptionScore?: number; // Minimum absorption score threshold (default: 0.8)
-    patternVarianceReduction?: number; // Pattern variance reduction multiplier (default: 2.0)
-    whaleActivityMultiplier?: number; // Whale activity scoring multiplier (default: 2.0)
-    maxZoneCountForScoring?: number; // Maximum zones to consider for scoring (default: 3)
-    confidenceBoostReduction?: number; // Confidence boost reduction factor (default: 0.5)
-
-    // Zone strength calculation weights
-    distanceWeight?: number; // Weight for distance-based strength (default: 0.4)
-    volumeWeight?: number; // Weight for volume-based strength (default: 0.35)
-    absorptionWeight?: number; // Weight for absorption pattern strength (default: 0.25)
-
-    // Confluence scoring parameters
-    minConfluenceScore?: number; // Minimum confluence score threshold (default: 0.6)
-    volumeConcentrationWeight?: number; // Volume concentration scoring weight (default: 0.15)
-    patternConsistencyWeight?: number; // Pattern consistency scoring weight (default: 0.1)
-    volumeBoostCap?: number; // Maximum volume boost value (default: 0.25)
-    volumeBoostMultiplier?: number; // Volume boost calculation multiplier (default: 0.25)
-
-    // Pattern analysis thresholds
-    passiveAbsorptionThreshold?: number; // Passive absorption pattern threshold (default: 0.6)
-    aggressiveDistributionThreshold?: number; // Aggressive distribution pattern threshold (default: 0.6)
-    patternDifferenceThreshold?: number; // Pattern difference significance threshold (default: 0.1)
-    minVolumeForRatio?: number; // Minimum volume for ratio calculations to avoid division by zero (default: 1)
-
-    // Enhancement control flags
-    enableZoneConfluenceFilter?: boolean; // Filter signals by zone confluence (default: true)
-    enableInstitutionalVolumeFilter?: boolean; // Filter by institutional volume presence (default: true)
-    enableCrossTimeframeAnalysis?: boolean; // Analyze across multiple zone timeframes (default: true)
-
-    // Confidence boost parameters
-    confluenceConfidenceBoost?: number; // Confidence boost for zone confluence (default: 0.15)
-    institutionalVolumeBoost?: number; // Confidence boost for institutional volume (default: 0.1)
-    crossTimeframeBoost?: number; // Confidence boost for cross-timeframe confirmation (default: 0.05)
-
-    // Enhancement mode control
-    enhancementMode?: "disabled" | "testing" | "production"; // Enhancement mode (default: 'disabled')
-    minEnhancedConfidenceThreshold?: number; // Minimum confidence for enhanced signals (default: 0.3)
-}
-
-export interface AbsorptionEnhancedSettings extends AbsorptionSettings {
-    // Standardized zone enhancement configuration
-    useStandardizedZones?: boolean; // Whether to use standardized zone enhancements
-    standardizedZoneConfig?: AbsorptionEnhancementConfig;
-}
+// Use Zod schema inference for complete type safety - matches config.json exactly
+export type AbsorptionEnhancedSettings = z.infer<
+    typeof AbsorptionDetectorSchema
+>;
 
 export interface AbsorptionEnhancementStats {
     enabled: boolean;
@@ -119,8 +66,7 @@ export interface AbsorptionEnhancementStats {
  */
 export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
     private readonly useStandardizedZones: boolean;
-    private readonly enhancementConfig: AbsorptionEnhancementConfig;
-    private readonly standardZoneConfig?: StandardZoneConfig;
+    private readonly enhancementConfig: AbsorptionEnhancedSettings;
 
     // Enhancement statistics and monitoring
     private enhancementStats: AbsorptionEnhancementStats = {
@@ -140,14 +86,15 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
 
     constructor(
         id: string,
-        settings: AbsorptionEnhancedSettings = {},
+        settings: AbsorptionEnhancedSettings,
         orderBook: IOrderBookState,
         logger: ILogger,
         spoofingDetector: SpoofingDetector,
         metricsCollector: IMetricsCollector,
         signalLogger?: ISignalLogger
     ) {
-        // Initialize the original detector with base settings
+        // Initialize the original detector with complete settings
+        // AbsorptionEnhancedSettings now contains ALL properties from config.json
         super(
             id,
             settings,
@@ -159,15 +106,12 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         );
 
         // Configure standardized zone enhancement
-        this.useStandardizedZones = settings.useStandardizedZones ?? false;
-        this.enhancementConfig = this.getDefaultEnhancementConfig(
-            settings.standardizedZoneConfig
-        );
+        this.useStandardizedZones = settings.useStandardizedZones;
+        this.enhancementConfig = settings;
 
         // Update enhancement statistics
         this.enhancementStats.enabled = this.useStandardizedZones;
-        this.enhancementStats.mode =
-            this.enhancementConfig.enhancementMode ?? "disabled";
+        this.enhancementStats.mode = settings.enhancementMode;
 
         this.logger.info("AbsorptionDetectorEnhanced initialized", {
             detectorId: id,
@@ -175,234 +119,6 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             enhancementMode: this.enhancementStats.mode,
             enhancementConfig: this.enhancementConfig,
         });
-    }
-
-    /**
-     * Get default enhancement configuration with conservative production values
-     */
-    private getDefaultEnhancementConfig(
-        config?: AbsorptionEnhancementConfig
-    ): AbsorptionEnhancementConfig {
-        return {
-            // Zone confluence configuration (conservative for production)
-            minZoneConfluenceCount:
-                config?.minZoneConfluenceCount ??
-                this.getDefaultMinZoneConfluenceCount(),
-            maxZoneConfluenceDistance:
-                config?.maxZoneConfluenceDistance ??
-                this.getDefaultMaxZoneConfluenceDistance(),
-
-            // Institutional volume configuration
-            institutionalVolumeThreshold:
-                config?.institutionalVolumeThreshold ??
-                this.getDefaultInstitutionalVolumeThreshold(),
-            institutionalVolumeRatioThreshold:
-                config?.institutionalVolumeRatioThreshold ??
-                this.getDefaultInstitutionalVolumeRatioThreshold(),
-
-            // CLAUDE.md compliant calculation parameters
-            ltcusdtTickValue:
-                config?.ltcusdtTickValue ?? this.getDefaultLtcusdtTickValue(),
-            volumeNormalizationThreshold:
-                config?.volumeNormalizationThreshold ??
-                this.getDefaultVolumeNormalizationThreshold(),
-            absorptionRatioNormalization:
-                config?.absorptionRatioNormalization ??
-                this.getDefaultAbsorptionRatioNormalization(),
-            highConfidenceThreshold:
-                config?.highConfidenceThreshold ??
-                this.getDefaultHighConfidenceThreshold(),
-            lowConfidenceReduction:
-                config?.lowConfidenceReduction ??
-                this.getDefaultLowConfidenceReduction(),
-            minAbsorptionScore:
-                config?.minAbsorptionScore ??
-                this.getDefaultMinAbsorptionScore(),
-            patternVarianceReduction:
-                config?.patternVarianceReduction ??
-                this.getDefaultPatternVarianceReduction(),
-            whaleActivityMultiplier:
-                config?.whaleActivityMultiplier ??
-                this.getDefaultWhaleActivityMultiplier(),
-            maxZoneCountForScoring:
-                config?.maxZoneCountForScoring ??
-                this.getDefaultMaxZoneCountForScoring(),
-            confidenceBoostReduction:
-                config?.confidenceBoostReduction ??
-                this.getDefaultConfidenceBoostReduction(),
-
-            // Zone strength calculation weights
-            distanceWeight:
-                config?.distanceWeight ?? this.getDefaultDistanceWeight(),
-            volumeWeight: config?.volumeWeight ?? this.getDefaultVolumeWeight(),
-            absorptionWeight:
-                config?.absorptionWeight ?? this.getDefaultAbsorptionWeight(),
-
-            // Confluence scoring parameters
-            minConfluenceScore:
-                config?.minConfluenceScore ??
-                this.getDefaultMinConfluenceScore(),
-            volumeConcentrationWeight:
-                config?.volumeConcentrationWeight ??
-                this.getDefaultVolumeConcentrationWeight(),
-            patternConsistencyWeight:
-                config?.patternConsistencyWeight ??
-                this.getDefaultPatternConsistencyWeight(),
-            volumeBoostCap:
-                config?.volumeBoostCap ?? this.getDefaultVolumeBoostCap(),
-            volumeBoostMultiplier:
-                config?.volumeBoostMultiplier ??
-                this.getDefaultVolumeBoostMultiplier(),
-
-            // Pattern analysis thresholds
-            passiveAbsorptionThreshold:
-                config?.passiveAbsorptionThreshold ??
-                this.getDefaultPassiveAbsorptionThreshold(),
-            aggressiveDistributionThreshold:
-                config?.aggressiveDistributionThreshold ??
-                this.getDefaultAggressiveDistributionThreshold(),
-            patternDifferenceThreshold:
-                config?.patternDifferenceThreshold ??
-                this.getDefaultPatternDifferenceThreshold(),
-            minVolumeForRatio:
-                config?.minVolumeForRatio ?? this.getDefaultMinVolumeForRatio(),
-
-            // Feature flags (conservative for production stability)
-            enableZoneConfluenceFilter:
-                config?.enableZoneConfluenceFilter ??
-                this.getDefaultEnableZoneConfluenceFilter(),
-            enableInstitutionalVolumeFilter:
-                config?.enableInstitutionalVolumeFilter ??
-                this.getDefaultEnableInstitutionalVolumeFilter(),
-            enableCrossTimeframeAnalysis:
-                config?.enableCrossTimeframeAnalysis ??
-                this.getDefaultEnableCrossTimeframeAnalysis(),
-
-            // Conservative confidence boosts for production
-            confluenceConfidenceBoost:
-                config?.confluenceConfidenceBoost ??
-                this.getDefaultConfluenceConfidenceBoost(),
-            institutionalVolumeBoost:
-                config?.institutionalVolumeBoost ??
-                this.getDefaultInstitutionalVolumeBoost(),
-            crossTimeframeBoost:
-                config?.crossTimeframeBoost ??
-                this.getDefaultCrossTimeframeBoost(),
-
-            // Enhancement control
-            enhancementMode:
-                config?.enhancementMode ?? this.getDefaultEnhancementMode(),
-            minEnhancedConfidenceThreshold:
-                config?.minEnhancedConfidenceThreshold ??
-                this.getDefaultMinEnhancedConfidenceThreshold(),
-        };
-    }
-
-    /**
-     * CLAUDE.md compliant default configuration getters
-     * All magic numbers are encapsulated in configurable methods
-     */
-    private getDefaultMinZoneConfluenceCount(): number {
-        return 2;
-    }
-    private getDefaultMaxZoneConfluenceDistance(): number {
-        return 3;
-    }
-    private getDefaultInstitutionalVolumeThreshold(): number {
-        return 50;
-    }
-    private getDefaultInstitutionalVolumeRatioThreshold(): number {
-        return 0.3;
-    }
-    private getDefaultLtcusdtTickValue(): number {
-        return 0.01;
-    }
-    private getDefaultVolumeNormalizationThreshold(): number {
-        return 200;
-    }
-    private getDefaultAbsorptionRatioNormalization(): number {
-        return 3.0;
-    }
-    private getDefaultHighConfidenceThreshold(): number {
-        return 0.7;
-    }
-    private getDefaultLowConfidenceReduction(): number {
-        return 0.7;
-    }
-    private getDefaultMinAbsorptionScore(): number {
-        return 0.8;
-    }
-    private getDefaultPatternVarianceReduction(): number {
-        return 2.0;
-    }
-    private getDefaultWhaleActivityMultiplier(): number {
-        return 2.0;
-    }
-    private getDefaultMaxZoneCountForScoring(): number {
-        return 3;
-    }
-    private getDefaultConfidenceBoostReduction(): number {
-        return 0.5;
-    }
-    private getDefaultDistanceWeight(): number {
-        return 0.4;
-    }
-    private getDefaultVolumeWeight(): number {
-        return 0.35;
-    }
-    private getDefaultAbsorptionWeight(): number {
-        return 0.25;
-    }
-    private getDefaultMinConfluenceScore(): number {
-        return 0.6;
-    }
-    private getDefaultVolumeConcentrationWeight(): number {
-        return 0.15;
-    }
-    private getDefaultPatternConsistencyWeight(): number {
-        return 0.1;
-    }
-    private getDefaultVolumeBoostCap(): number {
-        return 0.25;
-    }
-    private getDefaultVolumeBoostMultiplier(): number {
-        return 0.25;
-    }
-    private getDefaultPassiveAbsorptionThreshold(): number {
-        return 0.6;
-    }
-    private getDefaultAggressiveDistributionThreshold(): number {
-        return 0.6;
-    }
-    private getDefaultPatternDifferenceThreshold(): number {
-        return 0.1;
-    }
-    private getDefaultMinVolumeForRatio(): number {
-        return 1;
-    }
-    private getDefaultEnableZoneConfluenceFilter(): boolean {
-        return true;
-    }
-    private getDefaultEnableInstitutionalVolumeFilter(): boolean {
-        return false;
-    }
-    private getDefaultEnableCrossTimeframeAnalysis(): boolean {
-        return false;
-    }
-    private getDefaultConfluenceConfidenceBoost(): number {
-        return 0.15;
-    }
-    private getDefaultInstitutionalVolumeBoost(): number {
-        return 0.1;
-    }
-    private getDefaultCrossTimeframeBoost(): number {
-        return 0.05;
-    }
-    private getDefaultEnhancementMode(): "disabled" | "testing" | "production" {
-        return "disabled";
-    }
-    private getDefaultMinEnhancedConfidenceThreshold(): number {
-        return 0.3;
     }
 
     /**
@@ -453,7 +169,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         let totalConfidenceBoost = 0;
 
         // Zone confluence analysis
-        if (this.enhancementConfig.enableZoneConfluenceFilter) {
+        if (Config.UNIVERSAL_ZONE_CONFIG.enableZoneConfluenceFilter) {
             const confluenceResult = this.analyzeZoneConfluence(
                 zoneData,
                 event.price
@@ -461,7 +177,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             if (confluenceResult.hasConfluence) {
                 this.enhancementStats.confluenceDetectionCount++;
                 totalConfidenceBoost +=
-                    this.enhancementConfig.confluenceConfidenceBoost ?? 0.15;
+                    Config.UNIVERSAL_ZONE_CONFIG.confluenceConfidenceBoost;
 
                 this.logger.debug(
                     "AbsorptionDetectorEnhanced: Advanced zone confluence detected",
@@ -475,7 +191,8 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
                         absorptionAlignment:
                             confluenceResult.absorptionAlignment,
                         confidenceBoost:
-                            this.enhancementConfig.confluenceConfidenceBoost,
+                            Config.UNIVERSAL_ZONE_CONFIG
+                                .confluenceConfidenceBoost,
                     }
                 );
             }
@@ -490,7 +207,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             if (institutionalResult.hasInstitutionalPresence) {
                 this.enhancementStats.institutionalDetectionCount++;
                 totalConfidenceBoost +=
-                    this.enhancementConfig.institutionalVolumeBoost ?? 0.1;
+                    this.enhancementConfig.institutionalVolumeBoost;
 
                 this.logger.debug(
                     "AbsorptionDetectorEnhanced: Institutional volume detected",
@@ -507,7 +224,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         }
 
         // Cross-timeframe analysis
-        if (this.enhancementConfig.enableCrossTimeframeAnalysis) {
+        if (Config.UNIVERSAL_ZONE_CONFIG.enableCrossTimeframeAnalysis) {
             const crossTimeframeResult = this.analyzeCrossTimeframe(
                 zoneData,
                 event
@@ -515,7 +232,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             if (crossTimeframeResult.hasAlignment) {
                 this.enhancementStats.crossTimeframeDetectionCount++;
                 totalConfidenceBoost +=
-                    this.enhancementConfig.crossTimeframeBoost ?? 0.05;
+                    Config.UNIVERSAL_ZONE_CONFIG.crossTimeframeBoost;
 
                 this.logger.debug(
                     "AbsorptionDetectorEnhanced: Cross-timeframe alignment detected",
@@ -525,7 +242,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
                         alignedTimeframes:
                             crossTimeframeResult.alignedTimeframes,
                         confidenceBoost:
-                            this.enhancementConfig.crossTimeframeBoost,
+                            Config.UNIVERSAL_ZONE_CONFIG.crossTimeframeBoost,
                     }
                 );
             }
@@ -577,9 +294,9 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         absorptionAlignment: number;
     } {
         const minConfluenceZones =
-            this.enhancementConfig.minZoneConfluenceCount ?? 2;
+            Config.UNIVERSAL_ZONE_CONFIG.minZoneConfluenceCount;
         const maxDistance =
-            this.enhancementConfig.maxZoneConfluenceDistance ?? 3;
+            Config.UNIVERSAL_ZONE_CONFIG.maxZoneConfluenceDistance;
 
         // Multi-timeframe analysis with priority weighting
         const tick5Zones = this.findZonesNearPrice(
@@ -647,7 +364,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             tick5Zones.length + tick10Zones.length + tick20Zones.length;
         const hasConfluence =
             totalZones >= minConfluenceZones &&
-            confluenceScore >= this.enhancementConfig.minConfluenceScore!;
+            confluenceScore >= this.enhancementConfig.minConfluenceScore;
 
         // Enhanced confluence strength calculation using FinancialMath
         const baseStrength = Math.min(
@@ -691,7 +408,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
     ): ZoneSnapshot[] {
         const maxDistance = FinancialMath.multiplyQuantities(
             maxDistanceTicks,
-            this.enhancementConfig.ltcusdtTickValue!
+            Config.TICK_SIZE
         );
 
         return zones.filter((zone) => {
@@ -727,8 +444,8 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
                 8
             );
             const maxDistance =
-                this.enhancementConfig.maxZoneConfluenceDistance ?? 3;
-            const tickValue = this.enhancementConfig.ltcusdtTickValue!;
+                Config.UNIVERSAL_ZONE_CONFIG.maxZoneConfluenceDistance;
+            const tickValue = Config.TICK_SIZE;
             const maxDistanceValue = FinancialMath.multiplyQuantities(
                 maxDistance,
                 tickValue
@@ -745,7 +462,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
                 1.0,
                 FinancialMath.divideQuantities(
                     totalVolume,
-                    this.enhancementConfig.volumeNormalizationThreshold!
+                    this.enhancementConfig.volumeNormalizationThreshold
                 )
             );
 
@@ -753,7 +470,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             const absorptionRatio = FinancialMath.divideQuantities(
                 zone.passiveVolume,
                 Math.max(
-                    this.enhancementConfig.minVolumeForRatio!,
+                    this.enhancementConfig.minVolumeForRatio,
                     zone.aggressiveVolume
                 )
             );
@@ -761,7 +478,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
                 1.0,
                 FinancialMath.divideQuantities(
                     absorptionRatio,
-                    this.enhancementConfig.absorptionRatioNormalization!
+                    this.enhancementConfig.absorptionRatioNormalization
                 )
             );
 
@@ -769,15 +486,15 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             const zoneStrength =
                 FinancialMath.multiplyQuantities(
                     distanceStrength,
-                    this.enhancementConfig.distanceWeight!
+                    this.enhancementConfig.distanceWeight
                 ) +
                 FinancialMath.multiplyQuantities(
                     volumeStrength,
-                    this.enhancementConfig.volumeWeight!
+                    this.enhancementConfig.volumeWeight
                 ) +
                 FinancialMath.multiplyQuantities(
                     absorptionStrength,
-                    this.enhancementConfig.absorptionWeight!
+                    this.enhancementConfig.absorptionWeight
                 );
 
             totalStrength += FinancialMath.multiplyQuantities(
@@ -843,11 +560,11 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
                 diversityBonus +
                 FinancialMath.multiplyQuantities(
                     volumeConcentration,
-                    this.enhancementConfig.volumeConcentrationWeight!
+                    this.enhancementConfig.volumeConcentrationWeight
                 ) +
                 FinancialMath.multiplyQuantities(
                     patternConsistency,
-                    this.enhancementConfig.patternConsistencyWeight!
+                    this.enhancementConfig.patternConsistencyWeight
                 )
         );
 
@@ -961,7 +678,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         const closestZones = sortedByDistance.slice(
             0,
             Math.min(
-                this.enhancementConfig.maxZoneCountForScoring!,
+                this.enhancementConfig.maxZoneCountForScoring,
                 zones.length
             )
         ); // Top N closest zones
@@ -1006,7 +723,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             1 -
                 FinancialMath.multiplyQuantities(
                     variance,
-                    this.enhancementConfig.patternVarianceReduction!
+                    this.enhancementConfig.patternVarianceReduction
                 )
         );
     }
@@ -1030,12 +747,11 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
                 totalVolume
             );
             const absorptionStrength =
-                passiveRatio >
-                this.enhancementConfig.passiveAbsorptionThreshold!
+                passiveRatio > this.enhancementConfig.passiveAbsorptionThreshold
                     ? passiveRatio
                     : FinancialMath.multiplyQuantities(
                           passiveRatio,
-                          this.enhancementConfig.confidenceBoostReduction ?? 0.5
+                          this.enhancementConfig.confidenceBoostReduction
                       ); // Bonus for strong absorption
 
             return absorptionStrength;
@@ -1081,8 +797,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
 
             // Absorption characteristics: high passive volume, low aggressive volume
             if (
-                passiveRatio >
-                this.enhancementConfig.passiveAbsorptionThreshold!
+                passiveRatio > this.enhancementConfig.passiveAbsorptionThreshold
             ) {
                 totalAbsorptionScore += passiveRatio;
             }
@@ -1090,7 +805,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             // Distribution characteristics: high aggressive volume, lower passive volume
             if (
                 aggressiveRatio >
-                this.enhancementConfig.aggressiveDistributionThreshold!
+                this.enhancementConfig.aggressiveDistributionThreshold
             ) {
                 totalDistributionScore += aggressiveRatio;
             }
@@ -1108,11 +823,11 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         const patternType: "absorption" | "distribution" | "neutral" =
             avgAbsorptionScore >
             avgDistributionScore +
-                this.enhancementConfig.patternDifferenceThreshold!
+                this.enhancementConfig.patternDifferenceThreshold
                 ? "absorption"
                 : avgDistributionScore >
                     avgAbsorptionScore +
-                        this.enhancementConfig.patternDifferenceThreshold!
+                        this.enhancementConfig.patternDifferenceThreshold
                   ? "distribution"
                   : "neutral";
 
@@ -1135,9 +850,9 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         whaleActivity: number;
     } {
         const institutionalThreshold =
-            this.enhancementConfig.institutionalVolumeThreshold ?? 50;
+            this.enhancementConfig.institutionalVolumeThreshold;
         const minRatio =
-            this.enhancementConfig.institutionalVolumeRatioThreshold ?? 0.3;
+            this.enhancementConfig.institutionalVolumeRatioThreshold;
 
         // Check if current trade meets institutional volume threshold
         const isInstitutionalTrade = event.quantity >= institutionalThreshold;
@@ -1177,7 +892,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             1.0,
             FinancialMath.multiplyQuantities(
                 institutionalRatio,
-                this.enhancementConfig.whaleActivityMultiplier!
+                this.enhancementConfig.whaleActivityMultiplier
             )
         );
 

@@ -981,7 +981,7 @@ export class DetectorTestRunner extends EventEmitter {
 
                 return new AbsorptionDetectorEnhanced(
                     testConfig.id,
-                    testConfig.config as AbsorptionEnhancedSettings,
+                    testConfig.config as unknown as AbsorptionEnhancedSettings,
                     this.realOrderBook, // Use real order book with authentic market data
                     realLogger,
                     this.realSpoofingDetector, // Use real spoofing detector
@@ -999,7 +999,7 @@ export class DetectorTestRunner extends EventEmitter {
 
                 return new ExhaustionDetectorEnhanced(
                     testConfig.id,
-                    testConfig.config as ExhaustionEnhancedSettings,
+                    testConfig.config as unknown as ExhaustionEnhancedSettings,
                     realLogger,
                     this.realSpoofingDetector, // Use real spoofing detector
                     mockMetrics,
@@ -1017,7 +1017,7 @@ export class DetectorTestRunner extends EventEmitter {
 
                 return new DeltaCVDDetectorEnhanced(
                     testConfig.id,
-                    testConfig.config as DeltaCVDEnhancedSettings,
+                    testConfig.config as unknown as DeltaCVDEnhancedSettings,
                     realLogger,
                     this.realSpoofingDetector, // Use real spoofing detector with actual config
                     mockMetrics

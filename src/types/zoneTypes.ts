@@ -157,7 +157,7 @@ export interface ZoneAnalysisResult {
 
 export interface ZoneDetectorConfig {
     // Core zone detector configuration
-    symbol?: string; // Trading symbol
+    symbol: string; // Trading symbol
     maxActiveZones: number; // Max concurrent zones per symbol
     zoneTimeoutMs: number; // Max zone lifetime
     minZoneVolume: number; // Minimum volume for valid zone
@@ -168,78 +168,78 @@ export interface ZoneDetectorConfig {
     minCandidateDuration: number; // Minimum time to form candidate
     maxPriceDeviation: number; // Maximum price deviation within zone
     minTradeCount: number; // Minimum trades before forming zone
-    minBuyRatio?: number; // Minimum buy ratio for accumulation
-    minSellRatio?: number; // Minimum sell ratio for distribution
+    minBuyRatio: number; // Minimum buy ratio for accumulation
+    minSellRatio: number; // Minimum sell ratio for distribution
 
     // Accumulation-specific configuration from AccumulationSettings
-    minDurationMs?: number; // Minimum accumulation duration
-    minRatio?: number; // Min passive/aggressive ratio
-    minRecentActivityMs?: number; // Trade staleness threshold
-    threshold?: number; // Confidence threshold (0-1)
+    minDurationMs: number; // Minimum accumulation duration
+    minRatio: number; // Min passive/aggressive ratio
+    minRecentActivityMs: number; // Trade staleness threshold
+    threshold: number; // Confidence threshold (0-1)
 
     // Zone strength threshold parameters (previously hardcoded)
-    priceStabilityThreshold?: number; // Price stability threshold for accumulation (default 0.98)
-    strongZoneThreshold?: number; // Strong zone strength threshold (default 0.7)
-    weakZoneThreshold?: number; // Weak zone invalidation threshold (default 0.4)
+    priceStabilityThreshold: number; // Price stability threshold for accumulation
+    strongZoneThreshold: number; // Strong zone strength threshold
+    weakZoneThreshold: number; // Weak zone invalidation threshold
 
     // Volume surge detection parameters for enhanced zone analysis
-    volumeSurgeMultiplier?: number; // Volume surge threshold for zone validation
-    imbalanceThreshold?: number; // Order flow imbalance threshold
-    institutionalThreshold?: number; // Institutional trade size threshold
-    burstDetectionMs?: number; // Burst detection window
-    sustainedVolumeMs?: number; // Sustained volume analysis window
-    medianTradeSize?: number; // Baseline trade size for volume analysis
+    volumeSurgeMultiplier: number; // Volume surge threshold for zone validation
+    imbalanceThreshold: number; // Order flow imbalance threshold
+    institutionalThreshold: number; // Institutional trade size threshold
+    burstDetectionMs: number; // Burst detection window
+    sustainedVolumeMs: number; // Sustained volume analysis window
+    medianTradeSize: number; // Baseline trade size for volume analysis
 
     // ✅ CLAUDE.md COMPLIANCE: Business-critical configurable parameters
-    pricePrecision?: number; // Price precision for zone calculations (default 2)
-    zoneTicks?: number; // Price levels that define a zone (default 2)
+    pricePrecision: number; // Price precision for zone calculations
+    zoneTicks: number; // Price levels that define a zone
 
     // Enhanced zone formation parameters (business configurable)
-    enhancedInstitutionalSizeThreshold?: number; // Institutional size threshold (default 50)
-    enhancedIcebergDetectionWindow?: number; // Iceberg detection window (default 15)
-    enhancedMinInstitutionalRatio?: number; // Min institutional ratio (default 0.4)
+    enhancedInstitutionalSizeThreshold: number; // Institutional size threshold
+    enhancedIcebergDetectionWindow: number; // Iceberg detection window
+    enhancedMinInstitutionalRatio: number; // Min institutional ratio
 
     // Signal generation parameters (business configurable)
-    invalidationPercentBelow?: number; // Invalidation percentage below zone (default 0.005)
-    breakoutTargetPercentAbove?: number; // Breakout target percentage above center (default 0.02)
-    stopLossPercentBelow?: number; // Stop loss percentage below zone (default 0.01)
-    takeProfitPercentAbove?: number; // Take profit percentage above center (default 0.03)
-    completionBreakoutTargetPercent?: number; // Higher breakout target on completion (default 0.05)
-    completionStopLossPercent?: number; // Stop loss on completion (default 0.015)
-    completionConfidenceBoost?: number; // Confidence boost on completion (default 0.2)
+    invalidationPercentBelow: number; // Invalidation percentage below zone
+    breakoutTargetPercentAbove: number; // Breakout target percentage above center
+    stopLossPercentBelow: number; // Stop loss percentage below zone
+    takeProfitPercentAbove: number; // Take profit percentage above center
+    completionBreakoutTargetPercent: number; // Higher breakout target on completion
+    completionStopLossPercent: number; // Stop loss on completion
+    completionConfidenceBoost: number; // Confidence boost on completion
 
     // NEW: Reference to standardized zone configuration
-    useStandardizedZones?: boolean; // Whether to use centralized zone data
-    preferredZoneSize?: 1 | 2 | 4; // Preferred zone multiplier (1=base, 2=2x, 4=4x)
+    useStandardizedZones: boolean; // Whether to use centralized zone data
+    preferredZoneSize: 1 | 2 | 4; // Preferred zone multiplier (1=base, 2=2x, 4=4x)
 
     // Enhanced AccumulationZoneDetector standardized zone integration
-    standardizedZoneConfig?: {
-        minZoneConfluenceCount?: number; // Minimum zones overlapping for confluence (default: 2)
-        maxZoneConfluenceDistance?: number; // Max distance for zone confluence in ticks (default: 3)
-        institutionalVolumeThreshold?: number; // Threshold for institutional volume detection (default: 50)
-        passiveVolumeRatioThreshold?: number; // Min passive/aggressive ratio for accumulation (default: 1.5)
-        enableZoneConfluenceFilter?: boolean; // Filter signals by zone confluence (default: true)
-        enableInstitutionalVolumeFilter?: boolean; // Filter by institutional volume presence (default: true)
-        enableCrossTimeframeAnalysis?: boolean; // Analyze across multiple zone timeframes (default: true)
-        confluenceConfidenceBoost?: number; // Confidence boost for zone confluence (default: 0.2)
-        institutionalVolumeBoost?: number; // Confidence boost for institutional volume (default: 0.15)
-        crossTimeframeBoost?: number; // Confidence boost for cross-timeframe confirmation (default: 0.1)
+    standardizedZoneConfig: {
+        minZoneConfluenceCount: number; // Minimum zones overlapping for confluence
+        maxZoneConfluenceDistance: number; // Max distance for zone confluence in ticks
+        institutionalVolumeThreshold: number; // Threshold for institutional volume detection
+        passiveVolumeRatioThreshold: number; // Min passive/aggressive ratio for accumulation
+        enableZoneConfluenceFilter: boolean; // Filter signals by zone confluence
+        enableInstitutionalVolumeFilter: boolean; // Filter by institutional volume presence
+        enableCrossTimeframeAnalysis: boolean; // Analyze across multiple zone timeframes
+        confluenceConfidenceBoost: number; // Confidence boost for zone confluence
+        institutionalVolumeBoost: number; // Confidence boost for institutional volume
+        crossTimeframeBoost: number; // Confidence boost for cross-timeframe confirmation
     };
 
     // Enhancement control parameters
-    minEnhancedConfidenceThreshold?: number; // Minimum confidence for enhanced signals (default: 0.3)
-    enhancementSignificanceBoost?: boolean; // Whether to boost signal significance (default: true)
-    enhancementMode?: "disabled" | "testing" | "production"; // Enhancement mode control (default: 'disabled')
+    minEnhancedConfidenceThreshold: number; // Minimum confidence for enhanced signals
+    enhancementSignificanceBoost: boolean; // Whether to boost signal significance
+    enhancementMode: "disabled" | "testing" | "production"; // Enhancement mode control
 
     // CLAUDE.md compliant AccumulationZoneDetectorEnhanced parameters
-    enhancementCallFrequency?: number; // Frequency of enhancement calls (default: 5)
-    highConfidenceThreshold?: number; // High confidence signal threshold (default: 0.7)
-    lowConfidenceThreshold?: number; // Low confidence signal threshold (default: 0.8)
-    minConfidenceBoostThreshold?: number; // Minimum confidence boost threshold (default: 0.1)
-    defaultMinEnhancedConfidenceThreshold?: number; // Default minimum enhanced confidence (default: 0.3)
-    confidenceReductionFactor?: number; // Confidence reduction factor for filtering (default: 0.7)
-    significanceBoostMultiplier?: number; // Significance boost multiplier (default: 0.2)
-    neutralBoostReductionFactor?: number; // Neutral boost reduction factor (default: 0.5)
+    enhancementCallFrequency: number; // Frequency of enhancement calls
+    highConfidenceThreshold: number; // High confidence signal threshold
+    lowConfidenceThreshold: number; // Low confidence signal threshold
+    minConfidenceBoostThreshold: number; // Minimum confidence boost threshold
+    defaultMinEnhancedConfidenceThreshold: number; // Default minimum enhanced confidence
+    confidenceReductionFactor: number; // Confidence reduction factor for filtering
+    significanceBoostMultiplier: number; // Significance boost multiplier
+    neutralBoostReductionFactor: number; // Neutral boost reduction factor
 }
 
 export interface ZoneQueryOptions {

@@ -27,15 +27,27 @@ import { Detector } from "./base/detectorEnrichedTrade.js";
 import { FinancialMath } from "../utils/financialMath.js";
 import type {
     ZoneAnalysisResult,
-    ZoneDetectorConfig,
     ZoneSignal,
     AccumulationZone,
 } from "../types/zoneTypes.js";
+import { Config } from "../core/config.js";
+import { z } from "zod";
+import { AccumulationDetectorSchema } from "../core/config.js";
 import type { AccumulationCandidate } from "./interfaces/detectorInterfaces.js";
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type { StandardizedZoneAnalysisResult } from "./accumulationZoneDetector_standardizedEnhancement.js";
+
+// Use Zod schema inference for complete type safety - matches config.json exactly
+export type AccumulationEnhancedSettings = z.infer<
+    typeof AccumulationDetectorSchema
+>;
+
+/**
+ * Legacy interface - REMOVED: replaced by Zod schema inference
+ */
+// Removed legacy interface - all settings now use Zod schema inference
 
 /**
  * Enhanced AccumulationZoneDetector with Standardized Zone Integration
@@ -54,9 +66,10 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     private readonly confidenceReductionFactor: number;
     private readonly significanceBoostMultiplier: number;
     private readonly neutralBoostReductionFactor: number;
+    private readonly enhancementSignificanceBoost: boolean;
+    private readonly minEnhancedConfidenceThreshold: number;
     private readonly originalDetector: AccumulationZoneDetector;
     private readonly standardizedEnhancement?: AccumulationZoneStandardizedEnhancement;
-    private readonly config: ZoneDetectorConfig;
 
     // Feature flag and control
     private readonly useStandardizedZones: boolean;
@@ -70,38 +83,25 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     constructor(
         id: string,
         symbol: string,
-        config: ZoneDetectorConfig,
+        config: AccumulationEnhancedSettings,
         logger: ILogger,
         metricsCollector: IMetricsCollector
     ) {
         super(id, logger, metricsCollector);
-        this.config = config;
 
         // Initialize CLAUDE.md compliant configuration parameters
-        this.enhancementCallFrequency =
-            config.enhancementCallFrequency ??
-            this.getDefaultEnhancementCallFrequency();
-        this.highConfidenceThreshold =
-            config.highConfidenceThreshold ??
-            this.getDefaultHighConfidenceThreshold();
-        this.lowConfidenceThreshold =
-            config.lowConfidenceThreshold ??
-            this.getDefaultLowConfidenceThreshold();
-        this.minConfidenceBoostThreshold =
-            config.minConfidenceBoostThreshold ??
-            this.getDefaultMinConfidenceBoostThreshold();
+        this.enhancementCallFrequency = config.enhancementCallFrequency;
+        this.highConfidenceThreshold = config.highConfidenceThreshold;
+        this.lowConfidenceThreshold = config.lowConfidenceThreshold;
+        this.minConfidenceBoostThreshold = config.minConfidenceBoostThreshold;
         this.defaultMinEnhancedConfidenceThreshold =
-            config.defaultMinEnhancedConfidenceThreshold ??
-            this.getDefaultMinEnhancedConfidenceThreshold();
-        this.confidenceReductionFactor =
-            config.confidenceReductionFactor ??
-            this.getDefaultConfidenceReductionFactor();
-        this.significanceBoostMultiplier =
-            config.significanceBoostMultiplier ??
-            this.getDefaultSignificanceBoostMultiplier();
-        this.neutralBoostReductionFactor =
-            config.neutralBoostReductionFactor ??
-            this.getDefaultNeutralBoostReductionFactor();
+            config.defaultMinEnhancedConfidenceThreshold;
+        this.confidenceReductionFactor = config.confidenceReductionFactor;
+        this.significanceBoostMultiplier = config.significanceBoostMultiplier;
+        this.neutralBoostReductionFactor = config.neutralBoostReductionFactor;
+        this.enhancementSignificanceBoost = config.enhancementSignificanceBoost;
+        this.minEnhancedConfidenceThreshold =
+            config.minEnhancedConfidenceThreshold;
 
         // Create a logger wrapper that filters out deprecation warnings only when
         // the original detector is created internally by the enhanced wrapper
@@ -142,17 +142,16 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         );
 
         // Feature flag control
-        this.enhancementMode = config.enhancementMode ?? "disabled";
+        this.enhancementMode = config.enhancementMode;
         this.useStandardizedZones =
-            (config.useStandardizedZones ?? false) &&
-            this.enhancementMode !== "disabled";
+            config.useStandardizedZones && this.enhancementMode !== "disabled";
 
         // Initialize standardized zone enhancement if enabled
         if (this.useStandardizedZones) {
             try {
                 this.standardizedEnhancement =
                     new AccumulationZoneStandardizedEnhancement(
-                        config.standardizedZoneConfig ?? {},
+                        Config.UNIVERSAL_ZONE_CONFIG,
                         logger
                     );
 
@@ -160,7 +159,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
                     "AccumulationZoneDetectorEnhanced: Standardized zones enabled",
                     {
                         mode: this.enhancementMode,
-                        config: config.standardizedZoneConfig,
+                        config: config,
                     }
                 );
             } catch (error) {
@@ -382,9 +381,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
 
         // Apply filtering based on enhancement recommendations
         if (enhancement.recommendedAction === "filter") {
-            const minConfidence =
-                this.config.minEnhancedConfidenceThreshold ??
-                this.defaultMinEnhancedConfidenceThreshold;
+            const minConfidence = this.minEnhancedConfidenceThreshold;
             enhancedResult.signals = enhancedResult.signals.filter(
                 (signal) => signal.confidence >= minConfidence
             );
@@ -427,7 +424,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
                 );
 
                 // Optionally upgrade significance level
-                if (this.config.enhancementSignificanceBoost) {
+                if (this.enhancementSignificanceBoost) {
                     enhancedSignal.zoneStrength = Math.min(
                         1.0,
                         FinancialMath.addAmounts(
@@ -574,35 +571,6 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     }
 
     // Expose private methods for test compatibility
-
-    /**
-     * CLAUDE.md compliant default configuration getters
-     * All magic numbers are encapsulated in configurable methods
-     */
-    private getDefaultEnhancementCallFrequency(): number {
-        return 5;
-    }
-    private getDefaultHighConfidenceThreshold(): number {
-        return 0.7;
-    }
-    private getDefaultLowConfidenceThreshold(): number {
-        return 0.8;
-    }
-    private getDefaultMinConfidenceBoostThreshold(): number {
-        return 0.1;
-    }
-    private getDefaultMinEnhancedConfidenceThreshold(): number {
-        return 0.3;
-    }
-    private getDefaultConfidenceReductionFactor(): number {
-        return 0.7;
-    }
-    private getDefaultSignificanceBoostMultiplier(): number {
-        return 0.2;
-    }
-    private getDefaultNeutralBoostReductionFactor(): number {
-        return 0.5;
-    }
 
     // Forward events from original detector with proper typing
     public on(event: string, listener: (...args: unknown[]) => void): this {

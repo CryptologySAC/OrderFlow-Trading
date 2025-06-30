@@ -91,6 +91,134 @@ const spread = bestAsk - bestBid; // Only within same method call
 **VIOLATIONS DETECTION:**
 Any implementation of caching mechanisms on live market data will be **IMMEDIATELY REJECTED** and flagged as a critical trading system violation.
 
+#### 🚫 NUCLEAR CLEANUP PROTOCOLS: ZERO TOLERANCE CONFIGURATION (MANDATORY)
+
+**CRITICAL ENFORCEMENT**: All enhanced detectors MUST follow the "NO DEFAULTS, NO FALLBACKS, NO BULLSHIT" philosophy implemented through the nuclear cleanup project.
+
+**MANDATORY ARCHITECTURE PRINCIPLES:**
+
+1. **🚫 ZERO DEFAULT METHODS**: All `getDefault*()` methods are **STRICTLY FORBIDDEN** in enhanced detectors
+2. **🚫 ZERO FALLBACK OPERATORS**: All `??` fallback operators are **STRICTLY FORBIDDEN** throughout the codebase
+3. **🚫 ZERO HARDCODED VALUES**: All threshold, limit, and calculation values MUST be configurable via settings interfaces
+4. **✅ MANDATORY ZOD VALIDATION**: All settings MUST be validated through Zod schemas with `process.exit(1)` on missing configuration
+5. **✅ PURE WRAPPER ARCHITECTURE**: Enhanced detectors MUST be pure config-driven wrappers with no internal defaults
+
+**ZOD VALIDATION ENFORCEMENT:**
+
+```typescript
+// ✅ REQUIRED: Zod schemas for all enhanced detectors
+export const AbsorptionDetectorSchema = z.object({
+    minAggVolume: z.number().int().min(1).max(1000),
+    absorptionThreshold: z.number().min(0.1).max(1.0),
+    windowMs: z.number().int().min(5000).max(300000),
+    // ALL properties required - no .optional()
+});
+
+// ✅ REQUIRED: Config getters with Zod validation
+export class Config {
+    static get ABSORPTION_DETECTOR() {
+        return AbsorptionDetectorSchema.parse(SYMBOL_CFG.absorption);
+        // Zod .parse() throws on missing/invalid config → process.exit(1)
+    }
+}
+
+// ✅ CORRECT: Enhanced detector using validated config
+export class AbsorptionDetectorEnhanced extends EventEmitter {
+    constructor(
+        id: string,
+        settings: typeof Config.ABSORPTION_DETECTOR, // Pre-validated by Zod
+        // ... other dependencies
+    ) {
+        super();
+        // settings is guaranteed valid - no defaults needed
+        this.detector = new AbsorptionDetector(id, settings, /* ... */);
+    }
+}
+```
+
+**PROHIBITED PATTERNS:**
+
+```typescript
+// ❌ NEVER: Default methods in enhanced detectors
+private getDefaultMinAggVolume(): number { return 20; }
+private getDefaultSettings(): Settings { return {...}; }
+
+// ❌ NEVER: Fallback operators for missing config
+const threshold = this.settings.threshold ?? 0.5;
+const mode = config.mode || "production";
+
+// ❌ NEVER: Optional Zod properties (.optional())
+minAggVolume: z.number().optional(), // FORBIDDEN - all must be required
+
+// ❌ NEVER: Manual validation with defaults
+const settings = config.absorption || getDefaultAbsorptionSettings();
+
+// ❌ NEVER: Type casting to bypass Zod validation
+const settings = config as any;
+const detector = settings as DetectorSettings;
+```
+
+**REQUIRED ZOD PATTERNS:**
+
+```typescript
+// ✅ CORRECT: All Zod properties required with validation ranges
+export const ExhaustionDetectorSchema = z.object({
+    minAggVolume: z.number().int().min(1).max(10000),
+    windowMs: z.number().int().min(5000).max(300000),
+    exhaustionThreshold: z.number().min(0.1).max(1.0),
+    // NO .optional() - every property is mandatory
+});
+
+// ✅ CORRECT: Universal zone config separation
+export const UniversalZoneSchema = z.object({
+    maxActiveZones: z.number().int().min(1).max(100),
+    zoneTimeoutMs: z.number().int().min(60000).max(7200000),
+    useStandardizedZones: z.boolean(),
+    enhancementMode: z.enum(["disabled", "testing", "production"]),
+});
+
+// ✅ CORRECT: Config access with panic exit
+static get UNIVERSAL_ZONE_CONFIG() {
+    return UniversalZoneSchema.parse(SYMBOL_CFG.universalZoneConfig);
+    // Missing config = Zod parse failure = immediate crash
+}
+```
+
+**PANIC EXIT ON MISSING CONFIGURATION:**
+
+The nuclear cleanup ensures that ANY missing configuration property triggers immediate `process.exit(1)`:
+
+```typescript
+// When config.json is missing ANY required property:
+// 1. Zod .parse() throws ZodError
+// 2. Application crashes immediately  
+// 3. No fallbacks, no defaults, no silent failures
+// 4. Forces explicit configuration of ALL parameters
+```
+
+**ENFORCEMENT VIOLATIONS:**
+
+Any occurrence of the following patterns will result in **IMMEDIATE REJECTION**:
+
+- Default methods (`getDefault*()`) in enhanced detector classes
+- Fallback operators (`??`, `||`) for configuration values  
+- Optional Zod properties (`.optional()`) in enhanced detector schemas
+- Type casting to bypass Zod validation (`as any`, `as DetectorSettings`)
+- Manual default assignment when Zod validation fails
+- Try-catch blocks around config parsing to provide fallbacks
+
+**NUCLEAR CLEANUP VERIFICATION:**
+
+```bash
+# Verify zero tolerance configuration architecture
+yarn build  # MUST compile with 100% success
+grep -r "getDefault" src/indicators/*Enhanced.ts  # MUST return no results
+grep -r "??" src/indicators/*Enhanced.ts | grep -v "?: " # MUST return no fallback operators
+grep -r "\.optional()" src/core/config.ts  # MUST return no optional Zod properties
+```
+
+The nuclear cleanup project established **absolute zero tolerance** for missing configuration through strict Zod validation, ensuring institutional-grade reliability with immediate system failure on any configuration gaps.
+
 ## Development Commands
 
 ### Core Development

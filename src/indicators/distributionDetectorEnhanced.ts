@@ -27,57 +27,24 @@ import type {
     StandardZoneData,
     ZoneSnapshot,
 } from "../types/marketEvents.js";
-import type { ZoneDetectorConfig } from "../types/zoneTypes.js";
+import { Config } from "../core/config.js";
+import { z } from "zod";
+import { DistributionDetectorSchema } from "../core/config.js";
 
 /**
- * Enhanced configuration interface extending ZoneDetectorConfig with standardized zone capabilities
+ * Enhanced configuration interface for distribution detection - ONLY distribution-specific parameters
  *
  * DISTRIBUTION PHASE 1: Core interface for enhanced distribution detection
  */
-export interface DistributionEnhancedSettings extends ZoneDetectorConfig {
-    useStandardizedZones?: boolean;
-    standardizedZoneConfig?: DistributionEnhancementConfig;
-}
+// Use Zod schema inference for complete type safety - matches config.json exactly
+export type DistributionEnhancedSettings = z.infer<
+    typeof DistributionDetectorSchema
+>;
 
 /**
- * Configuration interface for distribution detector enhancements
- *
- * DISTRIBUTION PHASE 1: Standardized zone enhancement parameters
+ * Legacy interface - REMOVED: replaced by Zod schema inference
  */
-export interface DistributionEnhancementConfig {
-    // Zone confluence analysis
-    minZoneConfluenceCount?: number; // Minimum zones required for confluence (default: 2)
-    maxZoneConfluenceDistance?: number; // Max distance in ticks for zone confluence (default: 3)
-
-    // Institutional selling pressure analysis
-    sellingPressureVolumeThreshold?: number; // Minimum volume for selling pressure analysis (default: 40)
-    sellingPressureRatioThreshold?: number; // Minimum selling ratio for distribution (default: 0.65)
-
-    // CLAUDE.md compliant calculation parameters
-    ltcusdtTickValue?: number; // LTCUSDT tick value for distance calculations (default: 0.01)
-    varianceReductionFactor?: number; // Variance reduction factor for alignment calculations (default: 1.0)
-    alignmentNormalizationFactor?: number; // Alignment normalization factor (default: 1.0)
-    confluenceStrengthDivisor?: number; // Confluence strength calculation divisor (default: 2.0)
-    passiveToAggressiveRatio?: number; // Passive to aggressive volume ratio threshold (default: 0.6)
-    varianceDivisor?: number; // Variance calculation divisor (default: 3.0)
-    moderateAlignmentThreshold?: number; // Moderate alignment requirement threshold (default: 0.45)
-    aggressiveSellingRatioThreshold?: number; // Aggressive selling ratio threshold (default: 0.6)
-    aggressiveSellingReductionFactor?: number; // Aggressive selling reduction factor (default: 0.5)
-
-    // Multi-timeframe analysis
-    enableZoneConfluenceFilter?: boolean; // Enable zone confluence filtering (default: true)
-    enableSellingPressureAnalysis?: boolean; // Enable institutional selling analysis (default: true)
-    enableCrossTimeframeAnalysis?: boolean; // Enable cross-timeframe validation (default: false)
-
-    // Confidence boost parameters
-    confluenceConfidenceBoost?: number; // Boost for zone confluence (default: 0.12)
-    sellingPressureConfidenceBoost?: number; // Boost for selling pressure (default: 0.08)
-    crossTimeframeBoost?: number; // Boost for cross-timeframe alignment (default: 0.05)
-
-    // Enhancement control
-    enhancementMode?: "disabled" | "monitoring" | "production"; // Enhancement deployment mode
-    minEnhancedConfidenceThreshold?: number; // Minimum confidence for enhanced signals (default: 0.25)
-}
+// Removed legacy interface - all settings now use Zod schema inference
 
 /**
  * Statistics interface for monitoring distribution detector enhancements
@@ -111,7 +78,7 @@ export interface DistributionEnhancementStats {
  */
 export class DistributionDetectorEnhanced extends DistributionZoneDetector {
     private readonly useStandardizedZones: boolean;
-    private readonly enhancementConfig: DistributionEnhancementConfig;
+    private readonly enhancementConfig: DistributionEnhancedSettings;
     private readonly enhancementStats: DistributionEnhancementStats;
 
     constructor(
@@ -125,10 +92,8 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
         super(id, symbol, settings, logger, metrics);
 
         // Initialize enhancement configuration
-        this.useStandardizedZones = settings.useStandardizedZones ?? false;
-        this.enhancementConfig = this.initializeEnhancementConfig(
-            settings.standardizedZoneConfig
-        );
+        this.useStandardizedZones = settings.useStandardizedZones;
+        this.enhancementConfig = settings;
 
         // Initialize enhancement statistics
         this.enhancementStats = {
@@ -203,7 +168,7 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
         let enhancementApplied = false;
 
         // Zone confluence analysis for distribution validation
-        if (this.enhancementConfig.enableZoneConfluenceFilter) {
+        if (Config.UNIVERSAL_ZONE_CONFIG.enableZoneConfluenceFilter) {
             const confluenceResult = this.analyzeZoneConfluence(
                 event.zoneData,
                 event.price
@@ -211,7 +176,7 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
             if (confluenceResult.hasConfluence) {
                 this.enhancementStats.confluenceDetectionCount++;
                 totalConfidenceBoost +=
-                    this.enhancementConfig.confluenceConfidenceBoost ?? 0.12;
+                    Config.UNIVERSAL_ZONE_CONFIG.confluenceConfidenceBoost;
                 enhancementApplied = true;
 
                 this.logger.debug(
@@ -222,7 +187,8 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
                         confluenceZones: confluenceResult.confluenceZones,
                         confluenceStrength: confluenceResult.confluenceStrength,
                         confidenceBoost:
-                            this.enhancementConfig.confluenceConfidenceBoost,
+                            Config.UNIVERSAL_ZONE_CONFIG
+                                .confluenceConfidenceBoost,
                     }
                 );
             }
@@ -237,8 +203,7 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
             if (sellingResult.hasSellingPressure) {
                 this.enhancementStats.sellingPressureDetectionCount++;
                 totalConfidenceBoost +=
-                    this.enhancementConfig.sellingPressureConfidenceBoost ??
-                    0.08;
+                    this.enhancementConfig.sellingPressureConfidenceBoost;
                 enhancementApplied = true;
 
                 this.logger.debug(
@@ -257,7 +222,7 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
         }
 
         // Cross-timeframe distribution analysis
-        if (this.enhancementConfig.enableCrossTimeframeAnalysis) {
+        if (Config.UNIVERSAL_ZONE_CONFIG.enableCrossTimeframeAnalysis) {
             const crossTimeframeResult = this.analyzeCrossTimeframeDistribution(
                 event.zoneData,
                 event
@@ -265,7 +230,7 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
             if (crossTimeframeResult.hasAlignment) {
                 this.enhancementStats.crossTimeframeAnalysisCount++;
                 totalConfidenceBoost +=
-                    this.enhancementConfig.crossTimeframeBoost ?? 0.05;
+                    Config.UNIVERSAL_ZONE_CONFIG.crossTimeframeBoost;
                 enhancementApplied = true;
 
                 this.logger.debug(
@@ -277,7 +242,7 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
                         timeframeBreakdown:
                             crossTimeframeResult.timeframeBreakdown,
                         confidenceBoost:
-                            this.enhancementConfig.crossTimeframeBoost,
+                            Config.UNIVERSAL_ZONE_CONFIG.crossTimeframeBoost,
                     }
                 );
             }
@@ -313,9 +278,9 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
         confluenceStrength: number;
     } {
         const minConfluenceZones =
-            this.enhancementConfig.minZoneConfluenceCount ?? 2;
+            Config.UNIVERSAL_ZONE_CONFIG.minZoneConfluenceCount;
         const maxDistance =
-            this.enhancementConfig.maxZoneConfluenceDistance ?? 3;
+            Config.UNIVERSAL_ZONE_CONFIG.maxZoneConfluenceDistance;
 
         // Find zones that overlap around the current price
         const relevantZones: ZoneSnapshot[] = [];
@@ -340,7 +305,7 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
 
         // Calculate confluence strength using FinancialMath (higher = more zones overlapping)
         const confluenceStrengthDivisor =
-            this.enhancementConfig.confluenceStrengthDivisor ?? 2.0;
+            this.enhancementConfig.confluenceStrengthDivisor;
         const confluenceStrength = Math.min(
             1.0,
             FinancialMath.divideQuantities(
@@ -364,7 +329,7 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
         price: number,
         maxDistanceTicks: number
     ): ZoneSnapshot[] {
-        const tickValue = this.enhancementConfig.ltcusdtTickValue ?? 0.01;
+        const tickValue = Config.TICK_SIZE;
         const maxDistance = FinancialMath.multiplyQuantities(
             maxDistanceTicks,
             tickValue
@@ -394,9 +359,8 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
         affectedZones: number;
     } {
         const sellingThreshold =
-            this.enhancementConfig.sellingPressureVolumeThreshold ?? 40;
-        const minRatio =
-            this.enhancementConfig.sellingPressureRatioThreshold ?? 0.65;
+            this.enhancementConfig.sellingPressureVolumeThreshold;
+        const minRatio = this.enhancementConfig.sellingPressureRatioThreshold;
 
         // Analyze all zones for institutional selling pressure patterns
         const allZones = [
@@ -426,7 +390,7 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
                 aggressiveVolume >
                     FinancialMath.multiplyQuantities(
                         passiveVolume,
-                        this.enhancementConfig.passiveToAggressiveRatio ?? 0.6
+                        this.enhancementConfig.passiveToAggressiveRatio
                     )
             ) {
                 affectedZones++;
@@ -514,7 +478,7 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
 
         const variance = FinancialMath.multiplyQuantities(stdDev, stdDev); // Variance = stdDev^2
         const varianceReductionFactor =
-            this.enhancementConfig.varianceReductionFactor ?? 1.0;
+            this.enhancementConfig.varianceReductionFactor;
         const normalizedVariance = FinancialMath.multiplyQuantities(
             variance,
             varianceReductionFactor
@@ -524,7 +488,7 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
             Math.max(0, 1 - normalizedVariance)
         ); // Penalize high variance
         const moderateAlignmentThreshold =
-            this.enhancementConfig.moderateAlignmentThreshold ?? 0.45;
+            this.enhancementConfig.moderateAlignmentThreshold;
         const hasAlignment = alignmentScore >= moderateAlignmentThreshold; // Require moderate alignment for distribution
 
         return {
@@ -560,9 +524,9 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
                 totalVolume
             );
             const aggressiveSellingRatioThreshold =
-                this.enhancementConfig.aggressiveSellingRatioThreshold ?? 0.6;
+                this.enhancementConfig.aggressiveSellingRatioThreshold;
             const aggressiveSellingReductionFactor =
-                this.enhancementConfig.aggressiveSellingReductionFactor ?? 0.5;
+                this.enhancementConfig.aggressiveSellingReductionFactor;
             const distributionScore =
                 aggressiveSellingRatio > aggressiveSellingRatioThreshold
                     ? aggressiveSellingRatio
@@ -605,152 +569,6 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
     }
 
     /**
-     * Initialize enhancement configuration with safe defaults
-     *
-     * DISTRIBUTION PHASE 1: Production-safe configuration
-     */
-    private initializeEnhancementConfig(
-        config?: DistributionEnhancementConfig
-    ): DistributionEnhancementConfig {
-        return {
-            minZoneConfluenceCount:
-                config?.minZoneConfluenceCount ??
-                this.getDefaultMinZoneConfluenceCount(),
-            maxZoneConfluenceDistance:
-                config?.maxZoneConfluenceDistance ??
-                this.getDefaultMaxZoneConfluenceDistance(),
-            sellingPressureVolumeThreshold:
-                config?.sellingPressureVolumeThreshold ??
-                this.getDefaultSellingPressureVolumeThreshold(),
-            sellingPressureRatioThreshold:
-                config?.sellingPressureRatioThreshold ??
-                this.getDefaultSellingPressureRatioThreshold(),
-
-            // CLAUDE.md compliant calculation parameters
-            ltcusdtTickValue:
-                config?.ltcusdtTickValue ?? this.getDefaultLtcusdtTickValue(),
-            varianceReductionFactor:
-                config?.varianceReductionFactor ??
-                this.getDefaultVarianceReductionFactor(),
-            alignmentNormalizationFactor:
-                config?.alignmentNormalizationFactor ??
-                this.getDefaultAlignmentNormalizationFactor(),
-            confluenceStrengthDivisor:
-                config?.confluenceStrengthDivisor ??
-                this.getDefaultConfluenceStrengthDivisor(),
-            passiveToAggressiveRatio:
-                config?.passiveToAggressiveRatio ??
-                this.getDefaultPassiveToAggressiveRatio(),
-            varianceDivisor:
-                config?.varianceDivisor ?? this.getDefaultVarianceDivisor(),
-            moderateAlignmentThreshold:
-                config?.moderateAlignmentThreshold ??
-                this.getDefaultModerateAlignmentThreshold(),
-            aggressiveSellingRatioThreshold:
-                config?.aggressiveSellingRatioThreshold ??
-                this.getDefaultAggressiveSellingRatioThreshold(),
-            aggressiveSellingReductionFactor:
-                config?.aggressiveSellingReductionFactor ??
-                this.getDefaultAggressiveSellingReductionFactor(),
-
-            enableZoneConfluenceFilter:
-                config?.enableZoneConfluenceFilter ??
-                this.getDefaultEnableZoneConfluenceFilter(),
-            enableSellingPressureAnalysis:
-                config?.enableSellingPressureAnalysis ??
-                this.getDefaultEnableSellingPressureAnalysis(),
-            enableCrossTimeframeAnalysis:
-                config?.enableCrossTimeframeAnalysis ??
-                this.getDefaultEnableCrossTimeframeAnalysis(),
-            confluenceConfidenceBoost:
-                config?.confluenceConfidenceBoost ??
-                this.getDefaultConfluenceConfidenceBoost(),
-            sellingPressureConfidenceBoost:
-                config?.sellingPressureConfidenceBoost ??
-                this.getDefaultSellingPressureConfidenceBoost(),
-            crossTimeframeBoost:
-                config?.crossTimeframeBoost ??
-                this.getDefaultCrossTimeframeBoost(),
-            enhancementMode:
-                config?.enhancementMode ?? this.getDefaultEnhancementMode(),
-            minEnhancedConfidenceThreshold:
-                config?.minEnhancedConfidenceThreshold ??
-                this.getDefaultMinEnhancedConfidenceThreshold(),
-        };
-    }
-
-    /**
-     * CLAUDE.md compliant default configuration getters
-     * All magic numbers are encapsulated in configurable methods
-     */
-    private getDefaultMinZoneConfluenceCount(): number {
-        return 2;
-    }
-    private getDefaultMaxZoneConfluenceDistance(): number {
-        return 3;
-    }
-    private getDefaultSellingPressureVolumeThreshold(): number {
-        return 40;
-    }
-    private getDefaultSellingPressureRatioThreshold(): number {
-        return 0.65;
-    }
-    private getDefaultLtcusdtTickValue(): number {
-        return 0.01;
-    }
-    private getDefaultVarianceReductionFactor(): number {
-        return 1.0;
-    }
-    private getDefaultAlignmentNormalizationFactor(): number {
-        return 1.0;
-    }
-    private getDefaultConfluenceStrengthDivisor(): number {
-        return 2.0;
-    }
-    private getDefaultPassiveToAggressiveRatio(): number {
-        return 0.6;
-    }
-    private getDefaultVarianceDivisor(): number {
-        return 3.0;
-    }
-    private getDefaultModerateAlignmentThreshold(): number {
-        return 0.45;
-    }
-    private getDefaultAggressiveSellingRatioThreshold(): number {
-        return 0.6;
-    }
-    private getDefaultAggressiveSellingReductionFactor(): number {
-        return 0.5;
-    }
-    private getDefaultEnableZoneConfluenceFilter(): boolean {
-        return true;
-    }
-    private getDefaultEnableSellingPressureAnalysis(): boolean {
-        return true;
-    }
-    private getDefaultEnableCrossTimeframeAnalysis(): boolean {
-        return false;
-    }
-    private getDefaultConfluenceConfidenceBoost(): number {
-        return 0.12;
-    }
-    private getDefaultSellingPressureConfidenceBoost(): number {
-        return 0.08;
-    }
-    private getDefaultCrossTimeframeBoost(): number {
-        return 0.05;
-    }
-    private getDefaultEnhancementMode():
-        | "disabled"
-        | "monitoring"
-        | "production" {
-        return "disabled";
-    }
-    private getDefaultMinEnhancedConfidenceThreshold(): number {
-        return 0.25;
-    }
-
-    /**
      * Get enhancement statistics for monitoring and debugging
      *
      * DISTRIBUTION PHASE 1: Statistics and monitoring interface
@@ -765,7 +583,7 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
      * DISTRIBUTION PHASE 1: Runtime configuration management
      */
     public setEnhancementMode(
-        mode: "disabled" | "monitoring" | "production"
+        mode: "disabled" | "testing" | "production"
     ): void {
         this.enhancementConfig.enhancementMode = mode;
         this.logger.info(

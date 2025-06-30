@@ -1,9 +1,7 @@
 {
     "nodeEnv": "development",
-    "symbol": "LTCUSDT",
     "httpPort": 3000,
     "wsPort": 3001,
-
     "mqtt": {
         "url": "wss://mqtt.cryptology.pe",
         "username": "orderflow",
@@ -17,7 +15,6 @@
     "alertWebhookUrl": "https://lima.cryptology.pe/api/webhook/OcdSY61opli9-n7unmlw4CmO",
     "alertCooldownMs": 300000,
     "maxStorageTime": 5400000,
-
     "standardZoneConfig": {
         "baseTicks": 5,
         "zoneMultipliers": [1, 2, 4],
@@ -39,7 +36,6 @@
             "maxMemoryMB": 50
         }
     },
-
     "marketDataStorage": {
         "enabled": true,
         "dataDirectory": "./backtesting_data",
@@ -50,41 +46,34 @@
         "compressionEnabled": false,
         "monitoringInterval": 30
     },
-
     "zoneDetectors": {
         "LTCUSDT": {
             "accumulation": {
                 "minZoneStrength": 0.8,
                 "maxZoneWidth": 0.008,
                 "minZoneVolume": 500,
-
                 "maxActiveZones": 3,
                 "zoneTimeoutMs": 600000,
-
                 "completionThreshold": 0.9,
                 "strengthChangeThreshold": 0.15,
                 "minCandidateDuration": 300000,
                 "minBuyRatio": 0.65,
                 "maxPriceDeviation": 0.02,
                 "minTradeCount": 15,
-
                 "priceStabilityThreshold": 0.98,
                 "strongZoneThreshold": 0.7,
                 "weakZoneThreshold": 0.4,
-
-                "volumeSurgeMultiplier": 3.0,
+                "volumeSurgeMultiplier": 3,
                 "imbalanceThreshold": 0.35,
                 "institutionalThreshold": 17.8,
                 "burstDetectionMs": 1500,
                 "sustainedVolumeMs": 25000,
                 "medianTradeSize": 0.8,
-
                 "pricePrecision": 2,
                 "zoneTicks": 2,
                 "enhancedInstitutionalSizeThreshold": 50,
                 "enhancedIcebergDetectionWindow": 15,
                 "enhancedMinInstitutionalRatio": 0.4,
-
                 "invalidationPercentBelow": 0.005,
                 "breakoutTargetPercentAbove": 0.02,
                 "stopLossPercentBelow": 0.01,
@@ -92,21 +81,12 @@
                 "completionBreakoutTargetPercent": 0.05,
                 "completionStopLossPercent": 0.015,
                 "completionConfidenceBoost": 0.2,
-
                 "useStandardizedZones": true,
                 "enhancementMode": "production",
-                "standardizedZoneConfig": {
-                    "minZoneConfluenceCount": 2,
-                    "maxZoneConfluenceDistance": 3,
-                    "institutionalVolumeThreshold": 50,
-                    "passiveVolumeRatioThreshold": 1.5,
-                    "enableZoneConfluenceFilter": true,
-                    "enableInstitutionalVolumeFilter": false,
-                    "enableCrossTimeframeAnalysis": false,
-                    "confluenceConfidenceBoost": 0.1,
-                    "institutionalVolumeBoost": 0.1,
-                    "crossTimeframeBoost": 0.05
-                },
+                "institutionalVolumeThreshold": 50,
+                "passiveVolumeRatioThreshold": 1.5,
+                "enableInstitutionalVolumeFilter": false,
+                "institutionalVolumeBoost": 0.1,
                 "minEnhancedConfidenceThreshold": 0.3,
                 "enhancementSignificanceBoost": true,
                 "enhancementCallFrequency": 5,
@@ -122,52 +102,38 @@
                 "minZoneStrength": 0.8,
                 "maxZoneWidth": 0.014,
                 "minZoneVolume": 1000,
-
                 "maxActiveZones": 3,
                 "zoneTimeoutMs": 1800000,
-
                 "completionThreshold": 0.8,
                 "strengthChangeThreshold": 0.18,
                 "minCandidateDuration": 300000,
                 "minSellRatio": 0.65,
                 "maxPriceDeviation": 0.012,
                 "minTradeCount": 10,
-
                 "volumeSurgeMultiplier": 3.5,
                 "imbalanceThreshold": 0.3,
-                "institutionalThreshold": 15.0,
+                "institutionalThreshold": 15,
                 "burstDetectionMs": 1500,
                 "sustainedVolumeMs": 25000,
                 "medianTradeSize": 0.8,
-
                 "useStandardizedZones": true,
-                "standardizedZoneConfig": {
-                    "minZoneConfluenceCount": 2,
-                    "maxZoneConfluenceDistance": 3,
-                    "sellingPressureVolumeThreshold": 40,
-                    "sellingPressureRatioThreshold": 0.65,
-                    "ltcusdtTickValue": 0.01,
-                    "varianceReductionFactor": 1.0,
-                    "alignmentNormalizationFactor": 1.0,
-                    "confluenceStrengthDivisor": 2.0,
-                    "passiveToAggressiveRatio": 0.6,
-                    "varianceDivisor": 3.0,
-                    "moderateAlignmentThreshold": 0.45,
-                    "aggressiveSellingRatioThreshold": 0.6,
-                    "aggressiveSellingReductionFactor": 0.5,
-                    "enableZoneConfluenceFilter": true,
-                    "enableSellingPressureAnalysis": true,
-                    "enableCrossTimeframeAnalysis": false,
-                    "confluenceConfidenceBoost": 0.12,
-                    "sellingPressureConfidenceBoost": 0.08,
-                    "crossTimeframeBoost": 0.05,
-                    "enhancementMode": "production",
-                    "minEnhancedConfidenceThreshold": 0.25
-                }
+                "sellingPressureVolumeThreshold": 40,
+                "sellingPressureRatioThreshold": 0.65,
+                "varianceReductionFactor": 1,
+                "alignmentNormalizationFactor": 1,
+                "confluenceStrengthDivisor": 2,
+                "passiveToAggressiveRatio": 0.6,
+                "varianceDivisor": 3,
+                "moderateAlignmentThreshold": 0.45,
+                "aggressiveSellingRatioThreshold": 0.6,
+                "aggressiveSellingReductionFactor": 0.5,
+                "enableSellingPressureAnalysis": true,
+                "sellingPressureConfidenceBoost": 0.08,
+                "enhancementMode": "production",
+                "minEnhancedConfidenceThreshold": 0.25
             }
         }
     },
-
     "enhancedZoneFormation": {
         "icebergDetection": {
             "minSize": 10,
@@ -237,12 +203,10 @@
             }
         }
     },
-
     "symbols": {
         "LTCUSDT": {
             "pricePrecision": 2,
             "quantityPrecision": 8,
-
             "windowMs": 75000,
             "bandTicks": 5,
             "largeTradeThreshold": 100,
@@ -250,27 +214,59 @@
             "dashboardUpdateInterval": 500,
             "maxDashboardInterval": 1000,
             "significantChangeThreshold": 0.001,
-
+            "universalZoneConfig": {
+                "maxActiveZones": 50,
+                "zoneTimeoutMs": 1800000,
+                "minZoneVolume": 500,
+                "maxZoneWidth": 0.02,
+                "minZoneStrength": 0.7,
+                "completionThreshold": 0.8,
+                "strengthChangeThreshold": 0.15,
+                "minCandidateDuration": 300000,
+                "maxPriceDeviation": 0.02,
+                "minTradeCount": 10,
+                "minBuyRatio": 0.65,
+                "minSellRatio": 0.65,
+                "priceStabilityThreshold": 0.85,
+                "strongZoneThreshold": 0.7,
+                "weakZoneThreshold": 0.4,
+                "minZoneConfluenceCount": 2,
+                "maxZoneConfluenceDistance": 3,
+                "enableZoneConfluenceFilter": true,
+                "enableCrossTimeframeAnalysis": false,
+                "confluenceConfidenceBoost": 0.1,
+                "crossTimeframeBoost": 0.05,
+                "useStandardizedZones": true,
+                "enhancementMode": "production"
+            },
             "orderBookState": {
-                "binSize": 0.01,
+                "maxLevels": 150,
+                "snapshotIntervalMs": 1000,
+                "pricePrecision": 2,
+                "symbol": "LTCUSDT",
+                "maxPriceDistance": 10.0,
+                "pruneIntervalMs": 30000,
+                "maxErrorRate": 0.05,
+                "staleThresholdMs": 5000
+            },
+            "orderBookProcessor": {
+                "binSize": 10,
                 "numLevels": 150,
                 "maxBufferSize": 100000
             },
-
             "tradesProcessor": {
+                "storageTime": 5400000,
                 "maxBacklogRetries": 3,
                 "backlogBatchSize": 500,
                 "maxMemoryTrades": 20000,
                 "saveQueueSize": 1000,
                 "healthCheckInterval": 45000
             },
-
             "signalManager": {
                 "confidenceThreshold": 0.3,
                 "signalTimeout": 120000,
                 "enableMarketHealthCheck": true,
                 "enableAlerts": true,
-
                 "detectorThresholds": {
                     "exhaustion": 0.45,
                     "cvd_confirmation": 0.4,
@@ -280,15 +276,14 @@
                     "accumulation": 0.95,
                     "accumulation_zone": 0.95
                 },
-
                 "positionSizing": {
-                    "exhaustion": 1.0,
+                    "exhaustion": 1,
                     "cvd_confirmation": 0.7,
                     "distribution": 0.7,
                     "distribution_zone": 0.7,
                     "absorption": 0.5,
-                    "accumulation": 0.0,
-                    "accumulation_zone": 0.0
+                    "accumulation": 0,
+                    "accumulation_zone": 0
                 }
             },
             "signalCoordinator": {
@@ -299,28 +294,25 @@
                 "enableMetrics": true,
                 "logLevel": "info"
             },
-
             "exhaustion": {
                 "minAggVolume": 20,
                 "windowMs": 45000,
                 "pricePrecision": 2,
                 "zoneTicks": 3,
                 "eventCooldownMs": 10000,
-                "volumeSurgeMultiplier": 2.0,
+                "volumeSurgeMultiplier": 2,
                 "imbalanceThreshold": 0.3,
-                "institutionalThreshold": 15.0,
+                "institutionalThreshold": 15,
                 "burstDetectionMs": 2000,
                 "sustainedVolumeMs": 20000,
                 "medianTradeSize": 0.8,
                 "exhaustionThreshold": 0.3,
                 "maxPassiveRatio": 0.35,
                 "minDepletionFactor": 0.2,
-
                 "imbalanceHighThreshold": 0.75,
                 "imbalanceMediumThreshold": 0.55,
                 "spreadHighThreshold": 0.004,
                 "spreadMediumThreshold": 0.0015,
-
                 "scoringWeights": {
                     "depletion": 0.45,
                     "passive": 0.3,
@@ -337,21 +329,18 @@
                 "mediumQualityDataAge": 70000,
                 "circuitBreakerMaxErrors": 8,
                 "circuitBreakerWindowMs": 90000,
-
                 "lowScoreConfidenceAdjustment": 0.7,
                 "lowVolumeConfidenceAdjustment": 0.8,
                 "invalidSurgeConfidenceAdjustment": 0.8,
                 "passiveConsistencyThreshold": 0.7,
                 "imbalanceNeutralThreshold": 0.1,
                 "velocityMinBound": 0.1,
-                "velocityMaxBound": 10.0,
-
+                "velocityMaxBound": 10,
                 "minInitialMoveTicks": 1,
                 "confirmationTimeoutMs": 40000,
                 "maxRevisitTicks": 8,
                 "maxZones": 75,
                 "zoneAgeLimit": 1200000,
-
                 "features": {
                     "depletionTracking": true,
                     "spreadAdjustment": true,
@@ -361,24 +350,20 @@
                     "multiZone": false,
                     "passiveHistory": true
                 },
-
                 "useStandardizedZones": true,
-                "standardizedZoneConfig": {
-                    "minZoneConfluenceCount": 2,
-                    "maxZoneConfluenceDistance": 3,
-                    "depletionVolumeThreshold": 30,
-                    "depletionRatioThreshold": 0.6,
-                    "enableZoneConfluenceFilter": true,
-                    "enableDepletionAnalysis": true,
-                    "enableCrossTimeframeAnalysis": false,
-                    "confluenceConfidenceBoost": 0.15,
-                    "depletionConfidenceBoost": 0.1,
-                    "crossTimeframeBoost": 0.05,
-                    "enhancementMode": "production",
-                    "minEnhancedConfidenceThreshold": 0.3
-                }
+                "depletionVolumeThreshold": 30,
+                "depletionRatioThreshold": 0.6,
+                "varianceReductionFactor": 1,
+                "alignmentNormalizationFactor": 1,
+                "distanceNormalizationDivisor": 2,
+                "passiveVolumeExhaustionRatio": 0.5,
+                "aggressiveVolumeExhaustionThreshold": 0.7,
+                "aggressiveVolumeReductionFactor": 0.5,
+                "enableDepletionAnalysis": true,
+                "depletionConfidenceBoost": 0.1,
+                "enhancementMode": "production",
+                "minEnhancedConfidenceThreshold": 0.3
             },
-
             "absorption": {
                 "minAggVolume": 175,
                 "windowMs": 60000,
@@ -388,26 +373,21 @@
                 "minInitialMoveTicks": 4,
                 "confirmationTimeoutMs": 60000,
                 "maxRevisitTicks": 5,
-
                 "absorptionThreshold": 0.6,
                 "minPassiveMultiplier": 1.2,
                 "maxAbsorptionRatio": 0.4,
-
                 "strongAbsorptionRatio": 0.6,
                 "moderateAbsorptionRatio": 0.8,
-                "weakAbsorptionRatio": 1.0,
-
+                "weakAbsorptionRatio": 1,
                 "priceEfficiencyThreshold": 0.02,
                 "spreadImpactThreshold": 0.003,
                 "velocityIncreaseThreshold": 1.5,
                 "significantChangeThreshold": 0.1,
-
                 "dominantSideAnalysisWindowMs": 45000,
                 "dominantSideFallbackTradeCount": 10,
                 "dominantSideMinTradesRequired": 3,
                 "dominantSideTemporalWeighting": true,
                 "dominantSideWeightDecayFactor": 0.3,
-
                 "features": {
                     "adaptiveZone": true,
                     "passiveHistory": true,
@@ -417,24 +397,35 @@
                     "layeredAbsorption": true,
                     "spreadImpact": true
                 },
-
                 "useStandardizedZones": true,
-                "standardizedZoneConfig": {
-                    "minZoneConfluenceCount": 2,
-                    "maxZoneConfluenceDistance": 3,
-                    "institutionalVolumeThreshold": 50,
-                    "institutionalVolumeRatioThreshold": 0.3,
-                    "enableZoneConfluenceFilter": true,
-                    "enableInstitutionalVolumeFilter": true,
-                    "enableCrossTimeframeAnalysis": true,
-                    "confluenceConfidenceBoost": 0.15,
-                    "institutionalVolumeBoost": 0.1,
-                    "crossTimeframeBoost": 0.05,
-                    "enhancementMode": "production",
-                    "minEnhancedConfidenceThreshold": 0.3
-                }
+                "institutionalVolumeThreshold": 50,
+                "institutionalVolumeRatioThreshold": 0.3,
+                "volumeNormalizationThreshold": 200,
+                "absorptionRatioNormalization": 3,
+                "highConfidenceThreshold": 0.7,
+                "lowConfidenceReduction": 0.7,
+                "minAbsorptionScore": 0.8,
+                "patternVarianceReduction": 2,
+                "whaleActivityMultiplier": 2,
+                "maxZoneCountForScoring": 3,
+                "confidenceBoostReduction": 0.5,
+                "distanceWeight": 0.4,
+                "volumeWeight": 0.35,
+                "absorptionWeight": 0.25,
+                "minConfluenceScore": 0.6,
+                "volumeConcentrationWeight": 0.15,
+                "patternConsistencyWeight": 0.1,
+                "volumeBoostCap": 0.25,
+                "volumeBoostMultiplier": 0.25,
+                "passiveAbsorptionThreshold": 0.6,
+                "aggressiveDistributionThreshold": 0.6,
+                "patternDifferenceThreshold": 0.1,
+                "minVolumeForRatio": 1,
+                "enableInstitutionalVolumeFilter": true,
+                "institutionalVolumeBoost": 0.1,
+                "enhancementMode": "production",
+                "minEnhancedConfidenceThreshold": 0.3
             },
-
             "icebergDetector": {
                 "minRefillCount": 3,
                 "maxSizeVariation": 0.2,
@@ -446,7 +437,7 @@
                 "maxActiveIcebergs": 20,
                 "maxStoredIcebergs": 100,
                 "sizeRatioTolerance": 0.5,
-                "maxSizeRatio": 2.0,
+                "maxSizeRatio": 2,
                 "largeInstitutionalMultiplier": 2,
                 "largeInstitutionalScoreBoost": 0.4,
                 "mediumInstitutionalScoreBoost": 0.2,
@@ -467,9 +458,15 @@
                 "temporalScoreWeight": 0.05,
                 "minConfidenceThreshold": 0.6
             },
-
+            "supportResistanceDetector": {
+                "priceTolerancePercent": 0.1,
+                "minTouchCount": 3,
+                "minStrength": 0.5,
+                "timeWindowMs": 300000,
+                "volumeWeightFactor": 1.5,
+                "rejectionConfirmationTicks": 2
+            },
             "spoofingDetector": {
-                "tickSize": 0.01,
                 "wallTicks": 10,
                 "minWallSize": 20,
                 "dynamicWallWidth": false,
@@ -501,7 +498,6 @@
                 "mediumSignificanceThreshold": 0.6,
                 "spoofingDetectionWindowMs": 5000
             },
-
             "hiddenOrderDetector": {
                 "minHiddenVolume": 10,
                 "minTradeSize": 5,
@@ -510,7 +506,21 @@
                 "minConfidence": 0.8,
                 "zoneHeightPercentage": 0.002
             },
-
+            "anomalyDetector": {
+                "windowSize": 100,
+                "anomalyCooldownMs": 30000,
+                "volumeImbalanceThreshold": 0.7,
+                "normalSpreadBps": 5,
+                "minHistory": 50,
+                "flowWindowMs": 60000,
+                "orderSizeWindowMs": 300000,
+                "volatilityThreshold": 0.05,
+                "spreadThresholdBps": 10,
+                "extremeVolatilityWindowMs": 30000,
+                "liquidityCheckWindowMs": 120000,
+                "whaleCooldownMs": 300000,
+                "marketHealthWindowMs": 600000
+            },
             "deltaCvdConfirmation": {
                 "windowsSec": [60, 300],
                 "minZ": 0.4,
@@ -520,70 +530,131 @@
                 "eventCooldownMs": 15000,
                 "maxZones": 50,
                 "zoneAgeLimit": 1800000,
-
                 "minTradesPerSec": 0.1,
                 "minVolPerSec": 0.5,
                 "minSamplesForStats": 15,
                 "pricePrecision": 2,
-
                 "volatilityLookbackSec": 3600,
                 "maxDivergenceAllowed": 0.5,
                 "stateCleanupIntervalSec": 300,
-
                 "dynamicThresholds": true,
                 "logDebug": true,
-
                 "volumeSurgeMultiplier": 2.5,
                 "imbalanceThreshold": 0.15,
                 "institutionalThreshold": 17.8,
                 "burstDetectionMs": 1000,
                 "sustainedVolumeMs": 30000,
                 "medianTradeSize": 0.6,
-
                 "detectionMode": "momentum",
                 "divergenceThreshold": 0.3,
                 "divergenceLookbackSec": 60,
-
                 "enableDepthAnalysis": false,
                 "usePassiveVolume": true,
                 "maxOrderbookAge": 5000,
-
                 "absorptionCVDThreshold": 75,
                 "absorptionPriceThreshold": 0.1,
-
                 "imbalanceWeight": 0.2,
-
                 "icebergMinRefills": 3,
                 "icebergMinSize": 20,
-
                 "baseConfidenceRequired": 0.2,
                 "finalConfidenceRequired": 0.35,
-
                 "strongCorrelationThreshold": 0.7,
                 "weakCorrelationThreshold": 0.3,
                 "depthImbalanceThreshold": 0.2,
-
                 "useStandardizedZones": true,
-                "standardizedZoneConfig": {
-                    "minZoneConfluenceCount": 2,
-                    "maxZoneConfluenceDistance": 3,
-                    "cvdDivergenceVolumeThreshold": 50,
-                    "cvdDivergenceStrengthThreshold": 0.7,
-                    "cvdSignificantImbalanceThreshold": 0.3,
-                    "cvdDivergenceScoreMultiplier": 1.5,
-                    "ltcusdtTickValue": 0.01,
-                    "alignmentMinimumThreshold": 0.5,
-                    "momentumScoreMultiplier": 2.0,
-                    "enableZoneConfluenceFilter": true,
-                    "enableCVDDivergenceAnalysis": true,
-                    "enableMomentumAlignment": false,
-                    "confluenceConfidenceBoost": 0.15,
-                    "divergenceConfidenceBoost": 0.12,
-                    "momentumAlignmentBoost": 0.08,
-                    "enhancementMode": "production",
-                    "minEnhancedConfidenceThreshold": 0.3
-                }
+                "cvdDivergenceVolumeThreshold": 50,
+                "cvdDivergenceStrengthThreshold": 0.7,
+                "cvdSignificantImbalanceThreshold": 0.3,
+                "cvdDivergenceScoreMultiplier": 1.5,
+                "alignmentMinimumThreshold": 0.5,
+                "momentumScoreMultiplier": 2,
+                "enableCVDDivergenceAnalysis": true,
+                "enableMomentumAlignment": false,
+                "divergenceConfidenceBoost": 0.12,
+                "momentumAlignmentBoost": 0.08,
+                "enhancementMode": "production",
+                "minEnhancedConfidenceThreshold": 0.3,
+                "minTradesForAnalysis": 20,
+                "minVolumeRatio": 0.1,
+                "maxVolumeRatio": 5.0,
+                "priceChangeThreshold": 0.001,
+                "minZScoreBound": -20,
+                "maxZScoreBound": 20,
+                "minCorrelationBound": -0.999,
+                "maxCorrelationBound": 0.999
+            },
+            "dataStream": {
+                "reconnectDelay": 1000,
+                "maxReconnectAttempts": 5,
+                "depthUpdateSpeed": "100ms",
+                "enableHeartbeat": true,
+                "heartbeatInterval": 30000,
+                "maxBackoffDelay": 30000,
+                "streamHealthTimeout": 10000,
+                "enableStreamHealthCheck": true,
+                "reconnectOnHealthFailure": true,
+                "enableHardReload": false,
+                "hardReloadAfterAttempts": 3,
+                "hardReloadCooldownMs": 60000,
+                "maxHardReloads": 2,
+                "hardReloadRestartCommand": "pm2 restart orderflow"
+            },
+            "accumulationDetector": {
+                "useStandardizedZones": true,
+                "enhancementMode": "production",
+                "minEnhancedConfidenceThreshold": 0.3,
+                "enhancementCallFrequency": 5,
+                "highConfidenceThreshold": 0.8,
+                "lowConfidenceThreshold": 0.4,
+                "minConfidenceBoostThreshold": 0.05,
+                "defaultMinEnhancedConfidenceThreshold": 0.3,
+                "confidenceReductionFactor": 0.8,
+                "significanceBoostMultiplier": 0.3,
+                "neutralBoostReductionFactor": 0.5,
+                "enhancementSignificanceBoost": true
+            },
+            "accumulation": {
+                "useStandardizedZones": true,
+                "minDurationMs": 300000,
+                "minRatio": 1.5,
+                "minRecentActivityMs": 60000,
+                "threshold": 0.7,
+                "volumeSurgeMultiplier": 3.0,
+                "imbalanceThreshold": 0.35,
+                "institutionalThreshold": 17.8,
+                "burstDetectionMs": 1500,
+                "sustainedVolumeMs": 25000,
+                "medianTradeSize": 0.8,
+                "enhancementMode": "production",
+                "minEnhancedConfidenceThreshold": 0.3,
+                "enhancementCallFrequency": 5,
+                "highConfidenceThreshold": 0.8,
+                "lowConfidenceThreshold": 0.4,
+                "minConfidenceBoostThreshold": 0.05,
+                "defaultMinEnhancedConfidenceThreshold": 0.3,
+                "confidenceReductionFactor": 0.8,
+                "significanceBoostMultiplier": 0.3,
+                "neutralBoostReductionFactor": 0.5,
+                "enhancementSignificanceBoost": true
+            },
+            "distribution": {
+                "useStandardizedZones": true,
+                "sellingPressureVolumeThreshold": 40,
+                "sellingPressureRatioThreshold": 0.65,
+                "enableSellingPressureAnalysis": true,
+                "sellingPressureConfidenceBoost": 0.08,
+                "varianceReductionFactor": 1.0,
+                "alignmentNormalizationFactor": 1.0,
+                "confluenceStrengthDivisor": 2,
+                "passiveToAggressiveRatio": 0.6,
+                "varianceDivisor": 3,
+                "moderateAlignmentThreshold": 0.45,
+                "aggressiveSellingRatioThreshold": 0.6,
+                "aggressiveSellingReductionFactor": 0.5,
+                "enhancementMode": "production",
+                "minEnhancedConfidenceThreshold": 0.25
             }
         }
-    }
+    },
+    "symbol": "LTCUSDT"
 }

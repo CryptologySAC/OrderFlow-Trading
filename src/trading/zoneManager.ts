@@ -5,9 +5,9 @@ import {
     AccumulationZone,
     ZoneUpdate,
     ZoneDetectionData,
-    ZoneDetectorConfig,
     ZoneQueryOptions,
 } from "../types/zoneTypes.js";
+import { Config } from "../core/config.js";
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
@@ -17,30 +17,17 @@ export class ZoneManager extends EventEmitter {
     private completedZones: AccumulationZone[] = [];
     private zoneHistory = new Map<string, AccumulationZone[]>();
 
-    // Zone configuration
-    private readonly config: ZoneDetectorConfig;
+    // Zone configuration - uses universal zone config
+    private readonly config: typeof Config.UNIVERSAL_ZONE_CONFIG;
 
     constructor(
-        config: Partial<ZoneDetectorConfig>,
+        config: typeof Config.UNIVERSAL_ZONE_CONFIG,
         private logger: ILogger,
         private metricsCollector: IMetricsCollector
     ) {
         super();
 
-        this.config = {
-            maxActiveZones: config.maxActiveZones ?? 5,
-            zoneTimeoutMs: config.zoneTimeoutMs ?? 7200000, // 2 hours
-            minZoneVolume: config.minZoneVolume ?? 100,
-            maxZoneWidth: config.maxZoneWidth ?? 0.02, // 2%
-            minZoneStrength: config.minZoneStrength ?? 0.4,
-            completionThreshold: config.completionThreshold ?? 0.8,
-            strengthChangeThreshold: config.strengthChangeThreshold ?? 0.1,
-            minCandidateDuration: config.minCandidateDuration ?? 180_000,
-            maxPriceDeviation: config.maxPriceDeviation ?? 0.005,
-            minTradeCount: config.minTradeCount ?? 10,
-            minBuyRatio: config.minBuyRatio,
-            minSellRatio: config.minSellRatio,
-        };
+        this.config = config;
 
         // Cleanup old zones periodically
         setInterval(() => this.cleanupExpiredZones(), 300000); // Every 5 minutes

@@ -146,7 +146,7 @@ export class DistributionZoneDetector extends ZoneDetector {
         logger: ILogger,
         metrics: IMetricsCollector
     ) {
-        super(id, config, "distribution", logger, metrics);
+        super(id, "distribution", logger, metrics);
 
         this.symbol = symbol;
         this.pricePrecision = 2; // Fixed precision for distribution

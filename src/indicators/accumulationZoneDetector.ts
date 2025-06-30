@@ -259,7 +259,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
         logger: ILogger,
         metricsCollector: IMetricsCollector
     ) {
-        super(id, config, "accumulation", logger, metricsCollector);
+        super(id, "accumulation", logger, metricsCollector);
 
         // ⚠️ DEPRECATION WARNING: This detector is deprecated
         logger.warn(

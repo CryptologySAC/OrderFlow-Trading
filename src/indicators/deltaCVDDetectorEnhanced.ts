@@ -29,53 +29,17 @@ import type {
     StandardZoneData,
     ZoneSnapshot,
 } from "../types/marketEvents.js";
-import type { DeltaCVDConfirmationSettings } from "./types/deltaCVDTypes.js";
+import { z } from "zod";
+import { DeltaCVDDetectorSchema } from "../core/config.js";
+import { Config } from "../core/config.js";
 
 /**
  * Enhanced configuration interface extending DeltaCVDConfirmationSettings with standardized zone capabilities
  *
  * DELTACVD PHASE 1: Core interface for enhanced CVD detection
  */
-export interface DeltaCVDEnhancedSettings extends DeltaCVDConfirmationSettings {
-    useStandardizedZones?: boolean;
-    standardizedZoneConfig?: DeltaCVDEnhancementConfig;
-}
-
-/**
- * Configuration interface for DeltaCVD detector enhancements
- *
- * DELTACVD PHASE 1: Standardized zone enhancement parameters
- */
-export interface DeltaCVDEnhancementConfig {
-    // Zone confluence analysis
-    minZoneConfluenceCount?: number; // Minimum zones required for confluence (default: 2)
-    maxZoneConfluenceDistance?: number; // Max distance in ticks for zone confluence (default: 3)
-
-    // CVD divergence analysis
-    cvdDivergenceVolumeThreshold?: number; // Minimum volume for CVD divergence analysis (default: 50)
-    cvdDivergenceStrengthThreshold?: number; // Minimum divergence strength (default: 0.7)
-    cvdSignificantImbalanceThreshold?: number; // Significant CVD imbalance threshold (default: 0.3)
-    cvdDivergenceScoreMultiplier?: number; // CVD divergence score multiplier (default: 1.5)
-
-    // Zone distance and price calculations
-    ltcusdtTickValue?: number; // LTCUSDT tick value (default: 0.01)
-    alignmentMinimumThreshold?: number; // Minimum alignment threshold (default: 0.5)
-    momentumScoreMultiplier?: number; // Momentum score multiplier (default: 2.0)
-
-    // Multi-timeframe momentum analysis
-    enableZoneConfluenceFilter?: boolean; // Enable zone confluence filtering (default: true)
-    enableCVDDivergenceAnalysis?: boolean; // Enable CVD divergence analysis (default: true)
-    enableMomentumAlignment?: boolean; // Enable momentum alignment validation (default: false)
-
-    // Confidence boost parameters
-    confluenceConfidenceBoost?: number; // Boost for zone confluence (default: 0.15)
-    divergenceConfidenceBoost?: number; // Boost for CVD divergence (default: 0.12)
-    momentumAlignmentBoost?: number; // Boost for momentum alignment (default: 0.08)
-
-    // Enhancement control
-    enhancementMode?: "disabled" | "monitoring" | "production"; // Enhancement deployment mode
-    minEnhancedConfidenceThreshold?: number; // Minimum confidence for enhanced signals (default: 0.3)
-}
+// Use Zod schema inference for complete type safety - matches config.json exactly
+export type DeltaCVDEnhancedSettings = z.infer<typeof DeltaCVDDetectorSchema>;
 
 /**
  * Statistics interface for monitoring DeltaCVD detector enhancements
@@ -109,7 +73,7 @@ export interface DeltaCVDEnhancementStats {
  */
 export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
     private readonly useStandardizedZones: boolean;
-    private readonly enhancementConfig: DeltaCVDEnhancementConfig;
+    private readonly enhancementConfig: DeltaCVDEnhancedSettings;
     private readonly enhancementStats: DeltaCVDEnhancementStats;
 
     constructor(
@@ -124,10 +88,8 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
         super(id, settings, logger, spoofingDetector, metrics, signalLogger);
 
         // Initialize enhancement configuration
-        this.useStandardizedZones = settings.useStandardizedZones ?? false;
-        this.enhancementConfig = this.initializeEnhancementConfig(
-            settings.standardizedZoneConfig
-        );
+        this.useStandardizedZones = settings.useStandardizedZones;
+        this.enhancementConfig = settings;
 
         // Initialize enhancement statistics
         this.enhancementStats = {
@@ -196,7 +158,7 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
         let enhancementApplied = false;
 
         // Zone confluence analysis for CVD validation
-        if (this.enhancementConfig.enableZoneConfluenceFilter) {
+        if (Config.UNIVERSAL_ZONE_CONFIG.enableZoneConfluenceFilter) {
             const confluenceResult = this.analyzeZoneConfluence(
                 event.zoneData,
                 event.price
@@ -204,7 +166,7 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
             if (confluenceResult.hasConfluence) {
                 this.enhancementStats.confluenceDetectionCount++;
                 totalConfidenceBoost +=
-                    this.enhancementConfig.confluenceConfidenceBoost ?? 0.15;
+                    Config.UNIVERSAL_ZONE_CONFIG.confluenceConfidenceBoost;
                 enhancementApplied = true;
 
                 this.logger.debug(
@@ -215,7 +177,8 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
                         confluenceZones: confluenceResult.confluenceZones,
                         confluenceStrength: confluenceResult.confluenceStrength,
                         confidenceBoost:
-                            this.enhancementConfig.confluenceConfidenceBoost,
+                            Config.UNIVERSAL_ZONE_CONFIG
+                                .confluenceConfidenceBoost,
                     }
                 );
             }
@@ -230,7 +193,7 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
             if (divergenceResult.hasDivergence) {
                 this.enhancementStats.cvdDivergenceDetectionCount++;
                 totalConfidenceBoost +=
-                    this.enhancementConfig.divergenceConfidenceBoost ?? 0.12;
+                    this.enhancementConfig.divergenceConfidenceBoost;
                 enhancementApplied = true;
 
                 this.logger.debug(
@@ -256,7 +219,7 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
             if (momentumResult.hasAlignment) {
                 this.enhancementStats.momentumAlignmentCount++;
                 totalConfidenceBoost +=
-                    this.enhancementConfig.momentumAlignmentBoost ?? 0.08;
+                    this.enhancementConfig.momentumAlignmentBoost;
                 enhancementApplied = true;
 
                 this.logger.debug(
@@ -303,9 +266,9 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
         confluenceStrength: number;
     } {
         const minConfluenceZones =
-            this.enhancementConfig.minZoneConfluenceCount ?? 2;
+            Config.UNIVERSAL_ZONE_CONFIG.minZoneConfluenceCount;
         const maxDistance =
-            this.enhancementConfig.maxZoneConfluenceDistance ?? 3;
+            Config.UNIVERSAL_ZONE_CONFIG.maxZoneConfluenceDistance;
 
         // Find zones that overlap around the current price
         const relevantZones: ZoneSnapshot[] = [];
@@ -354,7 +317,7 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
     ): ZoneSnapshot[] {
         const maxDistance = FinancialMath.multiplyQuantities(
             maxDistanceTicks,
-            this.enhancementConfig.ltcusdtTickValue!
+            Config.TICK_SIZE
         );
 
         return zones.filter((zone) => {
@@ -381,9 +344,9 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
         affectedZones: number;
     } {
         const volumeThreshold =
-            this.enhancementConfig.cvdDivergenceVolumeThreshold ?? 50;
+            this.enhancementConfig.cvdDivergenceVolumeThreshold;
         const minStrength =
-            this.enhancementConfig.cvdDivergenceStrengthThreshold ?? 0.7;
+            this.enhancementConfig.cvdDivergenceStrengthThreshold;
 
         // Analyze all zones for CVD divergence patterns
         const allZones = [
@@ -417,16 +380,14 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
                 );
 
                 const cvdSignificantImbalanceThreshold =
-                    this.enhancementConfig.cvdSignificantImbalanceThreshold ??
-                    0.3;
+                    this.enhancementConfig.cvdSignificantImbalanceThreshold;
                 if (volumeRatio >= cvdSignificantImbalanceThreshold) {
                     // Significant CVD imbalance detected
                     const divergenceScore = Math.min(
                         1.0,
                         FinancialMath.multiplyQuantities(
                             volumeRatio,
-                            this.enhancementConfig
-                                .cvdDivergenceScoreMultiplier ?? 1.5
+                            this.enhancementConfig.cvdDivergenceScoreMultiplier
                         )
                     );
                     totalDivergenceScore += divergenceScore;
@@ -518,7 +479,7 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
             Math.max(0, 1 - normalizedVariability)
         ); // Penalize high variability
         const hasAlignment =
-            alignmentScore >= this.enhancementConfig.alignmentMinimumThreshold!;
+            alignmentScore >= this.enhancementConfig.alignmentMinimumThreshold;
 
         return {
             hasAlignment,
@@ -562,7 +523,7 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
 
             // Higher ratio = stronger momentum
             const momentumScoreMultiplier =
-                this.enhancementConfig.momentumScoreMultiplier ?? 2.0;
+                this.enhancementConfig.momentumScoreMultiplier;
             const momentumScore = Math.min(
                 1.0,
                 FinancialMath.multiplyQuantities(
@@ -598,44 +559,6 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
             confidenceBoost,
             enhancementStats: this.enhancementStats,
         });
-    }
-
-    /**
-     * Initialize enhancement configuration with safe defaults
-     *
-     * DELTACVD PHASE 1: Production-safe configuration
-     */
-    private initializeEnhancementConfig(
-        config?: DeltaCVDEnhancementConfig
-    ): DeltaCVDEnhancementConfig {
-        return {
-            minZoneConfluenceCount: config?.minZoneConfluenceCount ?? 2,
-            maxZoneConfluenceDistance: config?.maxZoneConfluenceDistance ?? 3,
-            cvdDivergenceVolumeThreshold:
-                config?.cvdDivergenceVolumeThreshold ?? 50,
-            cvdDivergenceStrengthThreshold:
-                config?.cvdDivergenceStrengthThreshold ?? 0.7,
-            cvdSignificantImbalanceThreshold:
-                config?.cvdSignificantImbalanceThreshold ?? 0.3,
-            cvdDivergenceScoreMultiplier:
-                config?.cvdDivergenceScoreMultiplier ?? 1.5,
-            ltcusdtTickValue: config?.ltcusdtTickValue ?? 0.01,
-            alignmentMinimumThreshold: config?.alignmentMinimumThreshold ?? 0.5,
-            momentumScoreMultiplier: config?.momentumScoreMultiplier ?? 2.0,
-            enableZoneConfluenceFilter:
-                config?.enableZoneConfluenceFilter ?? true,
-            enableCVDDivergenceAnalysis:
-                config?.enableCVDDivergenceAnalysis ?? true,
-            enableMomentumAlignment: config?.enableMomentumAlignment ?? false,
-            confluenceConfidenceBoost:
-                config?.confluenceConfidenceBoost ?? 0.15,
-            divergenceConfidenceBoost:
-                config?.divergenceConfidenceBoost ?? 0.12,
-            momentumAlignmentBoost: config?.momentumAlignmentBoost ?? 0.08,
-            enhancementMode: config?.enhancementMode ?? "disabled",
-            minEnhancedConfidenceThreshold:
-                config?.minEnhancedConfidenceThreshold ?? 0.3,
-        };
     }
 
     /**

@@ -3,20 +3,17 @@ import type { ILogger } from "../../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../../infrastructure/signalLoggerInterface.js";
 import { ZoneManager } from "../../trading/zoneManager.js";
-import {
-    ZoneAnalysisResult,
-    ZoneDetectorConfig,
-} from "../../types/zoneTypes.js";
+import { ZoneAnalysisResult } from "../../types/zoneTypes.js";
+// ZoneDetector now uses universal zone config from Config.UNIVERSAL_ZONE_CONFIG
 import { Config } from "../../core/config.js";
 import { Detector } from "./detectorEnrichedTrade.js";
 
 export abstract class ZoneDetector extends Detector {
-    protected readonly config: ZoneDetectorConfig;
+    protected readonly config: typeof Config.UNIVERSAL_ZONE_CONFIG;
     protected readonly zoneManager: ZoneManager;
 
     constructor(
         id: string,
-        config: Partial<ZoneDetectorConfig>,
         detectorType: "accumulation" | "distribution",
         logger: ILogger,
         metricsCollector: IMetricsCollector,
@@ -24,30 +21,8 @@ export abstract class ZoneDetector extends Detector {
     ) {
         super(id, logger, metricsCollector, signalLogger);
 
-        let zoneTimeoutMs = config.zoneTimeoutMs ?? 1800000; // 30 minutes (shorter than accumulation)
-        let maxZoneWidth = config.maxZoneWidth ?? 0.012; // 1.2% (slightly wider than accumulation)
-        let completionThreshold = 0.75; // Lower threshold for distribution
-        if (detectorType === "accumulation") {
-            zoneTimeoutMs = 3600000; // 1 hour
-            maxZoneWidth = 0.01;
-            completionThreshold = 0.85;
-        }
-        this.config = {
-            maxActiveZones: config.maxActiveZones ?? 3,
-            zoneTimeoutMs,
-            minZoneVolume: config.minZoneVolume ?? 150,
-            maxZoneWidth,
-            minZoneStrength: config.minZoneStrength ?? 0.45,
-            completionThreshold,
-            strengthChangeThreshold: config.strengthChangeThreshold ?? 0.12,
-            minCandidateDuration: config.minCandidateDuration ?? 120000,
-            maxPriceDeviation: config.maxPriceDeviation ?? 0.008,
-            minTradeCount: config.minTradeCount ?? 8,
-            minSellRatio:
-                config.minSellRatio ??
-                Config.ENHANCED_ZONE_FORMATION.detectorThresholds.distribution
-                    .minSellingRatio,
-        };
+        // Get universal zone config - shared by all zone detectors
+        this.config = Config.UNIVERSAL_ZONE_CONFIG;
 
         this.zoneManager = new ZoneManager(
             this.config,

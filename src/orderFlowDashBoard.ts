@@ -336,7 +336,6 @@ export class OrderFlowDashboard {
 
         // Absorption Detector - REQUIRES orderBook
         this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
-            Config.ABSORPTION_DETECTOR,
             this.orderBook, // Now guaranteed to be initialized
             dependencies,
             { id: "ltcusdt-absorption-main" }
@@ -350,7 +349,6 @@ export class OrderFlowDashboard {
 
         // Exhaustion Detector
         this.exhaustionDetector = DetectorFactory.createExhaustionDetector(
-            Config.EXHAUSTION_DETECTOR,
             dependencies,
             { id: "ltcusdt-exhaustion-main" }
         );
@@ -363,11 +361,9 @@ export class OrderFlowDashboard {
 
         // Delta CVD Confirmation Detector
         this.deltaCVDConfirmation =
-            DetectorFactory.createDeltaCVDConfirmationDetector(
-                Config.DELTACVD_DETECTOR,
-                dependencies,
-                { id: "ltcusdt-cvdConfirmation-main" }
-            );
+            DetectorFactory.createDeltaCVDConfirmationDetector(dependencies, {
+                id: "ltcusdt-cvdConfirmation-main",
+            });
         this.signalCoordinator.registerDetector(
             this.deltaCVDConfirmation,
             ["cvd_confirmation"],
@@ -391,11 +387,9 @@ export class OrderFlowDashboard {
 
         // Accumulation Zone Detector
         this.accumulationZoneDetector =
-            DetectorFactory.createAccumulationDetector(
-                Config.ACCUMULATION_ZONE_DETECTOR,
-                dependencies,
-                { id: "ltcusdt-accumulation-zone-main" }
-            );
+            DetectorFactory.createAccumulationDetector(dependencies, {
+                id: "ltcusdt-accumulation-zone-main",
+            });
         this.signalCoordinator.registerDetector(
             this.accumulationZoneDetector,
             ["accumulation"],
@@ -405,11 +399,9 @@ export class OrderFlowDashboard {
 
         // Distribution Zone Detector
         this.distributionZoneDetector =
-            DetectorFactory.createDistributionDetector(
-                Config.DISTRIBUTION_ZONE_DETECTOR,
-                dependencies,
-                { id: "ltcusdt-distribution-zone-main" }
-            );
+            DetectorFactory.createDistributionDetector(dependencies, {
+                id: "ltcusdt-distribution-zone-main",
+            });
         this.signalCoordinator.registerDetector(
             this.distributionZoneDetector,
             ["distribution"],

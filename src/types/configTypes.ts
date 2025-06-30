@@ -1,5 +1,4 @@
 export type AllowedSymbols = "LTCUSDT";
-import type { ZoneDetectorConfig } from "./zoneTypes.js";
 import type { DeltaCVDEnhancedSettings } from "../indicators/deltaCVDDetectorEnhanced.js";
 import type { ExhaustionEnhancedSettings } from "../indicators/exhaustionDetectorEnhanced.js";
 import type { AbsorptionEnhancedSettings } from "../indicators/absorptionDetectorEnhanced.js";
@@ -14,10 +13,9 @@ import type { SpoofingDetectorConfig } from "../services/spoofingDetector.js";
 import type { IcebergDetectorConfig } from "../services/icebergDetector.js";
 import type { HiddenOrderDetectorConfig } from "../services/hiddenOrderDetector.js";
 import type { OrderBookStateOptions } from "../market/orderBookState.js";
-import type {
-    AccumulationSettings,
-    SuperiorFlowSettings,
-} from "../indicators/interfaces/detectorInterfaces.js";
+import type { SuperiorFlowSettings } from "../indicators/interfaces/detectorInterfaces.js";
+import type { AccumulationEnhancedSettings } from "../indicators/accumulationZoneDetectorEnhanced.js";
+import type { DistributionEnhancedSettings } from "../indicators/distributionDetectorEnhanced.js";
 
 export interface MQTTConfig {
     url: string;
@@ -44,9 +42,7 @@ export interface MarketDataStorageConfig {
 export interface ConfigType {
     nodeEnv: string;
     symbol: AllowedSymbols;
-    symbols: {
-        LTCUSDT: SymbolConfig;
-    };
+    symbols: Record<string, SymbolConfig>;
     httpPort: number;
     wsPort: number;
     mqtt?: MQTTConfig;
@@ -54,7 +50,7 @@ export interface ConfigType {
     alertCooldownMs: number;
     maxStorageTime: number;
     marketDataStorage?: MarketDataStorageConfig;
-    zoneDetectors?: Record<string, ZoneDetectorSymbolConfig>;
+    zoneDetectors: Record<string, ZoneDetectorSymbolConfig>;
     // ✅ Enhanced zone formation configuration
     enhancedZoneFormation?: EnhancedZoneFormationConfig;
 }
@@ -81,10 +77,10 @@ type SymbolConfig = {
     spoofingDetector?: SpoofingDetectorConfig;
     icebergDetector?: Partial<IcebergDetectorConfig>;
     hiddenOrderDetector?: Partial<HiddenOrderDetectorConfig>;
-    exhaustion?: ExhaustionEnhancedSettings;
-    absorption?: AbsorptionEnhancedSettings;
-    deltaCvdConfirmation?: DeltaCVDEnhancedSettings;
-    accumulationDetector?: AccumulationSettings;
+    exhaustion: ExhaustionEnhancedSettings;
+    absorption: AbsorptionEnhancedSettings;
+    deltaCvdConfirmation: DeltaCVDEnhancedSettings;
+    accumulationDetector: AccumulationEnhancedSettings;
     distributionDetector?: SuperiorFlowSettings;
     supportResistanceDetector?: SupportResistanceConfig;
 };
@@ -92,8 +88,8 @@ type SymbolConfig = {
 // All type definitions now imported from their respective source files
 
 export type ZoneDetectorSymbolConfig = {
-    accumulation?: Partial<ZoneDetectorConfig>;
-    distribution?: Partial<ZoneDetectorConfig>;
+    accumulation: AccumulationEnhancedSettings;
+    distribution: DistributionEnhancedSettings;
 };
 
 /**
