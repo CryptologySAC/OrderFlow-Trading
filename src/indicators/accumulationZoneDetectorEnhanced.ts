@@ -29,7 +29,6 @@ import type {
     ZoneAnalysisResult,
     ZoneDetectorConfig,
     ZoneSignal,
-    ZoneUpdate,
     AccumulationZone,
 } from "../types/zoneTypes.js";
 import type { AccumulationCandidate } from "./interfaces/detectorInterfaces.js";
@@ -110,7 +109,11 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             info: logger.info.bind(logger),
             debug: logger.debug.bind(logger),
             error: logger.error.bind(logger),
-            warn: (message: string, ...args: any[]) => {
+            warn: (
+                message: string,
+                context?: Record<string, unknown>,
+                correlationId?: string
+            ) => {
                 // Filter out the deprecation warning only when created by enhanced detector
                 // The test that expects this warning will create the original detector directly
                 if (
@@ -122,7 +125,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
                 ) {
                     return; // Suppress the deprecation warning when used internally
                 }
-                return logger.warn(message, ...args);
+                return logger.warn(message, context, correlationId);
             },
             isDebugEnabled: logger.isDebugEnabled?.bind(logger),
             setCorrelationId: logger.setCorrelationId?.bind(logger),
@@ -571,35 +574,6 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     }
 
     // Expose private methods for test compatibility
-    public generateZoneSignals(update: ZoneUpdate): ZoneSignal[] {
-        // Access private method through type assertion for test compatibility
-        const detector = this.originalDetector as any;
-        return detector.generateZoneSignals(update);
-    }
-
-    public validateNumeric(value: number, fallback: number): number {
-        const detector = this.originalDetector as any;
-        return detector.validateNumeric(value, fallback);
-    }
-
-    public safeDivision(
-        numerator: number,
-        denominator: number,
-        fallback: number
-    ): number {
-        const detector = this.originalDetector as any;
-        return detector.safeDivision(numerator, denominator, fallback);
-    }
-
-    public safeMean(values: number[]): number {
-        const detector = this.originalDetector as any;
-        return detector.safeMean(values);
-    }
-
-    public getPriceLevel(price: number): number | null {
-        const detector = this.originalDetector as any;
-        return detector.getPriceLevel(price);
-    }
 
     /**
      * CLAUDE.md compliant default configuration getters
@@ -632,25 +606,12 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
 
     // Forward events from original detector with proper typing
     public on(event: string, listener: (...args: unknown[]) => void): this {
-        const detector = this.originalDetector as {
-            on?: (
-                event: string,
-                listener: (...args: unknown[]) => void
-            ) => void;
-        };
-        if (typeof detector.on === "function") {
-            detector.on(event, listener);
-        }
+        // Enhanced detector manages events through parent EventEmitter
         return super.on(event, listener);
     }
 
     public emit(event: string, ...args: unknown[]): boolean {
-        const detector = this.originalDetector as {
-            emit?: (event: string, ...args: unknown[]) => boolean;
-        };
-        if (typeof detector.emit === "function") {
-            detector.emit(event, ...args);
-        }
+        // Enhanced detector manages events through parent EventEmitter
         return super.emit(event, ...args);
     }
 }
