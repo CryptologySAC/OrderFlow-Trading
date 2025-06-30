@@ -1744,6 +1744,17 @@ export class ExhaustionDetector
             const { avgLiquidity, spreadInfo, recentAggressive, samples } =
                 dataResult.data;
 
+            // ✅ CLAUDE.md COMPLIANCE: Early return when spread data is not available
+            if (!spreadInfo) {
+                return {
+                    success: false,
+                    error: new Error(
+                        "Cannot proceed without valid spread data"
+                    ),
+                    fallbackSafe: true,
+                };
+            }
+
             // Validate data quality (LOOSEN THIS)
             const quality = this.assessDataQuality(
                 samples,
@@ -1751,9 +1762,17 @@ export class ExhaustionDetector
                 recentAggressive
             );
 
+            // ✅ CLAUDE.md COMPLIANCE: Early return when no samples available
+            if (samples.length === 0) {
+                return {
+                    success: false,
+                    error: new Error("Cannot proceed without sample data"),
+                    fallbackSafe: true,
+                };
+            }
+
             // Calculate all metrics with bounds checking
-            const currentPassive =
-                samples.length > 0 ? samples.at(-1)!.total : 0;
+            const currentPassive = samples.at(-1)!.total;
             const avgPassive = FinancialMath.calculateMean(
                 samples.map((s) => s.total)
             );
@@ -1771,10 +1790,10 @@ export class ExhaustionDetector
                 avgPassive
             );
 
-            // Calculate velocity with validation (only fail if feature is enabled but calculation fails)
+            // ✅ CLAUDE.md COMPLIANCE: Early return when velocity calculation fails and feature is enabled
             const passiveVelocity = this.calculateSafeVelocity(samples);
             if (passiveVelocity === null && this.features.volumeVelocity) {
-                // Only fail if velocity feature is enabled but we can't calculate it
+                // Cannot proceed without velocity when feature is enabled
                 return {
                     success: false,
                     error: new Error(
@@ -1783,14 +1802,26 @@ export class ExhaustionDetector
                     fallbackSafe: true,
                 };
             }
-            // Use 0 as default when velocity feature is disabled or insufficient data
-            const safePassiveVelocity = passiveVelocity ?? 0;
 
-            // Check passive imbalance with error handling
-            const imbalanceResult = this.checkPassiveImbalanceSafe(zone);
-            const imbalance = imbalanceResult.success
-                ? FinancialMath.calculateAbs(imbalanceResult.data.imbalance)
+            // ✅ CLAUDE.md COMPLIANCE: Only use velocity when available, zero when disabled
+            const safePassiveVelocity = this.features.volumeVelocity
+                ? passiveVelocity!
                 : 0;
+
+            // ✅ CLAUDE.md COMPLIANCE: Early return when imbalance calculation fails
+            const imbalanceResult = this.checkPassiveImbalanceSafe(zone);
+            if (!imbalanceResult.success) {
+                return {
+                    success: false,
+                    error: new Error(
+                        "Cannot proceed without valid imbalance data"
+                    ),
+                    fallbackSafe: true,
+                };
+            }
+            const imbalance = FinancialMath.calculateAbs(
+                imbalanceResult.data.imbalance
+            );
 
             // Calculate confidence based on data quality and completeness (ADJUSTED)
             let confidence = this.calculateDataConfidence(
@@ -1819,28 +1850,21 @@ export class ExhaustionDetector
             const maxPassive = FinancialMath.calculateMax(
                 samples.map((s) => s.total)
             );
+
+            // ✅ CLAUDE.md COMPLIANCE: Early return when calculations cannot be performed
             const consistency = this.calculateConsistency(
                 samples.map((s) => s.total)
             );
             const velocityIncrease = this.calculateVelocityIncrease(samples);
 
-            // 🔧 FUNCTIONALITY FIX: Use graceful degradation instead of blocking
-            const safeConsistency = consistency ?? 0.5; // Use neutral default when insufficient data
-            const safeVelocityIncrease = velocityIncrease ?? 1.0; // Use neutral default when insufficient data
-
-            // Log when calculations are unavailable for debugging
             if (consistency === null || velocityIncrease === null) {
-                this.logger.debug(
-                    `[ExhaustionDetector] Using default values for missing calculations`,
-                    {
-                        zone,
-                        price,
-                        side,
-                        samplesCount: samples.length,
-                        consistencyAvailable: consistency !== null,
-                        velocityIncreaseAvailable: velocityIncrease !== null,
-                    }
-                );
+                return {
+                    success: false,
+                    error: new Error(
+                        "Cannot proceed without valid consistency and velocity calculations"
+                    ),
+                    fallbackSafe: true,
+                };
             }
 
             // 🔧 CLAUDE.md COMPLIANCE: Use configurable threshold instead of magic numbers
@@ -1876,7 +1900,7 @@ export class ExhaustionDetector
                         ? samples.at(-1)!.total - samples[0].total
                         : 0,
                 imbalance,
-                spread: spreadInfo?.spread ?? 0,
+                spread: spreadInfo.spread,
                 passiveVelocity: safePassiveVelocity,
                 sampleCount: samples.length,
                 isValid: true,
@@ -1885,8 +1909,8 @@ export class ExhaustionDetector
                 // Additional fields for compatibility
                 absorptionRatio: depletionRatio, // alias for compatibility
                 passiveStrength: passiveRatio, // alias for compatibility
-                consistency: safeConsistency,
-                velocityIncrease: safeVelocityIncrease,
+                consistency: consistency,
+                velocityIncrease: velocityIncrease,
                 dominantSide,
                 hasRefill,
                 icebergSignal,

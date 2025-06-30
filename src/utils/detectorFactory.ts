@@ -34,6 +34,10 @@ import { Config } from "../core/config.js";
 import { AccumulationZoneDetector } from "../indicators/accumulationZoneDetector.js";
 import { AccumulationZoneDetectorEnhanced } from "../indicators/accumulationZoneDetectorEnhanced.js";
 import { DistributionZoneDetector } from "../indicators/distributionZoneDetector.js";
+import {
+    DistributionDetectorEnhanced,
+    DistributionEnhancedSettings,
+} from "../indicators/distributionDetectorEnhanced.js";
 import { ZoneDetectorConfig } from "../types/zoneTypes.js";
 import { IOrderBookState } from "../market/orderBookState";
 
@@ -287,13 +291,13 @@ export class DetectorFactory {
     }
 
     /**
-     * Create production-ready accumulation detector
+     * Create production-ready distribution detector with enhanced zone capabilities
      */
     public static createDistributionDetector(
-        settings: ZoneDetectorConfig,
+        settings: DistributionEnhancedSettings,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
-    ): DistributionZoneDetector {
+    ): DistributionZoneDetector | DistributionDetectorEnhanced {
         const id = options.id || `distribution-${Date.now()}`;
 
         this.validateCreationLimits();
@@ -302,25 +306,54 @@ export class DetectorFactory {
         const productionSettings = this.applyProductionDefaults(
             settings,
             "distribution"
-        ) as ZoneDetectorConfig;
+        ) as DistributionEnhancedSettings;
 
-        const detector = new DistributionZoneDetector(
-            id,
-            Config.SYMBOL,
-            Config.DISTRIBUTION_ZONE_DETECTOR,
-            dependencies.logger,
-            dependencies.metricsCollector
-        );
+        // Check if standardized zones are enabled to determine detector type
+        const useEnhanced =
+            productionSettings.useStandardizedZones &&
+            productionSettings.standardizedZoneConfig?.enhancementMode !==
+                "disabled";
+
+        let detector: DistributionZoneDetector | DistributionDetectorEnhanced;
+
+        if (useEnhanced) {
+            detector = new DistributionDetectorEnhanced(
+                id,
+                Config.SYMBOL,
+                productionSettings,
+                dependencies.logger,
+                dependencies.metricsCollector
+            );
+
+            dependencies.logger.info(
+                `[DetectorFactory] Created Enhanced DistributionDetector`,
+                {
+                    id,
+                    settings: productionSettings,
+                    enhancementMode:
+                        productionSettings.standardizedZoneConfig
+                            ?.enhancementMode,
+                }
+            );
+        } else {
+            detector = new DistributionZoneDetector(
+                id,
+                Config.SYMBOL,
+                Config.DISTRIBUTION_ZONE_DETECTOR,
+                dependencies.logger,
+                dependencies.metricsCollector
+            );
+
+            dependencies.logger.info(
+                `[DetectorFactory] Created Standard DistributionDetector`,
+                {
+                    id,
+                    settings: productionSettings,
+                }
+            );
+        }
 
         this.registerDetector(id, detector, dependencies, options);
-
-        dependencies.logger.info(
-            `[DetectorFactory] Created DistributionDetector`,
-            {
-                id,
-                settings: productionSettings,
-            }
-        );
 
         return detector;
     }

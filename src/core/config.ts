@@ -18,6 +18,7 @@ import type {
 import type { ZoneDetectorConfig } from "../types/zoneTypes.js";
 import type { ExhaustionEnhancedSettings } from "../indicators/exhaustionDetectorEnhanced.js";
 import type { AbsorptionEnhancedSettings } from "../indicators/absorptionDetectorEnhanced.js";
+import type { DistributionEnhancedSettings } from "../indicators/distributionDetectorEnhanced.js";
 import type { OrderflowPreprocessorOptions } from "../market/orderFlowPreprocessor.js";
 import type { DataStreamConfig } from "../trading/dataStreamManager.js";
 import type {
@@ -741,9 +742,10 @@ export class Config {
         };
     }
 
-    static get DISTRIBUTION_ZONE_DETECTOR(): ZoneDetectorConfig {
+    static get DISTRIBUTION_ZONE_DETECTOR(): DistributionEnhancedSettings {
         const cfgObj = ZONE_CFG?.distribution ?? {};
         return {
+            symbol: Config.SYMBOL,
             maxActiveZones: cfgObj.maxActiveZones ?? 3,
             zoneTimeoutMs: cfgObj.zoneTimeoutMs ?? 1_800_000,
             minZoneVolume: cfgObj.minZoneVolume ?? 150,
@@ -755,6 +757,23 @@ export class Config {
             maxPriceDeviation: cfgObj.maxPriceDeviation ?? 0.008,
             minTradeCount: cfgObj.minTradeCount ?? 8,
             minSellRatio: cfgObj.minSellRatio ?? 0.68,
+
+            // Enhanced settings - disabled by default for production safety
+            useStandardizedZones: false,
+            standardizedZoneConfig: {
+                minZoneConfluenceCount: 2,
+                maxZoneConfluenceDistance: 3,
+                sellingPressureVolumeThreshold: 40,
+                sellingPressureRatioThreshold: 0.65,
+                enableZoneConfluenceFilter: true,
+                enableSellingPressureAnalysis: true,
+                enableCrossTimeframeAnalysis: false,
+                confluenceConfidenceBoost: 0.12,
+                sellingPressureConfidenceBoost: 0.08,
+                crossTimeframeBoost: 0.05,
+                enhancementMode: "disabled" as const,
+                minEnhancedConfidenceThreshold: 0.25,
+            },
         };
     }
 

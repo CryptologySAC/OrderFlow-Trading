@@ -130,7 +130,23 @@
                 "institutionalThreshold": 15.0,
                 "burstDetectionMs": 1500,
                 "sustainedVolumeMs": 25000,
-                "medianTradeSize": 0.8
+                "medianTradeSize": 0.8,
+
+                "useStandardizedZones": true,
+                "standardizedZoneConfig": {
+                    "minZoneConfluenceCount": 2,
+                    "maxZoneConfluenceDistance": 3,
+                    "sellingPressureVolumeThreshold": 40,
+                    "sellingPressureRatioThreshold": 0.65,
+                    "enableZoneConfluenceFilter": true,
+                    "enableSellingPressureAnalysis": true,
+                    "enableCrossTimeframeAnalysis": false,
+                    "confluenceConfidenceBoost": 0.12,
+                    "sellingPressureConfidenceBoost": 0.08,
+                    "crossTimeframeBoost": 0.05,
+                    "enhancementMode": "production",
+                    "minEnhancedConfidenceThreshold": 0.25
+                }
             }
         }
     },
