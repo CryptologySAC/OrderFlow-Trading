@@ -28,7 +28,7 @@ import type {
     StandardZoneData,
     ZoneSnapshot,
 } from "../types/marketEvents.js";
-import type { ExhaustionSettings } from "./exhaustionDetector.js";
+import type { ExhaustionSettings } from "./types/exhaustionTypes.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
 
 /**

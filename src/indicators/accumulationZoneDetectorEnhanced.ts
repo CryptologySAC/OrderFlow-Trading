@@ -113,9 +113,13 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             warn: (message: string, ...args: any[]) => {
                 // Filter out the deprecation warning only when created by enhanced detector
                 // The test that expects this warning will create the original detector directly
-                if (typeof message === 'string' && 
-                    message.includes('DEPRECATED: AccumulationZoneDetector is deprecated') &&
-                    this.constructor.name === 'AccumulationZoneDetectorEnhanced') {
+                if (
+                    typeof message === "string" &&
+                    message.includes(
+                        "DEPRECATED: AccumulationZoneDetector is deprecated"
+                    ) &&
+                    this.constructor.name === "AccumulationZoneDetectorEnhanced"
+                ) {
                     return; // Suppress the deprecation warning when used internally
                 }
                 return logger.warn(message, ...args);
@@ -578,7 +582,11 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         return detector.validateNumeric(value, fallback);
     }
 
-    public safeDivision(numerator: number, denominator: number, fallback: number): number {
+    public safeDivision(
+        numerator: number,
+        denominator: number,
+        fallback: number
+    ): number {
         const detector = this.originalDetector as any;
         return detector.safeDivision(numerator, denominator, fallback);
     }

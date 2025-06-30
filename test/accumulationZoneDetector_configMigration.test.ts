@@ -73,13 +73,13 @@ describe("AccumulationZoneDetectorEnhanced - Configuration Migration", () => {
                 { id: "test-standard" }
             );
 
-            expect(detector).toBeInstanceOf(AccumulationZoneDetector);
-            expect(detector).not.toBeInstanceOf(
-                AccumulationZoneDetectorEnhanced
-            );
+            // Factory always returns enhanced detector (originals are deprecated)
+            expect(detector).toBeInstanceOf(AccumulationZoneDetectorEnhanced);
+            // Verify enhancement is properly disabled
+            expect((detector as any).useStandardizedZones).toBe(false);
             expect(mockLogger.info).toHaveBeenCalledWith(
                 expect.stringContaining(
-                    "Created Standard AccumulationDetector"
+                    "Created Enhanced AccumulationDetector (deprecated originals)"
                 ),
                 expect.any(Object)
             );
@@ -116,7 +116,7 @@ describe("AccumulationZoneDetectorEnhanced - Configuration Migration", () => {
             expect(detector).toBeInstanceOf(AccumulationZoneDetectorEnhanced);
             expect(mockLogger.info).toHaveBeenCalledWith(
                 expect.stringContaining(
-                    "Created Enhanced AccumulationDetector"
+                    "Created Enhanced AccumulationDetector (deprecated originals)"
                 ),
                 expect.objectContaining({
                     enhancementMode: "testing",
@@ -148,10 +148,10 @@ describe("AccumulationZoneDetectorEnhanced - Configuration Migration", () => {
                 { id: "test-mixed" }
             );
 
-            expect(detector).toBeInstanceOf(AccumulationZoneDetector);
-            expect(detector).not.toBeInstanceOf(
-                AccumulationZoneDetectorEnhanced
-            );
+            // Factory always returns enhanced detector (originals are deprecated)
+            expect(detector).toBeInstanceOf(AccumulationZoneDetectorEnhanced);
+            // Verify enhancement is properly disabled
+            expect((detector as any).useStandardizedZones).toBe(false);
         });
     });
 

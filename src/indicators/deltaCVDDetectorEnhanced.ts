@@ -29,7 +29,7 @@ import type {
     StandardZoneData,
     ZoneSnapshot,
 } from "../types/marketEvents.js";
-import type { DeltaCVDConfirmationSettings } from "./deltaCVDConfirmation.js";
+import type { DeltaCVDConfirmationSettings } from "./types/deltaCVDTypes.js";
 
 /**
  * Enhanced configuration interface extending DeltaCVDConfirmationSettings with standardized zone capabilities

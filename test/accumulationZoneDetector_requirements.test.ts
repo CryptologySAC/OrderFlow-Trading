@@ -74,7 +74,7 @@ describe("AccumulationZoneDetector Requirements", () => {
     it("should create detector instance successfully", () => {
         // ✅ CLAUDE.md COMPLIANCE: Test validates successful instantiation with mocks
         expect(detector).toBeDefined();
-        expect(detector).toBeInstanceOf(AccumulationZoneDetector);
+        expect(detector).toBeInstanceOf(AccumulationZoneDetectorEnhanced);
     });
 
     it("should have analyze method", () => {

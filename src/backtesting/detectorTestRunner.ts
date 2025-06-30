@@ -3,6 +3,7 @@
 import { EventEmitter } from "events";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import type {
     HealthSummary,
     HistogramSummary,
@@ -930,6 +931,12 @@ export class DetectorTestRunner extends EventEmitter {
             cleanup: () => {},
         };
 
+        const mockSignalLogger: ISignalLogger = {
+            logEvent: () => {},
+            logProcessedSignal: () => {},
+            logProcessingError: () => {},
+        };
+
         switch (testConfig.detectorType) {
             case "hiddenOrderDetector":
                 return new HiddenOrderDetector(
@@ -972,9 +979,9 @@ export class DetectorTestRunner extends EventEmitter {
                     );
                 }
 
-                return new AbsorptionDetector(
+                return new AbsorptionDetectorEnhanced(
                     testConfig.id,
-                    testConfig.config as AbsorptionSettings,
+                    testConfig.config as AbsorptionEnhancedSettings,
                     this.realOrderBook, // Use real order book with authentic market data
                     realLogger,
                     this.realSpoofingDetector, // Use real spoofing detector
@@ -992,10 +999,11 @@ export class DetectorTestRunner extends EventEmitter {
 
                 return new ExhaustionDetectorEnhanced(
                     testConfig.id,
-                    testConfig.config as ExhaustionSettings,
+                    testConfig.config as ExhaustionEnhancedSettings,
                     realLogger,
                     this.realSpoofingDetector, // Use real spoofing detector
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalLogger
                 );
             }
 

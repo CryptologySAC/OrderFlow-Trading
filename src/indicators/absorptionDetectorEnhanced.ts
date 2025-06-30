@@ -23,10 +23,8 @@
  * CRITICAL: DO NOT MODIFY ORIGINAL DETECTOR - This is a wrapper only
  */
 
-import {
-    AbsorptionDetector,
-    AbsorptionSettings,
-} from "./absorptionDetector.js";
+import { AbsorptionDetector } from "./absorptionDetector.js";
+import type { AbsorptionSettings } from "./types/absorptionTypes.js";
 import { FinancialMath } from "../utils/financialMath.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
