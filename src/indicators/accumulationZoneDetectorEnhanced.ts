@@ -24,6 +24,7 @@
 import { AccumulationZoneDetector } from "./accumulationZoneDetector.js";
 import { AccumulationZoneStandardizedEnhancement } from "./accumulationZoneDetector_standardizedEnhancement.js";
 import { Detector } from "./base/detectorEnrichedTrade.js";
+import { FinancialMath } from "../utils/financialMath.js";
 import type {
     ZoneAnalysisResult,
     ZoneDetectorConfig,
@@ -43,6 +44,15 @@ import type { StandardizedZoneAnalysisResult } from "./accumulationZoneDetector_
  * production-critical implementation.
  */
 export class AccumulationZoneDetectorEnhanced extends Detector {
+    // CLAUDE.md compliant configuration parameters
+    private readonly enhancementCallFrequency: number;
+    private readonly highConfidenceThreshold: number;
+    private readonly lowConfidenceThreshold: number;
+    private readonly minConfidenceBoostThreshold: number;
+    private readonly defaultMinEnhancedConfidenceThreshold: number;
+    private readonly confidenceReductionFactor: number;
+    private readonly significanceBoostMultiplier: number;
+    private readonly neutralBoostReductionFactor: number;
     private readonly originalDetector: AccumulationZoneDetector;
     private readonly standardizedEnhancement?: AccumulationZoneStandardizedEnhancement;
     private readonly config: ZoneDetectorConfig;
@@ -65,6 +75,21 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     ) {
         super(id, logger, metricsCollector);
         this.config = config;
+
+        // Initialize CLAUDE.md compliant configuration parameters
+        this.enhancementCallFrequency = config.enhancementCallFrequency ?? 5;
+        this.highConfidenceThreshold = config.highConfidenceThreshold ?? 0.7;
+        this.lowConfidenceThreshold = config.lowConfidenceThreshold ?? 0.8;
+        this.minConfidenceBoostThreshold =
+            config.minConfidenceBoostThreshold ?? 0.1;
+        this.defaultMinEnhancedConfidenceThreshold =
+            config.defaultMinEnhancedConfidenceThreshold ?? 0.3;
+        this.confidenceReductionFactor =
+            config.confidenceReductionFactor ?? 0.7;
+        this.significanceBoostMultiplier =
+            config.significanceBoostMultiplier ?? 0.2;
+        this.neutralBoostReductionFactor =
+            config.neutralBoostReductionFactor ?? 0.5;
 
         // Initialize original detector with original config
         this.originalDetector = new AccumulationZoneDetector(
@@ -153,8 +178,10 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         // 🚀 PERFORMANCE: Only enhance every Nth call to reduce overhead
         this.enhancementCallCount++;
         const shouldEnhance =
-            this.enhancementCallCount % 5 === 0 || // Every 5th call
-            originalResult.signals.some((s) => s.confidence > 0.7); // High confidence signals
+            this.enhancementCallCount % this.enhancementCallFrequency === 0 || // Every Nth call
+            originalResult.signals.some(
+                (s) => s.confidence > this.highConfidenceThreshold
+            ); // High confidence signals
 
         if (!shouldEnhance) {
             return originalResult;
@@ -236,7 +263,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
 
         // Skip if all signals are already high confidence
         const hasLowConfidenceSignals = result.signals.some(
-            (s) => s.confidence < 0.8
+            (s) => s.confidence < this.lowConfidenceThreshold
         );
         if (!hasLowConfidenceSignals) {
             return false;
@@ -255,13 +282,17 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         // If there are active zones, use the closest one
         if (analysis.activeZones.length > 0) {
             let closestZone = analysis.activeZones[0];
-            let minDistance = Math.abs(
-                closestZone.priceRange.center - currentPrice
+            let minDistance = FinancialMath.calculateSpread(
+                closestZone.priceRange.center,
+                currentPrice,
+                8
             );
 
             for (const zone of analysis.activeZones) {
-                const distance = Math.abs(
-                    zone.priceRange.center - currentPrice
+                const distance = FinancialMath.calculateSpread(
+                    zone.priceRange.center,
+                    currentPrice,
+                    8
                 );
                 if (distance < minDistance) {
                     minDistance = distance;
@@ -292,7 +323,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         // 🚀 PERFORMANCE: Reuse original object structure when possible
         if (
             enhancement.recommendedAction === "neutral" &&
-            enhancement.confidenceBoost < 0.1
+            enhancement.confidenceBoost < this.minConfidenceBoostThreshold
         ) {
             return originalResult; // No meaningful enhancement
         }
@@ -311,7 +342,8 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         // Apply filtering based on enhancement recommendations
         if (enhancement.recommendedAction === "filter") {
             const minConfidence =
-                this.config.minEnhancedConfidenceThreshold ?? 0.3;
+                this.config.minEnhancedConfidenceThreshold ??
+                this.defaultMinEnhancedConfidenceThreshold;
             enhancedResult.signals = enhancedResult.signals.filter(
                 (signal) => signal.confidence >= minConfidence
             );
@@ -346,15 +378,25 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             case "enhance":
                 enhancedSignal.confidence = Math.min(
                     1.0,
-                    signal.confidence + enhancement.confidenceBoost
+                    FinancialMath.addAmounts(
+                        signal.confidence,
+                        enhancement.confidenceBoost,
+                        8
+                    )
                 );
 
                 // Optionally upgrade significance level
                 if (this.config.enhancementSignificanceBoost) {
                     enhancedSignal.zoneStrength = Math.min(
                         1.0,
-                        signal.zoneStrength +
-                            enhancement.signalQualityScore * 0.2
+                        FinancialMath.addAmounts(
+                            signal.zoneStrength,
+                            FinancialMath.multiplyQuantities(
+                                enhancement.signalQualityScore,
+                                this.significanceBoostMultiplier
+                            ),
+                            8
+                        )
                     );
                 }
 
@@ -369,7 +411,10 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             case "filter":
                 enhancedSignal.confidence = Math.max(
                     0.0,
-                    signal.confidence * 0.7 // Reduce confidence for low-quality signals
+                    FinancialMath.multiplyQuantities(
+                        signal.confidence,
+                        this.confidenceReductionFactor
+                    ) // Reduce confidence for low-quality signals
                 );
 
                 this.logger.debug("Reduced signal confidence for filtering", {
@@ -382,7 +427,14 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             case "neutral":
                 enhancedSignal.confidence = Math.min(
                     1.0,
-                    signal.confidence + enhancement.confidenceBoost * 0.5
+                    FinancialMath.addAmounts(
+                        signal.confidence,
+                        FinancialMath.multiplyQuantities(
+                            enhancement.confidenceBoost,
+                            this.neutralBoostReductionFactor
+                        ),
+                        8
+                    )
                 );
 
                 this.logger.debug("Applied neutral enhancement", {
@@ -422,7 +474,10 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             errorCount: this.enhancementErrorCount,
             successRate:
                 this.enhancementCallCount > 0
-                    ? this.enhancementSuccessCount / this.enhancementCallCount
+                    ? FinancialMath.divideQuantities(
+                          this.enhancementSuccessCount,
+                          this.enhancementCallCount
+                      )
                     : 0,
         };
     }

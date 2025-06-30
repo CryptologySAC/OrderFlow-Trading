@@ -19,6 +19,7 @@
 //
 
 import { DistributionZoneDetector } from "./distributionZoneDetector.js";
+import { FinancialMath } from "../utils/financialMath.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type {
@@ -51,6 +52,17 @@ export interface DistributionEnhancementConfig {
     // Institutional selling pressure analysis
     sellingPressureVolumeThreshold?: number; // Minimum volume for selling pressure analysis (default: 40)
     sellingPressureRatioThreshold?: number; // Minimum selling ratio for distribution (default: 0.65)
+
+    // CLAUDE.md compliant calculation parameters
+    ltcusdtTickValue?: number; // LTCUSDT tick value for distance calculations (default: 0.01)
+    varianceReductionFactor?: number; // Variance reduction factor for alignment calculations (default: 1.0)
+    alignmentNormalizationFactor?: number; // Alignment normalization factor (default: 1.0)
+    confluenceStrengthDivisor?: number; // Confluence strength calculation divisor (default: 2.0)
+    passiveToAggressiveRatio?: number; // Passive to aggressive volume ratio threshold (default: 0.6)
+    varianceDivisor?: number; // Variance calculation divisor (default: 3.0)
+    moderateAlignmentThreshold?: number; // Moderate alignment requirement threshold (default: 0.45)
+    aggressiveSellingRatioThreshold?: number; // Aggressive selling ratio threshold (default: 0.6)
+    aggressiveSellingReductionFactor?: number; // Aggressive selling reduction factor (default: 0.5)
 
     // Multi-timeframe analysis
     enableZoneConfluenceFilter?: boolean; // Enable zone confluence filtering (default: true)
@@ -326,10 +338,14 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
         const confluenceZones = relevantZones.length;
         const hasConfluence = confluenceZones >= minConfluenceZones;
 
-        // Calculate confluence strength (higher = more zones overlapping)
+        // Calculate confluence strength using FinancialMath (higher = more zones overlapping)
         const confluenceStrength = Math.min(
             1.0,
-            confluenceZones / (minConfluenceZones * 2)
+            FinancialMath.divideQuantities(
+                confluenceZones,
+                minConfluenceZones *
+                    this.enhancementConfig.confluenceStrengthDivisor!
+            )
         );
 
         return {
@@ -347,10 +363,17 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
         price: number,
         maxDistanceTicks: number
     ): ZoneSnapshot[] {
-        const maxDistance = maxDistanceTicks * 0.01; // LTCUSDT tick value
+        const maxDistance = FinancialMath.multiplyQuantities(
+            maxDistanceTicks,
+            this.enhancementConfig.ltcusdtTickValue!
+        );
 
         return zones.filter((zone) => {
-            const distance = Math.abs(zone.priceLevel - price);
+            const distance = FinancialMath.calculateSpread(
+                zone.priceLevel,
+                price,
+                8
+            );
             return distance <= maxDistance;
         });
     }
@@ -398,7 +421,11 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
             const aggressiveSellVolume = zone.aggressiveSellVolume;
             if (
                 aggressiveSellVolume >= sellingThreshold &&
-                aggressiveVolume > passiveVolume * 0.6
+                aggressiveVolume >
+                    FinancialMath.multiplyQuantities(
+                        passiveVolume,
+                        this.enhancementConfig.passiveToAggressiveRatio!
+                    )
             ) {
                 affectedZones++;
             }
@@ -406,7 +433,12 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
 
         const totalVolume = totalPassiveVolume + totalAggressiveVolume;
         const sellingRatio =
-            totalVolume > 0 ? totalAggressiveVolume / totalVolume : 0;
+            totalVolume > 0
+                ? FinancialMath.divideQuantities(
+                      totalAggressiveVolume,
+                      totalVolume
+                  )
+                : 0;
         const hasSellingPressure =
             sellingRatio >= minRatio && affectedZones > 0;
 
@@ -454,17 +486,42 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
             tick20: tick20Distribution,
         };
 
-        // Calculate alignment score (how similar distribution levels are across timeframes)
-        const avgDistribution =
-            (tick5Distribution + tick10Distribution + tick20Distribution) / 3;
-        const variance =
-            [tick5Distribution, tick10Distribution, tick20Distribution].reduce(
-                (sum, val) => sum + Math.pow(val - avgDistribution, 2),
-                0
-            ) / 3;
+        // Calculate alignment score using FinancialMath (how similar distribution levels are across timeframes)
+        const distributionValues = [
+            tick5Distribution,
+            tick10Distribution,
+            tick20Distribution,
+        ];
+        const avgDistribution = FinancialMath.calculateMean(distributionValues);
+        if (avgDistribution === null) {
+            return {
+                hasAlignment: false,
+                alignmentScore: 0,
+                timeframeBreakdown,
+            }; // CLAUDE.md compliance: return when calculation cannot be performed
+        }
 
-        const alignmentScore = avgDistribution * Math.max(0, 1 - variance); // Penalize high variance
-        const hasAlignment = alignmentScore >= 0.45; // Require moderate alignment for distribution
+        const stdDev = FinancialMath.calculateStdDev(distributionValues);
+        if (stdDev === null) {
+            return {
+                hasAlignment: false,
+                alignmentScore: 0,
+                timeframeBreakdown,
+            }; // CLAUDE.md compliance: return when calculation cannot be performed
+        }
+
+        const variance = FinancialMath.multiplyQuantities(stdDev, stdDev); // Variance = stdDev^2
+        const normalizedVariance = FinancialMath.multiplyQuantities(
+            variance,
+            this.enhancementConfig.varianceReductionFactor!
+        );
+        const alignmentScore = FinancialMath.multiplyQuantities(
+            avgDistribution,
+            Math.max(0, 1 - normalizedVariance)
+        ); // Penalize high variance
+        const hasAlignment =
+            alignmentScore >=
+            this.enhancementConfig.moderateAlignmentThreshold!; // Require moderate alignment for distribution
 
         return {
             hasAlignment,
@@ -493,18 +550,28 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
             const totalVolume = zone.aggressiveVolume + zone.passiveVolume;
             if (totalVolume === 0) continue;
 
-            // For distribution, we want high aggressive selling (buyerIsMaker = true trades)
-            const aggressiveSellingRatio =
-                zone.aggressiveSellVolume / totalVolume;
+            // For distribution, we want high aggressive selling (buyerIsMaker = true trades) using FinancialMath
+            const aggressiveSellingRatio = FinancialMath.divideQuantities(
+                zone.aggressiveSellVolume,
+                totalVolume
+            );
             const distributionScore =
-                aggressiveSellingRatio > 0.6
+                aggressiveSellingRatio >
+                this.enhancementConfig.aggressiveSellingRatioThreshold!
                     ? aggressiveSellingRatio
-                    : aggressiveSellingRatio * 0.5;
+                    : FinancialMath.multiplyQuantities(
+                          aggressiveSellingRatio,
+                          this.enhancementConfig
+                              .aggressiveSellingReductionFactor!
+                      );
 
             totalDistributionScore += distributionScore;
         }
 
-        return totalDistributionScore / relevantZones.length;
+        return FinancialMath.divideQuantities(
+            totalDistributionScore,
+            relevantZones.length
+        );
     }
 
     /**
@@ -546,6 +613,22 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
                 config?.sellingPressureVolumeThreshold ?? 40,
             sellingPressureRatioThreshold:
                 config?.sellingPressureRatioThreshold ?? 0.65,
+
+            // CLAUDE.md compliant calculation parameters
+            ltcusdtTickValue: config?.ltcusdtTickValue ?? 0.01,
+            varianceReductionFactor: config?.varianceReductionFactor ?? 1.0,
+            alignmentNormalizationFactor:
+                config?.alignmentNormalizationFactor ?? 1.0,
+            confluenceStrengthDivisor: config?.confluenceStrengthDivisor ?? 2.0,
+            passiveToAggressiveRatio: config?.passiveToAggressiveRatio ?? 0.6,
+            varianceDivisor: config?.varianceDivisor ?? 3.0,
+            moderateAlignmentThreshold:
+                config?.moderateAlignmentThreshold ?? 0.45,
+            aggressiveSellingRatioThreshold:
+                config?.aggressiveSellingRatioThreshold ?? 0.6,
+            aggressiveSellingReductionFactor:
+                config?.aggressiveSellingReductionFactor ?? 0.5,
+
             enableZoneConfluenceFilter:
                 config?.enableZoneConfluenceFilter ?? true,
             enableSellingPressureAnalysis:

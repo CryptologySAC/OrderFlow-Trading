@@ -1,6 +1,6 @@
 export type AllowedSymbols = "LTCUSDT";
 import type { ZoneDetectorConfig } from "./zoneTypes.js";
-import type { DeltaCVDConfirmationSettings } from "../indicators/deltaCVDConfirmation.js";
+import type { DeltaCVDEnhancedSettings } from "../indicators/deltaCVDDetectorEnhanced.js";
 import type { ExhaustionSettings } from "../indicators/exhaustionDetector.js";
 import type { AbsorptionSettings } from "../indicators/absorptionDetector.js";
 import type { SupportResistanceConfig } from "../indicators/supportResistanceDetector.js";
@@ -83,7 +83,7 @@ type SymbolConfig = {
     hiddenOrderDetector?: Partial<HiddenOrderDetectorConfig>;
     exhaustion?: ExhaustionSettings;
     absorption?: AbsorptionSettings;
-    deltaCvdConfirmation?: DeltaCVDConfirmationSettings;
+    deltaCvdConfirmation?: DeltaCVDEnhancedSettings;
     accumulationDetector?: AccumulationSettings;
     distributionDetector?: SuperiorFlowSettings;
     supportResistanceDetector?: SupportResistanceConfig;

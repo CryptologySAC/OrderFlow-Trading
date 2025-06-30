@@ -27,6 +27,7 @@ import {
     AbsorptionDetector,
     AbsorptionSettings,
 } from "./absorptionDetector.js";
+import { FinancialMath } from "../utils/financialMath.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
@@ -47,6 +48,36 @@ export interface AbsorptionEnhancementConfig {
     // Institutional volume detection configuration
     institutionalVolumeThreshold?: number; // Threshold for institutional volume detection (default: 50)
     institutionalVolumeRatioThreshold?: number; // Min institutional/total ratio for enhancement (default: 0.3)
+
+    // CLAUDE.md compliant calculation parameters
+    ltcusdtTickValue?: number; // LTCUSDT tick value for distance calculations (default: 0.01)
+    volumeNormalizationThreshold?: number; // Volume normalization threshold (default: 200)
+    absorptionRatioNormalization?: number; // Absorption ratio normalization factor (default: 3.0)
+    highConfidenceThreshold?: number; // High confidence signal threshold (default: 0.7)
+    lowConfidenceReduction?: number; // Low confidence signal reduction factor (default: 0.7)
+    minAbsorptionScore?: number; // Minimum absorption score threshold (default: 0.8)
+    patternVarianceReduction?: number; // Pattern variance reduction multiplier (default: 2.0)
+    whaleActivityMultiplier?: number; // Whale activity scoring multiplier (default: 2.0)
+    maxZoneCountForScoring?: number; // Maximum zones to consider for scoring (default: 3)
+    confidenceBoostReduction?: number; // Confidence boost reduction factor (default: 0.5)
+
+    // Zone strength calculation weights
+    distanceWeight?: number; // Weight for distance-based strength (default: 0.4)
+    volumeWeight?: number; // Weight for volume-based strength (default: 0.35)
+    absorptionWeight?: number; // Weight for absorption pattern strength (default: 0.25)
+
+    // Confluence scoring parameters
+    minConfluenceScore?: number; // Minimum confluence score threshold (default: 0.6)
+    volumeConcentrationWeight?: number; // Volume concentration scoring weight (default: 0.15)
+    patternConsistencyWeight?: number; // Pattern consistency scoring weight (default: 0.1)
+    volumeBoostCap?: number; // Maximum volume boost value (default: 0.25)
+    volumeBoostMultiplier?: number; // Volume boost calculation multiplier (default: 0.25)
+
+    // Pattern analysis thresholds
+    passiveAbsorptionThreshold?: number; // Passive absorption pattern threshold (default: 0.6)
+    aggressiveDistributionThreshold?: number; // Aggressive distribution pattern threshold (default: 0.6)
+    patternDifferenceThreshold?: number; // Pattern difference significance threshold (default: 0.1)
+    minVolumeForRatio?: number; // Minimum volume for ratio calculations to avoid division by zero (default: 1)
 
     // Enhancement control flags
     enableZoneConfluenceFilter?: boolean; // Filter signals by zone confluence (default: true)
@@ -164,6 +195,42 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
                 config?.institutionalVolumeThreshold ?? 50,
             institutionalVolumeRatioThreshold:
                 config?.institutionalVolumeRatioThreshold ?? 0.3,
+
+            // CLAUDE.md compliant calculation parameters
+            ltcusdtTickValue: config?.ltcusdtTickValue ?? 0.01,
+            volumeNormalizationThreshold:
+                config?.volumeNormalizationThreshold ?? 200,
+            absorptionRatioNormalization:
+                config?.absorptionRatioNormalization ?? 3.0,
+            highConfidenceThreshold: config?.highConfidenceThreshold ?? 0.7,
+            lowConfidenceReduction: config?.lowConfidenceReduction ?? 0.7,
+            minAbsorptionScore: config?.minAbsorptionScore ?? 0.8,
+            patternVarianceReduction: config?.patternVarianceReduction ?? 2.0,
+            whaleActivityMultiplier: config?.whaleActivityMultiplier ?? 2.0,
+            maxZoneCountForScoring: config?.maxZoneCountForScoring ?? 3,
+            confidenceBoostReduction: config?.confidenceBoostReduction ?? 0.5,
+
+            // Zone strength calculation weights
+            distanceWeight: config?.distanceWeight ?? 0.4,
+            volumeWeight: config?.volumeWeight ?? 0.35,
+            absorptionWeight: config?.absorptionWeight ?? 0.25,
+
+            // Confluence scoring parameters
+            minConfluenceScore: config?.minConfluenceScore ?? 0.6,
+            volumeConcentrationWeight:
+                config?.volumeConcentrationWeight ?? 0.15,
+            patternConsistencyWeight: config?.patternConsistencyWeight ?? 0.1,
+            volumeBoostCap: config?.volumeBoostCap ?? 0.25,
+            volumeBoostMultiplier: config?.volumeBoostMultiplier ?? 0.25,
+
+            // Pattern analysis thresholds
+            passiveAbsorptionThreshold:
+                config?.passiveAbsorptionThreshold ?? 0.6,
+            aggressiveDistributionThreshold:
+                config?.aggressiveDistributionThreshold ?? 0.6,
+            patternDifferenceThreshold:
+                config?.patternDifferenceThreshold ?? 0.1,
+            minVolumeForRatio: config?.minVolumeForRatio ?? 1,
 
             // Feature flags (conservative for production stability)
             enableZoneConfluenceFilter:
@@ -417,19 +484,23 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         const totalZones =
             tick5Zones.length + tick10Zones.length + tick20Zones.length;
         const hasConfluence =
-            totalZones >= minConfluenceZones && confluenceScore >= 0.6;
+            totalZones >= minConfluenceZones &&
+            confluenceScore >= this.enhancementConfig.minConfluenceScore!;
 
-        // Enhanced confluence strength calculation
+        // Enhanced confluence strength calculation using FinancialMath
         const baseStrength = Math.min(
             1.0,
-            totalZones / (minConfluenceZones * 2)
+            FinancialMath.divideQuantities(totalZones, minConfluenceZones * 2)
         );
         const volumeBoost = this.calculateVolumeConfluenceBoost(
             tick5Zones,
             tick10Zones,
             tick20Zones
         );
-        const alignmentBoost = absorptionAlignment * 0.2; // Up to 20% boost for pattern alignment
+        const alignmentBoost = FinancialMath.multiplyQuantities(
+            absorptionAlignment,
+            this.enhancementConfig.confidenceBoostReduction!
+        );
 
         const confluenceStrength = Math.min(
             1.0,
@@ -454,12 +525,17 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         price: number,
         maxDistanceTicks: number
     ): ZoneSnapshot[] {
-        const maxDistance =
-            maxDistanceTicks *
-            (this.standardZoneConfig?.priceThresholds?.tickValue ?? 0.01);
+        const maxDistance = FinancialMath.multiplyQuantities(
+            maxDistanceTicks,
+            this.enhancementConfig.ltcusdtTickValue!
+        );
 
         return zones.filter((zone) => {
-            const distance = Math.abs(zone.priceLevel - price);
+            const distance = FinancialMath.calculateSpread(
+                zone.priceLevel,
+                price,
+                8
+            );
             return distance <= maxDistance;
         });
     }
@@ -480,34 +556,76 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         let totalWeight = 0;
 
         for (const zone of zones) {
-            // Distance-based strength (closer zones have higher strength)
-            const distance = Math.abs(zone.priceLevel - price);
+            // Distance-based strength (closer zones have higher strength) using FinancialMath
+            const distance = FinancialMath.calculateSpread(
+                zone.priceLevel,
+                price,
+                8
+            );
             const maxDistance =
                 this.enhancementConfig.maxZoneConfluenceDistance ?? 3;
-            const tickValue = 0.01; // LTCUSDT tick value
-            const normalizedDistance = distance / (maxDistance * tickValue);
+            const tickValue = this.enhancementConfig.ltcusdtTickValue!;
+            const maxDistanceValue = FinancialMath.multiplyQuantities(
+                maxDistance,
+                tickValue
+            );
+            const normalizedDistance = FinancialMath.divideQuantities(
+                distance,
+                maxDistanceValue
+            );
             const distanceStrength = Math.max(0, 1 - normalizedDistance);
 
-            // Volume-based strength (higher volume zones have higher strength)
+            // Volume-based strength (higher volume zones have higher strength) using FinancialMath
             const totalVolume = zone.aggressiveVolume + zone.passiveVolume;
-            const volumeStrength = Math.min(1.0, totalVolume / 200); // Normalize to 200 volume units
+            const volumeStrength = Math.min(
+                1.0,
+                FinancialMath.divideQuantities(
+                    totalVolume,
+                    this.enhancementConfig.volumeNormalizationThreshold!
+                )
+            );
 
-            // Absorption pattern strength (passive > aggressive indicates absorption)
-            const absorptionRatio =
-                zone.passiveVolume / Math.max(1, zone.aggressiveVolume);
-            const absorptionStrength = Math.min(1.0, absorptionRatio / 3); // Normalize to 3:1 ratio
+            // Absorption pattern strength (passive > aggressive indicates absorption) using FinancialMath
+            const absorptionRatio = FinancialMath.divideQuantities(
+                zone.passiveVolume,
+                Math.max(
+                    this.enhancementConfig.minVolumeForRatio!,
+                    zone.aggressiveVolume
+                )
+            );
+            const absorptionStrength = Math.min(
+                1.0,
+                FinancialMath.divideQuantities(
+                    absorptionRatio,
+                    this.enhancementConfig.absorptionRatioNormalization!
+                )
+            );
 
-            // Combined zone strength
+            // Combined zone strength using configurable weights
             const zoneStrength =
-                distanceStrength * 0.4 +
-                volumeStrength * 0.35 +
-                absorptionStrength * 0.25;
+                FinancialMath.multiplyQuantities(
+                    distanceStrength,
+                    this.enhancementConfig.distanceWeight!
+                ) +
+                FinancialMath.multiplyQuantities(
+                    volumeStrength,
+                    this.enhancementConfig.volumeWeight!
+                ) +
+                FinancialMath.multiplyQuantities(
+                    absorptionStrength,
+                    this.enhancementConfig.absorptionWeight!
+                );
 
-            totalStrength += zoneStrength * timeframeWeight;
+            totalStrength += FinancialMath.multiplyQuantities(
+                zoneStrength,
+                timeframeWeight
+            );
             totalWeight += timeframeWeight;
         }
 
-        return totalWeight > 0 ? totalStrength / totalWeight : 0;
+        return totalWeight > 0
+            ? FinancialMath.divideQuantities(totalStrength, totalWeight)
+            : 0;
     }
 
     /**
@@ -551,13 +669,19 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             tick20Zones
         );
 
-        // Final confluence score
+        // Final confluence score using FinancialMath
         const confluenceScore = Math.min(
             1.0,
             baseScore +
                 diversityBonus +
-                volumeConcentration * 0.15 +
-                patternConsistency * 0.1
+                FinancialMath.multiplyQuantities(
+                    volumeConcentration,
+                    this.enhancementConfig.volumeConcentrationWeight!
+                ) +
+                FinancialMath.multiplyQuantities(
+                    patternConsistency,
+                    this.enhancementConfig.patternConsistencyWeight!
+                )
         );
 
         return confluenceScore;
@@ -579,17 +703,19 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             this.getTimeframeAbsorptionStrength(tick20Zones),
         ];
 
-        // Calculate alignment consistency (how similar the absorption patterns are across timeframes)
-        const avgAlignment =
-            timeframeAlignments.reduce((sum, val) => sum + val, 0) /
-            timeframeAlignments.length;
+        // Calculate alignment consistency using FinancialMath (how similar the absorption patterns are across timeframes)
+        const avgAlignment = FinancialMath.calculateMean(timeframeAlignments);
+        if (avgAlignment === null) {
+            return 0; // CLAUDE.md compliance: return 0 when calculation cannot be performed
+        }
 
-        // Calculate variance (lower variance = better alignment)
-        const variance =
-            timeframeAlignments.reduce(
-                (sum, val) => sum + Math.pow(val - avgAlignment, 2),
-                0
-            ) / timeframeAlignments.length;
+        // Calculate variance using FinancialMath (lower variance = better alignment)
+        const stdDev = FinancialMath.calculateStdDev(timeframeAlignments);
+        if (stdDev === null) {
+            return 0; // CLAUDE.md compliance: return 0 when calculation cannot be performed
+        }
+
+        const variance = FinancialMath.multiplyQuantities(stdDev, stdDev); // Variance = stdDev^2
         const alignmentConsistency = Math.max(0, 1 - variance); // Lower variance = higher consistency
 
         // Weight by overall absorption strength
@@ -624,7 +750,13 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
 
         const volumeBoost = Math.min(
             0.25,
-            (highVolumeZones.length / allZones.length) * 0.25
+            FinancialMath.multiplyQuantities(
+                FinancialMath.divideQuantities(
+                    highVolumeZones.length,
+                    allZones.length
+                ),
+                0.25
+            )
         );
         return volumeBoost;
     }
@@ -645,22 +777,28 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             0
         );
 
-        // Find zones closest to price and calculate their volume share
+        // Find zones closest to price and calculate their volume share using FinancialMath
         const sortedByDistance = zones.sort(
             (a, b) =>
-                Math.abs(a.priceLevel - price) - Math.abs(b.priceLevel - price)
+                FinancialMath.calculateSpread(a.priceLevel, price, 8) -
+                FinancialMath.calculateSpread(b.priceLevel, price, 8)
         );
 
         const closestZones = sortedByDistance.slice(
             0,
-            Math.min(3, zones.length)
-        ); // Top 3 closest zones
+            Math.min(
+                this.enhancementConfig.maxZoneCountForScoring!,
+                zones.length
+            )
+        ); // Top N closest zones
         const closestVolume = closestZones.reduce(
             (sum, zone) => sum + zone.aggressiveVolume + zone.passiveVolume,
             0
         );
 
-        return totalVolume > 0 ? closestVolume / totalVolume : 0;
+        return totalVolume > 0
+            ? FinancialMath.divideQuantities(closestVolume, totalVolume)
+            : 0;
     }
 
     /**
@@ -680,20 +818,23 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         ];
 
         // Calculate pattern similarity (absorption vs distribution characteristics)
-        const avgPattern =
-            timeframePatterns.reduce(
-                (sum, pattern) => sum + pattern.absorptionScore,
-                0
-            ) / timeframePatterns.length;
-        const patternVariance =
-            timeframePatterns.reduce(
-                (sum, pattern) =>
-                    sum + Math.pow(pattern.absorptionScore - avgPattern, 2),
-                0
-            ) / timeframePatterns.length;
+        // Calculate pattern variance using FinancialMath statistical methods
+        const patternScores = timeframePatterns.map((p) => p.absorptionScore);
+        const stdDev = FinancialMath.calculateStdDev(patternScores);
+        if (stdDev === null) {
+            return 0; // CLAUDE.md compliance: return 0 when calculation cannot be performed
+        }
 
-        // Higher consistency = lower variance
-        return Math.max(0, 1 - Math.sqrt(patternVariance));
+        const variance = FinancialMath.multiplyQuantities(stdDev, stdDev);
+        // Higher consistency = lower variance, normalized by pattern variance reduction factor
+        return Math.max(
+            0,
+            1 -
+                FinancialMath.multiplyQuantities(
+                    variance,
+                    this.enhancementConfig.patternVarianceReduction!
+                )
+        );
     }
 
     /**
@@ -708,17 +849,24 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             const totalVolume = zone.aggressiveVolume + zone.passiveVolume;
             if (totalVolume === 0) return 0;
 
-            const passiveRatio = zone.passiveVolume / totalVolume;
+            const passiveRatio = FinancialMath.divideQuantities(
+                zone.passiveVolume,
+                totalVolume
+            );
             const absorptionStrength =
-                passiveRatio > 0.6 ? passiveRatio : passiveRatio * 0.5; // Bonus for strong absorption
+                passiveRatio >
+                this.enhancementConfig.passiveAbsorptionThreshold!
+                    ? passiveRatio
+                    : FinancialMath.multiplyQuantities(
+                          passiveRatio,
+                          this.enhancementConfig.confidenceBoostReduction!
+                      ); // Bonus for strong absorption
 
             return absorptionStrength;
         });
 
-        return (
-            absorptionScores.reduce((sum, score) => sum + score, 0) /
-            absorptionScores.length
-        );
+        const meanScore = FinancialMath.calculateMean(absorptionScores);
+        return meanScore ?? 0; // CLAUDE.md compliance: return 0 when calculation cannot be performed
     }
 
     /**
@@ -746,27 +894,49 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             const totalVolume = zone.aggressiveVolume + zone.passiveVolume;
             if (totalVolume === 0) continue;
 
-            const passiveRatio = zone.passiveVolume / totalVolume;
-            const aggressiveRatio = zone.aggressiveVolume / totalVolume;
+            const passiveRatio = FinancialMath.divideQuantities(
+                zone.passiveVolume,
+                totalVolume
+            );
+            const aggressiveRatio = FinancialMath.divideQuantities(
+                zone.aggressiveVolume,
+                totalVolume
+            );
 
             // Absorption characteristics: high passive volume, low aggressive volume
-            if (passiveRatio > 0.6) {
+            if (
+                passiveRatio >
+                this.enhancementConfig.passiveAbsorptionThreshold!
+            ) {
                 totalAbsorptionScore += passiveRatio;
             }
 
             // Distribution characteristics: high aggressive volume, lower passive volume
-            if (aggressiveRatio > 0.6) {
+            if (
+                aggressiveRatio >
+                this.enhancementConfig.aggressiveDistributionThreshold!
+            ) {
                 totalDistributionScore += aggressiveRatio;
             }
         }
 
-        const avgAbsorptionScore = totalAbsorptionScore / zones.length;
-        const avgDistributionScore = totalDistributionScore / zones.length;
+        const avgAbsorptionScore = FinancialMath.divideQuantities(
+            totalAbsorptionScore,
+            zones.length
+        );
+        const avgDistributionScore = FinancialMath.divideQuantities(
+            totalDistributionScore,
+            zones.length
+        );
 
         const patternType: "absorption" | "distribution" | "neutral" =
-            avgAbsorptionScore > avgDistributionScore + 0.1
+            avgAbsorptionScore >
+            avgDistributionScore +
+                this.enhancementConfig.patternDifferenceThreshold!
                 ? "absorption"
-                : avgDistributionScore > avgAbsorptionScore + 0.1
+                : avgDistributionScore >
+                    avgAbsorptionScore +
+                        this.enhancementConfig.patternDifferenceThreshold!
                   ? "distribution"
                   : "neutral";
 
@@ -826,8 +996,14 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         const hasInstitutionalPresence =
             isInstitutionalTrade || institutionalRatio >= minRatio;
 
-        // Calculate whale activity score (0-1)
-        const whaleActivity = Math.min(1.0, institutionalRatio * 2);
+        // Calculate whale activity score (0-1) using FinancialMath
+        const whaleActivity = Math.min(
+            1.0,
+            FinancialMath.multiplyQuantities(
+                institutionalRatio,
+                this.enhancementConfig.whaleActivityMultiplier!
+            )
+        );
 
         return {
             hasInstitutionalPresence,

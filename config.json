@@ -108,7 +108,15 @@
                     "crossTimeframeBoost": 0.05
                 },
                 "minEnhancedConfidenceThreshold": 0.3,
-                "enhancementSignificanceBoost": true
+                "enhancementSignificanceBoost": true,
+                "enhancementCallFrequency": 5,
+                "highConfidenceThreshold": 0.7,
+                "lowConfidenceThreshold": 0.8,
+                "minConfidenceBoostThreshold": 0.1,
+                "defaultMinEnhancedConfidenceThreshold": 0.3,
+                "confidenceReductionFactor": 0.7,
+                "significanceBoostMultiplier": 0.2,
+                "neutralBoostReductionFactor": 0.5
             },
             "distribution": {
                 "minZoneStrength": 0.8,
@@ -138,6 +146,15 @@
                     "maxZoneConfluenceDistance": 3,
                     "sellingPressureVolumeThreshold": 40,
                     "sellingPressureRatioThreshold": 0.65,
+                    "ltcusdtTickValue": 0.01,
+                    "varianceReductionFactor": 1.0,
+                    "alignmentNormalizationFactor": 1.0,
+                    "confluenceStrengthDivisor": 2.0,
+                    "passiveToAggressiveRatio": 0.6,
+                    "varianceDivisor": 3.0,
+                    "moderateAlignmentThreshold": 0.45,
+                    "aggressiveSellingRatioThreshold": 0.6,
+                    "aggressiveSellingReductionFactor": 0.5,
                     "enableZoneConfluenceFilter": true,
                     "enableSellingPressureAnalysis": true,
                     "enableCrossTimeframeAnalysis": false,
@@ -544,7 +561,28 @@
 
                 "strongCorrelationThreshold": 0.7,
                 "weakCorrelationThreshold": 0.3,
-                "depthImbalanceThreshold": 0.2
+                "depthImbalanceThreshold": 0.2,
+
+                "useStandardizedZones": true,
+                "standardizedZoneConfig": {
+                    "minZoneConfluenceCount": 2,
+                    "maxZoneConfluenceDistance": 3,
+                    "cvdDivergenceVolumeThreshold": 50,
+                    "cvdDivergenceStrengthThreshold": 0.7,
+                    "cvdSignificantImbalanceThreshold": 0.3,
+                    "cvdDivergenceScoreMultiplier": 1.5,
+                    "ltcusdtTickValue": 0.01,
+                    "alignmentMinimumThreshold": 0.5,
+                    "momentumScoreMultiplier": 2.0,
+                    "enableZoneConfluenceFilter": true,
+                    "enableCVDDivergenceAnalysis": true,
+                    "enableMomentumAlignment": false,
+                    "confluenceConfidenceBoost": 0.15,
+                    "divergenceConfidenceBoost": 0.12,
+                    "momentumAlignmentBoost": 0.08,
+                    "enhancementMode": "production",
+                    "minEnhancedConfidenceThreshold": 0.3
+                }
             }
         }
     }

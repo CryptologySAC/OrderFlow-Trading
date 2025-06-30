@@ -25,7 +25,7 @@ import type {
     AccumulationSettings,
     SuperiorFlowSettings,
 } from "../indicators/interfaces/detectorInterfaces.js";
-import type { DeltaCVDConfirmationSettings } from "../indicators/deltaCVDConfirmation.js";
+import type { DeltaCVDEnhancedSettings } from "../indicators/deltaCVDDetectorEnhanced.js";
 import type { SupportResistanceConfig } from "../indicators/supportResistanceDetector.js";
 import type { IndividualTradesManagerConfig } from "../data/individualTradesManager.js";
 import type { MicrostructureAnalyzerConfig } from "../data/microstructureAnalyzer.js";
@@ -546,7 +546,7 @@ export class Config {
         };
     }
 
-    static get DELTACVD_DETECTOR(): DeltaCVDConfirmationSettings {
+    static get DELTACVD_DETECTOR(): DeltaCVDEnhancedSettings {
         return {
             symbol: Config.SYMBOL,
             windowsSec: cfg.symbols[cfg.symbol].deltaCvdConfirmation
@@ -628,6 +628,34 @@ export class Config {
                 cfg.symbols[cfg.symbol].deltaCvdConfirmation
                     ?.divergenceLookbackSec ?? 60
             ),
+
+            // Enhanced settings with standardized zone support
+            useStandardizedZones: Boolean(
+                cfg.symbols[cfg.symbol].deltaCvdConfirmation
+                    ?.useStandardizedZones
+            ),
+            standardizedZoneConfig: cfg.symbols[cfg.symbol].deltaCvdConfirmation
+                ?.standardizedZoneConfig
+                ? {
+                      minZoneConfluenceCount: 2,
+                      maxZoneConfluenceDistance: 3,
+                      cvdDivergenceVolumeThreshold: 50,
+                      cvdDivergenceStrengthThreshold: 0.7,
+                      cvdSignificantImbalanceThreshold: 0.3,
+                      cvdDivergenceScoreMultiplier: 1.5,
+                      ltcusdtTickValue: 0.01,
+                      alignmentMinimumThreshold: 0.5,
+                      momentumScoreMultiplier: 2.0,
+                      enableZoneConfluenceFilter: true,
+                      enableCVDDivergenceAnalysis: true,
+                      enableMomentumAlignment: false,
+                      confluenceConfidenceBoost: 0.15,
+                      divergenceConfidenceBoost: 0.12,
+                      momentumAlignmentBoost: 0.08,
+                      enhancementMode: "production" as const,
+                      minEnhancedConfidenceThreshold: 0.3,
+                  }
+                : undefined,
         };
     }
 

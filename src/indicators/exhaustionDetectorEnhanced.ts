@@ -19,6 +19,7 @@
 //
 
 import { ExhaustionDetector } from "./exhaustionDetector.js";
+import { FinancialMath } from "../utils/financialMath.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
@@ -53,6 +54,15 @@ export interface ExhaustionEnhancementConfig {
     // Liquidity depletion analysis
     depletionVolumeThreshold?: number; // Minimum volume for depletion analysis (default: 30)
     depletionRatioThreshold?: number; // Minimum depletion ratio for exhaustion (default: 0.6)
+
+    // CLAUDE.md compliant calculation parameters
+    ltcusdtTickValue?: number; // LTCUSDT tick value for distance calculations (default: 0.01)
+    varianceReductionFactor?: number; // Variance reduction factor for alignment calculations (default: 1.0)
+    alignmentNormalizationFactor?: number; // Alignment normalization factor (default: 1.0)
+    distanceNormalizationDivisor?: number; // Distance normalization divisor (default: 2.0)
+    passiveVolumeExhaustionRatio?: number; // Passive volume exhaustion ratio threshold (default: 0.5)
+    aggressiveVolumeExhaustionThreshold?: number; // Aggressive volume exhaustion threshold (default: 0.7)
+    aggressiveVolumeReductionFactor?: number; // Aggressive volume reduction factor (default: 0.5)
 
     // Multi-timeframe analysis
     enableZoneConfluenceFilter?: boolean; // Enable zone confluence filtering (default: true)
@@ -328,10 +338,13 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
         const confluenceZones = relevantZones.length;
         const hasConfluence = confluenceZones >= minConfluenceZones;
 
-        // Calculate confluence strength (higher = more zones overlapping)
+        // Calculate confluence strength using FinancialMath (higher = more zones overlapping)
         const confluenceStrength = Math.min(
             1.0,
-            confluenceZones / (minConfluenceZones * 2)
+            FinancialMath.divideQuantities(
+                confluenceZones,
+                minConfluenceZones * 2
+            )
         );
 
         return {
@@ -349,10 +362,17 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
         price: number,
         maxDistanceTicks: number
     ): ZoneSnapshot[] {
-        const maxDistance = maxDistanceTicks * 0.01; // LTCUSDT tick value
+        const maxDistance = FinancialMath.multiplyQuantities(
+            maxDistanceTicks,
+            this.enhancementConfig.ltcusdtTickValue!
+        );
 
         return zones.filter((zone) => {
-            const distance = Math.abs(zone.priceLevel - price);
+            const distance = FinancialMath.calculateSpread(
+                zone.priceLevel,
+                price,
+                8
+            );
             return distance <= maxDistance;
         });
     }
@@ -394,10 +414,14 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
             totalPassiveVolume += passiveVolume;
             totalAggressiveVolume += aggressiveVolume;
 
-            // Check if this zone shows exhaustion (high aggressive, low passive)
+            // Check if this zone shows exhaustion (high aggressive, low passive) using FinancialMath
             if (
                 aggressiveVolume >= depletionThreshold &&
-                passiveVolume < aggressiveVolume * 0.5
+                passiveVolume <
+                    FinancialMath.multiplyQuantities(
+                        aggressiveVolume,
+                        this.enhancementConfig.passiveVolumeExhaustionRatio!
+                    )
             ) {
                 affectedZones++;
             }
@@ -405,7 +429,12 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
 
         const totalVolume = totalPassiveVolume + totalAggressiveVolume;
         const depletionRatio =
-            totalVolume > 0 ? totalAggressiveVolume / totalVolume : 0;
+            totalVolume > 0
+                ? FinancialMath.divideQuantities(
+                      totalAggressiveVolume,
+                      totalVolume
+                  )
+                : 0;
         const hasDepletion = depletionRatio >= minRatio && affectedZones > 0;
 
         return {
@@ -452,17 +481,42 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
             tick20: tick20Exhaustion,
         };
 
-        // Calculate alignment score (how similar exhaustion levels are across timeframes)
-        const avgExhaustion =
-            (tick5Exhaustion + tick10Exhaustion + tick20Exhaustion) / 3;
-        const variance =
-            [tick5Exhaustion, tick10Exhaustion, tick20Exhaustion].reduce(
-                (sum, val) => sum + Math.pow(val - avgExhaustion, 2),
-                0
-            ) / 3;
+        // Calculate alignment score using FinancialMath (how similar exhaustion levels are across timeframes)
+        const exhaustionValues = [
+            tick5Exhaustion,
+            tick10Exhaustion,
+            tick20Exhaustion,
+        ];
+        const avgExhaustion = FinancialMath.calculateMean(exhaustionValues);
+        if (avgExhaustion === null) {
+            return {
+                hasAlignment: false,
+                alignmentScore: 0,
+                timeframeBreakdown,
+            }; // CLAUDE.md compliance: return 0 when calculation cannot be performed
+        }
 
-        const alignmentScore = avgExhaustion * Math.max(0, 1 - variance); // Penalize high variance
-        const hasAlignment = alignmentScore >= 0.5; // Require moderate alignment
+        const stdDev = FinancialMath.calculateStdDev(exhaustionValues);
+        if (stdDev === null) {
+            return {
+                hasAlignment: false,
+                alignmentScore: 0,
+                timeframeBreakdown,
+            }; // CLAUDE.md compliance: return 0 when calculation cannot be performed
+        }
+
+        const variance = FinancialMath.multiplyQuantities(stdDev, stdDev); // Variance = stdDev^2
+        const normalizedVariance = FinancialMath.multiplyQuantities(
+            variance,
+            this.enhancementConfig.varianceReductionFactor!
+        );
+        const alignmentScore = FinancialMath.multiplyQuantities(
+            avgExhaustion,
+            Math.max(0, 1 - normalizedVariance)
+        ); // Penalize high variance
+        const hasAlignment =
+            alignmentScore >=
+            this.enhancementConfig.alignmentNormalizationFactor!; // Require moderate alignment
 
         return {
             hasAlignment,
@@ -491,14 +545,27 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
             const totalVolume = zone.aggressiveVolume + zone.passiveVolume;
             if (totalVolume === 0) continue;
 
-            const aggressiveRatio = zone.aggressiveVolume / totalVolume;
+            const aggressiveRatio = FinancialMath.divideQuantities(
+                zone.aggressiveVolume,
+                totalVolume
+            );
             const exhaustionScore =
-                aggressiveRatio > 0.7 ? aggressiveRatio : aggressiveRatio * 0.5;
+                aggressiveRatio >
+                this.enhancementConfig.aggressiveVolumeExhaustionThreshold!
+                    ? aggressiveRatio
+                    : FinancialMath.multiplyQuantities(
+                          aggressiveRatio,
+                          this.enhancementConfig
+                              .aggressiveVolumeReductionFactor!
+                      );
 
             totalExhaustionScore += exhaustionScore;
         }
 
-        return totalExhaustionScore / relevantZones.length;
+        return FinancialMath.divideQuantities(
+            totalExhaustionScore,
+            relevantZones.length
+        );
     }
 
     /**
@@ -538,6 +605,21 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
             maxZoneConfluenceDistance: config?.maxZoneConfluenceDistance ?? 3,
             depletionVolumeThreshold: config?.depletionVolumeThreshold ?? 30,
             depletionRatioThreshold: config?.depletionRatioThreshold ?? 0.6,
+
+            // CLAUDE.md compliant calculation parameters
+            ltcusdtTickValue: config?.ltcusdtTickValue ?? 0.01,
+            varianceReductionFactor: config?.varianceReductionFactor ?? 1.0,
+            alignmentNormalizationFactor:
+                config?.alignmentNormalizationFactor ?? 1.0,
+            distanceNormalizationDivisor:
+                config?.distanceNormalizationDivisor ?? 2.0,
+            passiveVolumeExhaustionRatio:
+                config?.passiveVolumeExhaustionRatio ?? 0.5,
+            aggressiveVolumeExhaustionThreshold:
+                config?.aggressiveVolumeExhaustionThreshold ?? 0.7,
+            aggressiveVolumeReductionFactor:
+                config?.aggressiveVolumeReductionFactor ?? 0.5,
+
             enableZoneConfluenceFilter:
                 config?.enableZoneConfluenceFilter ?? true,
             enableDepletionAnalysis: config?.enableDepletionAnalysis ?? true,

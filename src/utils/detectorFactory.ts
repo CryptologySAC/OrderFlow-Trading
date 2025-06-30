@@ -13,10 +13,11 @@ import {
     ExhaustionDetectorEnhanced,
     ExhaustionEnhancedSettings,
 } from "../indicators/exhaustionDetectorEnhanced.js";
+import { DeltaCVDConfirmation } from "../indicators/deltaCVDConfirmation.js";
 import {
-    DeltaCVDConfirmation,
-    DeltaCVDConfirmationSettings,
-} from "../indicators/deltaCVDConfirmation.js";
+    DeltaCVDDetectorEnhanced,
+    DeltaCVDEnhancedSettings,
+} from "../indicators/deltaCVDDetectorEnhanced.js";
 import {
     SupportResistanceDetector,
     SupportResistanceConfig,
@@ -403,13 +404,13 @@ export class DetectorFactory {
     }
 
     /**
-     * Create production-ready accumulation detector
+     * Create production-ready Delta CVD detector with enhanced zone capabilities
      */
     public static createDeltaCVDConfirmationDetector(
-        settings: DeltaCVDConfirmationSettings,
+        settings: DeltaCVDEnhancedSettings,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
-    ): DeltaCVDConfirmation {
+    ): DeltaCVDConfirmation | DeltaCVDDetectorEnhanced {
         const id = options.id || `cvd_confirmation-${Date.now()}`;
 
         this.validateCreationLimits();
@@ -418,27 +419,60 @@ export class DetectorFactory {
         const productionSettings = this.applyProductionDefaults(
             settings,
             "cvd_confirmation"
-        ) as BaseDetectorSettings;
+        ) as DeltaCVDEnhancedSettings;
 
-        const detector = new DeltaCVDConfirmation(
-            id,
-            productionSettings,
-            dependencies.logger,
-            dependencies.spoofingDetector,
-            dependencies.metricsCollector,
-            dependencies.signalLogger
-        );
+        // Check if standardized zones are enabled to determine detector type
+        const useEnhanced =
+            productionSettings.useStandardizedZones &&
+            productionSettings.standardizedZoneConfig?.enhancementMode !==
+                "disabled";
+
+        let detector: DeltaCVDConfirmation | DeltaCVDDetectorEnhanced;
+
+        if (useEnhanced) {
+            detector = new DeltaCVDDetectorEnhanced(
+                id,
+                productionSettings,
+                dependencies.logger,
+                dependencies.spoofingDetector,
+                dependencies.metricsCollector,
+                dependencies.signalLogger
+            );
+
+            dependencies.logger.info(
+                `[DetectorFactory] Created Enhanced DeltaCVDDetector`,
+                {
+                    id,
+                    enhancementMode:
+                        productionSettings.standardizedZoneConfig
+                            ?.enhancementMode,
+                    useStandardizedZones:
+                        productionSettings.useStandardizedZones,
+                    standardizedZoneConfig:
+                        productionSettings.standardizedZoneConfig,
+                }
+            );
+        } else {
+            detector = new DeltaCVDConfirmation(
+                id,
+                productionSettings,
+                dependencies.logger,
+                dependencies.spoofingDetector,
+                dependencies.metricsCollector,
+                dependencies.signalLogger
+            );
+
+            dependencies.logger.info(
+                `[DetectorFactory] Created Standard DeltaCVDConfirmation`,
+                {
+                    id,
+                    settings: productionSettings,
+                    features: productionSettings.features,
+                }
+            );
+        }
 
         this.registerDetector(id, detector, dependencies, options);
-
-        dependencies.logger.info(
-            `[DetectorFactory] Created Delta CVD Confirmation`,
-            {
-                id,
-                settings: productionSettings,
-                features: productionSettings.features,
-            }
-        );
 
         return detector;
     }

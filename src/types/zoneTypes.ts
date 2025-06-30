@@ -230,6 +230,16 @@ export interface ZoneDetectorConfig {
     minEnhancedConfidenceThreshold?: number; // Minimum confidence for enhanced signals (default: 0.3)
     enhancementSignificanceBoost?: boolean; // Whether to boost signal significance (default: true)
     enhancementMode?: "disabled" | "testing" | "production"; // Enhancement mode control (default: 'disabled')
+
+    // CLAUDE.md compliant AccumulationZoneDetectorEnhanced parameters
+    enhancementCallFrequency?: number; // Frequency of enhancement calls (default: 5)
+    highConfidenceThreshold?: number; // High confidence signal threshold (default: 0.7)
+    lowConfidenceThreshold?: number; // Low confidence signal threshold (default: 0.8)
+    minConfidenceBoostThreshold?: number; // Minimum confidence boost threshold (default: 0.1)
+    defaultMinEnhancedConfidenceThreshold?: number; // Default minimum enhanced confidence (default: 0.3)
+    confidenceReductionFactor?: number; // Confidence reduction factor for filtering (default: 0.7)
+    significanceBoostMultiplier?: number; // Significance boost multiplier (default: 0.2)
+    neutralBoostReductionFactor?: number; // Neutral boost reduction factor (default: 0.5)
 }
 
 export interface ZoneQueryOptions {
