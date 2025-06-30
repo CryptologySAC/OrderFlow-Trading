@@ -16,7 +16,7 @@ import type {
     MarketDataStorageConfig,
 } from "../types/configTypes.js";
 import type { ZoneDetectorConfig } from "../types/zoneTypes.js";
-import type { ExhaustionSettings } from "../indicators/exhaustionDetector.js";
+import type { ExhaustionEnhancedSettings } from "../indicators/exhaustionDetectorEnhanced.js";
 import type { AbsorptionEnhancedSettings } from "../indicators/absorptionDetectorEnhanced.js";
 import type { OrderflowPreprocessorOptions } from "../market/orderFlowPreprocessor.js";
 import type { DataStreamConfig } from "../trading/dataStreamManager.js";
@@ -439,10 +439,7 @@ export class Config {
             },
 
             // Standardized zone enhancement configuration
-            useStandardizedZones: Boolean(
-                (cfg.symbols[cfg.symbol].absorption as any)
-                    ?.useStandardizedZones ?? false
-            ),
+            useStandardizedZones: false, // Disabled by default for production safety
             standardizedZoneConfig: {
                 minZoneConfluenceCount: 2,
                 maxZoneConfluenceDistance: 3,
@@ -460,7 +457,7 @@ export class Config {
         };
     }
 
-    static get EXHAUSTION_DETECTOR(): ExhaustionSettings {
+    static get EXHAUSTION_DETECTOR(): ExhaustionEnhancedSettings {
         return {
             symbol: Config.SYMBOL,
             minAggVolume: Number(
@@ -506,6 +503,23 @@ export class Config {
                 passiveHistory:
                     cfg.symbols[cfg.symbol].exhaustion?.features
                         ?.passiveHistory ?? false,
+            },
+
+            // Enhanced settings - disabled by default for production safety
+            useStandardizedZones: false,
+            standardizedZoneConfig: {
+                minZoneConfluenceCount: 2,
+                maxZoneConfluenceDistance: 3,
+                depletionVolumeThreshold: 30,
+                depletionRatioThreshold: 0.6,
+                enableZoneConfluenceFilter: true,
+                enableDepletionAnalysis: true,
+                enableCrossTimeframeAnalysis: false,
+                confluenceConfidenceBoost: 0.15,
+                depletionConfidenceBoost: 0.1,
+                crossTimeframeBoost: 0.05,
+                enhancementMode: "disabled" as const,
+                minEnhancedConfidenceThreshold: 0.3,
             },
         };
     }

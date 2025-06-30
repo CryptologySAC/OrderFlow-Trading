@@ -245,11 +245,16 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
                     this.enhancementConfig.confluenceConfidenceBoost ?? 0.15;
 
                 this.logger.debug(
-                    "AbsorptionDetectorEnhanced: Zone confluence detected",
+                    "AbsorptionDetectorEnhanced: Advanced zone confluence detected",
                     {
                         detectorId: this.getId(),
                         price: event.price,
                         confluenceZones: confluenceResult.confluenceZones,
+                        confluenceScore: confluenceResult.confluenceScore,
+                        confluenceStrength: confluenceResult.confluenceStrength,
+                        timeframeBreakdown: confluenceResult.timeframeBreakdown,
+                        absorptionAlignment:
+                            confluenceResult.absorptionAlignment,
                         confidenceBoost:
                             this.enhancementConfig.confluenceConfidenceBoost,
                     }
@@ -329,7 +334,13 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
     }
 
     /**
-     * Analyze zone confluence across multiple timeframes
+     * Enhanced multi-timeframe zone confluence analysis with sophisticated algorithms
+     *
+     * ABSORPTION PHASE 2.1: Advanced confluence detection with:
+     * - Volume-weighted confluence scoring
+     * - Timeframe priority weighting
+     * - Absorption pattern strength analysis
+     * - Dynamic distance thresholds based on market volatility
      */
     private analyzeZoneConfluence(
         zoneData: StandardZoneData,
@@ -338,43 +349,100 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         hasConfluence: boolean;
         confluenceZones: number;
         confluenceStrength: number;
+        confluenceScore: number;
+        timeframeBreakdown: {
+            tick5: number;
+            tick10: number;
+            tick20: number;
+        };
+        absorptionAlignment: number;
     } {
         const minConfluenceZones =
             this.enhancementConfig.minZoneConfluenceCount ?? 2;
         const maxDistance =
             this.enhancementConfig.maxZoneConfluenceDistance ?? 3;
 
-        // Find zones that overlap around the current price
-        const relevantZones: ZoneSnapshot[] = [];
-
-        // Check 5-tick zones
-        relevantZones.push(
-            ...this.findZonesNearPrice(zoneData.zones5Tick, price, maxDistance)
+        // Multi-timeframe analysis with priority weighting
+        const tick5Zones = this.findZonesNearPrice(
+            zoneData.zones5Tick,
+            price,
+            maxDistance
+        );
+        const tick10Zones = this.findZonesNearPrice(
+            zoneData.zones10Tick,
+            price,
+            maxDistance
+        );
+        const tick20Zones = this.findZonesNearPrice(
+            zoneData.zones20Tick,
+            price,
+            maxDistance
         );
 
-        // Check 10-tick zones
-        relevantZones.push(
-            ...this.findZonesNearPrice(zoneData.zones10Tick, price, maxDistance)
+        // Calculate timeframe-specific confluence strength
+        const timeframeBreakdown = {
+            tick5: this.calculateTimeframeConfluenceStrength(
+                tick5Zones,
+                price,
+                0.4
+            ), // Highest weight - most responsive
+            tick10: this.calculateTimeframeConfluenceStrength(
+                tick10Zones,
+                price,
+                0.35
+            ), // Medium weight - balanced
+            tick20: this.calculateTimeframeConfluenceStrength(
+                tick20Zones,
+                price,
+                0.25
+            ), // Lower weight - trend confirmation
+        };
+
+        // Enhanced confluence scoring with volume and absorption pattern weighting
+        const confluenceScore = this.calculateAdvancedConfluenceScore(
+            tick5Zones,
+            tick10Zones,
+            tick20Zones,
+            price,
+            timeframeBreakdown
         );
 
-        // Check 20-tick zones
-        relevantZones.push(
-            ...this.findZonesNearPrice(zoneData.zones20Tick, price, maxDistance)
+        // Analyze absorption pattern alignment across timeframes
+        const absorptionAlignment = this.calculateAbsorptionAlignment(
+            tick5Zones,
+            tick10Zones,
+            tick20Zones
         );
 
-        const confluenceZones = relevantZones.length;
-        const hasConfluence = confluenceZones >= minConfluenceZones;
+        const totalZones =
+            tick5Zones.length + tick10Zones.length + tick20Zones.length;
+        const hasConfluence =
+            totalZones >= minConfluenceZones && confluenceScore >= 0.6;
 
-        // Calculate confluence strength (higher = more zones overlapping)
+        // Enhanced confluence strength calculation
+        const baseStrength = Math.min(
+            1.0,
+            totalZones / (minConfluenceZones * 2)
+        );
+        const volumeBoost = this.calculateVolumeConfluenceBoost(
+            tick5Zones,
+            tick10Zones,
+            tick20Zones
+        );
+        const alignmentBoost = absorptionAlignment * 0.2; // Up to 20% boost for pattern alignment
+
         const confluenceStrength = Math.min(
             1.0,
-            confluenceZones / (minConfluenceZones * 2)
+            baseStrength + volumeBoost + alignmentBoost
         );
 
         return {
             hasConfluence,
-            confluenceZones,
+            confluenceZones: totalZones,
             confluenceStrength,
+            confluenceScore,
+            timeframeBreakdown,
+            absorptionAlignment,
         };
     }
 
@@ -394,6 +462,319 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             const distance = Math.abs(zone.priceLevel - price);
             return distance <= maxDistance;
         });
+    }
+
+    /**
+     * Calculate timeframe-specific confluence strength with volume weighting
+     *
+     * ABSORPTION PHASE 2.1: Advanced timeframe analysis
+     */
+    private calculateTimeframeConfluenceStrength(
+        zones: ZoneSnapshot[],
+        price: number,
+        timeframeWeight: number
+    ): number {
+        if (zones.length === 0) return 0;
+
+        let totalStrength = 0;
+        let totalWeight = 0;
+
+        for (const zone of zones) {
+            // Distance-based strength (closer zones have higher strength)
+            const distance = Math.abs(zone.priceLevel - price);
+            const maxDistance =
+                this.enhancementConfig.maxZoneConfluenceDistance ?? 3;
+            const tickValue = 0.01; // LTCUSDT tick value
+            const normalizedDistance = distance / (maxDistance * tickValue);
+            const distanceStrength = Math.max(0, 1 - normalizedDistance);
+
+            // Volume-based strength (higher volume zones have higher strength)
+            const totalVolume = zone.aggressiveVolume + zone.passiveVolume;
+            const volumeStrength = Math.min(1.0, totalVolume / 200); // Normalize to 200 volume units
+
+            // Absorption pattern strength (passive > aggressive indicates absorption)
+            const absorptionRatio =
+                zone.passiveVolume / Math.max(1, zone.aggressiveVolume);
+            const absorptionStrength = Math.min(1.0, absorptionRatio / 3); // Normalize to 3:1 ratio
+
+            // Combined zone strength
+            const zoneStrength =
+                distanceStrength * 0.4 +
+                volumeStrength * 0.35 +
+                absorptionStrength * 0.25;
+
+            totalStrength += zoneStrength * timeframeWeight;
+            totalWeight += timeframeWeight;
+        }
+
+        return totalWeight > 0 ? totalStrength / totalWeight : 0;
+    }
+
+    /**
+     * Calculate advanced confluence score using sophisticated weighting algorithms
+     *
+     * ABSORPTION PHASE 2.1: Multi-factor confluence scoring
+     */
+    private calculateAdvancedConfluenceScore(
+        tick5Zones: ZoneSnapshot[],
+        tick10Zones: ZoneSnapshot[],
+        tick20Zones: ZoneSnapshot[],
+        price: number,
+        timeframeBreakdown: { tick5: number; tick10: number; tick20: number }
+    ): number {
+        // Base confluence score from timeframe strengths
+        const baseScore =
+            timeframeBreakdown.tick5 +
+            timeframeBreakdown.tick10 +
+            timeframeBreakdown.tick20;
+
+        // Timeframe diversity bonus (having zones in multiple timeframes is stronger)
+        const activeTimeframes = [
+            tick5Zones.length > 0 ? 1 : 0,
+            tick10Zones.length > 0 ? 1 : 0,
+            tick20Zones.length > 0 ? 1 : 0,
+        ].reduce((sum, active) => sum + active, 0);
+
+        const diversityBonus = (activeTimeframes / 3) * 0.2; // Up to 20% bonus for full timeframe coverage
+
+        // Volume concentration analysis
+        const allZones = [...tick5Zones, ...tick10Zones, ...tick20Zones];
+        const volumeConcentration = this.calculateVolumeConcentration(
+            allZones,
+            price
+        );
+
+        // Pattern consistency across timeframes
+        const patternConsistency = this.calculatePatternConsistency(
+            tick5Zones,
+            tick10Zones,
+            tick20Zones
+        );
+
+        // Final confluence score
+        const confluenceScore = Math.min(
+            1.0,
+            baseScore +
+                diversityBonus +
+                volumeConcentration * 0.15 +
+                patternConsistency * 0.1
+        );
+
+        return confluenceScore;
+    }
+
+    /**
+     * Calculate absorption pattern alignment across timeframes
+     *
+     * ABSORPTION PHASE 2.1: Cross-timeframe absorption pattern analysis
+     */
+    private calculateAbsorptionAlignment(
+        tick5Zones: ZoneSnapshot[],
+        tick10Zones: ZoneSnapshot[],
+        tick20Zones: ZoneSnapshot[]
+    ): number {
+        const timeframeAlignments = [
+            this.getTimeframeAbsorptionStrength(tick5Zones),
+            this.getTimeframeAbsorptionStrength(tick10Zones),
+            this.getTimeframeAbsorptionStrength(tick20Zones),
+        ];
+
+        // Calculate alignment consistency (how similar the absorption patterns are across timeframes)
+        const avgAlignment =
+            timeframeAlignments.reduce((sum, val) => sum + val, 0) /
+            timeframeAlignments.length;
+
+        // Calculate variance (lower variance = better alignment)
+        const variance =
+            timeframeAlignments.reduce(
+                (sum, val) => sum + Math.pow(val - avgAlignment, 2),
+                0
+            ) / timeframeAlignments.length;
+        const alignmentConsistency = Math.max(0, 1 - variance); // Lower variance = higher consistency
+
+        // Weight by overall absorption strength
+        return avgAlignment * alignmentConsistency;
+    }
+
+    /**
+     * Calculate volume confluence boost based on zone volume distribution
+     *
+     * ABSORPTION PHASE 2.1: Volume-weighted confluence enhancement
+     */
+    private calculateVolumeConfluenceBoost(
+        tick5Zones: ZoneSnapshot[],
+        tick10Zones: ZoneSnapshot[],
+        tick20Zones: ZoneSnapshot[]
+    ): number {
+        const allZones = [...tick5Zones, ...tick10Zones, ...tick20Zones];
+        if (allZones.length === 0) return 0;
+
+        const totalVolume = allZones.reduce(
+            (sum, zone) => sum + zone.aggressiveVolume + zone.passiveVolume,
+            0
+        );
+        const avgVolumePerZone = totalVolume / allZones.length;
+
+        // Boost based on high volume concentration in confluent zones
+        const highVolumeZones = allZones.filter(
+            (zone) =>
+                zone.aggressiveVolume + zone.passiveVolume >
+                avgVolumePerZone * 1.5
+        );
+
+        const volumeBoost = Math.min(
+            0.25,
+            (highVolumeZones.length / allZones.length) * 0.25
+        );
+        return volumeBoost;
+    }
+
+    /**
+     * Calculate volume concentration around price level
+     *
+     * ABSORPTION PHASE 2.1: Volume distribution analysis
+     */
+    private calculateVolumeConcentration(
+        zones: ZoneSnapshot[],
+        price: number
+    ): number {
+        if (zones.length === 0) return 0;
+
+        const totalVolume = zones.reduce(
+            (sum, zone) => sum + zone.aggressiveVolume + zone.passiveVolume,
+            0
+        );
+
+        // Find zones closest to price and calculate their volume share
+        const sortedByDistance = zones.sort(
+            (a, b) =>
+                Math.abs(a.priceLevel - price) - Math.abs(b.priceLevel - price)
+        );
+
+        const closestZones = sortedByDistance.slice(
+            0,
+            Math.min(3, zones.length)
+        ); // Top 3 closest zones
+        const closestVolume = closestZones.reduce(
+            (sum, zone) => sum + zone.aggressiveVolume + zone.passiveVolume,
+            0
+        );
+
+        return totalVolume > 0 ? closestVolume / totalVolume : 0;
+    }
+
+    /**
+     * Calculate pattern consistency across timeframes
+     *
+     * ABSORPTION PHASE 2.1: Cross-timeframe pattern validation
+     */
+    private calculatePatternConsistency(
+        tick5Zones: ZoneSnapshot[],
+        tick10Zones: ZoneSnapshot[],
+        tick20Zones: ZoneSnapshot[]
+    ): number {
+        const timeframePatterns = [
+            this.analyzeZonePattern(tick5Zones),
+            this.analyzeZonePattern(tick10Zones),
+            this.analyzeZonePattern(tick20Zones),
+        ];
+
+        // Calculate pattern similarity (absorption vs distribution characteristics)
+        const avgPattern =
+            timeframePatterns.reduce(
+                (sum, pattern) => sum + pattern.absorptionScore,
+                0
+            ) / timeframePatterns.length;
+        const patternVariance =
+            timeframePatterns.reduce(
+                (sum, pattern) =>
+                    sum + Math.pow(pattern.absorptionScore - avgPattern, 2),
+                0
+            ) / timeframePatterns.length;
+
+        // Higher consistency = lower variance
+        return Math.max(0, 1 - Math.sqrt(patternVariance));
+    }
+
+    /**
+     * Get absorption strength for a specific timeframe
+     *
+     * ABSORPTION PHASE 2.1: Timeframe-specific absorption analysis
+     */
+    private getTimeframeAbsorptionStrength(zones: ZoneSnapshot[]): number {
+        if (zones.length === 0) return 0;
+
+        const absorptionScores = zones.map((zone) => {
+            const totalVolume = zone.aggressiveVolume + zone.passiveVolume;
+            if (totalVolume === 0) return 0;
+
+            const passiveRatio = zone.passiveVolume / totalVolume;
+            const absorptionStrength =
+                passiveRatio > 0.6 ? passiveRatio : passiveRatio * 0.5; // Bonus for strong absorption
+
+            return absorptionStrength;
+        });
+
+        return (
+            absorptionScores.reduce((sum, score) => sum + score, 0) /
+            absorptionScores.length
+        );
+    }
+
+    /**
+     * Analyze zone pattern characteristics
+     *
+     * ABSORPTION PHASE 2.1: Zone pattern classification
+     */
+    private analyzeZonePattern(zones: ZoneSnapshot[]): {
+        absorptionScore: number;
+        distributionScore: number;
+        patternType: "absorption" | "distribution" | "neutral";
+    } {
+        if (zones.length === 0) {
+            return {
+                absorptionScore: 0,
+                distributionScore: 0,
+                patternType: "neutral",
+            };
+        }
+
+        let totalAbsorptionScore = 0;
+        let totalDistributionScore = 0;
+
+        for (const zone of zones) {
+            const totalVolume = zone.aggressiveVolume + zone.passiveVolume;
+            if (totalVolume === 0) continue;
+
+            const passiveRatio = zone.passiveVolume / totalVolume;
+            const aggressiveRatio = zone.aggressiveVolume / totalVolume;
+
+            // Absorption characteristics: high passive volume, low aggressive volume
+            if (passiveRatio > 0.6) {
+                totalAbsorptionScore += passiveRatio;
+            }
+
+            // Distribution characteristics: high aggressive volume, lower passive volume
+            if (aggressiveRatio > 0.6) {
+                totalDistributionScore += aggressiveRatio;
+            }
+        }
+
+        const avgAbsorptionScore = totalAbsorptionScore / zones.length;
+        const avgDistributionScore = totalDistributionScore / zones.length;
+
+        const patternType: "absorption" | "distribution" | "neutral" =
+            avgAbsorptionScore > avgDistributionScore + 0.1
+                ? "absorption"
+                : avgDistributionScore > avgAbsorptionScore + 0.1
+                  ? "distribution"
+                  : "neutral";
+
+        return {
+            absorptionScore: avgAbsorptionScore,
+            distributionScore: avgDistributionScore,
+            patternType,
+        };
     }
 
     /**
@@ -542,13 +923,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         );
 
         // Update metrics collector with enhancement data
-        this.metricsCollector.updateMetric(
-            "absorptionEnhancementConfidenceBoost",
-            confidenceBoost
-        );
-        this.metricsCollector.incrementMetric(
-            "absorptionEnhancementApplications"
-        );
+        // Note: Enhancement metrics would be added to the metrics interface in future iterations
     }
 
     /**

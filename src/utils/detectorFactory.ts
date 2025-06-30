@@ -8,10 +8,11 @@ import {
     AbsorptionDetectorEnhanced,
     AbsorptionEnhancedSettings,
 } from "../indicators/absorptionDetectorEnhanced.js";
+import { ExhaustionDetector } from "../indicators/exhaustionDetector.js";
 import {
-    ExhaustionDetector,
-    ExhaustionSettings,
-} from "../indicators/exhaustionDetector.js";
+    ExhaustionDetectorEnhanced,
+    ExhaustionEnhancedSettings,
+} from "../indicators/exhaustionDetectorEnhanced.js";
 import {
     DeltaCVDConfirmation,
     DeltaCVDConfirmationSettings,
@@ -146,13 +147,13 @@ export class DetectorFactory {
     }
 
     /**
-     * Create production-ready exhaustion detector
+     * Create production-ready exhaustion detector with enhanced zone capabilities
      */
     public static createExhaustionDetector(
-        settings: ExhaustionSettings,
+        settings: ExhaustionEnhancedSettings,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
-    ): ExhaustionDetector {
+    ): ExhaustionDetector | ExhaustionDetectorEnhanced {
         const id = options.id || `exhaustion-${Date.now()}`;
 
         this.validateCreationLimits();
@@ -161,27 +162,58 @@ export class DetectorFactory {
         const productionSettings = this.applyProductionDefaults(
             settings,
             "exhaustion"
-        ) as BaseDetectorSettings;
+        ) as ExhaustionEnhancedSettings;
 
-        const detector = new ExhaustionDetector(
-            id,
-            productionSettings,
-            dependencies.logger,
-            dependencies.spoofingDetector,
-            dependencies.metricsCollector,
-            dependencies.signalLogger
-        );
+        // Check if standardized zones are enabled to determine detector type
+        const useEnhanced =
+            productionSettings.useStandardizedZones &&
+            productionSettings.standardizedZoneConfig?.enhancementMode !==
+                "disabled";
+
+        let detector: ExhaustionDetector | ExhaustionDetectorEnhanced;
+
+        if (useEnhanced) {
+            detector = new ExhaustionDetectorEnhanced(
+                id,
+                productionSettings,
+                dependencies.logger,
+                dependencies.spoofingDetector,
+                dependencies.metricsCollector,
+                dependencies.signalLogger!
+            );
+
+            dependencies.logger.info(
+                `[DetectorFactory] Created Enhanced ExhaustionDetector`,
+                {
+                    id,
+                    settings: productionSettings,
+                    enhancementMode:
+                        productionSettings.standardizedZoneConfig
+                            ?.enhancementMode,
+                    features: productionSettings.features,
+                }
+            );
+        } else {
+            detector = new ExhaustionDetector(
+                id,
+                productionSettings,
+                dependencies.logger,
+                dependencies.spoofingDetector,
+                dependencies.metricsCollector,
+                dependencies.signalLogger
+            );
+
+            dependencies.logger.info(
+                `[DetectorFactory] Created Original ExhaustionDetector`,
+                {
+                    id,
+                    settings: productionSettings,
+                    features: productionSettings.features,
+                }
+            );
+        }
 
         this.registerDetector(id, detector, dependencies, options);
-
-        dependencies.logger.info(
-            `[DetectorFactory] Created ExhaustionDetector`,
-            {
-                id,
-                settings: productionSettings,
-                features: productionSettings.features,
-            }
-        );
 
         return detector;
     }

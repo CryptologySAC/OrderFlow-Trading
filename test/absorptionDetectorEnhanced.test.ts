@@ -70,23 +70,31 @@ const mockOrderBook: IOrderBookState = {
     cleanup: vi.fn(),
 } as unknown as IOrderBookState;
 
-// Helper function to create standardized zone data
-function createStandardizedZoneData(price: number): StandardZoneData {
-    const createZoneSnapshot = (
-        centerPrice: number,
-        multiplier: number
-    ): ZoneSnapshot => ({
-        centerPrice,
+// Helper function to create zone snapshots
+function createZoneSnapshot(
+    priceLevel: number,
+    multiplier: number
+): ZoneSnapshot {
+    return {
+        zoneId: `zone-${priceLevel}-${multiplier}`,
+        priceLevel,
+        tickSize: 0.01,
         aggressiveVolume: 50 * multiplier,
         passiveVolume: 100 * multiplier,
+        aggressiveBuyVolume: 25 * multiplier,
+        aggressiveSellVolume: 25 * multiplier,
+        passiveBidVolume: 50 * multiplier,
+        passiveAskVolume: 50 * multiplier,
         tradeCount: 10 * multiplier,
-        buyVolume: 75 * multiplier,
-        sellVolume: 75 * multiplier,
-        dominantSide: "buy",
-        imbalance: 0.2,
-        timestamp: Date.now(),
-    });
+        timespan: 60000,
+        boundaries: { min: priceLevel - 0.005, max: priceLevel + 0.005 },
+        lastUpdate: Date.now(),
+        volumeWeightedPrice: priceLevel,
+    };
+}
 
+// Helper function to create standardized zone data
+function createStandardizedZoneData(price: number): StandardZoneData {
     return {
         zones5Tick: [
             createZoneSnapshot(price - 0.05, 1),
@@ -276,6 +284,55 @@ describe("AbsorptionDetectorEnhanced", () => {
             const stats = enhancedDetector.getEnhancementStats();
             expect(stats.averageConfidenceBoost).toBeGreaterThanOrEqual(0);
         });
+
+        it("should perform advanced multi-timeframe confluence analysis", () => {
+            // Create trade event with rich zone data for confluence testing
+            const confluenceTestTrade = createEnrichedTradeEvent(
+                89.0,
+                25,
+                true
+            );
+
+            // Enhance zone data to create strong confluence scenario
+            if (confluenceTestTrade.zoneData) {
+                // Add more zones near the current price across all timeframes
+                confluenceTestTrade.zoneData.zones5Tick.push(
+                    createZoneSnapshot(89.01, 2.5), // Very close to price
+                    createZoneSnapshot(89.02, 2.0) // Also close to price
+                );
+                confluenceTestTrade.zoneData.zones10Tick.push(
+                    createZoneSnapshot(89.0, 3.0), // Exact price match
+                    createZoneSnapshot(89.01, 2.5) // Close to price
+                );
+                confluenceTestTrade.zoneData.zones20Tick.push(
+                    createZoneSnapshot(89.0, 4.0), // Exact price match
+                    createZoneSnapshot(88.99, 3.5) // Very close to price
+                );
+            }
+
+            enhancedDetector.onEnrichedTrade(confluenceTestTrade);
+
+            const stats = enhancedDetector.getEnhancementStats();
+            expect(stats.confluenceDetectionCount).toBeGreaterThan(0);
+            expect(stats.enhancementCount).toBeGreaterThan(0);
+        });
+
+        it("should provide detailed confluence analysis in debug logs", () => {
+            const trade = createEnrichedTradeEvent(89.0, 50, true); // Higher volume
+
+            enhancedDetector.onEnrichedTrade(trade);
+
+            // Verify debug logging was called with enhanced confluence data
+            expect(mockLogger.debug).toHaveBeenCalledWith(
+                expect.stringContaining("Advanced zone confluence"),
+                expect.objectContaining({
+                    confluenceScore: expect.any(Number),
+                    confluenceStrength: expect.any(Number),
+                    timeframeBreakdown: expect.any(Object),
+                    absorptionAlignment: expect.any(Number),
+                })
+            );
+        });
     });
 
     describe("Institutional Volume Analysis", () => {
@@ -317,6 +374,19 @@ describe("AbsorptionDetectorEnhanced", () => {
 
         it("should not detect institutional volume for small trades", () => {
             const retailTrade = createEnrichedTradeEvent(89.0, 10, true); // Small trade
+
+            // Override zone data with smaller volumes to avoid institutional threshold
+            if (retailTrade.zoneData) {
+                retailTrade.zoneData.zones5Tick = [
+                    createZoneSnapshot(89.0, 0.2), // 10 aggressive, 20 passive - below 50 threshold
+                ];
+                retailTrade.zoneData.zones10Tick = [
+                    createZoneSnapshot(89.0, 0.3), // 15 aggressive, 30 passive - below 50 threshold
+                ];
+                retailTrade.zoneData.zones20Tick = [
+                    createZoneSnapshot(89.0, 0.4), // 20 aggressive, 40 passive - below 50 threshold
+                ];
+            }
 
             enhancedDetector.onEnrichedTrade(retailTrade);
 

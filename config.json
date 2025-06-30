@@ -327,6 +327,22 @@
                     "adaptiveZone": true,
                     "multiZone": false,
                     "passiveHistory": true
+                },
+
+                "useStandardizedZones": true,
+                "standardizedZoneConfig": {
+                    "minZoneConfluenceCount": 2,
+                    "maxZoneConfluenceDistance": 3,
+                    "depletionVolumeThreshold": 30,
+                    "depletionRatioThreshold": 0.6,
+                    "enableZoneConfluenceFilter": true,
+                    "enableDepletionAnalysis": true,
+                    "enableCrossTimeframeAnalysis": false,
+                    "confluenceConfidenceBoost": 0.15,
+                    "depletionConfidenceBoost": 0.1,
+                    "crossTimeframeBoost": 0.05,
+                    "enhancementMode": "production",
+                    "minEnhancedConfidenceThreshold": 0.3
                 }
             },
 
@@ -369,19 +385,19 @@
                     "spreadImpact": true
                 },
 
-                "useStandardizedZones": false,
+                "useStandardizedZones": true,
                 "standardizedZoneConfig": {
                     "minZoneConfluenceCount": 2,
                     "maxZoneConfluenceDistance": 3,
                     "institutionalVolumeThreshold": 50,
                     "institutionalVolumeRatioThreshold": 0.3,
                     "enableZoneConfluenceFilter": true,
-                    "enableInstitutionalVolumeFilter": false,
-                    "enableCrossTimeframeAnalysis": false,
+                    "enableInstitutionalVolumeFilter": true,
+                    "enableCrossTimeframeAnalysis": true,
                     "confluenceConfidenceBoost": 0.15,
                     "institutionalVolumeBoost": 0.1,
                     "crossTimeframeBoost": 0.05,
-                    "enhancementMode": "disabled",
+                    "enhancementMode": "production",
                     "minEnhancedConfidenceThreshold": 0.3
                 }
             },
