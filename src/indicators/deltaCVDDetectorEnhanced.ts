@@ -84,16 +84,8 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
         metrics: IMetricsCollector,
         signalLogger?: ISignalLogger
     ) {
-        // 🚨 NUCLEAR CLEANUP: Zero tolerance Zod validation
-        try {
-            DeltaCVDDetectorSchema.parse(settings);
-        } catch (error) {
-            console.error("🚨 CRITICAL CONFIG ERROR - DeltaCVDDetectorEnhanced");
-            console.error("Missing mandatory configuration properties:");
-            console.error(error);
-            console.error("Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT");
-            process.exit(1);
-        }
+        // Settings are pre-validated by Config.DELTACVD_DETECTOR getter
+        // No validation needed here - trust that settings are correct
 
         // Initialize parent detector with original settings
         super(id, settings, logger, spoofingDetector, metrics, signalLogger);

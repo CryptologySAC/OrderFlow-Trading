@@ -88,16 +88,8 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
         logger: ILogger,
         metrics: IMetricsCollector
     ) {
-        // 🚨 NUCLEAR CLEANUP: Zero tolerance Zod validation
-        try {
-            DistributionDetectorSchema.parse(settings);
-        } catch (error) {
-            console.error("🚨 CRITICAL CONFIG ERROR - DistributionDetectorEnhanced");
-            console.error("Missing mandatory configuration properties:");
-            console.error(error);
-            console.error("Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT");
-            process.exit(1);
-        }
+        // Settings are pre-validated by Config.DISTRIBUTION_ZONE_DETECTOR getter
+        // No validation needed here - trust that settings are correct
 
         // Initialize parent detector with original settings
         super(id, symbol, settings, logger, metrics);
