@@ -231,7 +231,7 @@ describe("Service Detector Configuration Chain Validation", () => {
             // Only test properties that Config.SPOOFING_DETECTOR actually provides
             const expectedParams = [
                 "tickSize",
-                "wallTicks", 
+                "wallTicks",
                 "minWallSize",
                 "dynamicWallWidth",
                 "testLogMinSpoof",

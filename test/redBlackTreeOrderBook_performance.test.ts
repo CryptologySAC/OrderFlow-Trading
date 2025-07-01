@@ -365,8 +365,10 @@ describe("RedBlackTree vs Map OrderBook - Performance Validation", () => {
                 // Basic sanity checks - orderbook should function at all sizes
                 expect(timeRatio).toBeGreaterThan(0); // Performance should be measurable
                 expect(measurements[i].timeMs).toBeGreaterThan(0); // Should take some time
-                
-                console.log(`Size ratio: ${sizeRatio.toFixed(2)}, Time ratio: ${timeRatio.toFixed(2)}`);
+
+                console.log(
+                    `Size ratio: ${sizeRatio.toFixed(2)}, Time ratio: ${timeRatio.toFixed(2)}`
+                );
             }
         });
 

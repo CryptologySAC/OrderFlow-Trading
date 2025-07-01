@@ -54,14 +54,12 @@ describe("Production Validation - Enhanced AccumulationZoneDetector", () => {
 
     describe("Enhanced Detector Creation", () => {
         it("should create enhanced detector when standardized zones are enabled", () => {
-            const detector = DetectorFactory.createAccumulationDetector(
-                {
-                    logger: mockLogger,
-                    spoofingDetector: mockSpoofingDetector,
-                    metricsCollector: mockMetricsCollector,
-                    signalLogger: mockSignalLogger,
-                }
-            );
+            const detector = DetectorFactory.createAccumulationDetector({
+                logger: mockLogger,
+                spoofingDetector: mockSpoofingDetector,
+                metricsCollector: mockMetricsCollector,
+                signalLogger: mockSignalLogger,
+            });
 
             // Should create enhanced detector
             expect(detector).toBeInstanceOf(AccumulationZoneDetectorEnhanced);
@@ -109,7 +107,7 @@ describe("Production Validation - Enhanced AccumulationZoneDetector", () => {
             const config = Config.ACCUMULATION_DETECTOR;
 
             expect(config).toBeDefined();
-            
+
             // Core accumulation parameters
             expect(config.useStandardizedZones).toBeDefined();
             expect(config.enhancementMode).toBeDefined();
@@ -134,14 +132,12 @@ describe("Production Validation - Enhanced AccumulationZoneDetector", () => {
 
     describe("Production Readiness Validation", () => {
         it("should verify enhanced detector API compatibility", () => {
-            const detector = DetectorFactory.createAccumulationDetector(
-                {
-                    logger: mockLogger,
-                    spoofingDetector: mockSpoofingDetector,
-                    metricsCollector: mockMetricsCollector,
-                    signalLogger: mockSignalLogger,
-                }
-            );
+            const detector = DetectorFactory.createAccumulationDetector({
+                logger: mockLogger,
+                spoofingDetector: mockSpoofingDetector,
+                metricsCollector: mockMetricsCollector,
+                signalLogger: mockSignalLogger,
+            });
 
             // Should implement all required methods
             expect(typeof detector.analyze).toBe("function");
@@ -159,14 +155,12 @@ describe("Production Validation - Enhanced AccumulationZoneDetector", () => {
         });
 
         it("should validate monitoring capabilities", () => {
-            const detector = DetectorFactory.createAccumulationDetector(
-                {
-                    logger: mockLogger,
-                    spoofingDetector: mockSpoofingDetector,
-                    metricsCollector: mockMetricsCollector,
-                    signalLogger: mockSignalLogger,
-                }
-            ) as AccumulationZoneDetectorEnhanced;
+            const detector = DetectorFactory.createAccumulationDetector({
+                logger: mockLogger,
+                spoofingDetector: mockSpoofingDetector,
+                metricsCollector: mockMetricsCollector,
+                signalLogger: mockSignalLogger,
+            }) as AccumulationZoneDetectorEnhanced;
 
             const stats = detector.getEnhancementStats();
 

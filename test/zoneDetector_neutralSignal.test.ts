@@ -7,10 +7,10 @@ import type {
     ZoneSignal,
 } from "../src/types/zoneTypes";
 
-const logger = { 
-    info: vi.fn(), 
-    warn: vi.fn(), 
-    error: vi.fn(), 
+const logger = {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
     debug: vi.fn(),
     isDebugEnabled: vi.fn(() => false),
     setCorrelationId: vi.fn(),
@@ -74,7 +74,7 @@ describe("AccumulationZoneDetectorEnhanced neutral signal", () => {
             quantity: 10,
             timestamp: Date.now(),
             buyerIsMaker: false,
-            pair: "BTCUSDT", 
+            pair: "BTCUSDT",
             tradeId: "test_trade",
             originalTrade: {} as any,
             passiveBidVolume: 0,
