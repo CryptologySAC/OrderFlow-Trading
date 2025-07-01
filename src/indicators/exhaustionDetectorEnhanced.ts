@@ -86,6 +86,17 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
         metricsCollector: IMetricsCollector,
         signalLogger: ISignalLogger
     ) {
+        // 🚨 NUCLEAR CLEANUP: Zero tolerance Zod validation
+        try {
+            ExhaustionDetectorSchema.parse(settings);
+        } catch (error) {
+            console.error("🚨 CRITICAL CONFIG ERROR - ExhaustionDetectorEnhanced");
+            console.error("Missing mandatory configuration properties:");
+            console.error(error);
+            console.error("Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT");
+            process.exit(1);
+        }
+
         // Initialize parent detector with original settings
         super(
             id,

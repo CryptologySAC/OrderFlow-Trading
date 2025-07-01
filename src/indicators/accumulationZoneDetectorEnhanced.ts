@@ -87,6 +87,17 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         logger: ILogger,
         metricsCollector: IMetricsCollector
     ) {
+        // 🚨 NUCLEAR CLEANUP: Zero tolerance Zod validation
+        try {
+            AccumulationDetectorSchema.parse(config);
+        } catch (error) {
+            console.error("🚨 CRITICAL CONFIG ERROR - AccumulationZoneDetectorEnhanced");
+            console.error("Missing mandatory configuration properties:");
+            console.error(error);
+            console.error("Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT");
+            process.exit(1);
+        }
+
         super(id, logger, metricsCollector);
 
         // Initialize CLAUDE.md compliant configuration parameters
@@ -558,7 +569,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     }
 
     public getId(): string {
-        return this.id || `${this.constructor.name}_${Date.now()}`;
+        return this.id;
     }
 
     // Delegate missing methods that tests expect

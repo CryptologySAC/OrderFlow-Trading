@@ -93,6 +93,17 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         metricsCollector: IMetricsCollector,
         signalLogger?: ISignalLogger
     ) {
+        // 🚨 NUCLEAR CLEANUP: Zero tolerance Zod validation
+        try {
+            AbsorptionDetectorSchema.parse(settings);
+        } catch (error) {
+            console.error("🚨 CRITICAL CONFIG ERROR - AbsorptionDetectorEnhanced");
+            console.error("Missing mandatory configuration properties:");
+            console.error(error);
+            console.error("Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT");
+            process.exit(1);
+        }
+
         // Initialize the original detector with complete settings
         // AbsorptionEnhancedSettings now contains ALL properties from config.json
         super(
@@ -377,7 +388,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             tick20Zones
         );
         const confidenceBoostReduction =
-            this.enhancementConfig.confidenceBoostReduction ?? 0.5;
+            this.enhancementConfig.confidenceBoostReduction;
         const alignmentBoost = FinancialMath.multiplyQuantities(
             absorptionAlignment,
             confidenceBoostReduction
