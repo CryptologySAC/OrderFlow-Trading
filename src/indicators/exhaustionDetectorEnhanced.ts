@@ -86,8 +86,18 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
         metricsCollector: IMetricsCollector,
         signalLogger: ISignalLogger
     ) {
-        // Settings are pre-validated by Config.EXHAUSTION_DETECTOR getter
-        // No validation needed here - trust that settings are correct
+        // Nuclear cleanup pattern: Validate that required properties exist
+        // This ensures immediate crash on missing configuration
+        if (
+            !settings ||
+            !settings.minAggVolume ||
+            !settings.windowMs ||
+            !settings.exhaustionThreshold
+        ) {
+            throw new Error(
+                "Missing required configuration properties - nuclear cleanup violation"
+            );
+        }
 
         // Initialize parent detector with original settings
         super(

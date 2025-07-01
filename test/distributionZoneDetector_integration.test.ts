@@ -8,6 +8,7 @@ import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
+import { Config } from "../src/core/config.js";
 
 describe("DistributionDetectorEnhanced - Integration and Performance Tests", () => {
     let detector: DistributionDetectorEnhanced;
@@ -15,6 +16,33 @@ describe("DistributionDetectorEnhanced - Integration and Performance Tests", () 
     let mockMetrics: IMetricsCollector;
 
     beforeEach(async () => {
+        // Mock Config.UNIVERSAL_ZONE_CONFIG to use test-friendly values
+        vi.spyOn(Config, "UNIVERSAL_ZONE_CONFIG", "get").mockReturnValue({
+            maxActiveZones: 10,
+            zoneTimeoutMs: 600000,
+            minZoneVolume: 150, // Test-friendly value
+            maxZoneWidth: 0.05,
+            minZoneStrength: 0.1,
+            completionThreshold: 0.8,
+            strengthChangeThreshold: 0.15,
+            minCandidateDuration: 25000, // 25 seconds for fast testing
+            maxPriceDeviation: 0.05,
+            minTradeCount: 5, // Test-friendly value
+            minBuyRatio: 0.6, // For distribution (buying pressure for selling into)
+            minSellRatio: 0.5, // Reduced for testing
+            priceStabilityThreshold: 0.8,
+            strongZoneThreshold: 0.7,
+            weakZoneThreshold: 0.4,
+            minZoneConfluenceCount: 1,
+            maxZoneConfluenceDistance: 3,
+            enableZoneConfluenceFilter: false,
+            enableCrossTimeframeAnalysis: false,
+            confluenceConfidenceBoost: 0.1,
+            crossTimeframeBoost: 0.1,
+            useStandardizedZones: false,
+            enhancementMode: "disabled" as const,
+        });
+
         mockLogger = {
             info: vi.fn(),
             warn: vi.fn(),
@@ -491,12 +519,12 @@ describe("DistributionDetectorEnhanced - Integration and Performance Tests", () 
 
             // Create trades that would normally form zones
             const strictTrades: EnrichedTradeEvent[] = [];
-            for (let i = 0; i < 15; i++) {
-                // Less than required 20
+            for (let i = 0; i < 3; i++) {
+                // Only 3 trades (less than required 5 by universal mock)
                 strictTrades.push({
                     price: strictLevel + (Math.random() - 0.5) * 0.01, // Very tight price range
-                    quantity: 40 + Math.random() * 20,
-                    timestamp: baseTime + i * 10000,
+                    quantity: 25 + Math.random() * 10, // Smaller quantities to stay under volume threshold
+                    timestamp: baseTime + i * 5000,
                     buyerIsMaker: false,
                     pair: "BTCUSDT",
                     tradeId: `strict_${i}`,
@@ -512,11 +540,11 @@ describe("DistributionDetectorEnhanced - Integration and Performance Tests", () 
                 strictDetector.analyze(trade);
             });
 
-            // Try formation (before minimum duration)
+            // Try formation (before minimum duration from universal zone config mock)
             const earlyFormation: EnrichedTradeEvent = {
                 price: strictLevel,
-                quantity: 80,
-                timestamp: baseTime + 300000, // Only 5 minutes (less than 10 required)
+                quantity: 30, // Small quantity to stay under volume threshold
+                timestamp: baseTime + 5000, // Only 5 seconds (much less than 25 required by mock)
                 buyerIsMaker: false,
                 pair: "BTCUSDT",
                 tradeId: "strict_formation",
@@ -538,15 +566,15 @@ describe("DistributionDetectorEnhanced - Integration and Performance Tests", () 
             // Should not form zones due to strict requirements
             expect(strictDetector.getActiveZones().length).toBe(0);
 
-            // Test with very permissive configuration
+            // Test with very permissive configuration (align with universal zone config)
             const permissiveConfig: Partial<ZoneDetectorConfig> = {
-                minCandidateDuration: 10000, // 10 seconds (very permissive)
-                minZoneVolume: 50, // Low volume requirement
-                minTradeCount: 2, // Few trades required
+                minCandidateDuration: 20000, // 20 seconds (less than universal 25s)
+                minZoneVolume: 100, // Lower than universal 150
+                minTradeCount: 4, // Less than universal 5
                 maxPriceDeviation: 0.1, // Wide price tolerance
-                minZoneStrength: 0.1, // Low strength requirement
+                minZoneStrength: 0.05, // Very low strength requirement
                 strengthChangeThreshold: 0.5, // Large strength changes allowed
-                minSellRatio: 0.5, // Lower requirement for easier zone formation
+                minSellRatio: 0.4, // Very low requirement for easier zone formation
             };
 
             const permissiveDetector = new DistributionDetectorEnhanced(
@@ -557,71 +585,33 @@ describe("DistributionDetectorEnhanced - Integration and Performance Tests", () 
                 mockMetrics
             );
 
-            // Create minimal trades with proper institutional pattern (need minimum 5 trades)
-            const permissiveTrades: EnrichedTradeEvent[] = [
-                {
+            // Create enough trades with proper institutional pattern (need minimum 5 trades for universal config)
+            const permissiveTrades: EnrichedTradeEvent[] = [];
+            for (let i = 0; i < 6; i++) {
+                permissiveTrades.push({
                     price: strictLevel,
-                    quantity: 75, // Institutional size
-                    timestamp: baseTime,
-                    buyerIsMaker: false,
+                    quantity: 50, // Good institutional size
+                    timestamp: baseTime + i * 2000, // 2-second intervals
+                    buyerIsMaker: false, // High buy pressure for distribution
                     pair: "BTCUSDT",
-                    tradeId: "permissive_1",
+                    tradeId: `permissive_${i + 1}`,
                     originalTrade: {} as any,
                     passiveBidVolume: 0,
                     passiveAskVolume: 0,
                     zonePassiveBidVolume: 0,
                     zonePassiveAskVolume: 0,
-                },
-                {
-                    price: strictLevel,
-                    quantity: 80, // Institutional size
-                    timestamp: baseTime + 3000,
-                    buyerIsMaker: false,
-                    pair: "BTCUSDT",
-                    tradeId: "permissive_2",
-                    originalTrade: {} as any,
-                    passiveBidVolume: 0,
-                    passiveAskVolume: 0,
-                    zonePassiveBidVolume: 0,
-                    zonePassiveAskVolume: 0,
-                },
-                {
-                    price: strictLevel,
-                    quantity: 60, // Iceberg pattern start
-                    timestamp: baseTime + 6000,
-                    buyerIsMaker: false,
-                    pair: "BTCUSDT",
-                    tradeId: "permissive_3",
-                    originalTrade: {} as any,
-                    passiveBidVolume: 0,
-                    passiveAskVolume: 0,
-                    zonePassiveBidVolume: 0,
-                    zonePassiveAskVolume: 0,
-                },
-                {
-                    price: strictLevel,
-                    quantity: 60, // Iceberg pattern
-                    timestamp: baseTime + 9000,
-                    buyerIsMaker: false,
-                    pair: "BTCUSDT",
-                    tradeId: "permissive_4",
-                    originalTrade: {} as any,
-                    passiveBidVolume: 0,
-                    passiveAskVolume: 0,
-                    zonePassiveBidVolume: 0,
-                    zonePassiveAskVolume: 0,
-                },
-            ];
+                });
+            }
 
             permissiveTrades.forEach((trade) => {
                 permissiveDetector.analyze(trade);
             });
 
-            // Quick formation
+            // Quick formation (after minimum duration from universal config mock)
             const quickFormation: EnrichedTradeEvent = {
                 price: strictLevel,
                 quantity: 100, // Large institutional formation trade
-                timestamp: baseTime + 12000, // After minimum duration (12s > 10s)
+                timestamp: baseTime + 27000, // After universal config minimum (27s > 25s)
                 buyerIsMaker: false,
                 pair: "BTCUSDT",
                 tradeId: "permissive_formation",

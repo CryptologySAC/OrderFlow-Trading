@@ -88,7 +88,7 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
         logger: ILogger,
         metrics: IMetricsCollector
     ) {
-        // Settings are pre-validated by Config.DISTRIBUTION_ZONE_DETECTOR getter
+        // Settings are pre-validated by Config.DISTRIBUTION_DETECTOR getter
         // No validation needed here - trust that settings are correct
 
         // Initialize parent detector with original settings

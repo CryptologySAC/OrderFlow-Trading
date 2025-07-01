@@ -2,6 +2,7 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
+import { ExhaustionDetector } from "../src/indicators/exhaustionDetector.js";
 import { ExhaustionDetectorEnhanced } from "../src/indicators/exhaustionDetectorEnhanced.js";
 import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
@@ -378,14 +379,41 @@ describe("Threshold Configuration Chain", () => {
                 "validateConfigValue"
             );
 
+            // Complete configuration for nuclear cleanup compliance
             new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 {
+                    // Required mandatory properties for nuclear cleanup
+                    minAggVolume: 20,
+                    windowMs: 45000,
+                    exhaustionThreshold: 0.3,
+                    // Test-specific property
                     imbalanceHighThreshold: 0.85,
+                    // Other required properties
+                    pricePrecision: 2,
+                    zoneTicks: 3,
+                    eventCooldownMs: 10000,
+                    minInitialMoveTicks: 1,
+                    confirmationTimeoutMs: 40000,
+                    maxRevisitTicks: 8,
+                    volumeSurgeMultiplier: 2.0,
+                    imbalanceThreshold: 0.3,
+                    institutionalThreshold: 15,
+                    burstDetectionMs: 2000,
+                    sustainedVolumeMs: 20000,
+                    medianTradeSize: 0.8,
+                    maxPassiveRatio: 0.35,
+                    minDepletionFactor: 0.2,
+                    imbalanceMediumThreshold: 0.55,
+                    spreadHighThreshold: 0.004,
+                    spreadMediumThreshold: 0.0015,
+                    useStandardizedZones: false,
+                    enhancementMode: "disabled" as const,
                 },
                 mockLogger,
                 mockSpoofingDetector,
-                mockMetrics
+                mockMetrics,
+                { logSignal: vi.fn() } as any
             );
 
             // Verify validation was called for imbalance threshold
@@ -501,10 +529,35 @@ describe("Threshold Configuration Chain", () => {
 
             const exhaustionDetector = new ExhaustionDetectorEnhanced(
                 "config-test-exhaustion",
-                configValues,
+                {
+                    ...configValues,
+                    // Required mandatory properties for nuclear cleanup
+                    minAggVolume: 20,
+                    windowMs: 45000,
+                    exhaustionThreshold: 0.3,
+                    pricePrecision: 2,
+                    zoneTicks: 3,
+                    eventCooldownMs: 10000,
+                    minInitialMoveTicks: 1,
+                    confirmationTimeoutMs: 40000,
+                    maxRevisitTicks: 8,
+                    volumeSurgeMultiplier: 2.0,
+                    imbalanceThreshold: 0.3,
+                    institutionalThreshold: 15,
+                    burstDetectionMs: 2000,
+                    sustainedVolumeMs: 20000,
+                    medianTradeSize: 0.8,
+                    maxPassiveRatio: 0.35,
+                    minDepletionFactor: 0.2,
+                    spreadHighThreshold: 0.004,
+                    spreadMediumThreshold: 0.0015,
+                    useStandardizedZones: false,
+                    enhancementMode: "disabled" as const,
+                },
                 mockLogger,
                 mockSpoofingDetector,
-                mockMetrics
+                mockMetrics,
+                { logSignal: vi.fn() } as any
             );
 
             // Verify config chain worked
@@ -549,10 +602,31 @@ describe("Threshold Configuration Chain", () => {
                     imbalanceMediumThreshold: 0.6,
                     spreadHighThreshold: 0.005,
                     spreadMediumThreshold: 0.002,
+                    // Required mandatory properties for nuclear cleanup
+                    minAggVolume: 20,
+                    windowMs: 45000,
+                    exhaustionThreshold: 0.3,
+                    pricePrecision: 2,
+                    zoneTicks: 3,
+                    eventCooldownMs: 10000,
+                    minInitialMoveTicks: 1,
+                    confirmationTimeoutMs: 40000,
+                    maxRevisitTicks: 8,
+                    volumeSurgeMultiplier: 2.0,
+                    imbalanceThreshold: 0.3,
+                    institutionalThreshold: 15,
+                    burstDetectionMs: 2000,
+                    sustainedVolumeMs: 20000,
+                    medianTradeSize: 0.8,
+                    maxPassiveRatio: 0.35,
+                    minDepletionFactor: 0.2,
+                    useStandardizedZones: false,
+                    enhancementMode: "disabled" as const,
                 },
                 mockLogger,
                 mockSpoofingDetector,
-                mockMetrics
+                mockMetrics,
+                { logSignal: vi.fn() } as any
             );
 
             expect((detector as any).imbalanceMediumThreshold).toBeLessThan(

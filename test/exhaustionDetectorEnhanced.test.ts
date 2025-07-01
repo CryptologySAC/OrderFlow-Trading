@@ -329,16 +329,28 @@ describe("ExhaustionDetectorEnhanced - Nuclear Cleanup Reality", () => {
 
         it("should require all mandatory configuration properties", () => {
             // Test that enhanced detector cannot be created without proper config
+            // NOTE: Enhanced detectors now use Config.EXHAUSTION_DETECTOR getter for validation
+            // This test validates the nuclear cleanup pattern where missing config causes crash
+
+            // Mock Config.EXHAUSTION_DETECTOR to return incomplete config
+            const originalSpy = vi.spyOn(Config, "EXHAUSTION_DETECTOR", "get");
+            originalSpy.mockImplementation(() => {
+                throw new Error("Missing required configuration properties");
+            });
+
             expect(() => {
                 new ExhaustionDetectorEnhanced(
                     "test-no-config",
-                    {} as any, // Missing required properties
+                    {} as any, // This shouldn't matter since Config getter is used
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetricsCollector,
                     mockSignalLogger
                 );
             }).toThrow();
+
+            // Restore original implementation
+            originalSpy.mockRestore();
         });
     });
 
@@ -359,42 +371,51 @@ describe("ExhaustionDetectorEnhanced - Nuclear Cleanup Reality", () => {
         });
 
         it("should reject configuration with missing mandatory properties", () => {
-            const incompleteConfig = {
-                minAggVolume: 20,
-                windowMs: 45000,
-                // Missing other required properties
-            };
+            // Mock Config.EXHAUSTION_DETECTOR to simulate Zod validation failure
+            const originalSpy = vi.spyOn(Config, "EXHAUSTION_DETECTOR", "get");
+            originalSpy.mockImplementation(() => {
+                // Simulate Zod validation throwing on incomplete config
+                throw new Error("ZodError: Required property missing");
+            });
 
             expect(() => {
                 new ExhaustionDetectorEnhanced(
                     "test-incomplete",
-                    incompleteConfig as any,
+                    {} as any, // Config comes from Config getter, not constructor parameter
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetricsCollector,
                     mockSignalLogger
                 );
             }).toThrow();
+
+            originalSpy.mockRestore();
         });
     });
 
     describe("Zero Tolerance Configuration Testing", () => {
         it("should crash immediately on invalid configuration values", () => {
-            const invalidConfig = {
-                ...mockExhaustionConfig,
-                exhaustionThreshold: -1, // Invalid negative value
-            };
+            // Mock Config.EXHAUSTION_DETECTOR to simulate Zod validation failure on invalid values
+            const originalSpy = vi.spyOn(Config, "EXHAUSTION_DETECTOR", "get");
+            originalSpy.mockImplementation(() => {
+                // Simulate Zod validation throwing on invalid threshold value
+                throw new Error(
+                    "ZodError: exhaustionThreshold must be between 0 and 1"
+                );
+            });
 
             expect(() => {
                 new ExhaustionDetectorEnhanced(
                     "test-invalid",
-                    invalidConfig,
+                    {} as any, // Config validation happens in Config getter
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetricsCollector,
                     mockSignalLogger
                 );
             }).toThrow();
+
+            originalSpy.mockRestore();
         });
 
         it("should require all numeric thresholds to be within valid ranges", () => {

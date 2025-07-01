@@ -138,6 +138,7 @@ import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
+import { Config } from "../src/core/config.js";
 
 describe("AccumulationZoneDetectorEnhanced - Zone Merge Validation", () => {
     let detector: AccumulationZoneDetectorEnhanced;
@@ -147,6 +148,33 @@ describe("AccumulationZoneDetectorEnhanced - Zone Merge Validation", () => {
     beforeEach(() => {
         // Clear all mocks and reset state to prevent test pollution
         vi.clearAllMocks();
+
+        // Mock Config.UNIVERSAL_ZONE_CONFIG to use test-friendly values
+        vi.spyOn(Config, "UNIVERSAL_ZONE_CONFIG", "get").mockReturnValue({
+            maxActiveZones: 10,
+            zoneTimeoutMs: 600000,
+            minZoneVolume: 100, // Reduced from production 500
+            maxZoneWidth: 0.05,
+            minZoneStrength: 0.1,
+            completionThreshold: 0.8,
+            strengthChangeThreshold: 0.15,
+            minCandidateDuration: 60000, // Reduced from production 300000 (5min to 1min)
+            maxPriceDeviation: 0.05,
+            minTradeCount: 3, // Reduced from production 10
+            minBuyRatio: 0.5,
+            minSellRatio: 0.4, // Reduced from production 0.65
+            priceStabilityThreshold: 0.8,
+            strongZoneThreshold: 0.7,
+            weakZoneThreshold: 0.4,
+            minZoneConfluenceCount: 1,
+            maxZoneConfluenceDistance: 3,
+            enableZoneConfluenceFilter: false,
+            enableCrossTimeframeAnalysis: false,
+            confluenceConfidenceBoost: 0.1,
+            crossTimeframeBoost: 0.1,
+            useStandardizedZones: false,
+            enhancementMode: "disabled" as const,
+        });
 
         mockLogger = {
             info: vi.fn(),
@@ -158,6 +186,8 @@ describe("AccumulationZoneDetectorEnhanced - Zone Merge Validation", () => {
                     message.includes("checkForZoneFormation") ||
                     message.includes("Evaluating candidate") ||
                     message.includes("failed") ||
+                    message.includes("rejected") ||
+                    message.includes("insufficient") ||
                     message.includes("Creating zone detection data") ||
                     message.includes("Created new candidate") ||
                     message.includes("About to call") ||
@@ -174,14 +204,32 @@ describe("AccumulationZoneDetectorEnhanced - Zone Merge Validation", () => {
 
         mockMetrics = new MetricsCollector();
 
-        const config: Partial<ZoneDetectorConfig> = {
-            minCandidateDuration: 60000, // 1 minute - reduced for faster testing
-            minZoneVolume: 100, // Reduced from 200 to allow zone formation
-            minTradeCount: 3, // Reduced from 6 to allow reliable zone formation
-            maxPriceDeviation: 0.05, // 5% - more permissive for testing
-            minZoneStrength: 0.05, // VERY LOW: Even lower for test zone formation
-            strengthChangeThreshold: 0.15,
-            minSellRatio: 0.4, // 40% sell ratio - more permissive than 50%
+        const config = {
+            // Core accumulation parameters (complete AccumulationDetectorSchema)
+            useStandardizedZones: false,
+            minDurationMs: 60000, // 1 minute - reduced for faster testing
+            minRatio: 0.5,
+            minRecentActivityMs: 10000,
+            threshold: 0.3,
+            volumeSurgeMultiplier: 2.0,
+            imbalanceThreshold: 0.3,
+            institutionalThreshold: 15,
+            burstDetectionMs: 1500,
+            sustainedVolumeMs: 25000,
+            medianTradeSize: 1.0,
+            enhancementMode: "disabled" as const,
+            minEnhancedConfidenceThreshold: 0.3,
+
+            // Enhancement internal parameters (required by AccumulationDetectorSchema)
+            enhancementCallFrequency: 10,
+            highConfidenceThreshold: 0.8,
+            lowConfidenceThreshold: 0.4,
+            minConfidenceBoostThreshold: 0.05,
+            defaultMinEnhancedConfidenceThreshold: 0.3,
+            confidenceReductionFactor: 0.8,
+            significanceBoostMultiplier: 0.5,
+            neutralBoostReductionFactor: 0.6,
+            enhancementSignificanceBoost: false,
         };
 
         detector = new AccumulationZoneDetectorEnhanced(
@@ -400,7 +448,13 @@ describe("AccumulationZoneDetectorEnhanced - Zone Merge Validation", () => {
                 createTrade(basePrice + 100, baseTime + 265000, true, 60)
             );
 
-            const mergedZone = detector.getActiveZones()[0];
+            const activeZones = detector.getActiveZones();
+            console.log(`🔍 Active zones after merge: ${activeZones.length}`);
+            console.log(`🔍 Candidate count: ${detector.getCandidateCount()}`);
+
+            // Check if zone was actually created
+            expect(activeZones.length).toBeGreaterThan(0);
+            const mergedZone = activeZones[0];
 
             // Validate accumulation characteristics are preserved
             expect(mergedZone.type).toBe("accumulation");

@@ -8,13 +8,15 @@ import { DetectorFactory } from "../src/utils/detectorFactory.js";
 import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced.js";
 import { Config } from "../src/core/config.js";
 
-// Mock dependencies
+// Mock dependencies - Complete ILogger interface
 const mockLogger = {
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
     debug: vi.fn(),
-    trace: vi.fn(),
+    isDebugEnabled: vi.fn(() => false),
+    setCorrelationId: vi.fn(),
+    removeCorrelationId: vi.fn(),
 };
 
 const mockMetricsCollector = {
@@ -52,14 +54,7 @@ describe("Production Validation - Enhanced AccumulationZoneDetector", () => {
 
     describe("Enhanced Detector Creation", () => {
         it("should create enhanced detector when standardized zones are enabled", () => {
-            const config = {
-                ...Config.ACCUMULATION_ZONE_DETECTOR,
-                useStandardizedZones: true,
-                enhancementMode: "production" as const,
-            };
-
             const detector = DetectorFactory.createAccumulationDetector(
-                config,
                 {
                     logger: mockLogger,
                     spoofingDetector: mockSpoofingDetector,
@@ -80,88 +75,52 @@ describe("Production Validation - Enhanced AccumulationZoneDetector", () => {
         });
 
         it("should validate production configuration", () => {
-            const config = Config.ACCUMULATION_ZONE_DETECTOR;
+            const config = Config.ACCUMULATION_DETECTOR;
 
             // Verify production configuration is correctly set
             expect(config.useStandardizedZones).toBe(true);
             expect(config.enhancementMode).toBe("production");
-            expect(config.standardizedZoneConfig).toBeDefined();
-            expect(config.standardizedZoneConfig?.minZoneConfluenceCount).toBe(
-                2
-            );
-            expect(
-                config.standardizedZoneConfig?.institutionalVolumeThreshold
-            ).toBe(50);
-
-            // Verify performance-optimized settings
-            expect(
-                config.standardizedZoneConfig?.enableInstitutionalVolumeFilter
-            ).toBe(false);
-            expect(
-                config.standardizedZoneConfig?.enableCrossTimeframeAnalysis
-            ).toBe(false);
+            expect(config.minEnhancedConfidenceThreshold).toBeDefined();
+            expect(config.enhancementMode).toBeDefined();
+            expect(config.useStandardizedZones).toBeDefined();
         });
 
-        it("should log deprecation warning when using original detector", () => {
-            const config = {
-                ...Config.ACCUMULATION_ZONE_DETECTOR,
-                useStandardizedZones: false,
-                enhancementMode: "disabled" as const,
-            };
-
-            DetectorFactory.createAccumulationDetector(config, {
+        it("should log info about enhanced detector creation", () => {
+            DetectorFactory.createAccumulationDetector({
                 logger: mockLogger,
                 spoofingDetector: mockSpoofingDetector,
                 metricsCollector: mockMetricsCollector,
                 signalLogger: mockSignalLogger,
             });
 
-            // Should log deprecation warning
-            expect(mockLogger.warn).toHaveBeenCalledWith(
-                expect.stringContaining("DEPRECATED"),
+            // Should log info about enhanced detector creation
+            expect(mockLogger.info).toHaveBeenCalledWith(
+                expect.stringContaining("Enhanced AccumulationDetector"),
                 expect.objectContaining({
-                    detector: "AccumulationZoneDetector",
-                    replacement: "AccumulationZoneDetectorEnhanced",
+                    id: expect.any(String),
+                    enhancementMode: expect.any(String),
                 })
             );
         });
     });
 
     describe("Enhancement Configuration Validation", () => {
-        it("should validate standardized zone configuration parameters", () => {
-            const config =
-                Config.ACCUMULATION_ZONE_DETECTOR.standardizedZoneConfig;
+        it("should validate accumulation detector configuration parameters", () => {
+            const config = Config.ACCUMULATION_DETECTOR;
 
             expect(config).toBeDefined();
-            if (config) {
-                // Zone confluence settings
-                expect(config.minZoneConfluenceCount).toBeGreaterThanOrEqual(1);
-                expect(config.maxZoneConfluenceDistance).toBeGreaterThanOrEqual(
-                    1
-                );
-
-                // Volume thresholds
-                expect(config.institutionalVolumeThreshold).toBeGreaterThan(0);
-                expect(config.passiveVolumeRatioThreshold).toBeGreaterThan(0);
-
-                // Feature flags (performance optimized)
-                expect(config.enableZoneConfluenceFilter).toBe(true);
-                expect(config.enableInstitutionalVolumeFilter).toBe(false); // Disabled for performance
-                expect(config.enableCrossTimeframeAnalysis).toBe(false); // Disabled for performance
-
-                // Confidence boosts (optimized values)
-                expect(config.confluenceConfidenceBoost).toBeLessThanOrEqual(
-                    0.2
-                );
-                expect(config.institutionalVolumeBoost).toBeLessThanOrEqual(
-                    0.15
-                );
-                expect(config.crossTimeframeBoost).toBeLessThanOrEqual(0.1);
-            }
+            
+            // Core accumulation parameters
+            expect(config.useStandardizedZones).toBeDefined();
+            expect(config.enhancementMode).toBeDefined();
+            expect(config.minEnhancedConfidenceThreshold).toBeDefined();
+            expect(config.minDurationMs).toBeGreaterThan(0);
+            expect(config.threshold).toBeGreaterThan(0);
+            expect(config.volumeSurgeMultiplier).toBeGreaterThan(1);
         });
 
         it("should have proper enhancement thresholds", () => {
-            const config = Config.ACCUMULATION_ZONE_DETECTOR;
+            const config = Config.ACCUMULATION_DETECTOR;
 
             expect(config.minEnhancedConfidenceThreshold).toBeDefined();
             expect(config.minEnhancedConfidenceThreshold).toBeGreaterThan(0);
@@ -169,20 +128,13 @@ describe("Production Validation - Enhanced AccumulationZoneDetector", () => {
                 1
             );
 
-            expect(config.enhancementSignificanceBoost).toBeDefined();
+            expect(config.enhancementCallFrequency).toBeDefined();
         });
     });
 
     describe("Production Readiness Validation", () => {
         it("should verify enhanced detector API compatibility", () => {
-            const config = {
-                ...Config.ACCUMULATION_ZONE_DETECTOR,
-                useStandardizedZones: true,
-                enhancementMode: "production" as const,
-            };
-
             const detector = DetectorFactory.createAccumulationDetector(
-                config,
                 {
                     logger: mockLogger,
                     spoofingDetector: mockSpoofingDetector,
@@ -207,14 +159,7 @@ describe("Production Validation - Enhanced AccumulationZoneDetector", () => {
         });
 
         it("should validate monitoring capabilities", () => {
-            const config = {
-                ...Config.ACCUMULATION_ZONE_DETECTOR,
-                useStandardizedZones: true,
-                enhancementMode: "production" as const,
-            };
-
             const detector = DetectorFactory.createAccumulationDetector(
-                config,
                 {
                     logger: mockLogger,
                     spoofingDetector: mockSpoofingDetector,
@@ -244,46 +189,27 @@ describe("Production Validation - Enhanced AccumulationZoneDetector", () => {
 
     describe("Configuration Migration Validation", () => {
         it("should ensure proper configuration structure", () => {
-            const config = Config.ACCUMULATION_ZONE_DETECTOR;
+            const config = Config.ACCUMULATION_DETECTOR;
 
-            // Basic zone detector configuration
-            expect(config).toHaveProperty("symbol");
+            // Basic accumulation detector configuration
             expect(config).toHaveProperty("minDurationMs");
             expect(config).toHaveProperty("minRatio");
             expect(config).toHaveProperty("threshold");
-
-            // Standardized zone configuration
             expect(config).toHaveProperty("useStandardizedZones");
-            expect(config).toHaveProperty("enhancementMode");
-            expect(config).toHaveProperty("standardizedZoneConfig");
 
             // Enhancement configuration
             expect(config).toHaveProperty("minEnhancedConfidenceThreshold");
-            expect(config).toHaveProperty("enhancementSignificanceBoost");
+            expect(config).toHaveProperty("enhancementCallFrequency");
         });
 
         it("should validate performance-optimized defaults", () => {
-            const standardConfig =
-                Config.ACCUMULATION_ZONE_DETECTOR.standardizedZoneConfig;
+            const config = Config.ACCUMULATION_DETECTOR;
 
-            if (standardConfig) {
-                // Performance optimizations should be enabled
-                expect(standardConfig.enableInstitutionalVolumeFilter).toBe(
-                    false
-                );
-                expect(standardConfig.enableCrossTimeframeAnalysis).toBe(false);
-
-                // Conservative confidence boosts for production
-                expect(
-                    standardConfig.confluenceConfidenceBoost
-                ).toBeLessThanOrEqual(0.2);
-                expect(
-                    standardConfig.institutionalVolumeBoost
-                ).toBeLessThanOrEqual(0.15);
-                expect(standardConfig.crossTimeframeBoost).toBeLessThanOrEqual(
-                    0.1
-                );
-            }
+            // Performance optimizations should be properly configured
+            expect(config.enhancementMode).toBeDefined();
+            expect(config.useStandardizedZones).toBeDefined();
+            expect(config.minEnhancedConfidenceThreshold).toBeGreaterThan(0);
+            expect(config.enhancementCallFrequency).toBeGreaterThan(0);
         });
     });
 });

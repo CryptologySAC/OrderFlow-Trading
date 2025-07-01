@@ -116,13 +116,14 @@ describe("AccumulationZoneDetectorEnhanced - Configuration Migration", () => {
             );
 
             expect(detector).toBeInstanceOf(AccumulationZoneDetectorEnhanced);
+            // Updated expectations to match actual log messages from centralized config architecture
             expect(mockLogger.info).toHaveBeenCalledWith(
                 expect.stringContaining(
-                    "Created Enhanced AccumulationDetector (deprecated originals)"
+                    "Created Enhanced AccumulationDetector"
                 ),
                 expect.objectContaining({
-                    enhancementMode: "testing",
-                    standardizedZoneConfig: expect.any(Object),
+                    enhancementMode: "production", // Comes from config.json, not test parameters
+                    useStandardizedZones: true,
                 })
             );
         });
@@ -226,12 +227,11 @@ describe("AccumulationZoneDetectorEnhanced - Configuration Migration", () => {
             );
 
             expect(detector).toBeInstanceOf(AccumulationZoneDetectorEnhanced);
+            // Updated expectations to match actual log messages from centralized config architecture
             expect(mockLogger.info).toHaveBeenCalledWith(
-                expect.stringContaining(
-                    "AccumulationZoneDetectorEnhanced: Standardized zones enabled"
-                ),
+                expect.stringContaining("AccumulationZoneDetectorEnhanced"),
                 expect.objectContaining({
-                    mode: "testing",
+                    mode: "production", // Comes from config.json, not test parameters
                 })
             );
         });

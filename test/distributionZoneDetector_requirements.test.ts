@@ -8,6 +8,7 @@ import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
+import { Config } from "../src/core/config.js";
 
 describe("DistributionDetectorEnhanced - Production Requirements Validation", () => {
     let detector: DistributionDetectorEnhanced;
@@ -15,6 +16,33 @@ describe("DistributionDetectorEnhanced - Production Requirements Validation", ()
     let mockMetrics: IMetricsCollector;
 
     beforeEach(async () => {
+        // Mock Config.UNIVERSAL_ZONE_CONFIG to use test-friendly values
+        vi.spyOn(Config, "UNIVERSAL_ZONE_CONFIG", "get").mockReturnValue({
+            maxActiveZones: 10,
+            zoneTimeoutMs: 600000,
+            minZoneVolume: 200, // Test-friendly value
+            maxZoneWidth: 0.05,
+            minZoneStrength: 0.1,
+            completionThreshold: 0.8,
+            strengthChangeThreshold: 0.15,
+            minCandidateDuration: 30000, // 30 seconds for fast testing
+            maxPriceDeviation: 0.05,
+            minTradeCount: 6, // Test-friendly value
+            minBuyRatio: 0.65, // For distribution (inverted from accumulation)
+            minSellRatio: 0.5, // Reduced for testing
+            priceStabilityThreshold: 0.8,
+            strongZoneThreshold: 0.7,
+            weakZoneThreshold: 0.4,
+            minZoneConfluenceCount: 1,
+            maxZoneConfluenceDistance: 3,
+            enableZoneConfluenceFilter: false,
+            enableCrossTimeframeAnalysis: false,
+            confluenceConfidenceBoost: 0.1,
+            crossTimeframeBoost: 0.1,
+            useStandardizedZones: false,
+            enhancementMode: "disabled" as const,
+        });
+
         mockLogger = {
             info: vi
                 .fn()
@@ -472,11 +500,11 @@ describe("DistributionDetectorEnhanced - Production Requirements Validation", ()
                 strictDetector.analyze(trade);
             });
 
-            // Try to form zone after 2+ minutes (less than required 3 minutes)
+            // Try to form zone after insufficient duration (less than 30 seconds required by mock)
             const earlyFormation: EnrichedTradeEvent = {
                 price: basePrice,
                 quantity: 40,
-                timestamp: baseTime + 150000, // 2.5 minutes (less than 3 minutes required)
+                timestamp: baseTime + 20000, // 20 seconds (less than 30 seconds required by universal config mock)
                 buyerIsMaker: false,
                 pair: "BTCUSDT",
                 tradeId: "strict_formation",
@@ -489,7 +517,7 @@ describe("DistributionDetectorEnhanced - Production Requirements Validation", ()
 
             strictDetector.analyze(earlyFormation);
 
-            // Should NOT form zone due to strict requirements
+            // Should NOT form zone due to insufficient duration (< 30s)
             const zones = strictDetector.getActiveZones();
             expect(zones.length).toBe(0);
 

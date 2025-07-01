@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock dependencies
 vi.mock("../src/multithreading/workerLogger");
 
+import { Config } from "../src/core/config.js";
 import { DistributionDetectorEnhanced } from "../src/indicators/distributionDetectorEnhanced.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
@@ -15,6 +16,33 @@ describe("DistributionDetectorEnhanced - Real Distribution Scenarios", () => {
     let mockMetrics: IMetricsCollector;
 
     beforeEach(async () => {
+        // Mock Config.UNIVERSAL_ZONE_CONFIG to use test-friendly values
+        vi.spyOn(Config, "UNIVERSAL_ZONE_CONFIG", "get").mockReturnValue({
+            maxActiveZones: 10,
+            zoneTimeoutMs: 600000,
+            minZoneVolume: 150, // Test-friendly value
+            maxZoneWidth: 0.05,
+            minZoneStrength: 0.1,
+            completionThreshold: 0.8,
+            strengthChangeThreshold: 0.15,
+            minCandidateDuration: 25000, // 25 seconds for fast testing
+            maxPriceDeviation: 0.05,
+            minTradeCount: 5, // Test-friendly value
+            minBuyRatio: 0.6, // For distribution (buying pressure for selling into)
+            minSellRatio: 0.5, // Reduced for testing
+            priceStabilityThreshold: 0.8,
+            strongZoneThreshold: 0.7,
+            weakZoneThreshold: 0.4,
+            minZoneConfluenceCount: 1,
+            maxZoneConfluenceDistance: 3,
+            enableZoneConfluenceFilter: false,
+            enableCrossTimeframeAnalysis: false,
+            confluenceConfidenceBoost: 0.1,
+            crossTimeframeBoost: 0.1,
+            useStandardizedZones: false,
+            enhancementMode: "disabled" as const,
+        });
+
         mockLogger = {
             info: vi.fn(),
             warn: vi.fn(),

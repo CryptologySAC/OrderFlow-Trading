@@ -345,8 +345,28 @@ export const AccumulationDetectorSchema = z.object({
     enhancementSignificanceBoost: z.boolean(),
 });
 
-// DISTRIBUTION detector - ONLY distribution-specific logic
+// DISTRIBUTION detector - Core zone properties + distribution-specific logic
 export const DistributionDetectorSchema = z.object({
+    // Core zone detector properties (inherited from DistributionZoneDetector requirements)
+    minCandidateDuration: z.number().int().min(30000).max(1800000),
+    maxPriceDeviation: z.number().min(0.005).max(0.1),
+    minTradeCount: z.number().int().min(3).max(100),
+    minBuyRatio: z.number().min(0.3).max(0.8),
+    minSellRatio: z.number().min(0.3).max(0.8),
+    minZoneVolume: z.number().min(10).max(10000),
+    minZoneStrength: z.number().min(0.1).max(1.0),
+    priceStabilityThreshold: z.number().min(0.7).max(0.99),
+    strongZoneThreshold: z.number().min(0.5).max(0.9),
+    weakZoneThreshold: z.number().min(0.2).max(0.6),
+
+    // Volume analysis properties (inherited from DistributionZoneDetector requirements)
+    volumeSurgeMultiplier: z.number().min(1.5).max(10.0),
+    imbalanceThreshold: z.number().min(0.1).max(0.7),
+    institutionalThreshold: z.number().min(5).max(200),
+    burstDetectionMs: z.number().int().min(500).max(10000),
+    sustainedVolumeMs: z.number().int().min(10000).max(300000),
+    medianTradeSize: z.number().min(0.1).max(50),
+
     // Distribution-specific selling pressure
     sellingPressureVolumeThreshold: z.number().min(10).max(1000),
     sellingPressureRatioThreshold: z.number().min(0.5).max(0.9),
@@ -1077,6 +1097,15 @@ export class Config {
         return SYMBOL_CFG.distribution;
     }
 
+    // Distribution detector with schema validation
+    static get DISTRIBUTION_DETECTOR() {
+        return this.validateDetectorConfig(
+            DistributionDetectorSchema,
+            SYMBOL_CFG.distribution,
+            "DISTRIBUTION_DETECTOR"
+        );
+    }
+
     // 🚨 NUCLEAR CLEANUP: Zero tolerance configuration validation helpers
     private static validateDetectorConfig<T>(
         schema: z.ZodSchema<T>,
@@ -1091,7 +1120,9 @@ export class Config {
             console.error(`🚨 CRITICAL CONFIG ERROR - ${detectorName}`);
             console.error("Missing mandatory configuration properties:");
             console.error(error);
-            console.error("Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT");
+            console.error(
+                "Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT"
+            );
             process.exit(1);
         }
     }
