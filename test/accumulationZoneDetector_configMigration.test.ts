@@ -77,8 +77,9 @@ describe("AccumulationZoneDetectorEnhanced - Configuration Migration", () => {
 
             // Factory always returns enhanced detector (originals are deprecated)
             expect(detector).toBeInstanceOf(AccumulationZoneDetectorEnhanced);
-            // Verify enhancement is properly disabled
-            expect((detector as any).useStandardizedZones).toBe(false);
+            // ARCHITECTURE CHANGE: Configuration now comes from Config.ACCUMULATION_DETECTOR
+            // Settings are no longer configurable per instance - they come from config.json
+            expect((detector as any).useStandardizedZones).toBe(true); // From config.json
             expect(mockLogger.info).toHaveBeenCalledWith(
                 expect.stringContaining(
                     "Created Enhanced AccumulationDetector (deprecated originals)"
@@ -150,8 +151,8 @@ describe("AccumulationZoneDetectorEnhanced - Configuration Migration", () => {
 
             // Factory always returns enhanced detector (originals are deprecated)
             expect(detector).toBeInstanceOf(AccumulationZoneDetectorEnhanced);
-            // Verify enhancement is properly disabled
-            expect((detector as any).useStandardizedZones).toBe(false);
+            // ARCHITECTURE CHANGE: Configuration comes from config.json, not test parameters
+            expect((detector as any).useStandardizedZones).toBe(true); // From config.json
         });
     });
 
