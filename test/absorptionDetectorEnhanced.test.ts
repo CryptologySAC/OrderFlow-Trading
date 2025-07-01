@@ -271,19 +271,20 @@ describe("AbsorptionDetectorEnhanced - Nuclear Cleanup Reality", () => {
     });
 
     describe("Configuration Validation", () => {
-        it("should require all mandatory configuration properties", () => {
-            // Test that enhanced detector cannot be created without proper config
+        it("should trust pre-validated configuration from Config getters", () => {
+            // ARCHITECTURE: Validation now happens in config.ts before detector creation
+            // Detectors trust that settings are already validated
             expect(() => {
                 new AbsorptionDetectorEnhanced(
-                    "test-no-config",
-                    {} as any, // Missing required properties
+                    "test-validated-config",
+                    mockAbsorptionConfig, // Pre-validated settings should work
                     mockOrderBook,
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetricsCollector,
                     mockSignalLogger
                 );
-            }).toThrow();
+            }).not.toThrow();
         });
 
         it("should validate all required threshold properties", () => {
@@ -301,24 +302,20 @@ describe("AbsorptionDetectorEnhanced - Nuclear Cleanup Reality", () => {
             expect(mockAbsorptionConfig.enhancementMode).toBe("production");
         });
 
-        it("should reject configuration with missing mandatory properties", () => {
-            const incompleteConfig = {
-                minAggVolume: 175,
-                windowMs: 60000,
-                // Missing other required properties
-            };
-
+        it("should successfully create detector with complete configuration", () => {
+            // ARCHITECTURE: Config validation happens in config.ts, detectors trust pre-validated settings
+            // Test that detector can be created when given complete configuration
             expect(() => {
                 new AbsorptionDetectorEnhanced(
-                    "test-incomplete",
-                    incompleteConfig as any,
+                    "test-complete",
+                    mockAbsorptionConfig, // Complete validated configuration
                     mockOrderBook,
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetricsCollector,
                     mockSignalLogger
                 );
-            }).toThrow();
+            }).not.toThrow();
         });
 
         it("should not allow optional properties in configuration", () => {

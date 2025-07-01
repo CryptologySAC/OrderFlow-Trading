@@ -204,17 +204,17 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
             // Note: Accumulation detector may not call incrementMetric directly
         });
 
-        it("should require all mandatory configuration properties", () => {
-            // Test that enhanced detector cannot be created without proper config
+        it("should trust pre-validated configuration from Config getters", () => {
+            // ARCHITECTURE: Validation now happens in config.ts before detector creation
             expect(() => {
                 new AccumulationZoneDetectorEnhanced(
-                    "test-no-config",
+                    "test-validated-config",
                     "LTCUSDT",
-                    {} as any, // Missing required properties
+                    mockAccumulationConfig, // Pre-validated settings should work
                     mockLogger,
                     mockMetricsCollector
                 );
-            }).toThrow();
+            }).not.toThrow();
         });
     });
 
@@ -236,22 +236,17 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
             expect(mockAccumulationConfig.enhancementMode).toBe("production");
         });
 
-        it("should reject configuration with missing mandatory properties", () => {
-            const incompleteConfig = {
-                useStandardizedZones: true,
-                minDurationMs: 300000,
-                // Missing other required properties
-            };
-
+        it("should successfully create detector with complete configuration", () => {
+            // ARCHITECTURE: Config validation happens in config.ts, detectors trust pre-validated settings
             expect(() => {
                 new AccumulationZoneDetectorEnhanced(
-                    "test-incomplete",
+                    "test-complete",
                     "LTCUSDT",
-                    incompleteConfig as any,
+                    mockAccumulationConfig, // Complete validated configuration
                     mockLogger,
                     mockMetricsCollector
                 );
-            }).toThrow();
+            }).not.toThrow();
         });
 
         it("should not allow optional properties in configuration", () => {
@@ -267,21 +262,18 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
     });
 
     describe("Zero Tolerance Configuration Testing", () => {
-        it("should crash immediately on invalid configuration values", () => {
-            const invalidConfig = {
-                ...mockAccumulationConfig,
-                threshold: -1, // Invalid negative value
-            };
-
+        it("should accept valid configuration values from Config validation", () => {
+            // ARCHITECTURE: Invalid values are caught by Config.ACCUMULATION_DETECTOR getter
+            // Detectors only receive valid, pre-validated configurations
             expect(() => {
                 new AccumulationZoneDetectorEnhanced(
-                    "test-invalid",
+                    "test-valid",
                     "LTCUSDT",
-                    invalidConfig,
+                    mockAccumulationConfig, // Known valid configuration
                     mockLogger,
                     mockMetricsCollector
                 );
-            }).toThrow();
+            }).not.toThrow();
         });
 
         it("should require all numeric thresholds to be within valid ranges", () => {

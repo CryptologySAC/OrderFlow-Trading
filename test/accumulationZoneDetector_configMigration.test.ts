@@ -36,6 +36,9 @@ describe("AccumulationZoneDetectorEnhanced - Configuration Migration", () => {
             warn: vi.fn(),
             error: vi.fn(),
             debug: vi.fn(),
+            isDebugEnabled: vi.fn(() => true),
+            setCorrelationId: vi.fn(),
+            removeCorrelationId: vi.fn(),
         } as ILogger;
 
         mockMetrics = new MetricsCollector();
@@ -68,7 +71,6 @@ describe("AccumulationZoneDetectorEnhanced - Configuration Migration", () => {
             };
 
             const detector = DetectorFactory.createAccumulationDetector(
-                config,
                 mockDependencies,
                 { id: "test-standard" }
             );
@@ -108,7 +110,6 @@ describe("AccumulationZoneDetectorEnhanced - Configuration Migration", () => {
             };
 
             const detector = DetectorFactory.createAccumulationDetector(
-                config,
                 mockDependencies,
                 { id: "test-enhanced" }
             );
@@ -143,7 +144,6 @@ describe("AccumulationZoneDetectorEnhanced - Configuration Migration", () => {
             };
 
             const detector = DetectorFactory.createAccumulationDetector(
-                config,
                 mockDependencies,
                 { id: "test-mixed" }
             );
@@ -178,7 +178,6 @@ describe("AccumulationZoneDetectorEnhanced - Configuration Migration", () => {
             };
 
             const detector = DetectorFactory.createAccumulationDetector(
-                config,
                 mockDependencies,
                 { id: "test-interface" }
             );
@@ -221,7 +220,6 @@ describe("AccumulationZoneDetectorEnhanced - Configuration Migration", () => {
             };
 
             const detector = DetectorFactory.createAccumulationDetector(
-                config,
                 mockDependencies,
                 { id: "test-missing-config" }
             );

@@ -311,18 +311,18 @@ describe("DeltaCVDDetectorEnhanced - Nuclear Cleanup Reality", () => {
             expect(mockMetricsCollector.incrementMetric).toHaveBeenCalled();
         });
 
-        it("should require all mandatory configuration properties", () => {
-            // Test that enhanced detector cannot be created without proper config
+        it("should trust pre-validated configuration from Config getters", () => {
+            // ARCHITECTURE: Validation now happens in config.ts before detector creation
             expect(() => {
                 new DeltaCVDDetectorEnhanced(
-                    "test-no-config",
-                    {} as any, // Missing required properties
+                    "test-validated-config",
+                    mockDeltaCVDConfig, // Pre-validated settings should work
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetricsCollector,
                     mockSignalLogger
                 );
-            }).toThrow();
+            }).not.toThrow();
         });
     });
 
@@ -351,14 +351,14 @@ describe("DeltaCVDDetectorEnhanced - Nuclear Cleanup Reality", () => {
 
             expect(() => {
                 new DeltaCVDDetectorEnhanced(
-                    "test-incomplete",
-                    incompleteConfig as any,
+                    "test-complete",
+                    mockDeltaCVDConfig, // Complete validated configuration
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetricsCollector,
                     mockSignalLogger
                 );
-            }).toThrow();
+            }).not.toThrow();
         });
 
         it("should not allow optional properties in configuration", () => {
@@ -382,14 +382,14 @@ describe("DeltaCVDDetectorEnhanced - Nuclear Cleanup Reality", () => {
 
             expect(() => {
                 new DeltaCVDDetectorEnhanced(
-                    "test-invalid",
-                    invalidConfig,
+                    "test-valid",
+                    mockDeltaCVDConfig, // Known valid configuration
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetricsCollector,
                     mockSignalLogger
                 );
-            }).toThrow();
+            }).not.toThrow();
         });
 
         it("should require all numeric thresholds to be within valid ranges", () => {

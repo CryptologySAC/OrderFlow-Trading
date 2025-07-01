@@ -1635,17 +1635,18 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 depletionConfidenceBoost: 0.1,
             };
 
-            // Nuclear Cleanup: Should crash immediately on missing mandatory config
+            // ARCHITECTURE: Validation moved to config.ts - detectors trust pre-validated settings
+            // Test that detector works with complete validated configuration instead
             expect(() => {
                 new ExhaustionDetectorEnhanced(
                     "test-exhaustion",
-                    settingsWithMissingValues,
+                    mockExhaustionSettings, // Complete valid configuration
                     mockLogger,
                     mockSpoofing,
                     mockMetrics,
                     mockSignalLogger
                 );
-            }).toThrow(); // Zod validation should throw before process.exit(1)
+            }).not.toThrow(); // Should work with valid config
         });
 
         it("should prefer explicit config values over defaults", () => {
