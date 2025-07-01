@@ -378,7 +378,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             console.log("Real Exhaustion Config:", exhaustionConfig);
 
-            const settings: ExhaustionSettings = {
+            const settings: ExhaustionEnhancedSettings = {
                 symbol: "LTCUSDT",
                 ...exhaustionConfig,
             };
@@ -418,7 +418,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
         it("should process real market data and show blocking reasons", () => {
             const exhaustionConfig = realConfig.symbols.LTCUSDT.exhaustion;
 
-            const settings: ExhaustionSettings = {
+            const settings: ExhaustionEnhancedSettings = {
                 symbol: "LTCUSDT",
                 ...exhaustionConfig,
             };
@@ -476,7 +476,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             console.log("Real Absorption Config:", absorptionConfig);
 
-            const settings: AbsorptionSettings = {
+            const settings: AbsorptionEnhancedSettings = {
                 symbol: "LTCUSDT",
                 ...absorptionConfig,
             };
@@ -514,7 +514,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
         it("should process real market data and analyze signal direction", () => {
             const absorptionConfig = realConfig.symbols.LTCUSDT.absorption;
 
-            const settings: AbsorptionSettings = {
+            const settings: AbsorptionEnhancedSettings = {
                 symbol: "LTCUSDT",
                 ...absorptionConfig,
             };
@@ -571,14 +571,82 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             console.log("Real DeltaCVD Config:", deltaCVDConfig);
 
-            const settings: DeltaCVDEnhancedSettings = {
-                symbol: "LTCUSDT",
+            const completeDeltaCVDSettings: DeltaCVDEnhancedSettings = {
+                // Core CVD analysis (12 properties)
+                windowsSec: [60, 300],
+                minZ: 0.4,
+                priceCorrelationWeight: 0.3,
+                volumeConcentrationWeight: 0.2,
+                adaptiveThresholdMultiplier: 0.7,
+                eventCooldownMs: 15000,
+                minTradesPerSec: 0.1,
+                minVolPerSec: 0.5,
+                minSamplesForStats: 15,
+                pricePrecision: 2,
+                volatilityLookbackSec: 3600,
+                maxDivergenceAllowed: 0.5,
+                stateCleanupIntervalSec: 300,
+                dynamicThresholds: true,
+                logDebug: true,
+
+                // Volume and detection parameters (15 properties)
+                volumeSurgeMultiplier: 2.5,
+                imbalanceThreshold: 0.15,
+                institutionalThreshold: 17.8,
+                burstDetectionMs: 1000,
+                sustainedVolumeMs: 30000,
+                medianTradeSize: 0.6,
+                detectionMode: "momentum" as const,
+                divergenceThreshold: 0.3,
+                divergenceLookbackSec: 60,
+                enableDepthAnalysis: false,
+                usePassiveVolume: true,
+                maxOrderbookAge: 5000,
+                absorptionCVDThreshold: 75,
+                absorptionPriceThreshold: 0.1,
+                imbalanceWeight: 0.2,
+                icebergMinRefills: 3,
+                icebergMinSize: 20,
+                baseConfidenceRequired: 0.2,
+                finalConfidenceRequired: 0.35,
+                strongCorrelationThreshold: 0.7,
+                weakCorrelationThreshold: 0.3,
+                depthImbalanceThreshold: 0.2,
+
+                // Enhancement control (3 properties)
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Enhanced CVD analysis (6 properties)
+                cvdDivergenceVolumeThreshold: 50,
+                cvdDivergenceStrengthThreshold: 0.7,
+                cvdSignificantImbalanceThreshold: 0.3,
+                cvdDivergenceScoreMultiplier: 1.5,
+                alignmentMinimumThreshold: 0.5,
+                momentumScoreMultiplier: 2,
+                enableCVDDivergenceAnalysis: true,
+                enableMomentumAlignment: false,
+                divergenceConfidenceBoost: 0.12,
+                momentumAlignmentBoost: 0.08,
+
+                // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
+                minTradesForAnalysis: 20,
+                minVolumeRatio: 0.1,
+                maxVolumeRatio: 5.0,
+                priceChangeThreshold: 0.001,
+                minZScoreBound: -20,
+                maxZScoreBound: 20,
+                minCorrelationBound: -0.999,
+                maxCorrelationBound: 0.999,
+
+                // Override with actual config if available
                 ...deltaCVDConfig,
             };
 
             const detector = new DeltaCVDDetectorEnhanced(
                 "debug-deltacvd",
-                settings,
+                completeDeltaCVDSettings,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -612,14 +680,82 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
             const deltaCVDConfig =
                 realConfig.symbols.LTCUSDT.deltaCvdConfirmation;
 
-            const settings: DeltaCVDEnhancedSettings = {
-                symbol: "LTCUSDT",
+            const completeDeltaCVDSettings: DeltaCVDEnhancedSettings = {
+                // Core CVD analysis (12 properties)
+                windowsSec: [60, 300],
+                minZ: 0.4,
+                priceCorrelationWeight: 0.3,
+                volumeConcentrationWeight: 0.2,
+                adaptiveThresholdMultiplier: 0.7,
+                eventCooldownMs: 15000,
+                minTradesPerSec: 0.1,
+                minVolPerSec: 0.5,
+                minSamplesForStats: 15,
+                pricePrecision: 2,
+                volatilityLookbackSec: 3600,
+                maxDivergenceAllowed: 0.5,
+                stateCleanupIntervalSec: 300,
+                dynamicThresholds: true,
+                logDebug: true,
+
+                // Volume and detection parameters (15 properties)
+                volumeSurgeMultiplier: 2.5,
+                imbalanceThreshold: 0.15,
+                institutionalThreshold: 17.8,
+                burstDetectionMs: 1000,
+                sustainedVolumeMs: 30000,
+                medianTradeSize: 0.6,
+                detectionMode: "momentum" as const,
+                divergenceThreshold: 0.3,
+                divergenceLookbackSec: 60,
+                enableDepthAnalysis: false,
+                usePassiveVolume: true,
+                maxOrderbookAge: 5000,
+                absorptionCVDThreshold: 75,
+                absorptionPriceThreshold: 0.1,
+                imbalanceWeight: 0.2,
+                icebergMinRefills: 3,
+                icebergMinSize: 20,
+                baseConfidenceRequired: 0.2,
+                finalConfidenceRequired: 0.35,
+                strongCorrelationThreshold: 0.7,
+                weakCorrelationThreshold: 0.3,
+                depthImbalanceThreshold: 0.2,
+
+                // Enhancement control (3 properties)
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Enhanced CVD analysis (6 properties)
+                cvdDivergenceVolumeThreshold: 50,
+                cvdDivergenceStrengthThreshold: 0.7,
+                cvdSignificantImbalanceThreshold: 0.3,
+                cvdDivergenceScoreMultiplier: 1.5,
+                alignmentMinimumThreshold: 0.5,
+                momentumScoreMultiplier: 2,
+                enableCVDDivergenceAnalysis: true,
+                enableMomentumAlignment: false,
+                divergenceConfidenceBoost: 0.12,
+                momentumAlignmentBoost: 0.08,
+
+                // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
+                minTradesForAnalysis: 20,
+                minVolumeRatio: 0.1,
+                maxVolumeRatio: 5.0,
+                priceChangeThreshold: 0.001,
+                minZScoreBound: -20,
+                maxZScoreBound: 20,
+                minCorrelationBound: -0.999,
+                maxCorrelationBound: 0.999,
+
+                // Override with actual config if available
                 ...deltaCVDConfig,
             };
 
             const detector = new DeltaCVDDetectorEnhanced(
                 "debug-deltacvd",
-                settings,
+                completeDeltaCVDSettings,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -662,9 +798,100 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
             const config = realConfig.symbols.LTCUSDT;
 
             // Create all detectors with real config
+            const completeExhaustionSettings: ExhaustionEnhancedSettings = {
+                // Base detector settings
+                minAggVolume: 20,
+                windowMs: 45000,
+                pricePrecision: 2,
+                zoneTicks: 3,
+                eventCooldownMs: 10000,
+                minInitialMoveTicks: 1,
+                confirmationTimeoutMs: 40000,
+                maxRevisitTicks: 8,
+
+                // Exhaustion-specific thresholds
+                volumeSurgeMultiplier: 2.0,
+                imbalanceThreshold: 0.3,
+                institutionalThreshold: 15,
+                burstDetectionMs: 2000,
+                sustainedVolumeMs: 20000,
+                medianTradeSize: 0.8,
+                exhaustionThreshold: 0.3,
+                maxPassiveRatio: 0.35,
+                minDepletionFactor: 0.2,
+                imbalanceHighThreshold: 0.75,
+                imbalanceMediumThreshold: 0.55,
+                spreadHighThreshold: 0.004,
+                spreadMediumThreshold: 0.0015,
+
+                // Scoring weights
+                scoringWeights: {
+                    depletion: 0.45,
+                    passive: 0.3,
+                    continuity: 0.12,
+                    imbalance: 0.08,
+                    spread: 0.04,
+                    velocity: 0.01,
+                },
+
+                // Quality and performance settings
+                depletionThresholdRatio: 0.15,
+                significantChangeThreshold: 0.08,
+                highQualitySampleCount: 6,
+                highQualityDataAge: 35000,
+                mediumQualitySampleCount: 3,
+                mediumQualityDataAge: 70000,
+                circuitBreakerMaxErrors: 8,
+                circuitBreakerWindowMs: 90000,
+
+                // Confidence adjustments
+                lowScoreConfidenceAdjustment: 0.7,
+                lowVolumeConfidenceAdjustment: 0.8,
+                invalidSurgeConfidenceAdjustment: 0.8,
+                passiveConsistencyThreshold: 0.7,
+                imbalanceNeutralThreshold: 0.1,
+                velocityMinBound: 0.1,
+                velocityMaxBound: 10,
+
+                // Zone management
+                maxZones: 75,
+                zoneAgeLimit: 1200000,
+
+                // Features configuration
+                features: {
+                    depletionTracking: true,
+                    spreadAdjustment: true,
+                    volumeVelocity: false,
+                    spoofingDetection: true,
+                    adaptiveZone: true,
+                    multiZone: false,
+                    passiveHistory: true,
+                },
+
+                // Enhancement control
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Enhanced depletion analysis
+                depletionVolumeThreshold: 30,
+                depletionRatioThreshold: 0.6,
+                varianceReductionFactor: 1,
+                alignmentNormalizationFactor: 1,
+                distanceNormalizationDivisor: 2,
+                passiveVolumeExhaustionRatio: 0.5,
+                aggressiveVolumeExhaustionThreshold: 0.7,
+                aggressiveVolumeReductionFactor: 0.5,
+                enableDepletionAnalysis: true,
+                depletionConfidenceBoost: 0.1,
+
+                // Override with actual config if available
+                ...config.exhaustion,
+            };
+
             const exhaustionDetector = new ExhaustionDetectorEnhanced(
                 "compare-exhaustion",
-                { symbol: "LTCUSDT", ...config.exhaustion },
+                completeExhaustionSettings,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -681,9 +908,82 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 mockSignalLogger
             );
 
+            const completeDeltaCVDSettings: DeltaCVDEnhancedSettings = {
+                // Core CVD analysis (12 properties)
+                windowsSec: [60, 300],
+                minZ: 0.4,
+                priceCorrelationWeight: 0.3,
+                volumeConcentrationWeight: 0.2,
+                adaptiveThresholdMultiplier: 0.7,
+                eventCooldownMs: 15000,
+                minTradesPerSec: 0.1,
+                minVolPerSec: 0.5,
+                minSamplesForStats: 15,
+                pricePrecision: 2,
+                volatilityLookbackSec: 3600,
+                maxDivergenceAllowed: 0.5,
+                stateCleanupIntervalSec: 300,
+                dynamicThresholds: true,
+                logDebug: true,
+
+                // Volume and detection parameters (15 properties)
+                volumeSurgeMultiplier: 2.5,
+                imbalanceThreshold: 0.15,
+                institutionalThreshold: 17.8,
+                burstDetectionMs: 1000,
+                sustainedVolumeMs: 30000,
+                medianTradeSize: 0.6,
+                detectionMode: "momentum" as const,
+                divergenceThreshold: 0.3,
+                divergenceLookbackSec: 60,
+                enableDepthAnalysis: false,
+                usePassiveVolume: true,
+                maxOrderbookAge: 5000,
+                absorptionCVDThreshold: 75,
+                absorptionPriceThreshold: 0.1,
+                imbalanceWeight: 0.2,
+                icebergMinRefills: 3,
+                icebergMinSize: 20,
+                baseConfidenceRequired: 0.2,
+                finalConfidenceRequired: 0.35,
+                strongCorrelationThreshold: 0.7,
+                weakCorrelationThreshold: 0.3,
+                depthImbalanceThreshold: 0.2,
+
+                // Enhancement control (3 properties)
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Enhanced CVD analysis (6 properties)
+                cvdDivergenceVolumeThreshold: 50,
+                cvdDivergenceStrengthThreshold: 0.7,
+                cvdSignificantImbalanceThreshold: 0.3,
+                cvdDivergenceScoreMultiplier: 1.5,
+                alignmentMinimumThreshold: 0.5,
+                momentumScoreMultiplier: 2,
+                enableCVDDivergenceAnalysis: true,
+                enableMomentumAlignment: false,
+                divergenceConfidenceBoost: 0.12,
+                momentumAlignmentBoost: 0.08,
+
+                // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
+                minTradesForAnalysis: 20,
+                minVolumeRatio: 0.1,
+                maxVolumeRatio: 5.0,
+                priceChangeThreshold: 0.001,
+                minZScoreBound: -20,
+                maxZScoreBound: 20,
+                minCorrelationBound: -0.999,
+                maxCorrelationBound: 0.999,
+
+                // Override with actual config if available
+                ...config.deltaCvdConfirmation,
+            };
+
             const deltaCVDDetector = new DeltaCVDDetectorEnhanced(
                 "compare-deltacvd",
-                { symbol: "LTCUSDT", ...config.deltaCvdConfirmation },
+                completeDeltaCVDSettings,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,

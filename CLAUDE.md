@@ -126,12 +126,12 @@ export class Config {
 export class AbsorptionDetectorEnhanced extends EventEmitter {
     constructor(
         id: string,
-        settings: typeof Config.ABSORPTION_DETECTOR, // Pre-validated by Zod
+        settings: typeof Config.ABSORPTION_DETECTOR // Pre-validated by Zod
         // ... other dependencies
     ) {
         super();
         // settings is guaranteed valid - no defaults needed
-        this.detector = new AbsorptionDetector(id, settings, /* ... */);
+        this.detector = new AbsorptionDetector(id, settings /* ... */);
     }
 }
 ```
@@ -191,7 +191,7 @@ The nuclear cleanup ensures that ANY missing configuration property triggers imm
 ```typescript
 // When config.json is missing ANY required property:
 // 1. Zod .parse() throws ZodError
-// 2. Application crashes immediately  
+// 2. Application crashes immediately
 // 3. No fallbacks, no defaults, no silent failures
 // 4. Forces explicit configuration of ALL parameters
 ```
@@ -201,7 +201,7 @@ The nuclear cleanup ensures that ANY missing configuration property triggers imm
 Any occurrence of the following patterns will result in **IMMEDIATE REJECTION**:
 
 - Default methods (`getDefault*()`) in enhanced detector classes
-- Fallback operators (`??`, `||`) for configuration values  
+- Fallback operators (`??`, `||`) for configuration values
 - Optional Zod properties (`.optional()`) in enhanced detector schemas
 - Type casting to bypass Zod validation (`as any`, `as DetectorSettings`)
 - Manual default assignment when Zod validation fails

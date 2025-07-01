@@ -149,14 +149,92 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             const configValue = 0.4;
             const wrongDefault = 0.7;
 
-            const settings: ExhaustionSettings = {
-                symbol: "LTCUSDT",
-                exhaustionThreshold: configValue, // From config.json
-                windowMs: 45000,
+            const settings: ExhaustionEnhancedSettings = {
+                // Base detector settings
                 minAggVolume: 20,
+                windowMs: 45000,
                 pricePrecision: 2,
                 zoneTicks: 3,
                 eventCooldownMs: 10000,
+                minInitialMoveTicks: 1,
+                confirmationTimeoutMs: 40000,
+                maxRevisitTicks: 8,
+
+                // Exhaustion-specific thresholds
+                volumeSurgeMultiplier: 2.0,
+                imbalanceThreshold: 0.3,
+                institutionalThreshold: 15,
+                burstDetectionMs: 2000,
+                sustainedVolumeMs: 20000,
+                medianTradeSize: 0.8,
+                exhaustionThreshold: configValue, // From config.json
+                maxPassiveRatio: 0.35,
+                minDepletionFactor: 0.2,
+                imbalanceHighThreshold: 0.75,
+                imbalanceMediumThreshold: 0.55,
+                spreadHighThreshold: 0.004,
+                spreadMediumThreshold: 0.0015,
+
+                // Scoring weights
+                scoringWeights: {
+                    depletion: 0.45,
+                    passive: 0.3,
+                    continuity: 0.12,
+                    imbalance: 0.08,
+                    spread: 0.04,
+                    velocity: 0.01,
+                },
+
+                // Quality and performance settings
+                depletionThresholdRatio: 0.15,
+                significantChangeThreshold: 0.08,
+                highQualitySampleCount: 6,
+                highQualityDataAge: 35000,
+                mediumQualitySampleCount: 3,
+                mediumQualityDataAge: 70000,
+                circuitBreakerMaxErrors: 8,
+                circuitBreakerWindowMs: 90000,
+
+                // Confidence adjustments
+                lowScoreConfidenceAdjustment: 0.7,
+                lowVolumeConfidenceAdjustment: 0.8,
+                invalidSurgeConfidenceAdjustment: 0.8,
+                passiveConsistencyThreshold: 0.7,
+                imbalanceNeutralThreshold: 0.1,
+                velocityMinBound: 0.1,
+                velocityMaxBound: 10,
+
+                // Zone management
+                maxZones: 75,
+                zoneAgeLimit: 1200000,
+
+                // Features configuration
+                features: {
+                    depletionTracking: true,
+                    spreadAdjustment: true,
+                    volumeVelocity: false,
+                    spoofingDetection: true,
+                    adaptiveZone: true,
+                    multiZone: false,
+                    passiveHistory: true,
+                },
+
+                // Enhancement control
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Enhanced depletion analysis
+                depletionVolumeThreshold: 30,
+                depletionRatioThreshold: 0.6,
+                varianceReductionFactor: 1,
+                alignmentNormalizationFactor: 1,
+                distanceNormalizationDivisor: 2,
+                passiveVolumeExhaustionRatio: 0.5,
+                aggressiveVolumeExhaustionThreshold: 0.7,
+                aggressiveVolumeReductionFactor: 0.5,
+                enableDepletionAnalysis: true,
+                depletionConfidenceBoost: 0.1,
             };
 
             const detector = new ExhaustionDetectorEnhanced(
@@ -179,13 +257,92 @@ describe("Detector Config Validation - Universal Test Suite", () => {
         it("should use minAggVolume from config", () => {
             const configValue = 20; // From config.json
 
-            const settings: ExhaustionSettings = {
-                symbol: "LTCUSDT",
+            const settings: ExhaustionEnhancedSettings = {
+                // Base detector settings
                 minAggVolume: configValue,
                 windowMs: 45000,
                 pricePrecision: 2,
                 zoneTicks: 3,
                 eventCooldownMs: 10000,
+                minInitialMoveTicks: 1,
+                confirmationTimeoutMs: 40000,
+                maxRevisitTicks: 8,
+
+                // Exhaustion-specific thresholds
+                volumeSurgeMultiplier: 2.0,
+                imbalanceThreshold: 0.3,
+                institutionalThreshold: 15,
+                burstDetectionMs: 2000,
+                sustainedVolumeMs: 20000,
+                medianTradeSize: 0.8,
+                exhaustionThreshold: 0.3,
+                maxPassiveRatio: 0.35,
+                minDepletionFactor: 0.2,
+                imbalanceHighThreshold: 0.75,
+                imbalanceMediumThreshold: 0.55,
+                spreadHighThreshold: 0.004,
+                spreadMediumThreshold: 0.0015,
+
+                // Scoring weights
+                scoringWeights: {
+                    depletion: 0.45,
+                    passive: 0.3,
+                    continuity: 0.12,
+                    imbalance: 0.08,
+                    spread: 0.04,
+                    velocity: 0.01,
+                },
+
+                // Quality and performance settings
+                depletionThresholdRatio: 0.15,
+                significantChangeThreshold: 0.08,
+                highQualitySampleCount: 6,
+                highQualityDataAge: 35000,
+                mediumQualitySampleCount: 3,
+                mediumQualityDataAge: 70000,
+                circuitBreakerMaxErrors: 8,
+                circuitBreakerWindowMs: 90000,
+
+                // Confidence adjustments
+                lowScoreConfidenceAdjustment: 0.7,
+                lowVolumeConfidenceAdjustment: 0.8,
+                invalidSurgeConfidenceAdjustment: 0.8,
+                passiveConsistencyThreshold: 0.7,
+                imbalanceNeutralThreshold: 0.1,
+                velocityMinBound: 0.1,
+                velocityMaxBound: 10,
+
+                // Zone management
+                maxZones: 75,
+                zoneAgeLimit: 1200000,
+
+                // Features configuration
+                features: {
+                    depletionTracking: true,
+                    spreadAdjustment: true,
+                    volumeVelocity: false,
+                    spoofingDetection: true,
+                    adaptiveZone: true,
+                    multiZone: false,
+                    passiveHistory: true,
+                },
+
+                // Enhancement control
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Enhanced depletion analysis
+                depletionVolumeThreshold: 30,
+                depletionRatioThreshold: 0.6,
+                varianceReductionFactor: 1,
+                alignmentNormalizationFactor: 1,
+                distanceNormalizationDivisor: 2,
+                passiveVolumeExhaustionRatio: 0.5,
+                aggressiveVolumeExhaustionThreshold: 0.7,
+                aggressiveVolumeReductionFactor: 0.5,
+                enableDepletionAnalysis: true,
+                depletionConfidenceBoost: 0.1,
             };
 
             const detector = new ExhaustionDetectorEnhanced(
@@ -204,14 +361,92 @@ describe("Detector Config Validation - Universal Test Suite", () => {
         it("should use maxPassiveRatio from config", () => {
             const configValue = 0.35; // From config.json
 
-            const settings: ExhaustionSettings = {
-                symbol: "LTCUSDT",
-                maxPassiveRatio: configValue,
-                windowMs: 45000,
+            const settings: ExhaustionEnhancedSettings = {
+                // Base detector settings
                 minAggVolume: 20,
+                windowMs: 45000,
                 pricePrecision: 2,
                 zoneTicks: 3,
                 eventCooldownMs: 10000,
+                minInitialMoveTicks: 1,
+                confirmationTimeoutMs: 40000,
+                maxRevisitTicks: 8,
+
+                // Exhaustion-specific thresholds
+                volumeSurgeMultiplier: 2.0,
+                imbalanceThreshold: 0.3,
+                institutionalThreshold: 15,
+                burstDetectionMs: 2000,
+                sustainedVolumeMs: 20000,
+                medianTradeSize: 0.8,
+                exhaustionThreshold: 0.3,
+                maxPassiveRatio: configValue,
+                minDepletionFactor: 0.2,
+                imbalanceHighThreshold: 0.75,
+                imbalanceMediumThreshold: 0.55,
+                spreadHighThreshold: 0.004,
+                spreadMediumThreshold: 0.0015,
+
+                // Scoring weights
+                scoringWeights: {
+                    depletion: 0.45,
+                    passive: 0.3,
+                    continuity: 0.12,
+                    imbalance: 0.08,
+                    spread: 0.04,
+                    velocity: 0.01,
+                },
+
+                // Quality and performance settings
+                depletionThresholdRatio: 0.15,
+                significantChangeThreshold: 0.08,
+                highQualitySampleCount: 6,
+                highQualityDataAge: 35000,
+                mediumQualitySampleCount: 3,
+                mediumQualityDataAge: 70000,
+                circuitBreakerMaxErrors: 8,
+                circuitBreakerWindowMs: 90000,
+
+                // Confidence adjustments
+                lowScoreConfidenceAdjustment: 0.7,
+                lowVolumeConfidenceAdjustment: 0.8,
+                invalidSurgeConfidenceAdjustment: 0.8,
+                passiveConsistencyThreshold: 0.7,
+                imbalanceNeutralThreshold: 0.1,
+                velocityMinBound: 0.1,
+                velocityMaxBound: 10,
+
+                // Zone management
+                maxZones: 75,
+                zoneAgeLimit: 1200000,
+
+                // Features configuration
+                features: {
+                    depletionTracking: true,
+                    spreadAdjustment: true,
+                    volumeVelocity: false,
+                    spoofingDetection: true,
+                    adaptiveZone: true,
+                    multiZone: false,
+                    passiveHistory: true,
+                },
+
+                // Enhancement control
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Enhanced depletion analysis
+                depletionVolumeThreshold: 30,
+                depletionRatioThreshold: 0.6,
+                varianceReductionFactor: 1,
+                alignmentNormalizationFactor: 1,
+                distanceNormalizationDivisor: 2,
+                passiveVolumeExhaustionRatio: 0.5,
+                aggressiveVolumeExhaustionThreshold: 0.7,
+                aggressiveVolumeReductionFactor: 0.5,
+                enableDepletionAnalysis: true,
+                depletionConfidenceBoost: 0.1,
             };
 
             const detector = new ExhaustionDetectorEnhanced(
@@ -237,14 +472,85 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 velocity: 0.01,
             };
 
-            const settings: ExhaustionSettings = {
-                symbol: "LTCUSDT",
-                scoringWeights: configWeights,
-                windowMs: 45000,
+            const settings: ExhaustionEnhancedSettings = {
+                // Base detector settings
                 minAggVolume: 20,
+                windowMs: 45000,
                 pricePrecision: 2,
                 zoneTicks: 3,
                 eventCooldownMs: 10000,
+                minInitialMoveTicks: 1,
+                confirmationTimeoutMs: 40000,
+                maxRevisitTicks: 8,
+
+                // Exhaustion-specific thresholds
+                volumeSurgeMultiplier: 2.0,
+                imbalanceThreshold: 0.3,
+                institutionalThreshold: 15,
+                burstDetectionMs: 2000,
+                sustainedVolumeMs: 20000,
+                medianTradeSize: 0.8,
+                exhaustionThreshold: 0.3,
+                maxPassiveRatio: 0.35,
+                minDepletionFactor: 0.2,
+                imbalanceHighThreshold: 0.75,
+                imbalanceMediumThreshold: 0.55,
+                spreadHighThreshold: 0.004,
+                spreadMediumThreshold: 0.0015,
+
+                // Scoring weights
+                scoringWeights: configWeights,
+
+                // Quality and performance settings
+                depletionThresholdRatio: 0.15,
+                significantChangeThreshold: 0.08,
+                highQualitySampleCount: 6,
+                highQualityDataAge: 35000,
+                mediumQualitySampleCount: 3,
+                mediumQualityDataAge: 70000,
+                circuitBreakerMaxErrors: 8,
+                circuitBreakerWindowMs: 90000,
+
+                // Confidence adjustments
+                lowScoreConfidenceAdjustment: 0.7,
+                lowVolumeConfidenceAdjustment: 0.8,
+                invalidSurgeConfidenceAdjustment: 0.8,
+                passiveConsistencyThreshold: 0.7,
+                imbalanceNeutralThreshold: 0.1,
+                velocityMinBound: 0.1,
+                velocityMaxBound: 10,
+
+                // Zone management
+                maxZones: 75,
+                zoneAgeLimit: 1200000,
+
+                // Features configuration
+                features: {
+                    depletionTracking: true,
+                    spreadAdjustment: true,
+                    volumeVelocity: false,
+                    spoofingDetection: true,
+                    adaptiveZone: true,
+                    multiZone: false,
+                    passiveHistory: true,
+                },
+
+                // Enhancement control
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Enhanced depletion analysis
+                depletionVolumeThreshold: 30,
+                depletionRatioThreshold: 0.6,
+                varianceReductionFactor: 1,
+                alignmentNormalizationFactor: 1,
+                distanceNormalizationDivisor: 2,
+                passiveVolumeExhaustionRatio: 0.5,
+                aggressiveVolumeExhaustionThreshold: 0.7,
+                aggressiveVolumeReductionFactor: 0.5,
+                enableDepletionAnalysis: true,
+                depletionConfidenceBoost: 0.1,
             };
 
             const detector = new ExhaustionDetectorEnhanced(
@@ -270,7 +576,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
         it("should use absorptionThreshold from config", () => {
             const configValue = 0.6; // From config.json
 
-            const settings: AbsorptionSettings = {
+            const settings: AbsorptionEnhancedSettings = {
                 symbol: "LTCUSDT",
                 absorptionThreshold: configValue,
                 windowMs: 60000,
@@ -278,6 +584,76 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 pricePrecision: 2,
                 zoneTicks: 5,
                 eventCooldownMs: 15000,
+                minInitialMoveTicks: 4,
+                confirmationTimeoutMs: 60000,
+                maxRevisitTicks: 5,
+
+                // Absorption-specific thresholds
+                minPassiveMultiplier: 1.2,
+                maxAbsorptionRatio: 0.4,
+                strongAbsorptionRatio: 0.6,
+                moderateAbsorptionRatio: 0.8,
+                weakAbsorptionRatio: 1.0,
+                priceEfficiencyThreshold: 0.02,
+                spreadImpactThreshold: 0.003,
+                velocityIncreaseThreshold: 1.5,
+                significantChangeThreshold: 0.1,
+
+                // Dominant side analysis
+                dominantSideAnalysisWindowMs: 45000,
+                dominantSideFallbackTradeCount: 10,
+                dominantSideMinTradesRequired: 3,
+                dominantSideTemporalWeighting: true,
+                dominantSideWeightDecayFactor: 0.3,
+
+                // Features configuration
+                features: {
+                    adaptiveZone: true,
+                    passiveHistory: true,
+                    multiZone: false,
+                    liquidityGradient: true,
+                    absorptionVelocity: true,
+                    layeredAbsorption: true,
+                    spreadImpact: true,
+                },
+
+                // Enhancement control
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Institutional volume detection (enhanced)
+                institutionalVolumeThreshold: 50,
+                institutionalVolumeRatioThreshold: 0.3,
+                enableInstitutionalVolumeFilter: true,
+                institutionalVolumeBoost: 0.1,
+
+                // Enhanced calculation parameters
+                volumeNormalizationThreshold: 200,
+                absorptionRatioNormalization: 3,
+                minAbsorptionScore: 0.8,
+                patternVarianceReduction: 2,
+                whaleActivityMultiplier: 2,
+                maxZoneCountForScoring: 3,
+
+                // Enhanced thresholds
+                highConfidenceThreshold: 0.7,
+                lowConfidenceReduction: 0.7,
+                confidenceBoostReduction: 0.5,
+                passiveAbsorptionThreshold: 0.6,
+                aggressiveDistributionThreshold: 0.6,
+                patternDifferenceThreshold: 0.1,
+                minVolumeForRatio: 1,
+
+                // Enhanced scoring weights
+                distanceWeight: 0.4,
+                volumeWeight: 0.35,
+                absorptionWeight: 0.25,
+                minConfluenceScore: 0.6,
+                volumeConcentrationWeight: 0.15,
+                patternConsistencyWeight: 0.1,
+                volumeBoostCap: 0.25,
+                volumeBoostMultiplier: 0.25,
             };
 
             const detector = new AbsorptionDetectorEnhanced(
@@ -297,13 +673,84 @@ describe("Detector Config Validation - Universal Test Suite", () => {
         it("should use minAggVolume from config", () => {
             const configValue = 175; // From config.json
 
-            const settings: AbsorptionSettings = {
+            const settings: AbsorptionEnhancedSettings = {
                 symbol: "LTCUSDT",
                 minAggVolume: configValue,
                 windowMs: 60000,
                 pricePrecision: 2,
                 zoneTicks: 5,
                 eventCooldownMs: 15000,
+                minInitialMoveTicks: 4,
+                confirmationTimeoutMs: 60000,
+                maxRevisitTicks: 5,
+
+                // Absorption-specific thresholds
+                absorptionThreshold: 0.6,
+                minPassiveMultiplier: 1.2,
+                maxAbsorptionRatio: 0.4,
+                strongAbsorptionRatio: 0.6,
+                moderateAbsorptionRatio: 0.8,
+                weakAbsorptionRatio: 1.0,
+                priceEfficiencyThreshold: 0.02,
+                spreadImpactThreshold: 0.003,
+                velocityIncreaseThreshold: 1.5,
+                significantChangeThreshold: 0.1,
+
+                // Dominant side analysis
+                dominantSideAnalysisWindowMs: 45000,
+                dominantSideFallbackTradeCount: 10,
+                dominantSideMinTradesRequired: 3,
+                dominantSideTemporalWeighting: true,
+                dominantSideWeightDecayFactor: 0.3,
+
+                // Features configuration
+                features: {
+                    adaptiveZone: true,
+                    passiveHistory: true,
+                    multiZone: false,
+                    liquidityGradient: true,
+                    absorptionVelocity: true,
+                    layeredAbsorption: true,
+                    spreadImpact: true,
+                },
+
+                // Enhancement control
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Institutional volume detection (enhanced)
+                institutionalVolumeThreshold: 50,
+                institutionalVolumeRatioThreshold: 0.3,
+                enableInstitutionalVolumeFilter: true,
+                institutionalVolumeBoost: 0.1,
+
+                // Enhanced calculation parameters
+                volumeNormalizationThreshold: 200,
+                absorptionRatioNormalization: 3,
+                minAbsorptionScore: 0.8,
+                patternVarianceReduction: 2,
+                whaleActivityMultiplier: 2,
+                maxZoneCountForScoring: 3,
+
+                // Enhanced thresholds
+                highConfidenceThreshold: 0.7,
+                lowConfidenceReduction: 0.7,
+                confidenceBoostReduction: 0.5,
+                passiveAbsorptionThreshold: 0.6,
+                aggressiveDistributionThreshold: 0.6,
+                patternDifferenceThreshold: 0.1,
+                minVolumeForRatio: 1,
+
+                // Enhanced scoring weights
+                distanceWeight: 0.4,
+                volumeWeight: 0.35,
+                absorptionWeight: 0.25,
+                minConfluenceScore: 0.6,
+                volumeConcentrationWeight: 0.15,
+                patternConsistencyWeight: 0.1,
+                volumeBoostCap: 0.25,
+                volumeBoostMultiplier: 0.25,
             };
 
             const detector = new AbsorptionDetectorEnhanced(
@@ -323,7 +770,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
         it("should use priceEfficiencyThreshold from config", () => {
             const configValue = 0.02; // From config.json
 
-            const settings: AbsorptionSettings = {
+            const settings: AbsorptionEnhancedSettings = {
                 symbol: "LTCUSDT",
                 priceEfficiencyThreshold: configValue,
                 windowMs: 60000,
@@ -331,6 +778,76 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 pricePrecision: 2,
                 zoneTicks: 5,
                 eventCooldownMs: 15000,
+                minInitialMoveTicks: 4,
+                confirmationTimeoutMs: 60000,
+                maxRevisitTicks: 5,
+
+                // Absorption-specific thresholds
+                absorptionThreshold: 0.6,
+                minPassiveMultiplier: 1.2,
+                maxAbsorptionRatio: 0.4,
+                strongAbsorptionRatio: 0.6,
+                moderateAbsorptionRatio: 0.8,
+                weakAbsorptionRatio: 1.0,
+                spreadImpactThreshold: 0.003,
+                velocityIncreaseThreshold: 1.5,
+                significantChangeThreshold: 0.1,
+
+                // Dominant side analysis
+                dominantSideAnalysisWindowMs: 45000,
+                dominantSideFallbackTradeCount: 10,
+                dominantSideMinTradesRequired: 3,
+                dominantSideTemporalWeighting: true,
+                dominantSideWeightDecayFactor: 0.3,
+
+                // Features configuration
+                features: {
+                    adaptiveZone: true,
+                    passiveHistory: true,
+                    multiZone: false,
+                    liquidityGradient: true,
+                    absorptionVelocity: true,
+                    layeredAbsorption: true,
+                    spreadImpact: true,
+                },
+
+                // Enhancement control
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Institutional volume detection (enhanced)
+                institutionalVolumeThreshold: 50,
+                institutionalVolumeRatioThreshold: 0.3,
+                enableInstitutionalVolumeFilter: true,
+                institutionalVolumeBoost: 0.1,
+
+                // Enhanced calculation parameters
+                volumeNormalizationThreshold: 200,
+                absorptionRatioNormalization: 3,
+                minAbsorptionScore: 0.8,
+                patternVarianceReduction: 2,
+                whaleActivityMultiplier: 2,
+                maxZoneCountForScoring: 3,
+
+                // Enhanced thresholds
+                highConfidenceThreshold: 0.7,
+                lowConfidenceReduction: 0.7,
+                confidenceBoostReduction: 0.5,
+                passiveAbsorptionThreshold: 0.6,
+                aggressiveDistributionThreshold: 0.6,
+                patternDifferenceThreshold: 0.1,
+                minVolumeForRatio: 1,
+
+                // Enhanced scoring weights
+                distanceWeight: 0.4,
+                volumeWeight: 0.35,
+                absorptionWeight: 0.25,
+                minConfluenceScore: 0.6,
+                volumeConcentrationWeight: 0.15,
+                patternConsistencyWeight: 0.1,
+                volumeBoostCap: 0.25,
+                volumeBoostMultiplier: 0.25,
             };
 
             const detector = new AbsorptionDetectorEnhanced(
@@ -350,7 +867,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
         it("should use maxAbsorptionRatio from config", () => {
             const configValue = 0.4; // From config.json
 
-            const settings: AbsorptionSettings = {
+            const settings: AbsorptionEnhancedSettings = {
                 symbol: "LTCUSDT",
                 maxAbsorptionRatio: configValue,
                 windowMs: 60000,
@@ -358,6 +875,76 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 pricePrecision: 2,
                 zoneTicks: 5,
                 eventCooldownMs: 15000,
+                minInitialMoveTicks: 4,
+                confirmationTimeoutMs: 60000,
+                maxRevisitTicks: 5,
+
+                // Absorption-specific thresholds
+                absorptionThreshold: 0.6,
+                minPassiveMultiplier: 1.2,
+                strongAbsorptionRatio: 0.6,
+                moderateAbsorptionRatio: 0.8,
+                weakAbsorptionRatio: 1.0,
+                priceEfficiencyThreshold: 0.02,
+                spreadImpactThreshold: 0.003,
+                velocityIncreaseThreshold: 1.5,
+                significantChangeThreshold: 0.1,
+
+                // Dominant side analysis
+                dominantSideAnalysisWindowMs: 45000,
+                dominantSideFallbackTradeCount: 10,
+                dominantSideMinTradesRequired: 3,
+                dominantSideTemporalWeighting: true,
+                dominantSideWeightDecayFactor: 0.3,
+
+                // Features configuration
+                features: {
+                    adaptiveZone: true,
+                    passiveHistory: true,
+                    multiZone: false,
+                    liquidityGradient: true,
+                    absorptionVelocity: true,
+                    layeredAbsorption: true,
+                    spreadImpact: true,
+                },
+
+                // Enhancement control
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Institutional volume detection (enhanced)
+                institutionalVolumeThreshold: 50,
+                institutionalVolumeRatioThreshold: 0.3,
+                enableInstitutionalVolumeFilter: true,
+                institutionalVolumeBoost: 0.1,
+
+                // Enhanced calculation parameters
+                volumeNormalizationThreshold: 200,
+                absorptionRatioNormalization: 3,
+                minAbsorptionScore: 0.8,
+                patternVarianceReduction: 2,
+                whaleActivityMultiplier: 2,
+                maxZoneCountForScoring: 3,
+
+                // Enhanced thresholds
+                highConfidenceThreshold: 0.7,
+                lowConfidenceReduction: 0.7,
+                confidenceBoostReduction: 0.5,
+                passiveAbsorptionThreshold: 0.6,
+                aggressiveDistributionThreshold: 0.6,
+                patternDifferenceThreshold: 0.1,
+                minVolumeForRatio: 1,
+
+                // Enhanced scoring weights
+                distanceWeight: 0.4,
+                volumeWeight: 0.35,
+                absorptionWeight: 0.25,
+                minConfluenceScore: 0.6,
+                volumeConcentrationWeight: 0.15,
+                patternConsistencyWeight: 0.1,
+                volumeBoostCap: 0.25,
+                volumeBoostMultiplier: 0.25,
             };
 
             const detector = new AbsorptionDetectorEnhanced(
@@ -380,13 +967,73 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             const configValue = 0.2; // From config.json
 
             const settings: DeltaCVDEnhancedSettings = {
-                symbol: "LTCUSDT",
-                baseConfidenceRequired: configValue,
-                windowMs: 60000,
-                minAggVolume: 20,
-                pricePrecision: 2,
-                zoneTicks: 3,
+                // Core CVD analysis (12 properties)
+                windowsSec: [60, 300],
+                minZ: 0.4,
+                priceCorrelationWeight: 0.3,
+                volumeConcentrationWeight: 0.2,
+                adaptiveThresholdMultiplier: 0.7,
                 eventCooldownMs: 15000,
+                minTradesPerSec: 0.1,
+                minVolPerSec: 0.5,
+                minSamplesForStats: 15,
+                pricePrecision: 2,
+                volatilityLookbackSec: 3600,
+                maxDivergenceAllowed: 0.5,
+                stateCleanupIntervalSec: 300,
+                dynamicThresholds: true,
+                logDebug: true,
+
+                // Volume and detection parameters (15 properties)
+                volumeSurgeMultiplier: 2.5,
+                imbalanceThreshold: 0.15,
+                institutionalThreshold: 17.8,
+                burstDetectionMs: 1000,
+                sustainedVolumeMs: 30000,
+                medianTradeSize: 0.6,
+                detectionMode: "momentum" as const,
+                divergenceThreshold: 0.3,
+                divergenceLookbackSec: 60,
+                enableDepthAnalysis: false,
+                usePassiveVolume: true,
+                maxOrderbookAge: 5000,
+                absorptionCVDThreshold: 75,
+                absorptionPriceThreshold: 0.1,
+                imbalanceWeight: 0.2,
+                icebergMinRefills: 3,
+                icebergMinSize: 20,
+                baseConfidenceRequired: configValue, // Test parameter
+                finalConfidenceRequired: 0.35,
+                strongCorrelationThreshold: 0.7,
+                weakCorrelationThreshold: 0.3,
+                depthImbalanceThreshold: 0.2,
+
+                // Enhancement control (3 properties)
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Enhanced CVD analysis (6 properties)
+                cvdDivergenceVolumeThreshold: 50,
+                cvdDivergenceStrengthThreshold: 0.7,
+                cvdSignificantImbalanceThreshold: 0.3,
+                cvdDivergenceScoreMultiplier: 1.5,
+                alignmentMinimumThreshold: 0.5,
+                momentumScoreMultiplier: 2,
+                enableCVDDivergenceAnalysis: true,
+                enableMomentumAlignment: false,
+                divergenceConfidenceBoost: 0.12,
+                momentumAlignmentBoost: 0.08,
+
+                // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
+                minTradesForAnalysis: 20,
+                minVolumeRatio: 0.1,
+                maxVolumeRatio: 5.0,
+                priceChangeThreshold: 0.001,
+                minZScoreBound: -20,
+                maxZScoreBound: 20,
+                minCorrelationBound: -0.999,
+                maxCorrelationBound: 0.999,
             };
 
             const detector = new DeltaCVDDetectorEnhanced(
@@ -406,13 +1053,73 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             const configValue = 0.35; // From config.json
 
             const settings: DeltaCVDEnhancedSettings = {
-                symbol: "LTCUSDT",
-                finalConfidenceRequired: configValue,
-                windowMs: 60000,
-                minAggVolume: 20,
-                pricePrecision: 2,
-                zoneTicks: 3,
+                // Core CVD analysis (12 properties)
+                windowsSec: [60, 300],
+                minZ: 0.4,
+                priceCorrelationWeight: 0.3,
+                volumeConcentrationWeight: 0.2,
+                adaptiveThresholdMultiplier: 0.7,
                 eventCooldownMs: 15000,
+                minTradesPerSec: 0.1,
+                minVolPerSec: 0.5,
+                minSamplesForStats: 15,
+                pricePrecision: 2,
+                volatilityLookbackSec: 3600,
+                maxDivergenceAllowed: 0.5,
+                stateCleanupIntervalSec: 300,
+                dynamicThresholds: true,
+                logDebug: true,
+
+                // Volume and detection parameters (15 properties)
+                volumeSurgeMultiplier: 2.5,
+                imbalanceThreshold: 0.15,
+                institutionalThreshold: 17.8,
+                burstDetectionMs: 1000,
+                sustainedVolumeMs: 30000,
+                medianTradeSize: 0.6,
+                detectionMode: "momentum" as const,
+                divergenceThreshold: 0.3,
+                divergenceLookbackSec: 60,
+                enableDepthAnalysis: false,
+                usePassiveVolume: true,
+                maxOrderbookAge: 5000,
+                absorptionCVDThreshold: 75,
+                absorptionPriceThreshold: 0.1,
+                imbalanceWeight: 0.2,
+                icebergMinRefills: 3,
+                icebergMinSize: 20,
+                baseConfidenceRequired: 0.2,
+                finalConfidenceRequired: configValue, // Test parameter
+                strongCorrelationThreshold: 0.7,
+                weakCorrelationThreshold: 0.3,
+                depthImbalanceThreshold: 0.2,
+
+                // Enhancement control (3 properties)
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Enhanced CVD analysis (6 properties)
+                cvdDivergenceVolumeThreshold: 50,
+                cvdDivergenceStrengthThreshold: 0.7,
+                cvdSignificantImbalanceThreshold: 0.3,
+                cvdDivergenceScoreMultiplier: 1.5,
+                alignmentMinimumThreshold: 0.5,
+                momentumScoreMultiplier: 2,
+                enableCVDDivergenceAnalysis: true,
+                enableMomentumAlignment: false,
+                divergenceConfidenceBoost: 0.12,
+                momentumAlignmentBoost: 0.08,
+
+                // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
+                minTradesForAnalysis: 20,
+                minVolumeRatio: 0.1,
+                maxVolumeRatio: 5.0,
+                priceChangeThreshold: 0.001,
+                minZScoreBound: -20,
+                maxZScoreBound: 20,
+                minCorrelationBound: -0.999,
+                maxCorrelationBound: 0.999,
             };
 
             const detector = new DeltaCVDDetectorEnhanced(
@@ -432,13 +1139,73 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             const configValue = true; // From config.json
 
             const settings: DeltaCVDEnhancedSettings = {
-                symbol: "LTCUSDT",
-                usePassiveVolume: configValue,
-                windowMs: 60000,
-                minAggVolume: 20,
-                pricePrecision: 2,
-                zoneTicks: 3,
+                // Core CVD analysis (12 properties)
+                windowsSec: [60, 300],
+                minZ: 0.4,
+                priceCorrelationWeight: 0.3,
+                volumeConcentrationWeight: 0.2,
+                adaptiveThresholdMultiplier: 0.7,
                 eventCooldownMs: 15000,
+                minTradesPerSec: 0.1,
+                minVolPerSec: 0.5,
+                minSamplesForStats: 15,
+                pricePrecision: 2,
+                volatilityLookbackSec: 3600,
+                maxDivergenceAllowed: 0.5,
+                stateCleanupIntervalSec: 300,
+                dynamicThresholds: true,
+                logDebug: true,
+
+                // Volume and detection parameters (15 properties)
+                volumeSurgeMultiplier: 2.5,
+                imbalanceThreshold: 0.15,
+                institutionalThreshold: 17.8,
+                burstDetectionMs: 1000,
+                sustainedVolumeMs: 30000,
+                medianTradeSize: 0.6,
+                detectionMode: "momentum" as const,
+                divergenceThreshold: 0.3,
+                divergenceLookbackSec: 60,
+                enableDepthAnalysis: false,
+                usePassiveVolume: configValue, // Test parameter
+                maxOrderbookAge: 5000,
+                absorptionCVDThreshold: 75,
+                absorptionPriceThreshold: 0.1,
+                imbalanceWeight: 0.2,
+                icebergMinRefills: 3,
+                icebergMinSize: 20,
+                baseConfidenceRequired: 0.2,
+                finalConfidenceRequired: 0.35,
+                strongCorrelationThreshold: 0.7,
+                weakCorrelationThreshold: 0.3,
+                depthImbalanceThreshold: 0.2,
+
+                // Enhancement control (3 properties)
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Enhanced CVD analysis (6 properties)
+                cvdDivergenceVolumeThreshold: 50,
+                cvdDivergenceStrengthThreshold: 0.7,
+                cvdSignificantImbalanceThreshold: 0.3,
+                cvdDivergenceScoreMultiplier: 1.5,
+                alignmentMinimumThreshold: 0.5,
+                momentumScoreMultiplier: 2,
+                enableCVDDivergenceAnalysis: true,
+                enableMomentumAlignment: false,
+                divergenceConfidenceBoost: 0.12,
+                momentumAlignmentBoost: 0.08,
+
+                // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
+                minTradesForAnalysis: 20,
+                minVolumeRatio: 0.1,
+                maxVolumeRatio: 5.0,
+                priceChangeThreshold: 0.001,
+                minZScoreBound: -20,
+                maxZScoreBound: 20,
+                minCorrelationBound: -0.999,
+                maxCorrelationBound: 0.999,
             };
 
             const detector = new DeltaCVDDetectorEnhanced(
@@ -458,13 +1225,73 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             const configValue = true; // From config.json
 
             const settings: DeltaCVDEnhancedSettings = {
-                symbol: "LTCUSDT",
-                enableDepthAnalysis: configValue,
-                windowMs: 60000,
-                minAggVolume: 20,
-                pricePrecision: 2,
-                zoneTicks: 3,
+                // Core CVD analysis (12 properties)
+                windowsSec: [60, 300],
+                minZ: 0.4,
+                priceCorrelationWeight: 0.3,
+                volumeConcentrationWeight: 0.2,
+                adaptiveThresholdMultiplier: 0.7,
                 eventCooldownMs: 15000,
+                minTradesPerSec: 0.1,
+                minVolPerSec: 0.5,
+                minSamplesForStats: 15,
+                pricePrecision: 2,
+                volatilityLookbackSec: 3600,
+                maxDivergenceAllowed: 0.5,
+                stateCleanupIntervalSec: 300,
+                dynamicThresholds: true,
+                logDebug: true,
+
+                // Volume and detection parameters (15 properties)
+                volumeSurgeMultiplier: 2.5,
+                imbalanceThreshold: 0.15,
+                institutionalThreshold: 17.8,
+                burstDetectionMs: 1000,
+                sustainedVolumeMs: 30000,
+                medianTradeSize: 0.6,
+                detectionMode: "momentum" as const,
+                divergenceThreshold: 0.3,
+                divergenceLookbackSec: 60,
+                enableDepthAnalysis: configValue, // Test parameter
+                usePassiveVolume: true,
+                maxOrderbookAge: 5000,
+                absorptionCVDThreshold: 75,
+                absorptionPriceThreshold: 0.1,
+                imbalanceWeight: 0.2,
+                icebergMinRefills: 3,
+                icebergMinSize: 20,
+                baseConfidenceRequired: 0.2,
+                finalConfidenceRequired: 0.35,
+                strongCorrelationThreshold: 0.7,
+                weakCorrelationThreshold: 0.3,
+                depthImbalanceThreshold: 0.2,
+
+                // Enhancement control (3 properties)
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Enhanced CVD analysis (6 properties)
+                cvdDivergenceVolumeThreshold: 50,
+                cvdDivergenceStrengthThreshold: 0.7,
+                cvdSignificantImbalanceThreshold: 0.3,
+                cvdDivergenceScoreMultiplier: 1.5,
+                alignmentMinimumThreshold: 0.5,
+                momentumScoreMultiplier: 2,
+                enableCVDDivergenceAnalysis: true,
+                enableMomentumAlignment: false,
+                divergenceConfidenceBoost: 0.12,
+                momentumAlignmentBoost: 0.08,
+
+                // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
+                minTradesForAnalysis: 20,
+                minVolumeRatio: 0.1,
+                maxVolumeRatio: 5.0,
+                priceChangeThreshold: 0.001,
+                minZScoreBound: -20,
+                maxZScoreBound: 20,
+                minCorrelationBound: -0.999,
+                maxCorrelationBound: 0.999,
             };
 
             const detector = new DeltaCVDDetectorEnhanced(
@@ -484,14 +1311,92 @@ describe("Detector Config Validation - Universal Test Suite", () => {
     describe("Config Override Detection", () => {
         it("should detect when hard-coded defaults override config values", () => {
             // This test specifically catches the exhaustion threshold bug
-            const configSettings: ExhaustionSettings = {
-                symbol: "LTCUSDT",
-                exhaustionThreshold: 0.4, // Config value
-                windowMs: 45000,
+            const configSettings: ExhaustionEnhancedSettings = {
+                // Base detector settings
                 minAggVolume: 20,
+                windowMs: 45000,
                 pricePrecision: 2,
                 zoneTicks: 3,
                 eventCooldownMs: 10000,
+                minInitialMoveTicks: 1,
+                confirmationTimeoutMs: 40000,
+                maxRevisitTicks: 8,
+
+                // Exhaustion-specific thresholds
+                volumeSurgeMultiplier: 2.0,
+                imbalanceThreshold: 0.3,
+                institutionalThreshold: 15,
+                burstDetectionMs: 2000,
+                sustainedVolumeMs: 20000,
+                medianTradeSize: 0.8,
+                exhaustionThreshold: 0.4, // Config value
+                maxPassiveRatio: 0.35,
+                minDepletionFactor: 0.2,
+                imbalanceHighThreshold: 0.75,
+                imbalanceMediumThreshold: 0.55,
+                spreadHighThreshold: 0.004,
+                spreadMediumThreshold: 0.0015,
+
+                // Scoring weights
+                scoringWeights: {
+                    depletion: 0.45,
+                    passive: 0.3,
+                    continuity: 0.12,
+                    imbalance: 0.08,
+                    spread: 0.04,
+                    velocity: 0.01,
+                },
+
+                // Quality and performance settings
+                depletionThresholdRatio: 0.15,
+                significantChangeThreshold: 0.08,
+                highQualitySampleCount: 6,
+                highQualityDataAge: 35000,
+                mediumQualitySampleCount: 3,
+                mediumQualityDataAge: 70000,
+                circuitBreakerMaxErrors: 8,
+                circuitBreakerWindowMs: 90000,
+
+                // Confidence adjustments
+                lowScoreConfidenceAdjustment: 0.7,
+                lowVolumeConfidenceAdjustment: 0.8,
+                invalidSurgeConfidenceAdjustment: 0.8,
+                passiveConsistencyThreshold: 0.7,
+                imbalanceNeutralThreshold: 0.1,
+                velocityMinBound: 0.1,
+                velocityMaxBound: 10,
+
+                // Zone management
+                maxZones: 75,
+                zoneAgeLimit: 1200000,
+
+                // Features configuration
+                features: {
+                    depletionTracking: true,
+                    spreadAdjustment: true,
+                    volumeVelocity: false,
+                    spoofingDetection: true,
+                    adaptiveZone: true,
+                    multiZone: false,
+                    passiveHistory: true,
+                },
+
+                // Enhancement control
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Enhanced depletion analysis
+                depletionVolumeThreshold: 30,
+                depletionRatioThreshold: 0.6,
+                varianceReductionFactor: 1,
+                alignmentNormalizationFactor: 1,
+                distanceNormalizationDivisor: 2,
+                passiveVolumeExhaustionRatio: 0.5,
+                aggressiveVolumeExhaustionThreshold: 0.7,
+                aggressiveVolumeReductionFactor: 0.5,
+                enableDepletionAnalysis: true,
+                depletionConfidenceBoost: 0.1,
             };
 
             const detector = new ExhaustionDetectorEnhanced(
@@ -517,19 +1422,97 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             const testSettings = {
                 exhaustionThreshold: 0.123,
                 maxPassiveRatio: 0.456,
-                minDepletionFactor: 0.789,
+                minDepletionFactor: 0.35, // Within valid range of 0.05-0.5
                 imbalanceHighThreshold: 0.999,
                 spreadHighThreshold: 0.001,
             };
 
-            const settings: ExhaustionSettings = {
-                symbol: "LTCUSDT",
-                ...testSettings,
-                windowMs: 45000,
+            const settings: ExhaustionEnhancedSettings = {
+                // Base detector settings
                 minAggVolume: 20,
+                windowMs: 45000,
                 pricePrecision: 2,
                 zoneTicks: 3,
                 eventCooldownMs: 10000,
+                minInitialMoveTicks: 1,
+                confirmationTimeoutMs: 40000,
+                maxRevisitTicks: 8,
+
+                // Exhaustion-specific thresholds
+                volumeSurgeMultiplier: 2.0,
+                imbalanceThreshold: 0.3,
+                institutionalThreshold: 15,
+                burstDetectionMs: 2000,
+                sustainedVolumeMs: 20000,
+                medianTradeSize: 0.8,
+                exhaustionThreshold: testSettings.exhaustionThreshold,
+                maxPassiveRatio: testSettings.maxPassiveRatio,
+                minDepletionFactor: testSettings.minDepletionFactor, // 0.35
+                imbalanceHighThreshold: testSettings.imbalanceHighThreshold,
+                imbalanceMediumThreshold: 0.55,
+                spreadHighThreshold: testSettings.spreadHighThreshold,
+                spreadMediumThreshold: 0.0015,
+
+                // Scoring weights
+                scoringWeights: {
+                    depletion: 0.45,
+                    passive: 0.3,
+                    continuity: 0.12,
+                    imbalance: 0.08,
+                    spread: 0.04,
+                    velocity: 0.01,
+                },
+
+                // Quality and performance settings
+                depletionThresholdRatio: 0.15,
+                significantChangeThreshold: 0.08,
+                highQualitySampleCount: 6,
+                highQualityDataAge: 35000,
+                mediumQualitySampleCount: 3,
+                mediumQualityDataAge: 70000,
+                circuitBreakerMaxErrors: 8,
+                circuitBreakerWindowMs: 90000,
+
+                // Confidence adjustments
+                lowScoreConfidenceAdjustment: 0.7,
+                lowVolumeConfidenceAdjustment: 0.8,
+                invalidSurgeConfidenceAdjustment: 0.8,
+                passiveConsistencyThreshold: 0.7,
+                imbalanceNeutralThreshold: 0.1,
+                velocityMinBound: 0.1,
+                velocityMaxBound: 10,
+
+                // Zone management
+                maxZones: 75,
+                zoneAgeLimit: 1200000,
+
+                // Features configuration
+                features: {
+                    depletionTracking: true,
+                    spreadAdjustment: true,
+                    volumeVelocity: false,
+                    spoofingDetection: true,
+                    adaptiveZone: true,
+                    multiZone: false,
+                    passiveHistory: true,
+                },
+
+                // Enhancement control
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Enhanced depletion analysis
+                depletionVolumeThreshold: 30,
+                depletionRatioThreshold: 0.6,
+                varianceReductionFactor: 1,
+                alignmentNormalizationFactor: 1,
+                distanceNormalizationDivisor: 2,
+                passiveVolumeExhaustionRatio: 0.5,
+                aggressiveVolumeExhaustionThreshold: 0.7,
+                aggressiveVolumeReductionFactor: 0.5,
+                enableDepletionAnalysis: true,
+                depletionConfidenceBoost: 0.1,
             };
 
             const detector = new ExhaustionDetectorEnhanced(
@@ -561,48 +1544,199 @@ describe("Detector Config Validation - Universal Test Suite", () => {
     });
 
     describe("Missing Config Handling", () => {
-        it("should use appropriate defaults when config values are undefined", () => {
-            // Test that missing config values get sensible defaults,
-            // but explicitly provided values are always honored
-            const settingsWithMissingValues: ExhaustionSettings = {
-                symbol: "LTCUSDT",
-                // exhaustionThreshold intentionally omitted
-                windowMs: 45000,
+        it("should crash immediately on missing mandatory configuration (Nuclear Cleanup)", () => {
+            // Test that missing mandatory config values cause immediate crash
+            // This is per CLAUDE.md Nuclear Cleanup: "NO DEFAULTS, NO FALLBACKS, NO BULLSHIT"
+            const settingsWithMissingValues: any = {
+                // Base detector settings
                 minAggVolume: 20,
+                windowMs: 45000,
                 pricePrecision: 2,
                 zoneTicks: 3,
                 eventCooldownMs: 10000,
+                minInitialMoveTicks: 1,
+                confirmationTimeoutMs: 40000,
+                maxRevisitTicks: 8,
+
+                // Exhaustion-specific thresholds
+                volumeSurgeMultiplier: 2.0,
+                imbalanceThreshold: 0.3,
+                institutionalThreshold: 15,
+                burstDetectionMs: 2000,
+                sustainedVolumeMs: 20000,
+                medianTradeSize: 0.8,
+                // exhaustionThreshold intentionally omitted to test crash behavior
+                maxPassiveRatio: 0.35,
+                minDepletionFactor: 0.2,
+                imbalanceHighThreshold: 0.75,
+                imbalanceMediumThreshold: 0.55,
+                spreadHighThreshold: 0.004,
+                spreadMediumThreshold: 0.0015,
+
+                // Scoring weights
+                scoringWeights: {
+                    depletion: 0.45,
+                    passive: 0.3,
+                    continuity: 0.12,
+                    imbalance: 0.08,
+                    spread: 0.04,
+                    velocity: 0.01,
+                },
+
+                // Quality and performance settings
+                depletionThresholdRatio: 0.15,
+                significantChangeThreshold: 0.08,
+                highQualitySampleCount: 6,
+                highQualityDataAge: 35000,
+                mediumQualitySampleCount: 3,
+                mediumQualityDataAge: 70000,
+                circuitBreakerMaxErrors: 8,
+                circuitBreakerWindowMs: 90000,
+
+                // Confidence adjustments
+                lowScoreConfidenceAdjustment: 0.7,
+                lowVolumeConfidenceAdjustment: 0.8,
+                invalidSurgeConfidenceAdjustment: 0.8,
+                passiveConsistencyThreshold: 0.7,
+                imbalanceNeutralThreshold: 0.1,
+                velocityMinBound: 0.1,
+                velocityMaxBound: 10,
+
+                // Zone management
+                maxZones: 75,
+                zoneAgeLimit: 1200000,
+
+                // Features configuration
+                features: {
+                    depletionTracking: true,
+                    spreadAdjustment: true,
+                    volumeVelocity: false,
+                    spoofingDetection: true,
+                    adaptiveZone: true,
+                    multiZone: false,
+                    passiveHistory: true,
+                },
+
+                // Enhancement control
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Enhanced depletion analysis
+                depletionVolumeThreshold: 30,
+                depletionRatioThreshold: 0.6,
+                varianceReductionFactor: 1,
+                alignmentNormalizationFactor: 1,
+                distanceNormalizationDivisor: 2,
+                passiveVolumeExhaustionRatio: 0.5,
+                aggressiveVolumeExhaustionThreshold: 0.7,
+                aggressiveVolumeReductionFactor: 0.5,
+                enableDepletionAnalysis: true,
+                depletionConfidenceBoost: 0.1,
             };
 
-            const detector = new ExhaustionDetectorEnhanced(
-                "test-exhaustion",
-                settingsWithMissingValues,
-                mockLogger,
-                mockSpoofing,
-                mockMetrics,
-                mockSignalLogger
-            );
-
-            const actualThreshold = (detector as any).exhaustionThreshold;
-
-            // Should have a valid default (not undefined)
-            expect(actualThreshold).toBeDefined();
-            expect(typeof actualThreshold).toBe("number");
-            expect(actualThreshold).toBeGreaterThan(0);
-            expect(actualThreshold).toBeLessThanOrEqual(1);
+            // Nuclear Cleanup: Should crash immediately on missing mandatory config
+            expect(() => {
+                new ExhaustionDetectorEnhanced(
+                    "test-exhaustion",
+                    settingsWithMissingValues,
+                    mockLogger,
+                    mockSpoofing,
+                    mockMetrics,
+                    mockSignalLogger
+                );
+            }).toThrow(); // Zod validation should throw before process.exit(1)
         });
 
         it("should prefer explicit config values over defaults", () => {
             const explicitValue = 0.333;
 
-            const settingsWithExplicitValue: ExhaustionSettings = {
-                symbol: "LTCUSDT",
-                exhaustionThreshold: explicitValue,
-                windowMs: 45000,
+            const settingsWithExplicitValue: ExhaustionEnhancedSettings = {
+                // Base detector settings
                 minAggVolume: 20,
+                windowMs: 45000,
                 pricePrecision: 2,
                 zoneTicks: 3,
                 eventCooldownMs: 10000,
+                minInitialMoveTicks: 1,
+                confirmationTimeoutMs: 40000,
+                maxRevisitTicks: 8,
+
+                // Exhaustion-specific thresholds
+                volumeSurgeMultiplier: 2.0,
+                imbalanceThreshold: 0.3,
+                institutionalThreshold: 15,
+                burstDetectionMs: 2000,
+                sustainedVolumeMs: 20000,
+                medianTradeSize: 0.8,
+                exhaustionThreshold: explicitValue,
+                maxPassiveRatio: 0.35,
+                minDepletionFactor: 0.2,
+                imbalanceHighThreshold: 0.75,
+                imbalanceMediumThreshold: 0.55,
+                spreadHighThreshold: 0.004,
+                spreadMediumThreshold: 0.0015,
+
+                // Scoring weights
+                scoringWeights: {
+                    depletion: 0.45,
+                    passive: 0.3,
+                    continuity: 0.12,
+                    imbalance: 0.08,
+                    spread: 0.04,
+                    velocity: 0.01,
+                },
+
+                // Quality and performance settings
+                depletionThresholdRatio: 0.15,
+                significantChangeThreshold: 0.08,
+                highQualitySampleCount: 6,
+                highQualityDataAge: 35000,
+                mediumQualitySampleCount: 3,
+                mediumQualityDataAge: 70000,
+                circuitBreakerMaxErrors: 8,
+                circuitBreakerWindowMs: 90000,
+
+                // Confidence adjustments
+                lowScoreConfidenceAdjustment: 0.7,
+                lowVolumeConfidenceAdjustment: 0.8,
+                invalidSurgeConfidenceAdjustment: 0.8,
+                passiveConsistencyThreshold: 0.7,
+                imbalanceNeutralThreshold: 0.1,
+                velocityMinBound: 0.1,
+                velocityMaxBound: 10,
+
+                // Zone management
+                maxZones: 75,
+                zoneAgeLimit: 1200000,
+
+                // Features configuration
+                features: {
+                    depletionTracking: true,
+                    spreadAdjustment: true,
+                    volumeVelocity: false,
+                    spoofingDetection: true,
+                    adaptiveZone: true,
+                    multiZone: false,
+                    passiveHistory: true,
+                },
+
+                // Enhancement control
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Enhanced depletion analysis
+                depletionVolumeThreshold: 30,
+                depletionRatioThreshold: 0.6,
+                varianceReductionFactor: 1,
+                alignmentNormalizationFactor: 1,
+                distanceNormalizationDivisor: 2,
+                passiveVolumeExhaustionRatio: 0.5,
+                aggressiveVolumeExhaustionThreshold: 0.7,
+                aggressiveVolumeReductionFactor: 0.5,
+                enableDepletionAnalysis: true,
+                depletionConfidenceBoost: 0.1,
             };
 
             const detector = new ExhaustionDetectorEnhanced(

@@ -26,28 +26,84 @@ describe("AbsorptionDetector - Specification Compliance", () => {
     let mockMetrics: IMetricsCollector;
     let mockSpoofingDetector: SpoofingDetector;
 
-    const defaultSettings: AbsorptionSettings = {
+    const defaultSettings: AbsorptionEnhancedSettings = {
+        // Base detector settings (from config.json)
+        minAggVolume: 175,
         windowMs: 60000,
-        minAggVolume: 40, // Real config value
-        pricePrecision: 2, // Real config: 2 decimals
-        zoneTicks: 3, // Real config: 3 ticks = $0.03 zones
-        absorptionThreshold: 0.3, // Lower threshold for realistic detection
-        priceEfficiencyThreshold: 0.02, // Real config: 2% not 85%!
-        maxAbsorptionRatio: 0.7, // Allow up to 70% aggressive vs passive for absorption
+        pricePrecision: 2,
+        zoneTicks: 5,
+        eventCooldownMs: 15000,
+        minInitialMoveTicks: 4,
+        confirmationTimeoutMs: 60000,
+        maxRevisitTicks: 5,
 
-        // Realistic absorption level thresholds based on market data
-        strongAbsorptionRatio: 0.6, // 60% = strong absorption (realistic for institutional flows)
-        moderateAbsorptionRatio: 0.8, // 80% = moderate absorption (typical market absorption)
-        weakAbsorptionRatio: 1.0, // 100% = weak absorption (balanced aggressive/passive)
-
+        // Absorption-specific thresholds
+        absorptionThreshold: 0.6,
+        minPassiveMultiplier: 1.2,
+        maxAbsorptionRatio: 0.4,
+        strongAbsorptionRatio: 0.6,
+        moderateAbsorptionRatio: 0.8,
+        weakAbsorptionRatio: 1.0,
+        priceEfficiencyThreshold: 0.02,
         spreadImpactThreshold: 0.003,
         velocityIncreaseThreshold: 1.5,
+        significantChangeThreshold: 0.1,
+
+        // Dominant side analysis
+        dominantSideAnalysisWindowMs: 45000,
+        dominantSideFallbackTradeCount: 10,
+        dominantSideMinTradesRequired: 3,
+        dominantSideTemporalWeighting: true,
+        dominantSideWeightDecayFactor: 0.3,
+
+        // Features configuration
         features: {
+            adaptiveZone: true,
+            passiveHistory: true,
+            multiZone: false,
             liquidityGradient: true,
-            absorptionVelocity: false,
-            layeredAbsorption: false,
+            absorptionVelocity: true,
+            layeredAbsorption: true,
             spreadImpact: true,
         },
+
+        // Enhancement control
+        useStandardizedZones: true,
+        enhancementMode: "production" as const,
+        minEnhancedConfidenceThreshold: 0.3,
+
+        // Institutional volume detection (enhanced)
+        institutionalVolumeThreshold: 50,
+        institutionalVolumeRatioThreshold: 0.3,
+        enableInstitutionalVolumeFilter: true,
+        institutionalVolumeBoost: 0.1,
+
+        // Enhanced calculation parameters
+        volumeNormalizationThreshold: 200,
+        absorptionRatioNormalization: 3,
+        minAbsorptionScore: 0.8,
+        patternVarianceReduction: 2,
+        whaleActivityMultiplier: 2,
+        maxZoneCountForScoring: 3,
+
+        // Enhanced thresholds
+        highConfidenceThreshold: 0.7,
+        lowConfidenceReduction: 0.7,
+        confidenceBoostReduction: 0.5,
+        passiveAbsorptionThreshold: 0.6,
+        aggressiveDistributionThreshold: 0.6,
+        patternDifferenceThreshold: 0.1,
+        minVolumeForRatio: 1,
+
+        // Enhanced scoring weights
+        distanceWeight: 0.4,
+        volumeWeight: 0.35,
+        absorptionWeight: 0.25,
+        minConfluenceScore: 0.6,
+        volumeConcentrationWeight: 0.15,
+        patternConsistencyWeight: 0.1,
+        volumeBoostCap: 0.25,
+        volumeBoostMultiplier: 0.25,
     };
 
     beforeEach(async () => {
@@ -546,9 +602,9 @@ describe("AbsorptionDetector - Specification Compliance", () => {
     describe("SPECIFICATION: Configuration Compliance", () => {
         it("MUST use all configurable thresholds instead of magic numbers", () => {
             // REQUIREMENT: Zero magic numbers - all thresholds configurable
-            const customSettings: AbsorptionSettings = {
+            const customSettings: AbsorptionEnhancedSettings = {
                 ...defaultSettings,
-                priceEfficiencyThreshold: 0.75,
+                priceEfficiencyThreshold: 0.05, // Within valid range (0.02-0.1)
                 spreadImpactThreshold: 0.005,
                 velocityIncreaseThreshold: 2.0,
             };

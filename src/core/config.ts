@@ -1077,25 +1077,64 @@ export class Config {
         return SYMBOL_CFG.distribution;
     }
 
+    // 🚨 NUCLEAR CLEANUP: Zero tolerance configuration validation helpers
+    private static validateDetectorConfig<T>(
+        schema: z.ZodSchema<T>,
+        config: unknown,
+        detectorName: string
+    ): T {
+        try {
+            return schema.parse(config);
+        } catch (error) {
+            // POLICY OVERRIDE: Use console.error for critical config failures
+            // This is a system panic situation that requires immediate visibility
+            console.error(`🚨 CRITICAL CONFIG ERROR - ${detectorName}`);
+            console.error("Missing mandatory configuration properties:");
+            console.error(error);
+            console.error("Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT");
+            process.exit(1);
+        }
+    }
+
     // Enhanced detector configurations - validated Zod schemas
     static get ABSORPTION_DETECTOR() {
-        return AbsorptionDetectorSchema.parse(SYMBOL_CFG.absorption);
+        return this.validateDetectorConfig(
+            AbsorptionDetectorSchema,
+            SYMBOL_CFG.absorption,
+            "AbsorptionDetectorEnhanced"
+        );
     }
 
     static get EXHAUSTION_DETECTOR() {
-        return ExhaustionDetectorSchema.parse(SYMBOL_CFG.exhaustion);
+        return this.validateDetectorConfig(
+            ExhaustionDetectorSchema,
+            SYMBOL_CFG.exhaustion,
+            "ExhaustionDetectorEnhanced"
+        );
     }
 
     static get DELTACVD_DETECTOR() {
-        return DeltaCVDDetectorSchema.parse(SYMBOL_CFG.deltaCvdConfirmation);
+        return this.validateDetectorConfig(
+            DeltaCVDDetectorSchema,
+            SYMBOL_CFG.deltaCvdConfirmation,
+            "DeltaCVDDetectorEnhanced"
+        );
     }
 
     static get ACCUMULATION_DETECTOR() {
-        return AccumulationDetectorSchema.parse(SYMBOL_CFG.accumulation);
+        return this.validateDetectorConfig(
+            AccumulationDetectorSchema,
+            SYMBOL_CFG.accumulation,
+            "AccumulationZoneDetectorEnhanced"
+        );
     }
 
     static get DISTRIBUTION_ZONE_DETECTOR() {
-        return DistributionDetectorSchema.parse(SYMBOL_CFG.distribution);
+        return this.validateDetectorConfig(
+            DistributionDetectorSchema,
+            SYMBOL_CFG.distribution,
+            "DistributionDetectorEnhanced"
+        );
     }
 
     static get SUPPORT_RESISTANCE_DETECTOR(): SupportResistanceConfig {

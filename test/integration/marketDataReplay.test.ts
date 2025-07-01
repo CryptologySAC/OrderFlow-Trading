@@ -99,17 +99,83 @@ describe("Market Data Replay Integration Tests", () => {
             const absorptionDetector = new AbsorptionDetectorEnhanced(
                 "test-absorption-enhanced",
                 {
-                    minAggVolume: 50, // Lower volume threshold
+                    // Base detector settings (from config.json)
+                    minAggVolume: 50,
                     windowMs: 60000,
+                    pricePrecision: 2,
                     zoneTicks: 3,
-                    absorptionThreshold: 0.3, // Lower absorption threshold
-                    priceEfficiencyThreshold: 0.5, // Lower efficiency threshold
-                    volumeSurgeMultiplier: 2.0, // Lower multiplier
-                    imbalanceThreshold: 0.2, // Lower imbalance threshold
-                    useStandardizedZones: true,
-                    standardizedZoneConfig: {
-                        enhancementMode: "production",
+                    eventCooldownMs: 15000,
+                    minInitialMoveTicks: 4,
+                    confirmationTimeoutMs: 60000,
+                    maxRevisitTicks: 5,
+
+                    // Absorption-specific thresholds
+                    absorptionThreshold: 0.3,
+                    minPassiveMultiplier: 1.2,
+                    maxAbsorptionRatio: 0.4,
+                    strongAbsorptionRatio: 0.6,
+                    moderateAbsorptionRatio: 0.8,
+                    weakAbsorptionRatio: 1.0,
+                    priceEfficiencyThreshold: 0.5,
+                    spreadImpactThreshold: 0.003,
+                    velocityIncreaseThreshold: 1.5,
+                    significantChangeThreshold: 0.1,
+
+                    // Dominant side analysis
+                    dominantSideAnalysisWindowMs: 45000,
+                    dominantSideFallbackTradeCount: 10,
+                    dominantSideMinTradesRequired: 3,
+                    dominantSideTemporalWeighting: true,
+                    dominantSideWeightDecayFactor: 0.3,
+
+                    // Features configuration
+                    features: {
+                        adaptiveZone: true,
+                        passiveHistory: true,
+                        multiZone: false,
+                        liquidityGradient: true,
+                        absorptionVelocity: true,
+                        layeredAbsorption: true,
+                        spreadImpact: true,
                     },
+
+                    // Enhancement control
+                    useStandardizedZones: true,
+                    enhancementMode: "production" as const,
+                    minEnhancedConfidenceThreshold: 0.3,
+
+                    // Institutional volume detection (enhanced)
+                    institutionalVolumeThreshold: 50,
+                    institutionalVolumeRatioThreshold: 0.3,
+                    enableInstitutionalVolumeFilter: true,
+                    institutionalVolumeBoost: 0.1,
+
+                    // Enhanced calculation parameters
+                    volumeNormalizationThreshold: 200,
+                    absorptionRatioNormalization: 3,
+                    minAbsorptionScore: 0.8,
+                    patternVarianceReduction: 2,
+                    whaleActivityMultiplier: 2,
+                    maxZoneCountForScoring: 3,
+
+                    // Enhanced thresholds
+                    highConfidenceThreshold: 0.7,
+                    lowConfidenceReduction: 0.7,
+                    confidenceBoostReduction: 0.5,
+                    passiveAbsorptionThreshold: 0.6,
+                    aggressiveDistributionThreshold: 0.6,
+                    patternDifferenceThreshold: 0.1,
+                    minVolumeForRatio: 1,
+
+                    // Enhanced scoring weights
+                    distanceWeight: 0.4,
+                    volumeWeight: 0.35,
+                    absorptionWeight: 0.25,
+                    minConfluenceScore: 0.6,
+                    volumeConcentrationWeight: 0.15,
+                    patternConsistencyWeight: 0.1,
+                    volumeBoostCap: 0.25,
+                    volumeBoostMultiplier: 0.25,
                 },
                 mockOrderBookState,
                 mockLogger,
@@ -196,16 +262,91 @@ describe("Market Data Replay Integration Tests", () => {
             const exhaustionDetector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion-enhanced",
                 {
+                    // Base detector settings
                     minAggVolume: 50, // Lower volume threshold
                     windowMs: 90000,
+                    pricePrecision: 2,
                     zoneTicks: 3,
-                    exhaustionThreshold: 0.3, // Lower exhaustion threshold
+                    eventCooldownMs: 10000,
+                    minInitialMoveTicks: 1,
+                    confirmationTimeoutMs: 40000,
+                    maxRevisitTicks: 8,
+
+                    // Exhaustion-specific thresholds
                     volumeSurgeMultiplier: 1.5, // Lower multiplier
                     imbalanceThreshold: 0.15, // Lower imbalance threshold
-                    useStandardizedZones: true,
-                    standardizedZoneConfig: {
-                        enhancementMode: "production",
+                    institutionalThreshold: 15,
+                    burstDetectionMs: 2000,
+                    sustainedVolumeMs: 20000,
+                    medianTradeSize: 0.8,
+                    exhaustionThreshold: 0.3, // Lower exhaustion threshold
+                    maxPassiveRatio: 0.35,
+                    minDepletionFactor: 0.2,
+                    imbalanceHighThreshold: 0.75,
+                    imbalanceMediumThreshold: 0.55,
+                    spreadHighThreshold: 0.004,
+                    spreadMediumThreshold: 0.0015,
+
+                    // Scoring weights
+                    scoringWeights: {
+                        depletion: 0.45,
+                        passive: 0.3,
+                        continuity: 0.12,
+                        imbalance: 0.08,
+                        spread: 0.04,
+                        velocity: 0.01,
                     },
+
+                    // Quality and performance settings
+                    depletionThresholdRatio: 0.15,
+                    significantChangeThreshold: 0.08,
+                    highQualitySampleCount: 6,
+                    highQualityDataAge: 35000,
+                    mediumQualitySampleCount: 3,
+                    mediumQualityDataAge: 70000,
+                    circuitBreakerMaxErrors: 8,
+                    circuitBreakerWindowMs: 90000,
+
+                    // Confidence adjustments
+                    lowScoreConfidenceAdjustment: 0.7,
+                    lowVolumeConfidenceAdjustment: 0.8,
+                    invalidSurgeConfidenceAdjustment: 0.8,
+                    passiveConsistencyThreshold: 0.7,
+                    imbalanceNeutralThreshold: 0.1,
+                    velocityMinBound: 0.1,
+                    velocityMaxBound: 10,
+
+                    // Zone management
+                    maxZones: 75,
+                    zoneAgeLimit: 1200000,
+
+                    // Features configuration
+                    features: {
+                        depletionTracking: true,
+                        spreadAdjustment: true,
+                        volumeVelocity: false,
+                        spoofingDetection: true,
+                        adaptiveZone: true,
+                        multiZone: false,
+                        passiveHistory: true,
+                    },
+
+                    // Enhancement control
+                    useStandardizedZones: true,
+                    enhancementMode: "production" as const,
+                    minEnhancedConfidenceThreshold: 0.3,
+
+                    // Enhanced depletion analysis
+                    depletionVolumeThreshold: 30,
+                    depletionRatioThreshold: 0.6,
+                    varianceReductionFactor: 1,
+                    alignmentNormalizationFactor: 1,
+                    distanceNormalizationDivisor: 2,
+                    passiveVolumeExhaustionRatio: 0.5,
+                    aggressiveVolumeExhaustionThreshold: 0.7,
+                    aggressiveVolumeReductionFactor: 0.5,
+                    enableDepletionAnalysis: true,
+                    depletionConfidenceBoost: 0.1,
                 },
                 mockLogger,
                 mockSpoofingDetector,
@@ -280,10 +421,83 @@ describe("Market Data Replay Integration Tests", () => {
             const zoneBasedDetector = new AbsorptionDetectorEnhanced(
                 "LTCUSDT",
                 {
+                    // Base detector settings (from config.json)
                     minAggVolume: 30,
                     windowMs: 60000,
+                    pricePrecision: 2,
                     zoneTicks: 3,
+                    eventCooldownMs: 15000,
+                    minInitialMoveTicks: 4,
+                    confirmationTimeoutMs: 60000,
+                    maxRevisitTicks: 5,
+
+                    // Absorption-specific thresholds
                     absorptionThreshold: 0.3,
+                    minPassiveMultiplier: 1.2,
+                    maxAbsorptionRatio: 0.4,
+                    strongAbsorptionRatio: 0.6,
+                    moderateAbsorptionRatio: 0.8,
+                    weakAbsorptionRatio: 1.0,
+                    priceEfficiencyThreshold: 0.02,
+                    spreadImpactThreshold: 0.003,
+                    velocityIncreaseThreshold: 1.5,
+                    significantChangeThreshold: 0.1,
+
+                    // Dominant side analysis
+                    dominantSideAnalysisWindowMs: 45000,
+                    dominantSideFallbackTradeCount: 10,
+                    dominantSideMinTradesRequired: 3,
+                    dominantSideTemporalWeighting: true,
+                    dominantSideWeightDecayFactor: 0.3,
+
+                    // Features configuration
+                    features: {
+                        adaptiveZone: true,
+                        passiveHistory: true,
+                        multiZone: false,
+                        liquidityGradient: true,
+                        absorptionVelocity: true,
+                        layeredAbsorption: true,
+                        spreadImpact: true,
+                    },
+
+                    // Enhancement control
+                    useStandardizedZones: true,
+                    enhancementMode: "production" as const,
+                    minEnhancedConfidenceThreshold: 0.3,
+
+                    // Institutional volume detection (enhanced)
+                    institutionalVolumeThreshold: 50,
+                    institutionalVolumeRatioThreshold: 0.3,
+                    enableInstitutionalVolumeFilter: true,
+                    institutionalVolumeBoost: 0.1,
+
+                    // Enhanced calculation parameters
+                    volumeNormalizationThreshold: 200,
+                    absorptionRatioNormalization: 3,
+                    minAbsorptionScore: 0.8,
+                    patternVarianceReduction: 2,
+                    whaleActivityMultiplier: 2,
+                    maxZoneCountForScoring: 3,
+
+                    // Enhanced thresholds
+                    highConfidenceThreshold: 0.7,
+                    lowConfidenceReduction: 0.7,
+                    confidenceBoostReduction: 0.5,
+                    passiveAbsorptionThreshold: 0.6,
+                    aggressiveDistributionThreshold: 0.6,
+                    patternDifferenceThreshold: 0.1,
+                    minVolumeForRatio: 1,
+
+                    // Enhanced scoring weights
+                    distanceWeight: 0.4,
+                    volumeWeight: 0.35,
+                    absorptionWeight: 0.25,
+                    minConfluenceScore: 0.6,
+                    volumeConcentrationWeight: 0.15,
+                    patternConsistencyWeight: 0.1,
+                    volumeBoostCap: 0.25,
+                    volumeBoostMultiplier: 0.25,
                 },
                 mockOrderBookState,
                 mockLogger,
@@ -360,10 +574,91 @@ describe("Market Data Replay Integration Tests", () => {
             const exhaustionDetector = new ExhaustionDetectorEnhanced(
                 "LTCUSDT",
                 {
+                    // Base detector settings
                     minAggVolume: 200,
                     windowMs: 90000,
+                    pricePrecision: 2,
                     zoneTicks: 3,
+                    eventCooldownMs: 10000,
+                    minInitialMoveTicks: 1,
+                    confirmationTimeoutMs: 40000,
+                    maxRevisitTicks: 8,
+
+                    // Exhaustion-specific thresholds
+                    volumeSurgeMultiplier: 2.0,
+                    imbalanceThreshold: 0.3,
+                    institutionalThreshold: 15,
+                    burstDetectionMs: 2000,
+                    sustainedVolumeMs: 20000,
+                    medianTradeSize: 0.8,
                     exhaustionThreshold: 0.6,
+                    maxPassiveRatio: 0.35,
+                    minDepletionFactor: 0.2,
+                    imbalanceHighThreshold: 0.75,
+                    imbalanceMediumThreshold: 0.55,
+                    spreadHighThreshold: 0.004,
+                    spreadMediumThreshold: 0.0015,
+
+                    // Scoring weights
+                    scoringWeights: {
+                        depletion: 0.45,
+                        passive: 0.3,
+                        continuity: 0.12,
+                        imbalance: 0.08,
+                        spread: 0.04,
+                        velocity: 0.01,
+                    },
+
+                    // Quality and performance settings
+                    depletionThresholdRatio: 0.15,
+                    significantChangeThreshold: 0.08,
+                    highQualitySampleCount: 6,
+                    highQualityDataAge: 35000,
+                    mediumQualitySampleCount: 3,
+                    mediumQualityDataAge: 70000,
+                    circuitBreakerMaxErrors: 8,
+                    circuitBreakerWindowMs: 90000,
+
+                    // Confidence adjustments
+                    lowScoreConfidenceAdjustment: 0.7,
+                    lowVolumeConfidenceAdjustment: 0.8,
+                    invalidSurgeConfidenceAdjustment: 0.8,
+                    passiveConsistencyThreshold: 0.7,
+                    imbalanceNeutralThreshold: 0.1,
+                    velocityMinBound: 0.1,
+                    velocityMaxBound: 10,
+
+                    // Zone management
+                    maxZones: 75,
+                    zoneAgeLimit: 1200000,
+
+                    // Features configuration
+                    features: {
+                        depletionTracking: true,
+                        spreadAdjustment: true,
+                        volumeVelocity: false,
+                        spoofingDetection: true,
+                        adaptiveZone: true,
+                        multiZone: false,
+                        passiveHistory: true,
+                    },
+
+                    // Enhancement control
+                    useStandardizedZones: true,
+                    enhancementMode: "production" as const,
+                    minEnhancedConfidenceThreshold: 0.3,
+
+                    // Enhanced depletion analysis
+                    depletionVolumeThreshold: 30,
+                    depletionRatioThreshold: 0.6,
+                    varianceReductionFactor: 1,
+                    alignmentNormalizationFactor: 1,
+                    distanceNormalizationDivisor: 2,
+                    passiveVolumeExhaustionRatio: 0.5,
+                    aggressiveVolumeExhaustionThreshold: 0.7,
+                    aggressiveVolumeReductionFactor: 0.5,
+                    enableDepletionAnalysis: true,
+                    depletionConfidenceBoost: 0.1,
                 },
                 mockLogger,
                 mockSpoofingDetector,

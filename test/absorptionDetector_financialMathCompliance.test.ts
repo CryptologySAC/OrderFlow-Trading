@@ -22,13 +22,84 @@ describe("AbsorptionDetector - FinancialMath Compliance", () => {
     let mockMetrics: IMetricsCollector;
     let mockSpoofingDetector: SpoofingDetector;
 
-    const defaultSettings: AbsorptionSettings = {
+    const defaultSettings: AbsorptionEnhancedSettings = {
+        // Base detector settings (from config.json)
+        minAggVolume: 175,
         windowMs: 60000,
-        minAggVolume: 10,
-        pricePrecision: 4,
-        zoneTicks: 10,
-        absorptionThreshold: 0.7,
-        priceEfficiencyThreshold: 0.85,
+        pricePrecision: 2,
+        zoneTicks: 5,
+        eventCooldownMs: 15000,
+        minInitialMoveTicks: 4,
+        confirmationTimeoutMs: 60000,
+        maxRevisitTicks: 5,
+
+        // Absorption-specific thresholds
+        absorptionThreshold: 0.6,
+        minPassiveMultiplier: 1.2,
+        maxAbsorptionRatio: 0.4,
+        strongAbsorptionRatio: 0.6,
+        moderateAbsorptionRatio: 0.8,
+        weakAbsorptionRatio: 1.0,
+        priceEfficiencyThreshold: 0.02,
+        spreadImpactThreshold: 0.003,
+        velocityIncreaseThreshold: 1.5,
+        significantChangeThreshold: 0.1,
+
+        // Dominant side analysis
+        dominantSideAnalysisWindowMs: 45000,
+        dominantSideFallbackTradeCount: 10,
+        dominantSideMinTradesRequired: 3,
+        dominantSideTemporalWeighting: true,
+        dominantSideWeightDecayFactor: 0.3,
+
+        // Features configuration
+        features: {
+            adaptiveZone: true,
+            passiveHistory: true,
+            multiZone: false,
+            liquidityGradient: true,
+            absorptionVelocity: true,
+            layeredAbsorption: true,
+            spreadImpact: true,
+        },
+
+        // Enhancement control
+        useStandardizedZones: true,
+        enhancementMode: "production" as const,
+        minEnhancedConfidenceThreshold: 0.3,
+
+        // Institutional volume detection (enhanced)
+        institutionalVolumeThreshold: 50,
+        institutionalVolumeRatioThreshold: 0.3,
+        enableInstitutionalVolumeFilter: true,
+        institutionalVolumeBoost: 0.1,
+
+        // Enhanced calculation parameters
+        volumeNormalizationThreshold: 200,
+        absorptionRatioNormalization: 3,
+        minAbsorptionScore: 0.8,
+        patternVarianceReduction: 2,
+        whaleActivityMultiplier: 2,
+        maxZoneCountForScoring: 3,
+
+        // Enhanced thresholds
+        highConfidenceThreshold: 0.7,
+        lowConfidenceReduction: 0.7,
+        confidenceBoostReduction: 0.5,
+        passiveAbsorptionThreshold: 0.6,
+        aggressiveDistributionThreshold: 0.6,
+        patternDifferenceThreshold: 0.1,
+        minVolumeForRatio: 1,
+
+        // Enhanced scoring weights
+        distanceWeight: 0.4,
+        volumeWeight: 0.35,
+        absorptionWeight: 0.25,
+        minConfluenceScore: 0.6,
+        volumeConcentrationWeight: 0.15,
+        patternConsistencyWeight: 0.1,
+        volumeBoostCap: 0.25,
+        volumeBoostMultiplier: 0.25,
     };
 
     beforeEach(async () => {

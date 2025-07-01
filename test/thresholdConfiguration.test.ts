@@ -169,7 +169,90 @@ describe("Threshold Configuration Chain", () => {
         it("should use default threshold values when not provided", () => {
             const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
-                {}, // No thresholds provided
+                {
+                    // Base detector settings
+                    minAggVolume: 20,
+                    windowMs: 45000,
+                    pricePrecision: 2,
+                    zoneTicks: 3,
+                    eventCooldownMs: 10000,
+                    minInitialMoveTicks: 1,
+                    confirmationTimeoutMs: 40000,
+                    maxRevisitTicks: 8,
+
+                    // Exhaustion-specific thresholds
+                    volumeSurgeMultiplier: 2.0,
+                    imbalanceThreshold: 0.3,
+                    institutionalThreshold: 15,
+                    burstDetectionMs: 2000,
+                    sustainedVolumeMs: 20000,
+                    medianTradeSize: 0.8,
+                    exhaustionThreshold: 0.3,
+                    maxPassiveRatio: 0.35,
+                    minDepletionFactor: 0.2,
+                    // No custom thresholds provided - will use defaults
+
+                    // Scoring weights
+                    scoringWeights: {
+                        depletion: 0.45,
+                        passive: 0.3,
+                        continuity: 0.12,
+                        imbalance: 0.08,
+                        spread: 0.04,
+                        velocity: 0.01,
+                    },
+
+                    // Quality and performance settings
+                    depletionThresholdRatio: 0.15,
+                    significantChangeThreshold: 0.08,
+                    highQualitySampleCount: 6,
+                    highQualityDataAge: 35000,
+                    mediumQualitySampleCount: 3,
+                    mediumQualityDataAge: 70000,
+                    circuitBreakerMaxErrors: 8,
+                    circuitBreakerWindowMs: 90000,
+
+                    // Confidence adjustments
+                    lowScoreConfidenceAdjustment: 0.7,
+                    lowVolumeConfidenceAdjustment: 0.8,
+                    invalidSurgeConfidenceAdjustment: 0.8,
+                    passiveConsistencyThreshold: 0.7,
+                    imbalanceNeutralThreshold: 0.1,
+                    velocityMinBound: 0.1,
+                    velocityMaxBound: 10,
+
+                    // Zone management
+                    maxZones: 75,
+                    zoneAgeLimit: 1200000,
+
+                    // Features configuration
+                    features: {
+                        depletionTracking: true,
+                        spreadAdjustment: true,
+                        volumeVelocity: false,
+                        spoofingDetection: true,
+                        adaptiveZone: true,
+                        multiZone: false,
+                        passiveHistory: true,
+                    },
+
+                    // Enhancement control
+                    useStandardizedZones: true,
+                    enhancementMode: "production" as const,
+                    minEnhancedConfidenceThreshold: 0.3,
+
+                    // Enhanced depletion analysis
+                    depletionVolumeThreshold: 30,
+                    depletionRatioThreshold: 0.6,
+                    varianceReductionFactor: 1,
+                    alignmentNormalizationFactor: 1,
+                    distanceNormalizationDivisor: 2,
+                    passiveVolumeExhaustionRatio: 0.5,
+                    aggressiveVolumeExhaustionThreshold: 0.7,
+                    aggressiveVolumeReductionFactor: 0.5,
+                    enableDepletionAnalysis: true,
+                    depletionConfidenceBoost: 0.1,
+                },
                 mockLogger,
                 mockSpoofingDetector,
                 mockMetrics
@@ -190,9 +273,94 @@ describe("Threshold Configuration Chain", () => {
                 spreadMediumThreshold: 0.003,
             };
 
+            const completeSettings = {
+                // Base detector settings
+                minAggVolume: 20,
+                windowMs: 45000,
+                pricePrecision: 2,
+                zoneTicks: 3,
+                eventCooldownMs: 10000,
+                minInitialMoveTicks: 1,
+                confirmationTimeoutMs: 40000,
+                maxRevisitTicks: 8,
+
+                // Exhaustion-specific thresholds
+                volumeSurgeMultiplier: 2.0,
+                imbalanceThreshold: 0.3,
+                institutionalThreshold: 15,
+                burstDetectionMs: 2000,
+                sustainedVolumeMs: 20000,
+                medianTradeSize: 0.8,
+                exhaustionThreshold: 0.3,
+                maxPassiveRatio: 0.35,
+                minDepletionFactor: 0.2,
+                ...customSettings, // Override with custom values
+
+                // Scoring weights
+                scoringWeights: {
+                    depletion: 0.45,
+                    passive: 0.3,
+                    continuity: 0.12,
+                    imbalance: 0.08,
+                    spread: 0.04,
+                    velocity: 0.01,
+                },
+
+                // Quality and performance settings
+                depletionThresholdRatio: 0.15,
+                significantChangeThreshold: 0.08,
+                highQualitySampleCount: 6,
+                highQualityDataAge: 35000,
+                mediumQualitySampleCount: 3,
+                mediumQualityDataAge: 70000,
+                circuitBreakerMaxErrors: 8,
+                circuitBreakerWindowMs: 90000,
+
+                // Confidence adjustments
+                lowScoreConfidenceAdjustment: 0.7,
+                lowVolumeConfidenceAdjustment: 0.8,
+                invalidSurgeConfidenceAdjustment: 0.8,
+                passiveConsistencyThreshold: 0.7,
+                imbalanceNeutralThreshold: 0.1,
+                velocityMinBound: 0.1,
+                velocityMaxBound: 10,
+
+                // Zone management
+                maxZones: 75,
+                zoneAgeLimit: 1200000,
+
+                // Features configuration
+                features: {
+                    depletionTracking: true,
+                    spreadAdjustment: true,
+                    volumeVelocity: false,
+                    spoofingDetection: true,
+                    adaptiveZone: true,
+                    multiZone: false,
+                    passiveHistory: true,
+                },
+
+                // Enhancement control
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Enhanced depletion analysis
+                depletionVolumeThreshold: 30,
+                depletionRatioThreshold: 0.6,
+                varianceReductionFactor: 1,
+                alignmentNormalizationFactor: 1,
+                distanceNormalizationDivisor: 2,
+                passiveVolumeExhaustionRatio: 0.5,
+                aggressiveVolumeExhaustionThreshold: 0.7,
+                aggressiveVolumeReductionFactor: 0.5,
+                enableDepletionAnalysis: true,
+                depletionConfidenceBoost: 0.1,
+            };
+
             const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
-                customSettings,
+                completeSettings,
                 mockLogger,
                 mockSpoofingDetector,
                 mockMetrics
