@@ -45,7 +45,7 @@ describe("ExhaustionDetector - Operational Safety Tests", () => {
 
         // 🚫 NUCLEAR CLEANUP: Use complete mock config settings with test overrides
         const settings: ExhaustionSettings = {
-            ...mockConfig.symbols.LTCUSDT.exhaustion as ExhaustionSettings,
+            ...(mockConfig.symbols.LTCUSDT.exhaustion as ExhaustionSettings),
             circuitBreakerMaxErrors: 5,
             circuitBreakerWindowMs: 60000,
         };
@@ -220,9 +220,7 @@ describe("ExhaustionDetector - Operational Safety Tests", () => {
             detectorAny.cleanupZoneMemory();
 
             // Should be limited to max zones from mock config
-            expect(detectorAny.zonePassiveHistory.size).toBeLessThanOrEqual(
-                75
-            );
+            expect(detectorAny.zonePassiveHistory.size).toBeLessThanOrEqual(75);
         });
 
         it("should clean up zones based on age limit", () => {
@@ -338,7 +336,8 @@ describe("ExhaustionDetector - Operational Safety Tests", () => {
             // 🚫 NUCLEAR CLEANUP: Validation moved to Zod in config.ts
             // ExhaustionDetector no longer validates - relies on pre-validated config
             const validSettings: ExhaustionSettings = {
-                ...mockConfig.symbols.LTCUSDT.exhaustion as ExhaustionSettings,
+                ...(mockConfig.symbols.LTCUSDT
+                    .exhaustion as ExhaustionSettings),
                 exhaustionThreshold: 0.8, // Valid threshold
             };
 
@@ -359,7 +358,8 @@ describe("ExhaustionDetector - Operational Safety Tests", () => {
             // 🚫 NUCLEAR CLEANUP: Validation moved to Zod in config.ts
             // ExhaustionDetector no longer validates - relies on pre-validated config
             const validSettings: ExhaustionSettings = {
-                ...mockConfig.symbols.LTCUSDT.exhaustion as ExhaustionSettings,
+                ...(mockConfig.symbols.LTCUSDT
+                    .exhaustion as ExhaustionSettings),
                 maxPassiveRatio: 0.4, // Valid ratio
             };
 
@@ -380,7 +380,8 @@ describe("ExhaustionDetector - Operational Safety Tests", () => {
             // 🚫 NUCLEAR CLEANUP: Validation moved to Zod in config.ts
             // ExhaustionDetector no longer validates - relies on pre-validated config
             const validSettings: ExhaustionSettings = {
-                ...mockConfig.symbols.LTCUSDT.exhaustion as ExhaustionSettings,
+                ...(mockConfig.symbols.LTCUSDT
+                    .exhaustion as ExhaustionSettings),
                 minDepletionFactor: 0.3, // Valid factor
             };
 
@@ -401,7 +402,8 @@ describe("ExhaustionDetector - Operational Safety Tests", () => {
             // 🚫 NUCLEAR CLEANUP: Invalid configurations should never reach detector
             // Zod validation in config.ts ensures only valid configs are passed
             const validSettings: ExhaustionSettings = {
-                ...mockConfig.symbols.LTCUSDT.exhaustion as ExhaustionSettings,
+                ...(mockConfig.symbols.LTCUSDT
+                    .exhaustion as ExhaustionSettings),
                 // All values guaranteed valid by Zod schema validation
             };
 

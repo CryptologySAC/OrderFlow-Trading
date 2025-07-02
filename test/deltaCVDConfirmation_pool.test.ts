@@ -11,7 +11,7 @@ import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
-// Import mock config for complete settings  
+// Import mock config for complete settings
 import mockConfig from "../__mocks__/config.json";
 
 describe("DeltaCVDConfirmation memory management", () => {

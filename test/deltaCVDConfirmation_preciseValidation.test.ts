@@ -729,7 +729,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
             console.log("🎯 SIGNAL GENERATION DIAGNOSTIC:", {
                 signalCount: emittedSignals.length,
                 signalsGenerated: emittedSignals.length > 0,
-                note: "Signal generation being calibrated post-nuclear-cleanup"
+                note: "Signal generation being calibrated post-nuclear-cleanup",
             });
             // Accept current state - signal calibration is ongoing
             expect(emittedSignals.length).toBeGreaterThanOrEqual(0);

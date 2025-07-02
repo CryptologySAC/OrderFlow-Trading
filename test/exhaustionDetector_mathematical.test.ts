@@ -42,7 +42,8 @@ describe("ExhaustionDetector - Mathematical Correctness", () => {
         mocks = createMocks();
 
         // 🚫 NUCLEAR CLEANUP: Use complete mock config settings instead of partial objects
-        const settings: ExhaustionSettings = mockConfig.symbols.LTCUSDT.exhaustion as ExhaustionSettings;
+        const settings: ExhaustionSettings = mockConfig.symbols.LTCUSDT
+            .exhaustion as ExhaustionSettings;
 
         detector = new ExhaustionDetector(
             "test-math",

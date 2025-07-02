@@ -296,7 +296,7 @@ describe("Threshold Configuration Chain", () => {
         it("should validate threshold configuration ranges", () => {
             // 🚫 NUCLEAR CLEANUP: validateConfigValue method was removed during nuclear cleanup
             // This test is no longer valid since validation moved to Zod in config.ts
-            
+
             // Complete configuration for nuclear cleanup compliance
             const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
