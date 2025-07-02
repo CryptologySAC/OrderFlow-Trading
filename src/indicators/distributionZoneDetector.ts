@@ -58,11 +58,6 @@ import { FinancialMath } from "../utils/financialMath.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
 import { ObjectPool } from "../utils/objectPool.js";
 import { CircularBuffer } from "../utils/circularBuffer.js";
-import {
-    EnhancedZoneFormation,
-    type InstitutionalSignals,
-    type MarketRegime,
-} from "./enhancedZoneFormation.js";
 import { ZoneDetector } from "./base/zoneDetector.js";
 import type { DistributionCandidate } from "./interfaces/detectorInterfaces.js";
 import { VolumeAnalyzer } from "./utils/volumeAnalyzer.js";
@@ -132,9 +127,6 @@ export class DistributionZoneDetector extends ZoneDetector {
     private readonly zoneTicks: number;
     private readonly strongZoneThreshold: number;
 
-    // Enhanced zone formation analyzer (identical)
-    private readonly enhancedZoneFormation: EnhancedZoneFormation;
-
     // Volume surge analysis integration
     private readonly volumeAnalyzer: VolumeAnalyzer;
     private readonly volumeSurgeConfig: VolumeSurgeConfig;
@@ -154,11 +146,6 @@ export class DistributionZoneDetector extends ZoneDetector {
         this.strongZoneThreshold = config.strongZoneThreshold ?? 0.7;
 
         // Enhanced zone formation with distribution-specific settings
-        this.enhancedZoneFormation = new EnhancedZoneFormation(
-            40, // institutionalSizeThreshold
-            15, // icebergDetectionWindow
-            0.25 // minInstitutionalRatio
-        );
 
         // Initialize volume surge configuration
         this.volumeSurgeConfig = {
@@ -523,36 +510,18 @@ export class DistributionZoneDetector extends ZoneDetector {
                 continue;
             }
 
-            // Enhanced scoring with institutional factors (identical structure)
-            const institutionalSignals =
-                this.enhancedZoneFormation.analyzeInstitutionalSignals(
-                    candidate.trades.getAll()
-                );
-            const institutionalScore =
-                this.calculateInstitutionalScore(institutionalSignals);
-
-            // Use same lenient institutional requirement as accumulation
-            const minInstitutionalScore = Math.min(
-                0.15,
-                this.config.minZoneStrength * 0.3
-            );
-            if (institutionalScore < minInstitutionalScore) {
-                this.logger.debug(
-                    `[DistributionZoneDetector] Candidate rejected: insufficient institutional score`,
-                    {
-                        institutionalScore: institutionalScore.toFixed(3),
-                        required: minInstitutionalScore.toFixed(3),
-                        priceLevel: candidate.priceLevel,
-                    }
-                );
-                continue;
-            }
-
-            const score = this.scoreEnhancedCandidateForZone(
+            const score = this.scoreCandidateForZone(
                 candidate,
-                institutionalSignals,
                 trade.timestamp
             );
+            if (score === null) {
+                this.logger.debug("Candidate scoring failed", {
+                    component: "DistributionZoneDetector",
+                    candidatePrice: candidate.priceLevel,
+                    reason: "Invalid calculation data",
+                });
+                continue;
+            }
 
             this.logger.debug(`[DistributionZoneDetector] Candidate scoring`, {
                 priceLevel: candidate.priceLevel,
@@ -725,104 +694,64 @@ export class DistributionZoneDetector extends ZoneDetector {
     }
 
     /**
-     * Enhanced scoring - adapted from AccumulationZoneDetector with inverted logic
+     * Score candidate for zone formation - CLAUDE.md compliant
      */
-    private scoreEnhancedCandidateForZone(
+    private scoreCandidateForZone(
         candidate: DistributionCandidate,
-        institutionalSignals: InstitutionalSignals,
-        timestamp: number
-    ): number {
-        // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-        const buyRatio = FinancialMath.safeDivide(
-            candidate.buyVolume,
-            candidate.totalVolume,
-            0
-        );
+        currentTradeTimestamp: number
+    ): number | null {
+        // ✅ CLAUDE.md COMPLIANCE: Return null for invalid calculations
+        const totalVolume = candidate.totalVolume;
+        if (totalVolume === 0) return null;
 
-        // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-        const sellRatio = FinancialMath.safeDivide(
+        // Distribution scoring using FinancialMath for ALL calculations
+        const sellRatio = FinancialMath.divideQuantities(
             candidate.sellVolume,
-            candidate.totalVolume,
-            0
+            totalVolume
+        );
+        if (sellRatio === null) return null;
+
+        const buyRatio = FinancialMath.divideQuantities(
+            candidate.buyVolume,
+            totalVolume
+        );
+        if (buyRatio === null) return null;
+
+        // Use configurable thresholds from universal zone config
+        const duration = currentTradeTimestamp - candidate.startTime;
+        const durationScore = FinancialMath.divideQuantities(
+            Math.min(duration, this.config.minCandidateDuration),
+            this.config.minCandidateDuration
+        );
+        if (durationScore === null) return null;
+
+        // Simple distribution score using FinancialMath for ALL operations
+        const stabilityWeight = this.config.priceStabilityThreshold;
+        const sellComponent = FinancialMath.multiplyQuantities(
+            sellRatio,
+            stabilityWeight
+        );
+        const stabilityComponent = FinancialMath.multiplyQuantities(
+            candidate.priceStability,
+            FinancialMath.safeSubtract(1.0, stabilityWeight)
+        );
+        const durationComponent = FinancialMath.multiplyQuantities(
+            durationScore,
+            this.config.minZoneStrength
         );
 
-        const duration = timestamp - candidate.startTime;
-        const marketRegime = this.analyzeMarketRegime(
-            candidate.trades.getAll()
+        const totalScore = FinancialMath.addAmounts(
+            FinancialMath.addAmounts(sellComponent, stabilityComponent, 8),
+            durationComponent,
+            8
         );
 
-        // Use distribution-specific scoring (inverted from accumulation)
-        const enhancedResult =
-            this.enhancedZoneFormation.calculateDistributionScore(
-                sellRatio, // Aggressive selling ratio (want LOW for controlled distribution)
-                buyRatio, // Support buying ratio (want HIGH - retail buying into institutional selling)
-                candidate.priceStability, // Price resilience (want HIGH)
-                candidate.totalVolume,
-                duration,
-                candidate.averageOrderSize,
-                institutionalSignals,
-                marketRegime
-            );
+        if (totalScore === null) return null;
 
-        return enhancedResult.score;
-    }
-
-    /**
-     * Calculate institutional score - adapted for distribution patterns
-     */
-    private calculateInstitutionalScore(signals: InstitutionalSignals): number {
-        // Distribution-specific weighting (different from accumulation)
-        return (
-            signals.largeBlockRatio * 0.25 + // Less weight than accumulation
-            signals.volumeConsistency * 0.3 + // More important for distribution
-            signals.priceEfficiency * 0.2 + // Price control during selling
-            signals.orderSizeDistribution * 0.15 + // Size distribution matters
-            signals.icebergDetection * 0.1 // Less relevant for distribution
+        return FinancialMath.divideQuantities(
+            Math.min(Math.max(totalScore, 0), 1),
+            1
         );
-    }
-
-    /**
-     * Analyze market regime - identical to AccumulationZoneDetector
-     */
-    private analyzeMarketRegime(trades: EnrichedTradeEvent[]): MarketRegime {
-        // Simplified market regime analysis
-        const recentTrades = trades.slice(-20); // Last 20 trades
-        if (recentTrades.length < 5) {
-            return {
-                volatilityLevel: "medium",
-                volumeLevel: "medium",
-                trendStrength: 0.5,
-                marketPhase: "distribution",
-            };
-        }
-
-        const buyVolume = recentTrades
-            .filter((t) => !t.buyerIsMaker)
-            .reduce((sum, t) => sum + t.quantity, 0);
-
-        const sellVolume = recentTrades
-            .filter((t) => t.buyerIsMaker)
-            .reduce((sum, t) => sum + t.quantity, 0);
-
-        const totalVolume = buyVolume + sellVolume;
-        if (totalVolume === 0) {
-            return {
-                volatilityLevel: "medium",
-                volumeLevel: "medium",
-                trendStrength: 0.5,
-                marketPhase: "distribution",
-            };
-        }
-
-        const buyRatio = buyVolume / totalVolume;
-        const trendStrength = Math.abs(buyRatio - 0.5) * 2; // 0 to 1 scale
-
-        return {
-            volatilityLevel: "medium", // Default for distribution
-            volumeLevel: totalVolume > 100 ? "high" : "medium",
-            trendStrength,
-            marketPhase: "distribution",
-        };
     }
 
     /**

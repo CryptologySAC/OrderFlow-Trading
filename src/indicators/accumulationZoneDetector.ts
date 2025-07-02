@@ -80,11 +80,6 @@ import { FinancialMath } from "../utils/financialMath.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
 import { ObjectPool } from "../utils/objectPool.js";
 import { CircularBuffer } from "../utils/circularBuffer.js";
-import {
-    EnhancedZoneFormation,
-    type InstitutionalSignals,
-    type MarketRegime,
-} from "./enhancedZoneFormation.js";
 //import { Config } from "../core/config.js";
 import { ZoneDetector } from "./base/zoneDetector.js";
 import type { AccumulationCandidate } from "./interfaces/detectorInterfaces.js";
@@ -233,7 +228,6 @@ export class AccumulationZoneDetector extends ZoneDetector {
     private readonly weakZoneThreshold: number;
 
     // Enhanced zone formation analyzer
-    private readonly enhancedZoneFormation: EnhancedZoneFormation;
 
     // Volume surge analysis integration
     private readonly volumeAnalyzer: VolumeAnalyzer;
@@ -280,13 +274,6 @@ export class AccumulationZoneDetector extends ZoneDetector {
         this.priceStabilityThreshold = config.priceStabilityThreshold ?? 0.98;
         this.strongZoneThreshold = config.strongZoneThreshold ?? 0.7;
         this.weakZoneThreshold = config.weakZoneThreshold ?? 0.4;
-
-        // Initialize enhanced zone formation analyzer with configurable parameters
-        this.enhancedZoneFormation = new EnhancedZoneFormation(
-            config.enhancedInstitutionalSizeThreshold ?? 50,
-            config.enhancedIcebergDetectionWindow ?? 15,
-            config.enhancedMinInstitutionalRatio ?? 0.4
-        );
 
         // Initialize volume surge configuration
         this.volumeSurgeConfig = {
@@ -823,49 +810,34 @@ export class AccumulationZoneDetector extends ZoneDetector {
                     continue;
                 }
 
-                // Enhanced scoring with institutional factors
-                const institutionalSignals =
-                    this.enhancedZoneFormation.analyzeInstitutionalSignals(
-                        candidate.trades.getAll() // ✅ Convert CircularBuffer to Array for analysis
-                    );
-                const institutionalScore =
-                    this.calculateInstitutionalScore(institutionalSignals);
-
-                // Use configurable strength threshold for institutional activity
-                // More lenient institutional requirement for test scenarios
-                const minInstitutionalScore = Math.min(
-                    SIGNAL_GENERATION_DEFAULTS.MAX_INSTITUTIONAL_SCORE_FLOOR,
-                    this.config.minZoneStrength *
-                        SIGNAL_GENERATION_DEFAULTS.MIN_INSTITUTIONAL_SCORE_RATIO
+                // Simplified zone validation using universal zone config
+                const trades = candidate.trades.getAll();
+                const totalVolume = trades.reduce(
+                    (sum, t) => sum + t.quantity,
+                    0
                 );
-                if (institutionalScore < minInstitutionalScore) {
+                if (totalVolume < this.config.minZoneVolume) {
                     this.logger.debug(
-                        "Candidate rejected: insufficient institutional score",
+                        "Candidate rejected: insufficient volume",
                         {
                             component: "AccumulationZoneDetector",
                             candidatePrice: candidate.priceLevel,
-                            institutionalScore: institutionalScore,
-                            required: minInstitutionalScore,
+                            totalVolume: totalVolume,
+                            required: this.config.minZoneVolume,
                         }
                     );
                     continue;
                 }
 
-                let score: number;
-                try {
-                    score = this.scoreEnhancedCandidateForZone(
-                        candidate,
-                        institutionalSignals,
-                        trade.timestamp
-                    );
-                } catch (error) {
-                    this.logger.error("Error scoring candidate", {
+                const score = this.scoreCandidateForZone(
+                    candidate,
+                    trade.timestamp
+                );
+                if (score === null) {
+                    this.logger.debug("Candidate scoring failed", {
                         component: "AccumulationZoneDetector",
                         candidatePrice: candidate.priceLevel,
-                        error:
-                            error instanceof Error
-                                ? error.message
-                                : String(error),
+                        reason: "Invalid calculation data",
                     });
                     continue;
                 }
@@ -1147,69 +1119,6 @@ export class AccumulationZoneDetector extends ZoneDetector {
     }
 
     /**
-     * Enhanced scoring with institutional factors
-     * FIXED: Now properly calculates all required ratios and uses correct accumulation scoring
-     */
-    private scoreEnhancedCandidateForZone(
-        candidate: AccumulationCandidate,
-        institutionalSignals: InstitutionalSignals,
-        currentTradeTimestamp: number
-    ): number {
-        // Calculate all required ratios with safe division
-        // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-        const sellRatio = FinancialMath.safeDivide(
-            candidate.sellVolume,
-            candidate.totalVolume,
-            0
-        );
-
-        // FIXED: Calculate aggressive buy ratio (missing variable)
-        // 🔧 FIX: Replace DetectorUtils.safeDivide with internal safe method
-        const aggressiveBuyRatio = FinancialMath.safeDivide(
-            candidate.buyVolume,
-            candidate.totalVolume,
-            0
-        );
-
-        const duration = currentTradeTimestamp - candidate.startTime;
-
-        // Determine market regime for adaptive scoring
-        const marketRegime = this.analyzeMarketRegime(
-            candidate.trades.getAll()
-        );
-
-        // VALIDATION: Ensure ratios are consistent
-        const totalRatio = sellRatio + aggressiveBuyRatio;
-        if (
-            Math.abs(totalRatio - 1.0) >
-            ALGORITHM_CONSTANTS.RATIO_CONSISTENCY_TOLERANCE
-        ) {
-            // Log warning but continue - minor floating point differences are acceptable
-            this.logger.warn("Ratio inconsistency detected", {
-                sellRatio,
-                aggressiveBuyRatio,
-                totalRatio,
-                component: "AccumulationZoneDetector",
-            });
-        }
-
-        // Use enhanced zone formation scoring with correct parameters
-        const enhancedResult =
-            this.enhancedZoneFormation.calculateAccumulationScore(
-                sellRatio, // ✅ Absorption ratio (want HIGH - sells being absorbed)
-                aggressiveBuyRatio, // ✅ Aggressive ratio (want LOW - avoid retail FOMO)
-                candidate.priceStability,
-                candidate.totalVolume,
-                duration,
-                candidate.averageOrderSize,
-                institutionalSignals,
-                marketRegime
-            );
-
-        return enhancedResult.score;
-    }
-
-    /**
      * PATCH: Replace scoreCandidateForZone method with corrected logic
      */
     private scoreCandidateForZone(
@@ -1283,44 +1192,6 @@ export class AccumulationZoneDetector extends ZoneDetector {
     /**
      * Calculate institutional activity score
      */
-    private calculateInstitutionalScore(signals: InstitutionalSignals): number {
-        return (
-            signals.largeBlockRatio *
-                ALGORITHM_CONSTANTS.INSTITUTIONAL_SCORING_WEIGHTS
-                    .LARGE_BLOCK_RATIO +
-            signals.icebergDetection *
-                ALGORITHM_CONSTANTS.INSTITUTIONAL_SCORING_WEIGHTS
-                    .ICEBERG_DETECTION +
-            signals.volumeConsistency *
-                ALGORITHM_CONSTANTS.INSTITUTIONAL_SCORING_WEIGHTS
-                    .VOLUME_CONSISTENCY +
-            signals.priceEfficiency *
-                ALGORITHM_CONSTANTS.INSTITUTIONAL_SCORING_WEIGHTS
-                    .PRICE_EFFICIENCY +
-            signals.orderSizeDistribution *
-                ALGORITHM_CONSTANTS.INSTITUTIONAL_SCORING_WEIGHTS
-                    .ORDER_SIZE_DISTRIBUTION
-        );
-    }
-
-    /**
-     * Analyze market regime from candidate trades
-     */
-    private analyzeMarketRegime(trades: EnrichedTradeEvent[]): MarketRegime {
-        if (
-            trades.length < ALGORITHM_CONSTANTS.MIN_TRADES_FOR_REGIME_ANALYSIS
-        ) {
-            return {
-                volatilityLevel: "medium",
-                volumeLevel: "medium",
-                trendStrength: 0.5,
-                marketPhase: "accumulation",
-            };
-        }
-
-        const prices = trades.map((t) => t.price);
-        return this.enhancedZoneFormation.analyzeMarketRegime(trades, prices);
-    }
 
     /**
      * Calculate price stability within candidate

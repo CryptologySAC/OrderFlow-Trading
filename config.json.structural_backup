@@ -15,21 +15,26 @@
     "alertWebhookUrl": "https://lima.cryptology.pe/api/webhook/OcdSY61opli9-n7unmlw4CmO",
     "alertCooldownMs": 300000,
     "maxStorageTime": 5400000,
-    "dataStream": {
-        "reconnectDelay": 1000,
-        "maxReconnectAttempts": 5,
-        "depthUpdateSpeed": "100ms",
-        "enableHeartbeat": true,
-        "heartbeatInterval": 30000,
-        "maxBackoffDelay": 30000,
-        "streamHealthTimeout": 10000,
-        "enableStreamHealthCheck": true,
-        "reconnectOnHealthFailure": true,
-        "enableHardReload": false,
-        "hardReloadAfterAttempts": 3,
-        "hardReloadCooldownMs": 60000,
-        "maxHardReloads": 2,
-        "hardReloadRestartCommand": "pm2 restart orderflow"
+    "standardZoneConfig": {
+        "baseTicks": 5,
+        "zoneMultipliers": [1, 2, 4],
+        "timeWindows": [30000, 60000, 300000],
+        "adaptiveMode": false,
+        "volumeThresholds": {
+            "aggressive": 20,
+            "passive": 40,
+            "institutional": 50
+        },
+        "priceThresholds": {
+            "tickValue": 0.01,
+            "minZoneWidth": 0.01,
+            "maxZoneWidth": 0.2
+        },
+        "performanceConfig": {
+            "maxZoneHistory": 1000,
+            "cleanupInterval": 300000,
+            "maxMemoryMB": 50
+        }
     },
     "marketDataStorage": {
         "enabled": true,
@@ -40,6 +45,75 @@
         "rotationHours": 3,
         "compressionEnabled": false,
         "monitoringInterval": 30
+    },
+    "enhancedZoneFormation": {
+        "icebergDetection": {
+            "minSize": 10,
+            "maxSize": 250,
+            "priceStabilityTolerance": 0.025,
+            "sizeConsistencyThreshold": 0.5,
+            "sideDominanceThreshold": 0.6
+        },
+        "priceEfficiency": {
+            "baseImpactRate": 0.0003,
+            "maxVolumeMultiplier": 6,
+            "minEfficiencyThreshold": 0.05
+        },
+        "institutional": {
+            "minRatio": 0.25,
+            "sizeThreshold": 40,
+            "detectionWindow": 15
+        },
+        "detectorThresholds": {
+            "accumulation": {
+                "minScore": 0.9,
+                "minAbsorptionRatio": 0.65,
+                "maxAggressiveRatio": 0.3,
+                "minPriceStability": 0.85,
+                "minInstitutionalScore": 0.4
+            },
+            "distribution": {
+                "minScore": 0.8,
+                "minSellingRatio": 0.65,
+                "maxSupportRatio": 0.3,
+                "minPriceStability": 0.75,
+                "minInstitutionalScore": 0.3
+            }
+        },
+        "adaptiveThresholds": {
+            "volatility": {
+                "high": {
+                    "accumulation": {
+                        "minAbsorptionRatio": 0.6,
+                        "maxAggressiveRatio": 0.4
+                    },
+                    "distribution": {
+                        "minSellingRatio": 0.55,
+                        "maxSupportRatio": 0.45
+                    }
+                },
+                "medium": {
+                    "accumulation": {
+                        "minAbsorptionRatio": 0.55,
+                        "maxAggressiveRatio": 0.5
+                    },
+                    "distribution": {
+                        "minSellingRatio": 0.5,
+                        "maxSupportRatio": 0.5
+                    }
+                },
+                "low": {
+                    "accumulation": {
+                        "minAbsorptionRatio": 0.5,
+                        "maxAggressiveRatio": 0.55
+                    },
+                    "distribution": {
+                        "minSellingRatio": 0.45,
+                        "maxSupportRatio": 0.55
+                    }
+                }
+            }
+        }
     },
     "symbols": {
         "LTCUSDT": {
@@ -80,6 +154,8 @@
             "orderBookState": {
                 "maxLevels": 150,
                 "snapshotIntervalMs": 1000,
+                "pricePrecision": 2,
+                "symbol": "LTCUSDT",
                 "maxPriceDistance": 10.0,
                 "pruneIntervalMs": 30000,
                 "maxErrorRate": 0.05,
@@ -133,6 +209,8 @@
             "exhaustion": {
                 "minAggVolume": 20,
                 "windowMs": 45000,
+                "pricePrecision": 2,
+                "zoneTicks": 3,
                 "eventCooldownMs": 10000,
                 "volumeSurgeMultiplier": 2,
                 "imbalanceThreshold": 0.3,
@@ -201,6 +279,8 @@
             "absorption": {
                 "minAggVolume": 175,
                 "windowMs": 60000,
+                "pricePrecision": 2,
+                "zoneTicks": 5,
                 "eventCooldownMs": 15000,
                 "minInitialMoveTicks": 4,
                 "confirmationTimeoutMs": 60000,
@@ -365,6 +445,7 @@
                 "minTradesPerSec": 0.1,
                 "minVolPerSec": 0.5,
                 "minSamplesForStats": 15,
+                "pricePrecision": 2,
                 "volatilityLookbackSec": 3600,
                 "maxDivergenceAllowed": 0.5,
                 "stateCleanupIntervalSec": 300,
@@ -413,6 +494,36 @@
                 "maxZScoreBound": 20,
                 "minCorrelationBound": -0.999,
                 "maxCorrelationBound": 0.999
+            },
+            "dataStream": {
+                "reconnectDelay": 1000,
+                "maxReconnectAttempts": 5,
+                "depthUpdateSpeed": "100ms",
+                "enableHeartbeat": true,
+                "heartbeatInterval": 30000,
+                "maxBackoffDelay": 30000,
+                "streamHealthTimeout": 10000,
+                "enableStreamHealthCheck": true,
+                "reconnectOnHealthFailure": true,
+                "enableHardReload": false,
+                "hardReloadAfterAttempts": 3,
+                "hardReloadCooldownMs": 60000,
+                "maxHardReloads": 2,
+                "hardReloadRestartCommand": "pm2 restart orderflow"
+            },
+            "accumulationDetector": {
+                "useStandardizedZones": true,
+                "enhancementMode": "production",
+                "minEnhancedConfidenceThreshold": 0.3,
+                "enhancementCallFrequency": 5,
+                "highConfidenceThreshold": 0.8,
+                "lowConfidenceThreshold": 0.4,
+                "minConfidenceBoostThreshold": 0.05,
+                "defaultMinEnhancedConfidenceThreshold": 0.3,
+                "confidenceReductionFactor": 0.8,
+                "significanceBoostMultiplier": 0.3,
+                "neutralBoostReductionFactor": 0.5,
+                "enhancementSignificanceBoost": true
             },
             "accumulation": {
                 "useStandardizedZones": true,

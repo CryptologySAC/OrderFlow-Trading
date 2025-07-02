@@ -11,7 +11,6 @@ import type { HiddenOrderDetectorConfig } from "../services/hiddenOrderDetector.
 import { OrderBookStateOptions } from "../market/orderBookState.js";
 import type {
     AllowedSymbols,
-    EnhancedZoneFormationConfig,
     MarketDataStorageConfig,
 } from "../types/configTypes.js";
 import type { OrderflowPreprocessorOptions } from "../market/orderFlowPreprocessor.js";
@@ -26,6 +25,14 @@ import type { OrderBookProcessorOptions } from "../market/processors/orderBookPr
 import type { MQTTConfig } from "../types/configTypes.js";
 
 // FUTURE-PROOF: Symbol-agnostic validation schemas with mathematical ranges
+
+// Type for detector configurations - use the exact Zod inferred types for the enhanced settings
+type DetectorConfigInput =
+    | z.infer<typeof AbsorptionEnhancedSettingsSchema>
+    | z.infer<typeof ExhaustionEnhancedSettingsSchema>
+    | z.infer<typeof DeltaCVDEnhancedSettingsSchema>
+    | z.infer<typeof AccumulationEnhancedSettingsSchema>
+    | z.infer<typeof DistributionEnhancedSettingsSchema>;
 
 // Financial tick value validator - EXACT equality required for trading systems
 export const createTickValueValidator = (pricePrecision: number) => {
@@ -80,8 +87,6 @@ export const ExhaustionDetectorSchema = z.object({
     // Base detector settings (from config.json)
     minAggVolume: z.number().int().min(1).max(10000),
     windowMs: z.number().int().min(5000).max(300000),
-    pricePrecision: z.number().int().min(0).max(8),
-    zoneTicks: z.number().int().min(1).max(20),
     eventCooldownMs: z.number().int().min(1000).max(60000),
     minInitialMoveTicks: z.number().int().min(1).max(50),
     confirmationTimeoutMs: z.number().int().min(10000).max(300000),
@@ -169,8 +174,6 @@ export const AbsorptionDetectorSchema = z.object({
     // Base detector settings (from config.json)
     minAggVolume: z.number().int().min(1).max(10000),
     windowMs: z.number().int().min(5000).max(300000),
-    pricePrecision: z.number().int().min(0).max(8),
-    zoneTicks: z.number().int().min(1).max(20),
     eventCooldownMs: z.number().int().min(1000).max(60000),
     minInitialMoveTicks: z.number().int().min(1).max(50),
     confirmationTimeoutMs: z.number().int().min(10000).max(300000),
@@ -257,7 +260,6 @@ export const DeltaCVDDetectorSchema = z.object({
     minTradesPerSec: z.number().min(0.01).max(5.0),
     minVolPerSec: z.number().min(0.1).max(10.0),
     minSamplesForStats: z.number().int().min(5).max(100),
-    pricePrecision: z.number().int().min(0).max(8),
     volatilityLookbackSec: z.number().int().min(600).max(7200),
     maxDivergenceAllowed: z.number().min(0.1).max(2.0),
     stateCleanupIntervalSec: z.number().int().min(60).max(1800),
@@ -295,10 +297,10 @@ export const DeltaCVDDetectorSchema = z.object({
 
     // Enhanced CVD analysis
     cvdDivergenceVolumeThreshold: z.number().min(20).max(2000),
-    cvdDivergenceStrengthThreshold: z.number().min(0.5).max(1.0),
+    cvdDivergenceStrengthThreshold: z.number().min(0.2).max(1.0),
     cvdSignificantImbalanceThreshold: z.number().min(0.2).max(0.8),
     cvdDivergenceScoreMultiplier: z.number().min(1.0).max(5.0),
-    alignmentMinimumThreshold: z.number().min(0.4).max(0.8),
+    alignmentMinimumThreshold: z.number().min(0.2).max(0.8),
     momentumScoreMultiplier: z.number().min(1.0).max(5.0),
     enableCVDDivergenceAnalysis: z.boolean(),
     enableMomentumAlignment: z.boolean(),
@@ -345,31 +347,11 @@ export const AccumulationDetectorSchema = z.object({
     enhancementSignificanceBoost: z.boolean(),
 });
 
-// DISTRIBUTION detector - Core zone properties + distribution-specific logic
+// DISTRIBUTION detector - Distribution-specific logic only (zone properties from universalZoneConfig)
 export const DistributionDetectorSchema = z.object({
-    // Core zone detector properties (inherited from DistributionZoneDetector requirements)
-    minCandidateDuration: z.number().int().min(30000).max(1800000),
-    maxPriceDeviation: z.number().min(0.005).max(0.1),
-    minTradeCount: z.number().int().min(3).max(100),
-    minBuyRatio: z.number().min(0.3).max(0.8),
-    minSellRatio: z.number().min(0.3).max(0.8),
-    minZoneVolume: z.number().min(10).max(10000),
-    minZoneStrength: z.number().min(0.1).max(1.0),
-    priceStabilityThreshold: z.number().min(0.7).max(0.99),
-    strongZoneThreshold: z.number().min(0.5).max(0.9),
-    weakZoneThreshold: z.number().min(0.2).max(0.6),
-
-    // Volume analysis properties (inherited from DistributionZoneDetector requirements)
-    volumeSurgeMultiplier: z.number().min(1.5).max(10.0),
-    imbalanceThreshold: z.number().min(0.1).max(0.7),
-    institutionalThreshold: z.number().min(5).max(200),
-    burstDetectionMs: z.number().int().min(500).max(10000),
-    sustainedVolumeMs: z.number().int().min(10000).max(300000),
-    medianTradeSize: z.number().min(0.1).max(50),
-
     // Distribution-specific selling pressure
     sellingPressureVolumeThreshold: z.number().min(10).max(1000),
-    sellingPressureRatioThreshold: z.number().min(0.5).max(0.9),
+    sellingPressureRatioThreshold: z.number().min(0.3).max(0.9),
     enableSellingPressureAnalysis: z.boolean(),
     sellingPressureConfidenceBoost: z.number().min(0.05).max(0.3),
 
@@ -489,76 +471,6 @@ const DeltaCVDEnhancedSettingsSchema = z
     })
     .passthrough();
 
-const EnhancedZoneFormationConfigSchema = z.object({
-    icebergDetection: z.object({
-        minSize: z.number(),
-        maxSize: z.number(),
-        priceStabilityTolerance: z.number(),
-        sizeConsistencyThreshold: z.number(),
-        sideDominanceThreshold: z.number(),
-    }),
-    priceEfficiency: z.object({
-        baseImpactRate: z.number(),
-        maxVolumeMultiplier: z.number(),
-        minEfficiencyThreshold: z.number(),
-    }),
-    institutional: z.object({
-        minRatio: z.number(),
-        sizeThreshold: z.number(),
-        detectionWindow: z.number(),
-    }),
-    detectorThresholds: z.object({
-        accumulation: z.object({
-            minScore: z.number(),
-            minAbsorptionRatio: z.number(),
-            maxAggressiveRatio: z.number(),
-            minPriceStability: z.number(),
-            minInstitutionalScore: z.number(),
-        }),
-        distribution: z.object({
-            minScore: z.number(),
-            minSellingRatio: z.number(),
-            maxSupportRatio: z.number(),
-            minPriceStability: z.number(),
-            minInstitutionalScore: z.number(),
-        }),
-    }),
-    adaptiveThresholds: z.object({
-        volatility: z.object({
-            high: z.object({
-                accumulation: z.object({
-                    minAbsorptionRatio: z.number(),
-                    maxAggressiveRatio: z.number(),
-                }),
-                distribution: z.object({
-                    minSellingRatio: z.number(),
-                    maxSupportRatio: z.number(),
-                }),
-            }),
-            medium: z.object({
-                accumulation: z.object({
-                    minAbsorptionRatio: z.number(),
-                    maxAggressiveRatio: z.number(),
-                }),
-                distribution: z.object({
-                    minSellingRatio: z.number(),
-                    maxSupportRatio: z.number(),
-                }),
-            }),
-            low: z.object({
-                accumulation: z.object({
-                    minAbsorptionRatio: z.number(),
-                    maxAggressiveRatio: z.number(),
-                }),
-                distribution: z.object({
-                    minSellingRatio: z.number(),
-                    maxSupportRatio: z.number(),
-                }),
-            }),
-        }),
-    }),
-});
-
 const MarketDataStorageConfigSchema = z.object({
     enabled: z.boolean(),
     dataDirectory: z.string(),
@@ -596,8 +508,6 @@ const BasicSymbolConfigSchema = z
         orderBookState: z.object({
             maxLevels: z.number().int().positive(),
             snapshotIntervalMs: z.number().int().positive(),
-            pricePrecision: z.number().int().positive(),
-            symbol: z.string(),
             maxPriceDistance: z.number().positive(),
             pruneIntervalMs: z.number().int().positive(),
             maxErrorRate: z.number().positive(),
@@ -682,33 +592,11 @@ const BasicSymbolConfigSchema = z
         exhaustion: ExhaustionEnhancedSettingsSchema,
         absorption: AbsorptionEnhancedSettingsSchema,
         deltaCvdConfirmation: DeltaCVDEnhancedSettingsSchema,
-        accumulationDetector: AccumulationEnhancedSettingsSchema,
-        dataStream: z.object({
-            reconnectDelay: z.number().int().positive(),
-            maxReconnectAttempts: z.number().int().positive(),
-            depthUpdateSpeed: z.enum(["100ms", "1000ms"]),
-            enableHeartbeat: z.boolean(),
-            heartbeatInterval: z.number().int().positive(),
-            maxBackoffDelay: z.number().int().positive(),
-            streamHealthTimeout: z.number().int().positive(),
-            enableStreamHealthCheck: z.boolean(),
-            reconnectOnHealthFailure: z.boolean(),
-            enableHardReload: z.boolean(),
-            hardReloadAfterAttempts: z.number().int().positive(),
-            hardReloadCooldownMs: z.number().int().positive(),
-            maxHardReloads: z.number().int().positive(),
-            hardReloadRestartCommand: z.string(),
-        }),
         universalZoneConfig: UniversalZoneSchema,
         accumulation: AccumulationEnhancedSettingsSchema,
         distribution: DistributionEnhancedSettingsSchema,
     })
     .passthrough();
-
-const ZoneDetectorSymbolConfigSchema = z.object({
-    accumulation: AccumulationEnhancedSettingsSchema,
-    distribution: DistributionEnhancedSettingsSchema,
-});
 
 const ConfigSchema = z.object({
     nodeEnv: z.string(),
@@ -719,10 +607,24 @@ const ConfigSchema = z.object({
     alertWebhookUrl: z.string().url(),
     alertCooldownMs: z.number().int().positive(),
     maxStorageTime: z.number().int().positive(),
-    zoneDetectors: z.record(ZoneDetectorSymbolConfigSchema),
     mqtt: MQTTConfigSchema.optional(),
-    enhancedZoneFormation: EnhancedZoneFormationConfigSchema,
     marketDataStorage: MarketDataStorageConfigSchema.optional(),
+    dataStream: z.object({
+        reconnectDelay: z.number().int().positive(),
+        maxReconnectAttempts: z.number().int().positive(),
+        depthUpdateSpeed: z.enum(["100ms", "1000ms"]),
+        enableHeartbeat: z.boolean(),
+        heartbeatInterval: z.number().int().positive(),
+        maxBackoffDelay: z.number().int().positive(),
+        streamHealthTimeout: z.number().int().positive(),
+        enableStreamHealthCheck: z.boolean(),
+        reconnectOnHealthFailure: z.boolean(),
+        enableHardReload: z.boolean(),
+        hardReloadAfterAttempts: z.number().int().positive(),
+        hardReloadCooldownMs: z.number().int().positive(),
+        maxHardReloads: z.number().int().positive(),
+        hardReloadRestartCommand: z.string(),
+    }),
 });
 
 // Load and validate config.json
@@ -770,13 +672,6 @@ function validateMandatoryConfig(): void {
         errors.push("MISSING: cfg.symbols.LTCUSDT configuration is required");
     }
 
-    // Validate zone detectors configuration
-    if (!cfg.zoneDetectors || !cfg.zoneDetectors.LTCUSDT) {
-        errors.push(
-            "MISSING: cfg.zoneDetectors.LTCUSDT configuration is required"
-        );
-    }
-
     if (cfg.symbols && cfg.symbols.LTCUSDT) {
         const symbolCfg = cfg.symbols.LTCUSDT;
 
@@ -799,6 +694,18 @@ function validateMandatoryConfig(): void {
             );
         }
 
+        if (!symbolCfg.accumulation) {
+            errors.push(
+                "MISSING: symbols.LTCUSDT.accumulation configuration is required"
+            );
+        }
+
+        if (!symbolCfg.distribution) {
+            errors.push(
+                "MISSING: symbols.LTCUSDT.distribution configuration is required"
+            );
+        }
+
         if (!symbolCfg.universalZoneConfig) {
             errors.push(
                 "MISSING: symbols.LTCUSDT.universalZoneConfig is required"
@@ -806,31 +713,81 @@ function validateMandatoryConfig(): void {
         }
     }
 
-    // Validate zone detectors configuration
-    if (!cfg.zoneDetectors || !cfg.zoneDetectors.LTCUSDT) {
-        errors.push(
-            "MISSING: cfg.zoneDetectors.LTCUSDT configuration is required"
-        );
-    } else {
-        const zoneCfg = cfg.zoneDetectors.LTCUSDT;
-        if (!zoneCfg.accumulation) {
-            errors.push(
-                "MISSING: zoneDetectors.LTCUSDT.accumulation configuration is required"
-            );
-        }
-
-        if (!zoneCfg.distribution) {
-            errors.push(
-                "MISSING: zoneDetectors.LTCUSDT.distribution configuration is required"
-            );
-        }
-    }
-
     // Validate enhanced zone formation config
-    if (!cfg.enhancedZoneFormation) {
-        errors.push(
-            "MISSING: cfg.enhancedZoneFormation configuration is required"
-        );
+
+    // 🚨 CRITICAL: Validate ALL detector configurations at startup (not lazily)
+    // This ensures process.exit(1) happens immediately for ANY validation failures
+    // including missing properties AND out-of-range values
+    if (SYMBOL_CFG) {
+        try {
+            AbsorptionDetectorSchema.parse(SYMBOL_CFG.absorption);
+        } catch (error) {
+            console.error(
+                "🚨 CRITICAL CONFIG ERROR - AbsorptionDetectorEnhanced"
+            );
+            console.error("Missing mandatory configuration properties:");
+            console.error(error);
+            console.error(
+                "Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT"
+            );
+            process.exit(1);
+        }
+
+        try {
+            ExhaustionDetectorSchema.parse(SYMBOL_CFG.exhaustion);
+        } catch (error) {
+            console.error(
+                "🚨 CRITICAL CONFIG ERROR - ExhaustionDetectorEnhanced"
+            );
+            console.error("Missing mandatory configuration properties:");
+            console.error(error);
+            console.error(
+                "Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT"
+            );
+            process.exit(1);
+        }
+
+        try {
+            DeltaCVDDetectorSchema.parse(SYMBOL_CFG.deltaCvdConfirmation);
+        } catch (error) {
+            console.error(
+                "🚨 CRITICAL CONFIG ERROR - DeltaCVDDetectorEnhanced"
+            );
+            console.error("Missing mandatory configuration properties:");
+            console.error(error);
+            console.error(
+                "Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT"
+            );
+            process.exit(1);
+        }
+
+        try {
+            AccumulationDetectorSchema.parse(SYMBOL_CFG.accumulation);
+        } catch (error) {
+            console.error(
+                "🚨 CRITICAL CONFIG ERROR - AccumulationZoneDetectorEnhanced"
+            );
+            console.error("Missing mandatory configuration properties:");
+            console.error(error);
+            console.error(
+                "Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT"
+            );
+            process.exit(1);
+        }
+
+        try {
+            DistributionDetectorSchema.parse(SYMBOL_CFG.distribution);
+        } catch (error) {
+            console.error(
+                "🚨 CRITICAL CONFIG ERROR - DistributionDetectorEnhanced"
+            );
+            console.error("Missing mandatory configuration properties:");
+            console.error(error);
+            console.error(
+                "Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT"
+            );
+            process.exit(1);
+        }
     }
 
     // PANIC EXIT if any required configuration is missing
@@ -849,9 +806,6 @@ function validateMandatoryConfig(): void {
     console.log("✅ CONFIG VALIDATION PASSED - All mandatory settings present");
 }
 
-// Execute validation immediately after config load
-validateMandatoryConfig();
-
 let ENV_SYMBOL: string | undefined = process.env.SYMBOL?.toUpperCase();
 let CONFIG_SYMBOL: AllowedSymbols = (ENV_SYMBOL ||
     cfg.symbol) as AllowedSymbols;
@@ -863,21 +817,16 @@ if (!SYMBOL_CFG) {
     process.exit(1);
 }
 
-let DATASTREAM_CFG = SYMBOL_CFG.dataStream;
+// Execute validation after SYMBOL_CFG is initialized
+validateMandatoryConfig();
+
+let DATASTREAM_CFG = cfg.dataStream;
 
 // Universal zone config from LTCUSDT symbol configuration
 let UNIVERSAL_ZONE_CFG = SYMBOL_CFG.universalZoneConfig;
 if (!UNIVERSAL_ZONE_CFG) {
     console.error(
         `🚨 CRITICAL CONFIG ERROR: universalZoneConfig configuration missing from symbols.LTCUSDT in config.json`
-    );
-    process.exit(1);
-}
-
-let ENHANCED_ZONE_CFG = cfg.enhancedZoneFormation;
-if (!ENHANCED_ZONE_CFG) {
-    console.error(
-        `🚨 CRITICAL CONFIG ERROR: enhancedZoneFormation configuration missing from config.json`
     );
     process.exit(1);
 }
@@ -1101,70 +1050,54 @@ export class Config {
     static get DISTRIBUTION_DETECTOR() {
         return this.validateDetectorConfig(
             DistributionDetectorSchema,
-            SYMBOL_CFG.distribution,
-            "DISTRIBUTION_DETECTOR"
+            SYMBOL_CFG.distribution
         );
     }
 
     // 🚨 NUCLEAR CLEANUP: Zero tolerance configuration validation helpers
+    // NOTE: Validation now happens at startup in validateMandatoryConfig()
+    // This method is kept for type safety but should never fail
     private static validateDetectorConfig<T>(
         schema: z.ZodSchema<T>,
-        config: unknown,
-        detectorName: string
+        config: DetectorConfigInput
     ): T {
-        try {
-            return schema.parse(config);
-        } catch (error) {
-            // POLICY OVERRIDE: Use console.error for critical config failures
-            // This is a system panic situation that requires immediate visibility
-            console.error(`🚨 CRITICAL CONFIG ERROR - ${detectorName}`);
-            console.error("Missing mandatory configuration properties:");
-            console.error(error);
-            console.error(
-                "Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT"
-            );
-            process.exit(1);
-        }
+        // Config already validated at startup, but parse again for type safety
+        return schema.parse(config);
     }
 
     // Enhanced detector configurations - validated Zod schemas
     static get ABSORPTION_DETECTOR() {
         return this.validateDetectorConfig(
             AbsorptionDetectorSchema,
-            SYMBOL_CFG.absorption,
-            "AbsorptionDetectorEnhanced"
+            SYMBOL_CFG.absorption
         );
     }
 
     static get EXHAUSTION_DETECTOR() {
         return this.validateDetectorConfig(
             ExhaustionDetectorSchema,
-            SYMBOL_CFG.exhaustion,
-            "ExhaustionDetectorEnhanced"
+            SYMBOL_CFG.exhaustion
         );
     }
 
     static get DELTACVD_DETECTOR() {
         return this.validateDetectorConfig(
             DeltaCVDDetectorSchema,
-            SYMBOL_CFG.deltaCvdConfirmation,
-            "DeltaCVDDetectorEnhanced"
+            SYMBOL_CFG.deltaCvdConfirmation
         );
     }
 
     static get ACCUMULATION_DETECTOR() {
         return this.validateDetectorConfig(
             AccumulationDetectorSchema,
-            SYMBOL_CFG.accumulation,
-            "AccumulationZoneDetectorEnhanced"
+            SYMBOL_CFG.accumulation
         );
     }
 
     static get DISTRIBUTION_ZONE_DETECTOR() {
         return this.validateDetectorConfig(
             DistributionDetectorSchema,
-            SYMBOL_CFG.distribution,
-            "DistributionDetectorEnhanced"
+            SYMBOL_CFG.distribution
         );
     }
 
@@ -1351,11 +1284,6 @@ export class Config {
                 hiddenOrderConfig.zoneHeightPercentage
             ),
         };
-    }
-
-    // ✅ Enhanced zone formation configuration (replaces magic numbers)
-    static get ENHANCED_ZONE_FORMATION(): EnhancedZoneFormationConfig {
-        return ENHANCED_ZONE_CFG;
     }
 
     // Market Data Storage configuration for backtesting

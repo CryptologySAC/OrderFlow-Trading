@@ -51,8 +51,6 @@ export interface ConfigType {
     maxStorageTime: number;
     marketDataStorage?: MarketDataStorageConfig;
     zoneDetectors: Record<string, ZoneDetectorSymbolConfig>;
-    // ✅ Enhanced zone formation configuration
-    enhancedZoneFormation?: EnhancedZoneFormationConfig;
 }
 
 type SymbolConfig = {
@@ -91,85 +89,3 @@ export type ZoneDetectorSymbolConfig = {
     accumulation: AccumulationEnhancedSettings;
     distribution: DistributionEnhancedSettings;
 };
-
-/**
- * Enhanced zone formation configuration constants to replace magic numbers
- */
-export interface EnhancedZoneFormationConfig {
-    // Iceberg detection thresholds
-    icebergDetection: {
-        minSize: number; // Minimum trade size to consider for iceberg patterns
-        maxSize: number; // Maximum trade size to consider for iceberg patterns
-        priceStabilityTolerance: number; // Price stability tolerance (e.g., 0.02 = 2%)
-        sizeConsistencyThreshold: number; // Minimum consistency for iceberg detection (e.g., 0.6 = 60%)
-        sideDominanceThreshold: number; // Minimum side dominance for iceberg (e.g., 0.7 = 70%)
-    };
-
-    // Price efficiency calculation
-    priceEfficiency: {
-        baseImpactRate: number; // Base price impact rate per 1000 units (e.g., 0.0002 = 0.02%)
-        maxVolumeMultiplier: number; // Maximum volume multiplier (e.g., 5)
-        minEfficiencyThreshold: number; // Minimum efficiency threshold
-    };
-
-    // Institutional detection thresholds
-    institutional: {
-        minRatio: number; // Minimum institutional ratio (e.g., 0.3 = 30%)
-        sizeThreshold: number; // Institutional size threshold (e.g., 50-100)
-        detectionWindow: number; // Detection window size (e.g., 15-20)
-    };
-
-    // Detector scoring thresholds - CENTRALIZED!
-    detectorThresholds: {
-        accumulation: {
-            minScore: number; // Minimum score for accumulation zones (e.g., 0.75)
-            minAbsorptionRatio: number; // Minimum sell absorption ratio (e.g., 0.75)
-            maxAggressiveRatio: number; // Maximum aggressive buying ratio (e.g., 0.35)
-            minPriceStability: number; // Minimum price stability (e.g., 0.85)
-            minInstitutionalScore: number; // Minimum institutional score (e.g., 0.4)
-        };
-        distribution: {
-            minScore: number; // Minimum score for distribution zones (e.g., 0.55)
-            minSellingRatio: number; // Minimum aggressive selling ratio (e.g., 0.65)
-            maxSupportRatio: number; // Maximum support buying ratio (e.g., 0.35)
-            minPriceStability: number; // Minimum price stability (e.g., 0.75)
-            minInstitutionalScore: number; // Minimum institutional score (e.g., 0.3)
-        };
-    };
-
-    // Adaptive thresholds by market regime
-    adaptiveThresholds: {
-        volatility: {
-            high: {
-                accumulation: {
-                    minAbsorptionRatio: number;
-                    maxAggressiveRatio: number;
-                };
-                distribution: {
-                    minSellingRatio: number;
-                    maxSupportRatio: number;
-                };
-            };
-            medium: {
-                accumulation: {
-                    minAbsorptionRatio: number;
-                    maxAggressiveRatio: number;
-                };
-                distribution: {
-                    minSellingRatio: number;
-                    maxSupportRatio: number;
-                };
-            };
-            low: {
-                accumulation: {
-                    minAbsorptionRatio: number;
-                    maxAggressiveRatio: number;
-                };
-                distribution: {
-                    minSellingRatio: number;
-                    maxSupportRatio: number;
-                };
-            };
-        };
-    };
-}
