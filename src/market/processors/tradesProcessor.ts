@@ -451,17 +451,8 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                 oldestTradeTime = Math.min(...recentTrades.map((t) => t.T!));
                 recentTrades.forEach((t) => t.a && allTradeIds.push(t.a));
 
-                // Add to memory cache
-                for (const trade of recentValidated) {
-                    this.recentTrades.add({
-                        time: trade.T!,
-                        price: parseFloat(trade.p!),
-                        quantity: parseFloat(trade.q!),
-                        orderType: trade.m ? "SELL" : "BUY",
-                        symbol: this.symbol,
-                        tradeId: trade.a ?? 0,
-                    });
-                }
+                // 🚫 ARCHITECTURAL FIX: Backlog trades ONLY go to database, never memory cache
+                // Memory cache is reserved exclusively for live trades from signal pipeline
 
                 const initialCoverageMs = newestTradeTime - oldestTradeTime;
                 if (initialCoverageMs >= targetCoverageMs) {
@@ -533,17 +524,8 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                             await this.bulkSaveTrades(tradesToSave);
                             totalFetched += tradesToSave.length;
 
-                            // Add to memory cache
-                            for (const trade of validatedTrades) {
-                                this.recentTrades.add({
-                                    time: trade.T!,
-                                    price: parseFloat(trade.p!),
-                                    quantity: parseFloat(trade.q!),
-                                    orderType: trade.m ? "SELL" : "BUY",
-                                    symbol: this.symbol,
-                                    tradeId: trade.a ?? 0,
-                                });
-                            }
+                            // 🚫 ARCHITECTURAL FIX: Backlog trades ONLY go to database, never memory cache
+                            // Memory cache contamination removed - live trades only
                         }
 
                         // Update time range tracking
@@ -710,9 +692,8 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                 })
             );
 
-            plotTrades.forEach((trade: PlotTrade) =>
-                this.recentTrades.add(trade)
-            );
+            // 🚫 ARCHITECTURAL FIX: requestBacklog serves database data directly to clients
+            // No memory cache contamination - this is historical data for UI only
             return plotTrades.reverse();
         } catch (error) {
             this.handleError(error as Error, "requestBacklog");
