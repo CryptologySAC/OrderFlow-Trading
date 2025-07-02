@@ -296,7 +296,9 @@ describe("ExhaustionDetector - Comprehensive Logic Tests", () => {
 
                 // Low confidence should return 0, null, or >= 0.5 if it somehow meets the threshold
                 // null indicates invalid/insufficient data for calculation
-                expect(score === 0 || score === null || score >= 0.5).toBe(true);
+                expect(score === 0 || score === null || score >= 0.5).toBe(
+                    true
+                );
             });
 
             it("should apply data quality penalties correctly", () => {
