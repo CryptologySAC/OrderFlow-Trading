@@ -11,6 +11,9 @@ import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
+// Import mock config for complete settings  
+import mockConfig from "../__mocks__/config.json";
+
 describe("DeltaCVDConfirmation memory management", () => {
     let detector: DeltaCVDDetectorEnhanced;
     let mockLogger: ILogger;
@@ -26,9 +29,10 @@ describe("DeltaCVDConfirmation memory management", () => {
         } as ILogger;
         mockMetrics = new MetricsCollector();
         mockSpoofing = {} as any;
+        // 🚫 NUCLEAR CLEANUP: Use complete mock config settings instead of empty object
         detector = new DeltaCVDDetectorEnhanced(
             "test-cvd",
-            {},
+            mockConfig.symbols.LTCUSDT.deltaCvdConfirmation as any,
             mockLogger,
             mockSpoofing,
             mockMetrics

@@ -22,6 +22,9 @@ import { DeltaCVDDetectorEnhanced } from "../../src/indicators/deltaCVDDetectorE
 import type { EnrichedTradeEvent } from "../../src/types/marketEvents.js";
 import type { SignalCandidate } from "../../src/types/signalTypes.js";
 
+// Import mock config for complete settings
+import mockConfig from "../../__mocks__/config.json";
+
 // Mock dependencies
 const mockLogger = {
     info: vi.fn(),
@@ -262,78 +265,12 @@ describe("Market Data Replay Integration Tests", () => {
             const exhaustionDetector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion-enhanced",
                 {
-                    // Base detector settings
-                    minAggVolume: 50, // Lower volume threshold
+                    ...mockConfig.symbols.LTCUSDT.exhaustion,
+                    minAggVolume: 50,
                     windowMs: 90000,
-                    pricePrecision: 2,
-                    zoneTicks: 3,
-                    eventCooldownMs: 10000,
-                    minInitialMoveTicks: 1,
-                    confirmationTimeoutMs: 40000,
-                    maxRevisitTicks: 8,
-
-                    // Exhaustion-specific thresholds
-                    volumeSurgeMultiplier: 1.5, // Lower multiplier
-                    imbalanceThreshold: 0.15, // Lower imbalance threshold
-                    institutionalThreshold: 15,
-                    burstDetectionMs: 2000,
-                    sustainedVolumeMs: 20000,
-                    medianTradeSize: 0.8,
-                    exhaustionThreshold: 0.3, // Lower exhaustion threshold
-                    maxPassiveRatio: 0.35,
-                    minDepletionFactor: 0.2,
-                    imbalanceHighThreshold: 0.75,
-                    imbalanceMediumThreshold: 0.55,
-                    spreadHighThreshold: 0.004,
-                    spreadMediumThreshold: 0.0015,
-
-                    // Scoring weights
-                    scoringWeights: {
-                        depletion: 0.45,
-                        passive: 0.3,
-                        continuity: 0.12,
-                        imbalance: 0.08,
-                        spread: 0.04,
-                        velocity: 0.01,
-                    },
-
-                    // Quality and performance settings
-                    depletionThresholdRatio: 0.15,
-                    significantChangeThreshold: 0.08,
-                    highQualitySampleCount: 6,
-                    highQualityDataAge: 35000,
-                    mediumQualitySampleCount: 3,
-                    mediumQualityDataAge: 70000,
-                    circuitBreakerMaxErrors: 8,
-                    circuitBreakerWindowMs: 90000,
-
-                    // Confidence adjustments
-                    lowScoreConfidenceAdjustment: 0.7,
-                    lowVolumeConfidenceAdjustment: 0.8,
-                    invalidSurgeConfidenceAdjustment: 0.8,
-                    passiveConsistencyThreshold: 0.7,
-                    imbalanceNeutralThreshold: 0.1,
-                    velocityMinBound: 0.1,
-                    velocityMaxBound: 10,
-
-                    // Zone management
-                    maxZones: 75,
-                    zoneAgeLimit: 1200000,
-
-                    // Features configuration
-                    features: {
-                        depletionTracking: true,
-                        spreadAdjustment: true,
-                        volumeVelocity: false,
-                        spoofingDetection: true,
-                        adaptiveZone: true,
-                        multiZone: false,
-                        passiveHistory: true,
-                    },
-
-                    // Enhancement control
-                    useStandardizedZones: true,
-                    enhancementMode: "production" as const,
+                    volumeSurgeMultiplier: 1.5,
+                    imbalanceThreshold: 0.15,
+                    exhaustionThreshold: 0.3,
                     minEnhancedConfidenceThreshold: 0.3,
 
                     // Enhanced depletion analysis
@@ -957,9 +894,9 @@ describe("Market Data Replay Integration Tests", () => {
             const exhaustionDetector = new ExhaustionDetectorEnhanced(
                 "LTCUSDT",
                 {
+                    ...mockConfig.symbols.LTCUSDT.exhaustion,
                     minAggVolume: 150,
                     windowMs: 60000,
-                    zoneTicks: 3,
                     exhaustionThreshold: 0.7,
                 },
                 mockLogger,

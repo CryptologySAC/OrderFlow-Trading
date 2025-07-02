@@ -50,60 +50,65 @@ import { VolumeAnalyzer } from "./utils/volumeAnalyzer.js";
 import type { VolumeSurgeConfig } from "./interfaces/volumeAnalysisInterface.js";
 
 export interface ExhaustionSettings extends BaseDetectorSettings {
-    features?: ExhaustionFeatures;
+    // 🚫 NUCLEAR CLEANUP: ALL PROPERTIES REQUIRED - NO OPTIONAL MARKERS
+    features: ExhaustionFeatures;
     // Exhaustion-specific settings
-    exhaustionThreshold?: number; // Minimum exhaustion score (0-1)
-    maxPassiveRatio?: number; // Max ratio of current/avg passive for exhaustion
-    minDepletionFactor?: number; // Min factor for passive depletion detection
+    exhaustionThreshold: number; // Minimum exhaustion score (0-1)
+    maxPassiveRatio: number; // Max ratio of current/avg passive for exhaustion
+    minDepletionFactor: number; // Min factor for passive depletion detection
 
-    // Scoring threshold parameters (previously hardcoded)
-    imbalanceHighThreshold?: number; // High imbalance threshold (default 0.8)
-    imbalanceMediumThreshold?: number; // Medium imbalance threshold (default 0.6)
-    spreadHighThreshold?: number; // High spread threshold (default 0.005)
-    spreadMediumThreshold?: number; // Medium spread threshold (default 0.002)
+    // Scoring threshold parameters
+    imbalanceHighThreshold: number; // High imbalance threshold
+    imbalanceMediumThreshold: number; // Medium imbalance threshold
+    spreadHighThreshold: number; // High spread threshold
+    spreadMediumThreshold: number; // Medium spread threshold
 
     // Volume surge detection parameters for enhanced exhaustion analysis
-    volumeSurgeMultiplier?: number; // Volume surge threshold for exhaustion validation
-    imbalanceThreshold?: number; // Order flow imbalance threshold for exhaustion
-    institutionalThreshold?: number; // Institutional trade size threshold
-    burstDetectionMs?: number; // Burst detection window
-    sustainedVolumeMs?: number; // Sustained volume analysis window
-    medianTradeSize?: number; // Baseline trade size for volume analysis
+    volumeSurgeMultiplier: number; // Volume surge threshold for exhaustion validation
+    imbalanceThreshold: number; // Order flow imbalance threshold for exhaustion
+    institutionalThreshold: number; // Institutional trade size threshold
+    burstDetectionMs: number; // Burst detection window
+    sustainedVolumeMs: number; // Sustained volume analysis window
+    medianTradeSize: number; // Baseline trade size for volume analysis
 
-    // Scoring weight parameters (previously hardcoded)
-    scoringWeights?: {
-        depletion?: number; // Primary exhaustion factor (default 0.4)
-        passive?: number; // Passive liquidity depletion (default 0.25)
-        continuity?: number; // Continuous depletion trend (default 0.15)
-        imbalance?: number; // Market imbalance (default 0.1)
-        spread?: number; // Spread widening (default 0.08)
-        velocity?: number; // Volume velocity (default 0.02)
+    // Scoring weight parameters
+    scoringWeights: {
+        depletion: number; // Primary exhaustion factor
+        passive: number; // Passive liquidity depletion
+        continuity: number; // Continuous depletion trend
+        imbalance: number; // Market imbalance
+        spread: number; // Spread widening
+        velocity: number; // Volume velocity
     };
 
-    // Depletion calculation parameters (previously hardcoded)
-    depletionThresholdRatio?: number; // Ratio of avgPassive for depletion threshold (default 0.2)
+    // Depletion calculation parameters
+    depletionThresholdRatio: number; // Ratio of avgPassive for depletion threshold
 
-    // Data quality assessment parameters (previously hardcoded)
-    significantChangeThreshold?: number; // Significant change threshold (default 0.1)
-    highQualitySampleCount?: number; // High quality minimum sample count (default 8)
-    highQualityDataAge?: number; // High quality maximum data age (default 45000ms)
-    mediumQualitySampleCount?: number; // Medium quality minimum sample count (default 3)
-    mediumQualityDataAge?: number; // Medium quality maximum data age (default 90000ms)
+    // Data quality assessment parameters
+    significantChangeThreshold: number; // Significant change threshold
+    highQualitySampleCount: number; // High quality minimum sample count
+    highQualityDataAge: number; // High quality maximum data age
+    mediumQualitySampleCount: number; // Medium quality minimum sample count
+    mediumQualityDataAge: number; // Medium quality maximum data age
 
-    // Circuit breaker configuration (previously hardcoded)
-    circuitBreakerMaxErrors?: number; // Maximum errors before circuit breaker opens (default 5)
-    circuitBreakerWindowMs?: number; // Error count reset window (default 60000ms)
+    // Circuit breaker configuration
+    circuitBreakerMaxErrors: number; // Maximum errors before circuit breaker opens
+    circuitBreakerWindowMs: number; // Error count reset window
 
-    // 🔧 CLAUDE.md COMPLIANCE: Confidence adjustment parameters (previously hardcoded)
-    lowScoreConfidenceAdjustment?: number; // Confidence reduction for low scores (default 0.7)
-    lowVolumeConfidenceAdjustment?: number; // Confidence reduction for low volume (default 0.8)
-    invalidSurgeConfidenceAdjustment?: number; // Confidence reduction for invalid surge (default 0.8)
+    // Confidence adjustment parameters
+    lowScoreConfidenceAdjustment: number; // Confidence reduction for low scores
+    lowVolumeConfidenceAdjustment: number; // Confidence reduction for low volume
+    invalidSurgeConfidenceAdjustment: number; // Confidence reduction for invalid surge
 
-    // 🔧 CLAUDE.md COMPLIANCE: Calculation threshold parameters (previously hardcoded)
-    passiveConsistencyThreshold?: number; // Threshold for passive consistency calculation (default 0.7)
-    imbalanceNeutralThreshold?: number; // Threshold for neutral imbalance detection (default 0.1)
-    velocityMinBound?: number; // Minimum velocity ratio bound (default 0.1)
-    velocityMaxBound?: number; // Maximum velocity ratio bound (default 10.0)
+    // Calculation threshold parameters
+    passiveConsistencyThreshold: number; // Threshold for passive consistency calculation
+    imbalanceNeutralThreshold: number; // Threshold for neutral imbalance detection
+    velocityMinBound: number; // Minimum velocity ratio bound
+    velocityMaxBound: number; // Maximum velocity ratio bound
+
+    // Zone management parameters
+    maxZones: number; // Maximum number of zones
+    zoneAgeLimit: number; // Maximum age of zones in ms
 }
 
 type DetectorResult<T> =
@@ -205,13 +210,17 @@ export class ExhaustionDetector
     private readonly velocityMinBound: number;
     private readonly velocityMaxBound: number;
 
+    // 🚫 NUCLEAR CLEANUP: Zone management parameters
+    private readonly maxZones: number;
+    private readonly zoneAgeLimit: number;
+
     // 🔧 FIX: Remove duplicate threshold update interval (already handled by BaseDetector)
     // Interval handle for periodic threshold updates - REMOVED to eliminate race condition
     // private thresholdUpdateInterval?: NodeJS.Timeout;
 
     constructor(
         id: string,
-        settings: ExhaustionSettings = {},
+        settings: ExhaustionSettings,
         logger: ILogger,
         spoofingDetector: SpoofingDetector,
         metricsCollector: IMetricsCollector,
@@ -226,101 +235,23 @@ export class ExhaustionDetector
             signalLogger
         );
 
-        // 🔧 FIX: Enhanced configuration validation
-        this.exhaustionThreshold = this.validateConfigValue(
-            settings.exhaustionThreshold ?? 0.7,
-            0.1,
-            1.0,
-            0.7,
-            "exhaustionThreshold"
-        );
-        this.maxPassiveRatio = this.validateConfigValue(
-            settings.maxPassiveRatio ?? 0.3,
-            0.1,
-            1.0,
-            0.3,
-            "maxPassiveRatio"
-        );
-        this.minDepletionFactor = this.validateConfigValue(
-            settings.minDepletionFactor ?? 0.5,
-            0.1,
-            10.0,
-            0.5,
-            "minDepletionFactor"
-        );
-        this.imbalanceHighThreshold = this.validateConfigValue(
-            settings.imbalanceHighThreshold ?? 0.8,
-            0.1,
-            1.0,
-            0.8,
-            "imbalanceHighThreshold"
-        );
-        this.imbalanceMediumThreshold = this.validateConfigValue(
-            settings.imbalanceMediumThreshold ?? 0.6,
-            0.1,
-            1.0,
-            0.6,
-            "imbalanceMediumThreshold"
-        );
-        this.spreadHighThreshold = this.validateConfigValue(
-            settings.spreadHighThreshold ?? 0.005,
-            0.001,
-            0.1,
-            0.005,
-            "spreadHighThreshold"
-        );
-        this.spreadMediumThreshold = this.validateConfigValue(
-            settings.spreadMediumThreshold ?? 0.002,
-            0.0001,
-            0.1,
-            0.002,
-            "spreadMediumThreshold"
-        );
+        // 🚫 NUCLEAR CLEANUP: NO VALIDATION IN DETECTORS - ALL CONFIG VALIDATED BY ZOD IN CONFIG.TS
+        this.exhaustionThreshold = settings.exhaustionThreshold;
+        this.maxPassiveRatio = settings.maxPassiveRatio;
+        this.minDepletionFactor = settings.minDepletionFactor;
+        this.imbalanceHighThreshold = settings.imbalanceHighThreshold;
+        this.imbalanceMediumThreshold = settings.imbalanceMediumThreshold;
+        this.spreadHighThreshold = settings.spreadHighThreshold;
+        this.spreadMediumThreshold = settings.spreadMediumThreshold;
 
-        // Initialize scoring weights configuration with validation
+        // Initialize scoring weights configuration - guaranteed by Zod validation
         this.scoringWeights = {
-            depletion: this.validateConfigValue(
-                settings.scoringWeights?.depletion ?? 0.4,
-                0.1,
-                0.8,
-                0.4,
-                "scoringWeights.depletion"
-            ),
-            passive: this.validateConfigValue(
-                settings.scoringWeights?.passive ?? 0.25,
-                0.05,
-                0.5,
-                0.25,
-                "scoringWeights.passive"
-            ),
-            continuity: this.validateConfigValue(
-                settings.scoringWeights?.continuity ?? 0.15,
-                0.05,
-                0.3,
-                0.15,
-                "scoringWeights.continuity"
-            ),
-            imbalance: this.validateConfigValue(
-                settings.scoringWeights?.imbalance ?? 0.1,
-                0.05,
-                0.2,
-                0.1,
-                "scoringWeights.imbalance"
-            ),
-            spread: this.validateConfigValue(
-                settings.scoringWeights?.spread ?? 0.08,
-                0.01,
-                0.15,
-                0.08,
-                "scoringWeights.spread"
-            ),
-            velocity: this.validateConfigValue(
-                settings.scoringWeights?.velocity ?? 0.02,
-                0.01,
-                0.1,
-                0.02,
-                "scoringWeights.velocity"
-            ),
+            depletion: settings.scoringWeights.depletion,
+            passive: settings.scoringWeights.passive,
+            continuity: settings.scoringWeights.continuity,
+            imbalance: settings.scoringWeights.imbalance,
+            spread: settings.scoringWeights.spread,
+            velocity: settings.scoringWeights.velocity,
         };
 
         // Validate that weights sum to approximately 1.0 using FinancialMath
@@ -374,140 +305,49 @@ export class ExhaustionDetector
             );
         }
 
-        // Initialize depletion threshold ratio
-        this.depletionThresholdRatio = this.validateConfigValue(
-            settings.depletionThresholdRatio ?? 0.2,
-            0.05,
-            0.5,
-            0.2,
-            "depletionThresholdRatio"
-        );
+        // Initialize depletion threshold ratio - guaranteed by Zod validation
+        this.depletionThresholdRatio = settings.depletionThresholdRatio;
 
-        // Initialize volume surge configuration
+        // Initialize volume surge configuration - guaranteed by Zod validation
         this.volumeSurgeConfig = {
-            volumeSurgeMultiplier: settings.volumeSurgeMultiplier ?? 3.0,
-            imbalanceThreshold: settings.imbalanceThreshold ?? 0.3,
-            institutionalThreshold: settings.institutionalThreshold ?? 15.0,
-            burstDetectionMs: settings.burstDetectionMs ?? 1500,
-            sustainedVolumeMs: settings.sustainedVolumeMs ?? 25000,
-            medianTradeSize: settings.medianTradeSize ?? 0.8,
+            volumeSurgeMultiplier: settings.volumeSurgeMultiplier,
+            imbalanceThreshold: settings.imbalanceThreshold,
+            institutionalThreshold: settings.institutionalThreshold,
+            burstDetectionMs: settings.burstDetectionMs,
+            sustainedVolumeMs: settings.sustainedVolumeMs,
+            medianTradeSize: settings.medianTradeSize,
         };
 
-        // Initialize data quality assessment thresholds
-        this.significantChangeThreshold = this.validateConfigValue(
-            settings.significantChangeThreshold ?? 0.1,
-            0.01,
-            0.5,
-            0.1,
-            "significantChangeThreshold"
-        );
+        // Initialize data quality assessment thresholds - guaranteed by Zod validation
+        this.significantChangeThreshold = settings.significantChangeThreshold;
+        this.highQualitySampleCount = settings.highQualitySampleCount;
+        this.highQualityDataAge = settings.highQualityDataAge;
+        this.mediumQualitySampleCount = settings.mediumQualitySampleCount;
+        this.mediumQualityDataAge = settings.mediumQualityDataAge;
 
-        this.highQualitySampleCount = this.validateConfigValue(
-            settings.highQualitySampleCount ?? 8,
-            3,
-            20,
-            8,
-            "highQualitySampleCount"
-        );
+        // Initialize circuit breaker configuration - guaranteed by Zod validation
+        this.circuitBreakerState.maxErrors = settings.circuitBreakerMaxErrors;
+        this.circuitBreakerState.errorWindowMs =
+            settings.circuitBreakerWindowMs;
 
-        this.highQualityDataAge = this.validateConfigValue(
-            settings.highQualityDataAge ?? 45000,
-            10000,
-            120000,
-            45000,
-            "highQualityDataAge"
-        );
+        // 🔧 CLAUDE.md COMPLIANCE: Initialize configurable confidence adjustment parameters - guaranteed by Zod validation
+        this.lowScoreConfidenceAdjustment =
+            settings.lowScoreConfidenceAdjustment;
+        this.lowVolumeConfidenceAdjustment =
+            settings.lowVolumeConfidenceAdjustment;
+        this.invalidSurgeConfidenceAdjustment =
+            settings.invalidSurgeConfidenceAdjustment;
 
-        this.mediumQualitySampleCount = this.validateConfigValue(
-            settings.mediumQualitySampleCount ?? 3,
-            1,
-            10,
-            3,
-            "mediumQualitySampleCount"
-        );
+        // 🔧 CLAUDE.md COMPLIANCE: Initialize configurable calculation threshold parameters - guaranteed by Zod validation
+        this.passiveConsistencyThreshold = settings.passiveConsistencyThreshold;
 
-        this.mediumQualityDataAge = this.validateConfigValue(
-            settings.mediumQualityDataAge ?? 90000,
-            20000,
-            300000,
-            90000,
-            "mediumQualityDataAge"
-        );
+        this.imbalanceNeutralThreshold = settings.imbalanceNeutralThreshold;
+        this.velocityMinBound = settings.velocityMinBound;
+        this.velocityMaxBound = settings.velocityMaxBound;
 
-        // Initialize circuit breaker configuration
-        this.circuitBreakerState.maxErrors = this.validateConfigValue(
-            settings.circuitBreakerMaxErrors ?? 5,
-            2,
-            20,
-            5,
-            "circuitBreakerMaxErrors"
-        );
-
-        this.circuitBreakerState.errorWindowMs = this.validateConfigValue(
-            settings.circuitBreakerWindowMs ?? 60000,
-            10000,
-            300000,
-            60000,
-            "circuitBreakerWindowMs"
-        );
-
-        // 🔧 CLAUDE.md COMPLIANCE: Initialize configurable confidence adjustment parameters
-        this.lowScoreConfidenceAdjustment = this.validateConfigValue(
-            settings.lowScoreConfidenceAdjustment ?? 0.7,
-            0.1,
-            1.0,
-            0.7,
-            "lowScoreConfidenceAdjustment"
-        );
-
-        this.lowVolumeConfidenceAdjustment = this.validateConfigValue(
-            settings.lowVolumeConfidenceAdjustment ?? 0.8,
-            0.1,
-            1.0,
-            0.8,
-            "lowVolumeConfidenceAdjustment"
-        );
-
-        this.invalidSurgeConfidenceAdjustment = this.validateConfigValue(
-            settings.invalidSurgeConfidenceAdjustment ?? 0.8,
-            0.1,
-            1.0,
-            0.8,
-            "invalidSurgeConfidenceAdjustment"
-        );
-
-        // 🔧 CLAUDE.md COMPLIANCE: Initialize configurable calculation threshold parameters
-        this.passiveConsistencyThreshold = this.validateConfigValue(
-            settings.passiveConsistencyThreshold ?? 0.7,
-            0.1,
-            1.0,
-            0.7,
-            "passiveConsistencyThreshold"
-        );
-
-        this.imbalanceNeutralThreshold = this.validateConfigValue(
-            settings.imbalanceNeutralThreshold ?? 0.1,
-            0.01,
-            0.5,
-            0.1,
-            "imbalanceNeutralThreshold"
-        );
-
-        this.velocityMinBound = this.validateConfigValue(
-            settings.velocityMinBound ?? 0.1,
-            0.01,
-            1.0,
-            0.1,
-            "velocityMinBound"
-        );
-
-        this.velocityMaxBound = this.validateConfigValue(
-            settings.velocityMaxBound ?? 10.0,
-            2.0,
-            100.0,
-            10.0,
-            "velocityMaxBound"
-        );
+        // 🚫 NUCLEAR CLEANUP: Initialize zone management parameters - guaranteed by Zod validation
+        this.maxZones = settings.maxZones;
+        this.zoneAgeLimit = settings.zoneAgeLimit;
 
         // Initialize volume analyzer for enhanced exhaustion detection
         this.volumeAnalyzer = new VolumeAnalyzer(
@@ -532,31 +372,7 @@ export class ExhaustionDetector
         this.circuitBreakerState.errorCount = 0;
     }
 
-    /**
-     * 🔧 FIX: Configuration validation utility
-     */
-    private validateConfigValue(
-        value: number,
-        min: number,
-        max: number,
-        defaultValue: number,
-        name: string
-    ): number {
-        if (!isFinite(value) || value < min || value > max) {
-            this.logger.warn(
-                `[ExhaustionDetector] Invalid ${name}: ${value}, using default: ${defaultValue}`,
-                {
-                    value,
-                    min,
-                    max,
-                    defaultValue,
-                    configKey: name,
-                }
-            );
-            return defaultValue;
-        }
-        return value;
-    }
+    // 🚫 NUCLEAR CLEANUP: validateConfigValue method REMOVED - all validation now in config.ts via Zod
 
     /**
      * 🔧 FIX: Numeric validation helper to prevent NaN/Infinity propagation
@@ -569,20 +385,7 @@ export class ExhaustionDetector
      * 🔧 FIX: Safe mean calculation to replace DetectorUtils.calculateMean
      */
 
-    /**
-     * 🔧 FIX: Simple config implementation with type safety
-     */
-    private readonly config = {
-        maxZones: 100,
-        zoneAgeLimit: 3600000, // 1 hour
-    };
-
-    private getConfigValue<T>(
-        key: keyof typeof this.config,
-        defaultValue: T
-    ): T {
-        return (this.config[key] as T) ?? defaultValue;
-    }
+    // 🚫 NUCLEAR CLEANUP: getConfigValue method REMOVED - no internal config fallbacks allowed
 
     protected getSignalType(): SignalType {
         return "exhaustion";
@@ -679,9 +482,7 @@ export class ExhaustionDetector
         }
 
         // 🔧 FIX: Auto zone cleanup after zone creation
-        if (
-            this.zonePassiveHistory.size > this.getConfigValue("maxZones", 100)
-        ) {
+        if (this.zonePassiveHistory.size > this.maxZones) {
             this.cleanupZoneMemory();
         }
     }
@@ -1284,8 +1085,9 @@ export class ExhaustionDetector
         const memUsage = process.memoryUsage();
         const heapUsedMB = memUsage.heapUsed / 1024 / 1024;
 
-        let maxZones = this.getConfigValue("maxZones", 100);
-        let zoneAgeLimit = this.getConfigValue("zoneAgeLimit", 3600000); // 1 hour default
+        // 🚫 NUCLEAR CLEANUP: NO GETCONFIG - ALL PROPERTIES GUARANTEED BY ZOD VALIDATION
+        let maxZones = this.maxZones;
+        let zoneAgeLimit = this.zoneAgeLimit;
 
         // Adaptive thresholds based on memory pressure
         if (heapUsedMB > 1000) {

@@ -7,6 +7,9 @@ import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorIn
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
+// Import mock config for complete settings
+import mockConfig from "../__mocks__/config.json";
+
 describe("DeltaCVD Numeric Stability Fixes", () => {
     let detector: DeltaCVDDetectorEnhanced;
     let mockLogger: ILogger;
@@ -105,16 +108,7 @@ describe("DeltaCVD Numeric Stability Fixes", () => {
 
         detector = new DeltaCVDDetectorEnhanced(
             "test_cvd",
-            {
-                minZ: 3,
-                minTradesPerSec: 0.5,
-                minVolPerSec: 1,
-                usePassiveVolume: true,
-                enableDepthAnalysis: false, // Simplified mode
-                detectionMode: "momentum",
-                baseConfidenceRequired: 0.3,
-                finalConfidenceRequired: 0.5,
-            },
+            mockConfig.symbols.LTCUSDT.deltaCvdConfirmation as any,
             mockLogger,
             mockSpoofingDetector,
             mockMetrics

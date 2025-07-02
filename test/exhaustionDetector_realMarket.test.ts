@@ -11,6 +11,9 @@ import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 
+// Import mock config for complete settings
+import mockConfig from "../__mocks__/config.json";
+
 // Mock dependencies
 const createMockLogger = (): ILogger => ({
     info: vi.fn(),
@@ -170,21 +173,8 @@ describe("ExhaustionDetector - Real Market Scenarios", () => {
         mockMetrics = createMockMetricsCollector();
         mockSpoofingDetector = createMockSpoofingDetector();
 
-        // Production-like settings for realistic testing
-        const settings: ExhaustionSettings = {
-            exhaustionThreshold: 0.4, // Lower threshold for testing
-            maxPassiveRatio: 0.4, // More lenient
-            minDepletionFactor: 0.3,
-            windowMs: 30000, // Shorter window for faster testing
-            minAggVolume: 50, // Lower volume threshold for testing
-            features: {
-                depletionTracking: true,
-                spreadAdjustment: true,
-                volumeVelocity: true,
-                adaptiveZone: true,
-                passiveHistory: true,
-            },
-        };
+        // 🚫 NUCLEAR CLEANUP: Use complete mock config settings instead of partial objects
+        const settings: ExhaustionSettings = mockConfig.symbols.LTCUSDT.exhaustion as ExhaustionSettings;
 
         detector = new ExhaustionDetector(
             "test-real-market",

@@ -16,6 +16,9 @@ import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
 import { RedBlackTreeOrderBook } from "../src/market/redBlackTreeOrderBook.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
+// Import mock config for complete settings
+import mockConfig from "../__mocks__/config.json";
+
 // Mock dependencies
 vi.mock("../src/infrastructure/metricsCollector");
 vi.mock("../src/market/redBlackTreeOrderBook");
@@ -249,7 +252,7 @@ describe("DeltaCVD A/B Testing Framework", () => {
         it("should create detector with A/B testing enabled", () => {
             const detector = DeltaCVDWithABTesting.createWithABTesting(
                 "test-detector",
-                { windows: [5, 10], minZ: 2, minTPS: 3, minVPS: 50 } as any,
+                mockConfig.symbols.LTCUSDT.deltaCvdConfirmation as any,
                 orderBook,
                 logger,
                 metricsCollector,
@@ -268,10 +271,7 @@ describe("DeltaCVD A/B Testing Framework", () => {
             const detector = new DeltaCVDWithABTesting(
                 "test-detector",
                 {
-                    windows: [5, 10],
-                    minZ: 2,
-                    minTPS: 3,
-                    minVPS: 50,
+                    ...mockConfig.symbols.LTCUSDT.deltaCvdConfirmation,
                     enableABTesting: true,
                     abTestProfile: DeltaCVDTestProfile.SIMPLIFIED_WITH_PASSIVE,
                     abTestMonitor: monitor,

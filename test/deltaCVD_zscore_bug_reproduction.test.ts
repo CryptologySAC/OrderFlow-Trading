@@ -11,6 +11,9 @@ import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { SpoofingDetector } from "../src/services/spoofingDetector";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents";
 
+// Import mock config for complete settings
+import mockConfig from "../__mocks__/config.json";
+
 /**
  * MINIMAL Z-SCORE BUG REPRODUCTION
  *
@@ -67,16 +70,15 @@ describe("DeltaCVD Z-Score Bug Reproduction", () => {
         detector = new DeltaCVDDetectorEnhanced(
             "zscore_bug_test",
             {
+                ...mockConfig.symbols.LTCUSDT.deltaCvdConfirmation,
                 windowsSec: [60],
-                minZ: 1.0, // Lower threshold for testing
-                minTradesPerSec: 0.1,
-                minVolPerSec: 0.5,
+                minZ: 1.0,
                 detectionMode: "momentum",
                 baseConfidenceRequired: 0.2,
                 finalConfidenceRequired: 0.3,
                 usePassiveVolume: true,
-                enableDepthAnalysis: true, // Required for volume surge
-                volumeSurgeMultiplier: 1.5, // Lower threshold for testing
+                enableDepthAnalysis: true,
+                volumeSurgeMultiplier: 1.5,
                 imbalanceThreshold: 0.05, // Very low threshold for testing
             },
             mockLogger,

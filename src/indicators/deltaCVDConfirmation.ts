@@ -86,73 +86,73 @@ interface CVDCalculationResult {
 }
 
 export interface DeltaCVDConfirmationSettings extends BaseDetectorSettings {
-    windowsSec?: [60, 300, 900] | number[]; // analysed windows
-    minZ?: number; // base min |zScore| on shortest window
-    minTradesPerSec?: number; // floor scaled by window
-    minVolPerSec?: number; // floor scaled by window
+    windowsSec: number[]; // analysed windows
+    minZ: number; // base min |zScore| on shortest window
+    minTradesPerSec: number; // floor scaled by window
+    minVolPerSec: number; // floor scaled by window
 
-    // NEW: Detection mode
-    detectionMode?: "momentum" | "divergence" | "hybrid"; // Default: "momentum"
-    divergenceThreshold?: number; // 0.3 = 30% correlation threshold for divergence
-    divergenceLookbackSec?: number; // 60 seconds to check for price/CVD divergence
+    // Detection mode
+    detectionMode: "momentum" | "divergence" | "hybrid";
+    divergenceThreshold: number; // 0.3 = 30% correlation threshold for divergence
+    divergenceLookbackSec: number; // 60 seconds to check for price/CVD divergence
 
     // A/B Testing: Passive volume usage control
-    usePassiveVolume?: boolean; // Enable/disable passive volume in CVD calculation (default: true)
+    usePassiveVolume: boolean; // Enable/disable passive volume in CVD calculation
 
-    // CRITICAL FIX: Make minimum samples configurable for testing
-    minSamplesForStats?: number; // Minimum samples required for statistical analysis (default: 30)
+    // 🚫 NUCLEAR CLEANUP: ALL PROPERTIES REQUIRED - NO OPTIONAL MARKERS
+    minSamplesForStats: number; // Minimum samples required for statistical analysis
 
     // Enhanced settings
-    volatilityLookbackSec?: number; // window for volatility baseline (default: 3600)
-    priceCorrelationWeight?: number; // how much price correlation affects confidence (0-1)
-    volumeConcentrationWeight?: number; // weight for volume concentration factor
-    adaptiveThresholdMultiplier?: number; // multiplier for adaptive z-score thresholds
-    maxDivergenceAllowed?: number; // max allowed price/CVD divergence before penalty
-    stateCleanupIntervalSec?: number; // how often to cleanup old state
+    volatilityLookbackSec: number; // window for volatility baseline
+    priceCorrelationWeight: number; // how much price correlation affects confidence (0-1)
+    volumeConcentrationWeight: number; // weight for volume concentration factor
+    adaptiveThresholdMultiplier: number; // multiplier for adaptive z-score thresholds
+    maxDivergenceAllowed: number; // max allowed price/CVD divergence before penalty
+    stateCleanupIntervalSec: number; // how often to cleanup old state
 
     // Volume surge detection for 0.7%+ moves
-    volumeSurgeMultiplier?: number; // 4x volume surge threshold for momentum detection
-    imbalanceThreshold?: number; // 35% order flow imbalance threshold
-    institutionalThreshold?: number; // 17.8 LTC institutional trade size threshold
-    burstDetectionMs?: number; // 1000ms burst detection window
-    sustainedVolumeMs?: number; // 30000ms sustained volume confirmation window
-    medianTradeSize?: number; // 0.6 LTC median trade size baseline
-    dynamicThresholds?: boolean;
-    logDebug?: boolean;
+    volumeSurgeMultiplier: number; // volume surge threshold for momentum detection
+    imbalanceThreshold: number; // order flow imbalance threshold
+    institutionalThreshold: number; // institutional trade size threshold
+    burstDetectionMs: number; // burst detection window
+    sustainedVolumeMs: number; // sustained volume confirmation window
+    medianTradeSize: number; // median trade size baseline
+    dynamicThresholds: boolean;
+    logDebug: boolean;
 
     // PHASE 2: Depth analysis settings
-    enableDepthAnalysis?: boolean;
-    maxOrderbookAge?: number; // 5000ms
+    enableDepthAnalysis: boolean;
+    maxOrderbookAge: number;
 
     // PHASE 3: Absorption detection
-    absorptionCVDThreshold?: number; // 50
-    absorptionPriceThreshold?: number; // 0.1
+    absorptionCVDThreshold: number;
+    absorptionPriceThreshold: number;
 
     // PHASE 4: Imbalance analysis
-    imbalanceWeight?: number; // 0.2
+    imbalanceWeight: number;
 
     // PHASE 5: Iceberg detection
-    icebergMinRefills?: number; // 3
-    icebergMinSize?: number; // 20
+    icebergMinRefills: number;
+    icebergMinSize: number;
 
     // Enhanced confidence
-    baseConfidenceRequired?: number; // 0.4
-    finalConfidenceRequired?: number; // 0.6
+    baseConfidenceRequired: number;
+    finalConfidenceRequired: number;
 
-    // Correlation threshold parameters (previously hardcoded)
-    strongCorrelationThreshold?: number; // Strong correlation threshold (default 0.7)
-    weakCorrelationThreshold?: number; // Weak correlation threshold (default 0.3)
-    depthImbalanceThreshold?: number; // Depth imbalance signal threshold (default 0.2)
+    // Correlation threshold parameters
+    strongCorrelationThreshold: number; // Strong correlation threshold
+    weakCorrelationThreshold: number; // Weak correlation threshold
+    depthImbalanceThreshold: number; // Depth imbalance signal threshold
 
-    // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 parameters)
-    minTradesForAnalysis?: number; // Minimum trades required for analysis (default: 20)
-    minVolumeRatio?: number; // Minimum volume ratio for calculations (default: 0.1)
-    maxVolumeRatio?: number; // Maximum volume ratio cap (default: 5.0)
-    priceChangeThreshold?: number; // Price change threshold for direction detection (default: 0.001)
-    minZScoreBound?: number; // Minimum z-score bound (default: -20)
-    maxZScoreBound?: number; // Maximum z-score bound (default: 20)
-    minCorrelationBound?: number; // Minimum correlation bound (default: -0.999)
-    maxCorrelationBound?: number; // Maximum correlation bound (default: 0.999)
+    // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic
+    minTradesForAnalysis: number; // Minimum trades required for analysis
+    minVolumeRatio: number; // Minimum volume ratio for calculations
+    maxVolumeRatio: number; // Maximum volume ratio cap
+    priceChangeThreshold: number; // Price change threshold for direction detection
+    minZScoreBound: number; // Minimum z-score bound
+    maxZScoreBound: number; // Maximum z-score bound
+    minCorrelationBound: number; // Minimum correlation bound
+    maxCorrelationBound: number; // Maximum correlation bound
 }
 
 interface WindowState {
@@ -179,9 +179,9 @@ interface WindowState {
     burstHistory: { timestamp: number; volume: number; imbalance: number }[]; // detected bursts
 }
 
-// MIN_SAMPLES_FOR_STATS constant removed - now configurable via minSamplesForStats setting
-const VOLATILITY_LOOKBACK_DEFAULT = 3600; // 1 hour
-const CLEANUP_INTERVAL_DEFAULT = 300; // 5 minutes
+// 🚫 NUCLEAR CLEANUP: ALL CONSTANTS REMOVED - VALUES NOW CONFIGURABLE VIA ZOD VALIDATION
+// VOLATILITY_LOOKBACK_DEFAULT = 3600 → settings.volatilityLookbackSec
+// CLEANUP_INTERVAL_DEFAULT = 300 → settings.stateCleanupIntervalSec
 
 // Algorithm constants - internal implementation details
 const _MIN_VOLATILITY_SAMPLES = 50;
@@ -312,7 +312,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
     constructor(
         id: string,
-        settings: DeltaCVDConfirmationSettings = {},
+        settings: DeltaCVDConfirmationSettings,
         logger: ILogger,
         spoofingDetector: SpoofingDetector,
         metricsCollector: IMetricsCollector,
@@ -327,47 +327,42 @@ export class DeltaCVDConfirmation extends BaseDetector {
             signalLogger
         );
 
-        // Basic settings
-        this.windows = settings.windowsSec
-            ? [...settings.windowsSec]
-            : [60, 300, 900];
-        this.minZ = settings.minZ ?? 3;
-        this.minTPS = settings.minTradesPerSec ?? 0.5;
-        this.minVPS = settings.minVolPerSec ?? 1;
+        // 🚫 NUCLEAR CLEANUP: NO FALLBACKS - ALL PROPERTIES GUARANTEED BY ZOD VALIDATION
 
-        // Enhanced settings
-        this.volatilityLookbackSec =
-            settings.volatilityLookbackSec ?? VOLATILITY_LOOKBACK_DEFAULT;
-        this.priceCorrelationWeight = settings.priceCorrelationWeight ?? 0.3;
-        this.volumeConcentrationWeight =
-            settings.volumeConcentrationWeight ?? 0.2;
-        this.minSamplesForStats = settings.minSamplesForStats ?? 30;
-        this.adaptiveThresholdMultiplier =
-            settings.adaptiveThresholdMultiplier ?? 1.5;
-        this.maxDivergenceAllowed = settings.maxDivergenceAllowed ?? 0.7;
-        this.stateCleanupIntervalSec =
-            settings.stateCleanupIntervalSec ?? CLEANUP_INTERVAL_DEFAULT;
+        // Basic settings - guaranteed to exist from Zod validation
+        this.windows = [...settings.windowsSec];
+        this.minZ = settings.minZ;
+        this.minTPS = settings.minTradesPerSec;
+        this.minVPS = settings.minVolPerSec;
 
-        // Volume surge detection parameters
-        this.volumeSurgeMultiplier = settings.volumeSurgeMultiplier ?? 4.0;
-        this.imbalanceThreshold = settings.imbalanceThreshold ?? 0.35;
-        this.institutionalThreshold = settings.institutionalThreshold ?? 17.8;
-        this.burstDetectionMs = settings.burstDetectionMs ?? 1000;
-        this.sustainedVolumeMs = settings.sustainedVolumeMs ?? 30000;
-        this.medianTradeSize = settings.medianTradeSize ?? 0.6;
+        // Enhanced settings - guaranteed to exist from Zod validation
+        this.volatilityLookbackSec = settings.volatilityLookbackSec;
+        this.priceCorrelationWeight = settings.priceCorrelationWeight;
+        this.volumeConcentrationWeight = settings.volumeConcentrationWeight;
+        this.minSamplesForStats = settings.minSamplesForStats;
+        this.adaptiveThresholdMultiplier = settings.adaptiveThresholdMultiplier;
+        this.maxDivergenceAllowed = settings.maxDivergenceAllowed;
+        this.stateCleanupIntervalSec = settings.stateCleanupIntervalSec;
 
-        // NEW: Detection mode configuration
-        this.detectionMode = settings.detectionMode ?? "momentum";
-        this.divergenceThreshold = settings.divergenceThreshold ?? 0.3;
-        this.divergenceLookbackSec = settings.divergenceLookbackSec ?? 60;
+        // Volume surge detection parameters - guaranteed to exist from Zod validation
+        this.volumeSurgeMultiplier = settings.volumeSurgeMultiplier;
+        this.imbalanceThreshold = settings.imbalanceThreshold;
+        this.institutionalThreshold = settings.institutionalThreshold;
+        this.burstDetectionMs = settings.burstDetectionMs;
+        this.sustainedVolumeMs = settings.sustainedVolumeMs;
+        this.medianTradeSize = settings.medianTradeSize;
 
-        // A/B Testing: Passive volume configuration
-        this.usePassiveVolume = settings.usePassiveVolume ?? true;
+        // Detection mode configuration - guaranteed to exist from Zod validation
+        this.detectionMode = settings.detectionMode;
+        this.divergenceThreshold = settings.divergenceThreshold;
+        this.divergenceLookbackSec = settings.divergenceLookbackSec;
 
-        // PHASE 2: Depth analysis configuration
-        // SIMPLIFICATION: Default to false for better performance unless explicitly enabled
-        this.enableDepthAnalysis = settings.enableDepthAnalysis ?? false;
-        this.maxOrderbookAge = settings.maxOrderbookAge ?? 5000;
+        // A/B Testing: Passive volume configuration - guaranteed to exist from Zod validation
+        this.usePassiveVolume = settings.usePassiveVolume;
+
+        // PHASE 2: Depth analysis configuration - guaranteed to exist from Zod validation
+        this.enableDepthAnalysis = settings.enableDepthAnalysis;
+        this.maxOrderbookAge = settings.maxOrderbookAge;
 
         // PERFORMANCE OPTIMIZATION: Log configuration choices for debugging
         this.logger.info("[DeltaCVDConfirmation] Configuration initialized", {
@@ -379,36 +374,33 @@ export class DeltaCVDConfirmation extends BaseDetector {
             memoryOptimized: true,
         });
 
-        // PHASE 3: Absorption detection configuration
-        this.absorptionCVDThreshold = settings.absorptionCVDThreshold ?? 50;
-        this.absorptionPriceThreshold =
-            settings.absorptionPriceThreshold ?? 0.1;
+        // PHASE 3: Absorption detection configuration - guaranteed to exist from Zod validation
+        this.absorptionCVDThreshold = settings.absorptionCVDThreshold;
+        this.absorptionPriceThreshold = settings.absorptionPriceThreshold;
 
-        // PHASE 4: Imbalance analysis configuration
-        this.imbalanceWeight = settings.imbalanceWeight ?? 0.2;
+        // PHASE 4: Imbalance analysis configuration - guaranteed to exist from Zod validation
+        this.imbalanceWeight = settings.imbalanceWeight;
 
-        // PHASE 5: Iceberg detection configuration
-        this.icebergMinRefills = settings.icebergMinRefills ?? 3;
-        this.icebergMinSize = settings.icebergMinSize ?? 20;
+        // PHASE 5: Iceberg detection configuration - guaranteed to exist from Zod validation
+        this.icebergMinRefills = settings.icebergMinRefills;
+        this.icebergMinSize = settings.icebergMinSize;
 
-        // Enhanced confidence thresholds
-        this.baseConfidenceRequired = settings.baseConfidenceRequired ?? 0.4;
-        this.finalConfidenceRequired = settings.finalConfidenceRequired ?? 0.6;
-        this.strongCorrelationThreshold =
-            settings.strongCorrelationThreshold ?? 0.7;
-        this.weakCorrelationThreshold =
-            settings.weakCorrelationThreshold ?? 0.3;
-        this.depthImbalanceThreshold = settings.depthImbalanceThreshold ?? 0.2;
+        // Enhanced confidence thresholds - guaranteed to exist from Zod validation
+        this.baseConfidenceRequired = settings.baseConfidenceRequired;
+        this.finalConfidenceRequired = settings.finalConfidenceRequired;
+        this.strongCorrelationThreshold = settings.strongCorrelationThreshold;
+        this.weakCorrelationThreshold = settings.weakCorrelationThreshold;
+        this.depthImbalanceThreshold = settings.depthImbalanceThreshold;
 
-        // ESSENTIAL CONFIGURABLE PARAMETERS - Initialize with defaults
-        this.minTradesForAnalysis = settings.minTradesForAnalysis ?? 20;
-        this.minVolumeRatio = settings.minVolumeRatio ?? 0.1;
-        this.maxVolumeRatio = settings.maxVolumeRatio ?? 5.0;
-        this.priceChangeThreshold = settings.priceChangeThreshold ?? 0.001;
-        this.minZScoreBound = settings.minZScoreBound ?? -20;
-        this.maxZScoreBound = settings.maxZScoreBound ?? 20;
-        this.minCorrelationBound = settings.minCorrelationBound ?? -0.999;
-        this.maxCorrelationBound = settings.maxCorrelationBound ?? 0.999;
+        // ESSENTIAL CONFIGURABLE PARAMETERS - guaranteed to exist from Zod validation
+        this.minTradesForAnalysis = settings.minTradesForAnalysis;
+        this.minVolumeRatio = settings.minVolumeRatio;
+        this.maxVolumeRatio = settings.maxVolumeRatio;
+        this.priceChangeThreshold = settings.priceChangeThreshold;
+        this.minZScoreBound = settings.minZScoreBound;
+        this.maxZScoreBound = settings.maxZScoreBound;
+        this.minCorrelationBound = settings.minCorrelationBound;
+        this.maxCorrelationBound = settings.maxCorrelationBound;
 
         // Initialize window states
         for (const w of this.windows) {

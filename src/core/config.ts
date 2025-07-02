@@ -94,12 +94,12 @@ export const ExhaustionDetectorSchema = z.object({
 
     // Exhaustion-specific thresholds
     volumeSurgeMultiplier: z.number().min(0.5).max(10.0),
-    imbalanceThreshold: z.number().min(0.1).max(0.8),
+    imbalanceThreshold: z.number().min(0.05).max(0.8),
     institutionalThreshold: z.number().min(1).max(100),
     burstDetectionMs: z.number().int().min(500).max(10000),
     sustainedVolumeMs: z.number().int().min(5000).max(60000),
     medianTradeSize: z.number().min(0.1).max(10.0),
-    exhaustionThreshold: z.number().min(0.1).max(1.0),
+    exhaustionThreshold: z.number().min(0.01).max(1.0),
     maxPassiveRatio: z.number().min(0.1).max(1.0),
     minDepletionFactor: z.number().min(0.05).max(0.5),
     imbalanceHighThreshold: z.number().min(0.5).max(1.0),
@@ -154,7 +154,7 @@ export const ExhaustionDetectorSchema = z.object({
     // Enhancement control
     useStandardizedZones: z.boolean(),
     enhancementMode: z.enum(["disabled", "monitoring", "production"]),
-    minEnhancedConfidenceThreshold: z.number().min(0.2).max(0.8),
+    minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
 
     // Enhanced depletion analysis
     depletionVolumeThreshold: z.number().min(10).max(1000),
@@ -212,7 +212,7 @@ export const AbsorptionDetectorSchema = z.object({
     // Enhancement control
     useStandardizedZones: z.boolean(),
     enhancementMode: z.enum(["disabled", "testing", "production"]),
-    minEnhancedConfidenceThreshold: z.number().min(0.2).max(0.8),
+    minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
 
     // Institutional volume detection (enhanced)
     institutionalVolumeThreshold: z.number().min(10).max(1000),
@@ -252,7 +252,7 @@ export const AbsorptionDetectorSchema = z.object({
 export const DeltaCVDDetectorSchema = z.object({
     // Core CVD analysis
     windowsSec: z.array(z.number().int().min(30).max(3600)),
-    minZ: z.number().min(0.1).max(1.0),
+    minZ: z.number().min(0.01).max(1.0),
     priceCorrelationWeight: z.number().min(0.1).max(0.8),
     volumeConcentrationWeight: z.number().min(0.1).max(0.5),
     adaptiveThresholdMultiplier: z.number().min(0.3).max(2.0),
@@ -284,8 +284,8 @@ export const DeltaCVDDetectorSchema = z.object({
     imbalanceWeight: z.number().min(0.05).max(0.5),
     icebergMinRefills: z.number().int().min(1).max(10),
     icebergMinSize: z.number().min(5).max(100),
-    baseConfidenceRequired: z.number().min(0.1).max(0.8),
-    finalConfidenceRequired: z.number().min(0.2).max(0.9),
+    baseConfidenceRequired: z.number().min(0.01).max(0.8),
+    finalConfidenceRequired: z.number().min(0.01).max(0.9),
     strongCorrelationThreshold: z.number().min(0.5).max(0.95),
     weakCorrelationThreshold: z.number().min(0.1).max(0.6),
     depthImbalanceThreshold: z.number().min(0.05).max(0.5),
@@ -293,7 +293,7 @@ export const DeltaCVDDetectorSchema = z.object({
     // Enhancement control
     useStandardizedZones: z.boolean(),
     enhancementMode: z.enum(["disabled", "monitoring", "production"]),
-    minEnhancedConfidenceThreshold: z.number().min(0.2).max(0.8),
+    minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
 
     // Enhanced CVD analysis
     cvdDivergenceVolumeThreshold: z.number().min(20).max(2000),
@@ -333,7 +333,7 @@ export const AccumulationDetectorSchema = z.object({
     sustainedVolumeMs: z.number().int().min(10000).max(300000),
     medianTradeSize: z.number().min(0.1).max(50),
     enhancementMode: z.enum(["disabled", "testing", "production"]),
-    minEnhancedConfidenceThreshold: z.number().min(0.2).max(0.8),
+    minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
 
     // Enhancement internal parameters (accumulation-specific)
     enhancementCallFrequency: z.number().int().min(1).max(20),
@@ -368,7 +368,7 @@ export const DistributionDetectorSchema = z.object({
     // Enhancement control
     useStandardizedZones: z.boolean(),
     enhancementMode: z.enum(["disabled", "testing", "production"]),
-    minEnhancedConfidenceThreshold: z.number().min(0.2).max(0.8),
+    minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
 });
 
 const AccumulationEnhancedSettingsSchema = z

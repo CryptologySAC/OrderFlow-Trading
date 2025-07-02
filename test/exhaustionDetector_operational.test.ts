@@ -11,6 +11,9 @@ import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorIn
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import { FinancialMath } from "../src/utils/financialMath.js";
 
+// Import mock config for complete settings
+import mockConfig from "../__mocks__/config.json";
+
 // Mock dependencies for operational tests
 const createOperationalMocks = () => ({
     logger: {
@@ -40,19 +43,11 @@ describe("ExhaustionDetector - Operational Safety Tests", () => {
     beforeEach(() => {
         mocks = createOperationalMocks();
 
+        // 🚫 NUCLEAR CLEANUP: Use complete mock config settings with test overrides
         const settings: ExhaustionSettings = {
-            exhaustionThreshold: 0.7,
-            maxPassiveRatio: 0.3,
-            minDepletionFactor: 0.5,
-            features: {
-                depletionTracking: true,
-                spreadAdjustment: true,
-                volumeVelocity: true,
-                spoofingDetection: true,
-                adaptiveZone: true,
-                passiveHistory: true,
-                multiZone: false,
-            },
+            ...mockConfig.symbols.LTCUSDT.exhaustion as ExhaustionSettings,
+            circuitBreakerMaxErrors: 5,
+            circuitBreakerWindowMs: 60000,
         };
 
         detector = new ExhaustionDetector(
@@ -224,9 +219,9 @@ describe("ExhaustionDetector - Operational Safety Tests", () => {
             // Trigger cleanup
             detectorAny.cleanupZoneMemory();
 
-            // Should be limited to max zones
+            // Should be limited to max zones from mock config
             expect(detectorAny.zonePassiveHistory.size).toBeLessThanOrEqual(
-                100
+                75
             );
         });
 
@@ -340,97 +335,89 @@ describe("ExhaustionDetector - Operational Safety Tests", () => {
 
     describe("🔧 OPERATIONAL FIX #4: Enhanced Configuration Validation", () => {
         it("should validate exhaustion threshold bounds", () => {
-            const invalidSettings: ExhaustionSettings = {
-                exhaustionThreshold: 1.5, // > 1.0
+            // 🚫 NUCLEAR CLEANUP: Validation moved to Zod in config.ts
+            // ExhaustionDetector no longer validates - relies on pre-validated config
+            const validSettings: ExhaustionSettings = {
+                ...mockConfig.symbols.LTCUSDT.exhaustion as ExhaustionSettings,
+                exhaustionThreshold: 0.8, // Valid threshold
             };
 
-            new ExhaustionDetector(
-                "test-invalid-threshold",
-                invalidSettings,
+            const detector = new ExhaustionDetector(
+                "test-threshold",
+                validSettings,
                 mocks.logger,
                 mocks.spoofingDetector,
                 mocks.metrics
             );
 
-            expect(mocks.logger.warn).toHaveBeenCalledWith(
-                expect.stringContaining("Invalid exhaustionThreshold: 1.5"),
-                expect.objectContaining({
-                    value: 1.5,
-                    min: 0.1,
-                    max: 1.0,
-                    defaultValue: 0.7,
-                })
-            );
+            // Should accept pre-validated configuration without warnings
+            expect((detector as any).exhaustionThreshold).toBe(0.8);
+            expect(mocks.logger.warn).not.toHaveBeenCalled();
         });
 
         it("should validate passive ratio bounds", () => {
-            const invalidSettings: ExhaustionSettings = {
-                maxPassiveRatio: -0.1, // < 0.1
+            // 🚫 NUCLEAR CLEANUP: Validation moved to Zod in config.ts
+            // ExhaustionDetector no longer validates - relies on pre-validated config
+            const validSettings: ExhaustionSettings = {
+                ...mockConfig.symbols.LTCUSDT.exhaustion as ExhaustionSettings,
+                maxPassiveRatio: 0.4, // Valid ratio
             };
 
-            new ExhaustionDetector(
-                "test-invalid-ratio",
-                invalidSettings,
+            const detector = new ExhaustionDetector(
+                "test-ratio",
+                validSettings,
                 mocks.logger,
                 mocks.spoofingDetector,
                 mocks.metrics
             );
 
-            expect(mocks.logger.warn).toHaveBeenCalledWith(
-                expect.stringContaining("Invalid maxPassiveRatio: -0.1"),
-                expect.objectContaining({
-                    value: -0.1,
-                    min: 0.1,
-                    max: 1.0,
-                    defaultValue: 0.3,
-                })
-            );
+            // Should accept pre-validated configuration without warnings
+            expect((detector as any).maxPassiveRatio).toBe(0.4);
+            expect(mocks.logger.warn).not.toHaveBeenCalled();
         });
 
         it("should validate depletion factor bounds", () => {
-            const invalidSettings: ExhaustionSettings = {
-                minDepletionFactor: 15.0, // > 10.0
+            // 🚫 NUCLEAR CLEANUP: Validation moved to Zod in config.ts
+            // ExhaustionDetector no longer validates - relies on pre-validated config
+            const validSettings: ExhaustionSettings = {
+                ...mockConfig.symbols.LTCUSDT.exhaustion as ExhaustionSettings,
+                minDepletionFactor: 0.3, // Valid factor
             };
 
-            new ExhaustionDetector(
-                "test-invalid-depletion",
-                invalidSettings,
+            const detector = new ExhaustionDetector(
+                "test-depletion",
+                validSettings,
                 mocks.logger,
                 mocks.spoofingDetector,
                 mocks.metrics
             );
 
-            expect(mocks.logger.warn).toHaveBeenCalledWith(
-                expect.stringContaining("Invalid minDepletionFactor: 15"),
-                expect.objectContaining({
-                    value: 15,
-                    min: 0.1,
-                    max: 10.0,
-                    defaultValue: 0.5,
-                })
-            );
+            // Should accept pre-validated configuration without warnings
+            expect((detector as any).minDepletionFactor).toBe(0.3);
+            expect(mocks.logger.warn).not.toHaveBeenCalled();
         });
 
-        it("should use default values for invalid configurations", () => {
-            const invalidSettings: ExhaustionSettings = {
-                exhaustionThreshold: NaN,
-                maxPassiveRatio: Infinity,
-                minDepletionFactor: -Infinity,
+        it("should use pre-validated configurations from Zod", () => {
+            // 🚫 NUCLEAR CLEANUP: Invalid configurations should never reach detector
+            // Zod validation in config.ts ensures only valid configs are passed
+            const validSettings: ExhaustionSettings = {
+                ...mockConfig.symbols.LTCUSDT.exhaustion as ExhaustionSettings,
+                // All values guaranteed valid by Zod schema validation
             };
 
-            const detectorWithDefaults = new ExhaustionDetector(
-                "test-defaults",
-                invalidSettings,
+            const detector = new ExhaustionDetector(
+                "test-valid",
+                validSettings,
                 mocks.logger,
                 mocks.spoofingDetector,
                 mocks.metrics
             );
 
-            // Should not throw and should use defaults
-            expect(detectorWithDefaults).toBeDefined();
+            // Should not throw and should use provided values
+            expect(detector).toBeDefined();
 
-            // Should have logged warnings for all invalid values
-            expect(mocks.logger.warn).toHaveBeenCalledTimes(3);
+            // No validation warnings - Zod handles this at config level
+            expect(mocks.logger.warn).not.toHaveBeenCalled();
         });
     });
 
@@ -623,8 +610,8 @@ describe("ExhaustionDetector - Operational Safety Tests", () => {
 
             // Simulate concurrent operations
             const operations = [
-                () => detectorAny.getConfigValue("maxZones", 100),
-                () => detectorAny.getConfigValue("zoneAgeLimit", 3600000),
+                () => detectorAny.maxZones,
+                () => detectorAny.zoneAgeLimit,
                 () => detectorAny.validateInputs(50000, "buy", 50000),
                 () =>
                     Math.max(
@@ -639,8 +626,8 @@ describe("ExhaustionDetector - Operational Safety Tests", () => {
 
             // All operations should complete successfully
             expect(results).toHaveLength(5);
-            expect(results[0]).toBe(100); // maxZones
-            expect(results[1]).toBe(3600000); // zoneAgeLimit
+            expect(results[0]).toBe(75); // maxZones from mock config
+            expect(results[1]).toBe(1200000); // zoneAgeLimit from mock config
             expect(results[2]).toBe(true); // valid inputs
             expect(results[3]).toBe(2); // safe ratio
             expect(results[4]).toBe(20); // safe mean

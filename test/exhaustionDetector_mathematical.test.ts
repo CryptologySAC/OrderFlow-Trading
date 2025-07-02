@@ -10,6 +10,9 @@ import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorIn
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import { FinancialMath } from "../src/utils/financialMath.js";
 
+// Import mock config for complete settings
+import mockConfig from "../__mocks__/config.json";
+
 // Mock dependencies - simplified for mathematical tests
 const createMocks = () => ({
     logger: {
@@ -38,16 +41,8 @@ describe("ExhaustionDetector - Mathematical Correctness", () => {
     beforeEach(() => {
         mocks = createMocks();
 
-        const settings: ExhaustionSettings = {
-            exhaustionThreshold: 0.7,
-            maxPassiveRatio: 0.3,
-            minDepletionFactor: 0.5,
-            features: {
-                depletionTracking: true,
-                spreadAdjustment: true,
-                volumeVelocity: true,
-            },
-        };
+        // 🚫 NUCLEAR CLEANUP: Use complete mock config settings instead of partial objects
+        const settings: ExhaustionSettings = mockConfig.symbols.LTCUSDT.exhaustion as ExhaustionSettings;
 
         detector = new ExhaustionDetector(
             "test-math",

@@ -11,6 +11,9 @@ import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { SpoofingDetector } from "../src/services/spoofingDetector";
 
+// Import mock config for complete settings
+import mockConfig from "../__mocks__/config.json";
+
 describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
     let detector: DeltaCVDDetectorEnhanced;
     let mockLogger: WorkerLogger;
@@ -32,17 +35,12 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
         detector = new DeltaCVDDetectorEnhanced(
             "test_cvd_surge",
             {
+                ...mockConfig.symbols.LTCUSDT.deltaCvdConfirmation,
                 windowsSec: [60],
                 minZ: 2.5,
-                minTradesPerSec: 0.5, // Reduced for testing
-                minVolPerSec: 2, // Reduced for testing
                 volumeSurgeMultiplier: 4.0,
                 imbalanceThreshold: 0.35,
-                institutionalThreshold: 17.8,
-                burstDetectionMs: 1000,
-                sustainedVolumeMs: 30000,
-                medianTradeSize: 0.6,
-                enableDepthAnalysis: true, // ENABLE for volume surge testing
+                enableDepthAnalysis: true,
             },
             mockLogger,
             mockSpoofing,

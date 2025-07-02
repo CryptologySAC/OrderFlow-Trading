@@ -10,6 +10,9 @@ import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 
+// Import mock config for complete settings
+import mockConfig from "../__mocks__/config.json";
+
 // Mock dependencies for institutional flow testing
 const createMocks = () => ({
     logger: {
@@ -128,43 +131,8 @@ describe("ExhaustionDetector - Institutional Flow Signal Generation", () => {
         signalEmitted = false;
         lastSignal = null;
 
-        // Use relaxed thresholds from config.json for signal generation
-        const settings: ExhaustionSettings = {
-            exhaustionThreshold: 0.25, // Lower threshold for easier signal generation
-            maxPassiveRatio: 0.45, // Allow higher depletion for testing
-            minDepletionFactor: 0.2, // Easier to trigger for testing
-
-            // Volume surge parameters - relaxed
-            volumeSurgeMultiplier: 2.0, // From config
-            imbalanceThreshold: 0.3, // From config
-            institutionalThreshold: 15.0, // From config
-            burstDetectionMs: 2000, // From config
-            sustainedVolumeMs: 20000, // From config
-            medianTradeSize: 0.8, // From config
-
-            // Scoring thresholds - relaxed for signal generation
-            imbalanceHighThreshold: 0.75, // From config
-            imbalanceMediumThreshold: 0.55, // From config
-            spreadHighThreshold: 0.004, // From config
-            spreadMediumThreshold: 0.0015, // From config
-
-            // Data quality - very relaxed for testing
-            significantChangeThreshold: 0.08, // From config
-            highQualitySampleCount: 6, // From config: reduced
-            highQualityDataAge: 35000, // From config: 35s
-            mediumQualitySampleCount: 3, // From config
-            mediumQualityDataAge: 70000, // From config: 70s
-
-            features: {
-                depletionTracking: true,
-                spreadAdjustment: true,
-                volumeVelocity: true,
-                spoofingDetection: true,
-                adaptiveZone: true,
-                passiveHistory: true,
-                multiZone: false,
-            },
-        };
+        // 🚫 NUCLEAR CLEANUP: Use complete mock config settings instead of partial objects
+        const settings: ExhaustionSettings = mockConfig.symbols.LTCUSDT.exhaustion as ExhaustionSettings;
 
         detector = new ExhaustionDetector(
             "test-institutional",
