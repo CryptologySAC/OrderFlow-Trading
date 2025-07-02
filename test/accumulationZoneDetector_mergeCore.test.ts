@@ -15,7 +15,7 @@ vi.mock("../src/trading/zoneManager", () => {
                     .fn()
                     .mockImplementation(
                         (type, symbol, trade, zoneDetection) => {
-                            const zoneId = `${type}_${symbol}_${Date.now()}`;
+                            const zoneId = `${type}_${symbol}_${++zoneIdCounter}`;
                             const zone = {
                                 id: zoneId,
                                 type: type,
@@ -150,6 +150,9 @@ describe("AccumulationZoneDetectorEnhanced - Core Merge Functionality", () => {
     beforeEach(() => {
         // Clear zone manager between tests using the mock helper
         vi.clearAllMocks();
+
+        // Reset test counters for deterministic behavior
+        tradeIdCounter = 0;
 
         // Mock Config.UNIVERSAL_ZONE_CONFIG to use test-friendly values
         vi.spyOn(Config, "UNIVERSAL_ZONE_CONFIG", "get").mockReturnValue({
@@ -631,6 +634,8 @@ describe("AccumulationZoneDetectorEnhanced - Core Merge Functionality", () => {
 });
 
 // Helper functions optimized for zone creation
+let tradeIdCounter = 0;
+
 function createTrade(
     price: number,
     timestamp: number,
@@ -643,7 +648,7 @@ function createTrade(
         timestamp,
         buyerIsMaker,
         pair: "BTCUSDT",
-        tradeId: `trade_${timestamp}_${Math.random()}`,
+        tradeId: `trade_${timestamp}_${++tradeIdCounter}`,
         originalTrade: {} as any,
         passiveBidVolume: buyerIsMaker ? quantity : 0,
         passiveAskVolume: buyerIsMaker ? 0 : quantity,
@@ -669,13 +674,13 @@ function createConcentratedTrades(
     // The AccumulationZoneDetector groups trades by exact price level
     for (let i = 0; i < sellCount; i++) {
         const timestamp = startTime + i * 3000; // 3 second intervals for realism
-        const quantity = 80 + Math.random() * 40; // 80-120 institutional sizes (larger)
+        const quantity = 80 + (i % 5) * 8; // Deterministic 80-120 pattern (80, 88, 96, 104, 112)
         trades.push(createTrade(exactPrice, timestamp, true, quantity)); // buyerIsMaker=true = sell
     }
 
     for (let i = 0; i < buyCount; i++) {
         const timestamp = startTime + (sellCount + i) * 3000;
-        const quantity = 80 + Math.random() * 40; // 80-120 institutional sizes (larger)
+        const quantity = 80 + (i % 5) * 8; // Deterministic 80-120 pattern (80, 88, 96, 104, 112)
         trades.push(createTrade(exactPrice, timestamp, false, quantity)); // buyerIsMaker=false = buy
     }
 
