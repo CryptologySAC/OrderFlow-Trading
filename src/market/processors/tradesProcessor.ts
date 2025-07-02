@@ -502,21 +502,9 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                                 allTradeIds.push(trade.a);
                             }
 
-                            // Skip duplicates
-                            if (trade.a && this.isDuplicateTrade(trade.a)) {
-                                this.duplicatesDetected++;
-                                this.metricsCollector.incrementMetric(
-                                    "duplicateTradesDetected"
-                                );
-                                continue;
-                            }
-
+                            // 🚫 BACKLOG ARCHITECTURAL FIX: No duplicate detection for historical data
+                            // Backlog is optical only - just save all trades to database
                             tradesToSave.push(trade);
-
-                            // Mark as processed
-                            if (trade.a) {
-                                this.markTradeAsProcessed(trade.a);
-                            }
                         }
 
                         // Save to storage
