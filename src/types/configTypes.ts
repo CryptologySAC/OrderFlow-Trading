@@ -1,4 +1,3 @@
-// Only keep the types that are actually imported and used elsewhere
 export type AllowedSymbols = "LTCUSDT";
 
 export interface MQTTConfig {

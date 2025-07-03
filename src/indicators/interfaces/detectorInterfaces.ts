@@ -7,7 +7,6 @@ import { EnrichedTradeEvent } from "../../types/marketEvents.js";
 import { AggressiveTrade } from "../../types/marketEvents.js";
 import { MarketRegime } from "../../types/signalTypes.js";
 import { RollingWindow } from "../../utils/rollingWindow.js";
-// Removed unused import: AbsorptionEnhancedSettings (no longer exists)
 
 /**
  * Base detector interface - minimal common interface
@@ -86,7 +85,7 @@ export interface BaseDetectorSettings {
     metricsReportingIntervalMs?: number; // Metrics reporting frequency
     errorThresholdPerMinute?: number; // Max errors before circuit breaker
     circuitBreakerTimeoutMs?: number; // Circuit breaker reset time
-    features?: ExhaustionFeatures | AccumulationFeatures;
+    features?: AbsorptionFeatures | ExhaustionFeatures | AccumulationFeatures;
 }
 
 export interface AccumulationSettings extends BaseDetectorSettings {
