@@ -318,15 +318,44 @@ export class AccumulationZoneDetector extends ZoneDetector {
         };
 
         // Forward zone manager events
-        this.zoneManager.on("zoneCreated", (zone) =>
-            this.emit("zoneCreated", zone)
-        );
+        this.zoneManager.on("zoneCreated", (zone) => {
+            this.emit("zoneCreated", zone);
+            // 🎯 STATS FIX: Emit SignalCandidate for zone creation tracking
+            this.emit("signalCandidate", {
+                id: zone.id,
+                type: "accumulation_zone",
+                price: zone.currentPrice,
+                confidence: zone.strength,
+                timestamp: Date.now(),
+                metadata: {
+                    zoneType: "accumulation",
+                    phase: "created",
+                    duration: zone.duration,
+                    volume: zone.volume,
+                    strength: zone.strength
+                }
+            });
+        });
         this.zoneManager.on("zoneUpdated", (update) =>
             this.emit("zoneUpdated", update)
         );
-        this.zoneManager.on("zoneCompleted", (zone) =>
-            this.emit("zoneCompleted", zone)
-        );
+        this.zoneManager.on("zoneCompleted", (zone) => {
+            this.emit("zoneCompleted", zone);
+            // 🎯 STATS FIX: Emit SignalCandidate for metrics tracking
+            this.emit("signalCandidate", {
+                id: zone.id,
+                type: "accumulation_zone",
+                price: zone.currentPrice,
+                confidence: zone.strength,
+                timestamp: Date.now(),
+                metadata: {
+                    zoneType: "accumulation",
+                    duration: zone.duration,
+                    volume: zone.volume,
+                    strength: zone.strength
+                }
+            });
+        });
         this.zoneManager.on("zoneInvalidated", (update) =>
             this.emit("zoneInvalidated", update)
         );
