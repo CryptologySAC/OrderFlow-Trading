@@ -317,7 +317,7 @@ function updateSignalMetrics(metrics) {
         "absorption",
         "exhaustion",
         "accumulation_zone",
-        "distribution_zone", 
+        "distribution_zone",
         "cvd_confirmation",
     ];
 
@@ -348,7 +348,7 @@ function updateSignalMetrics(metrics) {
         } else {
             typePrefix = type;
         }
-        
+
         updateElement(`${typePrefix}Candidates`, formatNumber(candidates));
         updateElement(`${typePrefix}Confirmed`, formatNumber(confirmed));
         updateElement(`${typePrefix}Rejected`, formatNumber(rejected));

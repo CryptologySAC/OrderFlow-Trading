@@ -179,8 +179,8 @@ export class DistributionZoneDetector extends ZoneDetector {
                     phase: "created",
                     duration: zone.duration,
                     volume: zone.volume,
-                    strength: zone.strength
-                }
+                    strength: zone.strength,
+                },
             });
         });
         this.zoneManager.on("zoneUpdated", (update) =>
@@ -199,8 +199,8 @@ export class DistributionZoneDetector extends ZoneDetector {
                     zoneType: "distribution",
                     duration: zone.duration,
                     volume: zone.volume,
-                    strength: zone.strength
-                }
+                    strength: zone.strength,
+                },
             });
         });
         this.zoneManager.on("zoneInvalidated", (update) =>

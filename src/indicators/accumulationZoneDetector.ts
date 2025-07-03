@@ -332,8 +332,8 @@ export class AccumulationZoneDetector extends ZoneDetector {
                     phase: "created",
                     duration: zone.duration,
                     volume: zone.volume,
-                    strength: zone.strength
-                }
+                    strength: zone.strength,
+                },
             });
         });
         this.zoneManager.on("zoneUpdated", (update) =>
@@ -352,8 +352,8 @@ export class AccumulationZoneDetector extends ZoneDetector {
                     zoneType: "accumulation",
                     duration: zone.duration,
                     volume: zone.volume,
-                    strength: zone.strength
-                }
+                    strength: zone.strength,
+                },
             });
         });
         this.zoneManager.on("zoneInvalidated", (update) =>

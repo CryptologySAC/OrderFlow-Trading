@@ -40,10 +40,8 @@ import type {
 import { z } from "zod";
 import { AbsorptionDetectorSchema } from "../core/config.js";
 
-// Use Zod schema inference for complete type safety - matches config.json exactly
-export type AbsorptionEnhancedSettings = z.infer<
-    typeof AbsorptionDetectorSchema
->;
+// ✅ CLAUDE.md COMPLIANCE: Use Config getter type for pre-validated settings
+// This ensures settings are validated by Zod and guaranteed to be complete
 
 export interface AbsorptionEnhancementStats {
     enabled: boolean;
@@ -66,7 +64,7 @@ export interface AbsorptionEnhancementStats {
  */
 export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
     private readonly useStandardizedZones: boolean;
-    private readonly enhancementConfig: AbsorptionEnhancedSettings;
+    private readonly enhancementConfig: typeof Config.ABSORPTION_DETECTOR;
 
     // Enhancement statistics and monitoring
     private enhancementStats: AbsorptionEnhancementStats = {
@@ -86,7 +84,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
 
     constructor(
         id: string,
-        settings: AbsorptionEnhancedSettings,
+        settings: typeof Config.ABSORPTION_DETECTOR, // Pre-validated by Zod
         orderBook: IOrderBookState,
         logger: ILogger,
         spoofingDetector: SpoofingDetector,
