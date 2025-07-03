@@ -37,8 +37,7 @@ import type {
     ZoneSnapshot,
     StandardZoneData,
 } from "../types/marketEvents.js";
-import { z } from "zod";
-import { AbsorptionDetectorSchema } from "../core/config.js";
+// Removed unused imports: z and AbsorptionDetectorSchema
 
 // ✅ CLAUDE.md COMPLIANCE: Use Config getter type for pre-validated settings
 // This ensures settings are validated by Zod and guaranteed to be complete

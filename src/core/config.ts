@@ -198,6 +198,42 @@ export const AbsorptionDetectorSchema = z.object({
     dominantSideTemporalWeighting: z.boolean(),
     dominantSideWeightDecayFactor: z.number().min(0.1).max(1.0),
 
+    // ✅ CLAUDE.md COMPLIANCE: Calculation parameters (no magic numbers)
+    liquidityGradientRange: z.number().int().min(1).max(20),
+    recentEventsNormalizer: z.number().int().min(1).max(100),
+    contextTimeWindowMs: z.number().int().min(60000).max(1800000),
+    historyMultiplier: z.number().int().min(1).max(10),
+    refillThreshold: z.number().min(1.01).max(2.0),
+    consistencyThreshold: z.number().min(0.1).max(1.0),
+    passiveStrengthPeriods: z.number().int().min(1).max(10),
+
+    // ✅ CLAUDE.md COMPLIANCE: Expected movement scaling
+    expectedMovementScalingFactor: z.number().int().min(1).max(100),
+
+    // ✅ CLAUDE.md COMPLIANCE: Confidence and urgency thresholds
+    contextConfidenceBoostMultiplier: z.number().min(0.1).max(1.0),
+    highUrgencyThreshold: z.number().min(1.0).max(3.0),
+    lowUrgencyThreshold: z.number().min(0.1).max(1.0),
+    reversalStrengthThreshold: z.number().min(0.1).max(1.0),
+    pricePercentileHighThreshold: z.number().min(0.5).max(1.0),
+
+    // ✅ CLAUDE.md COMPLIANCE: Microstructure thresholds
+    microstructureSustainabilityThreshold: z.number().min(0.1).max(1.0),
+    microstructureEfficiencyThreshold: z.number().min(0.1).max(1.0),
+    microstructureFragmentationThreshold: z.number().min(0.1).max(1.0),
+    microstructureSustainabilityBonus: z.number().min(0.1).max(1.0),
+    microstructureToxicityMultiplier: z.number().min(0.1).max(1.0),
+    microstructureHighToxicityThreshold: z.number().min(0.1).max(1.0),
+    microstructureLowToxicityThreshold: z.number().min(0.1).max(1.0),
+    microstructureRiskCapMin: z.number().min(-1.0).max(0.0),
+    microstructureRiskCapMax: z.number().min(0.0).max(1.0),
+    microstructureCoordinationBonus: z.number().min(0.1).max(1.0),
+    microstructureConfidenceBoostMin: z.number().min(0.1).max(1.0),
+    microstructureConfidenceBoostMax: z.number().min(1.0).max(3.0),
+
+    // ✅ CLAUDE.md COMPLIANCE: Final confidence threshold
+    finalConfidenceRequired: z.number().min(0.01).max(1.0),
+
     // Features configuration
     features: z.object({
         adaptiveZone: z.boolean(),
