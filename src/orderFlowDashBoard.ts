@@ -50,7 +50,7 @@ import { DeltaCVDDetectorEnhanced } from "./indicators/deltaCVDDetectorEnhanced.
 import { AccumulationZoneDetectorEnhanced } from "./indicators/accumulationZoneDetectorEnhanced.js";
 import { DistributionDetectorEnhanced } from "./indicators/distributionDetectorEnhanced.js";
 import type {
-    AccumulationZone,
+    TradingZone,
     ZoneUpdate,
     ZoneSignal,
     ZoneAnalysisResult,
@@ -979,7 +979,7 @@ export class OrderFlowDashboard {
         this.accumulationZoneDetector.on(
             "zoneCreated",
             (...args: unknown[]) => {
-                const zone = args[0] as AccumulationZone;
+                const zone = args[0] as TradingZone;
                 this.logger.info("Accumulation zone created", {
                     zoneId: zone.id,
                     priceCenter: zone.priceRange.center,
@@ -992,7 +992,7 @@ export class OrderFlowDashboard {
         this.accumulationZoneDetector.on(
             "zoneCompleted",
             (...args: unknown[]) => {
-                const zone = args[0] as AccumulationZone;
+                const zone = args[0] as TradingZone;
                 this.logger.info("Accumulation zone completed", {
                     zoneId: zone.id,
                     finalStrength: zone.strength.toFixed(3),
@@ -1003,21 +1003,18 @@ export class OrderFlowDashboard {
         );
 
         // Distribution Zone Events
-        this.distributionZoneDetector.on(
-            "zoneCreated",
-            (zone: AccumulationZone) => {
-                this.logger.info("Distribution zone created", {
-                    zoneId: zone.id,
-                    priceCenter: zone.priceRange.center,
-                    strength: zone.strength.toFixed(3),
-                    significance: zone.significance,
-                });
-            }
-        );
+        this.distributionZoneDetector.on("zoneCreated", (zone: TradingZone) => {
+            this.logger.info("Distribution zone created", {
+                zoneId: zone.id,
+                priceCenter: zone.priceRange.center,
+                strength: zone.strength.toFixed(3),
+                significance: zone.significance,
+            });
+        });
 
         this.distributionZoneDetector.on(
             "zoneCompleted",
-            (zone: AccumulationZone) => {
+            (zone: TradingZone) => {
                 this.logger.info("Distribution zone completed", {
                     zoneId: zone.id,
                     finalStrength: zone.strength.toFixed(3),

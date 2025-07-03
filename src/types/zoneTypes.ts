@@ -35,7 +35,7 @@ export interface ZoneHistory {
 // Import ZoneSnapshot from marketEvents to avoid circular dependency
 import type { ZoneSnapshot } from "./marketEvents.js";
 
-export interface AccumulationZone {
+export interface TradingZone {
     // Zone identification
     id: string;
     type: "accumulation" | "distribution";
@@ -93,8 +93,8 @@ export interface ZoneUpdate {
         | "zone_weakened"
         | "zone_completed"
         | "zone_invalidated";
-    zone: AccumulationZone;
-    previousState?: Partial<AccumulationZone>; // For change tracking
+    zone: TradingZone;
+    previousState?: Partial<TradingZone>; // For change tracking
     significance: "low" | "medium" | "high"; // Importance of this update
     timestamp: number;
 
@@ -114,7 +114,7 @@ export interface ZoneSignal {
         | "zone_completion"
         | "zone_breakout_imminent"
         | "zone_invalidation";
-    zone: AccumulationZone;
+    zone: TradingZone;
 
     // Signal characteristics
     actionType:
@@ -146,13 +146,13 @@ export interface ZoneDetectionData {
     averageOrderSize: number;
     initialStrength: number;
     confidence: number;
-    supportingFactors: AccumulationZone["supportingFactors"];
+    supportingFactors: TradingZone["supportingFactors"];
 }
 
 export interface ZoneAnalysisResult {
     updates: ZoneUpdate[];
     signals: ZoneSignal[];
-    activeZones: AccumulationZone[];
+    activeZones: TradingZone[];
 }
 
 export interface ZoneDetectorConfig {

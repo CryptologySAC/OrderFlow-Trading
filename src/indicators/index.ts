@@ -1,10 +1,7 @@
 // Re-export all enhanced indicators and their types
 
 export { AccumulationZoneDetectorEnhanced } from "./accumulationZoneDetectorEnhanced.js";
-export {
-    AbsorptionDetectorEnhanced,
-    type AbsorptionEnhancedSettings,
-} from "./absorptionDetectorEnhanced.js";
+export { AbsorptionDetectorEnhanced } from "./absorptionDetectorEnhanced.js";
 export {
     ExhaustionDetectorEnhanced,
     type ExhaustionEnhancedSettings,

@@ -2,7 +2,7 @@
 
 import { EventEmitter } from "events";
 import {
-    AccumulationZone,
+    TradingZone,
     ZoneUpdate,
     ZoneDetectionData,
     ZoneQueryOptions,
@@ -13,9 +13,9 @@ import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 
 export class ZoneManager extends EventEmitter {
-    private activeZones = new Map<string, AccumulationZone>();
-    private completedZones: AccumulationZone[] = [];
-    private zoneHistory = new Map<string, AccumulationZone[]>();
+    private activeZones = new Map<string, TradingZone>();
+    private completedZones: TradingZone[] = [];
+    private zoneHistory = new Map<string, TradingZone[]>();
 
     // Zone configuration - uses universal zone config
     private readonly config: typeof Config.UNIVERSAL_ZONE_CONFIG;
@@ -47,7 +47,7 @@ export class ZoneManager extends EventEmitter {
         symbol: string,
         initialTrade: EnrichedTradeEvent,
         detection: ZoneDetectionData
-    ): AccumulationZone {
+    ): TradingZone {
         // Check if we've hit the limit for active zones
         const activeSymbolZones = this.getActiveZones(symbol);
         if (activeSymbolZones.length >= this.config.maxActiveZones) {
@@ -60,7 +60,7 @@ export class ZoneManager extends EventEmitter {
 
         const zoneId = `${type}_${symbol}_${Date.now()}`;
 
-        const zone: AccumulationZone = {
+        const zone: TradingZone = {
             id: zoneId,
             type,
             symbol,
@@ -251,7 +251,7 @@ export class ZoneManager extends EventEmitter {
     }
 
     // Zone analysis methods
-    private calculateZoneStrength(zone: AccumulationZone): number {
+    private calculateZoneStrength(zone: TradingZone): number {
         // Zone strength based on multiple factors
         const factors = {
             // Volume concentration (more volume = stronger)
@@ -303,7 +303,7 @@ export class ZoneManager extends EventEmitter {
         );
     }
 
-    private calculateZoneCompletion(zone: AccumulationZone): number {
+    private calculateZoneCompletion(zone: TradingZone): number {
         // Completion based on volume accumulation and time
         const expectedVolume = this.getExpectedZoneVolume(zone);
         const expectedTime = this.getExpectedZoneTime(zone);
@@ -318,7 +318,7 @@ export class ZoneManager extends EventEmitter {
         return Math.max(volumeCompletion, timeCompletion);
     }
 
-    private calculateZoneConfidence(zone: AccumulationZone): number {
+    private calculateZoneConfidence(zone: TradingZone): number {
         // Confidence increases with consistent patterns
         const consistencyFactors = [
             zone.supportingFactors.volumeConcentration,
@@ -338,9 +338,9 @@ export class ZoneManager extends EventEmitter {
     }
 
     private updateSupportingFactors(
-        zone: AccumulationZone,
+        zone: TradingZone,
         trade: EnrichedTradeEvent
-    ): AccumulationZone["supportingFactors"] {
+    ): TradingZone["supportingFactors"] {
         // Calculate volume concentration (how much volume is in this specific zone vs nearby prices)
         const volumeConcentration = Math.min(
             zone.totalVolume / (zone.totalVolume + 500),
@@ -392,7 +392,7 @@ export class ZoneManager extends EventEmitter {
     // Helper methods
     private isTradeInZone(
         trade: EnrichedTradeEvent,
-        zone: AccumulationZone
+        zone: TradingZone
     ): boolean {
         return (
             trade.price >= zone.priceRange.min &&
@@ -436,7 +436,7 @@ export class ZoneManager extends EventEmitter {
 
     private classifySignificance(
         detection: ZoneDetectionData
-    ): AccumulationZone["significance"] {
+    ): TradingZone["significance"] {
         const volume = detection.totalVolume;
         const orderSize = detection.averageOrderSize;
 
@@ -448,7 +448,7 @@ export class ZoneManager extends EventEmitter {
 
     private calculateUpdateSignificance(
         strengthChange: number,
-        zone: AccumulationZone
+        zone: TradingZone
     ): ZoneUpdate["significance"] {
         if (
             Math.abs(strengthChange) > 0.2 ||
@@ -460,7 +460,7 @@ export class ZoneManager extends EventEmitter {
         return "low";
     }
 
-    private moveToCompleted(zone: AccumulationZone): void {
+    private moveToCompleted(zone: TradingZone): void {
         this.activeZones.delete(zone.id);
         this.completedZones.push(zone);
 
@@ -504,7 +504,7 @@ export class ZoneManager extends EventEmitter {
         }
     }
 
-    private getExpectedZoneVolume(zone: AccumulationZone): number {
+    private getExpectedZoneVolume(zone: TradingZone): number {
         // Expected volume based on zone significance
         switch (zone.significance) {
             case "institutional":
@@ -518,7 +518,7 @@ export class ZoneManager extends EventEmitter {
         }
     }
 
-    private getExpectedZoneTime(zone: AccumulationZone): number {
+    private getExpectedZoneTime(zone: TradingZone): number {
         // Expected time based on zone type (accumulation takes longer than distribution)
         const baseTime = zone.type === "accumulation" ? 3600000 : 1800000; // 1 hour vs 30 min
 
@@ -536,12 +536,12 @@ export class ZoneManager extends EventEmitter {
     }
 
     // Public query methods
-    public getActiveZones(symbol?: string): AccumulationZone[] {
+    public getActiveZones(symbol?: string): TradingZone[] {
         const zones = Array.from(this.activeZones.values());
         return symbol ? zones.filter((z) => z.symbol === symbol) : zones;
     }
 
-    public getZone(zoneId: string): AccumulationZone | undefined {
+    public getZone(zoneId: string): TradingZone | undefined {
         return this.activeZones.get(zoneId);
     }
 
@@ -549,7 +549,7 @@ export class ZoneManager extends EventEmitter {
         symbol: string,
         price: number,
         tolerance: number = 0.01
-    ): AccumulationZone[] {
+    ): TradingZone[] {
         const activeZones = this.getActiveZones(symbol);
 
         this.logger.debug("Zone proximity search initiated", {
@@ -577,7 +577,7 @@ export class ZoneManager extends EventEmitter {
     public getCompletedZones(
         symbol: string,
         timeWindow?: number
-    ): AccumulationZone[] {
+    ): TradingZone[] {
         const symbolHistory = this.zoneHistory.get(symbol) || [];
 
         if (!timeWindow) return symbolHistory;
@@ -588,7 +588,7 @@ export class ZoneManager extends EventEmitter {
         );
     }
 
-    public queryZones(options: ZoneQueryOptions): AccumulationZone[] {
+    public queryZones(options: ZoneQueryOptions): TradingZone[] {
         let zones =
             options.isActive !== false
                 ? this.getActiveZones(options.symbol)

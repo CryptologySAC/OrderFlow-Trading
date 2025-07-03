@@ -66,7 +66,7 @@
  */
 
 import {
-    AccumulationZone,
+    TradingZone,
     ZoneUpdate,
     ZoneSignal,
     ZoneDetectionData,
@@ -318,20 +318,18 @@ export class AccumulationZoneDetector extends ZoneDetector {
         };
 
         // Forward zone manager events
-        this.zoneManager.on("zoneCreated", (zone) => {
+        this.zoneManager.on("zoneCreated", (zone: TradingZone) => {
             this.emit("zoneCreated", zone);
             // 🎯 STATS FIX: Emit SignalCandidate for zone creation tracking
             this.emit("signalCandidate", {
                 id: zone.id,
                 type: "accumulation_zone",
-                price: zone.currentPrice,
+                price: zone.priceRange.center,
                 confidence: zone.strength,
                 timestamp: Date.now(),
                 metadata: {
                     zoneType: "accumulation",
                     phase: "created",
-                    duration: zone.duration,
-                    volume: zone.volume,
                     strength: zone.strength,
                 },
             });
@@ -339,19 +337,17 @@ export class AccumulationZoneDetector extends ZoneDetector {
         this.zoneManager.on("zoneUpdated", (update) =>
             this.emit("zoneUpdated", update)
         );
-        this.zoneManager.on("zoneCompleted", (zone) => {
+        this.zoneManager.on("zoneCompleted", (zone: TradingZone) => {
             this.emit("zoneCompleted", zone);
             // 🎯 STATS FIX: Emit SignalCandidate for metrics tracking
             this.emit("signalCandidate", {
                 id: zone.id,
                 type: "accumulation_zone",
-                price: zone.currentPrice,
+                price: zone.priceRange.center,
                 confidence: zone.strength,
                 timestamp: Date.now(),
                 metadata: {
                     zoneType: "accumulation",
-                    duration: zone.duration,
-                    volume: zone.volume,
                     strength: zone.strength,
                 },
             });
@@ -705,7 +701,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
      */
     private checkForZoneFormation(
         trade: EnrichedTradeEvent
-    ): AccumulationZone | null {
+    ): TradingZone | null {
         const now = trade.timestamp;
         let bestCandidate: AccumulationCandidate | null = null;
         let bestScore = 0;
@@ -1068,7 +1064,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
      * ✅ NEW METHOD: Merge candidate data with existing zone to resolve conflicts
      */
     private mergeWithExistingZone(
-        existingZone: AccumulationZone,
+        existingZone: TradingZone,
         candidate: AccumulationCandidate,
         trade: EnrichedTradeEvent
     ): void {
@@ -1410,7 +1406,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
     /**
      * Generate zone entry signal when zone is created
      */
-    private generateZoneEntrySignal(zone: AccumulationZone): ZoneSignal | null {
+    private generateZoneEntrySignal(zone: TradingZone): ZoneSignal | null {
         if (zone.strength < this.config.minZoneStrength) return null;
 
         return {
@@ -1449,7 +1445,7 @@ export class AccumulationZoneDetector extends ZoneDetector {
      */
     private checkZoneInvalidations(
         trade: EnrichedTradeEvent,
-        activeZones: AccumulationZone[]
+        activeZones: TradingZone[]
     ): ZoneUpdate[] {
         const invalidations: ZoneUpdate[] = [];
 
@@ -1544,14 +1540,14 @@ export class AccumulationZoneDetector extends ZoneDetector {
     }
 
     // Public query methods
-    public getActiveZones(): AccumulationZone[] {
+    public getActiveZones(): TradingZone[] {
         return this.zoneManager.getActiveZones(this.symbol);
     }
 
     public getZoneNearPrice(
         price: number,
         tolerance: number = 0.01
-    ): AccumulationZone[] {
+    ): TradingZone[] {
         return this.zoneManager.getZonesNearPrice(
             this.symbol,
             price,

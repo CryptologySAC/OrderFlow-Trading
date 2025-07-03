@@ -28,7 +28,7 @@ import { FinancialMath } from "../utils/financialMath.js";
 import type {
     ZoneAnalysisResult,
     ZoneSignal,
-    AccumulationZone,
+    TradingZone,
 } from "../types/zoneTypes.js";
 import { Config } from "../core/config.js";
 import { z } from "zod";
@@ -492,7 +492,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     /**
      * Get active zones (delegates to original detector)
      */
-    public getActiveZones(): AccumulationZone[] {
+    public getActiveZones(): TradingZone[] {
         return this.originalDetector.getActiveZones();
     }
 
