@@ -52,6 +52,28 @@
             "dashboardUpdateInterval": 500,
             "maxDashboardInterval": 1000,
             "significantChangeThreshold": 0.001,
+            "enableStandardizedZones": true,
+            "standardZoneConfig": {
+                "baseTicks": 5,
+                "zoneMultipliers": [1, 2, 4],
+                "timeWindows": [300000, 900000, 1800000, 3600000, 5400000],
+                "adaptiveMode": false,
+                "volumeThresholds": {
+                    "aggressive": 10.0,
+                    "passive": 5.0,
+                    "institutional": 50.0
+                },
+                "priceThresholds": {
+                    "tickValue": 0.01,
+                    "minZoneWidth": 0.02,
+                    "maxZoneWidth": 0.1
+                },
+                "performanceConfig": {
+                    "maxZoneHistory": 2000,
+                    "cleanupInterval": 5400000,
+                    "maxMemoryMB": 50
+                }
+            },
             "universalZoneConfig": {
                 "maxActiveZones": 50,
                 "zoneTimeoutMs": 1800000,
@@ -104,8 +126,8 @@
                 "enableMarketHealthCheck": true,
                 "enableAlerts": true,
                 "detectorThresholds": {
-                    "exhaustion": 0.3,
-                    "cvd_confirmation": 0.25,
+                    "exhaustion": 0.2,
+                    "cvd_confirmation": 0.15,
                     "distribution": 0.5,
                     "distribution_zone": 0.5,
                     "absorption": 0.85,
@@ -419,7 +441,7 @@
                 "weakCorrelationThreshold": 0.3,
                 "depthImbalanceThreshold": 0.2,
                 "useStandardizedZones": true,
-                "cvdDivergenceVolumeThreshold": 25,
+                "cvdDivergenceVolumeThreshold": 15,
                 "cvdDivergenceStrengthThreshold": 0.4,
                 "cvdSignificantImbalanceThreshold": 0.3,
                 "cvdDivergenceScoreMultiplier": 1.5,

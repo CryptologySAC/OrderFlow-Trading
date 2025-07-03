@@ -424,6 +424,12 @@ export class OrderflowPreprocessor
             }
 
             this.processedTrades++;
+
+            // CRITICAL FIX: Aggregate trade into standardized zones
+            if (this.enableStandardizedZones && finalTrade) {
+                this.aggregateTradeIntoZones(finalTrade);
+            }
+
             this.emit("enriched_trade", finalTrade);
 
             // Emit metrics periodically
@@ -868,12 +874,35 @@ export class OrderflowPreprocessor
         timestamp: number
     ): ZoneSnapshot | undefined {
         try {
-            const zoneSize = zoneTicks * this.tickSize;
+            // CRITICAL FIX: Expand zone boundaries for better trade capture
+            // Original calculation was too restrictive, causing zero volume zones
+            const baseZoneSize = zoneTicks * this.tickSize;
+
+            // Expand boundaries by 50% to ensure overlapping coverage
+            // This prevents trade gaps between adjacent zones
+            const expandedZoneSize = baseZoneSize * 1.5;
+
             const minPrice = FinancialMath.safeSubtract(
                 zoneCenter,
-                zoneSize / 2
+                expandedZoneSize / 2
             );
-            const maxPrice = FinancialMath.safeAdd(zoneCenter, zoneSize / 2);
+            const maxPrice = FinancialMath.safeAdd(
+                zoneCenter,
+                expandedZoneSize / 2
+            );
+
+            this.logger.debug(
+                "[OrderflowPreprocessor] Zone boundary calculation",
+                {
+                    zoneCenter,
+                    zoneTicks,
+                    baseZoneSize,
+                    expandedZoneSize,
+                    minPrice,
+                    maxPrice,
+                    expansionFactor: 1.5,
+                }
+            );
 
             // Get zone band data from order book
             const band = this.bookState.sumBand(
@@ -1021,5 +1050,368 @@ export class OrderflowPreprocessor
             }
         }
         return undefined;
+    }
+
+    /**
+     * Aggregate trade data into standardized zones
+     *
+     * CLAUDE.md COMPLIANCE:
+     * - Uses FinancialMath for all price/volume calculations
+     * - No magic numbers - all thresholds configurable
+     * - Returns null when calculation cannot be performed
+     * - Proper error handling with try-catch
+     */
+    private aggregateTradeIntoZones(trade: EnrichedTradeEvent): void {
+        try {
+            if (!this.enableStandardizedZones || !this.standardZoneConfig) {
+                return;
+            }
+
+            const { price, timestamp } = trade;
+
+            // Process each zone size configured in standardZoneConfig
+            for (const zoneMultiplier of this.standardZoneConfig
+                .zoneMultipliers) {
+                const zoneTicks =
+                    this.standardZoneConfig.baseTicks * zoneMultiplier;
+
+                // Calculate which zone this trade belongs to using FinancialMath
+                const zoneCenter = FinancialMath.calculateZone(
+                    price,
+                    zoneTicks,
+                    this.pricePrecision
+                );
+
+                if (zoneCenter === null) {
+                    this.logger.warn(
+                        "[OrderflowPreprocessor] Failed to calculate zone center for trade aggregation",
+                        {
+                            price,
+                            zoneTicks,
+                            pricePrecision: this.pricePrecision,
+                        }
+                    );
+                    continue;
+                }
+
+                // Generate zone ID for cache lookup
+                const zoneId = `${this.symbol}_${zoneTicks}T_${zoneCenter.toFixed(this.pricePrecision)}`;
+
+                // Get existing zone from cache or create new one
+                let zone = this.getZoneFromCache(zoneId);
+                if (!zone) {
+                    zone = this.createZoneSnapshot(
+                        zoneCenter,
+                        zoneTicks,
+                        timestamp
+                    );
+                    if (!zone) {
+                        continue; // Skip if zone creation failed
+                    }
+                }
+
+                // Update zone with trade data using FinancialMath
+                const updatedZone = this.updateZoneWithTrade(zone, trade);
+                if (updatedZone) {
+                    // Update cache with aggregated data
+                    this.addZoneToCache(updatedZone);
+                }
+            }
+
+            // CRITICAL FIX: Populate zone data on trade event for CVD detectors
+            trade.zoneData = this.getCurrentZoneData(price, timestamp);
+
+            // Emit metrics for monitoring
+            this.metricsCollector.incrementCounter(
+                "zone_trade_aggregations_total",
+                1
+            );
+
+            // Log zone data population for troubleshooting
+            if (trade.zoneData) {
+                this.metricsCollector.incrementCounter(
+                    "zone_data_populated_total",
+                    1
+                );
+
+                this.logger.debug(
+                    "[OrderflowPreprocessor] Zone data populated for CVD detectors",
+                    {
+                        price,
+                        zones5Count: trade.zoneData.zones5Tick.length,
+                        zones10Count: trade.zoneData.zones10Tick.length,
+                        zones20Count: trade.zoneData.zones20Tick.length,
+                        sampleZone5: trade.zoneData.zones5Tick[0]
+                            ? {
+                                  priceLevel:
+                                      trade.zoneData.zones5Tick[0].priceLevel,
+                                  aggressiveVolume:
+                                      trade.zoneData.zones5Tick[0]
+                                          .aggressiveVolume,
+                                  tradeCount:
+                                      trade.zoneData.zones5Tick[0].tradeCount,
+                              }
+                            : null,
+                    }
+                );
+            } else {
+                this.metricsCollector.incrementCounter(
+                    "zone_data_population_failed_total",
+                    1
+                );
+                this.logger.warn(
+                    "[OrderflowPreprocessor] Failed to populate zone data for CVD detectors",
+                    { price }
+                );
+            }
+        } catch (error) {
+            this.logger.error(
+                "[OrderflowPreprocessor] Error aggregating trade into zones",
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    tradePrice: trade.price,
+                    tradeQuantity: trade.quantity,
+                    timestamp: trade.timestamp,
+                }
+            );
+            this.metricsCollector.incrementCounter(
+                "zone_aggregation_errors_total",
+                1
+            );
+        }
+    }
+
+    /**
+     * Update zone snapshot with new trade data
+     *
+     * CLAUDE.md COMPLIANCE:
+     * - Uses FinancialMath for all calculations
+     * - Returns null when update cannot be performed
+     * - No magic numbers
+     */
+    private updateZoneWithTrade(
+        zone: ZoneSnapshot,
+        trade: EnrichedTradeEvent
+    ): ZoneSnapshot | null {
+        try {
+            const { price, quantity, buyerIsMaker, timestamp } = trade;
+
+            // ENHANCED DEBUG: Log boundary check details for zero volume diagnosis
+            const withinBoundaries =
+                price >= zone.boundaries.min && price <= zone.boundaries.max;
+
+            this.logger.debug(
+                "[OrderflowPreprocessor] Zone update boundary check",
+                {
+                    zoneId: zone.zoneId,
+                    zoneCenter: zone.priceLevel,
+                    zoneBoundaries: zone.boundaries,
+                    tradePrice: price,
+                    tradeQuantity: quantity,
+                    withinBoundaries,
+                    currentAggressiveVolume: zone.aggressiveVolume,
+                    currentTradeCount: zone.tradeCount,
+                }
+            );
+
+            // Check if trade falls within zone boundaries
+            if (!withinBoundaries) {
+                this.logger.debug(
+                    "[OrderflowPreprocessor] Trade rejected - outside zone boundaries",
+                    {
+                        zoneId: zone.zoneId,
+                        tradePrice: price,
+                        minBoundary: zone.boundaries.min,
+                        maxBoundary: zone.boundaries.max,
+                        belowMin: price < zone.boundaries.min,
+                        aboveMax: price > zone.boundaries.max,
+                    }
+                );
+                return null; // Trade outside zone boundaries
+            }
+
+            // Update aggressive volume using FinancialMath
+            const newAggressiveVolume = FinancialMath.safeAdd(
+                zone.aggressiveVolume,
+                quantity
+            );
+
+            // Update buy/sell volumes based on trade direction
+            let newBuyVolume = zone.aggressiveBuyVolume;
+            let newSellVolume = zone.aggressiveSellVolume;
+
+            if (buyerIsMaker) {
+                // Buyer is maker = sell side trade (seller is taker)
+                newSellVolume = FinancialMath.safeAdd(newSellVolume, quantity);
+            } else {
+                // Buyer is taker = buy side trade
+                newBuyVolume = FinancialMath.safeAdd(newBuyVolume, quantity);
+            }
+
+            // Update trade count
+            const newTradeCount = zone.tradeCount + 1;
+
+            // Calculate new volume-weighted price using FinancialMath
+            const totalVolume = FinancialMath.safeAdd(
+                newAggressiveVolume,
+                zone.passiveVolume
+            );
+
+            const newVolumeWeightedPrice =
+                totalVolume > 0
+                    ? FinancialMath.safeDivide(
+                          FinancialMath.safeAdd(
+                              FinancialMath.safeMultiply(
+                                  zone.volumeWeightedPrice,
+                                  zone.aggressiveVolume + zone.passiveVolume
+                              ),
+                              FinancialMath.safeMultiply(price, quantity)
+                          ),
+                          totalVolume
+                      )
+                    : zone.volumeWeightedPrice;
+
+            // ENHANCED DEBUG: Log successful zone update
+            const updatedZone = {
+                ...zone,
+                aggressiveVolume: newAggressiveVolume,
+                aggressiveBuyVolume: newBuyVolume,
+                aggressiveSellVolume: newSellVolume,
+                tradeCount: newTradeCount,
+                volumeWeightedPrice: newVolumeWeightedPrice,
+                lastUpdate: timestamp,
+            };
+
+            this.logger.debug(
+                "[OrderflowPreprocessor] Zone successfully updated with trade",
+                {
+                    zoneId: zone.zoneId,
+                    oldAggressiveVolume: zone.aggressiveVolume,
+                    newAggressiveVolume: newAggressiveVolume,
+                    addedVolume: quantity,
+                    oldTradeCount: zone.tradeCount,
+                    newTradeCount: newTradeCount,
+                    tradeDirection: buyerIsMaker ? "sell" : "buy",
+                    oldBuyVolume: zone.aggressiveBuyVolume,
+                    newBuyVolume: newBuyVolume,
+                    oldSellVolume: zone.aggressiveSellVolume,
+                    newSellVolume: newSellVolume,
+                }
+            );
+
+            // Return updated zone snapshot
+            return updatedZone;
+        } catch (error) {
+            this.logger.error(
+                "[OrderflowPreprocessor] Error updating zone with trade",
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    zoneId: zone.zoneId,
+                    tradePrice: trade.price,
+                    tradeQuantity: trade.quantity,
+                }
+            );
+            return null;
+        }
+    }
+
+    /**
+     * Get current zone data for all zone sizes near the specified price
+     * Returns StandardZoneData with populated zone arrays for CVD detectors
+     *
+     * CLAUDE.md COMPLIANCE:
+     * - Uses FinancialMath for all calculations
+     * - Returns null when data cannot be retrieved
+     * - No magic numbers - configurable search range
+     */
+    private getCurrentZoneData(
+        price: number,
+        timestamp: number
+    ): StandardZoneData | undefined {
+        try {
+            if (!this.enableStandardizedZones || !this.standardZoneConfig) {
+                return undefined;
+            }
+
+            // Get zones for each configured zone size
+            const zones5Tick: ZoneSnapshot[] = [];
+            const zones10Tick: ZoneSnapshot[] = [];
+            const zones20Tick: ZoneSnapshot[] = [];
+            const adaptiveZones: ZoneSnapshot[] = [];
+
+            // Search range: ±5 price levels around current price for performance
+            const searchRange = FinancialMath.safeMultiply(this.tickSize, 5);
+            const minPrice = FinancialMath.safeSubtract(price, searchRange);
+            const maxPrice = FinancialMath.safeAdd(price, searchRange);
+
+            // Collect zones for each multiplier
+            for (const zoneMultiplier of this.standardZoneConfig
+                .zoneMultipliers) {
+                const zoneTicks =
+                    this.standardZoneConfig.baseTicks * zoneMultiplier;
+                const zonesForSize: ZoneSnapshot[] = [];
+
+                // Search through cache for zones in price range
+                for (let i = 0; i < this.zoneCacheSize; i++) {
+                    const cachedZone = this.zoneCache[i];
+                    if (
+                        cachedZone &&
+                        cachedZone.priceLevel >= minPrice &&
+                        cachedZone.priceLevel <= maxPrice &&
+                        cachedZone.zoneId.includes(`${zoneTicks}T`)
+                    ) {
+                        zonesForSize.push(cachedZone);
+                    }
+                }
+
+                // Sort zones by price level for consistent ordering
+                zonesForSize.sort((a, b) => a.priceLevel - b.priceLevel);
+
+                // Assign to appropriate zone size array
+                switch (zoneMultiplier) {
+                    case 1:
+                        zones5Tick.push(...zonesForSize);
+                        break;
+                    case 2:
+                        zones10Tick.push(...zonesForSize);
+                        break;
+                    case 4:
+                        zones20Tick.push(...zonesForSize);
+                        break;
+                    default:
+                        adaptiveZones.push(...zonesForSize);
+                        break;
+                }
+            }
+
+            // Return populated StandardZoneData
+            return {
+                zones5Tick,
+                zones10Tick,
+                zones20Tick,
+                adaptiveZones:
+                    adaptiveZones.length > 0 ? adaptiveZones : undefined,
+                zoneConfig: {
+                    baseTicks: this.standardZoneConfig.baseTicks,
+                    tickValue: this.tickSize,
+                    timeWindow: Math.max(
+                        ...this.standardZoneConfig.timeWindows
+                    ),
+                },
+            };
+        } catch (error) {
+            this.logger.error(
+                "[OrderflowPreprocessor] Error collecting current zone data",
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    price,
+                    timestamp,
+                }
+            );
+            return undefined;
+        }
     }
 }

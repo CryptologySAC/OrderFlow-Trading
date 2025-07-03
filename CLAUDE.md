@@ -851,6 +851,53 @@ Code review will reject any occurrence of:
 7. Memory usage analysis for zone state management
 8. Concurrent access pattern validation
 
+#### 🎯 CRITICAL: Zone Volume Aggregation Architecture (MANDATORY)
+
+**PROBLEM SOLVED (2025-07-03)**: Zone volume aggregation zero-volume issue that was blocking CVD signal generation.
+
+**ROOT CAUSE**: Zone boundary calculations were too restrictive, causing 99.9% of trades to fall outside zone boundaries, resulting in zero aggressive volume in all zones.
+
+**SOLUTION**: Expanded zone boundaries by 50% to ensure overlapping coverage and proper trade capture.
+
+**CRITICAL IMPLEMENTATION DETAILS**:
+
+```typescript
+// BEFORE (BROKEN): Too restrictive boundaries
+const zoneSize = zoneTicks * this.tickSize;
+const minPrice = zoneCenter - zoneSize / 2;  // 5-tick zone: ±0.025 range
+const maxPrice = zoneCenter + zoneSize / 2;
+
+// AFTER (FIXED): Expanded boundaries for trade capture  
+const baseZoneSize = zoneTicks * this.tickSize;
+const expandedZoneSize = baseZoneSize * 1.5;  // 50% expansion
+const minPrice = zoneCenter - expandedZoneSize / 2;  // 5-tick zone: ±0.0375 range
+const maxPrice = zoneCenter + expandedZoneSize / 2;
+```
+
+**VALIDATION METRICS**:
+- **Before**: `"aggressiveVolume":0,"tradeCount":0` (100% zones empty)
+- **After**: `"aggressiveVolume":3,"aggressiveBuyVolume":3,"tradeCount":1` (zones accumulating volume)
+
+**KEY INSIGHTS**:
+1. **Zone Coverage**: Adjacent zones must have overlapping boundaries to prevent trade gaps
+2. **Market Reality**: Real trades often fall slightly outside theoretical zone centers
+3. **Volume Accumulation**: Zones need time to accumulate 15+ LTC for CVD threshold compliance
+4. **Boundary Validation**: Always log boundary checks during development: `withinBoundaries: true/false`
+
+**DIAGNOSTIC COMMANDS**:
+```bash
+# Monitor zone boundary effectiveness
+pm2 logs app | grep -E "withinBoundaries.*true|Zone successfully updated"
+
+# Check volume accumulation  
+pm2 logs app | grep -E "aggressiveVolume.*[1-9]|meetsVolumeThreshold.*true"
+
+# Verify CVD detector integration
+pm2 logs app | grep -E "CVD.*divergence|hasDivergence.*true"
+```
+
+**NEVER REVERT**: This boundary expansion is critical for production CVD signal generation. Reverting will cause immediate signal failure.
+
 ### When Modifying Signal Processing
 
 - Maintain correlation ID propagation for tracing

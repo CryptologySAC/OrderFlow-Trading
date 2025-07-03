@@ -82,6 +82,38 @@ export const UniversalZoneSchema = z.object({
     enhancementMode: z.enum(["disabled", "testing", "production"]),
 });
 
+// ============================================================================
+// STANDARDIZED ZONE CONFIG - Zone volume aggregation for CVD detectors
+// ============================================================================
+export const StandardZoneConfigSchema = z.object({
+    // Core zone configuration
+    baseTicks: z.number().int().min(1).max(50), // Base zone size in ticks
+    zoneMultipliers: z.array(z.number().int().min(1).max(10)), // Zone size multipliers [1, 2, 4]
+    timeWindows: z.array(z.number().int().min(60000).max(7200000)), // Time windows [5min, 15min, etc]
+    adaptiveMode: z.boolean(), // Enable dynamic zone sizing
+
+    // Volume thresholds (LTCUSDT data-driven values)
+    volumeThresholds: z.object({
+        aggressive: z.number().min(1.0).max(1000.0), // Aggressive volume threshold
+        passive: z.number().min(0.5).max(500.0), // Passive volume threshold
+        institutional: z.number().min(10.0).max(5000.0), // Institutional volume threshold
+    }),
+
+    // Price thresholds
+    priceThresholds: z.object({
+        tickValue: z.number().min(0.0001).max(1.0), // Value of one tick
+        minZoneWidth: z.number().min(0.001).max(0.1), // Minimum zone width
+        maxZoneWidth: z.number().min(0.01).max(1.0), // Maximum zone width
+    }),
+
+    // Performance configuration
+    performanceConfig: z.object({
+        maxZoneHistory: z.number().int().min(100).max(10000), // Max zones to keep in history
+        cleanupInterval: z.number().int().min(300000).max(7200000), // Cleanup interval (5min-2h)
+        maxMemoryMB: z.number().int().min(10).max(500), // Max memory usage
+    }),
+});
+
 // EXHAUSTION detector - ALL properties from config.json exhaustion section
 export const ExhaustionDetectorSchema = z.object({
     // Base detector settings (from config.json)
@@ -332,7 +364,7 @@ export const DeltaCVDDetectorSchema = z.object({
     minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
 
     // Enhanced CVD analysis
-    cvdDivergenceVolumeThreshold: z.number().min(20).max(2000),
+    cvdDivergenceVolumeThreshold: z.number().min(10).max(2000),
     cvdDivergenceStrengthThreshold: z.number().min(0.2).max(1.0),
     cvdSignificantImbalanceThreshold: z.number().min(0.2).max(0.8),
     cvdDivergenceScoreMultiplier: z.number().min(1.0).max(5.0),
@@ -824,6 +856,24 @@ function validateMandatoryConfig(): void {
             );
             process.exit(1);
         }
+
+        // CRITICAL: StandardZoneConfig validation for CVD signal generation
+        try {
+            StandardZoneConfigSchema.parse(SYMBOL_CFG.standardZoneConfig);
+        } catch (error) {
+            console.error(
+                "🚨 CRITICAL CONFIG ERROR - StandardZoneConfig (CVD signals)"
+            );
+            console.error("Missing mandatory zone configuration properties:");
+            console.error(error);
+            console.error(
+                "Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT"
+            );
+            console.error(
+                "Zone configuration is REQUIRED for CVD signal generation"
+            );
+            process.exit(1);
+        }
     }
 
     // PANIC EXIT if any required configuration is missing
@@ -934,6 +984,9 @@ export class Config {
             dashboardUpdateInterval: SYMBOL_CFG.dashboardUpdateInterval,
             maxDashboardInterval: SYMBOL_CFG.maxDashboardInterval,
             significantChangeThreshold: SYMBOL_CFG.significantChangeThreshold,
+            // CRITICAL FIX: Zone configuration for CVD signal generation (Zod validated)
+            enableStandardizedZones: Config.ENABLE_STANDARDIZED_ZONES,
+            standardZoneConfig: Config.STANDARD_ZONE_CONFIG,
         };
     }
 
@@ -1135,6 +1188,17 @@ export class Config {
             DistributionDetectorSchema,
             SYMBOL_CFG.distribution
         );
+    }
+
+    // CRITICAL: Zone configuration with Zod validation for CVD signal generation
+    static get STANDARD_ZONE_CONFIG() {
+        return StandardZoneConfigSchema.parse(SYMBOL_CFG.standardZoneConfig);
+    }
+
+    static get ENABLE_STANDARDIZED_ZONES(): boolean {
+        // Zod validation for boolean value - no type casting allowed
+        const enabledSchema = z.boolean();
+        return enabledSchema.parse(SYMBOL_CFG.enableStandardizedZones);
     }
 
     static get SUPPORT_RESISTANCE_DETECTOR(): SupportResistanceConfig {
