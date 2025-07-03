@@ -120,8 +120,39 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
      * DELTACVD PHASE 1: Production-safe enhancement wrapper
      */
     public override onEnrichedTrade(event: EnrichedTradeEvent): void {
+        // 🔍 DEBUG: Log every trade event received by Enhanced CVD detector
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] Trade event received",
+            {
+                detectorId: this.getId(),
+                price: event.price,
+                quantity: event.quantity,
+                useStandardizedZones: this.useStandardizedZones,
+                enhancementMode: this.enhancementConfig.enhancementMode,
+                hasZoneData: !!event.zoneData,
+                timestamp: event.timestamp,
+            }
+        );
+
         // Always call the original detector first (production baseline)
+        // This should trigger base class signal processing including tryEmitSignal()
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] Calling base detector onEnrichedTrade",
+            {
+                detectorId: this.getId(),
+                price: event.price,
+            }
+        );
+
         super.onEnrichedTrade(event);
+
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] Base detector onEnrichedTrade completed",
+            {
+                detectorId: this.getId(),
+                price: event.price,
+            }
+        );
 
         // Only apply enhancements if enabled and standardized zones are available
         if (
@@ -129,6 +160,22 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
             this.enhancementConfig.enhancementMode === "disabled" ||
             !event.zoneData
         ) {
+            this.logger.debug(
+                "[DeltaCVDDetectorEnhanced DEBUG] Skipping enhancements",
+                {
+                    detectorId: this.getId(),
+                    reason: !this.useStandardizedZones
+                        ? "standardized_zones_disabled"
+                        : this.enhancementConfig.enhancementMode === "disabled"
+                          ? "enhancement_disabled"
+                          : !event.zoneData
+                            ? "no_zone_data"
+                            : "unknown",
+                    useStandardizedZones: this.useStandardizedZones,
+                    enhancementMode: this.enhancementConfig.enhancementMode,
+                    hasZoneData: !!event.zoneData,
+                }
+            );
             return;
         }
 
@@ -268,28 +315,57 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
         confluenceZones: number;
         confluenceStrength: number;
     } {
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] analyzeZoneConfluence started",
+            {
+                detectorId: this.getId(),
+                price: price,
+                zones5TickCount: zoneData.zones5Tick.length,
+                zones10TickCount: zoneData.zones10Tick.length,
+                zones20TickCount: zoneData.zones20Tick.length,
+            }
+        );
+
         const minConfluenceZones =
             Config.UNIVERSAL_ZONE_CONFIG.minZoneConfluenceCount;
         const maxDistance =
             Config.UNIVERSAL_ZONE_CONFIG.maxZoneConfluenceDistance;
 
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] analyzeZoneConfluence config",
+            {
+                detectorId: this.getId(),
+                minConfluenceZones,
+                maxDistance,
+            }
+        );
+
         // Find zones that overlap around the current price
         const relevantZones: ZoneSnapshot[] = [];
 
         // Check 5-tick zones
-        relevantZones.push(
-            ...this.findZonesNearPrice(zoneData.zones5Tick, price, maxDistance)
+        const zones5Near = this.findZonesNearPrice(
+            zoneData.zones5Tick,
+            price,
+            maxDistance
         );
+        relevantZones.push(...zones5Near);
 
         // Check 10-tick zones
-        relevantZones.push(
-            ...this.findZonesNearPrice(zoneData.zones10Tick, price, maxDistance)
+        const zones10Near = this.findZonesNearPrice(
+            zoneData.zones10Tick,
+            price,
+            maxDistance
         );
+        relevantZones.push(...zones10Near);
 
         // Check 20-tick zones
-        relevantZones.push(
-            ...this.findZonesNearPrice(zoneData.zones20Tick, price, maxDistance)
+        const zones20Near = this.findZonesNearPrice(
+            zoneData.zones20Tick,
+            price,
+            maxDistance
         );
+        relevantZones.push(...zones20Near);
 
         const confluenceZones = relevantZones.length;
         const hasConfluence = confluenceZones >= minConfluenceZones;
@@ -301,6 +377,21 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
                 confluenceZones,
                 minConfluenceZones * 2
             )
+        );
+
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] analyzeZoneConfluence result",
+            {
+                detectorId: this.getId(),
+                price,
+                zones5Near: zones5Near.length,
+                zones10Near: zones10Near.length,
+                zones20Near: zones20Near.length,
+                confluenceZones,
+                hasConfluence,
+                confluenceStrength,
+                minConfluenceZones,
+            }
         );
 
         return {
@@ -346,10 +437,60 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
         divergenceStrength: number;
         affectedZones: number;
     } {
+        this.logger.error(
+            "[DeltaCVDDetectorEnhanced DEBUG] CRITICAL ISSUE - ALL ZONES HAVE ZERO VOLUME",
+            {
+                detectorId: this.getId(),
+                price: event.price,
+                quantity: event.quantity,
+                totalZones5: zoneData.zones5Tick.length,
+                totalZones10: zoneData.zones10Tick.length,
+                totalZones20: zoneData.zones20Tick.length,
+                sampleZone5: zoneData.zones5Tick[0]
+                    ? {
+                          priceLevel: zoneData.zones5Tick[0].priceLevel,
+                          aggressiveVolume:
+                              zoneData.zones5Tick[0].aggressiveVolume,
+                          aggressiveBuyVolume:
+                              zoneData.zones5Tick[0].aggressiveBuyVolume,
+                          aggressiveSellVolume:
+                              zoneData.zones5Tick[0].aggressiveSellVolume,
+                          passiveVolume: zoneData.zones5Tick[0].passiveVolume,
+                          totalVolume:
+                              zoneData.zones5Tick[0].aggressiveVolume +
+                              zoneData.zones5Tick[0].passiveVolume,
+                      }
+                    : "no zones",
+                sampleZone10: zoneData.zones10Tick[0]
+                    ? {
+                          priceLevel: zoneData.zones10Tick[0].priceLevel,
+                          aggressiveVolume:
+                              zoneData.zones10Tick[0].aggressiveVolume,
+                          totalVolume:
+                              zoneData.zones10Tick[0].aggressiveVolume +
+                              zoneData.zones10Tick[0].passiveVolume,
+                      }
+                    : "no zones",
+            }
+        );
+
         const volumeThreshold =
             this.enhancementConfig.cvdDivergenceVolumeThreshold;
         const minStrength =
             this.enhancementConfig.cvdDivergenceStrengthThreshold;
+
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] analyzeCVDDivergence thresholds",
+            {
+                detectorId: this.getId(),
+                volumeThreshold,
+                minStrength,
+                cvdSignificantImbalanceThreshold:
+                    this.enhancementConfig.cvdSignificantImbalanceThreshold,
+                cvdDivergenceScoreMultiplier:
+                    this.enhancementConfig.cvdDivergenceScoreMultiplier,
+            }
+        );
 
         // Analyze all zones for CVD divergence patterns
         const allZones = [
@@ -360,15 +501,43 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
 
         const relevantZones = this.findZonesNearPrice(allZones, event.price, 5);
 
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] analyzeCVDDivergence zones found",
+            {
+                detectorId: this.getId(),
+                totalZones: allZones.length,
+                relevantZones: relevantZones.length,
+                searchPrice: event.price,
+                searchDistance: 5,
+            }
+        );
+
         let totalDivergenceScore = 0;
         let affectedZones = 0;
+        let zonesTooSmall = 0;
+        let zonesProcessed = 0;
 
-        relevantZones.forEach((zone) => {
+        relevantZones.forEach((zone, index) => {
+            zonesProcessed++;
             const aggressiveVolume = zone.aggressiveVolume;
 
             // Check if this zone shows CVD divergence patterns
             const buyVolume = zone.aggressiveBuyVolume;
             const sellVolume = zone.aggressiveSellVolume;
+
+            this.logger.debug(
+                "[DeltaCVDDetectorEnhanced DEBUG] analyzeCVDDivergence zone analysis",
+                {
+                    detectorId: this.getId(),
+                    zoneIndex: index,
+                    zonePriceLevel: zone.priceLevel,
+                    aggressiveVolume,
+                    buyVolume,
+                    sellVolume,
+                    volumeThreshold,
+                    meetsVolumeThreshold: aggressiveVolume >= volumeThreshold,
+                }
+            );
 
             if (aggressiveVolume >= volumeThreshold) {
                 // Calculate CVD delta for this zone using FinancialMath
@@ -384,6 +553,20 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
 
                 const cvdSignificantImbalanceThreshold =
                     this.enhancementConfig.cvdSignificantImbalanceThreshold;
+
+                this.logger.debug(
+                    "[DeltaCVDDetectorEnhanced DEBUG] analyzeCVDDivergence CVD calculation",
+                    {
+                        detectorId: this.getId(),
+                        zoneIndex: index,
+                        cvdDelta,
+                        volumeRatio,
+                        cvdSignificantImbalanceThreshold,
+                        meetsImbalanceThreshold:
+                            volumeRatio >= cvdSignificantImbalanceThreshold,
+                    }
+                );
+
                 if (volumeRatio >= cvdSignificantImbalanceThreshold) {
                     // Significant CVD imbalance detected
                     const divergenceScore = Math.min(
@@ -395,12 +578,45 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
                     );
                     totalDivergenceScore += divergenceScore;
                     affectedZones++;
+
+                    this.logger.debug(
+                        "[DeltaCVDDetectorEnhanced DEBUG] analyzeCVDDivergence divergence detected",
+                        {
+                            detectorId: this.getId(),
+                            zoneIndex: index,
+                            divergenceScore,
+                            totalDivergenceScore,
+                            affectedZones,
+                        }
+                    );
                 }
+            } else {
+                zonesTooSmall++;
             }
         });
 
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] analyzeCVDDivergence processing summary",
+            {
+                detectorId: this.getId(),
+                zonesProcessed,
+                zonesTooSmall,
+                affectedZones,
+                totalDivergenceScore,
+            }
+        );
+
         // 🔧 CLAUDE.md COMPLIANCE: Return null when calculation cannot be performed
         if (affectedZones === 0) {
+            this.logger.debug(
+                "[DeltaCVDDetectorEnhanced DEBUG] analyzeCVDDivergence no divergence detected",
+                {
+                    detectorId: this.getId(),
+                    reason: "no_affected_zones",
+                    zonesProcessed,
+                    zonesTooSmall,
+                }
+            );
             return {
                 hasDivergence: false,
                 divergenceStrength: 0, // No divergence detected
@@ -413,6 +629,17 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
             affectedZones
         );
         const hasDivergence = averageDivergence >= minStrength;
+
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] analyzeCVDDivergence final result",
+            {
+                detectorId: this.getId(),
+                averageDivergence,
+                minStrength,
+                hasDivergence,
+                affectedZones,
+            }
+        );
 
         return {
             hasDivergence,
@@ -438,6 +665,19 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
             tick20: number;
         };
     } {
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] analyzeMomentumAlignment started",
+            {
+                detectorId: this.getId(),
+                price: event.price,
+                zones5Count: zoneData.zones5Tick.length,
+                zones10Count: zoneData.zones10Tick.length,
+                zones20Count: zoneData.zones20Tick.length,
+                alignmentMinimumThreshold:
+                    this.enhancementConfig.alignmentMinimumThreshold,
+            }
+        );
+
         // Calculate momentum strength for each timeframe
         const tick5Momentum = this.calculateTimeframeMomentum(
             zoneData.zones5Tick,
@@ -458,13 +698,44 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
             tick20: tick20Momentum,
         };
 
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] analyzeMomentumAlignment timeframe momentum",
+            {
+                detectorId: this.getId(),
+                tick5Momentum,
+                tick10Momentum,
+                tick20Momentum,
+            }
+        );
+
         // Calculate alignment score using FinancialMath (how similar momentum levels are across timeframes)
         const momentumValues = [tick5Momentum, tick10Momentum, tick20Momentum];
         const avgMomentum = FinancialMath.calculateMean(momentumValues);
         const stdDev = FinancialMath.calculateStdDev(momentumValues);
 
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] analyzeMomentumAlignment statistics",
+            {
+                detectorId: this.getId(),
+                momentumValues,
+                avgMomentum,
+                stdDev,
+            }
+        );
+
         // 🔧 CLAUDE.md COMPLIANCE: Return null when calculation cannot be performed
         if (avgMomentum === null || stdDev === null) {
+            this.logger.debug(
+                "[DeltaCVDDetectorEnhanced DEBUG] analyzeMomentumAlignment calculation failed",
+                {
+                    detectorId: this.getId(),
+                    reason:
+                        avgMomentum === null
+                            ? "avgMomentum_null"
+                            : "stdDev_null",
+                    momentumValues,
+                }
+            );
             return {
                 hasAlignment: false,
                 alignmentScore: 0,
@@ -484,6 +755,19 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
         const hasAlignment =
             alignmentScore >= this.enhancementConfig.alignmentMinimumThreshold;
 
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] analyzeMomentumAlignment final result",
+            {
+                detectorId: this.getId(),
+                normalizedVariability,
+                alignmentScore,
+                alignmentMinimumThreshold:
+                    this.enhancementConfig.alignmentMinimumThreshold,
+                hasAlignment,
+                timeframeBreakdown,
+            }
+        );
+
         return {
             hasAlignment,
             alignmentScore,
@@ -500,16 +784,64 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
         zones: ZoneSnapshot[],
         price: number
     ): number {
-        if (zones.length === 0) return 0;
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] calculateTimeframeMomentum started",
+            {
+                detectorId: this.getId(),
+                price,
+                totalZones: zones.length,
+                searchDistance: 3,
+            }
+        );
+
+        if (zones.length === 0) {
+            this.logger.debug(
+                "[DeltaCVDDetectorEnhanced DEBUG] calculateTimeframeMomentum no zones",
+                {
+                    detectorId: this.getId(),
+                    result: 0,
+                }
+            );
+            return 0;
+        }
 
         const relevantZones = this.findZonesNearPrice(zones, price, 3);
-        if (relevantZones.length === 0) return 0;
+        if (relevantZones.length === 0) {
+            this.logger.debug(
+                "[DeltaCVDDetectorEnhanced DEBUG] calculateTimeframeMomentum no relevant zones",
+                {
+                    detectorId: this.getId(),
+                    totalZones: zones.length,
+                    relevantZones: 0,
+                    result: 0,
+                }
+            );
+            return 0;
+        }
+
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] calculateTimeframeMomentum zones found",
+            {
+                detectorId: this.getId(),
+                totalZones: zones.length,
+                relevantZones: relevantZones.length,
+                momentumScoreMultiplier:
+                    this.enhancementConfig.momentumScoreMultiplier,
+            }
+        );
 
         let totalMomentumScore = 0;
+        let zonesProcessed = 0;
+        let zonesSkipped = 0;
 
         for (const zone of relevantZones) {
             const totalVolume = zone.aggressiveVolume + zone.passiveVolume;
-            if (totalVolume === 0) continue;
+            if (totalVolume === 0) {
+                zonesSkipped++;
+                continue;
+            }
+
+            zonesProcessed++;
 
             // For CVD momentum, we want strong directional volume flow using FinancialMath
             const buyVolume = zone.aggressiveBuyVolume;
@@ -535,12 +867,41 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
                 )
             );
             totalMomentumScore += momentumScore;
+
+            this.logger.debug(
+                "[DeltaCVDDetectorEnhanced DEBUG] calculateTimeframeMomentum zone processed",
+                {
+                    detectorId: this.getId(),
+                    zonePriceLevel: zone.priceLevel,
+                    buyVolume,
+                    sellVolume,
+                    totalVolume,
+                    cvdDelta,
+                    cvdRatio,
+                    momentumScore,
+                    totalMomentumScore,
+                }
+            );
         }
 
-        return FinancialMath.divideQuantities(
+        const finalMomentum = FinancialMath.divideQuantities(
             totalMomentumScore,
             relevantZones.length
         );
+
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] calculateTimeframeMomentum final result",
+            {
+                detectorId: this.getId(),
+                zonesProcessed,
+                zonesSkipped,
+                totalMomentumScore,
+                relevantZonesCount: relevantZones.length,
+                finalMomentum,
+            }
+        );
+
+        return finalMomentum;
     }
 
     /**

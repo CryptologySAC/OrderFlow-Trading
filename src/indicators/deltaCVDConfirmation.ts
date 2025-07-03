@@ -1719,10 +1719,15 @@ export class DeltaCVDConfirmation extends BaseDetector {
     /* ------------------------------------------------------------------ */
 
     private tryEmitSignal(now: number): void {
-        // 🔍 DEBUG: Log signal emission attempt
-        console.log("[DeltaCVD DEBUG] Signal emission attempt started:", {
-            windows: this.windows,
+        // 🔍 DEBUG: Log signal emission attempt with initial conditions
+        this.logger.debug("[DeltaCVD DEBUG] Signal emission attempt started", {
             detectorId: this.getId(),
+            windows: this.windows,
+            detectionMode: this.detectionMode,
+            baseConfidenceRequired: this.baseConfidenceRequired,
+            finalConfidenceRequired: this.finalConfidenceRequired,
+            usePassiveVolume: this.usePassiveVolume,
+            enableDepthAnalysis: this.enableDepthAnalysis,
             timestamp: now,
         });
 
@@ -1776,6 +1781,17 @@ export class DeltaCVDConfirmation extends BaseDetector {
                     now
                 );
                 if (!surgeResult.valid) {
+                    // 🔍 DEBUG: Log volume surge validation failures
+                    this.logger.debug(
+                        "[DeltaCVD DEBUG] Volume surge validation failed",
+                        {
+                            detectorId: this.getId(),
+                            windowSec: w,
+                            reason: surgeResult.reason || "volume_surge_failed",
+                            tradesCount: state.trades.length,
+                            timestamp: now,
+                        }
+                    );
                     this.metricsCollector.incrementCounter(
                         "cvd_signals_rejected_total",
                         1,
@@ -1789,6 +1805,14 @@ export class DeltaCVDConfirmation extends BaseDetector {
             const cvdResult: CVDCalculationResult | null =
                 this.computeCVDSlope(state);
             if (cvdResult === null) {
+                // 🔍 DEBUG: Log CVD calculation failures
+                this.logger.debug("[DeltaCVD DEBUG] CVD calculation failed", {
+                    detectorId: this.getId(),
+                    windowSec: w,
+                    tradesCount: state.trades.length,
+                    usePassiveVolume: this.usePassiveVolume,
+                    timestamp: now,
+                });
                 this.metricsCollector.incrementCounter(
                     "cvd_signals_rejected_total",
                     1,
@@ -1804,6 +1828,17 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 cvdSeries
             );
             if (priceCorrelation === null) {
+                // 🔍 DEBUG: Log price correlation calculation failures
+                this.logger.debug(
+                    "[DeltaCVD DEBUG] Price correlation calculation failed",
+                    {
+                        detectorId: this.getId(),
+                        windowSec: w,
+                        tradesCount: state.trades.length,
+                        cvdSeriesLength: cvdSeries.length,
+                        timestamp: now,
+                    }
+                );
                 this.metricsCollector.incrementCounter(
                     "cvd_signals_rejected_total",
                     1,
@@ -1816,6 +1851,14 @@ export class DeltaCVDConfirmation extends BaseDetector {
 
             // Handle null slope from failed calculation
             if (slope === null) {
+                // 🔍 DEBUG: Log slope calculation failures
+                this.logger.debug("[DeltaCVD DEBUG] Slope calculation failed", {
+                    detectorId: this.getId(),
+                    windowSec: w,
+                    tradesCount: state.trades.length,
+                    cvdSeriesLength: cvdSeries.length,
+                    timestamp: now,
+                });
                 this.metricsCollector.incrementCounter(
                     "cvd_signals_rejected_total",
                     1,
@@ -1832,6 +1875,19 @@ export class DeltaCVDConfirmation extends BaseDetector {
             const adaptiveMinZ = this.calculateAdaptiveThreshold();
             const zScore = this.calculateZScore(state, slope);
             if (zScore === null) {
+                // 🔍 DEBUG: Log z-score calculation failures
+                this.logger.debug(
+                    "[DeltaCVD DEBUG] Z-score calculation failed",
+                    {
+                        detectorId: this.getId(),
+                        windowSec: w,
+                        tradesCount: state.trades.length,
+                        slope: slope,
+                        tradesInWindow: state.trades.length,
+                        adaptiveMinZ: adaptiveMinZ,
+                        timestamp: now,
+                    }
+                );
                 this.metricsCollector.incrementCounter(
                     "cvd_signals_rejected_total",
                     1,
@@ -1862,6 +1918,18 @@ export class DeltaCVDConfirmation extends BaseDetector {
             priceCorrelations
         );
         if (!validationResult.valid) {
+            // 🔍 DEBUG: Log multi-window validation failures
+            this.logger.debug(
+                "[DeltaCVD DEBUG] Multi-window validation failed",
+                {
+                    detectorId: this.getId(),
+                    reason: validationResult.reason,
+                    zScores: zScores,
+                    priceCorrelations: priceCorrelations,
+                    windows: this.windows,
+                    timestamp: now,
+                }
+            );
             this.metricsCollector.incrementCounter(
                 "cvd_signals_rejected_total",
                 1,
@@ -1907,7 +1975,20 @@ export class DeltaCVDConfirmation extends BaseDetector {
         }
 
         // Throttle signals
-        if (now - this.lastSignalTs < 60_000) return;
+        if (now - this.lastSignalTs < 60_000) {
+            // 🔍 DEBUG: Log throttled signals
+            this.logger.debug(
+                "[DeltaCVD DEBUG] Signal throttled - too soon after last signal",
+                {
+                    detectorId: this.getId(),
+                    timeSinceLastSignal: (now - this.lastSignalTs) / 1000,
+                    throttleSeconds: 60,
+                    signalType,
+                    timestamp: now,
+                }
+            );
+            return;
+        }
         this.lastSignalTs = now;
 
         // STEP 5: Calculate comprehensive confidence score
@@ -1945,12 +2026,37 @@ export class DeltaCVDConfirmation extends BaseDetector {
                 }
             );
             this.logger.debug(
-                "[DeltaCVDConfirmation] Signal blocked - insufficient final confidence",
+                "[DeltaCVD DEBUG] Signal blocked - insufficient final confidence",
                 {
+                    detectorId: this.getId(),
                     finalConfidence: finalConfidence.toFixed(3),
                     required: this.finalConfidenceRequired.toFixed(3),
+                    baseConfidenceRequired:
+                        this.baseConfidenceRequired.toFixed(3),
                     signalType,
+                    enhancedConfidence,
                     cvdZScore: zScores[this.windows[0]].toFixed(3),
+                    adaptiveMinZ: this.calculateAdaptiveThreshold().toFixed(3),
+                    confidenceFactors: {
+                        zScoreAlignment:
+                            confidenceFactors.zScoreAlignment.toFixed(3),
+                        magnitudeStrength:
+                            confidenceFactors.magnitudeStrength.toFixed(3),
+                        priceCorrelation:
+                            confidenceFactors.priceCorrelation.toFixed(3),
+                        volumeConcentration:
+                            confidenceFactors.volumeConcentration.toFixed(3),
+                        temporalConsistency:
+                            confidenceFactors.temporalConsistency.toFixed(3),
+                        divergencePenalty:
+                            confidenceFactors.divergencePenalty.toFixed(3),
+                    },
+                    absorption: {
+                        detected: absorption.detected,
+                        strength: absorption.strength?.toFixed(3),
+                        type: absorption.type,
+                    },
+                    timestamp: now,
                 }
             );
             return;
@@ -1977,14 +2083,32 @@ export class DeltaCVDConfirmation extends BaseDetector {
             { signal_side: candidate.side }
         );
 
-        this.logger.info("[DeltaCVDConfirmation] CVD signal emitted", {
-            detector: this.getId(),
+        this.logger.info("[DeltaCVD DEBUG] CVD signal SUCCESSFULLY emitted", {
+            detectorId: this.getId(),
             side: candidate.side,
-            confidence: finalConfidence,
+            finalConfidence: finalConfidence.toFixed(3),
+            required: this.finalConfidenceRequired.toFixed(3),
             price: candidate.price,
             signalType,
+            enhancedConfidence,
+            cvdZScore: zScores[this.windows[0]].toFixed(3),
+            adaptiveMinZ: this.calculateAdaptiveThreshold().toFixed(3),
             hasAbsorption: absorption.detected,
-            cvdZScore: zScores[this.windows[0]],
+            absorptionType: absorption.type,
+            absorptionStrength: absorption.strength?.toFixed(3),
+            confidenceFactors: {
+                zScoreAlignment: confidenceFactors.zScoreAlignment.toFixed(3),
+                magnitudeStrength:
+                    confidenceFactors.magnitudeStrength.toFixed(3),
+                priceCorrelation: confidenceFactors.priceCorrelation.toFixed(3),
+                volumeConcentration:
+                    confidenceFactors.volumeConcentration.toFixed(3),
+                temporalConsistency:
+                    confidenceFactors.temporalConsistency.toFixed(3),
+                divergencePenalty:
+                    confidenceFactors.divergencePenalty.toFixed(3),
+            },
+            timestamp: now,
         });
     }
 
