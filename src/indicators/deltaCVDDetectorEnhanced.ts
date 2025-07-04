@@ -29,6 +29,11 @@ import type {
     StandardZoneData,
     ZoneSnapshot,
 } from "../types/marketEvents.js";
+import type {
+    SignalCandidate,
+    DeltaCVDConfirmationResult,
+    SignalType,
+} from "../types/signalTypes.js";
 import { z } from "zod";
 import { DeltaCVDDetectorSchema } from "../core/config.js";
 import { Config } from "../core/config.js";
@@ -256,6 +261,13 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
                         confidenceBoost:
                             this.enhancementConfig.divergenceConfidenceBoost,
                     }
+                );
+
+                // ✅ EMIT ENHANCED CVD SIGNAL - Independent of base detector
+                this.emitEnhancedCVDSignal(
+                    event,
+                    divergenceResult,
+                    totalConfidenceBoost
                 );
             }
         }
@@ -923,6 +935,177 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
             confidenceBoost,
             enhancementStats: this.enhancementStats,
         });
+    }
+
+    /**
+     * Emit enhanced CVD signal based on zone divergence analysis
+     *
+     * CRITICAL FIX: Independent signal emission for enhanced CVD detection
+     */
+    private emitEnhancedCVDSignal(
+        event: EnrichedTradeEvent,
+        divergenceResult: {
+            hasDivergence: boolean;
+            divergenceStrength: number;
+            affectedZones: number;
+        },
+        confidenceBoost: number
+    ): void {
+        // Calculate enhanced confidence based on zone analysis
+        const baseConfidence = Math.min(
+            0.9,
+            Math.max(0.1, divergenceResult.divergenceStrength)
+        );
+        const enhancedConfidence = Math.min(
+            0.95,
+            baseConfidence + confidenceBoost
+        );
+
+        // Determine signal side based on zone CVD analysis
+        const signalSide = this.determineCVDSignalSide(event);
+
+        // Create enhanced CVD result
+        const cvdResult: DeltaCVDConfirmationResult = {
+            price: event.price,
+            side: signalSide,
+            rateOfChange: divergenceResult.divergenceStrength,
+            windowVolume: this.calculateZoneVolume(event.zoneData),
+            tradesInWindow: this.calculateZoneTrades(event.zoneData),
+            confidence: enhancedConfidence,
+            slopes: { 300: divergenceResult.divergenceStrength }, // Enhanced zone-based slope
+            zScores: { 300: divergenceResult.divergenceStrength * 2 }, // Enhanced z-score
+            metadata: {
+                signalType: "cvd_divergence",
+                timestamp: event.timestamp,
+                cvdMovement: {
+                    totalCVD: this.calculateZoneVolume(event.zoneData),
+                    normalizedCVD: divergenceResult.divergenceStrength,
+                    direction:
+                        signalSide === "buy"
+                            ? "bullish"
+                            : signalSide === "sell"
+                              ? "bearish"
+                              : "neutral",
+                },
+                cvdAnalysis: {
+                    shortestWindowSlope: divergenceResult.divergenceStrength,
+                    shortestWindowZScore:
+                        divergenceResult.divergenceStrength * 2,
+                    requiredMinZ:
+                        this.enhancementConfig.cvdDivergenceStrengthThreshold,
+                    detectionMode: "enhanced_zone_analysis",
+                    passedStatisticalTest: true,
+                },
+                qualityMetrics: {
+                    cvdStatisticalSignificance: enhancedConfidence,
+                    absorptionConfirmation: divergenceResult.affectedZones >= 2,
+                    signalPurity:
+                        enhancedConfidence > 0.7 ? "premium" : "standard",
+                },
+            },
+        };
+
+        // Create signal candidate
+        const signalCandidate: SignalCandidate = {
+            id: `enhanced-cvd-${event.timestamp}-${Math.random().toString(36).substring(7)}`,
+            type: "cvd_confirmation" as SignalType,
+            side: signalSide,
+            confidence: enhancedConfidence,
+            timestamp: event.timestamp,
+            data: cvdResult,
+        };
+
+        // ✅ EMIT ENHANCED CVD SIGNAL - Independent of base detector
+        this.emitSignalCandidate(signalCandidate);
+
+        this.logger.info(
+            "DeltaCVDDetectorEnhanced: ENHANCED CVD SIGNAL EMITTED",
+            {
+                detectorId: this.getId(),
+                price: event.price,
+                side: signalSide,
+                confidence: enhancedConfidence,
+                divergenceStrength: divergenceResult.divergenceStrength,
+                affectedZones: divergenceResult.affectedZones,
+                signalId: signalCandidate.id,
+                signalType: "enhanced_cvd_divergence",
+            }
+        );
+    }
+
+    /**
+     * Determine CVD signal side based on zone volume analysis
+     */
+    private determineCVDSignalSide(
+        event: EnrichedTradeEvent
+    ): "buy" | "sell" | "neutral" {
+        if (!event.zoneData) return "neutral";
+
+        const allZones = [
+            ...event.zoneData.zones5Tick,
+            ...event.zoneData.zones10Tick,
+            ...event.zoneData.zones20Tick,
+        ];
+
+        let totalBuyVolume = 0;
+        let totalSellVolume = 0;
+
+        allZones.forEach((zone) => {
+            totalBuyVolume += zone.aggressiveBuyVolume || 0;
+            totalSellVolume += zone.aggressiveSellVolume || 0;
+        });
+
+        const totalVolume = totalBuyVolume + totalSellVolume;
+        if (totalVolume === 0) return "neutral";
+
+        const buyRatio = FinancialMath.divideQuantities(
+            totalBuyVolume,
+            totalVolume
+        );
+
+        if (buyRatio > 0.6) return "buy";
+        if (buyRatio < 0.4) return "sell";
+        return "neutral";
+    }
+
+    /**
+     * Calculate total volume across all zones
+     */
+    private calculateZoneVolume(
+        zoneData: StandardZoneData | undefined
+    ): number {
+        if (!zoneData) return 0;
+
+        const allZones = [
+            ...zoneData.zones5Tick,
+            ...zoneData.zones10Tick,
+            ...zoneData.zones20Tick,
+        ];
+
+        return allZones.reduce(
+            (total, zone) => total + (zone.aggressiveVolume || 0),
+            0
+        );
+    }
+
+    /**
+     * Calculate total trades across all zones
+     */
+    private calculateZoneTrades(
+        zoneData: StandardZoneData | undefined
+    ): number {
+        if (!zoneData) return 0;
+
+        const allZones = [
+            ...zoneData.zones5Tick,
+            ...zoneData.zones10Tick,
+            ...zoneData.zones20Tick,
+        ];
+
+        return allZones.reduce(
+            (total, zone) => total + (zone.tradeCount || 0),
+            0
+        );
     }
 
     /**

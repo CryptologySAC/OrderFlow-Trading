@@ -864,32 +864,35 @@ Code review will reject any occurrence of:
 ```typescript
 // BEFORE (BROKEN): Too restrictive boundaries
 const zoneSize = zoneTicks * this.tickSize;
-const minPrice = zoneCenter - zoneSize / 2;  // 5-tick zone: ±0.025 range
+const minPrice = zoneCenter - zoneSize / 2; // 5-tick zone: ±0.025 range
 const maxPrice = zoneCenter + zoneSize / 2;
 
-// AFTER (FIXED): Expanded boundaries for trade capture  
+// AFTER (FIXED): Expanded boundaries for trade capture
 const baseZoneSize = zoneTicks * this.tickSize;
-const expandedZoneSize = baseZoneSize * 1.5;  // 50% expansion
-const minPrice = zoneCenter - expandedZoneSize / 2;  // 5-tick zone: ±0.0375 range
+const expandedZoneSize = baseZoneSize * 1.5; // 50% expansion
+const minPrice = zoneCenter - expandedZoneSize / 2; // 5-tick zone: ±0.0375 range
 const maxPrice = zoneCenter + expandedZoneSize / 2;
 ```
 
 **VALIDATION METRICS**:
+
 - **Before**: `"aggressiveVolume":0,"tradeCount":0` (100% zones empty)
 - **After**: `"aggressiveVolume":3,"aggressiveBuyVolume":3,"tradeCount":1` (zones accumulating volume)
 
 **KEY INSIGHTS**:
+
 1. **Zone Coverage**: Adjacent zones must have overlapping boundaries to prevent trade gaps
 2. **Market Reality**: Real trades often fall slightly outside theoretical zone centers
 3. **Volume Accumulation**: Zones need time to accumulate 15+ LTC for CVD threshold compliance
 4. **Boundary Validation**: Always log boundary checks during development: `withinBoundaries: true/false`
 
 **DIAGNOSTIC COMMANDS**:
+
 ```bash
 # Monitor zone boundary effectiveness
 pm2 logs app | grep -E "withinBoundaries.*true|Zone successfully updated"
 
-# Check volume accumulation  
+# Check volume accumulation
 pm2 logs app | grep -E "aggressiveVolume.*[1-9]|meetsVolumeThreshold.*true"
 
 # Verify CVD detector integration
