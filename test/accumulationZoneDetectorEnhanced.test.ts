@@ -280,6 +280,7 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
                     "test-validated-config",
                     "LTCUSDT",
                     mockAccumulationConfig, // Pre-validated settings should work
+                    mockPreprocessor,
                     mockLogger,
                     mockMetricsCollector
                 );
@@ -312,6 +313,7 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
                     "test-complete",
                     "LTCUSDT",
                     mockAccumulationConfig, // Complete validated configuration
+                    mockPreprocessor,
                     mockLogger,
                     mockMetricsCollector
                 );
@@ -339,6 +341,7 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
                     "test-valid",
                     "LTCUSDT",
                     mockAccumulationConfig, // Known valid configuration
+                    mockPreprocessor,
                     mockLogger,
                     mockMetricsCollector
                 );

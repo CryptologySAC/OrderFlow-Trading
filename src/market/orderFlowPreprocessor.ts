@@ -190,7 +190,11 @@ export class OrderflowPreprocessor
         this.bookState = orderBook;
 
         // Configure EventEmitter to prevent memory leaks
-        if (this.maxEventListeners && typeof this.maxEventListeners === 'number' && this.maxEventListeners > 0) {
+        if (
+            this.maxEventListeners &&
+            typeof this.maxEventListeners === "number" &&
+            this.maxEventListeners > 0
+        ) {
             this.setMaxListeners(this.maxEventListeners);
         }
 

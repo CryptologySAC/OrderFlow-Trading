@@ -131,7 +131,6 @@ describe("Config Usage Audit", () => {
                 "symbols.LTCUSDT.exhaustion", // container object
                 "symbols.LTCUSDT.absorption", // container object
                 "symbols.LTCUSDT.icebergDetector", // container object
-                "symbols.LTCUSDT.supportResistanceDetector", // container object
                 "symbols.LTCUSDT.spoofingDetector", // container object
                 "symbols.LTCUSDT.hiddenOrderDetector", // container object
                 "symbols.LTCUSDT.anomalyDetector", // container object

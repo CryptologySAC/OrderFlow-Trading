@@ -245,8 +245,6 @@ describe("Config.ts - Comprehensive Test Suite", () => {
             expect(positionSizing).toBeDefined();
             expect(typeof positionSizing).toBe("object");
         });
-
-       
     });
 
     describe("Service Configurations", () => {
