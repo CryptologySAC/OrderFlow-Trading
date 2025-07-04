@@ -29,6 +29,11 @@ import type {
     StandardZoneData,
     ZoneSnapshot,
 } from "../types/marketEvents.js";
+import type {
+    SignalCandidate,
+    ExhaustionSignalData,
+    SignalType,
+} from "../types/signalTypes.js";
 import { z } from "zod";
 import { ExhaustionDetectorSchema } from "../core/config.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
@@ -228,6 +233,13 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
                         confidenceBoost:
                             this.enhancementConfig.depletionConfidenceBoost,
                     }
+                );
+
+                // ✅ EMIT ENHANCED EXHAUSTION SIGNAL - Independent of base detector
+                this.emitEnhancedExhaustionSignal(
+                    event,
+                    depletionResult,
+                    totalConfidenceBoost
                 );
             }
         }
@@ -572,6 +584,227 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
                 enhancementStats: this.enhancementStats,
             }
         );
+    }
+
+    /**
+     * Emit enhanced exhaustion signal independently of base detector
+     *
+     * EXHAUSTION PHASE 1: Independent signal emission for enhanced exhaustion detection
+     */
+    private emitEnhancedExhaustionSignal(
+        event: EnrichedTradeEvent,
+        depletionResult: {
+            hasDepletion: boolean;
+            depletionRatio: number;
+            affectedZones: number;
+        },
+        confidenceBoost: number
+    ): void {
+        // 🔧 CLAUDE.md COMPLIANCE: Only proceed with valid depletion ratio
+        if (depletionResult.depletionRatio <= 0) {
+            return;
+        }
+
+        // Calculate enhanced confidence without any defaults
+        const enhancedConfidence = depletionResult.depletionRatio + confidenceBoost;
+
+        // Only emit if enhanced confidence meets minimum threshold
+        if (enhancedConfidence < this.enhancementConfig.minEnhancedConfidenceThreshold) {
+            return;
+        }
+
+        // Determine signal side based on zone exhaustion analysis
+        const signalSide = this.determineExhaustionSignalSide(event);
+        if (signalSide === "neutral") {
+            return;
+        }
+
+        // Calculate zone metrics - return early if any are null
+        const passiveVolumeRatio = this.calculateZonePassiveRatio(event.zoneData);
+        const avgSpread = this.calculateZoneSpread(event.zoneData);
+        const volumeImbalance = this.calculateZoneVolumeImbalance(event.zoneData);
+
+        if (passiveVolumeRatio === null || avgSpread === null || volumeImbalance === null) {
+            return;
+        }
+
+        // Create enhanced exhaustion result
+        const exhaustionResult: ExhaustionSignalData = {
+            price: event.price,
+            side: signalSide,
+            exhaustionScore: depletionResult.depletionRatio,
+            confidence: enhancedConfidence,
+            depletionRatio: depletionResult.depletionRatio,
+            passiveVolumeRatio,
+            avgSpread,
+            volumeImbalance,
+            metadata: {
+                signalType: "liquidity_depletion",
+                timestamp: event.timestamp,
+                affectedZones: depletionResult.affectedZones,
+                enhancementType: "zone_based_exhaustion",
+                qualityMetrics: {
+                    exhaustionStatisticalSignificance: enhancedConfidence,
+                    depletionConfirmation: depletionResult.affectedZones >= 2,
+                    signalPurity: enhancedConfidence > 0.7 ? "premium" : "standard",
+                },
+            },
+        };
+
+        // Create signal candidate
+        const signalCandidate: SignalCandidate = {
+            id: `enhanced-exhaustion-${event.timestamp}-${Math.random().toString(36).substring(7)}`,
+            type: "exhaustion" as SignalType,
+            side: signalSide,
+            confidence: enhancedConfidence,
+            timestamp: event.timestamp,
+            data: exhaustionResult,
+        };
+
+        // ✅ EMIT ENHANCED EXHAUSTION SIGNAL - Independent of base detector
+        this.emitSignalCandidate(signalCandidate);
+
+        this.logger.info(
+            "ExhaustionDetectorEnhanced: ENHANCED EXHAUSTION SIGNAL EMITTED",
+            {
+                detectorId: this.getId(),
+                price: event.price,
+                side: signalSide,
+                confidence: enhancedConfidence,
+                depletionRatio: depletionResult.depletionRatio,
+                affectedZones: depletionResult.affectedZones,
+                signalId: signalCandidate.id,
+                signalType: "enhanced_exhaustion_depletion",
+            }
+        );
+    }
+
+    /**
+     * Determine exhaustion signal side based on zone liquidity analysis
+     */
+    private determineExhaustionSignalSide(
+        event: EnrichedTradeEvent
+    ): "buy" | "sell" | "neutral" {
+        if (!event.zoneData) return "neutral";
+
+        const allZones = [
+            ...event.zoneData.zones5Tick,
+            ...event.zoneData.zones10Tick,
+            ...event.zoneData.zones20Tick,
+        ];
+
+        let totalBuyVolume = 0;
+        let totalSellVolume = 0;
+
+        allZones.forEach((zone) => {
+            if (zone.aggressiveBuyVolume !== undefined) {
+                totalBuyVolume += zone.aggressiveBuyVolume;
+            }
+            if (zone.aggressiveSellVolume !== undefined) {
+                totalSellVolume += zone.aggressiveSellVolume;
+            }
+        });
+
+        const totalVolume = totalBuyVolume + totalSellVolume;
+        if (totalVolume === 0) return "neutral";
+
+        const buyRatio = FinancialMath.divideQuantities(
+            totalBuyVolume,
+            totalVolume
+        );
+
+        // For exhaustion, high buy volume suggests buy-side exhaustion (sell signal)
+        if (buyRatio > 0.65) return "sell";
+        if (buyRatio < 0.35) return "buy";
+        return "neutral";
+    }
+
+    /**
+     * Calculate zone passive volume ratio for exhaustion analysis
+     */
+    private calculateZonePassiveRatio(
+        zoneData: StandardZoneData | undefined
+    ): number | null {
+        if (!zoneData) return null;
+
+        const allZones = [
+            ...zoneData.zones5Tick,
+            ...zoneData.zones10Tick,
+            ...zoneData.zones20Tick,
+        ];
+
+        let totalPassive = 0;
+        let totalAggressive = 0;
+
+        allZones.forEach((zone) => {
+            if (zone.passiveVolume !== undefined) {
+                totalPassive += zone.passiveVolume;
+            }
+            if (zone.aggressiveVolume !== undefined) {
+                totalAggressive += zone.aggressiveVolume;
+            }
+        });
+
+        const totalVolume = totalPassive + totalAggressive;
+        if (totalVolume === 0) return null;
+
+        return FinancialMath.divideQuantities(totalPassive, totalVolume);
+    }
+
+    /**
+     * Calculate average spread across zones
+     */
+    private calculateZoneSpread(
+        zoneData: StandardZoneData | undefined
+    ): number | null {
+        if (!zoneData) return null;
+
+        if (zoneData.zones5Tick.length < 2) return null;
+
+        const zones = zoneData.zones5Tick.slice(0, 10);
+        let totalSpread = 0;
+        let spreadCount = 0;
+
+        for (let i = 0; i < zones.length - 1; i++) {
+            const spread = Math.abs(zones[i + 1].priceLevel - zones[i].priceLevel);
+            totalSpread += spread;
+            spreadCount++;
+        }
+
+        return spreadCount > 0 ? FinancialMath.divideQuantities(totalSpread, spreadCount) : null;
+    }
+
+    /**
+     * Calculate volume imbalance across zones
+     */
+    private calculateZoneVolumeImbalance(
+        zoneData: StandardZoneData | undefined
+    ): number | null {
+        if (!zoneData) return null;
+
+        const allZones = [
+            ...zoneData.zones5Tick,
+            ...zoneData.zones10Tick,
+            ...zoneData.zones20Tick,
+        ];
+
+        let totalBuyVolume = 0;
+        let totalSellVolume = 0;
+
+        allZones.forEach((zone) => {
+            if (zone.aggressiveBuyVolume !== undefined) {
+                totalBuyVolume += zone.aggressiveBuyVolume;
+            }
+            if (zone.aggressiveSellVolume !== undefined) {
+                totalSellVolume += zone.aggressiveSellVolume;
+            }
+        });
+
+        const totalVolume = totalBuyVolume + totalSellVolume;
+        if (totalVolume === 0) return null;
+
+        const buyRatio = FinancialMath.divideQuantities(totalBuyVolume, totalVolume);
+        return Math.abs(buyRatio - 0.5);
     }
 
     /**

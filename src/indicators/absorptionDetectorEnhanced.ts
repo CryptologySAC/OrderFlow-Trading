@@ -37,6 +37,11 @@ import type {
     ZoneSnapshot,
     StandardZoneData,
 } from "../types/marketEvents.js";
+import type {
+    SignalCandidate,
+    AbsorptionSignalData,
+    SignalType,
+} from "../types/signalTypes.js";
 // Removed unused imports: z and AbsorptionDetectorSchema
 
 // ✅ CLAUDE.md COMPLIANCE: Use Config getter type for pre-validated settings
@@ -219,6 +224,13 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
                         confidenceBoost:
                             this.enhancementConfig.institutionalVolumeBoost,
                     }
+                );
+
+                // ✅ EMIT ENHANCED ABSORPTION SIGNAL - Independent of base detector
+                this.emitEnhancedAbsorptionSignal(
+                    event,
+                    institutionalResult,
+                    totalConfidenceBoost
                 );
             }
         }
@@ -991,6 +1003,292 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
 
         // Update metrics collector with enhancement data
         // Note: Enhancement metrics would be added to the metrics interface in future iterations
+    }
+
+    /**
+     * Emit enhanced absorption signal independently of base detector
+     *
+     * ABSORPTION PHASE 1: Independent signal emission for enhanced absorption detection
+     */
+    private emitEnhancedAbsorptionSignal(
+        event: EnrichedTradeEvent,
+        institutionalResult: {
+            hasInstitutionalPresence: boolean;
+            institutionalRatio: number;
+            volumeThreshold: number;
+        },
+        confidenceBoost: number
+    ): void {
+        // 🔧 CLAUDE.md COMPLIANCE: Only proceed with valid institutional ratio
+        if (institutionalResult.institutionalRatio <= 0) {
+            return;
+        }
+
+        // Calculate enhanced confidence without any defaults
+        const enhancedConfidence = institutionalResult.institutionalRatio + confidenceBoost;
+
+        // Only emit if enhanced confidence meets minimum threshold
+        if (enhancedConfidence < this.enhancementConfig.minEnhancedConfidenceThreshold) {
+            return;
+        }
+
+        // Determine signal side based on zone absorption analysis
+        const signalSide = this.determineAbsorptionSignalSide(event);
+        if (signalSide === "neutral") {
+            return;
+        }
+
+        // Calculate zone metrics - return early if any are null
+        const absorptionScore = this.calculateZoneAbsorptionScore(event.zoneData);
+        const passiveMultiplier = this.calculateZonePassiveMultiplier(event.zoneData);
+        const priceEfficiency = this.calculateZonePriceEfficiency(event.zoneData);
+
+        if (absorptionScore === null || passiveMultiplier === null || priceEfficiency === null) {
+            return;
+        }
+
+        // Create enhanced absorption result
+        const absorptionResult: AbsorptionSignalData = {
+            price: event.price,
+            side: signalSide,
+            absorptionScore,
+            confidence: enhancedConfidence,
+            passiveMultiplier,
+            priceEfficiency,
+            spreadImpact: this.calculateZoneSpreadImpact(event.zoneData),
+            volumeProfile: this.calculateZoneVolumeProfile(event.zoneData),
+            metadata: {
+                signalType: "institutional_absorption",
+                timestamp: event.timestamp,
+                institutionalRatio: institutionalResult.institutionalRatio,
+                enhancementType: "zone_based_absorption",
+                qualityMetrics: {
+                    absorptionStatisticalSignificance: enhancedConfidence,
+                    institutionalConfirmation: institutionalResult.hasInstitutionalPresence,
+                    signalPurity: enhancedConfidence > 0.7 ? "premium" : "standard",
+                },
+            },
+        };
+
+        // Create signal candidate
+        const signalCandidate: SignalCandidate = {
+            id: `enhanced-absorption-${event.timestamp}-${Math.random().toString(36).substring(7)}`,
+            type: "absorption" as SignalType,
+            side: signalSide,
+            confidence: enhancedConfidence,
+            timestamp: event.timestamp,
+            data: absorptionResult,
+        };
+
+        // ✅ EMIT ENHANCED ABSORPTION SIGNAL - Independent of base detector
+        this.emitSignalCandidate(signalCandidate);
+
+        this.logger.info(
+            "AbsorptionDetectorEnhanced: ENHANCED ABSORPTION SIGNAL EMITTED",
+            {
+                detectorId: this.getId(),
+                price: event.price,
+                side: signalSide,
+                confidence: enhancedConfidence,
+                institutionalRatio: institutionalResult.institutionalRatio,
+                absorptionScore,
+                signalId: signalCandidate.id,
+                signalType: "enhanced_absorption_institutional",
+            }
+        );
+    }
+
+    /**
+     * Determine absorption signal side based on zone volume analysis
+     */
+    private determineAbsorptionSignalSide(
+        event: EnrichedTradeEvent
+    ): "buy" | "sell" | "neutral" {
+        if (!event.zoneData) return "neutral";
+
+        const allZones = [
+            ...event.zoneData.zones5Tick,
+            ...event.zoneData.zones10Tick,
+            ...event.zoneData.zones20Tick,
+        ];
+
+        let totalBuyVolume = 0;
+        let totalSellVolume = 0;
+
+        allZones.forEach((zone) => {
+            if (zone.aggressiveBuyVolume !== undefined) {
+                totalBuyVolume += zone.aggressiveBuyVolume;
+            }
+            if (zone.aggressiveSellVolume !== undefined) {
+                totalSellVolume += zone.aggressiveSellVolume;
+            }
+        });
+
+        const totalVolume = totalBuyVolume + totalSellVolume;
+        if (totalVolume === 0) return "neutral";
+
+        const buyRatio = FinancialMath.divideQuantities(
+            totalBuyVolume,
+            totalVolume
+        );
+
+        // For absorption, high volume suggests absorption direction
+        if (buyRatio > 0.6) return "buy";   // Buy absorption
+        if (buyRatio < 0.4) return "sell";  // Sell absorption
+        return "neutral";
+    }
+
+    /**
+     * Calculate zone absorption score
+     */
+    private calculateZoneAbsorptionScore(
+        zoneData: StandardZoneData | undefined
+    ): number | null {
+        if (!zoneData) return null;
+
+        const allZones = [
+            ...zoneData.zones5Tick,
+            ...zoneData.zones10Tick,
+            ...zoneData.zones20Tick,
+        ];
+
+        if (allZones.length === 0) return null;
+
+        let totalAbsorption = 0;
+        let zoneCount = 0;
+
+        allZones.forEach((zone) => {
+            const aggressive = zone.aggressiveVolume;
+            const passive = zone.passiveVolume;
+            
+            if (aggressive !== undefined && passive !== undefined && passive > 0) {
+                const absorptionRatio = FinancialMath.divideQuantities(aggressive, passive);
+                totalAbsorption += Math.min(1.0, absorptionRatio);
+                zoneCount++;
+            }
+        });
+
+        return zoneCount > 0 ? FinancialMath.divideQuantities(totalAbsorption, zoneCount) : null;
+    }
+
+    /**
+     * Calculate zone passive multiplier
+     */
+    private calculateZonePassiveMultiplier(
+        zoneData: StandardZoneData | undefined
+    ): number | null {
+        if (!zoneData) return null;
+
+        const allZones = [
+            ...zoneData.zones5Tick,
+            ...zoneData.zones10Tick,
+            ...zoneData.zones20Tick,
+        ];
+
+        let totalPassive = 0;
+        let totalAggressive = 0;
+
+        allZones.forEach((zone) => {
+            if (zone.passiveVolume !== undefined) {
+                totalPassive += zone.passiveVolume;
+            }
+            if (zone.aggressiveVolume !== undefined) {
+                totalAggressive += zone.aggressiveVolume;
+            }
+        });
+
+        if (totalAggressive === 0) return null;
+
+        return FinancialMath.divideQuantities(totalPassive, totalAggressive);
+    }
+
+    /**
+     * Calculate zone price efficiency
+     */
+    private calculateZonePriceEfficiency(
+        zoneData: StandardZoneData | undefined
+    ): number | null {
+        if (!zoneData) return null;
+
+        const zones = zoneData.zones5Tick;
+        if (zones.length < 2) return null;
+
+        let totalEfficiency = 0;
+        let efficiencyCount = 0;
+
+        for (let i = 0; i < zones.length - 1; i++) {
+            const volume1 = zones[i].aggressiveVolume;
+            const volume2 = zones[i + 1].aggressiveVolume;
+            
+            if (volume1 !== undefined && volume2 !== undefined && volume1 > 0 && volume2 > 0) {
+                const priceMove = Math.abs(zones[i + 1].priceLevel - zones[i].priceLevel);
+                const volumeRatio = FinancialMath.divideQuantities(Math.max(volume1, volume2), Math.min(volume1, volume2));
+                
+                if (priceMove > 0) {
+                    const efficiency = FinancialMath.divideQuantities(volumeRatio, priceMove * 100);
+                    totalEfficiency += efficiency;
+                    efficiencyCount++;
+                }
+            }
+        }
+
+        return efficiencyCount > 0 ? FinancialMath.divideQuantities(totalEfficiency, efficiencyCount) : null;
+    }
+
+    /**
+     * Calculate zone spread impact
+     */
+    private calculateZoneSpreadImpact(
+        zoneData: StandardZoneData | undefined
+    ): number {
+        if (!zoneData) return 0;
+
+        const zones = zoneData.zones5Tick.slice(0, 5);
+        if (zones.length < 2) return 0;
+
+        let totalSpread = 0;
+        let spreadCount = 0;
+
+        for (let i = 0; i < zones.length - 1; i++) {
+            const spread = Math.abs(zones[i + 1].priceLevel - zones[i].priceLevel);
+            totalSpread += spread;
+            spreadCount++;
+        }
+
+        return spreadCount > 0 ? FinancialMath.divideQuantities(totalSpread, spreadCount) : 0;
+    }
+
+    /**
+     * Calculate zone volume profile
+     */
+    private calculateZoneVolumeProfile(
+        zoneData: StandardZoneData | undefined
+    ): { aggressive: number; passive: number; total: number } {
+        if (!zoneData) return { aggressive: 0, passive: 0, total: 0 };
+
+        const allZones = [
+            ...zoneData.zones5Tick,
+            ...zoneData.zones10Tick,
+            ...zoneData.zones20Tick,
+        ];
+
+        let totalAggressive = 0;
+        let totalPassive = 0;
+
+        allZones.forEach((zone) => {
+            if (zone.aggressiveVolume !== undefined) {
+                totalAggressive += zone.aggressiveVolume;
+            }
+            if (zone.passiveVolume !== undefined) {
+                totalPassive += zone.passiveVolume;
+            }
+        });
+
+        return {
+            aggressive: totalAggressive,
+            passive: totalPassive,
+            total: totalAggressive + totalPassive,
+        };
     }
 
     /**
