@@ -1025,10 +1025,14 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         }
 
         // Calculate enhanced confidence without any defaults
-        const enhancedConfidence = institutionalResult.institutionalRatio + confidenceBoost;
+        const enhancedConfidence =
+            institutionalResult.institutionalRatio + confidenceBoost;
 
         // Only emit if enhanced confidence meets minimum threshold
-        if (enhancedConfidence < this.enhancementConfig.minEnhancedConfidenceThreshold) {
+        if (
+            enhancedConfidence <
+            this.enhancementConfig.minEnhancedConfidenceThreshold
+        ) {
             return;
         }
 
@@ -1039,11 +1043,21 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         }
 
         // Calculate zone metrics - return early if any are null
-        const absorptionScore = this.calculateZoneAbsorptionScore(event.zoneData);
-        const passiveMultiplier = this.calculateZonePassiveMultiplier(event.zoneData);
-        const priceEfficiency = this.calculateZonePriceEfficiency(event.zoneData);
+        const absorptionScore = this.calculateZoneAbsorptionScore(
+            event.zoneData
+        );
+        const passiveMultiplier = this.calculateZonePassiveMultiplier(
+            event.zoneData
+        );
+        const priceEfficiency = this.calculateZonePriceEfficiency(
+            event.zoneData
+        );
 
-        if (absorptionScore === null || passiveMultiplier === null || priceEfficiency === null) {
+        if (
+            absorptionScore === null ||
+            passiveMultiplier === null ||
+            priceEfficiency === null
+        ) {
             return;
         }
 
@@ -1064,8 +1078,10 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
                 enhancementType: "zone_based_absorption",
                 qualityMetrics: {
                     absorptionStatisticalSignificance: enhancedConfidence,
-                    institutionalConfirmation: institutionalResult.hasInstitutionalPresence,
-                    signalPurity: enhancedConfidence > 0.7 ? "premium" : "standard",
+                    institutionalConfirmation:
+                        institutionalResult.hasInstitutionalPresence,
+                    signalPurity:
+                        enhancedConfidence > 0.7 ? "premium" : "standard",
                 },
             },
         };
@@ -1133,8 +1149,8 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         );
 
         // For absorption, high volume suggests absorption direction
-        if (buyRatio > 0.6) return "buy";   // Buy absorption
-        if (buyRatio < 0.4) return "sell";  // Sell absorption
+        if (buyRatio > 0.6) return "buy"; // Buy absorption
+        if (buyRatio < 0.4) return "sell"; // Sell absorption
         return "neutral";
     }
 
@@ -1160,15 +1176,24 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         allZones.forEach((zone) => {
             const aggressive = zone.aggressiveVolume;
             const passive = zone.passiveVolume;
-            
-            if (aggressive !== undefined && passive !== undefined && passive > 0) {
-                const absorptionRatio = FinancialMath.divideQuantities(aggressive, passive);
+
+            if (
+                aggressive !== undefined &&
+                passive !== undefined &&
+                passive > 0
+            ) {
+                const absorptionRatio = FinancialMath.divideQuantities(
+                    aggressive,
+                    passive
+                );
                 totalAbsorption += Math.min(1.0, absorptionRatio);
                 zoneCount++;
             }
         });
 
-        return zoneCount > 0 ? FinancialMath.divideQuantities(totalAbsorption, zoneCount) : null;
+        return zoneCount > 0
+            ? FinancialMath.divideQuantities(totalAbsorption, zoneCount)
+            : null;
     }
 
     /**
@@ -1219,20 +1244,35 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         for (let i = 0; i < zones.length - 1; i++) {
             const volume1 = zones[i].aggressiveVolume;
             const volume2 = zones[i + 1].aggressiveVolume;
-            
-            if (volume1 !== undefined && volume2 !== undefined && volume1 > 0 && volume2 > 0) {
-                const priceMove = Math.abs(zones[i + 1].priceLevel - zones[i].priceLevel);
-                const volumeRatio = FinancialMath.divideQuantities(Math.max(volume1, volume2), Math.min(volume1, volume2));
-                
+
+            if (
+                volume1 !== undefined &&
+                volume2 !== undefined &&
+                volume1 > 0 &&
+                volume2 > 0
+            ) {
+                const priceMove = Math.abs(
+                    zones[i + 1].priceLevel - zones[i].priceLevel
+                );
+                const volumeRatio = FinancialMath.divideQuantities(
+                    Math.max(volume1, volume2),
+                    Math.min(volume1, volume2)
+                );
+
                 if (priceMove > 0) {
-                    const efficiency = FinancialMath.divideQuantities(volumeRatio, priceMove * 100);
+                    const efficiency = FinancialMath.divideQuantities(
+                        volumeRatio,
+                        priceMove * 100
+                    );
                     totalEfficiency += efficiency;
                     efficiencyCount++;
                 }
             }
         }
 
-        return efficiencyCount > 0 ? FinancialMath.divideQuantities(totalEfficiency, efficiencyCount) : null;
+        return efficiencyCount > 0
+            ? FinancialMath.divideQuantities(totalEfficiency, efficiencyCount)
+            : null;
     }
 
     /**
@@ -1250,12 +1290,16 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         let spreadCount = 0;
 
         for (let i = 0; i < zones.length - 1; i++) {
-            const spread = Math.abs(zones[i + 1].priceLevel - zones[i].priceLevel);
+            const spread = Math.abs(
+                zones[i + 1].priceLevel - zones[i].priceLevel
+            );
             totalSpread += spread;
             spreadCount++;
         }
 
-        return spreadCount > 0 ? FinancialMath.divideQuantities(totalSpread, spreadCount) : 0;
+        return spreadCount > 0
+            ? FinancialMath.divideQuantities(totalSpread, spreadCount)
+            : 0;
     }
 
     /**

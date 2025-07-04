@@ -606,10 +606,14 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
         }
 
         // Calculate enhanced confidence without any defaults
-        const enhancedConfidence = depletionResult.depletionRatio + confidenceBoost;
+        const enhancedConfidence =
+            depletionResult.depletionRatio + confidenceBoost;
 
         // Only emit if enhanced confidence meets minimum threshold
-        if (enhancedConfidence < this.enhancementConfig.minEnhancedConfidenceThreshold) {
+        if (
+            enhancedConfidence <
+            this.enhancementConfig.minEnhancedConfidenceThreshold
+        ) {
             return;
         }
 
@@ -620,11 +624,19 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
         }
 
         // Calculate zone metrics - return early if any are null
-        const passiveVolumeRatio = this.calculateZonePassiveRatio(event.zoneData);
+        const passiveVolumeRatio = this.calculateZonePassiveRatio(
+            event.zoneData
+        );
         const avgSpread = this.calculateZoneSpread(event.zoneData);
-        const volumeImbalance = this.calculateZoneVolumeImbalance(event.zoneData);
+        const volumeImbalance = this.calculateZoneVolumeImbalance(
+            event.zoneData
+        );
 
-        if (passiveVolumeRatio === null || avgSpread === null || volumeImbalance === null) {
+        if (
+            passiveVolumeRatio === null ||
+            avgSpread === null ||
+            volumeImbalance === null
+        ) {
             return;
         }
 
@@ -646,7 +658,8 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
                 qualityMetrics: {
                     exhaustionStatisticalSignificance: enhancedConfidence,
                     depletionConfirmation: depletionResult.affectedZones >= 2,
-                    signalPurity: enhancedConfidence > 0.7 ? "premium" : "standard",
+                    signalPurity:
+                        enhancedConfidence > 0.7 ? "premium" : "standard",
                 },
             },
         };
@@ -766,12 +779,16 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
         let spreadCount = 0;
 
         for (let i = 0; i < zones.length - 1; i++) {
-            const spread = Math.abs(zones[i + 1].priceLevel - zones[i].priceLevel);
+            const spread = Math.abs(
+                zones[i + 1].priceLevel - zones[i].priceLevel
+            );
             totalSpread += spread;
             spreadCount++;
         }
 
-        return spreadCount > 0 ? FinancialMath.divideQuantities(totalSpread, spreadCount) : null;
+        return spreadCount > 0
+            ? FinancialMath.divideQuantities(totalSpread, spreadCount)
+            : null;
     }
 
     /**
@@ -803,7 +820,10 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
         const totalVolume = totalBuyVolume + totalSellVolume;
         if (totalVolume === 0) return null;
 
-        const buyRatio = FinancialMath.divideQuantities(totalBuyVolume, totalVolume);
+        const buyRatio = FinancialMath.divideQuantities(
+            totalBuyVolume,
+            totalVolume
+        );
         return Math.abs(buyRatio - 0.5);
     }
 

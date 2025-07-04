@@ -27,6 +27,13 @@ import type {
     StandardZoneData,
     ZoneSnapshot,
 } from "../types/marketEvents.js";
+import type {
+    SignalCandidate,
+    EnhancedDistributionSignalData,
+    SignalType,
+    DistributionConditions,
+    DistributionMarketRegime,
+} from "../types/signalTypes.js";
 import { Config } from "../core/config.js";
 import { z } from "zod";
 import { DistributionDetectorSchema } from "../core/config.js";
@@ -264,6 +271,9 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
 
             // Store enhanced distribution metrics for monitoring
             this.storeEnhancedDistributionMetrics(event, totalConfidenceBoost);
+
+            // ✅ EMIT ENHANCED DISTRIBUTION SIGNAL - Independent of base detector
+            this.emitEnhancedDistributionSignal(event, totalConfidenceBoost);
         }
     }
 
@@ -578,6 +588,260 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
      */
     public getEnhancementStats(): DistributionEnhancementStats {
         return { ...this.enhancementStats };
+    }
+
+    /**
+     * Emit enhanced distribution signal independently
+     *
+     * DISTRIBUTION PHASE 1: Independent signal emission for enhanced distribution detection
+     */
+    private emitEnhancedDistributionSignal(
+        event: EnrichedTradeEvent,
+        confidenceBoost: number
+    ): void {
+        // Only emit signals when enhancement is meaningful
+        if (
+            confidenceBoost < this.enhancementConfig.minConfidenceBoostThreshold
+        ) {
+            return;
+        }
+
+        // Calculate enhanced distribution confidence
+        if (!this.enhancementConfig.baseConfidenceRequired) {
+            return; // Cannot proceed without valid base confidence
+        }
+        const baseConfidence: number =
+            this.enhancementConfig.baseConfidenceRequired;
+        const enhancedConfidence = Math.min(
+            1.0,
+            FinancialMath.addAmounts(baseConfidence, confidenceBoost, 8)
+        );
+
+        // Only emit high-quality enhanced signals
+        if (
+            enhancedConfidence < this.enhancementConfig.finalConfidenceRequired
+        ) {
+            return;
+        }
+
+        // Determine signal side based on distribution analysis
+        const signalSide = this.determineDistributionSignalSide(event);
+        if (signalSide === "neutral") {
+            return;
+        }
+
+        // Calculate distribution metrics
+        const distributionMetrics = this.calculateDistributionMetrics(event);
+        if (distributionMetrics === null) {
+            return;
+        }
+
+        // Create enhanced distribution signal data
+        const distributionResult: EnhancedDistributionSignalData = {
+            duration: distributionMetrics.duration,
+            zone: distributionMetrics.zone,
+            ratio: distributionMetrics.sellRatio,
+            sellRatio: distributionMetrics.sellRatio,
+            strength: distributionMetrics.strength,
+            isDistributing: true,
+            price: event.price,
+            side: signalSide,
+            confidence: enhancedConfidence,
+            metadata: {
+                distributionScore: distributionMetrics.strength,
+                conditions: distributionMetrics.conditions,
+                marketRegime: distributionMetrics.marketRegime,
+                statisticalSignificance: enhancedConfidence,
+                volumeConcentration: distributionMetrics.volumeConcentration,
+                detectorVersion: "enhanced_v1",
+            },
+        };
+
+        // Create signal candidate
+        const signalCandidate: SignalCandidate = {
+            id: `enhanced-distribution-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+            type: "distribution" as SignalType,
+            side: signalSide,
+            confidence: enhancedConfidence,
+            timestamp: Date.now(),
+            data: distributionResult,
+        };
+
+        // ✅ EMIT ENHANCED DISTRIBUTION SIGNAL - Independent of base detector
+        this.emit("signal", signalCandidate);
+
+        this.logger.info(
+            "DistributionDetectorEnhanced: ENHANCED DISTRIBUTION SIGNAL EMITTED",
+            {
+                detectorId: this.getId(),
+                price: event.price,
+                side: signalSide,
+                confidence: enhancedConfidence,
+                confidenceBoost,
+                strength: distributionMetrics.strength,
+                sellRatio: distributionMetrics.sellRatio,
+                signalId: signalCandidate.id,
+                signalType: "enhanced_distribution_zone",
+            }
+        );
+    }
+
+    /**
+     * Determine distribution signal side based on market conditions
+     */
+    private determineDistributionSignalSide(
+        event: EnrichedTradeEvent
+    ): "buy" | "sell" | "neutral" {
+        if (!event.zoneData) {
+            return "neutral";
+        }
+
+        // For distribution, we expect institutions to be selling (distributing)
+        // This creates selling pressure, so we might see sell signals
+        const allZones = [
+            ...event.zoneData.zones5Tick,
+            ...event.zoneData.zones10Tick,
+            ...event.zoneData.zones20Tick,
+        ];
+
+        const relevantZones = this.findZonesNearPrice(allZones, event.price, 5);
+        if (relevantZones.length === 0) {
+            return "neutral";
+        }
+
+        let totalSellVolume = 0;
+        let totalBuyVolume = 0;
+
+        relevantZones.forEach((zone) => {
+            totalSellVolume += zone.aggressiveSellVolume;
+            totalBuyVolume += zone.aggressiveBuyVolume;
+        });
+
+        const totalVolume = totalSellVolume + totalBuyVolume;
+        if (totalVolume === 0) {
+            return "neutral";
+        }
+
+        const sellRatio = FinancialMath.divideQuantities(
+            totalSellVolume,
+            totalVolume
+        );
+        const distributionThreshold =
+            this.enhancementConfig.sellingPressureRatioThreshold;
+
+        // If selling pressure is high, this suggests distribution pattern
+        if (sellRatio >= distributionThreshold) {
+            return "sell"; // Distribution creates bearish pressure
+        }
+
+        return "neutral";
+    }
+
+    /**
+     * Calculate distribution metrics for signal data
+     */
+    private calculateDistributionMetrics(event: EnrichedTradeEvent): {
+        duration: number;
+        zone: number;
+        sellRatio: number;
+        strength: number;
+        conditions: DistributionConditions;
+        marketRegime: DistributionMarketRegime;
+        volumeConcentration: number;
+    } | null {
+        if (!event.zoneData) {
+            return null;
+        }
+
+        const allZones = [
+            ...event.zoneData.zones5Tick,
+            ...event.zoneData.zones10Tick,
+            ...event.zoneData.zones20Tick,
+        ];
+
+        const relevantZones = this.findZonesNearPrice(allZones, event.price, 5);
+        if (relevantZones.length === 0) {
+            return null;
+        }
+
+        let totalSellVolume = 0;
+        let totalVolume = 0;
+        let totalPassiveVolume = 0;
+
+        relevantZones.forEach((zone) => {
+            totalSellVolume += zone.aggressiveSellVolume;
+            totalVolume += zone.aggressiveVolume;
+            totalPassiveVolume += zone.passiveVolume;
+        });
+
+        if (totalVolume === 0) {
+            return null;
+        }
+
+        const sellRatio = FinancialMath.divideQuantities(
+            totalSellVolume,
+            totalVolume
+        );
+        const strength = Math.min(1.0, sellRatio * 1.5); // Boost strength for high sell ratios
+
+        // Calculate duration (simplified for now)
+        const duration = 60000; // 1 minute default
+
+        // Calculate zone (price level)
+        const zone = Math.round(event.price);
+
+        // Volume concentration
+        const volumeConcentration =
+            relevantZones.length > 0
+                ? FinancialMath.divideQuantities(
+                      totalVolume,
+                      relevantZones.length
+                  )
+                : 0;
+
+        // Calculate distribution-specific metrics
+        const sellingPressure = sellRatio;
+        const priceResistance = Math.min(1.0, strength * 1.2);
+        const distributionEfficiency = FinancialMath.divideQuantities(
+            totalSellVolume,
+            Math.max(1, totalPassiveVolume)
+        );
+
+        return {
+            duration,
+            zone,
+            sellRatio,
+            strength,
+            conditions: {
+                sellRatio,
+                duration,
+                aggressiveVolume: totalVolume,
+                passiveVolume: totalPassiveVolume,
+                totalVolume: totalVolume + totalPassiveVolume,
+                strength,
+                sellingPressure,
+                priceResistance,
+                volumeConcentration,
+                recentActivity: 1,
+                tradeCount: relevantZones.length,
+                meetsMinDuration: true,
+                meetsMinRatio:
+                    sellRatio >=
+                    this.enhancementConfig.sellingPressureRatioThreshold,
+                isRecentlyActive: true,
+                dominantSide: "sell" as const,
+                sideConfidence: sellRatio,
+                distributionEfficiency,
+            },
+            marketRegime: {
+                volatility: 0.1,
+                baselineVolatility: 0.08,
+                distributionPressure: sellingPressure,
+                resistanceStrength: priceResistance,
+                lastUpdate: Date.now(),
+            },
+            volumeConcentration,
+        };
     }
 
     /**

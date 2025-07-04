@@ -30,6 +30,11 @@ import type {
     ZoneSignal,
     TradingZone,
 } from "../types/zoneTypes.js";
+import type {
+    SignalCandidate,
+    AccumulationResult,
+    SignalType,
+} from "../types/signalTypes.js";
 import { Config } from "../core/config.js";
 import { z } from "zod";
 import { AccumulationDetectorSchema } from "../core/config.js";
@@ -403,6 +408,9 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             this.metricsCollector.incrementMetric("signalsGenerated");
         }
 
+        // ✅ EMIT ENHANCED ACCUMULATION SIGNALS - Independent of zone detector signals
+        this.emitEnhancedAccumulationSignals(enhancedResult, enhancement);
+
         return enhancedResult;
     }
 
@@ -539,6 +547,163 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             // In a real implementation, this would need to be handled differently
             // For now, this method serves as a placeholder for the API design
         }
+    }
+
+    /**
+     * Emit enhanced accumulation signals independently
+     *
+     * ACCUMULATION PHASE 1: Independent signal emission for enhanced accumulation detection
+     */
+    private emitEnhancedAccumulationSignals(
+        enhancedResult: ZoneAnalysisResult,
+        enhancement: StandardizedZoneAnalysisResult
+    ): void {
+        // Only emit signals when enhancement is meaningful
+        if (
+            enhancement.recommendedAction === "neutral" ||
+            enhancedResult.signals.length === 0
+        ) {
+            return;
+        }
+
+        enhancedResult.signals.forEach((zoneSignal) => {
+            // Only emit high-quality enhanced signals
+            if (zoneSignal.confidence < this.minEnhancedConfidenceThreshold) {
+                return;
+            }
+
+            // Determine signal side based on zone signal
+            const signalSide = this.determineAccumulationSignalSide(zoneSignal);
+            if (signalSide === "neutral") {
+                return;
+            }
+
+            // Calculate zone metrics for signal data
+            const accumulation = this.calculateAccumulationMetrics(
+                zoneSignal.zone
+            );
+            if (accumulation === null) {
+                return;
+            }
+
+            // Create enhanced accumulation signal data
+            const accumulationResult: AccumulationResult = {
+                price: zoneSignal.zone.priceRange.center,
+                side: signalSide,
+                isAccumulating: true,
+                strength: zoneSignal.zone.strength,
+                duration: Date.now() - zoneSignal.zone.startTime,
+                zone: Math.round(zoneSignal.zone.priceRange.center),
+                ratio: accumulation.accumRatio,
+                confidence: zoneSignal.confidence,
+                metadata: {
+                    signalType: "zone_accumulation",
+                    timestamp: Date.now(),
+                    zoneId: zoneSignal.zone.id,
+                    enhancementType: "standardized_zone_accumulation",
+                    volume: accumulation.totalVolume,
+                    qualityMetrics: {
+                        accumulationStatisticalSignificance:
+                            zoneSignal.confidence,
+                        zoneCompletionLevel: zoneSignal.zone.completion,
+                        signalPurity:
+                            zoneSignal.confidence > 0.7
+                                ? "premium"
+                                : "standard",
+                    },
+                },
+            };
+
+            // Create signal candidate
+            const signalCandidate: SignalCandidate = {
+                id: `enhanced-accumulation-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+                type: "accumulation" as SignalType,
+                side: signalSide,
+                confidence: zoneSignal.confidence,
+                timestamp: Date.now(),
+                data: accumulationResult,
+            };
+
+            // ✅ EMIT ENHANCED ACCUMULATION SIGNAL - Independent of zone detector
+            this.emitSignalCandidate(signalCandidate);
+
+            this.logger.info(
+                "AccumulationZoneDetectorEnhanced: ENHANCED ACCUMULATION SIGNAL EMITTED",
+                {
+                    detectorId: this.getId(),
+                    price: accumulationResult.price,
+                    side: signalSide,
+                    confidence: zoneSignal.confidence,
+                    strength: zoneSignal.zone.strength,
+                    duration: accumulationResult.duration,
+                    signalId: signalCandidate.id,
+                    signalType: "enhanced_accumulation_zone",
+                }
+            );
+        });
+    }
+
+    /**
+     * Determine accumulation signal side based on zone signal
+     */
+    private determineAccumulationSignalSide(
+        zoneSignal: ZoneSignal
+    ): "buy" | "sell" | "neutral" {
+        // For accumulation zones, we expect buy signals during accumulation
+        if (
+            zoneSignal.actionType === "enter" &&
+            zoneSignal.zone.type === "accumulation"
+        ) {
+            return "buy";
+        }
+
+        // Zone completion might suggest accumulation finished
+        if (
+            zoneSignal.signalType === "zone_completion" &&
+            zoneSignal.zone.type === "accumulation"
+        ) {
+            return "buy";
+        }
+
+        return "neutral";
+    }
+
+    /**
+     * Calculate accumulation metrics for zone
+     */
+    private calculateAccumulationMetrics(
+        zone: TradingZone
+    ): { totalVolume: number; accumRatio: number } | null {
+        if (!zone.volume) {
+            return null;
+        }
+
+        const { total, buy: buyVol, sell: sellVol } = zone.volume;
+
+        if (
+            !total ||
+            total === 0 ||
+            buyVol === undefined ||
+            sellVol === undefined
+        ) {
+            return null;
+        }
+
+        // Explicit type assertions after null checks
+        const totalVolume: number = total;
+        const buyVolume: number = buyVol;
+        // sellVolume not used in accumulation ratio calculation
+
+        // For accumulation, we expect more buying than selling
+        const accumRatio =
+            totalVolume > 0
+                ? FinancialMath.divideQuantities(buyVolume, totalVolume)
+                : 0;
+
+        return {
+            totalVolume,
+            accumRatio,
+        };
     }
 
     /**

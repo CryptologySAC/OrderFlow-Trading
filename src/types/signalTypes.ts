@@ -7,6 +7,7 @@ export type DetectorResultType =
     | TradingSignalData
     | DeltaCVDConfirmationResult
     | DistributionResult
+    | EnhancedDistributionSignalData
     | SwingSignalData
     | FlowSignalData;
 
@@ -328,6 +329,61 @@ export interface DistributionResult {
     };
 
     priceWeakness?: number;
+}
+
+export interface DistributionConditions {
+    // Core distribution metrics
+    sellRatio: number;
+    duration: number;
+    aggressiveVolume: number;
+    passiveVolume: number;
+    totalVolume: number;
+
+    // Distribution analytics
+    strength: number;
+    sellingPressure: number;
+    priceResistance: number;
+    volumeConcentration: number;
+
+    // Timing and validation
+    recentActivity: number;
+    tradeCount: number;
+    meetsMinDuration: boolean;
+    meetsMinRatio: boolean;
+    isRecentlyActive: boolean;
+
+    // Distribution characteristics
+    dominantSide: "sell";
+    sideConfidence: number;
+    distributionEfficiency: number;
+}
+
+export interface DistributionMarketRegime {
+    volatility: number;
+    baselineVolatility: number;
+    distributionPressure: number;
+    resistanceStrength: number;
+    lastUpdate: number;
+}
+
+export interface EnhancedDistributionSignalData {
+    duration: number;
+    zone: number;
+    ratio: number;
+    sellRatio: number;
+    strength: number;
+    isDistributing: boolean;
+    price: number;
+    side: "sell" | "buy";
+    confidence: number;
+    metadata: {
+        distributionScore: number;
+        conditions: DistributionConditions;
+        marketRegime: DistributionMarketRegime;
+        statisticalSignificance: number;
+        volumeConcentration: number;
+        detectorVersion: string;
+    };
 }
 
 export type MarketRegime = {

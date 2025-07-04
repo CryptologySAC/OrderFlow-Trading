@@ -403,7 +403,7 @@
             },
             "deltaCvdConfirmation": {
                 "windowsSec": [60, 300],
-                "minZ": 0.12,
+                "minZ": 0.5,
                 "priceCorrelationWeight": 0.3,
                 "volumeConcentrationWeight": 0.2,
                 "adaptiveThresholdMultiplier": 0.6,
