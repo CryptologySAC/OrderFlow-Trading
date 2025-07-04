@@ -32,6 +32,7 @@ import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterf
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
 import { IOrderBookState } from "../market/orderBookState.js";
+import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
 import type {
     EnrichedTradeEvent,
     ZoneSnapshot,
@@ -69,6 +70,7 @@ export interface AbsorptionEnhancementStats {
 export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
     private readonly useStandardizedZones: boolean;
     private readonly enhancementConfig: typeof Config.ABSORPTION_DETECTOR;
+    private readonly preprocessor: IOrderflowPreprocessor;
 
     // Enhancement statistics and monitoring
     private enhancementStats: AbsorptionEnhancementStats = {
@@ -90,6 +92,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         id: string,
         settings: typeof Config.ABSORPTION_DETECTOR, // Pre-validated by Zod
         orderBook: IOrderBookState,
+        preprocessor: IOrderflowPreprocessor,
         logger: ILogger,
         spoofingDetector: SpoofingDetector,
         metricsCollector: IMetricsCollector,
@@ -113,6 +116,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         // Configure standardized zone enhancement
         this.useStandardizedZones = settings.useStandardizedZones;
         this.enhancementConfig = settings;
+        this.preprocessor = preprocessor;
 
         // Update enhancement statistics
         this.enhancementStats.enabled = this.useStandardizedZones;
@@ -310,18 +314,18 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         const maxDistance =
             Config.UNIVERSAL_ZONE_CONFIG.maxZoneConfluenceDistance;
 
-        // Multi-timeframe analysis with priority weighting
-        const tick5Zones = this.findZonesNearPrice(
+        // Multi-timeframe analysis with priority weighting - using universal zone service
+        const tick5Zones = this.preprocessor.findZonesNearPrice(
             zoneData.zones5Tick,
             price,
             maxDistance
         );
-        const tick10Zones = this.findZonesNearPrice(
+        const tick10Zones = this.preprocessor.findZonesNearPrice(
             zoneData.zones10Tick,
             price,
             maxDistance
         );
-        const tick20Zones = this.findZonesNearPrice(
+        const tick20Zones = this.preprocessor.findZonesNearPrice(
             zoneData.zones20Tick,
             price,
             maxDistance
@@ -410,90 +414,11 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         };
     }
 
-    /**
-     * Find zones near a specific price within distance threshold
-     */
-    private findZonesNearPrice(
-        zones: ZoneSnapshot[],
-        price: number,
-        maxDistanceTicks: number
-    ): ZoneSnapshot[] {
-        const maxDistance = FinancialMath.multiplyQuantities(
-            maxDistanceTicks,
-            Config.TICK_SIZE
-        );
+    // ✅ REMOVED: Duplicate zone analysis method - now using preprocessor.findZonesNearPrice()
 
-        return zones.filter((zone) => {
-            const distance = FinancialMath.calculateSpread(
-                zone.priceLevel,
-                price,
-                8
-            );
-            return distance <= maxDistance;
-        });
-    }
+    // ✅ REMOVED: Duplicate zone analysis method - now using preprocessor.findMostRelevantZone()
 
-    /**
-     * Find the most relevant zone for absorption signal
-     */
-    private findMostRelevantZone(
-        zoneData: StandardZoneData,
-        price: number
-    ): ZoneSnapshot | null {
-        // Combine all zones from different timeframes
-        const allZones = [
-            ...zoneData.zones5Tick,
-            ...zoneData.zones10Tick,
-            ...zoneData.zones20Tick,
-        ];
-
-        if (allZones.length === 0) {
-            return null;
-        }
-
-        // Find zones near the current price (within 5 ticks)
-        const relevantZones = this.findZonesNearPrice(allZones, price, 5);
-        if (relevantZones.length === 0) {
-            return null;
-        }
-
-        // Select the zone with the highest absorption potential
-        // (combination of volume and proximity to price)
-        let bestZone = relevantZones[0];
-        let bestScore = this.calculateZoneRelevanceScore(bestZone, price);
-
-        for (const zone of relevantZones.slice(1)) {
-            const score = this.calculateZoneRelevanceScore(zone, price);
-            if (score > bestScore) {
-                bestScore = score;
-                bestZone = zone;
-            }
-        }
-
-        return bestZone;
-    }
-
-    /**
-     * Calculate zone relevance score for zone selection
-     */
-    private calculateZoneRelevanceScore(
-        zone: ZoneSnapshot,
-        price: number
-    ): number {
-        const totalVolume = zone.aggressiveVolume + zone.passiveVolume;
-        const distance = FinancialMath.calculateSpread(
-            zone.priceLevel,
-            price,
-            8
-        );
-        const proximityScore = Math.max(0, 1 - distance / 0.05); // Closer is better
-        const volumeScore = Math.min(1, totalVolume / 100); // Higher volume is better
-
-        return FinancialMath.multiplyQuantities(
-            FinancialMath.addAmounts(proximityScore, volumeScore, 8),
-            0.5
-        );
-    }
+    // ✅ REMOVED: Duplicate zone analysis method - now using preprocessor.calculateZoneRelevanceScore()
 
     /**
      * Calculate timeframe-specific confluence strength with volume weighting

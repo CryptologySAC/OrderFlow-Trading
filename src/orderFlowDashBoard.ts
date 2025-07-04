@@ -27,7 +27,10 @@ import {
 import { ThreadManager } from "./multithreading/threadManager.js";
 
 // Service imports
-import { DetectorFactory } from "./utils/detectorFactory.js";
+import {
+    DetectorFactory,
+    type DetectorDependencies,
+} from "./utils/detectorFactory.js";
 import type {
     EnrichedTradeEvent,
     OrderBookSnapshot,
@@ -332,12 +335,21 @@ export class OrderFlowDashboard {
     private initializeDetectors(dependencies: Dependencies): void {
         this.logger.info("[OrderFlowDashboard] Initializing detectors...");
 
-        DetectorFactory.initialize(dependencies);
+        // Create DetectorDependencies with preprocessor for enhanced detectors
+        const detectorDependencies: DetectorDependencies = {
+            logger: dependencies.logger,
+            spoofingDetector: dependencies.spoofingDetector,
+            metricsCollector: dependencies.metricsCollector,
+            signalLogger: dependencies.signalLogger,
+            preprocessor: this.preprocessor,
+        };
+
+        DetectorFactory.initialize(detectorDependencies);
 
         // Absorption Detector - REQUIRES orderBook
         this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
             this.orderBook, // Now guaranteed to be initialized
-            dependencies,
+            detectorDependencies,
             { id: "ltcusdt-absorption-main" }
         );
         this.signalCoordinator.registerDetector(
@@ -349,7 +361,7 @@ export class OrderFlowDashboard {
 
         // Exhaustion Detector
         this.exhaustionDetector = DetectorFactory.createExhaustionDetector(
-            dependencies,
+            detectorDependencies,
             { id: "ltcusdt-exhaustion-main" }
         );
         this.signalCoordinator.registerDetector(
@@ -361,9 +373,12 @@ export class OrderFlowDashboard {
 
         // Delta CVD Confirmation Detector
         this.deltaCVDConfirmation =
-            DetectorFactory.createDeltaCVDConfirmationDetector(dependencies, {
-                id: "ltcusdt-cvdConfirmation-main",
-            });
+            DetectorFactory.createDeltaCVDConfirmationDetector(
+                detectorDependencies,
+                {
+                    id: "ltcusdt-cvdConfirmation-main",
+                }
+            );
         this.signalCoordinator.registerDetector(
             this.deltaCVDConfirmation,
             ["cvd_confirmation"],
@@ -387,7 +402,7 @@ export class OrderFlowDashboard {
 
         // Accumulation Zone Detector
         this.accumulationZoneDetector =
-            DetectorFactory.createAccumulationDetector(dependencies, {
+            DetectorFactory.createAccumulationDetector(detectorDependencies, {
                 id: "ltcusdt-accumulation-zone-main",
             });
         this.signalCoordinator.registerDetector(
@@ -399,7 +414,7 @@ export class OrderFlowDashboard {
 
         // Distribution Zone Detector
         this.distributionZoneDetector =
-            DetectorFactory.createDistributionDetector(dependencies, {
+            DetectorFactory.createDistributionDetector(detectorDependencies, {
                 id: "ltcusdt-distribution-zone-main",
             });
         this.signalCoordinator.registerDetector(

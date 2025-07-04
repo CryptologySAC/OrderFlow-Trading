@@ -29,6 +29,7 @@ import { AccumulationZoneDetectorEnhanced } from "../indicators/accumulationZone
 import { DistributionDetectorEnhanced } from "../indicators/distributionDetectorEnhanced.js";
 import { ZoneDetectorConfig } from "../types/zoneTypes.js";
 import { IOrderBookState } from "../market/orderBookState";
+import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
 
 /**
  * Production detector factory with monitoring, validation, and lifecycle management
@@ -83,6 +84,7 @@ export class DetectorFactory {
             id,
             productionSettings,
             orderBook,
+            dependencies.preprocessor,
             dependencies.logger,
             dependencies.spoofingDetector,
             dependencies.metricsCollector,
@@ -120,6 +122,7 @@ export class DetectorFactory {
         const detector = new ExhaustionDetectorEnhanced(
             id,
             productionSettings,
+            dependencies.preprocessor,
             dependencies.logger,
             dependencies.spoofingDetector,
             dependencies.metricsCollector,
@@ -845,6 +848,7 @@ export interface DetectorDependencies {
     spoofingDetector: SpoofingDetector;
     metricsCollector: IMetricsCollector;
     signalLogger?: ISignalLogger;
+    preprocessor: IOrderflowPreprocessor;
 }
 
 export interface DetectorFactoryOptions {

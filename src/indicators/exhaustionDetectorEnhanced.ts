@@ -24,6 +24,7 @@ import { Config } from "../core/config.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
+import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
 import type {
     EnrichedTradeEvent,
     StandardZoneData,
@@ -82,10 +83,12 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
     private readonly useStandardizedZones: boolean;
     private readonly enhancementConfig: ExhaustionEnhancedSettings;
     private readonly enhancementStats: ExhaustionEnhancementStats;
+    private readonly preprocessor: IOrderflowPreprocessor;
 
     constructor(
         id: string,
         settings: ExhaustionEnhancedSettings,
+        preprocessor: IOrderflowPreprocessor,
         logger: ILogger,
         spoofingDetector: SpoofingDetector,
         metricsCollector: IMetricsCollector,
@@ -117,6 +120,7 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
         // Initialize enhancement configuration
         this.useStandardizedZones = settings.useStandardizedZones;
         this.enhancementConfig = settings;
+        this.preprocessor = preprocessor;
 
         // Initialize enhancement statistics
         this.enhancementStats = {
@@ -307,19 +311,31 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
         // Find zones that overlap around the current price
         const relevantZones: ZoneSnapshot[] = [];
 
-        // Check 5-tick zones
+        // Check 5-tick zones - using universal zone analysis service
         relevantZones.push(
-            ...this.findZonesNearPrice(zoneData.zones5Tick, price, maxDistance)
+            ...this.preprocessor.findZonesNearPrice(
+                zoneData.zones5Tick,
+                price,
+                maxDistance
+            )
         );
 
-        // Check 10-tick zones
+        // Check 10-tick zones - using universal zone analysis service
         relevantZones.push(
-            ...this.findZonesNearPrice(zoneData.zones10Tick, price, maxDistance)
+            ...this.preprocessor.findZonesNearPrice(
+                zoneData.zones10Tick,
+                price,
+                maxDistance
+            )
         );
 
-        // Check 20-tick zones
+        // Check 20-tick zones - using universal zone analysis service
         relevantZones.push(
-            ...this.findZonesNearPrice(zoneData.zones20Tick, price, maxDistance)
+            ...this.preprocessor.findZonesNearPrice(
+                zoneData.zones20Tick,
+                price,
+                maxDistance
+            )
         );
 
         const confluenceZones = relevantZones.length;
@@ -341,29 +357,7 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
         };
     }
 
-    /**
-     * Find zones near a specific price within distance threshold
-     */
-    private findZonesNearPrice(
-        zones: ZoneSnapshot[],
-        price: number,
-        maxDistanceTicks: number
-    ): ZoneSnapshot[] {
-        const tickValue = Config.TICK_SIZE;
-        const maxDistance = FinancialMath.multiplyQuantities(
-            maxDistanceTicks,
-            tickValue
-        );
-
-        return zones.filter((zone) => {
-            const distance = FinancialMath.calculateSpread(
-                zone.priceLevel,
-                price,
-                8
-            );
-            return distance <= maxDistance;
-        });
-    }
+    // ✅ REMOVED: Duplicate zone analysis method - now using preprocessor.findZonesNearPrice()
 
     /**
      * Analyze liquidity depletion across standardized zones
@@ -389,7 +383,11 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
             ...zoneData.zones20Tick,
         ];
 
-        const relevantZones = this.findZonesNearPrice(allZones, event.price, 5);
+        const relevantZones = this.preprocessor.findZonesNearPrice(
+            allZones,
+            event.price,
+            5
+        );
 
         let totalPassiveVolume = 0;
         let totalAggressiveVolume = 0;
@@ -528,7 +526,11 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
     ): number {
         if (zones.length === 0) return 0;
 
-        const relevantZones = this.findZonesNearPrice(zones, price, 3);
+        const relevantZones = this.preprocessor.findZonesNearPrice(
+            zones,
+            price,
+            3
+        );
         if (relevantZones.length === 0) return 0;
 
         let totalExhaustionScore = 0;

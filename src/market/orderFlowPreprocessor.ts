@@ -62,6 +62,18 @@ export interface IOrderflowPreprocessor {
         processedDepthUpdates: number;
         bookMetrics: ReturnType<IOrderBookState["getDepthMetrics"]>;
     };
+    // Universal zone analysis service methods
+    findZonesNearPrice(
+        zones: ZoneSnapshot[],
+        price: number,
+        maxDistanceTicks: number
+    ): ZoneSnapshot[];
+    calculateZoneRelevanceScore(zone: ZoneSnapshot, price: number): number;
+    findMostRelevantZone(
+        zoneData: StandardZoneData,
+        price: number,
+        maxDistanceTicks?: number
+    ): ZoneSnapshot | null;
 }
 
 export class OrderflowPreprocessor
@@ -805,6 +817,104 @@ export class OrderflowPreprocessor
             );
             return undefined;
         }
+    }
+
+    /**
+     * ===================================================================
+     * UNIVERSAL ZONE ANALYSIS SERVICE
+     * ===================================================================
+     *
+     * Centralized zone analysis methods for all enhanced detectors.
+     * Prevents code duplication and maintains architectural integrity.
+     */
+
+    /**
+     * Find zones near a specific price within distance threshold
+     */
+    public findZonesNearPrice(
+        zones: ZoneSnapshot[],
+        price: number,
+        maxDistanceTicks: number
+    ): ZoneSnapshot[] {
+        const maxDistance = FinancialMath.multiplyQuantities(
+            maxDistanceTicks,
+            this.tickSize
+        );
+
+        return zones.filter((zone) => {
+            const distance = FinancialMath.calculateSpread(
+                zone.priceLevel,
+                price,
+                8
+            );
+            return distance <= maxDistance;
+        });
+    }
+
+    /**
+     * Calculate zone relevance score for enhanced detector zone selection
+     */
+    public calculateZoneRelevanceScore(
+        zone: ZoneSnapshot,
+        price: number
+    ): number {
+        const totalVolume = zone.aggressiveVolume + zone.passiveVolume;
+        const distance = FinancialMath.calculateSpread(
+            zone.priceLevel,
+            price,
+            8
+        );
+        const proximityScore = Math.max(0, 1 - distance / 0.05); // Closer is better
+        const volumeScore = Math.min(1, totalVolume / 100); // Higher volume is better
+
+        return FinancialMath.multiplyQuantities(
+            FinancialMath.addAmounts(proximityScore, volumeScore, 8),
+            0.5
+        );
+    }
+
+    /**
+     * Find the most relevant zone from StandardZoneData for enhanced detectors
+     */
+    public findMostRelevantZone(
+        zoneData: StandardZoneData,
+        price: number,
+        maxDistanceTicks: number = 5
+    ): ZoneSnapshot | null {
+        // Combine all zones from different timeframes
+        const allZones = [
+            ...zoneData.zones5Tick,
+            ...zoneData.zones10Tick,
+            ...zoneData.zones20Tick,
+        ];
+
+        if (allZones.length === 0) {
+            return null;
+        }
+
+        // Find zones near the current price
+        const relevantZones = this.findZonesNearPrice(
+            allZones,
+            price,
+            maxDistanceTicks
+        );
+        if (relevantZones.length === 0) {
+            return null;
+        }
+
+        // Select the zone with the highest relevance score
+        let bestZone = relevantZones[0];
+        let bestScore = this.calculateZoneRelevanceScore(bestZone, price);
+
+        for (const zone of relevantZones.slice(1)) {
+            const score = this.calculateZoneRelevanceScore(zone, price);
+            if (score > bestScore) {
+                bestScore = score;
+                bestZone = zone;
+            }
+        }
+
+        return bestZone;
     }
 
     /**
