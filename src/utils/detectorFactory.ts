@@ -3,16 +3,9 @@ import { randomUUID } from "crypto";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
-// DEPRECATED: import { AbsorptionDetector } from "../indicators/absorptionDetector.js";
 import { AbsorptionDetectorEnhanced } from "../indicators/absorptionDetectorEnhanced.js";
-// DEPRECATED: import { ExhaustionDetector } from "../indicators/exhaustionDetector.js";
 import { ExhaustionDetectorEnhanced } from "../indicators/exhaustionDetectorEnhanced.js";
-// DEPRECATED: import { DeltaCVDConfirmation } from "../indicators/deltaCVDConfirmation.js";
 import { DeltaCVDDetectorEnhanced } from "../indicators/deltaCVDDetectorEnhanced.js";
-import {
-    SupportResistanceDetector,
-    SupportResistanceConfig,
-} from "../indicators/supportResistanceDetector.js";
 
 import type {
     BaseDetectorSettings,
@@ -23,9 +16,7 @@ import { SignalType } from "../types/signalTypes.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
 import { Config } from "../core/config.js";
 
-// DEPRECATED: import { AccumulationZoneDetector } from "../indicators/accumulationZoneDetector.js";
 import { AccumulationZoneDetectorEnhanced } from "../indicators/accumulationZoneDetectorEnhanced.js";
-// DEPRECATED: import { DistributionZoneDetector } from "../indicators/distributionZoneDetector.js";
 import { DistributionDetectorEnhanced } from "../indicators/distributionDetectorEnhanced.js";
 import { ZoneDetectorConfig } from "../types/zoneTypes.js";
 import { IOrderBookState } from "../market/orderBookState";
@@ -214,50 +205,6 @@ export class DetectorFactory {
         );
 
         this.registerDetector(id, detector, dependencies, options);
-
-        return detector;
-    }
-
-    /**
-     * Create production-ready support/resistance detector
-     */
-    public static createSupportResistanceDetector(
-        settings: Partial<SupportResistanceConfig>,
-        dependencies: DetectorDependencies,
-        options: DetectorFactoryOptions = {}
-    ): SupportResistanceDetector {
-        const id = options.id || `support_resistance-${Date.now()}`;
-
-        this.validateCreationLimits();
-
-        const productionSettings: SupportResistanceConfig = {
-            priceTolerancePercent: 0.05,
-            minTouchCount: 3,
-            minStrength: 0.6,
-            timeWindowMs: 5400000, // 90 minutes
-            volumeWeightFactor: 0.3,
-            rejectionConfirmationTicks: 5,
-            ...settings,
-        };
-
-        const detector = new SupportResistanceDetector(
-            id,
-            productionSettings,
-            dependencies.logger,
-            dependencies.spoofingDetector,
-            dependencies.metricsCollector,
-            dependencies.signalLogger
-        );
-
-        this.registerDetector(id, detector, dependencies, options);
-
-        dependencies.logger.info(
-            `[DetectorFactory] Created SupportResistanceDetector`,
-            {
-                id,
-                settings: productionSettings,
-            }
-        );
 
         return detector;
     }

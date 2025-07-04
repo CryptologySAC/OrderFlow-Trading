@@ -64,7 +64,7 @@ vi.mock("../src/core/config.js", async (importOriginal) => {
                     buyingPressureConfidenceBoost: 0.08,
                     enableZoneConfluenceFilter: true,
                     enableBuyingPressureAnalysis: true,
-                    enableCrossTimeframeAnalysis: true
+                    enableCrossTimeframeAnalysis: true,
                 };
             },
             get ENHANCED_ZONE_FORMATION() {
@@ -231,7 +231,7 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
         buyingPressureConfidenceBoost: 0.08,
         enableZoneConfluenceFilter: true,
         enableBuyingPressureAnalysis: true,
-        enableCrossTimeframeAnalysis: true
+        enableCrossTimeframeAnalysis: true,
     };
 
     beforeEach(() => {
