@@ -31,7 +31,7 @@ import type {
 } from "../types/marketEvents.js";
 import type {
     SignalCandidate,
-    ExhaustionSignalData,
+    EnhancedExhaustionSignalData,
     SignalType,
 } from "../types/signalTypes.js";
 import { z } from "zod";
@@ -563,6 +563,33 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
     }
 
     /**
+     * Calculate average passive volume from zone data
+     */
+    private calculateAveragePassiveVolume(
+        zoneData: StandardZoneData | undefined
+    ): number | null {
+        if (!zoneData) return null;
+
+        const allZones = [
+            ...zoneData.zones5Tick,
+            ...zoneData.zones10Tick,
+            ...zoneData.zones20Tick,
+        ];
+
+        if (allZones.length === 0) return null;
+
+        const totalPassiveVolume = allZones.reduce(
+            (sum, zone) => sum + zone.passiveVolume,
+            0
+        );
+
+        return FinancialMath.divideQuantities(
+            totalPassiveVolume,
+            allZones.length
+        );
+    }
+
+    /**
      * Store enhanced exhaustion metrics for monitoring and analysis
      *
      * EXHAUSTION PHASE 1: Comprehensive metrics tracking
@@ -631,19 +658,27 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
         const volumeImbalance = this.calculateZoneVolumeImbalance(
             event.zoneData
         );
+        const averagePassiveVolume = this.calculateAveragePassiveVolume(
+            event.zoneData
+        );
 
         if (
             passiveVolumeRatio === null ||
             avgSpread === null ||
-            volumeImbalance === null
+            volumeImbalance === null ||
+            averagePassiveVolume === null
         ) {
             return;
         }
 
         // Create enhanced exhaustion result
-        const exhaustionResult: ExhaustionSignalData = {
+        const exhaustionResult: EnhancedExhaustionSignalData = {
             price: event.price,
             side: signalSide,
+            aggressive: event.quantity,
+            oppositeQty: 0, // TODO: Calculate opposite side quantity
+            avgLiquidity: averagePassiveVolume,
+            spread: avgSpread,
             exhaustionScore: depletionResult.depletionRatio,
             confidence: enhancedConfidence,
             depletionRatio: depletionResult.depletionRatio,

@@ -461,6 +461,9 @@ const DistributionEnhancedSettingsSchema = z
         useStandardizedZones: z.boolean(),
         enhancementMode: z.enum(["disabled", "testing", "production"]),
         minEnhancedConfidenceThreshold: z.number(),
+        baseConfidenceRequired: z.number().min(0.1).max(0.9),
+        finalConfidenceRequired: z.number().min(0.1).max(0.9),
+        minConfidenceBoostThreshold: z.number().min(0.01).max(0.5),
         enableSellingPressureAnalysis: z.boolean(),
         sellingPressureConfidenceBoost: z.number(),
         sellingPressureVolumeThreshold: z.number(),
@@ -1185,7 +1188,7 @@ export class Config {
 
     static get DISTRIBUTION_ZONE_DETECTOR() {
         return this.validateDetectorConfig(
-            DistributionDetectorSchema,
+            DistributionEnhancedSettingsSchema,
             SYMBOL_CFG.distribution
         );
     }

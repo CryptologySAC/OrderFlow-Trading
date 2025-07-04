@@ -488,6 +488,9 @@
             },
             "distribution": {
                 "useStandardizedZones": true,
+                "baseConfidenceRequired": 0.3,
+                "finalConfidenceRequired": 0.5,
+                "minConfidenceBoostThreshold": 0.05,
                 "sellingPressureVolumeThreshold": 15,
                 "sellingPressureRatioThreshold": 0.45,
                 "enableSellingPressureAnalysis": true,

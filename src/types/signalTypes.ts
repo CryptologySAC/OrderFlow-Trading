@@ -2,7 +2,9 @@ import { MarketAnomaly } from "../utils/types.js";
 
 export type DetectorResultType =
     | AbsorptionSignalData
+    | EnhancedAbsorptionSignalData
     | ExhaustionSignalData
+    | EnhancedExhaustionSignalData
     | AccumulationResult
     | TradingSignalData
     | DeltaCVDConfirmationResult
@@ -64,6 +66,35 @@ export interface AbsorptionSignalData {
     meta?: Record<string, unknown>;
 }
 
+export interface EnhancedAbsorptionSignalData {
+    price: number;
+    zone: number;
+    side: "buy" | "sell";
+    aggressive: number;
+    passive: number;
+    refilled: boolean;
+    confidence: number;
+    absorptionScore: number;
+    passiveMultiplier: number;
+    priceEfficiency: number;
+    spreadImpact: number;
+    volumeProfile: {
+        totalVolume: number;
+        institutionalRatio: number;
+    };
+    metadata: {
+        signalType: string;
+        timestamp: number;
+        institutionalRatio: number;
+        enhancementType: string;
+        qualityMetrics: {
+            absorptionStatisticalSignificance: number;
+            institutionalConfirmation: boolean;
+            signalPurity: "premium" | "standard";
+        };
+    };
+}
+
 export interface ExhaustionSignalData {
     price: number;
     side: "buy" | "sell";
@@ -75,6 +106,33 @@ export interface ExhaustionSignalData {
     spoofed?: boolean;
     passiveHistory?: number[];
     meta?: Record<string, unknown>;
+}
+
+export interface EnhancedExhaustionSignalData {
+    price: number;
+    side: "buy" | "sell";
+    aggressive: number;
+    oppositeQty: number;
+    avgLiquidity: number;
+    spread: number;
+    confidence: number;
+    exhaustionScore: number;
+    depletionRatio: number;
+    passiveVolumeRatio: number;
+    avgSpread: number;
+    volumeImbalance: number;
+    spoofed?: boolean;
+    metadata: {
+        signalType: string;
+        timestamp: number;
+        enhancementType: string;
+        affectedZones: number;
+        qualityMetrics: {
+            exhaustionStatisticalSignificance: number;
+            depletionConfirmation: boolean;
+            signalPurity: "premium" | "standard";
+        };
+    };
 }
 
 export interface SwingSignalData {

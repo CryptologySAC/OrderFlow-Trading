@@ -651,7 +651,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     ): "buy" | "sell" | "neutral" {
         // For accumulation zones, we expect buy signals during accumulation
         if (
-            zoneSignal.actionType === "enter" &&
+            zoneSignal.actionType === "enter_zone" &&
             zoneSignal.zone.type === "accumulation"
         ) {
             return "buy";
@@ -674,34 +674,16 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     private calculateAccumulationMetrics(
         zone: TradingZone
     ): { totalVolume: number; accumRatio: number } | null {
-        if (!zone.volume) {
+        if (!zone.totalVolume || zone.totalVolume === 0) {
             return null;
         }
 
-        const { total, buy: buyVol, sell: sellVol } = zone.volume;
-
-        if (
-            !total ||
-            total === 0 ||
-            buyVol === undefined ||
-            sellVol === undefined
-        ) {
-            return null;
-        }
-
-        // Explicit type assertions after null checks
-        const totalVolume: number = total;
-        const buyVolume: number = buyVol;
-        // sellVolume not used in accumulation ratio calculation
-
-        // For accumulation, we expect more buying than selling
-        const accumRatio =
-            totalVolume > 0
-                ? FinancialMath.divideQuantities(buyVolume, totalVolume)
-                : 0;
+        // For accumulation zones, calculate ratio based on zone strength
+        // Zone strength indicates accumulation quality (higher = more accumulation)
+        const accumRatio = Math.min(1.0, zone.strength); // Use zone strength as accumulation ratio
 
         return {
-            totalVolume,
+            totalVolume: zone.totalVolume,
             accumRatio,
         };
     }

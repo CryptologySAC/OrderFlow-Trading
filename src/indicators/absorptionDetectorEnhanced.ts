@@ -39,7 +39,7 @@ import type {
 } from "../types/marketEvents.js";
 import type {
     SignalCandidate,
-    AbsorptionSignalData,
+    EnhancedAbsorptionSignalData,
     SignalType,
 } from "../types/signalTypes.js";
 // Removed unused imports: z and AbsorptionDetectorSchema
@@ -431,6 +431,68 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             );
             return distance <= maxDistance;
         });
+    }
+
+    /**
+     * Find the most relevant zone for absorption signal
+     */
+    private findMostRelevantZone(
+        zoneData: StandardZoneData,
+        price: number
+    ): ZoneSnapshot | null {
+        // Combine all zones from different timeframes
+        const allZones = [
+            ...zoneData.zones5Tick,
+            ...zoneData.zones10Tick,
+            ...zoneData.zones20Tick,
+        ];
+
+        if (allZones.length === 0) {
+            return null;
+        }
+
+        // Find zones near the current price (within 5 ticks)
+        const relevantZones = this.findZonesNearPrice(allZones, price, 5);
+        if (relevantZones.length === 0) {
+            return null;
+        }
+
+        // Select the zone with the highest absorption potential
+        // (combination of volume and proximity to price)
+        let bestZone = relevantZones[0];
+        let bestScore = this.calculateZoneRelevanceScore(bestZone, price);
+
+        for (const zone of relevantZones.slice(1)) {
+            const score = this.calculateZoneRelevanceScore(zone, price);
+            if (score > bestScore) {
+                bestScore = score;
+                bestZone = zone;
+            }
+        }
+
+        return bestZone;
+    }
+
+    /**
+     * Calculate zone relevance score for zone selection
+     */
+    private calculateZoneRelevanceScore(
+        zone: ZoneSnapshot,
+        price: number
+    ): number {
+        const totalVolume = zone.aggressiveVolume + zone.passiveVolume;
+        const distance = FinancialMath.calculateSpread(
+            zone.priceLevel,
+            price,
+            8
+        );
+        const proximityScore = Math.max(0, 1 - distance / 0.05); // Closer is better
+        const volumeScore = Math.min(1, totalVolume / 100); // Higher volume is better
+
+        return FinancialMath.multiplyQuantities(
+            FinancialMath.addAmounts(proximityScore, volumeScore, 8),
+            0.5
+        );
     }
 
     /**
@@ -859,7 +921,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
     ): {
         hasInstitutionalPresence: boolean;
         institutionalRatio: number;
-        whaleActivity: number;
+        volumeThreshold: number;
     } {
         const institutionalThreshold =
             this.enhancementConfig.institutionalVolumeThreshold;
@@ -899,8 +961,8 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         const hasInstitutionalPresence =
             isInstitutionalTrade || institutionalRatio >= minRatio;
 
-        // Calculate whale activity score (0-1) using FinancialMath
-        const whaleActivity = Math.min(
+        // Calculate volume threshold score (0-1) using FinancialMath
+        const volumeThreshold = Math.min(
             1.0,
             FinancialMath.multiplyQuantities(
                 institutionalRatio,
@@ -911,7 +973,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         return {
             hasInstitutionalPresence,
             institutionalRatio,
-            whaleActivity,
+            volumeThreshold,
         };
     }
 
@@ -1061,16 +1123,33 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             return;
         }
 
-        // Create enhanced absorption result
-        const absorptionResult: AbsorptionSignalData = {
+        // Find the relevant zone from standardized zone data
+        const relevantZone = this.findMostRelevantZone(
+            event.zoneData!,
+            event.price
+        );
+        if (!relevantZone) {
+            return; // Cannot create absorption signal without valid zone
+        }
+
+        // Create enhanced absorption result using actual zone data
+        const absorptionResult: EnhancedAbsorptionSignalData = {
             price: event.price,
+            zone: relevantZone.priceLevel,
             side: signalSide,
-            absorptionScore,
+            aggressive: relevantZone.aggressiveVolume,
+            passive: relevantZone.passiveVolume,
+            refilled: false, // TODO: Implement refill detection from zone data
             confidence: enhancedConfidence,
+            absorptionScore,
             passiveMultiplier,
             priceEfficiency,
             spreadImpact: this.calculateZoneSpreadImpact(event.zoneData),
-            volumeProfile: this.calculateZoneVolumeProfile(event.zoneData),
+            volumeProfile: {
+                totalVolume:
+                    relevantZone.aggressiveVolume + relevantZone.passiveVolume,
+                institutionalRatio: institutionalResult.institutionalRatio,
+            },
             metadata: {
                 signalType: "institutional_absorption",
                 timestamp: event.timestamp,

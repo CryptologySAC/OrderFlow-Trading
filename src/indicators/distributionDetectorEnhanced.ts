@@ -46,7 +46,11 @@ import { DistributionDetectorSchema } from "../core/config.js";
 // Use Zod schema inference for complete type safety - matches config.json exactly
 export type DistributionEnhancedSettings = z.infer<
     typeof DistributionDetectorSchema
->;
+> & {
+    baseConfidenceRequired: number;
+    finalConfidenceRequired: number;
+    minConfidenceBoostThreshold: number;
+};
 
 /**
  * Legacy interface - REMOVED: replaced by Zod schema inference
@@ -607,14 +611,17 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
         }
 
         // Calculate enhanced distribution confidence
-        if (!this.enhancementConfig.baseConfidenceRequired) {
+        if (
+            typeof this.enhancementConfig.baseConfidenceRequired !== "number" ||
+            this.enhancementConfig.baseConfidenceRequired <= 0
+        ) {
             return; // Cannot proceed without valid base confidence
         }
-        const baseConfidence: number =
+        const baseConfidenceValue =
             this.enhancementConfig.baseConfidenceRequired;
         const enhancedConfidence = Math.min(
             1.0,
-            FinancialMath.addAmounts(baseConfidence, confidenceBoost, 8)
+            FinancialMath.addAmounts(baseConfidenceValue, confidenceBoost, 8)
         );
 
         // Only emit high-quality enhanced signals
