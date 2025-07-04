@@ -16,6 +16,7 @@ import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorIn
 import { ISignalLogger } from "../src/infrastructure/signalLoggerInterface.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import { IOrderBookState } from "../src/market/orderBookState.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 
 // Mock dependencies
 const mockLogger: ILogger = {
@@ -47,6 +48,19 @@ const mockSpoofingDetector = {
     isSpoofed: vi.fn(() => false),
     detectLayeringAttack: vi.fn(() => false),
 } as unknown as SpoofingDetector;
+
+const mockPreprocessor: IOrderflowPreprocessor = {
+    handleDepth: vi.fn(),
+    handleAggTrade: vi.fn(),
+    getStats: vi.fn(() => ({
+        processedTrades: 0,
+        processedDepthUpdates: 0,
+        bookMetrics: {} as any,
+    })),
+    findZonesNearPrice: vi.fn(() => []),
+    calculateZoneRelevanceScore: vi.fn(() => 0.5),
+    findMostRelevantZone: vi.fn(() => null),
+};
 
 const mockOrderBook: IOrderBookState = {
     handleDepthUpdate: vi.fn(),
@@ -238,6 +252,7 @@ describe("AbsorptionDetectorEnhanced - Nuclear Cleanup Reality", () => {
             "test-absorption-enhanced",
             mockAbsorptionConfig,
             mockOrderBook,
+            mockPreprocessor,
             mockLogger,
             mockSpoofingDetector,
             mockMetricsCollector,
@@ -279,6 +294,7 @@ describe("AbsorptionDetectorEnhanced - Nuclear Cleanup Reality", () => {
                     "test-validated-config",
                     mockAbsorptionConfig, // Pre-validated settings should work
                     mockOrderBook,
+                    mockPreprocessor,
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetricsCollector,
@@ -310,6 +326,7 @@ describe("AbsorptionDetectorEnhanced - Nuclear Cleanup Reality", () => {
                     "test-complete",
                     mockAbsorptionConfig, // Complete validated configuration
                     mockOrderBook,
+                    mockPreprocessor,
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetricsCollector,

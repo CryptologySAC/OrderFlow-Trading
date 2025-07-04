@@ -13,6 +13,7 @@ import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ISignalLogger } from "../src/infrastructure/signalLoggerInterface.js";
 import type { IOrderBookState } from "../src/market/orderBookState.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type {
     EnrichedTradeEvent,
     StandardZoneData,
@@ -41,6 +42,19 @@ const mockMetricsCollector: IMetricsCollector = {
 const mockSignalLogger: ISignalLogger = {
     logSignal: vi.fn(),
     cleanup: vi.fn(),
+};
+
+const mockPreprocessor: IOrderflowPreprocessor = {
+    handleDepth: vi.fn(),
+    handleAggTrade: vi.fn(),
+    getStats: vi.fn(() => ({
+        processedTrades: 0,
+        processedDepthUpdates: 0,
+        bookMetrics: {} as any,
+    })),
+    findZonesNearPrice: vi.fn(() => []),
+    calculateZoneRelevanceScore: vi.fn(() => 0.5),
+    findMostRelevantZone: vi.fn(() => null),
 };
 
 const mockSpoofingDetector = {
@@ -294,6 +308,7 @@ describe("ExhaustionDetectorEnhanced - Nuclear Cleanup Reality", () => {
         enhancedDetector = new ExhaustionDetectorEnhanced(
             "test-enhanced-exhaustion",
             mockExhaustionConfig,
+            mockPreprocessor,
             mockLogger,
             mockSpoofingDetector,
             mockMetricsCollector,
@@ -342,6 +357,7 @@ describe("ExhaustionDetectorEnhanced - Nuclear Cleanup Reality", () => {
                 new ExhaustionDetectorEnhanced(
                     "test-no-config",
                     {} as any, // This shouldn't matter since Config getter is used
+                    mockPreprocessor,
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetricsCollector,
@@ -382,6 +398,7 @@ describe("ExhaustionDetectorEnhanced - Nuclear Cleanup Reality", () => {
                 new ExhaustionDetectorEnhanced(
                     "test-incomplete",
                     {} as any, // Config comes from Config getter, not constructor parameter
+                    mockPreprocessor,
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetricsCollector,
@@ -408,6 +425,7 @@ describe("ExhaustionDetectorEnhanced - Nuclear Cleanup Reality", () => {
                 new ExhaustionDetectorEnhanced(
                     "test-invalid",
                     {} as any, // Config validation happens in Config getter
+                    mockPreprocessor,
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetricsCollector,
