@@ -201,6 +201,14 @@ function getAnomalyIcon(type) {
             return "👻";
         case "iceberg_order":
             return "🧊";
+        case "hidden_liquidity":
+            return "🔍";
+        case "stealth_order":
+            return "👤";
+        case "reserve_order":
+            return "📦";
+        case "algorithmic_stealth":
+            return "🤖";
         case "orderbook_imbalance":
             return "⚖️";
         case "flow_imbalance":
@@ -232,6 +240,14 @@ function getAnomalyLabel(type) {
             return "Orderbook Imbalance";
         case "flow_imbalance":
             return "Flow Imbalance";
+        case "hidden_liquidity":
+            return "Hidden Liquidity";
+        case "stealth_order":
+            return "Stealth Order";
+        case "reserve_order":
+            return "Reserve Order";
+        case "algorithmic_stealth":
+            return "Algorithmic Stealth";
         default:
             return type
                 .replace(/_/g, " ")
@@ -2890,10 +2906,23 @@ function updateZoneBox(zone) {
             ];
         if (annotation) {
             // Update zone properties
-            annotation.yMin = zone.priceRange.min;
-            annotation.yMax = zone.priceRange.max;
-            annotation.backgroundColor = getZoneColor(zone);
-            annotation.borderColor = getZoneBorderColor(zone);
+            if (zone.type === "hidden_liquidity" || zone.type === "iceberg") {
+                const price =
+                    zone.priceRange.center ??
+                    (zone.priceRange.min + zone.priceRange.max) / 2;
+                annotation.yMin = price;
+                annotation.yMax = price;
+                annotation.borderColor = getZoneBorderColor(zone);
+                // Update end time for iceberg orders if zone has ended
+                if (zone.type === "iceberg" && zone.endTime) {
+                    annotation.xMax = zone.endTime;
+                }
+            } else {
+                annotation.yMin = zone.priceRange.min;
+                annotation.yMax = zone.priceRange.max;
+                annotation.backgroundColor = getZoneColor(zone);
+                annotation.borderColor = getZoneBorderColor(zone);
+            }
             annotation.label.content = getZoneLabel(zone);
 
             tradesChart.update("none");
@@ -2914,10 +2943,21 @@ function completeZoneBox(zone) {
             ];
         if (annotation) {
             // Change to completed zone style
-            annotation.backgroundColor = getCompletedZoneColor(zone);
-            annotation.borderColor = getCompletedZoneBorderColor(zone);
-            annotation.borderWidth = 2;
-            annotation.borderDash = [5, 5]; // Dashed border for completed zones
+            if (zone.type === "hidden_liquidity" || zone.type === "iceberg") {
+                annotation.borderColor = getCompletedZoneBorderColor(zone);
+                annotation.borderWidth = 2;
+                annotation.borderDash =
+                    zone.type === "iceberg" ? [3, 3] : [5, 5]; // Shorter dashes for iceberg
+                // Set final end time for iceberg orders
+                if (zone.type === "iceberg" && zone.endTime) {
+                    annotation.xMax = zone.endTime;
+                }
+            } else {
+                annotation.backgroundColor = getCompletedZoneColor(zone);
+                annotation.borderColor = getCompletedZoneBorderColor(zone);
+                annotation.borderWidth = 2;
+                annotation.borderDash = [5, 5];
+            }
             annotation.label.content = getZoneLabel(zone) + " ✓";
 
             tradesChart.update("none");
@@ -2952,36 +2992,76 @@ function removeZoneBox(zoneId) {
  */
 function addZoneToChart(zone) {
     if (!tradesChart?.options?.plugins?.annotation?.annotations) return;
+    let zoneAnnotation;
 
-    const zoneAnnotation = {
-        type: "box",
-        xMin: zone.startTime,
-        xMax: Date.now() + 5 * 60 * 1000, // Extend 5 minutes into future
-        yMin: zone.priceRange.min,
-        yMax: zone.priceRange.max,
-        backgroundColor: getZoneColor(zone),
-        borderColor: getZoneBorderColor(zone),
-        borderWidth: 1,
-        label: {
-            display: true,
-            content: getZoneLabel(zone),
-            position: "start",
-            font: {
-                size: 10,
-                weight: "bold",
+    if (zone.type === "hidden_liquidity" || zone.type === "iceberg") {
+        const price =
+            zone.priceRange.center ??
+            (zone.priceRange.min + zone.priceRange.max) / 2;
+
+        // Calculate actual end time for iceberg orders based on zone duration
+        const endTime = zone.endTime || Date.now() + 5 * 60 * 1000;
+
+        zoneAnnotation = {
+            type: "line",
+            xMin: zone.startTime,
+            xMax: endTime,
+            yMin: price,
+            yMax: price,
+            borderColor: getZoneBorderColor(zone),
+            borderWidth: zone.type === "iceberg" ? 3 : 2, // Slightly thicker for iceberg
+            borderDash: zone.type === "iceberg" ? [8, 4] : undefined, // Dashed line for iceberg
+            label: {
+                display: true,
+                content: getZoneLabel(zone),
+                position: "start",
+                font: {
+                    size: 10,
+                    weight: "bold",
+                },
+                color: getZoneTextColor(zone),
+                backgroundColor: "rgba(255, 255, 255, 0.8)",
+                padding: 4,
+                borderRadius: 3,
             },
-            color: getZoneTextColor(zone),
-            backgroundColor: "rgba(255, 255, 255, 0.8)",
-            padding: 4,
-            borderRadius: 3,
-        },
-        enter: (ctx, event) => {
-            showZoneTooltip(zone, event);
-        },
-        leave: () => {
-            hideZoneTooltip();
-        },
-    };
+            enter: (ctx, event) => {
+                showZoneTooltip(zone, event);
+            },
+            leave: () => {
+                hideZoneTooltip();
+            },
+        };
+    } else {
+        zoneAnnotation = {
+            type: "box",
+            xMin: zone.startTime,
+            xMax: Date.now() + 5 * 60 * 1000, // Extend 5 minutes into future
+            yMin: zone.priceRange.min,
+            yMax: zone.priceRange.max,
+            backgroundColor: getZoneColor(zone),
+            borderColor: getZoneBorderColor(zone),
+            borderWidth: 1,
+            label: {
+                display: true,
+                content: getZoneLabel(zone),
+                position: "start",
+                font: {
+                    size: 10,
+                    weight: "bold",
+                },
+                color: getZoneTextColor(zone),
+                backgroundColor: "rgba(255, 255, 255, 0.8)",
+                padding: 4,
+                borderRadius: 3,
+            },
+            enter: (ctx, event) => {
+                showZoneTooltip(zone, event);
+            },
+            leave: () => {
+                hideZoneTooltip();
+            },
+        };
+    }
 
     tradesChart.options.plugins.annotation.annotations[`zone_${zone.id}`] =
         zoneAnnotation;
@@ -2994,10 +3074,19 @@ function addZoneToChart(zone) {
 function getZoneColor(zone) {
     const alpha = Math.max(0.15, zone.strength * 0.4); // Min 15%, max 40% opacity
 
-    if (zone.type === "accumulation") {
-        return `rgba(34, 197, 94, ${alpha})`; // Green
-    } else {
-        return `rgba(239, 68, 68, ${alpha})`; // Red
+    switch (zone.type) {
+        case "accumulation":
+            return `rgba(34, 197, 94, ${alpha})`; // Green
+        case "distribution":
+            return `rgba(239, 68, 68, ${alpha})`; // Red
+        case "iceberg":
+            return `rgba(59, 130, 246, ${alpha})`; // Blue
+        case "spoofing":
+            return `rgba(147, 51, 234, ${alpha})`; // Purple
+        case "hidden_liquidity":
+            return `rgba(245, 158, 11, ${alpha})`; // Amber
+        default:
+            return `rgba(107, 114, 128, ${alpha})`; // Gray
     }
 }
 
@@ -3005,10 +3094,19 @@ function getZoneColor(zone) {
  * Get zone border color
  */
 function getZoneBorderColor(zone) {
-    if (zone.type === "accumulation") {
-        return "rgba(34, 197, 94, 0.8)"; // Green
-    } else {
-        return "rgba(239, 68, 68, 0.8)"; // Red
+    switch (zone.type) {
+        case "accumulation":
+            return "rgba(34, 197, 94, 0.8)"; // Green
+        case "distribution":
+            return "rgba(239, 68, 68, 0.8)"; // Red
+        case "iceberg":
+            return "rgba(59, 130, 246, 0.8)"; // Blue
+        case "spoofing":
+            return "rgba(147, 51, 234, 0.8)"; // Purple
+        case "hidden_liquidity":
+            return "rgba(245, 158, 11, 0.8)"; // Amber
+        default:
+            return "rgba(107, 114, 128, 0.8)"; // Gray
     }
 }
 
@@ -3016,18 +3114,36 @@ function getZoneBorderColor(zone) {
  * Get completed zone colors (more muted)
  */
 function getCompletedZoneColor(zone) {
-    if (zone.type === "accumulation") {
-        return "rgba(34, 197, 94, 0.2)"; // Lighter green
-    } else {
-        return "rgba(239, 68, 68, 0.2)"; // Lighter red
+    switch (zone.type) {
+        case "accumulation":
+            return "rgba(34, 197, 94, 0.2)"; // Lighter green
+        case "distribution":
+            return "rgba(239, 68, 68, 0.2)"; // Lighter red
+        case "iceberg":
+            return "rgba(59, 130, 246, 0.2)"; // Lighter blue
+        case "spoofing":
+            return "rgba(147, 51, 234, 0.2)"; // Lighter purple
+        case "hidden_liquidity":
+            return "rgba(245, 158, 11, 0.2)"; // Lighter amber
+        default:
+            return "rgba(107, 114, 128, 0.2)"; // Lighter gray
     }
 }
 
 function getCompletedZoneBorderColor(zone) {
-    if (zone.type === "accumulation") {
-        return "rgba(34, 197, 94, 0.5)"; // Muted green
-    } else {
-        return "rgba(239, 68, 68, 0.5)"; // Muted red
+    switch (zone.type) {
+        case "accumulation":
+            return "rgba(34, 197, 94, 0.5)"; // Muted green
+        case "distribution":
+            return "rgba(239, 68, 68, 0.5)"; // Muted red
+        case "iceberg":
+            return "rgba(59, 130, 246, 0.5)"; // Muted blue
+        case "spoofing":
+            return "rgba(147, 51, 234, 0.5)"; // Muted purple
+        case "hidden_liquidity":
+            return "rgba(245, 158, 11, 0.5)"; // Muted amber
+        default:
+            return "rgba(107, 114, 128, 0.5)"; // Muted gray
     }
 }
 
@@ -3046,9 +3162,29 @@ function getZoneTextColor(zone) {
  * Generate zone label text
  */
 function getZoneLabel(zone) {
-    const typeLabel = zone.type === "accumulation" ? "ACC" : "DIST";
     const strengthPercent = Math.round(zone.strength * 100);
     const completionPercent = Math.round(zone.completion * 100);
+
+    let typeLabel;
+    switch (zone.type) {
+        case "accumulation":
+            typeLabel = "ACC";
+            break;
+        case "distribution":
+            typeLabel = "DIST";
+            break;
+        case "iceberg":
+            typeLabel = "🧊 ICE";
+            break;
+        case "spoofing":
+            typeLabel = "👻 SPOOF";
+            break;
+        case "hidden_liquidity":
+            typeLabel = "🔍 HIDDEN";
+            break;
+        default:
+            typeLabel = zone.type.toUpperCase();
+    }
 
     return `${typeLabel} ${strengthPercent}% (${completionPercent}%)`;
 }
@@ -3075,24 +3211,85 @@ function showZoneTooltip(zone, event) {
     `;
 
     const duration = Math.round((Date.now() - zone.startTime) / 60000);
-    const volumeFormatted = zone.totalVolume.toLocaleString();
+    const volumeFormatted = zone.totalVolume?.toLocaleString() || "N/A";
 
-    tooltip.innerHTML = `
-        <div style="font-weight: bold; margin-bottom: 6px; color: ${zone.type === "accumulation" ? "#22c55e" : "#ef4444"}">
-            ${zone.type.toUpperCase()} ZONE
+    // Get zone type color
+    let zoneColor;
+    switch (zone.type) {
+        case "accumulation":
+            zoneColor = "#22c55e";
+            break;
+        case "distribution":
+            zoneColor = "#ef4444";
+            break;
+        case "iceberg":
+            zoneColor = "#3b82f6";
+            break;
+        case "spoofing":
+            zoneColor = "#9333ea";
+            break;
+        case "hidden_liquidity":
+            zoneColor = "#f59e0b";
+            break;
+        default:
+            zoneColor = "#6b7280";
+    }
+
+    let tooltipContent = `
+        <div style="font-weight: bold; margin-bottom: 6px; color: ${zoneColor}">
+            ${getZoneLabel(zone)} ZONE
         </div>
-        <div>Price Range: $${zone.priceRange.min.toFixed(4)} - $${zone.priceRange.max.toFixed(4)}</div>
-        <div>Center: $${zone.priceRange.center.toFixed(4)}</div>
+        <div>Price Range: $${zone.priceRange.min.toFixed(4)} - $${zone.priceRange.max.toFixed(4)}</div>`;
+
+    // Add center for accumulation/distribution zones
+    if (zone.priceRange.center) {
+        tooltipContent += `<div>Center: $${zone.priceRange.center.toFixed(4)}</div>`;
+    }
+
+    tooltipContent += `
         <div>Strength: ${(zone.strength * 100).toFixed(1)}%</div>
-        <div>Completion: ${(zone.completion * 100).toFixed(1)}%</div>
-        <div>Confidence: ${(zone.confidence * 100).toFixed(1)}%</div>
-        <div>Duration: ${duration}m</div>
-        <div>Volume: ${volumeFormatted}</div>
-        <div>Trades: ${zone.tradeCount}</div>
-        <div style="margin-top: 6px; font-size: 10px; opacity: 0.8">
-            ID: ${zone.id}
-        </div>
-    `;
+        <div>Completion: ${(zone.completion * 100).toFixed(1)}%</div>`;
+
+    // Add confidence if available
+    if (zone.confidence !== undefined) {
+        tooltipContent += `<div>Confidence: ${(zone.confidence * 100).toFixed(1)}%</div>`;
+    }
+
+    tooltipContent += `<div>Duration: ${duration}m</div>`;
+
+    // Add type-specific details
+    if (zone.type === "iceberg") {
+        tooltipContent += `
+            <div style="margin-top: 6px; border-top: 1px solid #333; padding-top: 6px;">
+                <div>Refills: ${zone.refillCount || "N/A"}</div>
+                <div>Volume: ${volumeFormatted}</div>
+                <div>Avg Size: ${zone.averagePieceSize?.toFixed(2) || "N/A"}</div>
+                <div>Side: ${zone.side?.toUpperCase() || "N/A"}</div>
+            </div>`;
+    } else if (zone.type === "spoofing") {
+        tooltipContent += `
+            <div style="margin-top: 6px; border-top: 1px solid #333; padding-top: 6px;">
+                <div>Type: ${zone.spoofType || "N/A"}</div>
+                <div>Wall Size: ${zone.wallSize?.toFixed(2) || "N/A"}</div>
+                <div>Canceled: ${zone.canceled?.toFixed(2) || "N/A"}</div>
+                <div>Executed: ${zone.executed?.toFixed(2) || "N/A"}</div>
+                <div>Side: ${zone.side?.toUpperCase() || "N/A"}</div>
+            </div>`;
+    } else if (zone.type === "hidden_liquidity") {
+        tooltipContent += `
+            <div style="margin-top: 6px; border-top: 1px solid #333; padding-top: 6px;">
+                <div>Stealth Type: ${zone.stealthType || "N/A"}</div>
+                <div>Stealth Score: ${zone.stealthScore ? (zone.stealthScore * 100).toFixed(1) + "%" : "N/A"}</div>
+                <div>Trades: ${zone.tradeCount || "N/A"}</div>
+                <div>Volume: ${volumeFormatted}</div>
+                <div>Side: ${zone.side?.toUpperCase() || "N/A"}</div>
+            </div>`;
+    } else if (zone.totalVolume) {
+        // Default volume display for accumulation/distribution
+        tooltipContent += `<div>Volume: ${volumeFormatted}</div>`;
+    }
+
+    tooltip.innerHTML = tooltipContent;
 
     tooltip.style.left = `${event.clientX + 10}px`;
     tooltip.style.top = `${event.clientY - 10}px`;

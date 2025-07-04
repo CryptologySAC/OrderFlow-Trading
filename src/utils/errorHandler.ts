@@ -26,7 +26,7 @@ export class StandardError extends Error {
         this.name = "StandardError";
 
         // Preserve stack trace from original error if available
-        if (originalError && originalError.stack) {
+        if (originalError?.stack) {
             this.stack = `${this.stack}\nCaused by: ${originalError.stack}`;
         }
     }

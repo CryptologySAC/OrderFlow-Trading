@@ -2,11 +2,14 @@ import { MarketAnomaly } from "../utils/types.js";
 
 export type DetectorResultType =
     | AbsorptionSignalData
+    | EnhancedAbsorptionSignalData
     | ExhaustionSignalData
+    | EnhancedExhaustionSignalData
     | AccumulationResult
     | TradingSignalData
     | DeltaCVDConfirmationResult
     | DistributionResult
+    | EnhancedDistributionSignalData
     | SwingSignalData
     | FlowSignalData;
 
@@ -63,6 +66,35 @@ export interface AbsorptionSignalData {
     meta?: Record<string, unknown>;
 }
 
+export interface EnhancedAbsorptionSignalData {
+    price: number;
+    zone: number;
+    side: "buy" | "sell";
+    aggressive: number;
+    passive: number;
+    refilled: boolean;
+    confidence: number;
+    absorptionScore: number;
+    passiveMultiplier: number;
+    priceEfficiency: number;
+    spreadImpact: number;
+    volumeProfile: {
+        totalVolume: number;
+        institutionalRatio: number;
+    };
+    metadata: {
+        signalType: string;
+        timestamp: number;
+        institutionalRatio: number;
+        enhancementType: string;
+        qualityMetrics: {
+            absorptionStatisticalSignificance: number;
+            institutionalConfirmation: boolean;
+            signalPurity: "premium" | "standard";
+        };
+    };
+}
+
 export interface ExhaustionSignalData {
     price: number;
     side: "buy" | "sell";
@@ -74,6 +106,33 @@ export interface ExhaustionSignalData {
     spoofed?: boolean;
     passiveHistory?: number[];
     meta?: Record<string, unknown>;
+}
+
+export interface EnhancedExhaustionSignalData {
+    price: number;
+    side: "buy" | "sell";
+    aggressive: number;
+    oppositeQty: number;
+    avgLiquidity: number;
+    spread: number;
+    confidence: number;
+    exhaustionScore: number;
+    depletionRatio: number;
+    passiveVolumeRatio: number;
+    avgSpread: number;
+    volumeImbalance: number;
+    spoofed?: boolean;
+    metadata: {
+        signalType: string;
+        timestamp: number;
+        enhancementType: string;
+        affectedZones: number;
+        qualityMetrics: {
+            exhaustionStatisticalSignificance: number;
+            depletionConfirmation: boolean;
+            signalPurity: "premium" | "standard";
+        };
+    };
 }
 
 export interface SwingSignalData {
@@ -127,7 +186,7 @@ export interface BaseSignalEvent {
 
 export interface DeltaCVDConfirmationResult {
     price: number;
-    side: "buy" | "sell";
+    side: "buy" | "sell" | "neutral";
     rateOfChange: number;
     windowVolume: number;
     tradesInWindow: number;
@@ -135,13 +194,81 @@ export interface DeltaCVDConfirmationResult {
     slopes: Record<number, number>;
     zScores: Record<number, number>;
     confidence: number;
-    metadata?: Record<string, unknown>;
+    metadata?: DeltaCVDConfirmationMetadata;
+}
+
+interface DeltaCVDConfirmationMetadata {
+    signalType?: "enhanced_cvd" | "cvd_divergence" | "absorption_enhanced";
+    cvdAnalysis?: {
+        shortestWindowSlope: number;
+        shortestWindowZScore: number;
+        requiredMinZ: number;
+        detectionMode: string;
+        passedStatisticalTest: boolean;
+    };
+    absorptionAnalysis?: {
+        type: string;
+        strength: number;
+        expectedSignal: string;
+        cvdMagnitude?: number;
+        priceChange?: number;
+        alignsWithCVD: boolean;
+    } | null;
+    qualityMetrics?: {
+        cvdStatisticalSignificance: number;
+        absorptionConfirmation: boolean;
+        signalPurity: "premium" | "standard";
+    };
+    confidenceFactors?: ConfidenceFactors;
+    priceCorrelations?: Record<number, number>;
+    marketRegime?: MarketRegime;
+    adaptiveThreshold?: number;
+    timestamp: number;
+    volumeConcentration?: number;
+    majorVolumeLevel?: number | null;
+    institutionalZones?: InstitutionalZone[];
+    dominantInstitutionalSide?: string;
+    cvdWeightedPrice?: number;
+    institutionalFlowStrength?: number;
+    sampleSizes?: Record<number, number>;
+    priceMovement?: {
+        absoluteMove: number;
+        percentMove: number;
+        direction: "up" | "down" | "flat";
+    };
+    cvdMovement: {
+        totalCVD: number;
+        normalizedCVD: number;
+        direction: "bullish" | "bearish" | "neutral";
+    };
+    signalFrequency?: number;
+    timeToLastSignal?: number;
+}
+
+export interface InstitutionalZone {
+    priceLevel: number; // price level where institutional activity detected
+    netCVD: number; // net CVD accumulation at this level
+    buyVolume: number; // total buy volume at this level
+    sellVolume: number; // total sell volume at this level
+    firstSeen: number; // timestamp when first detected
+    lastUpdate: number; // timestamp of last activity
+    strength: number; // 0-1, strength of institutional activity
+    isActive: boolean; // whether zone is currently active
+}
+
+export interface ConfidenceFactors {
+    zScoreAlignment: number; // 0-1, how well z-scores align across windows
+    magnitudeStrength: number; // 0-1, strength of z-score magnitudes
+    priceCorrelation: number; // -1 to 1, correlation between price and CVD
+    volumeConcentration: number; // 0-1, how concentrated volume is at key levels
+    temporalConsistency: number; // 0-1, consistency of signal across timeframes
+    divergencePenalty: number; // 0-1, penalty for price/CVD divergence
 }
 
 export interface SignalCandidate {
     id: string;
     type: SignalType;
-    side: "buy" | "sell";
+    side: "buy" | "sell" | "neutral";
     confidence: number;
     timestamp: number;
     data: DetectorResultType;
@@ -235,6 +362,7 @@ export interface TradingSignalData {
     correlationData?: CorrelationData;
     side: "buy" | "sell";
     price: number;
+    positionSize?: number;
 }
 
 export interface DistributionResult {
@@ -261,12 +389,67 @@ export interface DistributionResult {
     priceWeakness?: number;
 }
 
+export interface DistributionConditions {
+    // Core distribution metrics
+    sellRatio: number;
+    duration: number;
+    aggressiveVolume: number;
+    passiveVolume: number;
+    totalVolume: number;
+
+    // Distribution analytics
+    strength: number;
+    sellingPressure: number;
+    priceResistance: number;
+    volumeConcentration: number;
+
+    // Timing and validation
+    recentActivity: number;
+    tradeCount: number;
+    meetsMinDuration: boolean;
+    meetsMinRatio: boolean;
+    isRecentlyActive: boolean;
+
+    // Distribution characteristics
+    dominantSide: "sell";
+    sideConfidence: number;
+    distributionEfficiency: number;
+}
+
+export interface DistributionMarketRegime {
+    volatility: number;
+    baselineVolatility: number;
+    distributionPressure: number;
+    resistanceStrength: number;
+    lastUpdate: number;
+}
+
+export interface EnhancedDistributionSignalData {
+    duration: number;
+    zone: number;
+    ratio: number;
+    sellRatio: number;
+    strength: number;
+    isDistributing: boolean;
+    price: number;
+    side: "sell" | "buy";
+    confidence: number;
+    metadata: {
+        distributionScore: number;
+        conditions: DistributionConditions;
+        marketRegime: DistributionMarketRegime;
+        statisticalSignificance: number;
+        volumeConcentration: number;
+        detectorVersion: string;
+    };
+}
+
 export type MarketRegime = {
     volatility: number;
     baselineVolatility: number;
     trendStrength: number;
     volumeNormalization: number;
-    lastUpdate: number;
+    lastUpdate?: number;
 };
 
 export interface DistributionEvent {

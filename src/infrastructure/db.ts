@@ -1,4 +1,6 @@
 import BetterSqlite3, { Database } from "better-sqlite3";
+import fs from "fs";
+import path from "path";
 
 /**
  * Singleton database instance for thread-safe access
@@ -35,6 +37,14 @@ export function getDB(dbPath = "./storage/trades.db"): Database {
 
         // Set flag to prevent concurrent initialization
         isInitializing = true;
+
+        // Ensure storage directory exists unless using in-memory database
+        if (dbPath !== ":memory:") {
+            const dir = path.dirname(dbPath);
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+            }
+        }
 
         // Initialize database with production settings
         dbInstance = new BetterSqlite3(dbPath);

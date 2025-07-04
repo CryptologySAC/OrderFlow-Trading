@@ -27,7 +27,10 @@ import {
 import { ThreadManager } from "./multithreading/threadManager.js";
 
 // Service imports
-import { DetectorFactory } from "./utils/detectorFactory.js";
+import {
+    DetectorFactory,
+    type DetectorDependencies,
+} from "./utils/detectorFactory.js";
 import type {
     EnrichedTradeEvent,
     OrderBookSnapshot,
@@ -39,20 +42,24 @@ import { SignalManager } from "./trading/signalManager.js";
 import { SignalCoordinator } from "./services/signalCoordinator.js";
 import { AnomalyDetector, AnomalyEvent } from "./services/anomalyDetector.js";
 
-// Indicator imports
-import { AbsorptionDetector } from "./indicators/absorptionDetector.js";
-import { ExhaustionDetector } from "./indicators/exhaustionDetector.js";
-import { DeltaCVDConfirmation } from "./indicators/deltaCVDConfirmation.js";
-import { SupportResistanceDetector } from "./indicators/supportResistanceDetector.js";
+// Enhanced Indicator imports
+import { AbsorptionDetectorEnhanced } from "./indicators/absorptionDetectorEnhanced.js";
+import { ExhaustionDetectorEnhanced } from "./indicators/exhaustionDetectorEnhanced.js";
+import { DeltaCVDDetectorEnhanced } from "./indicators/deltaCVDDetectorEnhanced.js";
+// Support/Resistance detector import removed - detector disabled
+// import { SupportResistanceDetector } from "./indicators/supportResistanceDetector.js";
 
-// Zone-based Detector imports
-import { AccumulationZoneDetector } from "./indicators/accumulationZoneDetector.js";
-import { DistributionZoneDetector } from "./indicators/distributionZoneDetector.js";
+// Enhanced Zone-based Detector imports
+import { AccumulationZoneDetectorEnhanced } from "./indicators/accumulationZoneDetectorEnhanced.js";
+import { DistributionDetectorEnhanced } from "./indicators/distributionDetectorEnhanced.js";
 import type {
-    AccumulationZone,
+    TradingZone,
     ZoneUpdate,
     ZoneSignal,
     ZoneAnalysisResult,
+    IcebergZoneUpdate,
+    HiddenOrderZoneUpdate,
+    SpoofingZoneUpdate,
 } from "./types/zoneTypes.js";
 
 // Utils imports
@@ -72,6 +79,10 @@ import type {
 } from "./utils/types.js";
 
 // Storage and processors
+import {
+    MarketDataStorageService,
+    type DataStorageConfig,
+} from "./services/marketDataStorageService.js";
 
 import { ProductionUtils } from "./utils/productionUtils.js";
 
@@ -98,26 +109,30 @@ export class OrderFlowDashboard {
     // DataStreamManager is handled by BinanceWorker in threaded mode
 
     // Market
-    private orderBook: IOrderBookState | null = null;
+    private orderBook!: IOrderBookState; // Initialized in initialize() method
     private preprocessor: OrderflowPreprocessor | null = null;
 
     // Coordinators
     private readonly signalCoordinator: SignalCoordinator;
     private readonly anomalyDetector: AnomalyDetector;
 
-    // Event-based Detectors (keep as-is)
-    private readonly absorptionDetector: AbsorptionDetector;
-    private readonly exhaustionDetector: ExhaustionDetector;
-    private readonly supportResistanceDetector: SupportResistanceDetector;
+    // Market Data Storage for Backtesting
+    private marketDataStorage?: MarketDataStorageService;
 
-    // Zone-based Detectors (new architecture)
-    private readonly accumulationZoneDetector: AccumulationZoneDetector;
-    private readonly distributionZoneDetector: DistributionZoneDetector;
+    // Event-based Detectors (initialized in initializeDetectors)
+    private absorptionDetector!: AbsorptionDetectorEnhanced;
+    private exhaustionDetector!: ExhaustionDetectorEnhanced;
+    // Support/Resistance detector disabled - generating too many useless signals
+    // private supportResistanceDetector!: SupportResistanceDetector;
+
+    // Zone-based Detectors (initialized in initializeDetectors)
+    private accumulationZoneDetector!: AccumulationZoneDetectorEnhanced;
+    private distributionZoneDetector!: DistributionDetectorEnhanced;
 
     // Legacy detectors removed - replaced by zone-based architecture
 
-    // Indicators
-    private readonly deltaCVDConfirmation: DeltaCVDConfirmation;
+    // Indicators (initialized in initializeDetectors)
+    private deltaCVDConfirmation!: DeltaCVDDetectorEnhanced;
 
     // Time context
     private timeContext: TimeContext = {
@@ -164,6 +179,13 @@ export class OrderFlowDashboard {
             this.logger.info(
                 "[OrderFlowDashboard] Orderflow preprocessor initialized"
             );
+
+            // 🚨 CRITICAL FIX: Initialize detectors AFTER orderBook is ready
+            this.initializeDetectors(dependencies);
+
+            // Initialize market data storage for backtesting
+            this.initializeMarketDataStorage();
+
             this.setupEventHandlers();
             this.setupHttpServer();
             this.setupGracefulShutdown();
@@ -243,24 +265,109 @@ export class OrderFlowDashboard {
 
         this.signalManager = dependencies.signalManager;
 
-        DetectorFactory.initialize(dependencies);
+        // Note: All detector initialization moved to initialize() method
+        // to ensure proper dependency order (after orderBook is ready)
+    }
 
+    /**
+     * Initialize market data storage for backtesting
+     */
+    private initializeMarketDataStorage(): void {
+        try {
+            const storageConfig = Config.marketDataStorage;
+            if (!storageConfig) {
+                this.logger.info(
+                    "[OrderFlowDashboard] Market data storage not configured - skipping"
+                );
+                return;
+            }
+
+            const dataStorageConfig: DataStorageConfig = {
+                enabled: storageConfig.enabled ?? false,
+                dataDirectory:
+                    storageConfig.dataDirectory ?? "./backtesting_data",
+                format: storageConfig.format ?? "both",
+                symbol: Config.SYMBOL,
+                maxFileSize: storageConfig.maxFileSize ?? 100,
+                depthLevels: storageConfig.depthLevels ?? 20,
+                rotationHours: storageConfig.rotationHours ?? 6,
+                compressionEnabled: storageConfig.compressionEnabled ?? false,
+                monitoringInterval: storageConfig.monitoringInterval ?? 30,
+            };
+
+            this.marketDataStorage = new MarketDataStorageService(
+                dataStorageConfig,
+                this.logger,
+                this.metricsCollector
+            );
+
+            if (dataStorageConfig.enabled) {
+                this.marketDataStorage.start();
+                this.logger.info(
+                    "[OrderFlowDashboard] Market data storage initialized and started",
+                    {
+                        directory: dataStorageConfig.dataDirectory,
+                        format: dataStorageConfig.format,
+                        symbol: dataStorageConfig.symbol,
+                        depthLevels: dataStorageConfig.depthLevels,
+                    }
+                );
+            } else {
+                this.logger.info(
+                    "[OrderFlowDashboard] Market data storage is disabled"
+                );
+            }
+        } catch (error) {
+            this.logger.error(
+                "[OrderFlowDashboard] Failed to initialize market data storage",
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
+            // Don't throw - this is not critical for main functionality
+        }
+    }
+
+    /**
+     * Initialize all detectors after orderBook is ready
+     */
+    private initializeDetectors(dependencies: Dependencies): void {
+        this.logger.info("[OrderFlowDashboard] Initializing detectors...");
+
+        // Create DetectorDependencies with preprocessor for enhanced detectors
+        if (!this.preprocessor) {
+            throw new Error(
+                "Preprocessor must be initialized before initializing detectors"
+            );
+        }
+
+        const detectorDependencies: DetectorDependencies = {
+            logger: dependencies.logger,
+            spoofingDetector: dependencies.spoofingDetector,
+            metricsCollector: dependencies.metricsCollector,
+            signalLogger: dependencies.signalLogger,
+            preprocessor: this.preprocessor,
+        };
+
+        DetectorFactory.initialize(detectorDependencies);
+
+        // Absorption Detector - REQUIRES orderBook
         this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
-            Config.ABSORPTION_DETECTOR,
-            this.orderBook as IOrderBookState,
-            dependencies,
+            this.orderBook, // Now guaranteed to be initialized
+            detectorDependencies,
             { id: "ltcusdt-absorption-main" }
         );
         this.signalCoordinator.registerDetector(
             this.absorptionDetector,
             ["absorption"],
-            60,
+            20,
             true
         );
 
+        // Exhaustion Detector
         this.exhaustionDetector = DetectorFactory.createExhaustionDetector(
-            Config.EXHAUSTION_DETECTOR,
-            dependencies,
+            detectorDependencies,
             { id: "ltcusdt-exhaustion-main" }
         );
         this.signalCoordinator.registerDetector(
@@ -270,41 +377,40 @@ export class OrderFlowDashboard {
             true
         );
 
-        // Initialize other components
+        // Delta CVD Confirmation Detector
         this.deltaCVDConfirmation =
             DetectorFactory.createDeltaCVDConfirmationDetector(
-                Config.DELTACVD_DETECTOR,
-                dependencies,
-                { id: "ltcusdt-cvdConfirmation-main" }
+                detectorDependencies,
+                {
+                    id: "ltcusdt-cvdConfirmation-main",
+                }
             );
         this.signalCoordinator.registerDetector(
             this.deltaCVDConfirmation,
             ["cvd_confirmation"],
-            30,
+            500,
             true
         );
 
-        // Support/Resistance Detector
-        this.supportResistanceDetector =
-            DetectorFactory.createSupportResistanceDetector(
-                Config.SUPPORT_RESISTANCE_DETECTOR,
-                dependencies,
-                { id: "ltcusdt-support-resistance-main" }
-            );
-        this.signalCoordinator.registerDetector(
-            this.supportResistanceDetector,
-            ["support_resistance_level"],
-            10,
-            true
-        );
+        // Support/Resistance Detector - DISABLED: Generating too many useless signals
+        // this.supportResistanceDetector =
+        //     DetectorFactory.createSupportResistanceDetector(
+        //         Config.SUPPORT_RESISTANCE_DETECTOR,
+        //         dependencies,
+        //         { id: "ltcusdt-support-resistance-main" }
+        //     );
+        // this.signalCoordinator.registerDetector(
+        //     this.supportResistanceDetector,
+        //     ["support_resistance_level"],
+        //     10,
+        //     true
+        // );
 
-        // Initialize Zone-based Detectors
+        // Accumulation Zone Detector
         this.accumulationZoneDetector =
-            DetectorFactory.createAccumulationDetector(
-                Config.ACCUMULATION_ZONE_DETECTOR,
-                dependencies,
-                { id: "ltcusdt-accumulation-zone-main" }
-            );
+            DetectorFactory.createAccumulationDetector(detectorDependencies, {
+                id: "ltcusdt-accumulation-zone-main",
+            });
         this.signalCoordinator.registerDetector(
             this.accumulationZoneDetector,
             ["accumulation"],
@@ -312,26 +418,26 @@ export class OrderFlowDashboard {
             true
         );
 
-        // Initialize Zone-based Detectors
+        // Distribution Zone Detector
         this.distributionZoneDetector =
-            DetectorFactory.createDistributionDetector(
-                Config.DISTRIBUTION_ZONE_DETECTOR,
-                dependencies,
-                { id: "ltcusdt-distribution-zone-main" }
-            );
+            DetectorFactory.createDistributionDetector(detectorDependencies, {
+                id: "ltcusdt-distribution-zone-main",
+            });
         this.signalCoordinator.registerDetector(
             this.distributionZoneDetector,
             ["distribution"],
-            40,
+            50,
             true
         );
 
+        // Start signal coordinator
         void this.signalCoordinator.start();
-        this.logger.info("SignalCoordinator started");
-        this.logger.info("Status:", this.signalCoordinator.getStatus());
-        const signalCoordinatorInfo = this.signalCoordinator.getDetectorInfo();
-        this.logger.info("Detectors:", { signalCoordinatorInfo });
 
+        this.logger.info(
+            "[OrderFlowDashboard] All detectors initialized successfully"
+        );
+
+        // Log detector status periodically
         setInterval(() => {
             const stats = DetectorFactory.getFactoryStats();
             this.logger.info("Factory stats:", { stats });
@@ -340,7 +446,7 @@ export class OrderFlowDashboard {
             this.logger.info("Detectors:", { signalCoordinatorInfo });
         }, 60000);
 
-        // Cleanup on exit
+        // Setup cleanup on exit
         process.on("SIGINT", () => {
             DetectorFactory.destroyAll();
             void this.signalCoordinator.stop();
@@ -636,14 +742,28 @@ export class OrderFlowDashboard {
                     // Store last trade price for anomaly context
                     this.lastTradePrice = enrichedTrade.price;
 
+                    // Store trade data for backtesting (if enabled)
+                    if (this.marketDataStorage?.isActive()) {
+                        this.marketDataStorage.storeTrade(enrichedTrade);
+                    }
+
                     // Feed trade data to event-based detectors
                     this.absorptionDetector.onEnrichedTrade(enrichedTrade);
                     this.exhaustionDetector.onEnrichedTrade(enrichedTrade);
                     this.anomalyDetector.onEnrichedTrade(enrichedTrade);
                     this.deltaCVDConfirmation.onEnrichedTrade(enrichedTrade);
-                    this.supportResistanceDetector.onEnrichedTrade(
+
+                    // Feed trade data to new advanced detectors
+                    this.dependencies.icebergDetector.onEnrichedTrade(
                         enrichedTrade
                     );
+                    this.dependencies.hiddenOrderDetector.onEnrichedTrade(
+                        enrichedTrade
+                    );
+                    // Support/Resistance detector disabled
+                    // this.supportResistanceDetector.onEnrichedTrade(
+                    //     enrichedTrade
+                    // );
 
                     // Legacy detectors removed - replaced by zone-based architecture
 
@@ -666,12 +786,42 @@ export class OrderFlowDashboard {
                     }
                 }
             );
+            // Dashboard-specific orderbook updates with full snapshot for visualization
             this.preprocessor?.on(
-                "orderbook_update",
-                (orderBookUpdate: OrderBookSnapshot) => {
+                "dashboard_orderbook_update",
+                (dashboardUpdate: OrderBookSnapshot) => {
+                    // Store depth data for backtesting (if enabled)
+                    if (this.marketDataStorage?.isActive()) {
+                        // Convert depth snapshot map to bids/asks arrays
+                        const bids: { price: number; quantity: number }[] = [];
+                        const asks: { price: number; quantity: number }[] = [];
+
+                        for (const [
+                            price,
+                            level,
+                        ] of dashboardUpdate.depthSnapshot) {
+                            if (level.bid > 0) {
+                                bids.push({ price, quantity: level.bid });
+                            }
+                            if (level.ask > 0) {
+                                asks.push({ price, quantity: level.ask });
+                            }
+                        }
+
+                        // Sort bids highest to lowest, asks lowest to highest
+                        bids.sort((a, b) => b.price - a.price);
+                        asks.sort((a, b) => a.price - b.price);
+
+                        this.marketDataStorage.storeDepthSnapshot(
+                            bids,
+                            asks,
+                            dashboardUpdate.timestamp
+                        );
+                    }
+
                     const orderBookMessage: WebSocketMessage =
                         this.dependencies.orderBookProcessor.onOrderBookUpdate(
-                            orderBookUpdate
+                            dashboardUpdate
                         );
                     if (orderBookMessage) {
                         this.broadcastMessage(orderBookMessage);
@@ -696,34 +846,35 @@ export class OrderFlowDashboard {
             });
         }
 
-        if (this.supportResistanceDetector) {
-            this.logger.info(
-                "[OrderFlowDashboard] Setting up support/resistance detector event handlers..."
-            );
-            this.supportResistanceDetector.on(
-                "supportResistanceLevel",
-                (event: {
-                    type: string;
-                    data: Record<string, unknown>;
-                    timestamp: Date;
-                }) => {
-                    const message: WebSocketMessage = {
-                        type: "supportResistanceLevel",
-                        data: event.data,
-                        now: Date.now(),
-                    };
-                    this.broadcastMessage(message);
-                    this.logger.info(
-                        "Support/Resistance level broadcasted via WebSocket",
-                        {
-                            levelId: event.data.id,
-                            price: event.data.price,
-                            type: event.data.type,
-                        }
-                    );
-                }
-            );
-        }
+        // Support/Resistance detector event handlers disabled
+        // if (this.supportResistanceDetector) {
+        //     this.logger.info(
+        //         "[OrderFlowDashboard] Setting up support/resistance detector event handlers..."
+        //     );
+        //     this.supportResistanceDetector.on(
+        //         "supportResistanceLevel",
+        //         (event: {
+        //             type: string;
+        //             data: Record<string, unknown>;
+        //             timestamp: Date;
+        //         }) => {
+        //             const message: WebSocketMessage = {
+        //                 type: "supportResistanceLevel",
+        //                 data: event.data,
+        //                 now: Date.now(),
+        //             };
+        //             this.broadcastMessage(message);
+        //             this.logger.info(
+        //                 "Support/Resistance level broadcasted via WebSocket",
+        //                 {
+        //                     levelId: event.data.id,
+        //                     price: event.data.price,
+        //                     type: event.data.type,
+        //                 }
+        //             );
+        //         }
+        //     );
+        // }
 
         // Setup zone-based detector event handlers
         this.setupZoneEventHandlers();
@@ -848,7 +999,8 @@ export class OrderFlowDashboard {
         // Accumulation Zone Events
         this.accumulationZoneDetector.on(
             "zoneCreated",
-            (zone: AccumulationZone) => {
+            (...args: unknown[]) => {
+                const zone = args[0] as TradingZone;
                 this.logger.info("Accumulation zone created", {
                     zoneId: zone.id,
                     priceCenter: zone.priceRange.center,
@@ -860,7 +1012,8 @@ export class OrderFlowDashboard {
 
         this.accumulationZoneDetector.on(
             "zoneCompleted",
-            (zone: AccumulationZone) => {
+            (...args: unknown[]) => {
+                const zone = args[0] as TradingZone;
                 this.logger.info("Accumulation zone completed", {
                     zoneId: zone.id,
                     finalStrength: zone.strength.toFixed(3),
@@ -871,27 +1024,147 @@ export class OrderFlowDashboard {
         );
 
         // Distribution Zone Events
-        this.distributionZoneDetector.on(
-            "zoneCreated",
-            (zone: AccumulationZone) => {
-                this.logger.info("Distribution zone created", {
-                    zoneId: zone.id,
-                    priceCenter: zone.priceRange.center,
-                    strength: zone.strength.toFixed(3),
-                    significance: zone.significance,
-                });
-            }
-        );
+        this.distributionZoneDetector.on("zoneCreated", (zone: TradingZone) => {
+            this.logger.info("Distribution zone created", {
+                zoneId: zone.id,
+                priceCenter: zone.priceRange.center,
+                strength: zone.strength.toFixed(3),
+                significance: zone.significance,
+            });
+        });
 
         this.distributionZoneDetector.on(
             "zoneCompleted",
-            (zone: AccumulationZone) => {
+            (zone: TradingZone) => {
                 this.logger.info("Distribution zone completed", {
                     zoneId: zone.id,
                     finalStrength: zone.strength.toFixed(3),
                     duration: zone.timeInZone,
                     totalVolume: zone.totalVolume,
                 });
+            }
+        );
+
+        // Iceberg Detector Zone Events
+        this.dependencies.icebergDetector.on(
+            "zoneUpdated",
+            (update: IcebergZoneUpdate) => {
+                this.logger.info("Iceberg zone detected", {
+                    component: "IcebergDetector",
+                    zoneId: update.zone.id,
+                    priceRange: update.zone.priceRange,
+                    strength: update.zone.strength,
+                    refillCount: update.zone.refillCount,
+                    totalVolume: update.zone.totalVolume,
+                });
+
+                // Broadcast zone update to clients
+                const message: WebSocketMessage = {
+                    type: "zoneUpdate",
+                    now: Date.now(),
+                    data: {
+                        updateType: update.updateType,
+                        zone: {
+                            id: update.zone.id,
+                            type: update.zone.type,
+                            priceRange: update.zone.priceRange,
+                            strength: update.zone.strength,
+                            completion: update.zone.completion,
+                            startTime: update.zone.startTime,
+                            endTime: update.zone.endTime,
+                            totalVolume: update.zone.totalVolume,
+                            refillCount: update.zone.refillCount,
+                            side: update.zone.side,
+                            institutionalScore: update.zone.institutionalScore,
+                            priceStability: update.zone.priceStability,
+                            avgRefillGap: update.zone.avgRefillGap,
+                            temporalScore: update.zone.temporalScore,
+                        },
+                        significance: update.significance,
+                    },
+                };
+                this.broadcastMessage(message);
+            }
+        );
+
+        // Hidden Order Detector Zone Events
+        this.dependencies.hiddenOrderDetector.on(
+            "zoneUpdated",
+            (update: HiddenOrderZoneUpdate) => {
+                this.logger.info("Hidden order zone detected", {
+                    component: "HiddenOrderDetector",
+                    zoneId: update.zone.id,
+                    priceRange: update.zone.priceRange,
+                    strength: update.zone.strength,
+                    stealthType: update.zone.stealthType,
+                    totalVolume: update.zone.totalVolume,
+                });
+
+                // Broadcast zone update to clients
+                const message: WebSocketMessage = {
+                    type: "zoneUpdate",
+                    now: Date.now(),
+                    data: {
+                        updateType: update.updateType,
+                        zone: {
+                            id: update.zone.id,
+                            type: update.zone.type,
+                            priceRange: update.zone.priceRange,
+                            strength: update.zone.strength,
+                            completion: update.zone.completion,
+                            startTime: update.zone.startTime,
+                            endTime: update.zone.endTime,
+                            totalVolume: update.zone.totalVolume,
+                            tradeCount: update.zone.tradeCount,
+                            side: update.zone.side,
+                            stealthType: update.zone.stealthType,
+                            stealthScore: update.zone.stealthScore,
+                        },
+                        significance: update.significance,
+                    },
+                };
+                this.broadcastMessage(message);
+            }
+        );
+
+        // Spoofing Detector Zone Events
+        this.dependencies.spoofingDetector.on(
+            "zoneUpdated",
+            (update: SpoofingZoneUpdate) => {
+                this.logger.info("Spoofing zone detected", {
+                    component: "SpoofingDetector",
+                    zoneId: update.zone.id,
+                    priceRange: update.zone.priceRange,
+                    strength: update.zone.strength,
+                    spoofType: update.zone.spoofType,
+                    wallSize: update.zone.wallSize,
+                });
+
+                // Broadcast zone update to clients
+                const message: WebSocketMessage = {
+                    type: "zoneUpdate",
+                    now: Date.now(),
+                    data: {
+                        updateType: update.updateType,
+                        zone: {
+                            id: update.zone.id,
+                            type: update.zone.type,
+                            priceRange: update.zone.priceRange,
+                            strength: update.zone.strength,
+                            completion: update.zone.completion,
+                            startTime: update.zone.startTime,
+                            endTime: update.zone.endTime,
+                            spoofType: update.zone.spoofType,
+                            wallSize: update.zone.wallSize,
+                            canceled: update.zone.canceled,
+                            executed: update.zone.executed,
+                            side: update.zone.side,
+                            confidence: update.zone.confidence,
+                        },
+                        significance: update.significance,
+                    },
+                };
+                this.broadcastMessage(message);
             }
         );
     }
@@ -948,6 +1221,10 @@ export class OrderFlowDashboard {
                     metrics: this.metricsCollector.getMetrics(),
                     health: this.metricsCollector.getHealthSummary(),
                     dataStream: null, // DataStreamManager handled by BinanceWorker
+                    marketDataStorage:
+                        this.marketDataStorage?.getStorageStats() || {
+                            enabled: false,
+                        },
                     correlationId,
                 };
                 res.json(stats);
@@ -956,6 +1233,76 @@ export class OrderFlowDashboard {
                 this.handleError(
                     error as Error,
                     "stats_endpoint",
+                    correlationId
+                );
+                res.status(500).json({
+                    status: "error",
+                    error: (error as Error).message,
+                    correlationId,
+                });
+            }
+        });
+
+        // Market data storage status and control endpoint
+        this.httpServer.get("/market-data-storage", (req, res) => {
+            const correlationId = randomUUID();
+            try {
+                if (!this.marketDataStorage) {
+                    res.json({
+                        status: "not_configured",
+                        message: "Market data storage is not configured",
+                        correlationId,
+                    });
+                    return;
+                }
+
+                const stats = this.marketDataStorage.getStorageStats();
+                const config = this.marketDataStorage.getConfig();
+
+                res.json({
+                    status: "configured",
+                    stats,
+                    config,
+                    correlationId,
+                });
+            } catch (error) {
+                this.handleError(
+                    error as Error,
+                    "market_data_storage_endpoint",
+                    correlationId
+                );
+                res.status(500).json({
+                    status: "error",
+                    error: (error as Error).message,
+                    correlationId,
+                });
+            }
+        });
+
+        // Market data storage control endpoint
+        this.httpServer.post("/market-data-storage/log-status", (req, res) => {
+            const correlationId = randomUUID();
+            try {
+                if (!this.marketDataStorage) {
+                    res.status(404).json({
+                        status: "not_configured",
+                        message: "Market data storage is not configured",
+                        correlationId,
+                    });
+                    return;
+                }
+
+                this.marketDataStorage.logStatus();
+
+                res.json({
+                    status: "success",
+                    message: "Storage status logged",
+                    correlationId,
+                });
+            } catch (error) {
+                this.handleError(
+                    error as Error,
+                    "market_data_storage_control_endpoint",
                     correlationId
                 );
                 res.status(500).json({
@@ -1330,9 +1677,59 @@ export class OrderFlowDashboard {
             const correlationId = randomUUID();
             this.logger.info("Starting scheduled purge", {}, correlationId);
 
+            // 🔧 FIX: Use 1.5 hours (90 minutes) retention instead of default 24 hours
+            const retentionHours = 1.5; // Match Config.maxStorageTime (5400000ms = 90 minutes)
+
             this.threadManager
-                .callStorage("purgeOldEntries")
-                .then()
+                .callStorage("purgeOldEntries", correlationId, retentionHours)
+                .then((deletedCount) => {
+                    this.logger.info("Scheduled purge completed successfully", {
+                        deletedRecords: deletedCount,
+                        retentionHours,
+                        correlationId,
+                    });
+
+                    // 🔧 FIX: Run VACUUM after purge to reclaim disk space
+                    if (deletedCount > 0) {
+                        return this.threadManager.callStorage(
+                            "vacuumDatabase",
+                            correlationId
+                        );
+                    }
+                })
+                .then(() => {
+                    // 🔧 FIX: Monitor database size after cleanup
+                    return this.threadManager.callStorage(
+                        "getDatabaseSize",
+                        correlationId
+                    );
+                })
+                .then((sizeInfo) => {
+                    if (sizeInfo) {
+                        const { sizeMB } = sizeInfo as {
+                            sizeBytes: number;
+                            sizeMB: number;
+                        };
+
+                        // Alert on database size thresholds
+                        if (sizeMB > 200) {
+                            this.logger.warn(
+                                "Database size exceeds warning threshold",
+                                {
+                                    sizeMB,
+                                    threshold: "200MB",
+                                    correlationId,
+                                }
+                            );
+                        } else if (sizeMB > 100) {
+                            this.logger.info("Database size monitoring", {
+                                sizeMB,
+                                status: "normal",
+                                correlationId,
+                            });
+                        }
+                    }
+                })
                 .catch((error) => {
                     this.handleError(
                         error as Error,
@@ -1426,6 +1823,11 @@ export class OrderFlowDashboard {
             // Shutdown components
             // WebSocketManager shutdown handled by communication worker
             // DataStreamManager disconnect handled by BinanceWorker
+
+            // Stop market data storage
+            if (this.marketDataStorage?.isActive()) {
+                void this.marketDataStorage.stop();
+            }
 
             // Give time for cleanup
             // StatsBroadcaster stopped by communication worker

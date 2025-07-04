@@ -26,6 +26,12 @@ describe("trading/SignalManager", () => {
             recentAnomalyTypes: [],
             volatilityRatio: 1.0,
             highestSeverity: "low",
+            metrics: {
+                volatility: 0.5,
+                spreadBps: 1.0,
+                flowImbalance: 0.0,
+                lastUpdateAge: 0,
+            },
         });
 
         const manager = new SignalManager(
@@ -39,7 +45,7 @@ describe("trading/SignalManager", () => {
             id: "test_signal_1",
             originalCandidate: {} as any,
             type: "absorption" as const,
-            confidence: 0.8,
+            confidence: 0.9, // Updated to exceed the new 0.85 threshold for absorption
             timestamp: new Date(),
             detectorId: "test_detector",
             processingMetadata: {},
@@ -63,6 +69,12 @@ describe("trading/SignalManager", () => {
             recentAnomalyTypes: [],
             volatilityRatio: 1.0,
             highestSeverity: "low",
+            metrics: {
+                volatility: 0.5,
+                spreadBps: 1.0,
+                flowImbalance: 0.0,
+                lastUpdateAge: 0,
+            },
         });
 
         const manager = new SignalManager(
@@ -75,7 +87,7 @@ describe("trading/SignalManager", () => {
 
         const baseSignal = {
             originalCandidate: {} as any,
-            confidence: 0.8,
+            confidence: 0.96, // Updated to exceed the accumulation threshold of 0.95
             timestamp: new Date(),
             detectorId: "test_detector",
             processingMetadata: {},

@@ -102,6 +102,10 @@ Settings for the ExhaustionDetector (aggressive flow depletion).
 - `moveTicks` – Expected follow‑through move in ticks to confirm the event.
 - `confirmationTimeout` – Time to wait for confirmation before discarding the signal.
 - `maxRevisitTicks` – Maximum ticks price may revisit the zone before invalidating it.
+- **`imbalanceHighThreshold`** – High imbalance threshold for scoring (default 0.8).
+- **`imbalanceMediumThreshold`** – Medium imbalance threshold for scoring (default 0.6).
+- **`spreadHighThreshold`** – High spread threshold for scoring (default 0.005).
+- **`spreadMediumThreshold`** – Medium spread threshold for scoring (default 0.002).
 - `features` – Feature flags enabling advanced logic:
     - `depletionTracking`, `spreadAdjustment`, `spoofingDetection`, `autoCalibrate`, `adaptiveZone`, `multiZone`, `volumeVelocity`, `passiveHistory`.
 
@@ -120,6 +124,7 @@ Configuration for the AbsorptionDetector.
 - `moveTicks` – Required move away from the zone to confirm absorption.
 - `confirmationTimeout` – How long to wait for price confirmation in ms.
 - `maxRevisitTicks` – Allowed revisit distance before the zone is invalidated.
+- **`priceEfficiencyThreshold`** – Price efficiency threshold for absorption detection (default 0.85). Previously hardcoded at 0.7.
 - `features` – Feature toggles: `spoofingDetection`, `adaptiveZone`, `passiveHistory`, `multiZone`, `autoCalibrate`, `icebergDetection`, `liquidityGradient`, `spreadAdjustment`, `absorptionVelocity`.
 
 ### deltaCvdConfirmation
@@ -131,6 +136,9 @@ Configuration for the AbsorptionDetector.
 - `pricePrecision` – Decimal precision used.
 - `dynamicThresholds` – Use adaptive thresholds based on recent volatility.
 - `logDebug` – Enable extra debugging output.
+- **`strongCorrelationThreshold`** – Strong correlation threshold for signal confidence (default 0.8).
+- **`weakCorrelationThreshold`** – Weak correlation threshold for signal confidence (default 0.4).
+- **`depthImbalanceThreshold`** – Order book depth imbalance threshold (default 0.7).
 
 ### swingPredictor
 
@@ -149,6 +157,9 @@ Configuration for the AbsorptionDetector.
 - `trackSide` – If `true`, accumulation is tracked separately on bid and ask.
 - `pricePrecision` – Decimal precision.
 - `accumulationThreshold` – Confidence score needed to emit a signal.
+- **`priceStabilityThreshold`** – Price stability threshold for zone formation (default 0.002).
+- **`strongZoneThreshold`** – Strong zone threshold for signal generation (default 0.8).
+- **`weakZoneThreshold`** – Weak zone threshold for signal generation (default 0.6).
 
 ### distributionDetector
 
@@ -201,3 +212,34 @@ Configuration for the AbsorptionDetector.
 ## Notes on Tweaking Values
 
 Lowering thresholds (like `minAggVolume` or `threshold`) generally produces more signals but with higher noise. Increasing cooldowns and confirmation requirements results in fewer, higher‑quality alerts at the expense of responsiveness. Each trading pair may require tuning to balance sensitivity and false positives.
+
+## 🔧 Threshold Configuration Improvements (2025-06-23)
+
+**Key Enhancement**: All detector threshold parameters are now **fully configurable** through `config.json`, eliminating previously hardcoded values that could block signal generation.
+
+### Critical Fixes Applied
+
+**AbsorptionDetector**:
+
+- `priceEfficiencyThreshold` (was hardcoded at 0.7, now configurable with default 0.85)
+
+**ExhaustionDetector**:
+
+- `imbalanceHighThreshold`, `imbalanceMediumThreshold` (were hardcoded at 0.8, 0.6)
+- `spreadHighThreshold`, `spreadMediumThreshold` (were hardcoded at 0.005, 0.002)
+
+**DeltaCVDConfirmation**:
+
+- `strongCorrelationThreshold`, `weakCorrelationThreshold` (were hardcoded at 0.8, 0.4)
+- `depthImbalanceThreshold` (was hardcoded at 0.7)
+
+**AccumulationZoneDetector**:
+
+- `priceStabilityThreshold`, `strongZoneThreshold`, `weakZoneThreshold` (now configurable)
+
+### Benefits
+
+- **Eliminates "No Signals" Issues**: Hardcoded thresholds that blocked signals are now configurable
+- **Backtesting Flexibility**: Different threshold combinations can be tested systematically
+- **Production Optimization**: Optimal thresholds can be deployed from backtesting results
+- **Institutional Compliance**: Full configuration auditability and repeatability

@@ -35,9 +35,12 @@
         "update": "npx npm-check-updates -u",
         "prepare": "husky",
         "build": "yarn format && tsc -p tsconfig.build.json",
-        "test": "vitest",
+        "test": "vitest --run",
         "test:coverage": "vitest run --coverage",
+        "test:deltacvd-ab": "tsx scripts/runDeltaCVDABTest.ts",
+        "test:deltacvd-ab:all": "tsx scripts/runDeltaCVDABTest.ts --profile all --parallel",
         "dev": "ts-node --transpile-only src/index.ts",
+        "backtest": "node --max-old-space-size=8192 --expose-gc --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"));' scripts/runBacktest.ts",
         "protect-production": "echo 'Files protected from automated modification'",
         "validate-protection": "grep -l 'PRODUCTION-READY' src/indicators/*.ts"
     },

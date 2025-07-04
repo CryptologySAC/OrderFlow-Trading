@@ -731,6 +731,9 @@ export class DataStreamManager extends EventEmitter {
                         },
                         correlationId
                     );
+                    // Ensure Binance feed cleans up underlying connection to
+                    // avoid residual event listeners during reconnection
+                    await this.binanceFeed.disconnect();
                 } catch (error) {
                     this.logger.error(
                         "Error disconnecting connection",

@@ -17,5 +17,7 @@ describe("utils/rollingWindow", () => {
         const w = new RollingWindow(3);
         [1, 2, 3, 4].forEach((n) => w.push(n));
         expect(w.toArray()).toEqual([2, 3, 4]);
+        expect(w.sum()).toBe(9);
+        expect(w.stdDev()).toBeGreaterThan(0);
     });
 });

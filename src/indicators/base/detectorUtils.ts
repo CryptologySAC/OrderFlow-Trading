@@ -2,108 +2,67 @@
 import { SpotWebsocketStreams } from "@binance/spot";
 import type { AggressiveTrade } from "../../types/marketEvents.js";
 import { randomUUID } from "crypto";
+import { FinancialMath } from "../../utils/financialMath.js";
 
+/**
+ * @deprecated This class is being migrated to use FinancialMath for all calculations.
+ * Use FinancialMath directly for new code.
+ *
+ * DetectorUtils now provides wrapper methods that delegate to FinancialMath
+ * to maintain backward compatibility while ensuring institutional-grade precision.
+ */
 export class DetectorUtils {
     /**
-     * Calculate median
+     * @deprecated Use FinancialMath.calculateMedian() directly
      */
     public static calculateMedian(values: number[]): number {
-        if (values.length === 0) return 0;
-
-        const sorted = [...values].sort((a, b) => a - b);
-        const mid = Math.floor(sorted.length / 2);
-
-        if (sorted.length % 2 === 0) {
-            return (sorted[mid - 1] + sorted[mid]) / 2;
-        }
-
-        return sorted[mid];
+        return FinancialMath.calculateMedian(values);
     }
 
     /**
-     * CRITICAL FIX: Standardized zone calculation for all detectors
-     * This method was called but not implemented
+     * @deprecated Use FinancialMath.calculateZone() directly
      */
     public static calculateZone(
         price: number,
         zoneTicks: number,
         pricePrecision: number
     ): number {
-        if (price <= 0 || zoneTicks <= 0 || pricePrecision < 0) {
-            throw new Error(
-                `Invalid zone calculation parameters: price=${price}, zoneTicks=${zoneTicks}, pricePrecision=${pricePrecision}`
-            );
-        }
-
-        // Use integer arithmetic for financial precision
-        const scale = Math.pow(10, pricePrecision);
-        const scaledPrice = Math.round(price * scale);
-        const scaledTickSize = Math.round(
-            Math.pow(10, -pricePrecision) * scale
-        );
-        const scaledZoneSize = zoneTicks * scaledTickSize;
-
-        // Ensure consistent rounding across all detectors
-        const scaledResult =
-            Math.round(scaledPrice / scaledZoneSize) * scaledZoneSize;
-        return scaledResult / scale;
+        return FinancialMath.calculateZone(price, zoneTicks, pricePrecision);
     }
 
     /**
-     * Calculate percentile
+     * @deprecated Use FinancialMath.calculatePercentile() directly
      */
     public static calculatePercentile(
         values: number[],
         percentile: number
     ): number {
-        if (values.length === 0) return 0;
-
-        const sorted = [...values].sort((a, b) => a - b);
-        const index = Math.ceil((percentile / 100) * sorted.length) - 1;
-
-        return sorted[Math.max(0, index)];
+        return FinancialMath.calculatePercentile(values, percentile);
     }
 
     /**
-     * Calculate mean of numeric array
+     * @deprecated Use FinancialMath.calculateMean() directly
      */
     public static calculateMean(values: number[]): number {
-        if (values.length === 0) return 0;
-        return values.reduce((sum, val) => sum + val, 0) / values.length;
+        return FinancialMath.calculateMean(values);
     }
 
     /**
-     * Safe division with zero protection
+     * @deprecated Use FinancialMath.safeDivide() directly
      */
     public static safeDivide(
         numerator: number,
         denominator: number,
         defaultValue: number = 0
     ): number {
-        if (denominator === 0 || isNaN(denominator) || isNaN(numerator)) {
-            return defaultValue;
-        }
-        return numerator / denominator;
+        return FinancialMath.safeDivide(numerator, denominator, defaultValue);
     }
 
-    // ✅ SHOULD USE WELFORD'S ALGORITHM:
+    /**
+     * @deprecated Use FinancialMath.calculateStdDev() directly
+     */
     public static calculateStdDev(values: number[]): number {
-        if (values.length === 0) return 0;
-        if (values.length === 1) return 0;
-
-        // Welford's algorithm for numerical stability
-        let mean = 0;
-        let m2 = 0;
-
-        for (let i = 0; i < values.length; i++) {
-            const delta = values[i] - mean;
-            mean += delta / (i + 1);
-            const delta2 = values[i] - mean;
-            m2 += delta * delta2;
-        }
-
-        const variance = m2 / (values.length - 1);
-        return Math.sqrt(Math.max(0, variance));
+        return FinancialMath.calculateStdDev(values);
     }
 
     /**

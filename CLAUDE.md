@@ -49,6 +49,176 @@ This is a **PRODUCTION TRADING SYSTEM** handling real financial data and trading
 5. **Rollback Plan**: Define immediate rollback procedure
 6. **User Approval**: Get explicit approval for business-critical changes
 
+#### 🚫 STRICTLY FORBIDDEN: LIVE DATA CACHING
+
+**CRITICAL PROHIBITION**: Caching of live market data is **STRICTLY FORBIDDEN** in this production trading system.
+
+**RATIONALE:**
+
+- **Financial Risk**: Stale cached data can lead to incorrect trading signals
+- **Market Impact**: Outdated prices/volumes cause wrong signal timing
+- **Real-time Requirement**: Trading algorithms depend on millisecond-fresh data
+- **Data Integrity**: Cache invalidation failures create systematic trading errors
+
+**PROHIBITED PATTERNS:**
+
+```typescript
+// ❌ NEVER: Cache live market data
+const cachedOrderBookState = this.cache.get('orderbook');
+const cachedBestBid = this.priceCache[symbol];
+const cachedTradeData = this.memoize(getTrade);
+
+// ❌ NEVER: Store live data in variables for reuse
+private lastBestBid: number; // DON'T cache live quotes
+private cachedSpread: number; // DON'T cache live calculations
+private bufferedTrades: Trade[]; // DON'T cache live trades
+```
+
+**ALLOWED PATTERNS:**
+
+```typescript
+// ✅ CORRECT: Always fetch fresh data
+const bestBid = this.orderBook.getBestBid();
+const spread = this.orderBook.getSpread();
+const trade = this.getCurrentTrade();
+
+// ✅ CORRECT: Single-use calculation within method scope
+const bestBid = this.orderBook.getBestBid();
+const bestAsk = this.orderBook.getBestAsk();
+const spread = bestAsk - bestBid; // Only within same method call
+```
+
+**VIOLATIONS DETECTION:**
+Any implementation of caching mechanisms on live market data will be **IMMEDIATELY REJECTED** and flagged as a critical trading system violation.
+
+#### 🚫 NUCLEAR CLEANUP PROTOCOLS: ZERO TOLERANCE CONFIGURATION (MANDATORY)
+
+**CRITICAL ENFORCEMENT**: All enhanced detectors MUST follow the "NO DEFAULTS, NO FALLBACKS, NO BULLSHIT" philosophy implemented through the nuclear cleanup project.
+
+**MANDATORY ARCHITECTURE PRINCIPLES:**
+
+1. **🚫 ZERO DEFAULT METHODS**: All `getDefault*()` methods are **STRICTLY FORBIDDEN** in enhanced detectors
+2. **🚫 ZERO FALLBACK OPERATORS**: All `??` fallback operators are **STRICTLY FORBIDDEN** throughout the codebase
+3. **🚫 ZERO HARDCODED VALUES**: All threshold, limit, and calculation values MUST be configurable via settings interfaces
+4. **✅ MANDATORY ZOD VALIDATION**: All settings MUST be validated through Zod schemas with `process.exit(1)` on missing configuration
+5. **✅ PURE WRAPPER ARCHITECTURE**: Enhanced detectors MUST be pure config-driven wrappers with no internal defaults
+
+**ZOD VALIDATION ENFORCEMENT:**
+
+```typescript
+// ✅ REQUIRED: Zod schemas for all enhanced detectors
+export const AbsorptionDetectorSchema = z.object({
+    minAggVolume: z.number().int().min(1).max(1000),
+    absorptionThreshold: z.number().min(0.1).max(1.0),
+    windowMs: z.number().int().min(5000).max(300000),
+    // ALL properties required - no .optional()
+});
+
+// ✅ REQUIRED: Config getters with Zod validation
+export class Config {
+    static get ABSORPTION_DETECTOR() {
+        return AbsorptionDetectorSchema.parse(SYMBOL_CFG.absorption);
+        // Zod .parse() throws on missing/invalid config → process.exit(1)
+    }
+}
+
+// ✅ CORRECT: Enhanced detector using validated config
+export class AbsorptionDetectorEnhanced extends EventEmitter {
+    constructor(
+        id: string,
+        settings: typeof Config.ABSORPTION_DETECTOR // Pre-validated by Zod
+        // ... other dependencies
+    ) {
+        super();
+        // settings is guaranteed valid - no defaults needed
+        this.detector = new AbsorptionDetector(id, settings /* ... */);
+    }
+}
+```
+
+**PROHIBITED PATTERNS:**
+
+```typescript
+// ❌ NEVER: Default methods in enhanced detectors
+private getDefaultMinAggVolume(): number { return 20; }
+private getDefaultSettings(): Settings { return {...}; }
+
+// ❌ NEVER: Fallback operators for missing config
+const threshold = this.settings.threshold ?? 0.5;
+const mode = config.mode || "production";
+
+// ❌ NEVER: Optional Zod properties (.optional())
+minAggVolume: z.number().optional(), // FORBIDDEN - all must be required
+
+// ❌ NEVER: Manual validation with defaults
+const settings = config.absorption || getDefaultAbsorptionSettings();
+
+// ❌ NEVER: Type casting to bypass Zod validation
+const settings = config as any;
+const detector = settings as DetectorSettings;
+```
+
+**REQUIRED ZOD PATTERNS:**
+
+```typescript
+// ✅ CORRECT: All Zod properties required with validation ranges
+export const ExhaustionDetectorSchema = z.object({
+    minAggVolume: z.number().int().min(1).max(10000),
+    windowMs: z.number().int().min(5000).max(300000),
+    exhaustionThreshold: z.number().min(0.1).max(1.0),
+    // NO .optional() - every property is mandatory
+});
+
+// ✅ CORRECT: Universal zone config separation
+export const UniversalZoneSchema = z.object({
+    maxActiveZones: z.number().int().min(1).max(100),
+    zoneTimeoutMs: z.number().int().min(60000).max(7200000),
+    useStandardizedZones: z.boolean(),
+    enhancementMode: z.enum(["disabled", "testing", "production"]),
+});
+
+// ✅ CORRECT: Config access with panic exit
+static get UNIVERSAL_ZONE_CONFIG() {
+    return UniversalZoneSchema.parse(SYMBOL_CFG.universalZoneConfig);
+    // Missing config = Zod parse failure = immediate crash
+}
+```
+
+**PANIC EXIT ON MISSING CONFIGURATION:**
+
+The nuclear cleanup ensures that ANY missing configuration property triggers immediate `process.exit(1)`:
+
+```typescript
+// When config.json is missing ANY required property:
+// 1. Zod .parse() throws ZodError
+// 2. Application crashes immediately
+// 3. No fallbacks, no defaults, no silent failures
+// 4. Forces explicit configuration of ALL parameters
+```
+
+**ENFORCEMENT VIOLATIONS:**
+
+Any occurrence of the following patterns will result in **IMMEDIATE REJECTION**:
+
+- Default methods (`getDefault*()`) in enhanced detector classes
+- Fallback operators (`??`, `||`) for configuration values
+- Optional Zod properties (`.optional()`) in enhanced detector schemas
+- Type casting to bypass Zod validation (`as any`, `as DetectorSettings`)
+- Manual default assignment when Zod validation fails
+- Try-catch blocks around config parsing to provide fallbacks
+
+**NUCLEAR CLEANUP VERIFICATION:**
+
+```bash
+# Verify zero tolerance configuration architecture
+yarn build  # MUST compile with 100% success
+grep -r "getDefault" src/indicators/*Enhanced.ts  # MUST return no results
+grep -r "??" src/indicators/*Enhanced.ts | grep -v "?: " # MUST return no fallback operators
+grep -r "\.optional()" src/core/config.ts  # MUST return no optional Zod properties
+```
+
+The nuclear cleanup project established **absolute zero tolerance** for missing configuration through strict Zod validation, ensuring institutional-grade reliability with immediate system failure on any configuration gaps.
+
 ## Development Commands
 
 ### Core Development
@@ -217,6 +387,93 @@ See [Zone-Based Architecture Documentation](docs/Zone-Based-Architecture.md) for
 
 All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 
+### 🎯 DETECTOR OPTIMIZATION GOALS
+
+#### AbsorptionDetector Turning Point Optimization
+
+**PRIMARY OBJECTIVE**: Detect local tops and bottoms that lead to **0.7%+ movement** until the next local top or bottom.
+
+**OPTIMIZATION CRITERIA**:
+
+- **Maximize detection rate** of significant turning points (0.7%+ moves)
+- **Minimize false signals** that don't lead to substantial movement
+- **Balance sensitivity vs precision** for optimal signal quality
+
+**STRATEGIC APPROACH**: 2-Phase Hierarchical Optimization
+
+##### Phase 1: Core Parameters (Most Influential)
+
+Focus on the parameters with highest impact on turning point detection:
+
+1. **Zone Size (`zoneTicks`)**:
+
+    - Range: 1-10 ticks
+    - Impact: Granularity of absorption detection
+    - Smaller zones = more precise, larger zones = broader institutional patterns
+
+2. **Time Window (`windowMs`)**:
+
+    - Range: 30-180 seconds
+    - Impact: Pattern formation timeframe
+    - Shorter windows = faster signals, longer windows = more context
+
+3. **Min Aggressive Volume (`minAggVolume`)**:
+    - Range: 15-150
+    - Impact: Signal significance threshold
+    - Lower volume = more signals, higher volume = higher quality
+
+**Phase 1 Expected Optimal Ranges** (for 0.7%+ moves):
+
+```javascript
+// High sensitivity for 0.7%+ detection
+zoneTicks: [2, 3, 4],           // Tight to medium zones
+windowMs: [45000, 60000],       // 45-60s responsive timing
+minAggVolume: [20, 30, 40],     // Sensitive to moderate volume
+```
+
+##### Phase 2: Refinement Parameters (False Signal Filtering)
+
+After identifying best Phase 1 combinations, refine with quality filters:
+
+1. **Absorption Quality**:
+
+    - `absorptionThreshold`: 0.45-0.75 (lower = more signals)
+    - `minPassiveMultiplier`: 1.1-1.8 (higher = stricter absorption)
+    - `maxAbsorptionRatio`: 0.4-0.7 (higher = allow more aggressive)
+
+2. **Price Movement Validation**:
+
+    - `priceEfficiencyThreshold`: 0.01-0.025 (lower = more price impact sensitive)
+    - `velocityIncreaseThreshold`: 1.2-2.0 (higher = require stronger acceleration)
+
+3. **Signal Timing & Filtering**:
+    - `eventCooldownMs`: 5000-20000 (longer = fewer duplicate signals)
+    - `spreadImpactThreshold`: 0.002-0.005 (market impact sensitivity)
+
+**EVALUATION METRICS FOR 0.7%+ MOVES**:
+
+- **Primary**: Detection Rate (% of 0.7%+ moves caught), False Signal Rate
+- **Secondary**: Precision, Timing accuracy, Average movement magnitude
+
+**BACKTESTING COMMANDS**:
+
+```bash
+# Phase 1: Core parameter optimization
+npx ts-node scripts/runBacktest.ts --detectors absorptionDetector \
+  --custom-grid '{"zoneTicks":[2,3,4],"windowMs":[45000,60000],"minAggVolume":[20,30,40]}' \
+  --speed 100 --verbose
+
+# Phase 2: Refinement based on Phase 1 winners
+npx ts-node scripts/runBacktest.ts --detectors absorptionDetector \
+  --custom-grid '{"absorptionThreshold":[0.45,0.55,0.65],"minPassiveMultiplier":[1.1,1.3,1.5]}' \
+  --speed 100 --verbose
+```
+
+**OPTIMIZATION FILES**:
+
+- `absorption_turning_point_optimization.js` - Detailed optimization strategies
+- `start_absorption_optimization.sh` - Automated optimization sequence
+
 ### Signal Processing Pipeline
 
 1. **SignalCoordinator** (`src/services/signalCoordinator.ts`) - Manages detector registration and signal queuing
@@ -239,6 +496,138 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 - **NEVER create inline mocks in test files - always use `__mocks__/` structure**
 - **Mock files MUST mirror the exact directory structure of `src/`**
 - **All mocks MUST use `vi.fn()` for proper vitest integration**
+
+### 🧪 UNIT TESTING STANDARDS (MANDATORY - ZERO TOLERANCE)
+
+#### Test Integrity Requirements
+
+- **Tests MUST detect errors in code** - Never adjust tests to pass buggy implementations
+- **Tests MUST validate real-world logic** - Test against correct behavior, not current broken code
+- **Tests MUST fail when bugs are present** - If logic is wrong, tests should fail
+- **NO adjusting expectations to match buggy code** - Fix the code, not the tests
+- **NO lowering test standards to make tests pass** - Tests guide proper implementation
+
+#### Error Detection Validation
+
+- Every test must validate the CORRECT implementation of the feature
+- Tests must be written based on requirements/specifications, not current code behavior
+- When tests fail due to bugs, fix the bugs, never lower the test standards
+- Tests that pass buggy code are worse than no tests at all
+- **CRITICAL: If a test passes when it should fail, the test is broken, not the code**
+
+#### Prohibited Test Practices
+
+- ❌ Adjusting expectations to match broken code (`expect(0).toBeGreaterThan(0)` → `expect(0).toBeGreaterThanOrEqual(0)`)
+- ❌ Adding randomness workarounds to mask detection failures
+- ❌ Lowering validation thresholds to hide logic bugs
+- ❌ Using hardcoded defaults in tests instead of validating real calculations
+- ❌ Writing tests that validate current behavior instead of correct behavior
+
+#### Required Test Practices
+
+- ✅ Test the CORRECT logic implementation based on specifications
+- ✅ Validate exact method behavior against requirements
+- ✅ Ensure tests fail when known bugs are present
+- ✅ Write tests that guide proper bug fixes
+- ✅ Use deterministic test data to ensure reliable error detection
+
+### 🔢 FINANCIALMATH - MISSION CRITICAL CALCULATIONS (MANDATORY)
+
+**CRITICAL REQUIREMENT**: ALL financial calculations MUST use `src/utils/financialMath.ts` for precision and accuracy.
+
+#### Why FinancialMath is Required
+
+- **Floating Point Precision**: Eliminates floating-point arithmetic errors in financial calculations
+- **Trading Accuracy**: Ensures precise price/quantity calculations for live trading
+- **Regulatory Compliance**: Meets institutional-grade numerical precision requirements
+- **Data Integrity**: Prevents accumulation of rounding errors in high-frequency operations
+
+#### Mandatory Usage Patterns
+
+**✅ REQUIRED: Use FinancialMath for all calculations**
+
+```typescript
+// Price calculations
+const midPrice = FinancialMath.calculateMidPrice(bid, ask, precision);
+const spread = FinancialMath.calculateSpread(ask, bid, precision);
+
+// Quantity operations
+const ratio = FinancialMath.divideQuantities(volume1, volume2);
+const product = FinancialMath.multiplyQuantities(price, quantity);
+
+// Statistical calculations (NEW)
+const mean = FinancialMath.calculateMean(values);
+const stdDev = FinancialMath.calculateStdDev(values);
+const percentile = FinancialMath.calculatePercentile(values, 95);
+```
+
+**❌ PROHIBITED: Direct floating-point arithmetic**
+
+```typescript
+// NEVER DO THIS - causes precision errors
+const midPrice = (bid + ask) / 2;
+const ratio = volume1 / volume2;
+const mean = values.reduce((a, b) => a + b) / values.length;
+```
+
+#### Implementation Requirements
+
+- **ALL detectors**: Must use FinancialMath for price/quantity operations
+- **Statistical Analysis**: Must use FinancialMath statistical methods (not DetectorUtils)
+- **Zone Calculations**: Must use FinancialMath for zone-based computations
+- **Risk Calculations**: Must use FinancialMath for precision-critical risk metrics
+
+#### Migration Priority
+
+**HIGH PRIORITY**: Replace any DetectorUtils usage with FinancialMath equivalents
+
+- **DetectorUtils.calculateMean()** → **FinancialMath.calculateMean()**
+- **DetectorUtils.calculateStdDev()** → **FinancialMath.calculateStdDev()**
+- **DetectorUtils.calculatePercentile()** → **FinancialMath.calculatePercentile()**
+
+**RATIONALE**: FinancialMath provides institutional-grade precision while DetectorUtils may have floating-point precision issues affecting live trading.
+
+#### 📏 TICK SIZE COMPLIANCE (MANDATORY)
+
+**CRITICAL REQUIREMENT**: ALL price movements in tests and calculations MUST respect minimum tick sizes for realistic market behavior.
+
+**TICK SIZE RULES:**
+
+- **Price < $1**: Minimum tick = 0.0001
+- **$1 ≤ Price < $10**: Minimum tick = 0.001
+- **$10 ≤ Price < $100**: Minimum tick = 0.01
+- **$100 ≤ Price < $1000**: Minimum tick = 0.1
+- **Price ≥ $1000**: Minimum tick = 1.0
+
+**✅ REQUIRED: Tick-compliant price movements**
+
+```typescript
+// ✅ CORRECT: Use proper tick sizes
+const basePrice = 89.0; // Price ~$89
+const tickSize = 0.01; // Correct tick for $10-$100 range
+const newPrice = basePrice + tickSize; // 89.01 - valid
+
+// ✅ CORRECT: Multiple tick movements
+const priceChange = basePrice + i * 0.01; // Valid 1-cent increments
+```
+
+**❌ PROHIBITED: Sub-tick price movements**
+
+```typescript
+// ❌ NEVER: Sub-tick movements create invalid market data
+const basePrice = 89.0;
+const invalidPrice = basePrice + 0.0005; // FORBIDDEN - half-cent on 1-cent tick
+const wrongPrice = basePrice + 0.001; // FORBIDDEN - tenth-cent on 1-cent tick
+```
+
+**WHY THIS MATTERS:**
+
+- **Market Realism**: Sub-tick movements cannot occur in real markets
+- **Correlation Accuracy**: Invalid price movements corrupt price/volume correlation calculations
+- **Test Validity**: Tests with sub-tick movements provide false results
+- **Signal Quality**: Detectors trained on invalid data produce unreliable signals
+
+**ENFORCEMENT**: Any test or calculation using sub-tick price movements will be **IMMEDIATELY REJECTED** as creating unrealistic market conditions.
 
 ### Database
 
@@ -264,6 +653,74 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 - **Strict null checking enabled**
 - **No implicit returns**
 - **KEEP CODE SIMPLE** - Avoid complex casting patterns, prefer interface compatibility
+
+#### 🚫 MAGIC NUMBERS PROHIBITION (ZERO TOLERANCE)
+
+**CRITICAL RULE**: Magic numbers are **STRICTLY FORBIDDEN** in all detector implementations. All threshold, limit, and calculation values MUST be configurable via settings interfaces.
+
+**PROHIBITED PATTERNS:**
+
+```typescript
+// ❌ NEVER: Hardcoded thresholds in detector logic
+if (priceEfficiency < 0.7) return null;
+if (imbalance > 0.8) return "high";
+if (correlation < 0.4) return false;
+const spreadThreshold = 0.005; // FORBIDDEN
+
+// ❌ NEVER: Magic numbers in calculations
+const confidence = volume * 0.85; // FORBIDDEN
+const score = Math.min(ratio, 0.95); // FORBIDDEN
+if (trades.length > 100) return; // FORBIDDEN
+```
+
+**REQUIRED PATTERNS:**
+
+```typescript
+// ✅ CORRECT: All values configurable via settings
+if (priceEfficiency < this.priceEfficiencyThreshold) return null;
+if (imbalance > this.imbalanceHighThreshold) return "high";
+if (correlation < this.weakCorrelationThreshold) return false;
+const spreadThreshold = this.spreadHighThreshold;
+
+// ✅ CORRECT: Settings interface with defaults
+export interface DetectorSettings extends BaseDetectorSettings {
+    priceEfficiencyThreshold?: number; // Default 0.85
+    imbalanceHighThreshold?: number;    // Default 0.8
+    weakCorrelationThreshold?: number;  // Default 0.4
+    spreadHighThreshold?: number;       // Default 0.005
+}
+
+// ✅ CORRECT: Constructor reads from settings
+constructor(settings: DetectorSettings) {
+    this.priceEfficiencyThreshold = settings.priceEfficiencyThreshold ?? 0.85;
+    this.imbalanceHighThreshold = settings.imbalanceHighThreshold ?? 0.8;
+}
+```
+
+**WHY THIS MATTERS:**
+
+- **Signal Blocking Prevention**: Hardcoded values can block signal generation
+- **Backtesting Flexibility**: Different values can be tested systematically
+- **Production Optimization**: Optimal values can be deployed from testing results
+- **Configuration Auditability**: All parameters visible in config.json
+- **Institutional Compliance**: Full repeatability and parameter transparency
+
+**ENFORCEMENT:**
+
+- Any magic number in detector code is an **IMMEDIATE REJECTION**
+- All threshold/limit values MUST be in settings interfaces
+- All calculations MUST use configurable parameters
+- Constructor MUST read ALL numeric values from settings
+- Unit tests MUST verify configurability of ALL parameters
+
+**VIOLATION DETECTION:**
+
+Code review will reject any occurrence of:
+
+- Hardcoded decimals (0.7, 0.85, 0.005) in detector logic
+- Hardcoded integers (100, 50, 1000) as thresholds or limits
+- Mathematical operations with literal numbers as thresholds
+- Conditional statements with hardcoded comparison values
 
 #### Error Handling Standards
 
@@ -394,6 +851,56 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 7. Memory usage analysis for zone state management
 8. Concurrent access pattern validation
 
+#### 🎯 CRITICAL: Zone Volume Aggregation Architecture (MANDATORY)
+
+**PROBLEM SOLVED (2025-07-03)**: Zone volume aggregation zero-volume issue that was blocking CVD signal generation.
+
+**ROOT CAUSE**: Zone boundary calculations were too restrictive, causing 99.9% of trades to fall outside zone boundaries, resulting in zero aggressive volume in all zones.
+
+**SOLUTION**: Expanded zone boundaries by 50% to ensure overlapping coverage and proper trade capture.
+
+**CRITICAL IMPLEMENTATION DETAILS**:
+
+```typescript
+// BEFORE (BROKEN): Too restrictive boundaries
+const zoneSize = zoneTicks * this.tickSize;
+const minPrice = zoneCenter - zoneSize / 2; // 5-tick zone: ±0.025 range
+const maxPrice = zoneCenter + zoneSize / 2;
+
+// AFTER (FIXED): Expanded boundaries for trade capture
+const baseZoneSize = zoneTicks * this.tickSize;
+const expandedZoneSize = baseZoneSize * 1.5; // 50% expansion
+const minPrice = zoneCenter - expandedZoneSize / 2; // 5-tick zone: ±0.0375 range
+const maxPrice = zoneCenter + expandedZoneSize / 2;
+```
+
+**VALIDATION METRICS**:
+
+- **Before**: `"aggressiveVolume":0,"tradeCount":0` (100% zones empty)
+- **After**: `"aggressiveVolume":3,"aggressiveBuyVolume":3,"tradeCount":1` (zones accumulating volume)
+
+**KEY INSIGHTS**:
+
+1. **Zone Coverage**: Adjacent zones must have overlapping boundaries to prevent trade gaps
+2. **Market Reality**: Real trades often fall slightly outside theoretical zone centers
+3. **Volume Accumulation**: Zones need time to accumulate 15+ LTC for CVD threshold compliance
+4. **Boundary Validation**: Always log boundary checks during development: `withinBoundaries: true/false`
+
+**DIAGNOSTIC COMMANDS**:
+
+```bash
+# Monitor zone boundary effectiveness
+pm2 logs app | grep -E "withinBoundaries.*true|Zone successfully updated"
+
+# Check volume accumulation
+pm2 logs app | grep -E "aggressiveVolume.*[1-9]|meetsVolumeThreshold.*true"
+
+# Verify CVD detector integration
+pm2 logs app | grep -E "CVD.*divergence|hasDivergence.*true"
+```
+
+**NEVER REVERT**: This boundary expansion is critical for production CVD signal generation. Reverting will cause immediate signal failure.
+
 ### When Modifying Signal Processing
 
 - Maintain correlation ID propagation for tracing
@@ -420,6 +927,62 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 - Every class that has configurable options need to use /config.json
 - Backward compatibility validation
 - Default value safety analysis
+
+#### 🎯 DeltaCVD Detector Configuration (Updated 2025-06-23)
+
+**NEW A/B Testing Framework:** Three configurations available for passive volume optimization:
+
+**Simplified Configurations (Recommended):**
+
+```typescript
+// No passive volume (pure CVD baseline)
+{
+    usePassiveVolume: false,
+    enableDepthAnalysis: false,
+    detectionMode: "momentum",
+    baseConfidenceRequired: 0.3,
+    finalConfidenceRequired: 0.5
+}
+
+// With passive volume (enhanced CVD)
+{
+    usePassiveVolume: true,
+    enableDepthAnalysis: false,
+    detectionMode: "momentum",
+    baseConfidenceRequired: 0.3,
+    finalConfidenceRequired: 0.5
+}
+```
+
+**Complex Configuration (Full Features):**
+
+```typescript
+{
+    usePassiveVolume: true,
+    enableDepthAnalysis: true,
+    detectionMode: "hybrid",
+    baseConfidenceRequired: 0.4,
+    finalConfidenceRequired: 0.6
+}
+```
+
+**Key Benefits:**
+
+- 60%+ memory reduction with simplified configurations
+- 40-60% faster processing with conditional enhancement phases
+- Proper passive volume implementation (was previously minimal)
+- Systematic A/B testing for optimal signal quality
+
+**Usage:**
+
+```bash
+# Test configurations
+node run_hierarchical_backtest.js --detector deltaCVDDetector --profile simplified_no_passive
+node run_hierarchical_backtest.js --detector deltaCVDDetector --profile simplified_with_passive
+node run_hierarchical_backtest.js --detector deltaCVDDetector --profile current_complex
+```
+
+📖 **[Complete Guide: DeltaCVD Simplification](./docs/DeltaCVD-Simplification-Guide.md)**
 
 ### WebSocket Management
 
@@ -558,6 +1121,55 @@ interface IWorkerCircuitBreaker {
 - Multiple implementations of same functionality
 - Conditional logic choosing between worker/non-worker paths
 - Direct infrastructure imports in worker files (use shared proxies)
+- non Financial Math in any financial calculation (using price or quantity)
+
+#### 🚫 CALCULATION INTEGRITY (ZERO TOLERANCE)
+
+**CRITICAL RULE**: When calculations cannot be performed with valid data, return `null` - NEVER use default numbers, fallbacks, or arbitrary values.
+
+**PROHIBITED PATTERNS:**
+
+```typescript
+// ❌ NEVER: Default numbers when calculation is invalid
+const efficiency = calculateEfficiency(data) ?? 0.5; // FORBIDDEN
+const confidence = priceData.length < 3 ? 0.7 : calculate(priceData); // FORBIDDEN
+const result = isNaN(calculation) ? 1.0 : calculation; // FORBIDDEN
+
+// ❌ NEVER: Arbitrary fallbacks for insufficient data
+if (trades.length < 3) return 0.85; // FORBIDDEN - not based on real data
+```
+
+**REQUIRED PATTERNS:**
+
+```typescript
+// ✅ CORRECT: Return null for invalid calculations
+const efficiency = calculateEfficiency(data); // returns number | null
+if (efficiency === null) {
+    return; // Cannot proceed without valid calculation
+}
+
+// ✅ CORRECT: Early return when insufficient data
+if (trades.length < 3) {
+    return null; // Honest: cannot calculate with insufficient data
+}
+
+// ✅ CORRECT: Null propagation through calculation chain
+const priceEfficiency = this.calculatePriceEfficiency(trades, zone);
+if (priceEfficiency === null) {
+    return; // Cannot emit signal without valid efficiency
+}
+```
+
+**WHY THIS MATTERS:**
+
+- **Trading Integrity**: Fake numbers can cause wrong trading decisions
+- **Data Honesty**: Better to admit insufficient data than guess
+- **System Reliability**: Null values force proper error handling
+- **Debugging**: Real issues are visible, not masked by defaults
+
+**ENFORCEMENT:**
+
+Any use of default numbers, fallback values, or arbitrary constants when calculations fail is an **IMMEDIATE REJECTION**. All calculation methods must return `null` when they cannot produce valid results.
 
 #### Architecture Benefits (Why This Matters):
 
@@ -583,6 +1195,7 @@ interface IWorkerCircuitBreaker {
 **NEVER:**
 
 - **Modify, overwrite, or copy over the `.env` file - Contains irreplaceable production API keys**
+- **Use magic numbers or hardcoded thresholds in detector implementations**
 - Modify production-critical algorithms without explicit approval
 - Change WebSocket URLs or connection parameters
 - Alter signal processing logic without validation

@@ -1,6 +1,41 @@
 // src/types/zoneTypes.ts
 
-export interface AccumulationZone {
+// NEW: Standardized zone configuration for all detectors
+export interface StandardZoneConfig {
+    baseTicks: number; // Base zone size in ticks (e.g., 5)
+    zoneMultipliers: number[]; // Zone size multipliers [1, 2, 4] for 5, 10, 20 tick zones
+    timeWindows: number[]; // Time windows for zone analysis [30s, 60s, 300s]
+    adaptiveMode: boolean; // Enable dynamic zone sizing based on market conditions
+    volumeThresholds: {
+        aggressive: number; // Volume threshold for aggressive classification
+        passive: number; // Volume threshold for passive classification
+        institutional: number; // Volume threshold for institutional classification
+    };
+    priceThresholds: {
+        tickValue: number; // Value of one tick in price units
+        minZoneWidth: number; // Minimum zone width in price units
+        maxZoneWidth: number; // Maximum zone width in price units
+    };
+    performanceConfig: {
+        maxZoneHistory: number; // Maximum number of zones to keep in history
+        cleanupInterval: number; // Cleanup interval for old zones (ms)
+        maxMemoryMB: number; // Maximum memory usage for zone cache
+    };
+}
+
+// Zone data cache for efficient detector access
+export interface ZoneHistory {
+    zoneId: string;
+    snapshots: ZoneSnapshot[];
+    createdAt: number;
+    lastAccess: number;
+    memoryUsage: number; // Estimated memory usage in bytes
+}
+
+// Import ZoneSnapshot from marketEvents to avoid circular dependency
+import type { ZoneSnapshot } from "./marketEvents.js";
+
+export interface TradingZone {
     // Zone identification
     id: string;
     type: "accumulation" | "distribution";
@@ -58,8 +93,8 @@ export interface ZoneUpdate {
         | "zone_weakened"
         | "zone_completed"
         | "zone_invalidated";
-    zone: AccumulationZone;
-    previousState?: Partial<AccumulationZone>; // For change tracking
+    zone: TradingZone;
+    previousState?: Partial<TradingZone>; // For change tracking
     significance: "low" | "medium" | "high"; // Importance of this update
     timestamp: number;
 
@@ -79,7 +114,7 @@ export interface ZoneSignal {
         | "zone_completion"
         | "zone_breakout_imminent"
         | "zone_invalidation";
-    zone: AccumulationZone;
+    zone: TradingZone;
 
     // Signal characteristics
     actionType:
@@ -111,16 +146,18 @@ export interface ZoneDetectionData {
     averageOrderSize: number;
     initialStrength: number;
     confidence: number;
-    supportingFactors: AccumulationZone["supportingFactors"];
+    supportingFactors: TradingZone["supportingFactors"];
 }
 
 export interface ZoneAnalysisResult {
     updates: ZoneUpdate[];
     signals: ZoneSignal[];
-    activeZones: AccumulationZone[];
+    activeZones: TradingZone[];
 }
 
 export interface ZoneDetectorConfig {
+    // Core zone detector configuration
+    symbol: string; // Trading symbol
     maxActiveZones: number; // Max concurrent zones per symbol
     zoneTimeoutMs: number; // Max zone lifetime
     minZoneVolume: number; // Minimum volume for valid zone
@@ -131,8 +168,78 @@ export interface ZoneDetectorConfig {
     minCandidateDuration: number; // Minimum time to form candidate
     maxPriceDeviation: number; // Maximum price deviation within zone
     minTradeCount: number; // Minimum trades before forming zone
-    minBuyRatio?: number; // Minimum buy ratio for accumulation
-    minSellRatio?: number; // Minimum sell ratio for distribution
+    minBuyRatio: number; // Minimum buy ratio for accumulation
+    minSellRatio: number; // Minimum sell ratio for distribution
+
+    // Accumulation-specific configuration from AccumulationSettings
+    minDurationMs: number; // Minimum accumulation duration
+    minRatio: number; // Min passive/aggressive ratio
+    minRecentActivityMs: number; // Trade staleness threshold
+    threshold: number; // Confidence threshold (0-1)
+
+    // Zone strength threshold parameters (previously hardcoded)
+    priceStabilityThreshold: number; // Price stability threshold for accumulation
+    strongZoneThreshold: number; // Strong zone strength threshold
+    weakZoneThreshold: number; // Weak zone invalidation threshold
+
+    // Volume surge detection parameters for enhanced zone analysis
+    volumeSurgeMultiplier: number; // Volume surge threshold for zone validation
+    imbalanceThreshold: number; // Order flow imbalance threshold
+    institutionalThreshold: number; // Institutional trade size threshold
+    burstDetectionMs: number; // Burst detection window
+    sustainedVolumeMs: number; // Sustained volume analysis window
+    medianTradeSize: number; // Baseline trade size for volume analysis
+
+    // ✅ CLAUDE.md COMPLIANCE: Business-critical configurable parameters
+    pricePrecision: number; // Price precision for zone calculations
+    zoneTicks: number; // Price levels that define a zone
+
+    // Enhanced zone formation parameters (business configurable)
+    enhancedInstitutionalSizeThreshold: number; // Institutional size threshold
+    enhancedIcebergDetectionWindow: number; // Iceberg detection window
+    enhancedMinInstitutionalRatio: number; // Min institutional ratio
+
+    // Signal generation parameters (business configurable)
+    invalidationPercentBelow: number; // Invalidation percentage below zone
+    breakoutTargetPercentAbove: number; // Breakout target percentage above center
+    stopLossPercentBelow: number; // Stop loss percentage below zone
+    takeProfitPercentAbove: number; // Take profit percentage above center
+    completionBreakoutTargetPercent: number; // Higher breakout target on completion
+    completionStopLossPercent: number; // Stop loss on completion
+    completionConfidenceBoost: number; // Confidence boost on completion
+
+    // NEW: Reference to standardized zone configuration
+    useStandardizedZones: boolean; // Whether to use centralized zone data
+    preferredZoneSize: 1 | 2 | 4; // Preferred zone multiplier (1=base, 2=2x, 4=4x)
+
+    // Enhanced AccumulationZoneDetector standardized zone integration
+    standardizedZoneConfig: {
+        minZoneConfluenceCount: number; // Minimum zones overlapping for confluence
+        maxZoneConfluenceDistance: number; // Max distance for zone confluence in ticks
+        institutionalVolumeThreshold: number; // Threshold for institutional volume detection
+        passiveVolumeRatioThreshold: number; // Min passive/aggressive ratio for accumulation
+        enableZoneConfluenceFilter: boolean; // Filter signals by zone confluence
+        enableInstitutionalVolumeFilter: boolean; // Filter by institutional volume presence
+        enableCrossTimeframeAnalysis: boolean; // Analyze across multiple zone timeframes
+        confluenceConfidenceBoost: number; // Confidence boost for zone confluence
+        institutionalVolumeBoost: number; // Confidence boost for institutional volume
+        crossTimeframeBoost: number; // Confidence boost for cross-timeframe confirmation
+    };
+
+    // Enhancement control parameters
+    minEnhancedConfidenceThreshold: number; // Minimum confidence for enhanced signals
+    enhancementSignificanceBoost: boolean; // Whether to boost signal significance
+    enhancementMode: "disabled" | "testing" | "production"; // Enhancement mode control
+
+    // CLAUDE.md compliant AccumulationZoneDetectorEnhanced parameters
+    enhancementCallFrequency: number; // Frequency of enhancement calls
+    highConfidenceThreshold: number; // High confidence signal threshold
+    lowConfidenceThreshold: number; // Low confidence signal threshold
+    minConfidenceBoostThreshold: number; // Minimum confidence boost threshold
+    defaultMinEnhancedConfidenceThreshold: number; // Default minimum enhanced confidence
+    confidenceReductionFactor: number; // Confidence reduction factor for filtering
+    significanceBoostMultiplier: number; // Significance boost multiplier
+    neutralBoostReductionFactor: number; // Neutral boost reduction factor
 }
 
 export interface ZoneQueryOptions {
@@ -145,4 +252,80 @@ export interface ZoneQueryOptions {
         price: number;
         tolerance: number;
     };
+}
+
+// Enhanced zone types for new detectors
+export interface IcebergZoneUpdate {
+    updateType: "zone_created" | "zone_updated" | "zone_completed";
+    zone: {
+        id: string;
+        type: "iceberg";
+        priceRange: { min: number; max: number };
+        strength: number;
+        completion: number;
+        startTime: number;
+        endTime?: number;
+        totalVolume: number;
+        refillCount: number;
+        averagePieceSize: number;
+        side: "buy" | "sell";
+        institutionalScore: number;
+        priceStability: number;
+        avgRefillGap: number;
+        temporalScore: number;
+    };
+    significance: "low" | "medium" | "high";
+}
+
+export interface HiddenOrderZoneUpdate {
+    updateType: "zone_created" | "zone_updated" | "zone_completed";
+    zone: {
+        id: string;
+        type: "hidden_liquidity";
+        priceRange: { min: number; max: number };
+        strength: number;
+        completion: number;
+        startTime: number;
+        endTime?: number;
+        totalVolume: number;
+        tradeCount: number;
+        averageTradeSize: number;
+        side: "buy" | "sell";
+        stealthScore: number;
+        stealthType:
+            | "reserve_order"
+            | "stealth_liquidity"
+            | "algorithmic_hidden"
+            | "institutional_stealth";
+        volumeConcentration: number;
+        detectionMethod: string;
+    };
+    significance: "low" | "medium" | "high";
+}
+
+export interface SpoofingZoneUpdate {
+    updateType: "zone_created" | "zone_updated" | "zone_completed";
+    zone: {
+        id: string;
+        type: "spoofing";
+        priceRange: { min: number; max: number };
+        strength: number;
+        completion: number;
+        startTime: number;
+        endTime?: number;
+        spoofType:
+            | "fake_wall"
+            | "layering"
+            | "ghost_liquidity"
+            | "algorithmic"
+            | "iceberg_manipulation";
+        wallSize: number;
+        canceled: number;
+        executed: number;
+        side: "buy" | "sell";
+        confidence: number;
+        marketImpact: number;
+        cancelTimeMs: number;
+    };
+    significance: "low" | "medium" | "high";
 }

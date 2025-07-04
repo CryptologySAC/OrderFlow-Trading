@@ -428,7 +428,7 @@ class EnhancedStatsBroadcaster {
                 });
 
                 // Publish to MQTT if connected
-                if (this.mqttClient && this.mqttClient.connected) {
+                if (this.mqttClient?.connected) {
                     this.mqttClient.publish(
                         Config.MQTT?.statsTopic ?? "orderflow/stats",
                         JSON.stringify(stats)

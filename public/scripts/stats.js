@@ -316,8 +316,8 @@ function updateSignalMetrics(metrics) {
     const signalTypes = [
         "absorption",
         "exhaustion",
-        "accumulation",
-        "distribution",
+        "accumulation_zone",
+        "distribution_zone",
         "cvd_confirmation",
     ];
 
@@ -337,7 +337,18 @@ function updateSignalMetrics(metrics) {
         const successRate =
             total > 0 ? ((confirmed / total) * 100).toFixed(1) + "%" : "--";
 
-        const typePrefix = type === "cvd_confirmation" ? "cvd" : type;
+        // Map signal types to HTML element prefixes
+        let typePrefix;
+        if (type === "cvd_confirmation") {
+            typePrefix = "cvd";
+        } else if (type === "accumulation_zone") {
+            typePrefix = "accumulationZone";
+        } else if (type === "distribution_zone") {
+            typePrefix = "distributionZone";
+        } else {
+            typePrefix = type;
+        }
+
         updateElement(`${typePrefix}Candidates`, formatNumber(candidates));
         updateElement(`${typePrefix}Confirmed`, formatNumber(confirmed));
         updateElement(`${typePrefix}Rejected`, formatNumber(rejected));

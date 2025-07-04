@@ -157,6 +157,8 @@ export interface MarketAnomaly {
         | "liquidity_void"
         | "extreme_volatility"
         | "spoofing"
+        | "layering"
+        | "ghost_liquidity"
         | "orderbook_imbalance"
         | "health_check"
         | "flow_imbalance"
@@ -175,6 +177,8 @@ export interface MarketAnomaly {
         | "realtime_liquidity_void"
         | "realtime_extreme_volatility"
         | "realtime_spoofing"
+        | "realtime_layering"
+        | "realtime_ghost_liquidity"
         | "realtime_orderbook_imbalance"
         | "realtime_flow_imbalance"
         | "realtime_whale_activity"
@@ -182,7 +186,15 @@ export interface MarketAnomaly {
         | "realtime_exhaustion"
         | "realtime_momentum_ignition"
         | "realtime_iceberg_order"
-        | "realtime_order_size_anomaly";
+        | "realtime_order_size_anomaly"
+        | "hidden_liquidity"
+        | "stealth_order"
+        | "reserve_order"
+        | "algorithmic_stealth"
+        | "realtime_hidden_liquidity"
+        | "realtime_stealth_order"
+        | "realtime_reserve_order"
+        | "realtime_algorithmic_stealth";
     detectedAt: number;
     severity: "low" | "medium" | "high" | "critical" | "info";
     affectedPriceRange: { min: number; max: number };

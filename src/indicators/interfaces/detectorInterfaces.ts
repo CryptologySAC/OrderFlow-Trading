@@ -9,16 +9,23 @@ import { MarketRegime } from "../../types/signalTypes.js";
 import { RollingWindow } from "../../utils/rollingWindow.js";
 
 /**
- * Base detector interface
+ * Base detector interface - minimal common interface
  */
-export interface IDetector {
+export interface IBaseDetector {
+    readonly logger: import("../../infrastructure/loggerInterface.js").ILogger;
     onEnrichedTrade(event: EnrichedTradeEvent): void;
-    addTrade(tradeData: AggressiveTrade): void;
-    getStats(): DetectorStats;
-    cleanup(): void;
     markSignalConfirmed(zone: number, side: "buy" | "sell"): void;
     getStatus(): string;
     getId(): string;
+}
+
+/**
+ * Full detector interface - for BaseDetector implementations
+ */
+export interface IDetector extends IBaseDetector {
+    addTrade(tradeData: AggressiveTrade): void;
+    getStats(): DetectorStats;
+    cleanup(): void;
 }
 
 /**
@@ -88,11 +95,15 @@ export interface AccumulationSettings extends BaseDetectorSettings {
     minRatio?: number; // Min passive/aggressive ratio
     minRecentActivityMs?: number; // Trade staleness threshold
     accumulationThreshold?: number; // Confidence threshold (0-1)
+
+    // Zone strength threshold parameters (previously hardcoded)
+    priceStabilityThreshold?: number; // Price stability threshold for accumulation (default 0.98)
+    strongZoneThreshold?: number; // Strong zone strength threshold (default 0.7)
+    weakZoneThreshold?: number; // Weak zone invalidation threshold (default 0.4)
 }
 
 export interface AbsorptionFeatures extends DetectorFeatures {
     // Absorption-specific features
-    icebergDetection?: boolean; // Detect iceberg orders
     liquidityGradient?: boolean; // Analyze liquidity depth gradient
     absorptionVelocity?: boolean; // Track rate of absorption
     layeredAbsorption?: boolean; // Detect multi-level absorption
@@ -118,7 +129,6 @@ export interface AccumulationFeatures extends DetectorFeatures {
  * Common feature flags
  */
 export interface DetectorFeatures {
-    spoofingDetection?: boolean;
     adaptiveZone?: boolean;
     passiveHistory?: boolean;
     multiZone?: boolean;
@@ -254,7 +264,7 @@ export interface ZoneCandidate {
     tradeCount: number;
 }
 export interface DistributionCandidate extends ZoneCandidate {
-    volumeDistribution: number; // How distributed the selling is
+    absorptionQuality?: number; // Quality of institutional selling patterns (mirrors accumulation)
 }
 
 export interface AccumulationCandidate extends ZoneCandidate {

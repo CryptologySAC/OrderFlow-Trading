@@ -18,6 +18,7 @@ import type {
     ConnectivityStatus,
 } from "../infrastructure/apiConnectivityMonitor.js";
 import { RollingWindow } from "../utils/rollingWindow.js";
+import { RollingStatsWindow } from "../utils/rollingStatsWindow.js";
 
 export interface AnomalyDetectorOptions {
     /** Rolling trade window size for statistics (default: 9000 trades for 15min) */
@@ -61,10 +62,18 @@ export type AnomalyType =
     | "extreme_volatility" // Market Health: Sudden volatility spike
     | "orderbook_imbalance" // Market Structure: Passive volume asymmetry
     | "flow_imbalance" // Market Structure: Aggressive flow asymmetry
-    | "whale_activity" // Market Structure: Large order impact
     | "coordinated_activity" // Microstructure: Coordinated execution patterns
     | "algorithmic_activity" // Microstructure: Detected algorithmic trading
-    | "toxic_flow"; // Microstructure: High toxicity/informed flow
+    | "toxic_flow" // Microstructure: High toxicity/informed flow
+    | "spoofing" // Market Manipulation: Fake wall spoofing
+    | "layering" // Market Manipulation: Multi-level spoofing attack
+    | "ghost_liquidity" // Market Manipulation: Rapidly appearing/disappearing liquidity
+    | "iceberg_order" // Institutional Activity: Large order fragmentation
+    | "whale_activity" // Institutional Activity: Large volume trading
+    | "hidden_liquidity" // Stealth Trading: Invisible liquidity patterns
+    | "stealth_order" // Stealth Trading: Algorithmic stealth positioning
+    | "reserve_order" // Stealth Trading: Reserve order activation
+    | "algorithmic_stealth"; // Stealth Trading: Advanced algorithmic concealment
 
 /**
  * Structure of an emitted anomaly event.
@@ -136,6 +145,11 @@ export class AnomalyDetector extends EventEmitter {
     private currentBestBid = 0;
     private currentBestAsk = 0;
 
+    private priceHistory: RollingWindow<number>;
+    private returnStats: RollingStatsWindow;
+    private recentReturnStats: RollingStatsWindow;
+    private lastPrice = 0;
+
     // Flow tracking for market structure analysis
     private recentFlowWindow: RollingWindow<{
         volume: number;
@@ -184,6 +198,15 @@ export class AnomalyDetector extends EventEmitter {
         this.marketHistory = new RollingWindow<MarketSnapshot>(
             this.windowSize,
             false
+        );
+
+        this.priceHistory = new RollingWindow<number>(this.windowSize);
+        this.returnStats = new RollingStatsWindow(
+            this.extremeVolatilityWindowMs
+        );
+        this.recentReturnStats = new RollingStatsWindow(
+            this.extremeVolatilityWindowMs,
+            20
         );
 
         this.orderSizeHistory = new RollingWindow<{
@@ -242,6 +265,15 @@ export class AnomalyDetector extends EventEmitter {
                 price: trade.price,
                 time: now,
             });
+
+            // Track price and returns for volatility calculations
+            if (this.lastPrice > 0) {
+                const ret = (trade.price - this.lastPrice) / this.lastPrice;
+                this.returnStats.push(ret, now);
+                this.recentReturnStats.push(ret, now);
+            }
+            this.lastPrice = trade.price;
+            this.priceHistory.push(trade.price);
 
             // Compute spread if we have valid quotes
             let spreadBps: number | undefined;
@@ -313,11 +345,9 @@ export class AnomalyDetector extends EventEmitter {
         // Infrastructure issues (most critical)
         this.checkFlashCrash(snapshot);
         this.checkLiquidityVoid(snapshot, spreadBps);
-        // API connectivity issues are now handled separately via onConnectivityIssue()
 
         // Market health issues
         this.checkExtremeVolatility(snapshot);
-        this.checkWhaleActivity(snapshot);
 
         // Market structure issues (informational)
         this.checkOrderbookImbalance(snapshot);
@@ -329,16 +359,15 @@ export class AnomalyDetector extends EventEmitter {
      * Critical infrastructure issue requiring immediate attention.
      */
     private checkFlashCrash(snapshot: MarketSnapshot): void {
-        const prices = this.marketHistory.toArray().map((h) => h.price);
-        const mean = this.calculateMean(prices);
-        const stdDev = this.calculateStdDev(prices, mean);
+        const mean = this.priceHistory.mean();
+        const stdDev = this.priceHistory.stdDev();
         const zScore = Math.abs(snapshot.price - mean) / (stdDev || 1);
 
-        if (zScore > 3) {
+        if (zScore > 5) {
             this.emitAnomaly({
                 type: "flash_crash",
                 detectedAt: snapshot.timestamp,
-                severity: zScore > 5 ? "critical" : "high",
+                severity: zScore > 8 ? "critical" : "high",
                 affectedPriceRange: {
                     min: Math.min(snapshot.price, mean - 3 * stdDev),
                     max: Math.max(snapshot.price, mean + 3 * stdDev),
@@ -522,33 +551,13 @@ export class AnomalyDetector extends EventEmitter {
      * Market health issue indicating unstable conditions.
      */
     private checkExtremeVolatility(snapshot: MarketSnapshot): void {
-        const now = Date.now();
-        const recentPrices = this.marketHistory
-            .toArray()
-            .filter((s) => now - s.timestamp < this.extremeVolatilityWindowMs)
-            .map((h) => h.price);
+        const allReturnsStdDev = this.returnStats.stdDev();
+        const recentStdDev = this.recentReturnStats.stdDev();
 
-        const returns: number[] = [];
-        for (let i = 1; i < recentPrices.length; i++) {
-            if (recentPrices[i - 1] > 0) {
-                returns.push(
-                    (recentPrices[i] - recentPrices[i - 1]) /
-                        recentPrices[i - 1]
-                );
-            }
-        }
-
-        const recentReturns = returns.slice(-20);
-        const allReturnsStdDev = this.calculateStdDev(
-            returns,
-            this.calculateMean(returns)
-        );
-        const recentStdDev = this.calculateStdDev(
-            recentReturns,
-            this.calculateMean(recentReturns)
-        );
-
-        if (recentStdDev > allReturnsStdDev * 2.5) {
+        if (
+            this.returnStats.count() > 20 &&
+            recentStdDev > allReturnsStdDev * 2.5
+        ) {
             this.emitAnomaly({
                 type: "extreme_volatility",
                 detectedAt: snapshot.timestamp,
@@ -564,68 +573,6 @@ export class AnomalyDetector extends EventEmitter {
                     normalVolatility: allReturnsStdDev,
                     volatilityRatio: recentStdDev / allReturnsStdDev,
                     rationale: "Sudden volatility spike detected",
-                },
-            });
-        }
-    }
-
-    /**
-     * Detects whale activity via outlier order sizes.
-     * Market structure issue indicating large player activity.
-     */
-    private checkWhaleActivity(snapshot: MarketSnapshot): void {
-        const now = Date.now();
-        const recentSizes = this.orderSizeHistory
-            .toArray()
-            .filter((o) => now - o.time < this.orderSizeWindowMs)
-            .map((o) => o.size);
-
-        if (recentSizes.length < 100) return; // Need sufficient sample
-
-        recentSizes.sort((a, b) => a - b);
-        const p995 = recentSizes[Math.floor(recentSizes.length * 0.995)];
-        const p9995 = recentSizes[Math.floor(recentSizes.length * 0.9955)];
-        const candidateSize = snapshot.aggressiveVolume;
-
-        let confidence = 0;
-        let whaleLevel = 0;
-
-        if (candidateSize >= p9995) {
-            confidence = 0.9;
-            whaleLevel = 9995;
-        } else if (candidateSize >= p995) {
-            confidence = 0.7;
-            whaleLevel = 995;
-        }
-
-        // Check for whale clustering
-        const recentLarge = this.orderSizeHistory
-            .toArray()
-            .filter(
-                (o) => now - o.time < this.whaleCooldownMs && o.size >= p995
-            ).length;
-
-        if (recentLarge > 3) confidence += 0.1; // Boost for clustering
-
-        if (confidence >= 0.7) {
-            this.emitAnomaly({
-                type: "whale_activity",
-                detectedAt: snapshot.timestamp,
-                severity: confidence > 0.85 ? "high" : "medium",
-                affectedPriceRange: {
-                    min: snapshot.price * 0.997,
-                    max: snapshot.price * 1.003,
-                },
-                recommendedAction: "monitor",
-                details: {
-                    confidence,
-                    whaleLevel,
-                    orderSize: candidateSize,
-                    p995,
-                    p9995,
-                    recentLargeOrders: recentLarge,
-                    rationale:
-                        "Large order detected affecting market structure",
                 },
             });
         }
@@ -764,9 +711,8 @@ export class AnomalyDetector extends EventEmitter {
         };
 
         // Clone to avoid mutation
-        const payload: AnomalyEvent = JSON.parse(
-            JSON.stringify(anomaly)
-        ) as AnomalyEvent;
+        // structuredClone available in Node >=17
+        const payload: AnomalyEvent = structuredClone(anomaly);
 
         // Keep history for market health reporting
         this.recentAnomalies.push(payload);
@@ -1111,6 +1057,163 @@ export class AnomalyDetector extends EventEmitter {
     public getRecentAnomalies(windowMs: number = 300000): AnomalyEvent[] {
         const cutoff = Date.now() - windowMs;
         return this.recentAnomalies.filter((a) => a.detectedAt > cutoff);
+    }
+
+    /**
+     * Handle spoofing events from SpoofingDetector
+     * Converts spoofing detection results into anomaly events for dashboard display
+     */
+    public onSpoofingEvent(
+        spoofingEvent: {
+            priceStart: number;
+            priceEnd: number;
+            side: "buy" | "sell";
+            wallBefore: number;
+            wallAfter: number;
+            canceled: number;
+            executed: number;
+            timestamp: number;
+            spoofedSide: "bid" | "ask";
+            spoofType:
+                | "fake_wall"
+                | "layering"
+                | "ghost_liquidity"
+                | "algorithmic"
+                | "iceberg_manipulation"
+                | "hidden_liquidity";
+            confidence: number;
+            cancelTimeMs: number;
+            marketImpact: number;
+        },
+        currentPrice: number
+    ): void {
+        // Map spoofing types to anomaly types
+        let anomalyType: AnomalyType;
+        switch (spoofingEvent.spoofType) {
+            case "fake_wall":
+                anomalyType = "spoofing";
+                break;
+            case "layering":
+                anomalyType = "layering";
+                break;
+            case "ghost_liquidity":
+                anomalyType = "ghost_liquidity";
+                break;
+            case "iceberg_manipulation":
+                anomalyType = "iceberg_order";
+                break;
+            case "hidden_liquidity":
+                anomalyType = "hidden_liquidity";
+                break;
+            case "algorithmic":
+                anomalyType = "algorithmic_activity";
+                break;
+            default:
+                anomalyType = "spoofing";
+        }
+
+        // Determine severity based on size and confidence
+        let severity: AnomalyEvent["severity"] = "medium";
+        if (spoofingEvent.canceled > 100 && spoofingEvent.confidence > 0.8) {
+            severity = "high";
+        } else if (
+            spoofingEvent.canceled > 50 &&
+            spoofingEvent.confidence > 0.6
+        ) {
+            severity = "medium";
+        } else {
+            severity = "low";
+        }
+
+        // Determine recommended action
+        let recommendedAction:
+            | "pause"
+            | "reduce_size"
+            | "close_positions"
+            | "continue"
+            | "monitor";
+        if (severity === "high") {
+            recommendedAction = "pause";
+        } else if (severity === "medium") {
+            recommendedAction = "reduce_size";
+        } else {
+            recommendedAction = "monitor";
+        }
+
+        this.emitAnomaly({
+            type: anomalyType,
+            detectedAt: spoofingEvent.timestamp,
+            severity,
+            affectedPriceRange: {
+                min: Math.min(spoofingEvent.priceStart, spoofingEvent.priceEnd),
+                max: Math.max(spoofingEvent.priceStart, spoofingEvent.priceEnd),
+            },
+            recommendedAction,
+            details: {
+                confidence: spoofingEvent.confidence,
+                spoofType: spoofingEvent.spoofType,
+                side: spoofingEvent.side,
+                spoofedSide: spoofingEvent.spoofedSide,
+                wallBefore: spoofingEvent.wallBefore,
+                wallAfter: spoofingEvent.wallAfter,
+                canceled: spoofingEvent.canceled,
+                executed: spoofingEvent.executed,
+                cancelTimeMs: spoofingEvent.cancelTimeMs,
+                marketImpact: spoofingEvent.marketImpact,
+                priceRange: `${spoofingEvent.priceStart.toFixed(4)} - ${spoofingEvent.priceEnd.toFixed(4)}`,
+                currentPrice: currentPrice.toFixed(4),
+                rationale: `${spoofingEvent.spoofType} detected: ${spoofingEvent.canceled.toFixed(2)} units canceled in ${spoofingEvent.cancelTimeMs}ms`,
+            },
+        });
+    }
+
+    /**
+     * Handle whale activity detection
+     * Identifies large volume trades that could impact market structure
+     */
+    public onWhaleActivity(
+        trade: {
+            price: number;
+            quantity: number;
+            side: "buy" | "sell";
+            timestamp: number;
+        },
+        context: {
+            averageSize: number;
+            volumeMultiplier: number;
+            priceImpact?: number;
+        }
+    ): void {
+        // Determine severity based on size relative to average
+        let severity: AnomalyEvent["severity"] = "medium";
+        if (context.volumeMultiplier > 10) {
+            severity = "high";
+        } else if (context.volumeMultiplier > 5) {
+            severity = "medium";
+        } else {
+            severity = "low";
+        }
+
+        this.emitAnomaly({
+            type: "whale_activity",
+            detectedAt: trade.timestamp,
+            severity,
+            affectedPriceRange: {
+                min: trade.price * 0.999,
+                max: trade.price * 1.001,
+            },
+            recommendedAction: severity === "high" ? "reduce_size" : "monitor",
+            details: {
+                confidence: Math.min(context.volumeMultiplier / 15, 1.0),
+                tradeSize: trade.quantity,
+                averageSize: context.averageSize,
+                volumeMultiplier: context.volumeMultiplier,
+                side: trade.side,
+                price: trade.price,
+                priceImpact: context.priceImpact || 0,
+                rationale: `Large ${trade.side} order: ${trade.quantity.toFixed(2)} units (${context.volumeMultiplier.toFixed(1)}x average size)`,
+            },
+        });
     }
 
     /**
