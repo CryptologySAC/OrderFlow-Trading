@@ -15,7 +15,6 @@ import type {
 } from "../types/configTypes.js";
 import type { OrderflowPreprocessorOptions } from "../market/orderFlowPreprocessor.js";
 import type { DataStreamConfig } from "../trading/dataStreamManager.js";
-import type { SupportResistanceConfig } from "../indicators/supportResistanceDetector.js";
 import type { IndividualTradesManagerConfig } from "../data/individualTradesManager.js";
 import type { MicrostructureAnalyzerConfig } from "../data/microstructureAnalyzer.js";
 import type { TradesProcessorOptions } from "../market/processors/tradesProcessor.js";
@@ -1269,31 +1268,6 @@ export class Config {
         // Zod validation for boolean value - no type casting allowed
         const enabledSchema = z.boolean();
         return enabledSchema.parse(SYMBOL_CFG.enableStandardizedZones);
-    }
-
-    static get SUPPORT_RESISTANCE_DETECTOR(): SupportResistanceConfig {
-        return {
-            priceTolerancePercent: Number(
-                cfg.symbols[cfg.symbol].supportResistanceDetector
-                    .priceTolerancePercent
-            ),
-            minTouchCount:
-                cfg.symbols[cfg.symbol].supportResistanceDetector.minTouchCount,
-            minStrength: Number(
-                cfg.symbols[cfg.symbol].supportResistanceDetector.minStrength
-            ),
-            timeWindowMs: Number(
-                cfg.symbols[cfg.symbol].supportResistanceDetector.timeWindowMs
-            ),
-            volumeWeightFactor: Number(
-                cfg.symbols[cfg.symbol].supportResistanceDetector
-                    .volumeWeightFactor
-            ),
-            rejectionConfirmationTicks: Number(
-                cfg.symbols[cfg.symbol].supportResistanceDetector
-                    .rejectionConfirmationTicks
-            ),
-        };
     }
 
     static get INDIVIDUAL_TRADES_MANAGER(): IndividualTradesManagerConfig {

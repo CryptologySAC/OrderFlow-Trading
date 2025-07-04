@@ -246,14 +246,7 @@ describe("Config.ts - Comprehensive Test Suite", () => {
             expect(typeof positionSizing).toBe("object");
         });
 
-        it("should provide SUPPORT_RESISTANCE_DETECTOR configuration", () => {
-            const srConfig = Config.SUPPORT_RESISTANCE_DETECTOR;
-            expect(srConfig).toBeDefined();
-            expect(typeof srConfig.priceTolerancePercent).toBe("number");
-            expect(typeof srConfig.minTouchCount).toBe("number");
-            expect(typeof srConfig.minStrength).toBe("number");
-            expect(typeof srConfig.timeWindowMs).toBe("number");
-        });
+       
     });
 
     describe("Service Configurations", () => {
@@ -401,7 +394,6 @@ describe("Config.ts - Comprehensive Test Suite", () => {
                 "DELTACVD_DETECTOR",
                 "ACCUMULATION_DETECTOR",
                 "DISTRIBUTION_ZONE_DETECTOR",
-                "SUPPORT_RESISTANCE_DETECTOR",
                 "INDIVIDUAL_TRADES_MANAGER",
                 "MICROSTRUCTURE_ANALYZER",
                 "SPOOFING_DETECTOR",

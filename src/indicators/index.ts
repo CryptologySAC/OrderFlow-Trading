@@ -11,7 +11,6 @@ export {
     DeltaCVDDetectorEnhanced,
     type DeltaCVDEnhancedSettings,
 } from "./deltaCVDDetectorEnhanced.js";
-export { SupportResistanceDetector } from "./supportResistanceDetector.js";
 
 // Re-export settings types from extracted type files
 export type { AbsorptionSettings } from "./types/absorptionTypes.js";
