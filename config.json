@@ -153,6 +153,7 @@
                 "logLevel": "info"
             },
             "exhaustion": {
+
                 "minAggVolume": 15,
                 "windowMs": 45000,
                 "eventCooldownMs": 5000,
@@ -197,6 +198,7 @@
                 "maxRevisitTicks": 8,
                 "maxZones": 75,
                 "zoneAgeLimit": 1200000,
+
                 "features": {
                     "depletionTracking": true,
                     "spreadAdjustment": true,
