@@ -198,6 +198,7 @@ export class DetectorFactory {
             id,
             Config.SYMBOL,
             productionSettings,
+            dependencies.preprocessor,
             dependencies.logger,
             dependencies.metricsCollector
         );
@@ -277,6 +278,7 @@ export class DetectorFactory {
         const detector = new DeltaCVDDetectorEnhanced(
             id,
             productionSettings,
+            dependencies.preprocessor,
             dependencies.logger,
             dependencies.spoofingDetector,
             dependencies.metricsCollector,

@@ -336,6 +336,12 @@ export class OrderFlowDashboard {
         this.logger.info("[OrderFlowDashboard] Initializing detectors...");
 
         // Create DetectorDependencies with preprocessor for enhanced detectors
+        if (!this.preprocessor) {
+            throw new Error(
+                "Preprocessor must be initialized before initializing detectors"
+            );
+        }
+
         const detectorDependencies: DetectorDependencies = {
             logger: dependencies.logger,
             spoofingDetector: dependencies.spoofingDetector,

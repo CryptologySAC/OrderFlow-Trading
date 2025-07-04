@@ -863,7 +863,11 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
             ...zoneData.zones20Tick,
         ];
 
-        const relevantZones = this.findZonesNearPrice(allZones, event.price, 5);
+        const relevantZones = this.preprocessor.findZonesNearPrice(
+            allZones,
+            event.price,
+            5
+        );
 
         let totalVolume = 0;
         let institutionalVolume = 0;
@@ -950,7 +954,11 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         zones: ZoneSnapshot[],
         price: number
     ): boolean {
-        const relevantZones = this.findZonesNearPrice(zones, price, 2);
+        const relevantZones = this.preprocessor.findZonesNearPrice(
+            zones,
+            price,
+            2
+        );
 
         if (relevantZones.length === 0) return false;
 
@@ -1049,7 +1057,7 @@ export class AbsorptionDetectorEnhanced extends AbsorptionDetector {
         }
 
         // Find the relevant zone from standardized zone data
-        const relevantZone = this.findMostRelevantZone(
+        const relevantZone = this.preprocessor.findMostRelevantZone(
             event.zoneData!,
             event.price
         );

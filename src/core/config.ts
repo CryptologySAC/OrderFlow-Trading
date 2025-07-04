@@ -326,7 +326,7 @@ export const DeltaCVDDetectorSchema = z.object({
     adaptiveThresholdMultiplier: z.number().min(0.3).max(2.0),
     eventCooldownMs: z.number().int().min(5000).max(60000),
     minTradesPerSec: z.number().min(0.01).max(5.0),
-    minVolPerSec: z.number().min(0.1).max(10.0),
+    minVolPerSec: z.number().min(0.1).max(2000.0),
     minSamplesForStats: z.number().int().min(5).max(100),
     volatilityLookbackSec: z.number().int().min(600).max(7200),
     maxDivergenceAllowed: z.number().min(0.1).max(2.0),

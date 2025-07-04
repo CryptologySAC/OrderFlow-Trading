@@ -22,6 +22,7 @@ import { DistributionZoneDetector } from "./distributionZoneDetector.js";
 import { FinancialMath } from "../utils/financialMath.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
 import type {
     EnrichedTradeEvent,
     StandardZoneData,
@@ -91,11 +92,13 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
     private readonly useStandardizedZones: boolean;
     private readonly enhancementConfig: DistributionEnhancedSettings;
     private readonly enhancementStats: DistributionEnhancementStats;
+    private readonly preprocessor: IOrderflowPreprocessor;
 
     constructor(
         id: string,
         symbol: string,
         settings: DistributionEnhancedSettings,
+        preprocessor: IOrderflowPreprocessor,
         logger: ILogger,
         metrics: IMetricsCollector
     ) {
@@ -108,6 +111,7 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
         // Initialize enhancement configuration
         this.useStandardizedZones = settings.useStandardizedZones;
         this.enhancementConfig = settings;
+        this.preprocessor = preprocessor;
 
         // Initialize enhancement statistics
         this.enhancementStats = {
@@ -302,19 +306,31 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
         // Find zones that overlap around the current price
         const relevantZones: ZoneSnapshot[] = [];
 
-        // Check 5-tick zones
+        // Check 5-tick zones - using universal zone analysis service
         relevantZones.push(
-            ...this.findZonesNearPrice(zoneData.zones5Tick, price, maxDistance)
+            ...this.preprocessor.findZonesNearPrice(
+                zoneData.zones5Tick,
+                price,
+                maxDistance
+            )
         );
 
-        // Check 10-tick zones
+        // Check 10-tick zones - using universal zone analysis service
         relevantZones.push(
-            ...this.findZonesNearPrice(zoneData.zones10Tick, price, maxDistance)
+            ...this.preprocessor.findZonesNearPrice(
+                zoneData.zones10Tick,
+                price,
+                maxDistance
+            )
         );
 
-        // Check 20-tick zones
+        // Check 20-tick zones - using universal zone analysis service
         relevantZones.push(
-            ...this.findZonesNearPrice(zoneData.zones20Tick, price, maxDistance)
+            ...this.preprocessor.findZonesNearPrice(
+                zoneData.zones20Tick,
+                price,
+                maxDistance
+            )
         );
 
         const confluenceZones = relevantZones.length;
@@ -338,29 +354,7 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
         };
     }
 
-    /**
-     * Find zones near a specific price within distance threshold
-     */
-    private findZonesNearPrice(
-        zones: ZoneSnapshot[],
-        price: number,
-        maxDistanceTicks: number
-    ): ZoneSnapshot[] {
-        const tickValue = Config.TICK_SIZE;
-        const maxDistance = FinancialMath.multiplyQuantities(
-            maxDistanceTicks,
-            tickValue
-        );
-
-        return zones.filter((zone) => {
-            const distance = FinancialMath.calculateSpread(
-                zone.priceLevel,
-                price,
-                8
-            );
-            return distance <= maxDistance;
-        });
-    }
+    // ✅ REMOVED: Duplicate zone analysis method - now using preprocessor.findZonesNearPrice()
 
     /**
      * Analyze institutional selling pressure across standardized zones
@@ -386,7 +380,11 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
             ...zoneData.zones20Tick,
         ];
 
-        const relevantZones = this.findZonesNearPrice(allZones, event.price, 5);
+        const relevantZones = this.preprocessor.findZonesNearPrice(
+            allZones,
+            event.price,
+            5
+        );
 
         let totalPassiveVolume = 0;
         let totalAggressiveVolume = 0;
@@ -526,7 +524,11 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
     ): number {
         if (zones.length === 0) return 0;
 
-        const relevantZones = this.findZonesNearPrice(zones, price, 3);
+        const relevantZones = this.preprocessor.findZonesNearPrice(
+            zones,
+            price,
+            3
+        );
         if (relevantZones.length === 0) return 0;
 
         let totalDistributionScore = 0;
@@ -711,7 +713,11 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
             ...event.zoneData.zones20Tick,
         ];
 
-        const relevantZones = this.findZonesNearPrice(allZones, event.price, 5);
+        const relevantZones = this.preprocessor.findZonesNearPrice(
+            allZones,
+            event.price,
+            5
+        );
         if (relevantZones.length === 0) {
             return "neutral";
         }
@@ -766,7 +772,11 @@ export class DistributionDetectorEnhanced extends DistributionZoneDetector {
             ...event.zoneData.zones20Tick,
         ];
 
-        const relevantZones = this.findZonesNearPrice(allZones, event.price, 5);
+        const relevantZones = this.preprocessor.findZonesNearPrice(
+            allZones,
+            event.price,
+            5
+        );
         if (relevantZones.length === 0) {
             return null;
         }

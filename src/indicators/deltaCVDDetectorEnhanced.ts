@@ -24,6 +24,7 @@ import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
+import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
 import type {
     EnrichedTradeEvent,
     StandardZoneData,
@@ -80,10 +81,12 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
     private readonly useStandardizedZones: boolean;
     private readonly enhancementConfig: DeltaCVDEnhancedSettings;
     private readonly enhancementStats: DeltaCVDEnhancementStats;
+    private readonly preprocessor: IOrderflowPreprocessor;
 
     constructor(
         id: string,
         settings: DeltaCVDEnhancedSettings,
+        preprocessor: IOrderflowPreprocessor,
         logger: ILogger,
         spoofingDetector: SpoofingDetector,
         metrics: IMetricsCollector,
@@ -98,6 +101,7 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
         // Initialize enhancement configuration
         this.useStandardizedZones = settings.useStandardizedZones;
         this.enhancementConfig = settings;
+        this.preprocessor = preprocessor;
 
         // Initialize enhancement statistics
         this.enhancementStats = {
@@ -355,24 +359,24 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
         // Find zones that overlap around the current price
         const relevantZones: ZoneSnapshot[] = [];
 
-        // Check 5-tick zones
-        const zones5Near = this.findZonesNearPrice(
+        // Check 5-tick zones - using universal zone analysis service
+        const zones5Near = this.preprocessor.findZonesNearPrice(
             zoneData.zones5Tick,
             price,
             maxDistance
         );
         relevantZones.push(...zones5Near);
 
-        // Check 10-tick zones
-        const zones10Near = this.findZonesNearPrice(
+        // Check 10-tick zones - using universal zone analysis service
+        const zones10Near = this.preprocessor.findZonesNearPrice(
             zoneData.zones10Tick,
             price,
             maxDistance
         );
         relevantZones.push(...zones10Near);
 
-        // Check 20-tick zones
-        const zones20Near = this.findZonesNearPrice(
+        // Check 20-tick zones - using universal zone analysis service
+        const zones20Near = this.preprocessor.findZonesNearPrice(
             zoneData.zones20Tick,
             price,
             maxDistance
@@ -413,28 +417,7 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
         };
     }
 
-    /**
-     * Find zones near a specific price within distance threshold
-     */
-    private findZonesNearPrice(
-        zones: ZoneSnapshot[],
-        price: number,
-        maxDistanceTicks: number
-    ): ZoneSnapshot[] {
-        const maxDistance = FinancialMath.multiplyQuantities(
-            maxDistanceTicks,
-            Config.TICK_SIZE
-        );
-
-        return zones.filter((zone) => {
-            const distance = FinancialMath.calculateSpread(
-                zone.priceLevel,
-                price,
-                8
-            );
-            return distance <= maxDistance;
-        });
-    }
+    // ✅ REMOVED: Duplicate zone analysis method - now using preprocessor.findZonesNearPrice()
 
     /**
      * Analyze CVD divergence across standardized zones
@@ -511,7 +494,11 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
             ...zoneData.zones20Tick,
         ];
 
-        const relevantZones = this.findZonesNearPrice(allZones, event.price, 5);
+        const relevantZones = this.preprocessor.findZonesNearPrice(
+            allZones,
+            event.price,
+            5
+        );
 
         this.logger.debug(
             "[DeltaCVDDetectorEnhanced DEBUG] analyzeCVDDivergence zones found",
@@ -817,7 +804,11 @@ export class DeltaCVDDetectorEnhanced extends DeltaCVDConfirmation {
             return 0;
         }
 
-        const relevantZones = this.findZonesNearPrice(zones, price, 3);
+        const relevantZones = this.preprocessor.findZonesNearPrice(
+            zones,
+            price,
+            3
+        );
         if (relevantZones.length === 0) {
             this.logger.debug(
                 "[DeltaCVDDetectorEnhanced DEBUG] calculateTimeframeMomentum no relevant zones",
