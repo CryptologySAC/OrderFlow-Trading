@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
 
 describe("AccumulationZoneDetectorEnhanced - CLAUDE.md Compliance Audit Validation", () => {

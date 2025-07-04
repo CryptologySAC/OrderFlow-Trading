@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// ✅ CLAUDE.md COMPLIANCE: Use centralized mocks from __mocks__/ directory
+vi.mock("../src/indicators/accumulationZoneDetector.js");
+
 // ✅ CLAUDE.md COMPLIANCE: Complete test coverage for all AccumulationZoneDetector functionality
 // This test file provides comprehensive coverage for ALL functional logic and edge cases
 
@@ -7,21 +10,32 @@ import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulation
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
+import type { AccumulationEnhancedSettings } from "../src/indicators/accumulationZoneDetectorEnhanced.js";
+import { createMockLogger } from "../__mocks__/src/infrastructure/loggerInterface.js";
 
 describe("AccumulationZoneDetectorEnhanced - Comprehensive Functional Testing", () => {
     let detector: AccumulationZoneDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
 
+    const mockPreprocessor: IOrderflowPreprocessor = {
+        handleDepth: vi.fn(),
+        handleAggTrade: vi.fn(),
+        getStats: vi.fn(() => ({
+            processedTrades: 0,
+            processedDepthUpdates: 0,
+            bookMetrics: {} as any,
+        })),
+        findZonesNearPrice: vi.fn(() => []),
+        calculateZoneRelevanceScore: vi.fn(() => 0.5),
+        findMostRelevantZone: vi.fn(() => null),
+    };
+
     beforeEach(() => {
-        mockLogger = {
-            info: vi.fn(),
-            warn: vi.fn(),
-            error: vi.fn(),
-            debug: vi.fn(),
-            trace: vi.fn(),
-        } as unknown as ILogger;
+        // ✅ CLAUDE.md COMPLIANCE: Use centralized mock from __mocks__/ directory
+        mockLogger = createMockLogger();
 
         mockMetrics = {
             updateMetric: vi.fn(),
@@ -33,14 +47,40 @@ describe("AccumulationZoneDetectorEnhanced - Comprehensive Functional Testing", 
         } as unknown as IMetricsCollector;
     });
 
+    // Helper function to create complete AccumulationEnhancedSettings
+    function createAccumulationConfig(
+        overrides: Partial<AccumulationEnhancedSettings> = {}
+    ): AccumulationEnhancedSettings {
+        return {
+            useStandardizedZones: true,
+            minDurationMs: 30000,
+            minRatio: 0.7,
+            minRecentActivityMs: 120000,
+            threshold: 0.85,
+            volumeSurgeMultiplier: 2.0,
+            imbalanceThreshold: 0.3,
+            institutionalThreshold: 15,
+            burstDetectionMs: 2000,
+            sustainedVolumeMs: 20000,
+            medianTradeSize: 0.8,
+            enhancementMode: "testing" as const,
+            minEnhancedConfidenceThreshold: 0.3,
+            enhancementCallFrequency: 5,
+            highConfidenceThreshold: 0.8,
+            lowConfidenceThreshold: 0.3,
+            minConfidenceBoostThreshold: 0.05,
+            defaultMinEnhancedConfidenceThreshold: 0.25,
+            confidenceReductionFactor: 0.9,
+            significanceBoostMultiplier: 1.2,
+            neutralBoostReductionFactor: 0.8,
+            enhancementSignificanceBoost: true,
+            ...overrides,
+        };
+    }
+
     describe("Core Analyze Method - Complete Functional Coverage", () => {
         it("should handle empty trade input gracefully", () => {
-            const config: Partial<ZoneDetectorConfig> = {
-                minZoneVolume: 100,
-                minTradeCount: 3,
-                pricePrecision: 2,
-                zoneTicks: 2,
-            };
+            const config = createAccumulationConfig();
 
             detector = new AccumulationZoneDetectorEnhanced(
                 "test-empty",
@@ -56,12 +96,12 @@ describe("AccumulationZoneDetectorEnhanced - Comprehensive Functional Testing", 
         });
 
         it("should process single trade and create candidate", () => {
-            const config: Partial<ZoneDetectorConfig> = {
+            const config = createAccumulationConfig({
                 minZoneVolume: 50,
                 minTradeCount: 1,
                 pricePrecision: 2,
                 zoneTicks: 2,
-            };
+            });
 
             detector = new AccumulationZoneDetectorEnhanced(
                 "test-single",
@@ -83,6 +123,16 @@ describe("AccumulationZoneDetectorEnhanced - Comprehensive Functional Testing", 
                 passiveAskVolume: 0,
                 zonePassiveBidVolume: 0,
                 zonePassiveAskVolume: 0,
+                zoneData: {
+                    zones5Tick: [],
+                    zones10Tick: [],
+                    zones20Tick: [],
+                    zoneConfig: {
+                        baseTicks: 5,
+                        tickValue: 0.01,
+                        timeWindow: 300000,
+                    },
+                },
             };
 
             // ✅ FUNCTIONAL TEST: Single trade processing
@@ -96,12 +146,7 @@ describe("AccumulationZoneDetectorEnhanced - Comprehensive Functional Testing", 
         });
 
         it("should accumulate trades in the same price zone", () => {
-            const config: Partial<ZoneDetectorConfig> = {
-                minZoneVolume: 100,
-                minTradeCount: 3,
-                pricePrecision: 2,
-                zoneTicks: 2,
-            };
+            const config = createAccumulationConfig();
 
             detector = new AccumulationZoneDetectorEnhanced(
                 "test-accumulate",
@@ -148,16 +193,15 @@ describe("AccumulationZoneDetectorEnhanced - Comprehensive Functional Testing", 
 
     describe("Institutional Accumulation Pattern Recognition", () => {
         it("should detect institutional accumulation vs retail patterns", () => {
-            const config: Partial<ZoneDetectorConfig> = {
+            const config = createAccumulationConfig({
                 minZoneVolume: 200,
                 minTradeCount: 3, // Reduced from 5 to ensure reliable zone formation
-                enhancedInstitutionalSizeThreshold: 50, // Reduced from 75 to match test quantities
-                minBuyRatio: 0.4, // Reduced from 0.65 to be more permissive
-                minZoneStrength: 0.1, // Added: Critical for zone formation
-                minSellRatio: 0.4, // Added: More permissive than default 0.55
+                institutionalThreshold: 50, // Reduced from 75 to match test quantities
+                minRatio: 0.4, // Reduced from 0.65 to be more permissive
+                threshold: 0.6, // Zone strength threshold
                 pricePrecision: 2,
                 zoneTicks: 2,
-            };
+            });
 
             detector = new AccumulationZoneDetectorEnhanced(
                 "test-institutional",
@@ -224,12 +268,7 @@ describe("AccumulationZoneDetectorEnhanced - Comprehensive Functional Testing", 
         });
 
         it("should handle mixed buy/sell pressure correctly", () => {
-            const config: Partial<ZoneDetectorConfig> = {
-                minZoneVolume: 100,
-                minTradeCount: 3,
-                pricePrecision: 2,
-                zoneTicks: 2,
-            };
+            const config = createAccumulationConfig();
 
             detector = new AccumulationZoneDetectorEnhanced(
                 "test-mixed",
@@ -285,12 +324,12 @@ describe("AccumulationZoneDetectorEnhanced - Comprehensive Functional Testing", 
     describe("Price Level and Zone Calculations", () => {
         it("should handle price levels correctly with proper tick alignment", () => {
             // ✅ REALISTIC TEST: Use tick-aligned prices only
-            const config: Partial<ZoneDetectorConfig> = {
+            const config = createAccumulationConfig({
                 pricePrecision: 2, // LTC standard: 2 decimal places
                 zoneTicks: 2,
                 minZoneVolume: 50,
                 minTradeCount: 1,
-            };
+            });
 
             const detector = new AccumulationZoneDetectorEnhanced(
                 "test-tick-alignment",
@@ -326,12 +365,12 @@ describe("AccumulationZoneDetectorEnhanced - Comprehensive Functional Testing", 
         });
 
         it("should handle edge case prices and quantities", () => {
-            const config: Partial<ZoneDetectorConfig> = {
+            const config = createAccumulationConfig({
                 pricePrecision: 2,
                 zoneTicks: 2,
                 minZoneVolume: 1,
                 minTradeCount: 1,
-            };
+            });
 
             detector = new AccumulationZoneDetectorEnhanced(
                 "test-edge-cases",
@@ -371,13 +410,13 @@ describe("AccumulationZoneDetectorEnhanced - Comprehensive Functional Testing", 
 
     describe("Zone Formation and Lifecycle", () => {
         it("should respect minimum trade count requirement", () => {
-            const config: Partial<ZoneDetectorConfig> = {
+            const config = createAccumulationConfig({
                 minTradeCount: 5, // Strict requirement
                 minZoneVolume: 100,
                 minCandidateDuration: 10000,
                 pricePrecision: 2,
                 zoneTicks: 2,
-            };
+            });
 
             detector = new AccumulationZoneDetectorEnhanced(
                 "test-min-trades",
@@ -415,12 +454,12 @@ describe("AccumulationZoneDetectorEnhanced - Comprehensive Functional Testing", 
         });
 
         it("should respect minimum volume requirement", () => {
-            const config: Partial<ZoneDetectorConfig> = {
+            const config = createAccumulationConfig({
                 minZoneVolume: 500, // High volume requirement
                 minTradeCount: 3,
                 pricePrecision: 2,
                 zoneTicks: 2,
-            };
+            });
 
             detector = new AccumulationZoneDetectorEnhanced(
                 "test-min-volume",
@@ -464,10 +503,10 @@ describe("AccumulationZoneDetectorEnhanced - Comprehensive Functional Testing", 
 
     describe("Error Handling and Robustness", () => {
         it("should handle malformed trade data", () => {
-            const config: Partial<ZoneDetectorConfig> = {
+            const config = createAccumulationConfig({
                 pricePrecision: 2,
                 zoneTicks: 2,
-            };
+            });
 
             detector = new AccumulationZoneDetectorEnhanced(
                 "test-malformed",
@@ -508,12 +547,12 @@ describe("AccumulationZoneDetectorEnhanced - Comprehensive Functional Testing", 
         });
 
         it("should maintain performance under high-frequency updates", () => {
-            const config: Partial<ZoneDetectorConfig> = {
+            const config = createAccumulationConfig({
                 pricePrecision: 2,
                 zoneTicks: 2,
                 minZoneVolume: 1000,
                 minTradeCount: 10,
-            };
+            });
 
             detector = new AccumulationZoneDetectorEnhanced(
                 "test-performance",

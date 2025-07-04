@@ -9,6 +9,7 @@ import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnha
 import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { SpoofingDetector } from "../src/services/spoofingDetector";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents";
 
 /**
@@ -28,6 +29,19 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
     let mockLogger: WorkerLogger;
     let mockMetrics: MetricsCollector;
     let mockSpoofing: SpoofingDetector;
+
+    const mockPreprocessor: IOrderflowPreprocessor = {
+        handleDepth: vi.fn(),
+        handleAggTrade: vi.fn(),
+        getStats: vi.fn(() => ({
+            processedTrades: 0,
+            processedDepthUpdates: 0,
+            bookMetrics: {} as any,
+        })),
+        findZonesNearPrice: vi.fn(() => []),
+        calculateZoneRelevanceScore: vi.fn(() => 0.5),
+        findMostRelevantZone: vi.fn(() => null),
+    };
 
     // Helper to create realistic trade events with proper market structure
     const createRealisticTrade = (
@@ -85,6 +99,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                     enableDepthAnalysis: true,
                     usePassiveVolume: true,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -319,6 +334,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                     minVolPerSec: 1.5,
                     usePassiveVolume: true,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -437,6 +453,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                     minVolPerSec: 1.0,
                     usePassiveVolume: true,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -570,6 +587,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                     minVolPerSec: 1.2,
                     usePassiveVolume: true,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -713,6 +731,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                     enableDepthAnalysis: true,
                     usePassiveVolume: true,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -941,6 +960,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                     usePassiveVolume: true,
                     enableDepthAnalysis: true,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -1185,6 +1205,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                     usePassiveVolume: true,
                     enableDepthAnalysis: true,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics

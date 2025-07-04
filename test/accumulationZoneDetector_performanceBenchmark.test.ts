@@ -6,18 +6,12 @@
 
 import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
 import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced.js";
-import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
+import { createMockLogger } from "../__mocks__/src/infrastructure/loggerInterface.js";
 
 // Mock dependencies
-const mockLogger = {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-};
+const mockLogger = createMockLogger();
 
 const mockMetricsCollector = {
     incrementMetric: vi.fn(),
@@ -31,7 +25,7 @@ const mockMetricsCollector = {
 
 describe("AccumulationZoneDetector Performance Benchmark", () => {
     let baseConfig: ZoneDetectorConfig;
-    let originalDetector: AccumulationZoneDetector;
+    let originalDetector: AccumulationZoneDetectorEnhanced;
     let enhancedDetectorDisabled: AccumulationZoneDetectorEnhanced;
     let enhancedDetectorEnabled: AccumulationZoneDetectorEnhanced;
     let testTradeEvents: EnrichedTradeEvent[];

@@ -12,6 +12,55 @@ import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { FinancialMath } from "../src/utils/financialMath";
 import type { SpotWebsocketStreams } from "@binance/spot";
 
+// Helper function to create complete OrderflowPreprocessor configuration
+function createTestConfig(overrides: any = {}) {
+    return {
+        pricePrecision: 2,
+        quantityPrecision: 8,
+        bandTicks: 5,
+        tickSize: 0.01,
+        symbol: "LTCUSDT",
+        enableIndividualTrades: false,
+        largeTradeThreshold: 100,
+        maxEventListeners: 50,
+        dashboardUpdateInterval: 200,
+        maxDashboardInterval: 1000,
+        significantChangeThreshold: 0.001,
+        enableStandardizedZones: true,
+        standardZoneConfig: {
+            baseTicks: 5,
+            zoneMultipliers: [1, 2, 4],
+            timeWindows: [30000, 60000, 300000], // 30s, 60s, 5min
+            adaptiveMode: false,
+            volumeThresholds: {
+                aggressive: 10.0,
+                passive: 5.0,
+                institutional: 50.0,
+            },
+            priceThresholds: {
+                significantMove: 0.001, // 0.1%
+                majorMove: 0.005, // 0.5%
+            },
+            maxZones: 100,
+            zoneTimeoutMs: 300000,
+        },
+        maxZoneCacheAgeMs: 5400000,
+        adaptiveZoneLookbackTrades: 500,
+        zoneCalculationRange: 12,
+        zoneCacheSize: 375,
+        defaultZoneMultipliers: [1, 2, 4],
+        defaultTimeWindows: [300000, 900000, 1800000, 3600000, 5400000],
+        defaultMinZoneWidthMultiplier: 2,
+        defaultMaxZoneWidthMultiplier: 10,
+        defaultMaxZoneHistory: 2000,
+        defaultMaxMemoryMB: 50,
+        defaultAggressiveVolumeAbsolute: 10.0,
+        defaultPassiveVolumeAbsolute: 5.0,
+        defaultInstitutionalVolumeAbsolute: 50.0,
+        ...overrides,
+    };
+}
+
 describe("OrderFlowPreprocessor Logic Tests", () => {
     let preprocessor: OrderflowPreprocessor;
     let mockOrderBook: any;
@@ -106,7 +155,7 @@ describe("OrderFlowPreprocessor Logic Tests", () => {
     describe("Trade Validation Logic", () => {
         beforeEach(() => {
             preprocessor = new OrderflowPreprocessor(
-                { largeTradeThreshold: 100 },
+                createTestConfig({ largeTradeThreshold: 100 }),
                 mockOrderBook,
                 mockLogger,
                 mockMetrics
@@ -197,11 +246,11 @@ describe("OrderFlowPreprocessor Logic Tests", () => {
     describe("Dashboard Update Timing Logic", () => {
         beforeEach(() => {
             preprocessor = new OrderflowPreprocessor(
-                {
+                createTestConfig({
                     dashboardUpdateInterval: 200,
                     maxDashboardInterval: 1000,
                     significantChangeThreshold: 0.01, // 1%
-                },
+                }),
                 mockOrderBook,
                 mockLogger,
                 mockMetrics
@@ -268,7 +317,7 @@ describe("OrderFlowPreprocessor Logic Tests", () => {
     describe("Large Trade Threshold Logic", () => {
         it("should include snapshot for trades above threshold", async () => {
             preprocessor = new OrderflowPreprocessor(
-                { largeTradeThreshold: 100 },
+                createTestConfig({ largeTradeThreshold: 100 }),
                 mockOrderBook,
                 mockLogger,
                 mockMetrics
@@ -296,7 +345,7 @@ describe("OrderFlowPreprocessor Logic Tests", () => {
 
         it("should not include snapshot for trades below threshold", async () => {
             preprocessor = new OrderflowPreprocessor(
-                { largeTradeThreshold: 100 },
+                createTestConfig({ largeTradeThreshold: 100 }),
                 mockOrderBook,
                 mockLogger,
                 mockMetrics
@@ -325,7 +374,7 @@ describe("OrderFlowPreprocessor Logic Tests", () => {
     describe("Event Emission Logic", () => {
         beforeEach(() => {
             preprocessor = new OrderflowPreprocessor(
-                {},
+                createTestConfig(),
                 mockOrderBook,
                 mockLogger,
                 mockMetrics
@@ -431,7 +480,7 @@ describe("OrderFlowPreprocessor Logic Tests", () => {
             };
 
             preprocessor = new OrderflowPreprocessor(
-                { enableIndividualTrades: true },
+                createTestConfig({ enableIndividualTrades: true }),
                 mockOrderBook,
                 mockLogger,
                 mockMetrics,
@@ -585,7 +634,7 @@ describe("OrderFlowPreprocessor Logic Tests", () => {
     describe("Error Handling Logic", () => {
         beforeEach(() => {
             preprocessor = new OrderflowPreprocessor(
-                {},
+                createTestConfig(),
                 mockOrderBook,
                 mockLogger,
                 mockMetrics
@@ -696,7 +745,7 @@ describe("OrderFlowPreprocessor Logic Tests", () => {
             };
 
             const customPreprocessor = new OrderflowPreprocessor(
-                customOptions,
+                createTestConfig(customOptions),
                 mockOrderBook,
                 mockLogger,
                 mockMetrics
@@ -728,7 +777,7 @@ describe("OrderFlowPreprocessor Logic Tests", () => {
 
         it("should use default values when options not provided", () => {
             const defaultPreprocessor = new OrderflowPreprocessor(
-                {},
+                createTestConfig(),
                 mockOrderBook,
                 mockLogger,
                 mockMetrics
@@ -744,7 +793,7 @@ describe("OrderFlowPreprocessor Logic Tests", () => {
     describe("State Management Logic", () => {
         beforeEach(() => {
             preprocessor = new OrderflowPreprocessor(
-                {},
+                createTestConfig(),
                 mockOrderBook,
                 mockLogger,
                 mockMetrics

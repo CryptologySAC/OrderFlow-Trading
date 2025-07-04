@@ -9,8 +9,10 @@ import type {
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { IOrderBookState } from "../src/market/orderBookState.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import { FinancialMath } from "../src/utils/financialMath.js";
+import { createMockLogger } from "../__mocks__/src/infrastructure/loggerInterface.js";
 
 /**
  * CRITICAL REQUIREMENT: These tests validate EXPECTED CORRECT BEHAVIOR
@@ -20,11 +22,24 @@ import { FinancialMath } from "../src/utils/financialMath.js";
  */
 
 describe("AbsorptionDetector - Specification Compliance", () => {
-    let detector: AbsorptionDetector;
+    let detector: AbsorptionDetectorEnhanced;
     let mockOrderBook: IOrderBookState;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
     let mockSpoofingDetector: SpoofingDetector;
+
+    const mockPreprocessor: IOrderflowPreprocessor = {
+        handleDepth: vi.fn(),
+        handleAggTrade: vi.fn(),
+        getStats: vi.fn(() => ({
+            processedTrades: 0,
+            processedDepthUpdates: 0,
+            bookMetrics: {} as any,
+        })),
+        findZonesNearPrice: vi.fn(() => []),
+        calculateZoneRelevanceScore: vi.fn(() => 0.5),
+        findMostRelevantZone: vi.fn(() => null),
+    };
 
     const defaultSettings: AbsorptionEnhancedSettings = {
         // Base detector settings (from config.json)
@@ -116,20 +131,8 @@ describe("AbsorptionDetector - Specification Compliance", () => {
             getLastUpdate: vi.fn().mockReturnValue(Date.now()),
         } as any;
 
-        mockLogger = {
-            info: vi.fn((msg: string, data?: any) => {
-                console.log(`[INFO] ${msg}`, data);
-            }),
-            warn: vi.fn((msg: string, data?: any) => {
-                console.log(`[WARN] ${msg}`, data);
-            }),
-            error: vi.fn((msg: string, data?: any) => {
-                console.log(`[ERROR] ${msg}`, data);
-            }),
-            debug: vi.fn((msg: string, data?: any) => {
-                console.log(`[DEBUG] ${msg}`, data);
-            }),
-        } as any;
+        // ✅ CLAUDE.md COMPLIANCE: Use centralized mock from __mocks__/ directory
+        mockLogger = createMockLogger();
 
         // Use proper mock from __mocks__/ directory per CLAUDE.md
         const { MetricsCollector: MockMetricsCollector } = await import(
@@ -144,6 +147,7 @@ describe("AbsorptionDetector - Specification Compliance", () => {
         detector = new AbsorptionDetectorEnhanced(
             "TEST",
             defaultSettings,
+            mockPreprocessor,
             mockOrderBook,
             mockLogger,
             mockSpoofingDetector,
@@ -410,6 +414,7 @@ describe("AbsorptionDetector - Specification Compliance", () => {
                 const testDetector = new AbsorptionDetectorEnhanced(
                     detectorName,
                     defaultSettings,
+                    mockPreprocessor,
                     mockOrderBook,
                     mockLogger,
                     mockSpoofingDetector,
@@ -629,6 +634,7 @@ describe("AbsorptionDetector - Specification Compliance", () => {
             const customDetector = new AbsorptionDetectorEnhanced(
                 "CUSTOM",
                 customSettings,
+                mockPreprocessor,
                 mockOrderBook,
                 mockLogger,
                 mockSpoofingDetector,

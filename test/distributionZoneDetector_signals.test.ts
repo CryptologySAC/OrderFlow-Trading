@@ -8,12 +8,26 @@ import { DistributionDetectorEnhanced } from "../src/indicators/distributionDete
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { ZoneDetectorConfig, ZoneSignal } from "../src/types/zoneTypes.js";
 
 describe("DistributionDetectorEnhanced - Signal Generation Validation", () => {
     let detector: DistributionDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
+
+    const mockPreprocessor: IOrderflowPreprocessor = {
+        handleDepth: vi.fn(),
+        handleAggTrade: vi.fn(),
+        getStats: vi.fn(() => ({
+            processedTrades: 0,
+            processedDepthUpdates: 0,
+            bookMetrics: {} as any,
+        })),
+        findZonesNearPrice: vi.fn(() => []),
+        calculateZoneRelevanceScore: vi.fn(() => 0.5),
+        findMostRelevantZone: vi.fn(() => null),
+    };
 
     beforeEach(async () => {
         // Mock Config.UNIVERSAL_ZONE_CONFIG to use test-friendly values
@@ -105,6 +119,7 @@ describe("DistributionDetectorEnhanced - Signal Generation Validation", () => {
             "test-signals",
             "BTCUSDT",
             config,
+            mockPreprocessor,
             mockLogger,
             mockMetrics
         );
@@ -339,6 +354,7 @@ describe("DistributionDetectorEnhanced - Signal Generation Validation", () => {
                         minTradeCount: 4,
                         minZoneStrength: 0.35,
                     },
+                    mockPreprocessor,
                     mockLogger,
                     mockMetrics
                 );

@@ -7,6 +7,7 @@ import { DistributionDetectorEnhanced } from "../src/indicators/distributionDete
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
 import { Config } from "../src/core/config.js";
 
@@ -14,6 +15,19 @@ describe("DistributionDetectorEnhanced - Integration and Performance Tests", () 
     let detector: DistributionDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
+
+    const mockPreprocessor: IOrderflowPreprocessor = {
+        handleDepth: vi.fn(),
+        handleAggTrade: vi.fn(),
+        getStats: vi.fn(() => ({
+            processedTrades: 0,
+            processedDepthUpdates: 0,
+            bookMetrics: {} as any,
+        })),
+        findZonesNearPrice: vi.fn(() => []),
+        calculateZoneRelevanceScore: vi.fn(() => 0.5),
+        findMostRelevantZone: vi.fn(() => null),
+    };
 
     beforeEach(async () => {
         // Mock Config.UNIVERSAL_ZONE_CONFIG to use test-friendly values
@@ -73,6 +87,7 @@ describe("DistributionDetectorEnhanced - Integration and Performance Tests", () 
             "test-integration",
             "BTCUSDT",
             config,
+            mockPreprocessor,
             mockLogger,
             mockMetrics
         );
@@ -510,6 +525,7 @@ describe("DistributionDetectorEnhanced - Integration and Performance Tests", () 
                 "test-strict",
                 "BTCUSDT",
                 strictConfig,
+                mockPreprocessor,
                 mockLogger,
                 mockMetrics
             );
@@ -581,6 +597,7 @@ describe("DistributionDetectorEnhanced - Integration and Performance Tests", () 
                 "test-permissive",
                 "BTCUSDT",
                 permissiveConfig,
+                mockPreprocessor,
                 mockLogger,
                 mockMetrics
             );

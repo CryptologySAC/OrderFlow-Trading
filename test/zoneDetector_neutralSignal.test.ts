@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced";
 import { MetricsCollector } from "../__mocks__/src/infrastructure/metricsCollector";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor";
 import type {
     AccumulationZone,
     ZoneUpdate,

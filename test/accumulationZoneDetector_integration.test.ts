@@ -7,6 +7,7 @@ import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulation
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { ZoneDetectorConfig } from "../src/types/zoneTypes.js";
 import { Config } from "../src/core/config.js";
 

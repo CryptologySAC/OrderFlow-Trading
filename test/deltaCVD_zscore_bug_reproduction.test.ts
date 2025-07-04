@@ -9,10 +9,24 @@ import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnha
 import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { SpoofingDetector } from "../src/services/spoofingDetector";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents";
 
 // Import mock config for complete settings
 import mockConfig from "../__mocks__/config.json";
+
+const createMockPreprocessor = (): IOrderflowPreprocessor => ({
+    handleDepth: vi.fn(),
+    handleAggTrade: vi.fn(),
+    getStats: vi.fn(() => ({
+        processedTrades: 0,
+        processedDepthUpdates: 0,
+        bookMetrics: {} as any,
+    })),
+    findZonesNearPrice: vi.fn(() => []),
+    calculateZoneRelevanceScore: vi.fn(() => 0.5),
+    findMostRelevantZone: vi.fn(() => null),
+});
 
 /**
  * MINIMAL Z-SCORE BUG REPRODUCTION
@@ -28,6 +42,7 @@ describe("DeltaCVD Z-Score Bug Reproduction", () => {
     let mockLogger: WorkerLogger;
     let mockMetrics: MetricsCollector;
     let mockSpoofing: SpoofingDetector;
+    let mockPreprocessor: IOrderflowPreprocessor;
 
     const createTradeEvent = (
         price: number,
@@ -66,6 +81,7 @@ describe("DeltaCVD Z-Score Bug Reproduction", () => {
             dynamicWallWidth: true,
             testLogMinSpoof: 50,
         });
+        mockPreprocessor = createMockPreprocessor();
 
         detector = new DeltaCVDDetectorEnhanced(
             "zscore_bug_test",
@@ -81,6 +97,7 @@ describe("DeltaCVD Z-Score Bug Reproduction", () => {
                 volumeSurgeMultiplier: 1.5,
                 imbalanceThreshold: 0.05, // Very low threshold for testing
             },
+            mockPreprocessor,
             mockLogger,
             mockSpoofing,
             mockMetrics

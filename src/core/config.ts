@@ -320,7 +320,7 @@ export const AbsorptionDetectorSchema = z.object({
 export const DeltaCVDDetectorSchema = z.object({
     // Core CVD analysis
     windowsSec: z.array(z.number().int().min(30).max(3600)),
-    minZ: z.number().min(0.01).max(1.0),
+    minZ: z.number().min(0.01).max(2.0),
     priceCorrelationWeight: z.number().min(0.1).max(0.8),
     volumeConcentrationWeight: z.number().min(0.1).max(0.5),
     adaptiveThresholdMultiplier: z.number().min(0.3).max(2.0),
@@ -983,13 +983,26 @@ export class Config {
             tickSize: Config.TICK_SIZE,
             largeTradeThreshold: SYMBOL_CFG.largeTradeThreshold,
             maxEventListeners: SYMBOL_CFG.maxEventListeners,
-            // Dashboard update configuration
             dashboardUpdateInterval: SYMBOL_CFG.dashboardUpdateInterval,
             maxDashboardInterval: SYMBOL_CFG.maxDashboardInterval,
             significantChangeThreshold: SYMBOL_CFG.significantChangeThreshold,
-            // CRITICAL FIX: Zone configuration for CVD signal generation (Zod validated)
             enableStandardizedZones: Config.ENABLE_STANDARDIZED_ZONES,
             standardZoneConfig: Config.STANDARD_ZONE_CONFIG,
+
+            enableIndividualTrades: true,
+            maxZoneCacheAgeMs: 5400000, // 90 minutes for cross-detector zone persistence
+            adaptiveZoneLookbackTrades: 500, // 500 trades ≈ meaningful zone formation over 12-15 min
+            zoneCalculationRange: 12, // ±12 zones for broader price action coverage
+            zoneCacheSize: 375, // Pre-allocated cache size for 90-minute analysis
+            defaultZoneMultipliers: [1, 2, 4],
+            defaultTimeWindows: [300000, 900000, 1800000, 3600000, 5400000],
+            defaultMinZoneWidthMultiplier: 2, // Based on LTCUSDT: 2 ticks minimum
+            defaultMaxZoneWidthMultiplier: 10, // Based on LTCUSDT: 10 ticks maximum
+            defaultMaxZoneHistory: 2000, // 2000 zones ≈ 90+ minutes comprehensive coverage
+            defaultMaxMemoryMB: 50, // 50MB for 90-minute zone structures and history
+            defaultAggressiveVolumeAbsolute: 10.0, // LTCUSDT: 10+ LTC (top 5% of trades)
+            defaultPassiveVolumeAbsolute: 5.0, // LTCUSDT: 5+ LTC (top 15% of trades)
+            defaultInstitutionalVolumeAbsolute: 50.0,
         };
     }
 

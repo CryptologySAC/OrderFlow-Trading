@@ -131,6 +131,7 @@ import { Config } from "../src/core/config.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ISignalLogger } from "../src/infrastructure/signalLoggerInterface.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
 // Mock dependencies
@@ -156,6 +157,19 @@ const mockMetricsCollector: IMetricsCollector = {
 const mockSignalLogger: ISignalLogger = {
     logSignal: vi.fn(),
     getHistory: vi.fn(() => []),
+};
+
+const mockPreprocessor: IOrderflowPreprocessor = {
+    handleDepth: vi.fn(),
+    handleAggTrade: vi.fn(),
+    getStats: vi.fn(() => ({
+        processedTrades: 0,
+        processedDepthUpdates: 0,
+        bookMetrics: {} as any,
+    })),
+    findZonesNearPrice: vi.fn(() => []),
+    calculateZoneRelevanceScore: vi.fn(() => 0.5),
+    findMostRelevantZone: vi.fn(() => null),
 };
 
 // Helper function to create enriched trade events
@@ -230,6 +244,7 @@ describe("DistributionDetectorEnhanced - Nuclear Cleanup Reality", () => {
             "test-distribution-enhanced",
             "LTCUSDT",
             mockDistributionConfig,
+            mockPreprocessor,
             mockLogger,
             mockMetricsCollector
         );

@@ -9,6 +9,7 @@ import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnha
 import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { SpoofingDetector } from "../src/services/spoofingDetector";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents";
 
 // Import mock config for complete settings
@@ -30,6 +31,19 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
     let mockLogger: WorkerLogger;
     let mockMetrics: MetricsCollector;
     let mockSpoofing: SpoofingDetector;
+
+    const mockPreprocessor: IOrderflowPreprocessor = {
+        handleDepth: vi.fn(),
+        handleAggTrade: vi.fn(),
+        getStats: vi.fn(() => ({
+            processedTrades: 0,
+            processedDepthUpdates: 0,
+            bookMetrics: {} as any,
+        })),
+        findZonesNearPrice: vi.fn(() => []),
+        calculateZoneRelevanceScore: vi.fn(() => 0.5),
+        findMostRelevantZone: vi.fn(() => null),
+    };
 
     // Track emitted signals for validation
     const emittedSignals: any[] = [];
@@ -101,8 +115,11 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                     usePassiveVolume: true,
                     strongCorrelationThreshold: 0.5,
                     weakCorrelationThreshold: 0.2, // Lower threshold for momentum
+                    minTradesPerSec: 0.5, // Lower threshold for test data
+                    minVolPerSec: 1.0, // Lower threshold for test data  
                     ...createVolumeConfig(),
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -566,6 +583,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                     maxDivergenceAllowed: 0.8, // Allow more divergence for SELL signals
                     ...createVolumeConfig(),
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -763,6 +781,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                     usePassiveVolume: true,
                     ...createVolumeConfig(),
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -910,6 +929,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                     usePassiveVolume: true,
                     ...createVolumeConfig(),
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -1065,6 +1085,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                     divergenceLookbackSec: 30,
                     ...createVolumeConfig(),
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -1083,6 +1104,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                     usePassiveVolume: true,
                     ...createVolumeConfig(),
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -1111,6 +1133,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                     usePassiveVolume: true,
                     ...createVolumeConfig(),
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -1255,6 +1278,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                     usePassiveVolume: true,
                     ...createVolumeConfig(),
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -1311,6 +1335,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                     usePassiveVolume: true,
                     ...createVolumeConfig(),
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -1461,6 +1486,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                     usePassiveVolume: true,
                     ...createVolumeConfig(),
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -1590,6 +1616,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                     usePassiveVolume: true,
                     ...createVolumeConfig(),
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -1740,6 +1767,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                     usePassiveVolume: true,
                     ...createVolumeConfig(),
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -1800,6 +1828,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                     volumeConcentrationWeight: 0.2,
                     ...createVolumeConfig(),
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -1822,6 +1851,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                     usePassiveVolume: true,
                     ...createVolumeConfig(),
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -1849,6 +1879,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                     volumeConcentrationWeight: 0.2,
                     ...createVolumeConfig(),
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics

@@ -16,6 +16,7 @@ import {
     ExhaustionDetectorEnhanced,
     type ExhaustionEnhancedSettings,
 } from "../src/indicators/exhaustionDetectorEnhanced.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import {
     AbsorptionDetectorEnhanced,
     type AbsorptionEnhancedSettings,
@@ -67,6 +68,19 @@ const createMockSignalLogger = (): ISignalLogger => ({
     ),
     logAlert: vi.fn(),
     getSignalHistory: vi.fn(() => []),
+});
+
+const createMockPreprocessor = (): IOrderflowPreprocessor => ({
+    handleDepth: vi.fn(),
+    handleAggTrade: vi.fn(),
+    getStats: vi.fn(() => ({
+        processedTrades: 0,
+        processedDepthUpdates: 0,
+        bookMetrics: {} as any,
+    })),
+    findZonesNearPrice: vi.fn(() => []),
+    calculateZoneRelevanceScore: vi.fn(() => 0.5),
+    findMostRelevantZone: vi.fn(() => null),
 });
 
 // Create realistic order book mock that matches test data price range (86.25-86.30)
@@ -356,6 +370,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
     let mockSpoofing: SpoofingDetector;
     let mockSignalLogger: ISignalLogger;
     let mockOrderBook: IOrderBookState;
+    let mockPreprocessor: IOrderflowPreprocessor;
     let realConfig: any;
     let realMarketData: AggressiveTrade[];
 
@@ -365,6 +380,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
         mockSpoofing = createMockSpoofingDetector();
         mockSignalLogger = createMockSignalLogger();
         mockOrderBook = createMockOrderBookState();
+        mockPreprocessor = createMockPreprocessor();
         realConfig = loadRealConfig();
         realMarketData = createRealMarketData();
 
@@ -386,6 +402,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
             const detector = new ExhaustionDetectorEnhanced(
                 "debug-exhaustion",
                 settings,
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -426,6 +443,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
             const detector = new ExhaustionDetectorEnhanced(
                 "debug-exhaustion",
                 settings,
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -484,6 +502,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
             const detector = new AbsorptionDetectorEnhanced(
                 "debug-absorption",
                 settings,
+                mockPreprocessor,
                 mockOrderBook,
                 mockLogger,
                 mockSpoofing,
@@ -522,6 +541,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
             const detector = new AbsorptionDetectorEnhanced(
                 "debug-absorption",
                 settings,
+                mockPreprocessor,
                 mockOrderBook,
                 mockLogger,
                 mockSpoofing,
@@ -647,6 +667,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
             const detector = new DeltaCVDDetectorEnhanced(
                 "debug-deltacvd",
                 completeDeltaCVDSettings,
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -756,6 +777,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
             const detector = new DeltaCVDDetectorEnhanced(
                 "debug-deltacvd",
                 completeDeltaCVDSettings,
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -892,6 +914,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
             const exhaustionDetector = new ExhaustionDetectorEnhanced(
                 "compare-exhaustion",
                 completeExhaustionSettings,
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -901,6 +924,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
             const absorptionDetector = new AbsorptionDetectorEnhanced(
                 "compare-absorption",
                 { symbol: "LTCUSDT", ...config.absorption },
+                mockPreprocessor,
                 mockOrderBook,
                 mockLogger,
                 mockSpoofing,
@@ -984,6 +1008,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
             const deltaCVDDetector = new DeltaCVDDetectorEnhanced(
                 "compare-deltacvd",
                 completeDeltaCVDSettings,
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,

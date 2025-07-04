@@ -8,6 +8,7 @@ import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnha
 import { IcebergDetector } from "../src/services/icebergDetector.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import { HiddenOrderDetector } from "../src/services/hiddenOrderDetector.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { SignalCandidate } from "../src/types/signalTypes.js";
 
@@ -17,6 +18,19 @@ describe("Mathematical Property Testing for All Detectors", () => {
     let mockMetrics: any;
     let mockOrderBook: any;
     let mockSpoofingDetector: any;
+
+    const mockPreprocessor: IOrderflowPreprocessor = {
+        handleDepth: vi.fn(),
+        handleAggTrade: vi.fn(),
+        getStats: vi.fn(() => ({
+            processedTrades: 0,
+            processedDepthUpdates: 0,
+            bookMetrics: {} as any,
+        })),
+        findZonesNearPrice: vi.fn(() => []),
+        calculateZoneRelevanceScore: vi.fn(() => 0.5),
+        findMostRelevantZone: vi.fn(() => null),
+    };
 
     beforeEach(async () => {
         propertyTestRunner = new PropertyTestRunner({
@@ -140,6 +154,7 @@ describe("Mathematical Property Testing for All Detectors", () => {
                         volumeBoostCap: 0.25,
                         volumeBoostMultiplier: 0.25,
                     },
+                    mockPreprocessor,
                     mockOrderBook,
                     mockLogger,
                     mockSpoofingDetector,
@@ -252,6 +267,7 @@ describe("Mathematical Property Testing for All Detectors", () => {
                     volumeBoostCap: 0.25,
                     volumeBoostMultiplier: 0.25,
                 },
+                mockPreprocessor,
                 mockOrderBook,
                 mockLogger,
                 mockSpoofingDetector,
@@ -378,6 +394,7 @@ describe("Mathematical Property Testing for All Detectors", () => {
                         enableDepletionAnalysis: true,
                         depletionConfidenceBoost: 0.1,
                     },
+                    mockPreprocessor,
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetrics
@@ -511,6 +528,7 @@ describe("Mathematical Property Testing for All Detectors", () => {
                 const detector = new DeltaCVDDetectorEnhanced(
                     "test-deltacvd",
                     completeDeltaCVDSettings,
+                    mockPreprocessor,
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetrics

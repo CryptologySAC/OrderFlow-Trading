@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
 describe("AccumulationZoneDetector Numeric Stability Fixes", () => {
@@ -11,13 +12,28 @@ describe("AccumulationZoneDetector Numeric Stability Fixes", () => {
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
 
+    const mockPreprocessor: IOrderflowPreprocessor = {
+        handleDepth: vi.fn(),
+        handleAggTrade: vi.fn(),
+        getStats: vi.fn(() => ({
+            processedTrades: 0,
+            processedDepthUpdates: 0,
+            bookMetrics: {} as any,
+        })),
+        findZonesNearPrice: vi.fn(() => []),
+        calculateZoneRelevanceScore: vi.fn(() => 0.5),
+        findMostRelevantZone: vi.fn(() => null),
+    };
+
     beforeEach(() => {
+        // NOTE: AccumulationZoneDetectorEnhanced requires bindable logger methods due to logger.info.bind(logger) pattern
+        // Using inline mock instead of centralized mock for this specific enhanced detector
         mockLogger = {
             info: vi.fn(),
             warn: vi.fn(),
             error: vi.fn(),
             debug: vi.fn(),
-            isDebugEnabled: () => false,
+            isDebugEnabled: vi.fn().mockReturnValue(false),
             setCorrelationId: vi.fn(),
             removeCorrelationId: vi.fn(),
         };

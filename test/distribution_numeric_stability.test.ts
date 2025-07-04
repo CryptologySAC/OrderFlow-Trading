@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { DistributionDetectorEnhanced } from "../src/indicators/distributionDetectorEnhanced.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import { FinancialMath } from "../src/utils/financialMath.js";
 
@@ -11,6 +12,19 @@ describe("DistributionZoneDetector Numeric Stability Fixes", () => {
     let detector: DistributionDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
+
+    const mockPreprocessor: IOrderflowPreprocessor = {
+        handleDepth: vi.fn(),
+        handleAggTrade: vi.fn(),
+        getStats: vi.fn(() => ({
+            processedTrades: 0,
+            processedDepthUpdates: 0,
+            bookMetrics: {} as any,
+        })),
+        findZonesNearPrice: vi.fn(() => []),
+        calculateZoneRelevanceScore: vi.fn(() => 0.5),
+        findMostRelevantZone: vi.fn(() => null),
+    };
 
     beforeEach(() => {
         mockLogger = {
@@ -101,6 +115,7 @@ describe("DistributionZoneDetector Numeric Stability Fixes", () => {
                 maxPriceDeviation: 0.02,
                 minZoneStrength: 0.3,
             },
+            mockPreprocessor,
             mockLogger,
             mockMetrics
         );
