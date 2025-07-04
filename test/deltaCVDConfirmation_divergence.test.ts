@@ -9,6 +9,7 @@ import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnha
 import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import { SpoofingDetector } from "../src/services/spoofingDetector";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents";
 
 // Import mock config for complete settings
@@ -29,6 +30,19 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
     let mockLogger: WorkerLogger;
     let mockMetrics: MetricsCollector;
     let mockSpoofing: SpoofingDetector;
+
+    const mockPreprocessor: IOrderflowPreprocessor = {
+        handleDepth: vi.fn(),
+        handleAggTrade: vi.fn(),
+        getStats: vi.fn(() => ({
+            processedTrades: 0,
+            processedDepthUpdates: 0,
+            bookMetrics: {} as any,
+        })),
+        findZonesNearPrice: vi.fn(() => []),
+        calculateZoneRelevanceScore: vi.fn(() => 0.5),
+        findMostRelevantZone: vi.fn(() => null),
+    };
 
     // Helper to create standardized trade events
     const createTradeEvent = (
@@ -80,6 +94,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                     detectionMode: "divergence",
                     minZ: 2.0,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -95,6 +110,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
             detector = new DeltaCVDDetectorEnhanced(
                 "test_default_mode",
                 mockConfig.symbols.LTCUSDT.deltaCvdConfirmation as any,
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -112,6 +128,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                     ...mockConfig.symbols.LTCUSDT.deltaCvdConfirmation,
                     detectionMode: "hybrid",
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -131,6 +148,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                     detectionMode: "divergence",
                     minZ: 2.0,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -191,6 +209,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                     ...mockConfig.symbols.LTCUSDT.deltaCvdConfirmation,
                     detectionMode: "divergence",
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -275,6 +294,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                     minTradesPerSec: 0.1,
                     minVolPerSec: 0.5,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -403,6 +423,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
             momentumDetector = new DeltaCVDDetectorEnhanced(
                 "momentum_detector",
                 { ...sharedConfig, detectionMode: "momentum" },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -411,6 +432,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
             divergenceDetector = new DeltaCVDDetectorEnhanced(
                 "divergence_detector",
                 { ...sharedConfig, detectionMode: "divergence" },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -473,6 +495,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                     minTradesPerSec: 0.1,
                     minVolPerSec: 0.5,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -525,6 +548,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                     divergenceLookbackSec: 30, // Shorter for testing
                     minZ: 1.0,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics
@@ -633,6 +657,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                     divergenceLookbackSec: 60,
                     minZ: 2.0,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofing,
                 mockMetrics

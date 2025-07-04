@@ -5,6 +5,7 @@ import { ExhaustionDetectorEnhanced } from "../src/indicators/exhaustionDetector
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import { FinancialMath } from "../src/utils/financialMath.js";
 
@@ -13,6 +14,19 @@ describe("ExhaustionDetector Numeric Stability Fixes", () => {
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
     let mockSpoofingDetector: SpoofingDetector;
+
+    const mockPreprocessor: IOrderflowPreprocessor = {
+        handleDepth: vi.fn(),
+        handleAggTrade: vi.fn(),
+        getStats: vi.fn(() => ({
+            processedTrades: 0,
+            processedDepthUpdates: 0,
+            bookMetrics: {} as any,
+        })),
+        findZonesNearPrice: vi.fn(() => []),
+        calculateZoneRelevanceScore: vi.fn(() => 0.5),
+        findMostRelevantZone: vi.fn(() => null),
+    };
 
     beforeEach(async () => {
         mockLogger = {
@@ -132,6 +146,7 @@ describe("ExhaustionDetector Numeric Stability Fixes", () => {
                 enableDepletionAnalysis: true,
                 depletionConfidenceBoost: 0.1,
             },
+            mockPreprocessor,
             mockLogger,
             mockSpoofingDetector,
             mockMetrics

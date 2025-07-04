@@ -21,37 +21,32 @@ import { AdaptiveZoneCalculator } from "../utils/adaptiveZoneCalculator.js";
 import type { StandardZoneConfig } from "../types/zoneTypes.js";
 
 export interface OrderflowPreprocessorOptions {
-    pricePrecision?: number;
-    quantityPrecision?: number;
-    bandTicks?: number;
-    tickSize?: number;
-    symbol?: string;
-    enableIndividualTrades?: boolean;
-    largeTradeThreshold?: number;
-    maxEventListeners?: number;
-    // Dashboard update configuration
-    dashboardUpdateInterval?: number;
-    maxDashboardInterval?: number;
-    significantChangeThreshold?: number;
-    // NEW: Standardized zone configuration
-    enableStandardizedZones?: boolean;
-    standardZoneConfig?: StandardZoneConfig;
-    // Zone cache configuration (CLAUDE.md compliance) - 90-MINUTE CROSS-DETECTOR ANALYSIS
-    maxZoneCacheAgeMs?: number; // 90 minutes for cross-detector zone persistence
-    adaptiveZoneLookbackTrades?: number; // 500 trades ≈ meaningful zone formation over 12-15 min
-    zoneCalculationRange?: number; // ±12 zones for broader price action coverage
-    zoneCacheSize?: number; // Pre-allocated cache size for 90-minute analysis
-    // Zone configuration defaults (LTCUSDT market data analysis)
-    defaultZoneMultipliers?: number[];
-    defaultTimeWindows?: number[];
-    defaultMinZoneWidthMultiplier?: number; // Based on LTCUSDT: 2 ticks minimum
-    defaultMaxZoneWidthMultiplier?: number; // Based on LTCUSDT: 10 ticks maximum
-    defaultMaxZoneHistory?: number; // 2000 zones ≈ 90+ minutes comprehensive coverage
-    defaultMaxMemoryMB?: number; // 50MB for 90-minute zone structures and history
-    // Volume thresholds based on LTCUSDT trade distribution analysis
-    defaultAggressiveVolumeAbsolute?: number; // LTCUSDT: 10+ LTC (top 5% of trades)
-    defaultPassiveVolumeAbsolute?: number; // LTCUSDT: 5+ LTC (top 15% of trades)
-    defaultInstitutionalVolumeAbsolute?: number; // LTCUSDT: 50+ LTC (<1% whale trades)
+    pricePrecision: number;
+    quantityPrecision: number;
+    bandTicks: number;
+    tickSize: number;
+    symbol: string;
+    enableIndividualTrades: boolean;
+    largeTradeThreshold: number;
+    maxEventListeners: number;
+    dashboardUpdateInterval: number;
+    maxDashboardInterval: number;
+    significantChangeThreshold: number;
+    enableStandardizedZones: boolean;
+    standardZoneConfig: StandardZoneConfig;
+    maxZoneCacheAgeMs: number; // 90 minutes for cross-detector zone persistence
+    adaptiveZoneLookbackTrades: number; // 500 trades ≈ meaningful zone formation over 12-15 min
+    zoneCalculationRange: number; // ±12 zones for broader price action coverage
+    zoneCacheSize: number; // Pre-allocated cache size for 90-minute analysis
+    defaultZoneMultipliers: number[];
+    defaultTimeWindows: number[];
+    defaultMinZoneWidthMultiplier: number; // Based on LTCUSDT: 2 ticks minimum
+    defaultMaxZoneWidthMultiplier: number; // Based on LTCUSDT: 10 ticks maximum
+    defaultMaxZoneHistory: number; // 2000 zones ≈ 90+ minutes comprehensive coverage
+    defaultMaxMemoryMB: number; // 50MB for 90-minute zone structures and history
+    defaultAggressiveVolumeAbsolute: number; // LTCUSDT: 10+ LTC (top 5% of trades)
+    defaultPassiveVolumeAbsolute: number; // LTCUSDT: 5+ LTC (top 15% of trades)
+    defaultInstitutionalVolumeAbsolute: number; // LTCUSDT: 50+ LTC (<1% whale trades)
 }
 
 export interface IOrderflowPreprocessor {
@@ -135,7 +130,7 @@ export class OrderflowPreprocessor
     private processedDepthUpdates = 0;
 
     constructor(
-        opts: OrderflowPreprocessorOptions = {},
+        opts: OrderflowPreprocessorOptions,
         orderBook: IOrderBookState,
         logger: ILogger,
         metricsCollector: IMetricsCollector,
@@ -145,63 +140,63 @@ export class OrderflowPreprocessor
         super();
         this.logger = logger;
         this.metricsCollector = metricsCollector;
-        this.pricePrecision = opts.pricePrecision ?? 2;
-        this.quantityPrecision = opts.quantityPrecision ?? 8; // Default 8 decimals for most crypto
-        this.bandTicks = opts.bandTicks ?? 5;
-        this.tickSize = opts.tickSize ?? 0.01;
-        this.enableIndividualTrades = opts.enableIndividualTrades ?? false;
-        this.symbol = opts.symbol ?? "LTCUSDT";
-        this.largeTradeThreshold = opts.largeTradeThreshold ?? 100;
-        this.maxEventListeners = opts.maxEventListeners ?? 50;
+        this.pricePrecision = opts.pricePrecision;
+        this.quantityPrecision = opts.quantityPrecision; // Default 8 decimals for most crypto
+        this.bandTicks = opts.bandTicks;
+        this.tickSize = opts.tickSize;
+        this.enableIndividualTrades = opts.enableIndividualTrades;
+        this.symbol = opts.symbol;
+        this.largeTradeThreshold = opts.largeTradeThreshold;
+        this.maxEventListeners = opts.maxEventListeners;
 
         // Dashboard update configuration
-        this.dashboardUpdateInterval = opts.dashboardUpdateInterval ?? 200; // 200ms = 5 FPS
-        this.maxDashboardInterval = opts.maxDashboardInterval ?? 1000; // Max 1 second between updates
-        this.significantChangeThreshold =
-            opts.significantChangeThreshold ?? 0.001; // 0.1% price change
+        this.dashboardUpdateInterval = opts.dashboardUpdateInterval; // 200ms = 5 FPS
+        this.maxDashboardInterval = opts.maxDashboardInterval; // Max 1 second between updates
+        this.significantChangeThreshold = opts.significantChangeThreshold; // 0.1% price change
 
         // LTCUSDT trade distribution analysis defaults (NO arbitrary ratios) - INITIALIZE FIRST
-        this.defaultZoneMultipliers = opts.defaultZoneMultipliers ?? [1, 2, 4]; // Standard progressive sizing
-        this.defaultTimeWindows = opts.defaultTimeWindows ?? [
-            300000, 900000, 1800000, 3600000, 5400000,
-        ]; // 5min, 15min, 30min, 60min, 90min (cross-detector zone analysis)
-        this.defaultMinZoneWidthMultiplier =
-            opts.defaultMinZoneWidthMultiplier ?? 2; // 2 ticks minimum (LTCUSDT analysis)
-        this.defaultMaxZoneWidthMultiplier =
-            opts.defaultMaxZoneWidthMultiplier ?? 10; // 10 ticks maximum (LTCUSDT analysis)
-        this.defaultMaxZoneHistory = opts.defaultMaxZoneHistory ?? 2000; // 2000 zones ≈ 90+ minutes comprehensive coverage
-        this.defaultMaxMemoryMB = opts.defaultMaxMemoryMB ?? 50; // 50MB for 90-minute zone structures and history
+        this.defaultZoneMultipliers = opts.defaultZoneMultipliers; // Standard progressive sizing
+        this.defaultTimeWindows = opts.defaultTimeWindows; // 5min, 15min, 30min, 60min, 90min (cross-detector zone analysis)
+        this.defaultMinZoneWidthMultiplier = opts.defaultMinZoneWidthMultiplier; // 2 ticks minimum (LTCUSDT analysis)
+        this.defaultMaxZoneWidthMultiplier = opts.defaultMaxZoneWidthMultiplier; // 10 ticks maximum (LTCUSDT analysis)
+        this.defaultMaxZoneHistory = opts.defaultMaxZoneHistory; // 2000 zones ≈ 90+ minutes comprehensive coverage
+        this.defaultMaxMemoryMB = opts.defaultMaxMemoryMB; // 50MB for 90-minute zone structures and history
 
         // LTCUSDT volume thresholds - absolute values from trade distribution analysis
         this.defaultAggressiveVolumeAbsolute =
-            opts.defaultAggressiveVolumeAbsolute ?? 10.0; // Top 5% of trades
-        this.defaultPassiveVolumeAbsolute =
-            opts.defaultPassiveVolumeAbsolute ?? 5.0; // Top 15% of trades
+            opts.defaultAggressiveVolumeAbsolute; // Top 5% of trades
+        this.defaultPassiveVolumeAbsolute = opts.defaultPassiveVolumeAbsolute; // Top 15% of trades
         this.defaultInstitutionalVolumeAbsolute =
-            opts.defaultInstitutionalVolumeAbsolute ?? 50.0; // <1% whale trades
+            opts.defaultInstitutionalVolumeAbsolute; // <1% whale trades
 
         // NEW: Initialize standardized zone configuration (LTCUSDT data-driven defaults) - AFTER defaults set
-        this.enableStandardizedZones = opts.enableStandardizedZones ?? true; // Default enabled
-        this.standardZoneConfig =
-            opts.standardZoneConfig ?? this.getDefaultZoneConfig();
+        this.enableStandardizedZones = opts.enableStandardizedZones; // Default enabled
+        this.standardZoneConfig = opts.standardZoneConfig;
 
         // LTCUSDT 90-minute cross-detector zone analysis (1.54s avg trade frequency, 3,500 trades/90min)
-        this.maxZoneCacheAge = opts.maxZoneCacheAgeMs ?? 5400000; // 90 minutes for cross-detector zone persistence
-        this.adaptiveZoneLookbackTrades =
-            opts.adaptiveZoneLookbackTrades ?? 500; // 500 trades ≈ 12-15 min meaningful zone formation
-        this.zoneCalculationRange = opts.zoneCalculationRange ?? 12; // ±12 zones captures broader price action
-        this.zoneCacheSize = opts.zoneCacheSize ?? 375; // (12*2+1) * 3 zone sizes * 5 time windows for 90-min analysis
+        this.maxZoneCacheAge = opts.maxZoneCacheAgeMs; // 90 minutes for cross-detector zone persistence
+        this.adaptiveZoneLookbackTrades = opts.adaptiveZoneLookbackTrades; // 500 trades ≈ 12-15 min meaningful zone formation
+        this.zoneCalculationRange = opts.zoneCalculationRange; // ±12 zones captures broader price action
+        this.zoneCacheSize = opts.zoneCacheSize; // (12*2+1) * 3 zone sizes * 5 time windows for 90-min analysis
 
         // Pre-allocate zone cache for performance (based on zoneCacheSize)
-        this.zoneCache.length = this.zoneCacheSize;
-        for (let i = 0; i < this.zoneCacheSize; i++) {
-            this.zoneCache[i] = null; // Will be populated as needed
+        if (this.zoneCacheSize && this.zoneCacheSize > 0) {
+            this.zoneCache.length = this.zoneCacheSize;
+            for (let i = 0; i < this.zoneCacheSize; i++) {
+                this.zoneCache[i] = null; // Will be populated as needed
+            }
         }
 
         this.bookState = orderBook;
 
         // Configure EventEmitter to prevent memory leaks
-        this.setMaxListeners(this.maxEventListeners);
+        if (
+            this.maxEventListeners &&
+            typeof this.maxEventListeners === "number" &&
+            this.maxEventListeners > 0
+        ) {
+            this.setMaxListeners(this.maxEventListeners);
+        }
 
         // Initialize individual trades components if enabled
         if (this.enableIndividualTrades) {
@@ -237,9 +232,9 @@ export class OrderflowPreprocessor
             hasMicrostructureAnalyzer: !!this.microstructureAnalyzer,
             // NEW: Zone configuration logging
             enableStandardizedZones: this.enableStandardizedZones,
-            zoneBaseTicks: this.standardZoneConfig.baseTicks,
-            zoneMultipliers: this.standardZoneConfig.zoneMultipliers,
-            adaptiveMode: this.standardZoneConfig.adaptiveMode,
+            zoneBaseTicks: this.standardZoneConfig?.baseTicks,
+            zoneMultipliers: this.standardZoneConfig?.zoneMultipliers,
+            adaptiveMode: this.standardZoneConfig?.adaptiveMode,
             hasAdaptiveCalculator: !!this.adaptiveZoneCalculator,
         });
 
@@ -650,53 +645,6 @@ export class OrderflowPreprocessor
     // ========================================================================
     // STANDARDIZED ZONE CALCULATION METHODS
     // ========================================================================
-
-    /**
-     * Get default standardized zone configuration based on LTCUSDT market data analysis
-     * All values derived from real trading patterns - NO arbitrary numbers
-     */
-    private getDefaultZoneConfig(): StandardZoneConfig {
-        // LTCUSDT MARKET DATA ANALYSIS: ALL values based on real trading patterns
-        // Analysis of 30+ data files: 1.54s avg trade frequency, 2.71 LTC avg size, 0.99 range/6h
-
-        const DEFAULT_ADAPTIVE_MODE = false; // Conservative default for stability
-
-        // LTCUSDT volume distribution analysis - absolute thresholds from real data
-        // Small trades (≤1.0 LTC): 68% | Medium (1-10 LTC): 25% | Large (10-50 LTC): 5% | Whale (>50 LTC): <1%
-        const DEFAULT_MIN_AGGRESSIVE_VOLUME =
-            this.defaultAggressiveVolumeAbsolute; // 10+ LTC (top 5%)
-        const DEFAULT_MIN_PASSIVE_VOLUME = this.defaultPassiveVolumeAbsolute; // 5+ LTC (top 15%)
-        const DEFAULT_INSTITUTIONAL_VOLUME =
-            this.defaultInstitutionalVolumeAbsolute; // 50+ LTC (<1% whales)
-
-        return {
-            baseTicks: this.bandTicks, // Use existing bandTicks configuration
-            zoneMultipliers: this.defaultZoneMultipliers, // Configurable multipliers
-            timeWindows: this.defaultTimeWindows, // Configurable time windows
-            adaptiveMode: DEFAULT_ADAPTIVE_MODE,
-            volumeThresholds: {
-                aggressive: DEFAULT_MIN_AGGRESSIVE_VOLUME,
-                passive: DEFAULT_MIN_PASSIVE_VOLUME,
-                institutional: DEFAULT_INSTITUTIONAL_VOLUME,
-            },
-            priceThresholds: {
-                tickValue: this.tickSize,
-                minZoneWidth: FinancialMath.safeMultiply(
-                    this.tickSize,
-                    this.defaultMinZoneWidthMultiplier
-                ),
-                maxZoneWidth: FinancialMath.safeMultiply(
-                    this.tickSize,
-                    this.defaultMaxZoneWidthMultiplier
-                ),
-            },
-            performanceConfig: {
-                maxZoneHistory: this.defaultMaxZoneHistory,
-                cleanupInterval: this.maxZoneCacheAge, // Reuse cache age setting
-                maxMemoryMB: this.defaultMaxMemoryMB,
-            },
-        };
-    }
 
     /**
      * Calculate standardized zone data for all supported zone sizes

@@ -8,17 +8,32 @@ import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnha
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
 // Import mock config for complete settings
 import mockConfig from "../__mocks__/config.json";
 
+const createMockPreprocessor = (): IOrderflowPreprocessor => ({
+    handleDepth: vi.fn(),
+    handleAggTrade: vi.fn(),
+    getStats: vi.fn(() => ({
+        processedTrades: 0,
+        processedDepthUpdates: 0,
+        bookMetrics: {} as any,
+    })),
+    findZonesNearPrice: vi.fn(() => []),
+    calculateZoneRelevanceScore: vi.fn(() => 0.5),
+    findMostRelevantZone: vi.fn(() => null),
+});
+
 describe("DeltaCVDConfirmation memory management", () => {
     let detector: DeltaCVDDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
     let mockSpoofing: SpoofingDetector;
+    let mockPreprocessor: IOrderflowPreprocessor;
 
     beforeEach(() => {
         mockLogger = {
@@ -29,10 +44,12 @@ describe("DeltaCVDConfirmation memory management", () => {
         } as ILogger;
         mockMetrics = new MetricsCollector();
         mockSpoofing = {} as any;
+        mockPreprocessor = createMockPreprocessor();
         // 🚫 NUCLEAR CLEANUP: Use complete mock config settings instead of empty object
         detector = new DeltaCVDDetectorEnhanced(
             "test-cvd",
             mockConfig.symbols.LTCUSDT.deltaCvdConfirmation as any,
+            mockPreprocessor,
             mockLogger,
             mockSpoofing,
             mockMetrics

@@ -31,7 +31,55 @@ describe("market/OrderflowPreprocessor", () => {
                 imbalance: 0,
             }),
         };
-        pre = new OrderflowPreprocessor({}, book, logger, metrics);
+        pre = new OrderflowPreprocessor(
+            {
+                pricePrecision: 2,
+                quantityPrecision: 8,
+                bandTicks: 5,
+                tickSize: 0.01,
+                symbol: "LTCUSDT",
+                enableIndividualTrades: false,
+                largeTradeThreshold: 100,
+                maxEventListeners: 50,
+                dashboardUpdateInterval: 200,
+                maxDashboardInterval: 1000,
+                significantChangeThreshold: 0.001,
+                enableStandardizedZones: true,
+                standardZoneConfig: {
+                    baseTicks: 5,
+                    zoneMultipliers: [1, 2, 4],
+                    timeWindows: [30000, 60000, 300000], // 30s, 60s, 5min
+                    adaptiveMode: false,
+                    volumeThresholds: {
+                        aggressive: 10.0,
+                        passive: 5.0,
+                        institutional: 50.0,
+                    },
+                    priceThresholds: {
+                        significantMove: 0.001, // 0.1%
+                        majorMove: 0.005, // 0.5%
+                    },
+                    maxZones: 100,
+                    zoneTimeoutMs: 300000,
+                },
+                maxZoneCacheAgeMs: 5400000,
+                adaptiveZoneLookbackTrades: 500,
+                zoneCalculationRange: 12,
+                zoneCacheSize: 375,
+                defaultZoneMultipliers: [1, 2, 4],
+                defaultTimeWindows: [300000, 900000, 1800000, 3600000, 5400000],
+                defaultMinZoneWidthMultiplier: 2,
+                defaultMaxZoneWidthMultiplier: 10,
+                defaultMaxZoneHistory: 2000,
+                defaultMaxMemoryMB: 50,
+                defaultAggressiveVolumeAbsolute: 10.0,
+                defaultPassiveVolumeAbsolute: 5.0,
+                defaultInstitutionalVolumeAbsolute: 50.0,
+            },
+            book,
+            logger,
+            metrics
+        );
     });
 
     it("emits enriched trade", (done) => {

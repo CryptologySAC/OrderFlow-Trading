@@ -29,6 +29,7 @@ import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorIn
 import { ISignalLogger } from "../src/infrastructure/signalLoggerInterface.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import { IOrderBookState } from "../src/market/orderBookState.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 
 // Mock dependencies
 const createMockLogger = (): ILogger => ({
@@ -36,6 +37,9 @@ const createMockLogger = (): ILogger => ({
     warn: vi.fn(),
     error: vi.fn(),
     debug: vi.fn(),
+    isDebugEnabled: vi.fn().mockReturnValue(false),
+    setCorrelationId: vi.fn(),
+    removeCorrelationId: vi.fn(),
 });
 
 const createMockMetricsCollector = (): IMetricsCollector => ({
@@ -61,6 +65,19 @@ const createMockSignalLogger = (): ISignalLogger => ({
     logSignal: vi.fn(),
     logAlert: vi.fn(),
     getSignalHistory: vi.fn(() => []),
+});
+
+const createMockPreprocessor = (): IOrderflowPreprocessor => ({
+    handleDepth: vi.fn(),
+    handleAggTrade: vi.fn(),
+    getStats: vi.fn(() => ({
+        processedTrades: 0,
+        processedDepthUpdates: 0,
+        bookMetrics: {} as any,
+    })),
+    findZonesNearPrice: vi.fn(() => []),
+    calculateZoneRelevanceScore: vi.fn(() => 0.5),
+    findMostRelevantZone: vi.fn(() => null),
 });
 
 // Create realistic order book mock for config validation tests
@@ -240,6 +257,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 settings,
+                createMockPreprocessor(),
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -348,6 +366,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 settings,
+                createMockPreprocessor(),
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -452,6 +471,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 settings,
+                createMockPreprocessor(),
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -556,6 +576,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 settings,
+                createMockPreprocessor(),
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -660,6 +681,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 "test-absorption",
                 settings,
                 mockOrderBook,
+                createMockPreprocessor(),
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -757,6 +779,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 "test-absorption",
                 settings,
                 mockOrderBook,
+                createMockPreprocessor(),
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -854,6 +877,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 "test-absorption",
                 settings,
                 mockOrderBook,
+                createMockPreprocessor(),
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -951,6 +975,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 "test-absorption",
                 settings,
                 mockOrderBook,
+                createMockPreprocessor(),
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -1039,6 +1064,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             const detector = new DeltaCVDDetectorEnhanced(
                 "test-deltacvd",
                 settings,
+                createMockPreprocessor(),
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -1125,6 +1151,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             const detector = new DeltaCVDDetectorEnhanced(
                 "test-deltacvd",
                 settings,
+                createMockPreprocessor(),
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -1211,6 +1238,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             const detector = new DeltaCVDDetectorEnhanced(
                 "test-deltacvd",
                 settings,
+                createMockPreprocessor(),
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -1297,6 +1325,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             const detector = new DeltaCVDDetectorEnhanced(
                 "test-deltacvd",
                 settings,
+                createMockPreprocessor(),
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -1402,6 +1431,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 configSettings,
+                createMockPreprocessor(),
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -1518,6 +1548,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 settings,
+                createMockPreprocessor(),
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
@@ -1729,6 +1760,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 new ExhaustionDetectorEnhanced(
                     "test-exhaustion",
                     mockExhaustionSettings, // Complete valid configuration
+                    createMockPreprocessor(),
                     mockLogger,
                     mockSpoofing,
                     mockMetrics,
@@ -1831,6 +1863,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 settingsWithExplicitValue,
+                createMockPreprocessor(),
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,

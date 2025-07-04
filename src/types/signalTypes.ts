@@ -389,6 +389,38 @@ export interface DistributionResult {
     priceWeakness?: number;
 }
 
+export interface AccumulationConditions {
+    // Core accumulation metrics
+    ratio: number;
+    duration: number;
+    aggressiveVolume: number;
+    relevantPassive: number;
+    totalPassive: number;
+
+    // Accumulation analytics
+    strength: number;
+    velocity: number;
+    dominantSide: "buy";
+    recentActivity: number;
+    tradeCount: number;
+
+    // Timing and validation
+    meetsMinDuration: boolean;
+    meetsMinRatio: boolean;
+    isRecentlyActive: boolean;
+
+    // Accumulation characteristics
+    accumulationEfficiency: number;
+}
+
+export interface AccumulationMarketRegime {
+    volatility: number;
+    baselineVolatility: number;
+    accumulationPressure: number;
+    supportStrength: number;
+    lastUpdate: number;
+}
+
 export interface DistributionConditions {
     // Core distribution metrics
     sellRatio: number;

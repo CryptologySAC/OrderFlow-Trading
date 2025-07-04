@@ -78,13 +78,13 @@
                 "maxActiveZones": 50,
                 "zoneTimeoutMs": 1800000,
                 "minZoneVolume": 500,
-                "maxZoneWidth": 0.02,
+                "maxZoneWidth": 0.05,
                 "minZoneStrength": 0.7,
                 "completionThreshold": 0.8,
                 "strengthChangeThreshold": 0.15,
                 "minCandidateDuration": 300000,
                 "maxPriceDeviation": 0.02,
-                "minTradeCount": 10,
+                "minTradeCount": 50,
                 "minBuyRatio": 0.65,
                 "minSellRatio": 0.65,
                 "priceStabilityThreshold": 0.85,
@@ -153,7 +153,6 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-
                 "minAggVolume": 15,
                 "windowMs": 45000,
                 "eventCooldownMs": 5000,
@@ -223,7 +222,7 @@
                 "minEnhancedConfidenceThreshold": 0.05
             },
             "absorption": {
-                "minAggVolume": 175,
+                "minAggVolume": 250,
                 "windowMs": 60000,
                 "eventCooldownMs": 15000,
                 "minInitialMoveTicks": 4,
@@ -405,7 +404,7 @@
             },
             "deltaCvdConfirmation": {
                 "windowsSec": [60, 300],
-                "minZ": 0.8,
+                "minZ": 1.2,
                 "priceCorrelationWeight": 0.3,
                 "volumeConcentrationWeight": 0.2,
                 "adaptiveThresholdMultiplier": 0.6,
@@ -486,7 +485,35 @@
                 "confidenceReductionFactor": 0.8,
                 "significanceBoostMultiplier": 0.3,
                 "neutralBoostReductionFactor": 0.5,
-                "enhancementSignificanceBoost": true
+                "enhancementSignificanceBoost": true,
+
+                "baseConfidenceRequired": 0.3,
+                "finalConfidenceRequired": 0.5,
+                "confluenceMinZones": 2,
+                "confluenceMaxDistance": 0.1,
+                "confluenceConfidenceBoost": 0.1,
+                "crossTimeframeConfidenceBoost": 0.15,
+                "accumulationVolumeThreshold": 20,
+                "accumulationRatioThreshold": 0.6,
+                "alignmentScoreThreshold": 0.5,
+                "defaultDurationMs": 120000,
+                "tickSize": 0.01,
+                "maxPriceSupport": 2.0,
+                "priceSupportMultiplier": 1.5,
+                "minPassiveVolumeForEfficiency": 5,
+                "defaultVolatility": 0.1,
+                "defaultBaselineVolatility": 0.05,
+
+                "confluenceStrengthDivisor": 2,
+                "passiveToAggressiveRatio": 0.6,
+                "varianceReductionFactor": 1.0,
+                "aggressiveBuyingRatioThreshold": 0.6,
+                "aggressiveBuyingReductionFactor": 0.5,
+                "buyingPressureConfidenceBoost": 0.08,
+
+                "enableZoneConfluenceFilter": true,
+                "enableBuyingPressureAnalysis": true,
+                "enableCrossTimeframeAnalysis": true
             },
             "distribution": {
                 "useStandardizedZones": true,
@@ -506,7 +533,23 @@
                 "aggressiveSellingRatioThreshold": 0.6,
                 "aggressiveSellingReductionFactor": 0.5,
                 "enhancementMode": "production",
-                "minEnhancedConfidenceThreshold": 0.2
+                "minEnhancedConfidenceThreshold": 0.2,
+                "confluenceMinZones": 2,
+                "confluenceMaxDistance": 0.1,
+                "confluenceConfidenceBoost": 0.1,
+                "crossTimeframeConfidenceBoost": 0.15,
+                "distributionVolumeThreshold": 20,
+                "distributionRatioThreshold": 0.6,
+                "alignmentScoreThreshold": 0.5,
+                "defaultDurationMs": 120000,
+                "tickSize": 0.01,
+                "maxPriceResistance": 2.0,
+                "priceResistanceMultiplier": 1.5,
+                "minPassiveVolumeForEfficiency": 5,
+                "defaultVolatility": 0.1,
+                "defaultBaselineVolatility": 0.05,
+                "enableZoneConfluenceFilter": true,
+                "enableCrossTimeframeAnalysis": true
             }
         }
     },

@@ -86,6 +86,7 @@ import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../src/infrastructure/signalLoggerInterface.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type {
     EnrichedTradeEvent,
     StandardZoneData,
@@ -125,6 +126,19 @@ const mockSpoofingDetector: SpoofingDetector = {
     updateMarketData: vi.fn(),
     isSpoofed: vi.fn(() => false),
 } as any;
+
+const mockPreprocessor: IOrderflowPreprocessor = {
+    handleDepth: vi.fn(),
+    handleAggTrade: vi.fn(),
+    getStats: vi.fn(() => ({
+        processedTrades: 0,
+        processedDepthUpdates: 0,
+        bookMetrics: {} as any,
+    })),
+    findZonesNearPrice: vi.fn(() => []),
+    calculateZoneRelevanceScore: vi.fn(() => 0.5),
+    findMostRelevantZone: vi.fn(() => null),
+};
 
 // Helper function to create zone snapshots
 function createZoneSnapshot(
@@ -278,6 +292,7 @@ describe("DeltaCVDDetectorEnhanced - Nuclear Cleanup Reality", () => {
         enhancedDetector = new DeltaCVDDetectorEnhanced(
             "test-deltacvd-enhanced",
             mockDeltaCVDConfig,
+            mockPreprocessor,
             mockLogger,
             mockSpoofingDetector,
             mockMetricsCollector,
@@ -317,6 +332,7 @@ describe("DeltaCVDDetectorEnhanced - Nuclear Cleanup Reality", () => {
                 new DeltaCVDDetectorEnhanced(
                     "test-validated-config",
                     mockDeltaCVDConfig, // Pre-validated settings should work
+                    mockPreprocessor,
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetricsCollector,
@@ -353,6 +369,7 @@ describe("DeltaCVDDetectorEnhanced - Nuclear Cleanup Reality", () => {
                 new DeltaCVDDetectorEnhanced(
                     "test-complete",
                     mockDeltaCVDConfig, // Complete validated configuration
+                    mockPreprocessor,
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetricsCollector,
@@ -384,6 +401,7 @@ describe("DeltaCVDDetectorEnhanced - Nuclear Cleanup Reality", () => {
                 new DeltaCVDDetectorEnhanced(
                     "test-valid",
                     mockDeltaCVDConfig, // Known valid configuration
+                    mockPreprocessor,
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetricsCollector,

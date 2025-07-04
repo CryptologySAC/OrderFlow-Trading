@@ -19,18 +19,28 @@ import { ExhaustionDetectorEnhanced } from "../../src/indicators/exhaustionDetec
 import { AccumulationZoneDetectorEnhanced } from "../../src/indicators/accumulationZoneDetectorEnhanced.js";
 import { DistributionDetectorEnhanced } from "../../src/indicators/distributionDetectorEnhanced.js";
 import { DeltaCVDDetectorEnhanced } from "../../src/indicators/deltaCVDDetectorEnhanced.js";
+import type { IOrderflowPreprocessor } from "../../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../../src/types/marketEvents.js";
 import type { SignalCandidate } from "../../src/types/signalTypes.js";
 
 // Import mock config for complete settings
 import mockConfig from "../../__mocks__/config.json";
+import { createMockLogger } from "../../__mocks__/src/infrastructure/loggerInterface.js";
 
 // Mock dependencies
-const mockLogger = {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
+const mockLogger = createMockLogger();
+
+const mockPreprocessor: IOrderflowPreprocessor = {
+    handleDepth: vi.fn(),
+    handleAggTrade: vi.fn(),
+    getStats: vi.fn(() => ({
+        processedTrades: 0,
+        processedDepthUpdates: 0,
+        bookMetrics: {} as any,
+    })),
+    findZonesNearPrice: vi.fn(() => []),
+    calculateZoneRelevanceScore: vi.fn(() => 0.5),
+    findMostRelevantZone: vi.fn(() => null),
 };
 
 const mockMetricsCollector = {
@@ -180,6 +190,7 @@ describe("Market Data Replay Integration Tests", () => {
                     volumeBoostCap: 0.25,
                     volumeBoostMultiplier: 0.25,
                 },
+                mockPreprocessor,
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
@@ -285,6 +296,7 @@ describe("Market Data Replay Integration Tests", () => {
                     enableDepletionAnalysis: true,
                     depletionConfidenceBoost: 0.1,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofingDetector,
                 mockMetricsCollector,
@@ -436,10 +448,12 @@ describe("Market Data Replay Integration Tests", () => {
                     volumeBoostCap: 0.25,
                     volumeBoostMultiplier: 0.25,
                 },
+                mockPreprocessor,
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
-                mockMetricsCollector
+                mockMetricsCollector,
+                mockSignalLogger
             );
 
             // Set up signal capture
@@ -502,10 +516,12 @@ describe("Market Data Replay Integration Tests", () => {
                     zoneTicks: 3,
                     absorptionThreshold: 0.6,
                 },
+                mockPreprocessor,
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
-                mockMetricsCollector
+                mockMetricsCollector,
+                mockSignalLogger
             );
 
             const exhaustionDetector = new ExhaustionDetectorEnhanced(
@@ -597,9 +613,11 @@ describe("Market Data Replay Integration Tests", () => {
                     enableDepletionAnalysis: true,
                     depletionConfidenceBoost: 0.1,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofingDetector,
-                mockMetricsCollector
+                mockMetricsCollector,
+                mockSignalLogger
             );
 
             // Use a third absorption detector with different settings to simulate multi-detector
@@ -611,10 +629,12 @@ describe("Market Data Replay Integration Tests", () => {
                     zoneTicks: 2,
                     absorptionThreshold: 0.4,
                 },
+                mockPreprocessor,
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
-                mockMetricsCollector
+                mockMetricsCollector,
+                mockSignalLogger
             );
 
             // Track all signals and performance
@@ -722,10 +742,12 @@ describe("Market Data Replay Integration Tests", () => {
                     zoneTicks: 3,
                     absorptionThreshold: 0.6,
                 },
+                mockPreprocessor,
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
-                mockMetricsCollector
+                mockMetricsCollector,
+                mockSignalLogger
             );
 
             const latencies: number[] = [];
@@ -815,10 +837,12 @@ describe("Market Data Replay Integration Tests", () => {
                         zoneTicks: 3,
                         absorptionThreshold: 0.3,
                     },
+                    mockPreprocessor,
                     mockOrderBookState,
                     mockLogger,
                     mockSpoofingDetector,
-                    mockMetricsCollector
+                    mockMetricsCollector,
+                    mockSignalLogger
                 );
 
                 const signals: SignalCandidate[] = [];
@@ -885,10 +909,12 @@ describe("Market Data Replay Integration Tests", () => {
                     zoneTicks: 3,
                     absorptionThreshold: 0.7,
                 },
+                mockPreprocessor,
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
-                mockMetricsCollector
+                mockMetricsCollector,
+                mockSignalLogger
             );
 
             const exhaustionDetector = new ExhaustionDetectorEnhanced(
@@ -899,9 +925,11 @@ describe("Market Data Replay Integration Tests", () => {
                     windowMs: 60000,
                     exhaustionThreshold: 0.7,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofingDetector,
-                mockMetricsCollector
+                mockMetricsCollector,
+                mockSignalLogger
             );
 
             const allSignals: Array<{
@@ -983,10 +1011,12 @@ describe("Market Data Replay Integration Tests", () => {
                     zoneTicks: 3,
                     absorptionThreshold: 0.6,
                 },
+                mockPreprocessor,
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
-                mockMetricsCollector
+                mockMetricsCollector,
+                mockSignalLogger
             );
 
             const detectedSignals: SignalCandidate[] = [];
@@ -1044,10 +1074,12 @@ describe("Market Data Replay Integration Tests", () => {
                     zoneTicks: 3,
                     absorptionThreshold: 0.65,
                 },
+                mockPreprocessor,
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
-                mockMetricsCollector
+                mockMetricsCollector,
+                mockSignalLogger
             );
 
             // Use another absorption detector with different parameters for complexity testing
@@ -1059,10 +1091,12 @@ describe("Market Data Replay Integration Tests", () => {
                     zoneTicks: 4,
                     absorptionThreshold: 0.5,
                 },
+                mockPreprocessor,
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
-                mockMetricsCollector
+                mockMetricsCollector,
+                mockSignalLogger
             );
 
             const phaseSignals: Array<{
@@ -1154,10 +1188,12 @@ describe("Market Data Replay Integration Tests", () => {
                     zoneTicks: 2,
                     absorptionThreshold: 0.2,
                 },
+                mockPreprocessor,
                 mockOrderBookState,
                 mockLogger,
                 mockSpoofingDetector,
-                mockMetricsCollector
+                mockMetricsCollector,
+                mockSignalLogger
             );
 
             const hftSignals: SignalCandidate[] = [];
@@ -1254,10 +1290,12 @@ describe("Market Data Replay Integration Tests", () => {
                             zoneTicks: 3,
                             absorptionThreshold: 0.6,
                         },
+                        mockPreprocessor,
                         mockOrderBookState,
                         mockLogger,
                         mockSpoofingDetector,
-                        mockMetricsCollector
+                        mockMetricsCollector,
+                        mockSignalLogger
                     );
 
                     let signalCount = 0;

@@ -38,6 +38,33 @@ vi.mock("../src/core/config.js", async (importOriginal) => {
                     significanceBoostMultiplier: 0.3,
                     neutralBoostReductionFactor: 0.5,
                     enhancementSignificanceBoost: true,
+
+                    // CLAUDE.md compliant standalone detector parameters
+                    baseConfidenceRequired: 0.3,
+                    finalConfidenceRequired: 0.5,
+                    confluenceMinZones: 2,
+                    confluenceMaxDistance: 0.1,
+                    confluenceConfidenceBoost: 0.1,
+                    crossTimeframeConfidenceBoost: 0.15,
+                    accumulationVolumeThreshold: 20,
+                    accumulationRatioThreshold: 0.6,
+                    alignmentScoreThreshold: 0.5,
+                    defaultDurationMs: 120000,
+                    tickSize: 0.01,
+                    maxPriceSupport: 2.0,
+                    priceSupportMultiplier: 1.5,
+                    minPassiveVolumeForEfficiency: 5,
+                    defaultVolatility: 0.1,
+                    defaultBaselineVolatility: 0.05,
+                    confluenceStrengthDivisor: 2,
+                    passiveToAggressiveRatio: 0.6,
+                    varianceReductionFactor: 1.0,
+                    aggressiveBuyingRatioThreshold: 0.6,
+                    aggressiveBuyingReductionFactor: 0.5,
+                    buyingPressureConfidenceBoost: 0.08,
+                    enableZoneConfluenceFilter: true,
+                    enableBuyingPressureAnalysis: true,
+                    enableCrossTimeframeAnalysis: true,
                 };
             },
             get ENHANCED_ZONE_FORMATION() {
@@ -82,6 +109,7 @@ import { Config } from "../src/core/config.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ISignalLogger } from "../src/infrastructure/signalLoggerInterface.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
 // Mock dependencies
@@ -110,6 +138,19 @@ const mockMetricsCollector: IMetricsCollector = {
 const mockSignalLogger: ISignalLogger = {
     logSignal: vi.fn(),
     getHistory: vi.fn(() => []),
+};
+
+const mockPreprocessor: IOrderflowPreprocessor = {
+    handleDepth: vi.fn(),
+    handleAggTrade: vi.fn(),
+    getStats: vi.fn(() => ({
+        processedTrades: 0,
+        processedDepthUpdates: 0,
+        bookMetrics: {} as any,
+    })),
+    findZonesNearPrice: vi.fn(() => []),
+    calculateZoneRelevanceScore: vi.fn(() => 0.5),
+    findMostRelevantZone: vi.fn(() => null),
 };
 
 // Helper function to create enriched trade events
@@ -164,6 +205,33 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
         significanceBoostMultiplier: 0.3,
         neutralBoostReductionFactor: 0.5,
         enhancementSignificanceBoost: true,
+
+        // CLAUDE.md compliant standalone detector parameters
+        baseConfidenceRequired: 0.3,
+        finalConfidenceRequired: 0.5,
+        confluenceMinZones: 2,
+        confluenceMaxDistance: 0.1,
+        confluenceConfidenceBoost: 0.1,
+        crossTimeframeConfidenceBoost: 0.15,
+        accumulationVolumeThreshold: 20,
+        accumulationRatioThreshold: 0.6,
+        alignmentScoreThreshold: 0.5,
+        defaultDurationMs: 120000,
+        tickSize: 0.01,
+        maxPriceSupport: 2.0,
+        priceSupportMultiplier: 1.5,
+        minPassiveVolumeForEfficiency: 5,
+        defaultVolatility: 0.1,
+        defaultBaselineVolatility: 0.05,
+        confluenceStrengthDivisor: 2,
+        passiveToAggressiveRatio: 0.6,
+        varianceReductionFactor: 1.0,
+        aggressiveBuyingRatioThreshold: 0.6,
+        aggressiveBuyingReductionFactor: 0.5,
+        buyingPressureConfidenceBoost: 0.08,
+        enableZoneConfluenceFilter: true,
+        enableBuyingPressureAnalysis: true,
+        enableCrossTimeframeAnalysis: true,
     };
 
     beforeEach(() => {
@@ -173,6 +241,7 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
             "test-accumulation-enhanced",
             "LTCUSDT",
             mockAccumulationConfig,
+            mockPreprocessor,
             mockLogger,
             mockMetricsCollector
         );
@@ -211,6 +280,7 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
                     "test-validated-config",
                     "LTCUSDT",
                     mockAccumulationConfig, // Pre-validated settings should work
+                    mockPreprocessor,
                     mockLogger,
                     mockMetricsCollector
                 );
@@ -243,6 +313,7 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
                     "test-complete",
                     "LTCUSDT",
                     mockAccumulationConfig, // Complete validated configuration
+                    mockPreprocessor,
                     mockLogger,
                     mockMetricsCollector
                 );
@@ -270,6 +341,7 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
                     "test-valid",
                     "LTCUSDT",
                     mockAccumulationConfig, // Known valid configuration
+                    mockPreprocessor,
                     mockLogger,
                     mockMetricsCollector
                 );

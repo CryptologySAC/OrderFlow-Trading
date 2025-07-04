@@ -15,7 +15,6 @@ import type {
 } from "../types/configTypes.js";
 import type { OrderflowPreprocessorOptions } from "../market/orderFlowPreprocessor.js";
 import type { DataStreamConfig } from "../trading/dataStreamManager.js";
-import type { SupportResistanceConfig } from "../indicators/supportResistanceDetector.js";
 import type { IndividualTradesManagerConfig } from "../data/individualTradesManager.js";
 import type { MicrostructureAnalyzerConfig } from "../data/microstructureAnalyzer.js";
 import type { TradesProcessorOptions } from "../market/processors/tradesProcessor.js";
@@ -320,7 +319,7 @@ export const AbsorptionDetectorSchema = z.object({
 export const DeltaCVDDetectorSchema = z.object({
     // Core CVD analysis
     windowsSec: z.array(z.number().int().min(30).max(3600)),
-    minZ: z.number().min(0.01).max(1.0),
+    minZ: z.number().min(0.01).max(2.0),
     priceCorrelationWeight: z.number().min(0.1).max(0.8),
     volumeConcentrationWeight: z.number().min(0.1).max(0.5),
     adaptiveThresholdMultiplier: z.number().min(0.3).max(2.0),
@@ -413,6 +412,37 @@ export const AccumulationDetectorSchema = z.object({
     significanceBoostMultiplier: z.number().min(0.1).max(1.0),
     neutralBoostReductionFactor: z.number().min(0.3).max(0.8),
     enhancementSignificanceBoost: z.boolean(),
+
+    // CLAUDE.md Compliance: All configurable parameters for standalone accumulation detector
+    baseConfidenceRequired: z.number().min(0.1).max(0.9),
+    finalConfidenceRequired: z.number().min(0.1).max(0.9),
+    confluenceMinZones: z.number().int().min(1).max(10),
+    confluenceMaxDistance: z.number().min(0.01).max(1.0),
+    confluenceConfidenceBoost: z.number().min(0.05).max(0.3),
+    crossTimeframeConfidenceBoost: z.number().min(0.05).max(0.3),
+    accumulationVolumeThreshold: z.number().min(10).max(1000),
+    accumulationRatioThreshold: z.number().min(0.3).max(0.9),
+    alignmentScoreThreshold: z.number().min(0.3).max(0.8),
+    defaultDurationMs: z.number().int().min(30000).max(600000),
+    tickSize: z.number().min(0.0001).max(1.0),
+    maxPriceSupport: z.number().min(0.5).max(5.0),
+    priceSupportMultiplier: z.number().min(1.0).max(10.0),
+    minPassiveVolumeForEfficiency: z.number().min(1).max(100),
+    defaultVolatility: z.number().min(0.01).max(0.5),
+    defaultBaselineVolatility: z.number().min(0.01).max(0.3),
+
+    // Accumulation-specific parameters
+    confluenceStrengthDivisor: z.number().min(1).max(10),
+    passiveToAggressiveRatio: z.number().min(0.3).max(2.0),
+    varianceReductionFactor: z.number().min(0.5).max(3.0),
+    aggressiveBuyingRatioThreshold: z.number().min(0.4).max(0.8),
+    aggressiveBuyingReductionFactor: z.number().min(0.3).max(0.8),
+    buyingPressureConfidenceBoost: z.number().min(0.05).max(0.3),
+
+    // Zone confluence analysis
+    enableZoneConfluenceFilter: z.boolean(),
+    enableBuyingPressureAnalysis: z.boolean(),
+    enableCrossTimeframeAnalysis: z.boolean(),
 });
 
 // DISTRIBUTION detector - Distribution-specific logic only (zone properties from universalZoneConfig)
@@ -432,6 +462,29 @@ export const DistributionDetectorSchema = z.object({
     moderateAlignmentThreshold: z.number().min(0.3).max(0.7),
     aggressiveSellingRatioThreshold: z.number().min(0.4).max(0.8),
     aggressiveSellingReductionFactor: z.number().min(0.3).max(0.8),
+
+    // CLAUDE.md Compliance: All configurable parameters for standalone detector
+    baseConfidenceRequired: z.number().min(0.1).max(0.9),
+    finalConfidenceRequired: z.number().min(0.1).max(0.9),
+    minConfidenceBoostThreshold: z.number().min(0.01).max(0.5),
+    confluenceMinZones: z.number().int().min(1).max(10),
+    confluenceMaxDistance: z.number().min(0.01).max(1.0),
+    confluenceConfidenceBoost: z.number().min(0.05).max(0.3),
+    crossTimeframeConfidenceBoost: z.number().min(0.05).max(0.3),
+    distributionVolumeThreshold: z.number().min(10).max(1000),
+    distributionRatioThreshold: z.number().min(0.3).max(0.9),
+    alignmentScoreThreshold: z.number().min(0.3).max(0.8),
+    defaultDurationMs: z.number().int().min(30000).max(600000),
+    tickSize: z.number().min(0.0001).max(1.0),
+    maxPriceResistance: z.number().min(0.5).max(5.0),
+    priceResistanceMultiplier: z.number().min(1.0).max(10.0),
+    minPassiveVolumeForEfficiency: z.number().min(1).max(100),
+    defaultVolatility: z.number().min(0.01).max(0.5),
+    defaultBaselineVolatility: z.number().min(0.01).max(0.3),
+
+    // Zone confluence analysis
+    enableZoneConfluenceFilter: z.boolean(),
+    enableCrossTimeframeAnalysis: z.boolean(),
 
     // Enhancement control
     useStandardizedZones: z.boolean(),
@@ -983,13 +1036,26 @@ export class Config {
             tickSize: Config.TICK_SIZE,
             largeTradeThreshold: SYMBOL_CFG.largeTradeThreshold,
             maxEventListeners: SYMBOL_CFG.maxEventListeners,
-            // Dashboard update configuration
             dashboardUpdateInterval: SYMBOL_CFG.dashboardUpdateInterval,
             maxDashboardInterval: SYMBOL_CFG.maxDashboardInterval,
             significantChangeThreshold: SYMBOL_CFG.significantChangeThreshold,
-            // CRITICAL FIX: Zone configuration for CVD signal generation (Zod validated)
             enableStandardizedZones: Config.ENABLE_STANDARDIZED_ZONES,
             standardZoneConfig: Config.STANDARD_ZONE_CONFIG,
+
+            enableIndividualTrades: true,
+            maxZoneCacheAgeMs: 5400000, // 90 minutes for cross-detector zone persistence
+            adaptiveZoneLookbackTrades: 500, // 500 trades ≈ meaningful zone formation over 12-15 min
+            zoneCalculationRange: 12, // ±12 zones for broader price action coverage
+            zoneCacheSize: 375, // Pre-allocated cache size for 90-minute analysis
+            defaultZoneMultipliers: [1, 2, 4],
+            defaultTimeWindows: [300000, 900000, 1800000, 3600000, 5400000],
+            defaultMinZoneWidthMultiplier: 2, // Based on LTCUSDT: 2 ticks minimum
+            defaultMaxZoneWidthMultiplier: 10, // Based on LTCUSDT: 10 ticks maximum
+            defaultMaxZoneHistory: 2000, // 2000 zones ≈ 90+ minutes comprehensive coverage
+            defaultMaxMemoryMB: 50, // 50MB for 90-minute zone structures and history
+            defaultAggressiveVolumeAbsolute: 10.0, // LTCUSDT: 10+ LTC (top 5% of trades)
+            defaultPassiveVolumeAbsolute: 5.0, // LTCUSDT: 5+ LTC (top 15% of trades)
+            defaultInstitutionalVolumeAbsolute: 50.0,
         };
     }
 
@@ -1202,31 +1268,6 @@ export class Config {
         // Zod validation for boolean value - no type casting allowed
         const enabledSchema = z.boolean();
         return enabledSchema.parse(SYMBOL_CFG.enableStandardizedZones);
-    }
-
-    static get SUPPORT_RESISTANCE_DETECTOR(): SupportResistanceConfig {
-        return {
-            priceTolerancePercent: Number(
-                cfg.symbols[cfg.symbol].supportResistanceDetector
-                    .priceTolerancePercent
-            ),
-            minTouchCount:
-                cfg.symbols[cfg.symbol].supportResistanceDetector.minTouchCount,
-            minStrength: Number(
-                cfg.symbols[cfg.symbol].supportResistanceDetector.minStrength
-            ),
-            timeWindowMs: Number(
-                cfg.symbols[cfg.symbol].supportResistanceDetector.timeWindowMs
-            ),
-            volumeWeightFactor: Number(
-                cfg.symbols[cfg.symbol].supportResistanceDetector
-                    .volumeWeightFactor
-            ),
-            rejectionConfirmationTicks: Number(
-                cfg.symbols[cfg.symbol].supportResistanceDetector
-                    .rejectionConfirmationTicks
-            ),
-        };
     }
 
     static get INDIVIDUAL_TRADES_MANAGER(): IndividualTradesManagerConfig {

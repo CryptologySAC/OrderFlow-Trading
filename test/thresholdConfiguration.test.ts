@@ -8,6 +8,7 @@ import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnha
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { IOrderBookState } from "../src/market/redBlackTreeOrderBook.js";
+import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
@@ -19,6 +20,19 @@ describe("Threshold Configuration Chain", () => {
     let mockMetrics: IMetricsCollector;
     let mockOrderBook: IOrderBookState;
     let mockSpoofingDetector: SpoofingDetector;
+
+    const mockPreprocessor: IOrderflowPreprocessor = {
+        handleDepth: vi.fn(),
+        handleAggTrade: vi.fn(),
+        getStats: vi.fn(() => ({
+            processedTrades: 0,
+            processedDepthUpdates: 0,
+            bookMetrics: {} as any,
+        })),
+        findZonesNearPrice: vi.fn(() => []),
+        calculateZoneRelevanceScore: vi.fn(() => 0.5),
+        findMostRelevantZone: vi.fn(() => null),
+    };
 
     beforeEach(async () => {
         mockLogger = {
@@ -62,6 +76,7 @@ describe("Threshold Configuration Chain", () => {
                 "test-absorption",
                 {}, // No threshold provided
                 mockOrderBook,
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofingDetector,
                 mockMetrics
@@ -80,6 +95,7 @@ describe("Threshold Configuration Chain", () => {
                     priceEfficiencyThreshold: customThreshold,
                 },
                 mockOrderBook,
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofingDetector,
                 mockMetrics
@@ -97,6 +113,7 @@ describe("Threshold Configuration Chain", () => {
                     priceEfficiencyThreshold: customThreshold,
                 },
                 mockOrderBook,
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofingDetector,
                 mockMetrics
@@ -148,6 +165,7 @@ describe("Threshold Configuration Chain", () => {
                     priceEfficiencyThreshold: 0.1, // Very low
                 },
                 mockOrderBook,
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofingDetector,
                 mockMetrics
@@ -159,6 +177,7 @@ describe("Threshold Configuration Chain", () => {
                     priceEfficiencyThreshold: 0.99, // Very high
                 },
                 mockOrderBook,
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofingDetector,
                 mockMetrics
@@ -174,9 +193,11 @@ describe("Threshold Configuration Chain", () => {
             const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 mockConfig.symbols.LTCUSDT.exhaustion as any,
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofingDetector,
-                mockMetrics
+                mockMetrics,
+                { logSignal: vi.fn() } as any
             );
 
             // Check all threshold defaults from mock config
@@ -282,9 +303,11 @@ describe("Threshold Configuration Chain", () => {
             const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 completeSettings,
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofingDetector,
-                mockMetrics
+                mockMetrics,
+                { logSignal: vi.fn() } as any
             );
 
             expect((detector as any).imbalanceHighThreshold).toBe(0.9);
@@ -305,6 +328,7 @@ describe("Threshold Configuration Chain", () => {
                     // Override with test-specific values
                     imbalanceHighThreshold: 0.85,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofingDetector,
                 mockMetrics,
@@ -332,6 +356,7 @@ describe("Threshold Configuration Chain", () => {
                 "integration-test",
                 absorptionSettings,
                 mockOrderBook,
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofingDetector,
                 mockMetrics
@@ -376,6 +401,7 @@ describe("Threshold Configuration Chain", () => {
                         priceEfficiencyThreshold: NaN,
                     },
                     mockOrderBook,
+                    mockPreprocessor,
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetrics
@@ -390,6 +416,7 @@ describe("Threshold Configuration Chain", () => {
                         priceEfficiencyThreshold: undefined,
                     },
                     mockOrderBook,
+                    mockPreprocessor,
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetrics
@@ -412,6 +439,7 @@ describe("Threshold Configuration Chain", () => {
                 "config-test-absorption",
                 configValues,
                 mockOrderBook,
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofingDetector,
                 mockMetrics
@@ -424,6 +452,7 @@ describe("Threshold Configuration Chain", () => {
                     ...configValues, // Override with test-specific values
                     enhancementMode: "disabled" as const,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofingDetector,
                 mockMetrics,
@@ -454,6 +483,7 @@ describe("Threshold Configuration Chain", () => {
                     "edge-case-absorption",
                     edgeCaseSettings,
                     mockOrderBook,
+                    mockPreprocessor,
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetrics
@@ -476,6 +506,7 @@ describe("Threshold Configuration Chain", () => {
                     spreadMediumThreshold: 0.002,
                     enhancementMode: "disabled" as const,
                 },
+                mockPreprocessor,
                 mockLogger,
                 mockSpoofingDetector,
                 mockMetrics,

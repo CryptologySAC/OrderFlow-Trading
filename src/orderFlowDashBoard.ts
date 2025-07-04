@@ -765,17 +765,13 @@ export class OrderFlowDashboard {
                     //     enrichedTrade
                     // );
 
-                    // Legacy detectors removed - replaced by zone-based architecture
-
-                    // Process zone-based detectors (new architecture)
-                    const accumulationAnalysis =
-                        this.accumulationZoneDetector.analyze(enrichedTrade);
-                    const distributionAnalysis =
-                        this.distributionZoneDetector.analyze(enrichedTrade);
-
-                    // Handle zone updates and signals
-                    this.processZoneAnalysis(accumulationAnalysis);
-                    this.processZoneAnalysis(distributionAnalysis);
+                    // Enhanced zone-based detectors (standalone architecture)
+                    this.accumulationZoneDetector.onEnrichedTrade(
+                        enrichedTrade
+                    );
+                    this.distributionZoneDetector.onEnrichedTrade(
+                        enrichedTrade
+                    );
 
                     const aggTradeMessage: WebSocketMessage =
                         this.dependencies.tradesProcessor.onEnrichedTrade(
