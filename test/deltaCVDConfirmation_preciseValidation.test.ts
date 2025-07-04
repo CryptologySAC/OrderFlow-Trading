@@ -116,7 +116,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                     strongCorrelationThreshold: 0.5,
                     weakCorrelationThreshold: 0.2, // Lower threshold for momentum
                     minTradesPerSec: 0.5, // Lower threshold for test data
-                    minVolPerSec: 1.0, // Lower threshold for test data  
+                    minVolPerSec: 1.0, // Lower threshold for test data
                     ...createVolumeConfig(),
                 },
                 mockPreprocessor,

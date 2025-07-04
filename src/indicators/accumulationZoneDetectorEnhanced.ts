@@ -203,7 +203,9 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     public analyze(trade: EnrichedTradeEvent): ZoneAnalysisResult {
         // ✅ CLAUDE.md COMPLIANCE: Null/undefined safety for trade input
         if (!trade) {
-            this.logger.warn("AccumulationZoneDetectorEnhanced: Received null/undefined trade");
+            this.logger.warn(
+                "AccumulationZoneDetectorEnhanced: Received null/undefined trade"
+            );
             return { updates: [], signals: [], activeZones: [] };
         }
 

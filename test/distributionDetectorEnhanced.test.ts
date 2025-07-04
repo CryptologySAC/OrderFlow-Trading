@@ -270,10 +270,12 @@ describe("DistributionDetectorEnhanced - Nuclear Cleanup Reality", () => {
         it("should delegate all functionality to underlying detector", () => {
             const tradeEvent = createEnrichedTradeEvent(89.0, 25, false); // Sell trade
 
-            expect(() => enhancedDetector.analyze(tradeEvent)).not.toThrow();
+            expect(() =>
+                enhancedDetector.onEnrichedTrade(tradeEvent)
+            ).not.toThrow();
 
-            // Verify it's working as a pure wrapper by checking the trade was processed
-            // The underlying detector may not call incrementMetric for every trade
+            // Verify it's working as a standalone detector by checking the trade was processed
+            // The standalone detector may not call incrementMetric for every trade
             // Instead verify that the analysis completed without error
             expect(true).toBe(true); // Analysis completed successfully
         });
@@ -387,14 +389,14 @@ describe("DistributionDetectorEnhanced - Nuclear Cleanup Reality", () => {
     });
 
     describe("Pure Wrapper Functionality", () => {
-        it("should delegate all trade processing to underlying detector", () => {
+        it("should delegate all trade processing to standalone detector", () => {
             const largeVolumeEvent = createEnrichedTradeEvent(89.0, 50, false); // Large sell
 
             expect(() =>
-                enhancedDetector.analyze(largeVolumeEvent)
+                enhancedDetector.onEnrichedTrade(largeVolumeEvent)
             ).not.toThrow();
 
-            // Should process the trade through the underlying DistributionZoneDetector
+            // Should process the trade through the standalone DistributionDetectorEnhanced
             // Verify by checking analysis completed successfully
             expect(true).toBe(true); // Analysis completed without error
         });
@@ -449,13 +451,13 @@ describe("DistributionDetectorEnhanced - Nuclear Cleanup Reality", () => {
     });
 
     describe("Production Safety", () => {
-        it("should be a reliable wrapper with no internal complexity", () => {
+        it("should be a reliable standalone detector with no internal complexity", () => {
             const trade = createEnrichedTradeEvent(89.0, 45, false);
 
-            // Should not throw - pure wrapper should be extremely stable
-            expect(() => enhancedDetector.analyze(trade)).not.toThrow();
+            // Should not throw - standalone detector should be extremely stable
+            expect(() => enhancedDetector.onEnrichedTrade(trade)).not.toThrow();
 
-            // Should delegate to underlying detector - verify by successful analysis
+            // Should process trades directly - verify by successful analysis
             expect(true).toBe(true); // Analysis completed successfully
         });
 

@@ -433,6 +433,29 @@ export const DistributionDetectorSchema = z.object({
     aggressiveSellingRatioThreshold: z.number().min(0.4).max(0.8),
     aggressiveSellingReductionFactor: z.number().min(0.3).max(0.8),
 
+    // CLAUDE.md Compliance: All configurable parameters for standalone detector
+    baseConfidenceRequired: z.number().min(0.1).max(0.9),
+    finalConfidenceRequired: z.number().min(0.1).max(0.9),
+    minConfidenceBoostThreshold: z.number().min(0.01).max(0.5),
+    confluenceMinZones: z.number().int().min(1).max(10),
+    confluenceMaxDistance: z.number().min(0.01).max(1.0),
+    confluenceConfidenceBoost: z.number().min(0.05).max(0.3),
+    crossTimeframeConfidenceBoost: z.number().min(0.05).max(0.3),
+    distributionVolumeThreshold: z.number().min(10).max(1000),
+    distributionRatioThreshold: z.number().min(0.3).max(0.9),
+    alignmentScoreThreshold: z.number().min(0.3).max(0.8),
+    defaultDurationMs: z.number().int().min(30000).max(600000),
+    tickSize: z.number().min(0.0001).max(1.0),
+    maxPriceResistance: z.number().min(0.5).max(5.0),
+    priceResistanceMultiplier: z.number().min(1.0).max(10.0),
+    minPassiveVolumeForEfficiency: z.number().min(1).max(100),
+    defaultVolatility: z.number().min(0.01).max(0.5),
+    defaultBaselineVolatility: z.number().min(0.01).max(0.3),
+
+    // Zone confluence analysis
+    enableZoneConfluenceFilter: z.boolean(),
+    enableCrossTimeframeAnalysis: z.boolean(),
+
     // Enhancement control
     useStandardizedZones: z.boolean(),
     enhancementMode: z.enum(["disabled", "testing", "production"]),

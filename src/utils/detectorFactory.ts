@@ -191,7 +191,7 @@ export class DetectorFactory {
 
         this.validateCreationLimits();
 
-        const productionSettings = Config.DISTRIBUTION_ZONE_DETECTOR;
+        const productionSettings = Config.DISTRIBUTION_DETECTOR;
 
         // Always use enhanced detector - originals are deprecated
         const detector = new DistributionDetectorEnhanced(

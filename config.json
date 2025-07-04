@@ -153,7 +153,6 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-
                 "minAggVolume": 15,
                 "windowMs": 45000,
                 "eventCooldownMs": 5000,
@@ -506,7 +505,23 @@
                 "aggressiveSellingRatioThreshold": 0.6,
                 "aggressiveSellingReductionFactor": 0.5,
                 "enhancementMode": "production",
-                "minEnhancedConfidenceThreshold": 0.2
+                "minEnhancedConfidenceThreshold": 0.2,
+                "confluenceMinZones": 2,
+                "confluenceMaxDistance": 0.1,
+                "confluenceConfidenceBoost": 0.1,
+                "crossTimeframeConfidenceBoost": 0.15,
+                "distributionVolumeThreshold": 20,
+                "distributionRatioThreshold": 0.6,
+                "alignmentScoreThreshold": 0.5,
+                "defaultDurationMs": 120000,
+                "tickSize": 0.01,
+                "maxPriceResistance": 2.0,
+                "priceResistanceMultiplier": 1.5,
+                "minPassiveVolumeForEfficiency": 5,
+                "defaultVolatility": 0.1,
+                "defaultBaselineVolatility": 0.05,
+                "enableZoneConfluenceFilter": true,
+                "enableCrossTimeframeAnalysis": true
             }
         }
     },

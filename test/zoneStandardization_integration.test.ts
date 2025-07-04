@@ -258,7 +258,7 @@ describe("Zone Standardization Integration", () => {
                 const actualZoneSize =
                     zone.boundaries.max - zone.boundaries.min;
                 expect(actualZoneSize).toBeGreaterThan(0.04); // At least 4 ticks
-                expect(actualZoneSize).toBeLessThan(0.10); // At most 10 ticks
+                expect(actualZoneSize).toBeLessThan(0.1); // At most 10 ticks
 
                 // Verify passive volume is populated from order book mock
                 expect(zone.passiveVolume).toBeGreaterThan(0);
@@ -320,7 +320,7 @@ describe("Zone Standardization Integration", () => {
                 // Allow for zone multiplier variations in boundary calculations
                 const zoneSize = zone.boundaries.max - zone.boundaries.min;
                 expect(zoneSize).toBeGreaterThan(0.04); // At least 4 ticks
-                expect(zoneSize).toBeLessThan(0.10); // At most 10 ticks
+                expect(zoneSize).toBeLessThan(0.1); // At most 10 ticks
             });
         });
 

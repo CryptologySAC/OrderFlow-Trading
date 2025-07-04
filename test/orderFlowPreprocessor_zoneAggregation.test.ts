@@ -389,7 +389,9 @@ describe("OrderFlowPreprocessor Zone Aggregation", () => {
                 "zone_trade_aggregations_total",
                 expect.any(Number)
             );
-            expect(mockMetricsCollector.incrementCounter.mock.calls.length).toBeGreaterThanOrEqual(100);
+            expect(
+                mockMetricsCollector.incrementCounter.mock.calls.length
+            ).toBeGreaterThanOrEqual(100);
         });
     });
 });
