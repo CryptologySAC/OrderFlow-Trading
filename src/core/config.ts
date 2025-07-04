@@ -413,6 +413,37 @@ export const AccumulationDetectorSchema = z.object({
     significanceBoostMultiplier: z.number().min(0.1).max(1.0),
     neutralBoostReductionFactor: z.number().min(0.3).max(0.8),
     enhancementSignificanceBoost: z.boolean(),
+
+    // CLAUDE.md Compliance: All configurable parameters for standalone accumulation detector
+    baseConfidenceRequired: z.number().min(0.1).max(0.9),
+    finalConfidenceRequired: z.number().min(0.1).max(0.9),
+    confluenceMinZones: z.number().int().min(1).max(10),
+    confluenceMaxDistance: z.number().min(0.01).max(1.0),
+    confluenceConfidenceBoost: z.number().min(0.05).max(0.3),
+    crossTimeframeConfidenceBoost: z.number().min(0.05).max(0.3),
+    accumulationVolumeThreshold: z.number().min(10).max(1000),
+    accumulationRatioThreshold: z.number().min(0.3).max(0.9),
+    alignmentScoreThreshold: z.number().min(0.3).max(0.8),
+    defaultDurationMs: z.number().int().min(30000).max(600000),
+    tickSize: z.number().min(0.0001).max(1.0),
+    maxPriceSupport: z.number().min(0.5).max(5.0),
+    priceSupportMultiplier: z.number().min(1.0).max(10.0),
+    minPassiveVolumeForEfficiency: z.number().min(1).max(100),
+    defaultVolatility: z.number().min(0.01).max(0.5),
+    defaultBaselineVolatility: z.number().min(0.01).max(0.3),
+
+    // Accumulation-specific parameters
+    confluenceStrengthDivisor: z.number().min(1).max(10),
+    passiveToAggressiveRatio: z.number().min(0.3).max(2.0),
+    varianceReductionFactor: z.number().min(0.5).max(3.0),
+    aggressiveBuyingRatioThreshold: z.number().min(0.4).max(0.8),
+    aggressiveBuyingReductionFactor: z.number().min(0.3).max(0.8),
+    buyingPressureConfidenceBoost: z.number().min(0.05).max(0.3),
+
+    // Zone confluence analysis
+    enableZoneConfluenceFilter: z.boolean(),
+    enableBuyingPressureAnalysis: z.boolean(),
+    enableCrossTimeframeAnalysis: z.boolean(),
 });
 
 // DISTRIBUTION detector - Distribution-specific logic only (zone properties from universalZoneConfig)

@@ -485,7 +485,35 @@
                 "confidenceReductionFactor": 0.8,
                 "significanceBoostMultiplier": 0.3,
                 "neutralBoostReductionFactor": 0.5,
-                "enhancementSignificanceBoost": true
+                "enhancementSignificanceBoost": true,
+
+                "baseConfidenceRequired": 0.3,
+                "finalConfidenceRequired": 0.5,
+                "confluenceMinZones": 2,
+                "confluenceMaxDistance": 0.1,
+                "confluenceConfidenceBoost": 0.1,
+                "crossTimeframeConfidenceBoost": 0.15,
+                "accumulationVolumeThreshold": 20,
+                "accumulationRatioThreshold": 0.6,
+                "alignmentScoreThreshold": 0.5,
+                "defaultDurationMs": 120000,
+                "tickSize": 0.01,
+                "maxPriceSupport": 2.0,
+                "priceSupportMultiplier": 1.5,
+                "minPassiveVolumeForEfficiency": 5,
+                "defaultVolatility": 0.1,
+                "defaultBaselineVolatility": 0.05,
+
+                "confluenceStrengthDivisor": 2,
+                "passiveToAggressiveRatio": 0.6,
+                "varianceReductionFactor": 1.0,
+                "aggressiveBuyingRatioThreshold": 0.6,
+                "aggressiveBuyingReductionFactor": 0.5,
+                "buyingPressureConfidenceBoost": 0.08,
+
+                "enableZoneConfluenceFilter": true,
+                "enableBuyingPressureAnalysis": true,
+                "enableCrossTimeframeAnalysis": true
             },
             "distribution": {
                 "useStandardizedZones": true,

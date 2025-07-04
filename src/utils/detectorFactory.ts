@@ -162,6 +162,7 @@ export class DetectorFactory {
             id,
             Config.SYMBOL,
             productionSettings,
+            dependencies.preprocessor,
             dependencies.logger,
             dependencies.metricsCollector
         );
