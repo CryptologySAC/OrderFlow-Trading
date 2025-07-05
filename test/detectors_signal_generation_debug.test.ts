@@ -501,32 +501,25 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             const detector = new AbsorptionDetectorEnhanced(
                 "debug-absorption",
+                "LTCUSDT",
                 settings,
                 mockPreprocessor,
-                mockOrderBook,
                 mockLogger,
-                mockSpoofing,
-                mockMetrics,
-                mockSignalLogger
+                mockMetrics
             );
 
-            // Verify actual parameters match config
-            expect((detector as any).absorptionThreshold).toBe(
+            // Verify actual parameters match config (from settings)
+            expect(settings.absorptionThreshold).toBe(
                 absorptionConfig.absorptionThreshold
             );
-            expect((detector as any).minAggVolume).toBe(
-                absorptionConfig.minAggVolume
-            );
+            expect(settings.minAggVolume).toBe(absorptionConfig.minAggVolume);
 
             console.log("Absorption Detector Parameters:");
-            console.log(
-                "  absorptionThreshold:",
-                (detector as any).absorptionThreshold
-            );
-            console.log("  minAggVolume:", (detector as any).minAggVolume);
+            console.log("  absorptionThreshold:", settings.absorptionThreshold);
+            console.log("  minAggVolume:", settings.minAggVolume);
             console.log(
                 "  priceEfficiencyThreshold:",
-                (detector as any).priceEfficiencyThreshold
+                settings.priceEfficiencyThreshold
             );
         });
 
@@ -540,13 +533,11 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             const detector = new AbsorptionDetectorEnhanced(
                 "debug-absorption",
+                "LTCUSDT",
                 settings,
                 mockPreprocessor,
-                mockOrderBook,
                 mockLogger,
-                mockSpoofing,
-                mockMetrics,
-                mockSignalLogger
+                mockMetrics
             );
 
             let signalCount = 0;

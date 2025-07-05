@@ -19,7 +19,6 @@ import { Config } from "../core/config.js";
 import { AccumulationZoneDetectorEnhanced } from "../indicators/accumulationZoneDetectorEnhanced.js";
 import { DistributionDetectorEnhanced } from "../indicators/distributionDetectorEnhanced.js";
 import { ZoneDetectorConfig } from "../types/zoneTypes.js";
-import { IOrderBookState } from "../market/orderBookState";
 import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
 
 /**
@@ -50,40 +49,30 @@ export class DetectorFactory {
     }
 
     /**
-     * Create production-ready absorption detector (original or enhanced)
+     * Create production-ready absorption detector (standalone enhanced)
      */
     public static createAbsorptionDetector(
-        orderBook: IOrderBookState,
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
     ): AbsorptionDetectorEnhanced {
         const id = options.id || `absorption-${Date.now()}`;
 
-        // 🚨 CRITICAL FIX: Validate orderBook since it should be initialized by now
-        if (!orderBook) {
-            throw new Error(
-                `DetectorFactory.createAbsorptionDetector: orderBook is unexpectedly null for detector ${id}. This indicates an initialization order bug.`
-            );
-        }
-
         this.validateCreationLimits();
 
         const productionSettings = Config.ABSORPTION_DETECTOR;
 
-        // Always use enhanced detector - originals are deprecated
+        // Always use enhanced detector - standalone architecture
         const detector = new AbsorptionDetectorEnhanced(
             id,
+            Config.SYMBOL,
             productionSettings,
-            orderBook,
             dependencies.preprocessor,
             dependencies.logger,
-            dependencies.spoofingDetector,
-            dependencies.metricsCollector,
-            dependencies.signalLogger
+            dependencies.metricsCollector
         );
 
         dependencies.logger.info(
-            `[DetectorFactory] Created Enhanced AbsorptionDetector (deprecated originals)`,
+            `[DetectorFactory] Created Standalone AbsorptionDetectorEnhanced`,
             {
                 id,
                 enhancementMode: productionSettings.enhancementMode,

@@ -222,7 +222,7 @@
                 "minEnhancedConfidenceThreshold": 0.05
             },
             "absorption": {
-                "minAggVolume": 250,
+                "minAggVolume": 100,
                 "windowMs": 60000,
                 "eventCooldownMs": 15000,
                 "minInitialMoveTicks": 4,
