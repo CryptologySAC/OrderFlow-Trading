@@ -7,7 +7,7 @@
 //
 // CRITICAL COVERAGE:
 // - ExhaustionDetectorEnhanced signal emission validation
-// - DeltaCVDDetectorEnhanced signal emission validation  
+// - DeltaCVDDetectorEnhanced signal emission validation
 // - Threshold mapping for exhaustion (0.2) and cvd_confirmation (0.15)
 // - Signal flow integration with SignalManager
 
@@ -15,7 +15,10 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { ExhaustionDetectorEnhanced } from "../../src/indicators/exhaustionDetectorEnhanced.js";
 import { DeltaCVDDetectorEnhanced } from "../../src/indicators/deltaCVDDetectorEnhanced.js";
 import { SignalManager } from "../../src/trading/signalManager.js";
-import type { SignalCandidate, SignalType } from "../../src/types/signalTypes.js";
+import type {
+    SignalCandidate,
+    SignalType,
+} from "../../src/types/signalTypes.js";
 import type { IOrderflowPreprocessor } from "../../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../../src/types/marketEvents.js";
 import { createMockLogger } from "../../__mocks__/src/infrastructure/loggerInterface.js";
@@ -28,7 +31,7 @@ import mockConfig from "../../__mocks__/config.json";
 
 /**
  * CRITICAL TEST: Exhaustion & CVD Signal Flow Validation
- * 
+ *
  * Validates signal emission patterns for the two most complex enhanced detectors
  */
 describe("Exhaustion & CVD Signal Flow Integration", () => {
@@ -48,7 +51,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
 
     beforeEach(() => {
         mockLogger = createMockLogger();
-        
+
         // Use proper mock from __mocks__/ directory as per CLAUDE.md
         mockMetrics = new MetricsCollector();
 
@@ -68,7 +71,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
                     tradeCount: 8,
                     strength: 0.9,
                     timestamp: Date.now(),
-                }
+                },
             ]),
             calculateZoneRelevanceScore: vi.fn(() => 0.8),
             findMostRelevantZone: vi.fn(() => ({
@@ -137,7 +140,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
                             tradeCount: 8,
                             strength: 0.9,
                             timestamp: Date.now(),
-                        }
+                        },
                     ],
                     zones10Tick: [],
                     zones20Tick: [],
@@ -156,15 +159,23 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
             }
 
             // Wait for processing
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise((resolve) => setTimeout(resolve, 100));
 
             // CRITICAL ASSERTION: Exhaustion signal type validation
             if (signalCaptures.length > 0) {
                 expect(signalCaptures[0].type).toBe(EXHAUSTION_SIGNAL_TYPE);
-                console.log("✅ ExhaustionDetectorEnhanced emits correct signal type:", signalCaptures[0].type);
-                console.log("📊 Exhaustion signal confidence:", signalCaptures[0].confidence);
+                console.log(
+                    "✅ ExhaustionDetectorEnhanced emits correct signal type:",
+                    signalCaptures[0].type
+                );
+                console.log(
+                    "📊 Exhaustion signal confidence:",
+                    signalCaptures[0].confidence
+                );
             } else {
-                console.log("⚠️  No exhaustion signals generated (may need config adjustment)");
+                console.log(
+                    "⚠️  No exhaustion signals generated (may need config adjustment)"
+                );
             }
         });
 
@@ -213,7 +224,9 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
 
             const result = signalManager.processSignal(testSignal);
             expect(result).toBeDefined();
-            console.log(`✅ Exhaustion signal passes threshold ${EXHAUSTION_THRESHOLD}`);
+            console.log(
+                `✅ Exhaustion signal passes threshold ${EXHAUSTION_THRESHOLD}`
+            );
 
             // Test signal below threshold
             const lowSignal = {
@@ -223,7 +236,9 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
 
             const lowResult = signalManager.processSignal(lowSignal);
             expect(lowResult).toBeNull();
-            console.log(`✅ Exhaustion signal below threshold ${EXHAUSTION_THRESHOLD} correctly rejected`);
+            console.log(
+                `✅ Exhaustion signal below threshold ${EXHAUSTION_THRESHOLD} correctly rejected`
+            );
         });
     });
 
@@ -273,7 +288,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
                             tradeCount: 10,
                             strength: 0.8,
                             timestamp: Date.now(),
-                        }
+                        },
                     ],
                     zones10Tick: [],
                     zones20Tick: [],
@@ -286,22 +301,30 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
                     ...cvdTrade,
                     tradeId: `test-cvd-${i}`,
                     timestamp: Date.now() + i * 1000,
-                    price: 100.0 + (i * 0.001), // Slight price increase
-                    aggressiveBuyVolume: 100 + (i * 5), // Increasing buy volume
+                    price: 100.0 + i * 0.001, // Slight price increase
+                    aggressiveBuyVolume: 100 + i * 5, // Increasing buy volume
                 };
                 cvdDetector.onEnrichedTrade(trade);
             }
 
             // Wait for processing
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise((resolve) => setTimeout(resolve, 200));
 
             // CRITICAL ASSERTION: CVD signal type validation
             if (signalCaptures.length > 0) {
                 expect(signalCaptures[0].type).toBe(CVD_SIGNAL_TYPE);
-                console.log("✅ DeltaCVDDetectorEnhanced emits correct signal type:", signalCaptures[0].type);
-                console.log("📊 CVD signal confidence:", signalCaptures[0].confidence);
+                console.log(
+                    "✅ DeltaCVDDetectorEnhanced emits correct signal type:",
+                    signalCaptures[0].type
+                );
+                console.log(
+                    "📊 CVD signal confidence:",
+                    signalCaptures[0].confidence
+                );
             } else {
-                console.log("⚠️  No CVD signals generated (may need config adjustment)");
+                console.log(
+                    "⚠️  No CVD signals generated (may need config adjustment)"
+                );
             }
         });
 
@@ -360,7 +383,9 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
 
             const lowResult = signalManager.processSignal(lowSignal);
             expect(lowResult).toBeNull();
-            console.log(`✅ CVD signal below threshold ${CVD_THRESHOLD} correctly rejected`);
+            console.log(
+                `✅ CVD signal below threshold ${CVD_THRESHOLD} correctly rejected`
+            );
         });
     });
 
@@ -378,9 +403,13 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
             expect(expectedThresholds.exhaustion).toBe(0.2);
             expect(expectedThresholds.cvd_confirmation).toBe(0.15);
 
-            console.log("✅ Exhaustion & CVD threshold configuration validated:");
+            console.log(
+                "✅ Exhaustion & CVD threshold configuration validated:"
+            );
             console.log(`   exhaustion: ${expectedThresholds.exhaustion}`);
-            console.log(`   cvd_confirmation: ${expectedThresholds.cvd_confirmation}`);
+            console.log(
+                `   cvd_confirmation: ${expectedThresholds.cvd_confirmation}`
+            );
         });
     });
 });

@@ -19,7 +19,10 @@ import { DistributionDetectorEnhanced } from "../../src/indicators/distributionD
 import { DeltaCVDDetectorEnhanced } from "../../src/indicators/deltaCVDDetectorEnhanced.js";
 import { SignalManager } from "../../src/trading/signalManager.js";
 import { SignalCoordinator } from "../../src/services/signalCoordinator.js";
-import type { SignalCandidate, SignalType } from "../../src/types/signalTypes.js";
+import type {
+    SignalCandidate,
+    SignalType,
+} from "../../src/types/signalTypes.js";
 import type { IOrderflowPreprocessor } from "../../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../../src/types/marketEvents.js";
 import { createMockLogger } from "../../__mocks__/src/infrastructure/loggerInterface.js";
@@ -32,7 +35,7 @@ import mockConfig from "../../__mocks__/config.json";
 
 /**
  * CRITICAL TEST: Signal Type Contract Validation
- * 
+ *
  * Ensures all enhanced detectors emit signal types that match SignalManager threshold configuration
  */
 describe("Enhanced Detector Signal Flow Integration", () => {
@@ -46,7 +49,7 @@ describe("Enhanced Detector Signal Flow Integration", () => {
     // Expected signal type contracts for each detector
     const DETECTOR_SIGNAL_CONTRACTS = {
         absorption: "absorption" as SignalType,
-        exhaustion: "exhaustion" as SignalType, 
+        exhaustion: "exhaustion" as SignalType,
         accumulation: "accumulation" as SignalType,
         distribution: "distribution" as SignalType,
         cvd_confirmation: "cvd_confirmation" as SignalType,
@@ -63,7 +66,7 @@ describe("Enhanced Detector Signal Flow Integration", () => {
 
     beforeEach(() => {
         mockLogger = createMockLogger();
-        
+
         // Use proper mock from __mocks__/ directory as per CLAUDE.md
         mockMetrics = new MetricsCollector();
 
@@ -83,7 +86,7 @@ describe("Enhanced Detector Signal Flow Integration", () => {
                     tradeCount: 5,
                     strength: 0.8,
                     timestamp: Date.now(),
-                }
+                },
             ]),
             calculateZoneRelevanceScore: vi.fn(() => 0.8),
             findMostRelevantZone: vi.fn(() => ({
@@ -120,7 +123,7 @@ describe("Enhanced Detector Signal Flow Integration", () => {
 
     /**
      * TEST 1: Signal Type Contract Validation
-     * 
+     *
      * Verifies each enhanced detector emits the correct signal type
      */
     describe("Signal Type Contract Validation", () => {
@@ -139,7 +142,7 @@ describe("Enhanced Detector Signal Flow Integration", () => {
 
             const accumulationDetector = new AccumulationZoneDetectorEnhanced(
                 "test-accumulation",
-                "LTCUSDT", 
+                "LTCUSDT",
                 mockConfig.symbols.LTCUSDT.accumulation as any,
                 mockPreprocessor,
                 mockLogger,
@@ -175,7 +178,7 @@ describe("Enhanced Detector Signal Flow Integration", () => {
             // Create realistic test trade events that match production thresholds
             const testTrade: EnrichedTradeEvent = {
                 tradeId: "test-signal-flow-123",
-                price: 89.50, // Realistic LTC price
+                price: 89.5, // Realistic LTC price
                 quantity: 200, // Above absorption minAggVolume (175)
                 timestamp: Date.now(),
                 buyerIsMaker: false,
@@ -190,7 +193,7 @@ describe("Enhanced Detector Signal Flow Integration", () => {
                 zoneData: {
                     zones5Tick: [
                         {
-                            priceLevel: 89.50,
+                            priceLevel: 89.5,
                             aggressiveVolume: 200, // Above thresholds
                             passiveVolume: 800, // Strong passive volume
                             aggressiveBuyVolume: 200,
@@ -198,11 +201,11 @@ describe("Enhanced Detector Signal Flow Integration", () => {
                             tradeCount: 12, // Above minimum trade counts
                             strength: 0.9,
                             timestamp: Date.now(),
-                        }
+                        },
                     ],
                     zones10Tick: [
                         {
-                            priceLevel: 89.50,
+                            priceLevel: 89.5,
                             aggressiveVolume: 400, // Higher for 10-tick zone
                             passiveVolume: 1200,
                             aggressiveBuyVolume: 400,
@@ -210,11 +213,11 @@ describe("Enhanced Detector Signal Flow Integration", () => {
                             tradeCount: 20,
                             strength: 0.85,
                             timestamp: Date.now(),
-                        }
+                        },
                     ],
                     zones20Tick: [
                         {
-                            priceLevel: 89.50,
+                            priceLevel: 89.5,
                             aggressiveVolume: 600, // Highest for 20-tick zone
                             passiveVolume: 1800,
                             aggressiveBuyVolume: 600,
@@ -222,7 +225,7 @@ describe("Enhanced Detector Signal Flow Integration", () => {
                             tradeCount: 35,
                             strength: 0.8,
                             timestamp: Date.now(),
-                        }
+                        },
                     ],
                 },
             };
@@ -233,55 +236,81 @@ describe("Enhanced Detector Signal Flow Integration", () => {
                     ...testTrade,
                     tradeId: `test-signal-flow-${i}`,
                     timestamp: Date.now() + i * 1000,
-                    price: 89.50 + (i * 0.01), // Slight price movement
-                    quantity: 200 + (i * 10), // Increasing volume
+                    price: 89.5 + i * 0.01, // Slight price movement
+                    quantity: 200 + i * 10, // Increasing volume
                 };
-                
+
                 absorptionDetector.onEnrichedTrade(trade);
                 accumulationDetector.onEnrichedTrade(trade);
                 distributionDetector.onEnrichedTrade(trade);
-                
+
                 // Small delay between trades
-                await new Promise(resolve => setTimeout(resolve, 10));
+                await new Promise((resolve) => setTimeout(resolve, 10));
             }
 
             // Wait for async processing
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise((resolve) => setTimeout(resolve, 500));
 
             // CRITICAL ASSERTIONS: Signal Type Contract Validation
-            
+
             // Test absorption detector signal type (if signals generated)
             if (signalCaptures.absorption.length > 0) {
-                expect(signalCaptures.absorption[0].type).toBe(DETECTOR_SIGNAL_CONTRACTS.absorption);
-                console.log("✅ AbsorptionDetectorEnhanced emits correct signal type:", signalCaptures.absorption[0].type);
+                expect(signalCaptures.absorption[0].type).toBe(
+                    DETECTOR_SIGNAL_CONTRACTS.absorption
+                );
+                console.log(
+                    "✅ AbsorptionDetectorEnhanced emits correct signal type:",
+                    signalCaptures.absorption[0].type
+                );
             } else {
-                console.log("ℹ️  No absorption signals generated (realistic thresholds require specific conditions)");
+                console.log(
+                    "ℹ️  No absorption signals generated (realistic thresholds require specific conditions)"
+                );
             }
 
             // Test accumulation detector signal type (if signals generated)
             if (signalCaptures.accumulation.length > 0) {
-                expect(signalCaptures.accumulation[0].type).toBe(DETECTOR_SIGNAL_CONTRACTS.accumulation);
-                console.log("✅ AccumulationZoneDetectorEnhanced emits correct signal type:", signalCaptures.accumulation[0].type);
+                expect(signalCaptures.accumulation[0].type).toBe(
+                    DETECTOR_SIGNAL_CONTRACTS.accumulation
+                );
+                console.log(
+                    "✅ AccumulationZoneDetectorEnhanced emits correct signal type:",
+                    signalCaptures.accumulation[0].type
+                );
             } else {
-                console.log("ℹ️  No accumulation signals generated (realistic thresholds require specific conditions)");
+                console.log(
+                    "ℹ️  No accumulation signals generated (realistic thresholds require specific conditions)"
+                );
             }
 
             // Test distribution detector signal type (if signals generated)
             if (signalCaptures.distribution.length > 0) {
-                expect(signalCaptures.distribution[0].type).toBe(DETECTOR_SIGNAL_CONTRACTS.distribution);
-                console.log("✅ DistributionDetectorEnhanced emits correct signal type:", signalCaptures.distribution[0].type);
+                expect(signalCaptures.distribution[0].type).toBe(
+                    DETECTOR_SIGNAL_CONTRACTS.distribution
+                );
+                console.log(
+                    "✅ DistributionDetectorEnhanced emits correct signal type:",
+                    signalCaptures.distribution[0].type
+                );
             } else {
-                console.log("ℹ️  No distribution signals generated (realistic thresholds require specific conditions)");
+                console.log(
+                    "ℹ️  No distribution signals generated (realistic thresholds require specific conditions)"
+                );
             }
 
             // MAIN VALIDATION: Verify detector instantiation works correctly with realistic config
-            const totalSignals = signalCaptures.absorption.length + 
-                                signalCaptures.accumulation.length + 
-                                signalCaptures.distribution.length;
-            
-            console.log(`📊 Signal generation test: ${totalSignals} signals captured across detectors`);
-            console.log("✅ All detectors instantiated successfully with realistic production configurations");
-            
+            const totalSignals =
+                signalCaptures.absorption.length +
+                signalCaptures.accumulation.length +
+                signalCaptures.distribution.length;
+
+            console.log(
+                `📊 Signal generation test: ${totalSignals} signals captured across detectors`
+            );
+            console.log(
+                "✅ All detectors instantiated successfully with realistic production configurations"
+            );
+
             // The primary test is that detectors can be created and process trades without errors
             // Signal generation depends on very specific market conditions matching institutional thresholds
         });
@@ -289,7 +318,7 @@ describe("Enhanced Detector Signal Flow Integration", () => {
 
     /**
      * TEST 2: SignalManager Threshold Mapping Validation
-     * 
+     *
      * Verifies SignalManager applies correct thresholds for each signal type
      */
     describe("SignalManager Threshold Mapping", () => {
@@ -328,29 +357,36 @@ describe("Enhanced Detector Signal Flow Integration", () => {
             );
 
             // Test each signal type threshold mapping
-            Object.entries(DETECTOR_SIGNAL_CONTRACTS).forEach(([detectorName, signalType]) => {
-                const expectedThreshold = EXPECTED_THRESHOLDS[signalType as keyof typeof EXPECTED_THRESHOLDS];
-                
-                // Create test signal with confidence just above threshold
-                const testSignal = {
-                    id: `test-${detectorName}-signal`,
-                    originalCandidate: {} as any,
-                    type: signalType,
-                    confidence: expectedThreshold + 0.01, // Just above threshold
-                    timestamp: new Date(),
-                    detectorId: `test-${detectorName}`,
-                    side: "buy" as const,
-                    price: 100.0,
-                    tradeIndex: 1,
-                };
+            Object.entries(DETECTOR_SIGNAL_CONTRACTS).forEach(
+                ([detectorName, signalType]) => {
+                    const expectedThreshold =
+                        EXPECTED_THRESHOLDS[
+                            signalType as keyof typeof EXPECTED_THRESHOLDS
+                        ];
 
-                // Process signal through SignalManager
-                const result = signalManager.processSignal(testSignal);
+                    // Create test signal with confidence just above threshold
+                    const testSignal = {
+                        id: `test-${detectorName}-signal`,
+                        originalCandidate: {} as any,
+                        type: signalType,
+                        confidence: expectedThreshold + 0.01, // Just above threshold
+                        timestamp: new Date(),
+                        detectorId: `test-${detectorName}`,
+                        side: "buy" as const,
+                        price: 100.0,
+                        tradeIndex: 1,
+                    };
 
-                // Verify signal passes threshold check
-                expect(result).toBeDefined();
-                console.log(`✅ ${detectorName} signal (${signalType}) passes threshold ${expectedThreshold}`);
-            });
+                    // Process signal through SignalManager
+                    const result = signalManager.processSignal(testSignal);
+
+                    // Verify signal passes threshold check
+                    expect(result).toBeDefined();
+                    console.log(
+                        `✅ ${detectorName} signal (${signalType}) passes threshold ${expectedThreshold}`
+                    );
+                }
+            );
         });
 
         it("should reject signals below detector-specific thresholds", () => {
@@ -387,46 +423,69 @@ describe("Enhanced Detector Signal Flow Integration", () => {
             );
 
             // Test signals below threshold are rejected
-            Object.entries(DETECTOR_SIGNAL_CONTRACTS).forEach(([detectorName, signalType]) => {
-                const expectedThreshold = EXPECTED_THRESHOLDS[signalType as keyof typeof EXPECTED_THRESHOLDS];
-                
-                const testSignal = {
-                    id: `test-${detectorName}-low-signal`,
-                    originalCandidate: {} as any,
-                    type: signalType,
-                    confidence: expectedThreshold - 0.01, // Just below threshold
-                    timestamp: new Date(),
-                    detectorId: `test-${detectorName}`,
-                    side: "buy" as const,
-                    price: 100.0,
-                    tradeIndex: 1,
-                };
+            Object.entries(DETECTOR_SIGNAL_CONTRACTS).forEach(
+                ([detectorName, signalType]) => {
+                    const expectedThreshold =
+                        EXPECTED_THRESHOLDS[
+                            signalType as keyof typeof EXPECTED_THRESHOLDS
+                        ];
 
-                const result = signalManager.processSignal(testSignal);
+                    const testSignal = {
+                        id: `test-${detectorName}-low-signal`,
+                        originalCandidate: {} as any,
+                        type: signalType,
+                        confidence: expectedThreshold - 0.01, // Just below threshold
+                        timestamp: new Date(),
+                        detectorId: `test-${detectorName}`,
+                        side: "buy" as const,
+                        price: 100.0,
+                        tradeIndex: 1,
+                    };
 
-                // Signal should be rejected (null or undefined)
-                expect(result).toBeNull();
-                console.log(`✅ ${detectorName} signal below threshold ${expectedThreshold} correctly rejected`);
-            });
+                    const result = signalManager.processSignal(testSignal);
+
+                    // Signal should be rejected (null or undefined)
+                    expect(result).toBeNull();
+                    console.log(
+                        `✅ ${detectorName} signal below threshold ${expectedThreshold} correctly rejected`
+                    );
+                }
+            );
         });
     });
 
     /**
      * TEST 3: Configuration Contract Validation
-     * 
+     *
      * Ensures all detector signal types have corresponding threshold configuration
      */
     describe("Configuration Contract Validation", () => {
         it("should have threshold configuration for all detector signal types", () => {
             // Verify every detector signal type has a threshold configured
-            Object.entries(DETECTOR_SIGNAL_CONTRACTS).forEach(([detectorName, signalType]) => {
-                expect(EXPECTED_THRESHOLDS).toHaveProperty(signalType);
-                expect(typeof EXPECTED_THRESHOLDS[signalType as keyof typeof EXPECTED_THRESHOLDS]).toBe('number');
-                expect(EXPECTED_THRESHOLDS[signalType as keyof typeof EXPECTED_THRESHOLDS]).toBeGreaterThan(0);
-                expect(EXPECTED_THRESHOLDS[signalType as keyof typeof EXPECTED_THRESHOLDS]).toBeLessThanOrEqual(1);
-                
-                console.log(`✅ ${detectorName} → ${signalType} → threshold: ${EXPECTED_THRESHOLDS[signalType as keyof typeof EXPECTED_THRESHOLDS]}`);
-            });
+            Object.entries(DETECTOR_SIGNAL_CONTRACTS).forEach(
+                ([detectorName, signalType]) => {
+                    expect(EXPECTED_THRESHOLDS).toHaveProperty(signalType);
+                    expect(
+                        typeof EXPECTED_THRESHOLDS[
+                            signalType as keyof typeof EXPECTED_THRESHOLDS
+                        ]
+                    ).toBe("number");
+                    expect(
+                        EXPECTED_THRESHOLDS[
+                            signalType as keyof typeof EXPECTED_THRESHOLDS
+                        ]
+                    ).toBeGreaterThan(0);
+                    expect(
+                        EXPECTED_THRESHOLDS[
+                            signalType as keyof typeof EXPECTED_THRESHOLDS
+                        ]
+                    ).toBeLessThanOrEqual(1);
+
+                    console.log(
+                        `✅ ${detectorName} → ${signalType} → threshold: ${EXPECTED_THRESHOLDS[signalType as keyof typeof EXPECTED_THRESHOLDS]}`
+                    );
+                }
+            );
         });
 
         it("should validate detector threshold configuration completeness", () => {
@@ -434,11 +493,13 @@ describe("Enhanced Detector Signal Flow Integration", () => {
             const configuredTypes = Object.keys(EXPECTED_THRESHOLDS);
             const requiredTypes = Object.values(DETECTOR_SIGNAL_CONTRACTS);
 
-            requiredTypes.forEach(signalType => {
+            requiredTypes.forEach((signalType) => {
                 expect(configuredTypes).toContain(signalType);
             });
 
-            console.log("✅ All enhanced detector signal types have threshold configuration");
+            console.log(
+                "✅ All enhanced detector signal types have threshold configuration"
+            );
             console.log("📋 Signal Type → Threshold Mapping:");
             Object.entries(EXPECTED_THRESHOLDS).forEach(([type, threshold]) => {
                 console.log(`   ${type}: ${threshold}`);
@@ -448,23 +509,25 @@ describe("Enhanced Detector Signal Flow Integration", () => {
 
     /**
      * TEST 4: End-to-End Signal Flow Validation
-     * 
+     *
      * Tests complete signal pipeline: Detector → Coordinator → Manager → Statistics
      */
     describe("End-to-End Signal Flow", () => {
         it("should process enhanced detector signals through complete pipeline", async () => {
             // This test would require setting up the complete signal processing pipeline
             // Including SignalCoordinator, SignalManager, and statistics tracking
-            
+
             // For now, we validate the contracts are in place
             expect(DETECTOR_SIGNAL_CONTRACTS).toBeDefined();
             expect(EXPECTED_THRESHOLDS).toBeDefined();
-            
+
             console.log("✅ Signal flow contracts validated");
             console.log("📊 Enhanced Detector Signal Type Contracts:");
-            Object.entries(DETECTOR_SIGNAL_CONTRACTS).forEach(([detector, signalType]) => {
-                console.log(`   ${detector} → emits → "${signalType}"`);
-            });
+            Object.entries(DETECTOR_SIGNAL_CONTRACTS).forEach(
+                ([detector, signalType]) => {
+                    console.log(`   ${detector} → emits → "${signalType}"`);
+                }
+            );
         });
     });
 });
