@@ -352,9 +352,8 @@ export class OrderFlowDashboard {
 
         DetectorFactory.initialize(detectorDependencies);
 
-        // Absorption Detector - REQUIRES orderBook
+        // Absorption Detector - Standalone Enhanced
         this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
-            this.orderBook, // Now guaranteed to be initialized
             detectorDependencies,
             { id: "ltcusdt-absorption-main" }
         );
