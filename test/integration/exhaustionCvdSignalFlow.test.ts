@@ -8,7 +8,7 @@
 // CRITICAL COVERAGE:
 // - ExhaustionDetectorEnhanced signal emission validation
 // - DeltaCVDDetectorEnhanced signal emission validation
-// - Threshold mapping for exhaustion (0.2) and cvd_confirmation (0.15)
+// - Threshold mapping for exhaustion (0.2) and deltacvd (0.15)
 // - Signal flow integration with SignalManager
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -43,11 +43,47 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
 
     // Expected signal type contracts
     const EXHAUSTION_SIGNAL_TYPE: SignalType = "exhaustion";
-    const CVD_SIGNAL_TYPE: SignalType = "cvd_confirmation";
+    const CVD_SIGNAL_TYPE: SignalType = "deltacvd";
 
     // Expected thresholds from config.json
     const EXHAUSTION_THRESHOLD = 0.2;
     const CVD_THRESHOLD = 0.15;
+
+    // Complete SignalManager config as required by nuclear cleanup
+    const getSignalManagerConfig = (
+        detectorThresholds: Record<string, number>
+    ) => ({
+        confidenceThreshold: 0.3,
+        signalTimeout: 120000,
+        enableMarketHealthCheck: true,
+        enableAlerts: true,
+        maxQueueSize: 1000,
+        processingBatchSize: 10,
+        backpressureThreshold: 800,
+        enableSignalPrioritization: true,
+        adaptiveBatchSizing: true,
+        maxAdaptiveBatchSize: 50,
+        minAdaptiveBatchSize: 5,
+        circuitBreakerThreshold: 5,
+        circuitBreakerResetMs: 60000,
+        adaptiveBackpressure: true,
+        highPriorityBypassThreshold: 8.5,
+        signalTypePriorities: {
+            absorption: 10,
+            exhaustion: 9,
+            deltacvd: 8,
+            accumulation: 7,
+            distribution: 7,
+        },
+        detectorThresholds,
+        positionSizing: {
+            absorption: 0.5,
+            exhaustion: 1.0,
+            accumulation: 0.6,
+            distribution: 0.7,
+            deltacvd: 0.7,
+        },
+    });
 
     beforeEach(() => {
         mockLogger = createMockLogger();
@@ -207,12 +243,11 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
                 mockLogger,
                 mockMetrics,
                 { callStorage: vi.fn(), broadcast: vi.fn() } as any,
-                {
-                    confidenceThreshold: 0.3,
-                    detectorThresholds: {
-                        exhaustion: EXHAUSTION_THRESHOLD,
-                    },
-                }
+                undefined,
+                undefined,
+                getSignalManagerConfig({
+                    exhaustion: EXHAUSTION_THRESHOLD,
+                })
             );
 
             // Test signal above threshold
@@ -252,7 +287,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
      * TEST 2: DeltaCVDDetectorEnhanced Signal Type Validation
      */
     describe("DeltaCVDDetectorEnhanced Signal Flow", () => {
-        it("should emit correct cvd_confirmation signal type", async () => {
+        it("should emit correct deltacvd signal type", async () => {
             const signalCaptures: SignalCandidate[] = [];
 
             const cvdDetector = new DeltaCVDDetectorEnhanced(
@@ -334,7 +369,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
             }
         });
 
-        it("should pass cvd_confirmation threshold validation in SignalManager", () => {
+        it("should pass deltacvd threshold validation in SignalManager", () => {
             const signalManager = new SignalManager(
                 {
                     getMarketHealth: vi.fn().mockReturnValue({
@@ -356,12 +391,11 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
                 mockLogger,
                 mockMetrics,
                 { callStorage: vi.fn(), broadcast: vi.fn() } as any,
-                {
-                    confidenceThreshold: 0.3,
-                    detectorThresholds: {
-                        cvd_confirmation: CVD_THRESHOLD,
-                    },
-                }
+                undefined,
+                undefined,
+                getSignalManagerConfig({
+                    deltacvd: CVD_THRESHOLD,
+                })
             );
 
             // Test signal above threshold
@@ -402,20 +436,18 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
         it("should have correct threshold mappings for exhaustion and CVD detectors", () => {
             const expectedThresholds = {
                 exhaustion: EXHAUSTION_THRESHOLD,
-                cvd_confirmation: CVD_THRESHOLD,
+                deltacvd: CVD_THRESHOLD,
             };
 
             // Validate threshold values
             expect(expectedThresholds.exhaustion).toBe(0.2);
-            expect(expectedThresholds.cvd_confirmation).toBe(0.15);
+            expect(expectedThresholds.deltacvd).toBe(0.15);
 
             console.log(
                 "✅ Exhaustion & CVD threshold configuration validated:"
             );
             console.log(`   exhaustion: ${expectedThresholds.exhaustion}`);
-            console.log(
-                `   cvd_confirmation: ${expectedThresholds.cvd_confirmation}`
-            );
+            console.log(`   deltacvd: ${expectedThresholds.deltacvd}`);
         });
     });
 });

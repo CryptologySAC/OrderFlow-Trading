@@ -66,12 +66,8 @@ export class AlertManager {
     }
 
     private formatAlert(signal: Signal): AlertMessage {
-        const side: "buy" | "sell" =
-            signal.type === "absorption" ||
-            signal.type === "absorption_confirmed" ||
-            signal.type === "flow"
-                ? "buy"
-                : "sell";
+        // Use the side determined by the detector's market analysis
+        const side: "buy" | "sell" = signal.side;
 
         const breakeven = calculateBreakeven(signal.price, side);
         const profit1 = calculateProfitTarget(signal.price, side, 0.01); // 1%

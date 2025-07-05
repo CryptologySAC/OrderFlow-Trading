@@ -650,6 +650,18 @@ const BasicSymbolConfigSchema = z
             signalTimeout: z.number().int().positive(),
             enableMarketHealthCheck: z.boolean(),
             enableAlerts: z.boolean(),
+            maxQueueSize: z.number().int().positive(),
+            processingBatchSize: z.number().int().positive(),
+            backpressureThreshold: z.number().int().positive(),
+            enableSignalPrioritization: z.boolean(),
+            adaptiveBatchSizing: z.boolean(),
+            maxAdaptiveBatchSize: z.number().int().positive(),
+            minAdaptiveBatchSize: z.number().int().positive(),
+            circuitBreakerThreshold: z.number().int().positive(),
+            circuitBreakerResetMs: z.number().int().positive(),
+            adaptiveBackpressure: z.boolean(),
+            highPriorityBypassThreshold: z.number().positive(),
+            signalTypePriorities: z.record(z.number()),
             detectorThresholds: z.record(z.number()),
             positionSizing: z.record(z.number()),
         }),
@@ -1124,16 +1136,28 @@ export class Config {
     }
 
     static get SIGNAL_MANAGER(): SignalManagerConfig {
+        const smConfig = cfg.symbols[cfg.symbol].signalManager;
         return {
-            confidenceThreshold: Number(
-                cfg.symbols[cfg.symbol].signalManager.confidenceThreshold
+            confidenceThreshold: Number(smConfig.confidenceThreshold),
+            signalTimeout: Number(smConfig.signalTimeout),
+            enableMarketHealthCheck: smConfig.enableMarketHealthCheck,
+            enableAlerts: smConfig.enableAlerts,
+            maxQueueSize: Number(smConfig.maxQueueSize),
+            processingBatchSize: Number(smConfig.processingBatchSize),
+            backpressureThreshold: Number(smConfig.backpressureThreshold),
+            detectorThresholds: smConfig.detectorThresholds,
+            positionSizing: smConfig.positionSizing,
+            enableSignalPrioritization: smConfig.enableSignalPrioritization,
+            adaptiveBatchSizing: smConfig.adaptiveBatchSizing,
+            maxAdaptiveBatchSize: Number(smConfig.maxAdaptiveBatchSize),
+            minAdaptiveBatchSize: Number(smConfig.minAdaptiveBatchSize),
+            circuitBreakerThreshold: Number(smConfig.circuitBreakerThreshold),
+            circuitBreakerResetMs: Number(smConfig.circuitBreakerResetMs),
+            signalTypePriorities: smConfig.signalTypePriorities,
+            adaptiveBackpressure: smConfig.adaptiveBackpressure,
+            highPriorityBypassThreshold: Number(
+                smConfig.highPriorityBypassThreshold
             ),
-            signalTimeout: Number(
-                cfg.symbols[cfg.symbol].signalManager.signalTimeout
-            ),
-            enableMarketHealthCheck:
-                cfg.symbols[cfg.symbol].signalManager.enableMarketHealthCheck,
-            enableAlerts: cfg.symbols[cfg.symbol].signalManager.enableAlerts,
         };
     }
 

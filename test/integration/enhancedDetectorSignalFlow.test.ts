@@ -52,7 +52,7 @@ describe("Enhanced Detector Signal Flow Integration", () => {
         exhaustion: "exhaustion" as SignalType,
         accumulation: "accumulation" as SignalType,
         distribution: "distribution" as SignalType,
-        cvd_confirmation: "cvd_confirmation" as SignalType,
+        cvd_confirmation: "deltacvd" as SignalType,
     };
 
     // Expected threshold mapping from config.json (corrected values)
@@ -61,8 +61,44 @@ describe("Enhanced Detector Signal Flow Integration", () => {
         exhaustion: 0.2,
         accumulation: 0.3, // Fixed from previous config issues
         distribution: 0.5,
-        cvd_confirmation: 0.15,
+        deltacvd: 0.15,
     };
+
+    // Complete SignalManager config as required by nuclear cleanup
+    const getSignalManagerConfig = (
+        detectorThresholds: Record<string, number>
+    ) => ({
+        confidenceThreshold: 0.3,
+        signalTimeout: 120000,
+        enableMarketHealthCheck: true,
+        enableAlerts: true,
+        maxQueueSize: 1000,
+        processingBatchSize: 10,
+        backpressureThreshold: 800,
+        enableSignalPrioritization: true,
+        adaptiveBatchSizing: true,
+        maxAdaptiveBatchSize: 50,
+        minAdaptiveBatchSize: 5,
+        circuitBreakerThreshold: 5,
+        circuitBreakerResetMs: 60000,
+        adaptiveBackpressure: true,
+        highPriorityBypassThreshold: 8.5,
+        signalTypePriorities: {
+            absorption: 10,
+            exhaustion: 9,
+            deltacvd: 8,
+            accumulation: 7,
+            distribution: 7,
+        },
+        detectorThresholds,
+        positionSizing: {
+            absorption: 0.5,
+            exhaustion: 1.0,
+            accumulation: 0.6,
+            distribution: 0.7,
+            deltacvd: 0.7,
+        },
+    });
 
     beforeEach(() => {
         mockLogger = createMockLogger();
@@ -350,10 +386,9 @@ describe("Enhanced Detector Signal Flow Integration", () => {
                     callStorage: vi.fn(),
                     broadcast: vi.fn(),
                 } as any,
-                {
-                    confidenceThreshold: 0.3,
-                    detectorThresholds: EXPECTED_THRESHOLDS,
-                }
+                undefined,
+                undefined,
+                getSignalManagerConfig(EXPECTED_THRESHOLDS)
             );
 
             // Test each signal type threshold mapping
@@ -416,10 +451,9 @@ describe("Enhanced Detector Signal Flow Integration", () => {
                     callStorage: vi.fn(),
                     broadcast: vi.fn(),
                 } as any,
-                {
-                    confidenceThreshold: 0.3,
-                    detectorThresholds: EXPECTED_THRESHOLDS,
-                }
+                undefined,
+                undefined,
+                getSignalManagerConfig(EXPECTED_THRESHOLDS)
             );
 
             // Test signals below threshold are rejected

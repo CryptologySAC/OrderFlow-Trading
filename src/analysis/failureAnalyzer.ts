@@ -1517,12 +1517,8 @@ export class FailureAnalyzer {
             "exhaustion_confirmed",
             "accumulation_confirmed",
             "distribution_confirmed",
-            "flow",
-            "swingHigh",
-            "swingLow",
-            "cvd_confirmation",
-            "cvd_confirmation_confirmed",
-            "support_resistance_level",
+            "deltacvd",
+            "deltacvd_confirmed",
             "generic",
         ];
 

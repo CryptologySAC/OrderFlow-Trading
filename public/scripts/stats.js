@@ -316,9 +316,9 @@ function updateSignalMetrics(metrics) {
     const signalTypes = [
         "absorption",
         "exhaustion",
-        "accumulation_zone",
-        "distribution_zone",
-        "cvd_confirmation",
+        "accumulation",
+        "distribution",
+        "deltacvd",
     ];
 
     signalTypes.forEach((type) => {
@@ -337,17 +337,8 @@ function updateSignalMetrics(metrics) {
         const successRate =
             total > 0 ? ((confirmed / total) * 100).toFixed(1) + "%" : "--";
 
-        // Map signal types to HTML element prefixes
-        let typePrefix;
-        if (type === "cvd_confirmation") {
-            typePrefix = "cvd";
-        } else if (type === "accumulation_zone") {
-            typePrefix = "accumulationZone";
-        } else if (type === "distribution_zone") {
-            typePrefix = "distributionZone";
-        } else {
-            typePrefix = type;
-        }
+        // Use standardized signal types as prefixes
+        let typePrefix = type;
 
         updateElement(`${typePrefix}Candidates`, formatNumber(candidates));
         updateElement(`${typePrefix}Confirmed`, formatNumber(confirmed));

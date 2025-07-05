@@ -38,7 +38,7 @@ const sampleSignal = (): Signal => {
 
     return {
         id: "1",
-        type: "flow",
+        type: "accumulation",
         time: Date.now(),
         price: 100,
         side: "buy",
@@ -122,5 +122,322 @@ describe("AlertManager", () => {
             statusText: "Bad",
         }));
         await expect((manager as any).sendWebhook({})).rejects.toThrow();
+    });
+
+    describe("Nuclear Cleanup: All 5 Standardized Signal Types Support", () => {
+        beforeEach(() => {
+            (global as any).fetch = vi.fn(async () => ({ ok: true }));
+            (calculateBreakeven as any).mockReturnValue(101);
+            (calculateProfitTarget as any)
+                .mockReturnValueOnce({
+                    price: 110,
+                    percentGain: 0.01,
+                    netGain: 0.009,
+                })
+                .mockReturnValueOnce({
+                    price: 120,
+                    percentGain: 0.02,
+                    netGain: 0.018,
+                });
+        });
+
+        it("should handle absorption signals correctly", async () => {
+            const manager = new AlertManager(
+                "http://example.com",
+                0,
+                mockLogger
+            );
+            const absorptionSignal: Signal = {
+                id: "absorption-1",
+                type: "absorption",
+                time: Date.now(),
+                price: 100,
+                side: "sell",
+                signalData: {},
+            };
+
+            await manager.sendAlert(absorptionSignal);
+
+            expect(fetch).toHaveBeenCalled();
+            const call = (fetch as any).mock.calls[0];
+            const body = JSON.parse(call[1].body);
+            expect(body.side).toBe("sell");
+            expect(body.type).toBe("swing_entry");
+            expect(calculateBreakeven).toHaveBeenCalledWith(100, "sell");
+            expect(calculateProfitTarget).toHaveBeenCalledWith(
+                100,
+                "sell",
+                0.01
+            );
+            expect(calculateProfitTarget).toHaveBeenCalledWith(
+                100,
+                "sell",
+                0.02
+            );
+        });
+
+        it("should handle exhaustion signals correctly", async () => {
+            const manager = new AlertManager(
+                "http://example.com",
+                0,
+                mockLogger
+            );
+            const exhaustionSignal: Signal = {
+                id: "exhaustion-1",
+                type: "exhaustion",
+                time: Date.now(),
+                price: 85,
+                side: "buy",
+                signalData: {},
+            };
+
+            await manager.sendAlert(exhaustionSignal);
+
+            expect(fetch).toHaveBeenCalled();
+            const call = (fetch as any).mock.calls[0];
+            const body = JSON.parse(call[1].body);
+            expect(body.side).toBe("buy");
+            expect(body.type).toBe("swing_entry");
+            expect(calculateBreakeven).toHaveBeenCalledWith(85, "buy");
+            expect(calculateProfitTarget).toHaveBeenCalledWith(85, "buy", 0.01);
+            expect(calculateProfitTarget).toHaveBeenCalledWith(85, "buy", 0.02);
+        });
+
+        it("should handle accumulation signals correctly", async () => {
+            const manager = new AlertManager(
+                "http://example.com",
+                0,
+                mockLogger
+            );
+            const accumulationSignal: Signal = {
+                id: "accumulation-1",
+                type: "accumulation",
+                time: Date.now(),
+                price: 90,
+                side: "buy",
+                signalData: {
+                    accumulation: {
+                        price: 90,
+                        side: "buy",
+                        isAccumulating: true,
+                        strength: 0.8,
+                        duration: 300000,
+                        zone: 1,
+                        ratio: 0.7,
+                        confidence: 0.9,
+                    },
+                    divergence: {
+                        type: "bullish",
+                        strength: 0.7,
+                        priceSlope: 0.1,
+                        volumeSlope: -0.1,
+                    },
+                },
+            };
+
+            await manager.sendAlert(accumulationSignal);
+
+            expect(fetch).toHaveBeenCalled();
+            const call = (fetch as any).mock.calls[0];
+            const body = JSON.parse(call[1].body);
+            expect(body.side).toBe("buy");
+            expect(body.reasoning).toContain("Accumulation detected");
+            expect(body.reasoning).toContain("Bullish divergence");
+            expect(calculateBreakeven).toHaveBeenCalledWith(90, "buy");
+        });
+
+        it("should handle distribution signals correctly", async () => {
+            const manager = new AlertManager(
+                "http://example.com",
+                0,
+                mockLogger
+            );
+            const distributionSignal: Signal = {
+                id: "distribution-1",
+                type: "distribution",
+                time: Date.now(),
+                price: 95,
+                side: "sell",
+                signalData: {},
+            };
+
+            await manager.sendAlert(distributionSignal);
+
+            expect(fetch).toHaveBeenCalled();
+            const call = (fetch as any).mock.calls[0];
+            const body = JSON.parse(call[1].body);
+            expect(body.side).toBe("sell");
+            expect(body.type).toBe("swing_entry");
+            expect(calculateBreakeven).toHaveBeenCalledWith(95, "sell");
+            expect(calculateProfitTarget).toHaveBeenCalledWith(
+                95,
+                "sell",
+                0.01
+            );
+            expect(calculateProfitTarget).toHaveBeenCalledWith(
+                95,
+                "sell",
+                0.02
+            );
+        });
+
+        it("should handle deltacvd signals correctly", async () => {
+            const manager = new AlertManager(
+                "http://example.com",
+                0,
+                mockLogger
+            );
+            const deltacvdSignal: Signal = {
+                id: "deltacvd-1",
+                type: "deltacvd",
+                time: Date.now(),
+                price: 88,
+                side: "buy",
+                signalData: {
+                    accumulation: {
+                        price: 88,
+                        side: "buy",
+                        isAccumulating: false,
+                        strength: 0.5,
+                        duration: 180000,
+                        zone: 2,
+                        ratio: 0.6,
+                        confidence: 0.7,
+                    },
+                    divergence: {
+                        type: "bullish",
+                        strength: 0.8,
+                        priceSlope: 0.1,
+                        volumeSlope: -0.2,
+                    },
+                },
+            };
+
+            await manager.sendAlert(deltacvdSignal);
+
+            expect(fetch).toHaveBeenCalled();
+            const call = (fetch as any).mock.calls[0];
+            const body = JSON.parse(call[1].body);
+            expect(body.side).toBe("buy");
+            expect(body.reasoning).toContain("Bullish divergence");
+            expect(calculateBreakeven).toHaveBeenCalledWith(88, "buy");
+            expect(calculateProfitTarget).toHaveBeenCalledWith(88, "buy", 0.01);
+            expect(calculateProfitTarget).toHaveBeenCalledWith(88, "buy", 0.02);
+        });
+
+        it("should handle signals with bearish divergence correctly", async () => {
+            const manager = new AlertManager(
+                "http://example.com",
+                0,
+                mockLogger
+            );
+            const deltacvdSignal: Signal = {
+                id: "deltacvd-2",
+                type: "deltacvd",
+                time: Date.now(),
+                price: 92,
+                side: "sell",
+                signalData: {
+                    accumulation: {
+                        price: 92,
+                        side: "sell",
+                        isAccumulating: false,
+                        strength: 0.3,
+                        duration: 240000,
+                        zone: 3,
+                        ratio: 0.4,
+                        confidence: 0.6,
+                    },
+                    divergence: {
+                        type: "bearish",
+                        strength: 0.7,
+                        priceSlope: 0.2,
+                        volumeSlope: -0.1,
+                    },
+                },
+            };
+
+            await manager.sendAlert(deltacvdSignal);
+
+            expect(fetch).toHaveBeenCalled();
+            const call = (fetch as any).mock.calls[0];
+            const body = JSON.parse(call[1].body);
+            expect(body.side).toBe("sell");
+            expect(body.reasoning).toContain("Bearish divergence");
+            expect(calculateBreakeven).toHaveBeenCalledWith(92, "sell");
+        });
+
+        it("should use signal.side directly for all signal types (trading engine safety)", async () => {
+            const manager = new AlertManager(
+                "http://example.com",
+                0,
+                mockLogger
+            );
+
+            // Test all 5 signal types with both buy and sell sides
+            const signalTypes: Array<
+                | "absorption"
+                | "exhaustion"
+                | "accumulation"
+                | "distribution"
+                | "deltacvd"
+            > = [
+                "absorption",
+                "exhaustion",
+                "accumulation",
+                "distribution",
+                "deltacvd",
+            ];
+            const sides: Array<"buy" | "sell"> = ["buy", "sell"];
+
+            for (const type of signalTypes) {
+                for (const side of sides) {
+                    // Reset mocks for each test
+                    vi.clearAllMocks();
+                    (global as any).fetch = vi.fn(async () => ({ ok: true }));
+                    (calculateBreakeven as any).mockReturnValue(101);
+                    (calculateProfitTarget as any)
+                        .mockReturnValueOnce({
+                            price: 110,
+                            percentGain: 0.01,
+                            netGain: 0.009,
+                        })
+                        .mockReturnValueOnce({
+                            price: 120,
+                            percentGain: 0.02,
+                            netGain: 0.018,
+                        });
+
+                    const signal: Signal = {
+                        id: `${type}-${side}-test`,
+                        type,
+                        time: Date.now(),
+                        price: 100,
+                        side,
+                        signalData: {},
+                    };
+
+                    await manager.sendAlert(signal);
+
+                    expect(fetch).toHaveBeenCalled();
+                    const call = (fetch as any).mock.calls[0];
+                    const body = JSON.parse(call[1].body);
+
+                    // CRITICAL: AlertManager MUST use signal.side directly
+                    expect(body.side).toBe(side);
+                    expect(calculateBreakeven).toHaveBeenCalledWith(100, side);
+                    expect(calculateProfitTarget).toHaveBeenCalledWith(
+                        100,
+                        side,
+                        0.01
+                    );
+                    expect(calculateProfitTarget).toHaveBeenCalledWith(
+                        100,
+                        side,
+                        0.02
+                    );
+                }
+            }
+        });
     });
 });

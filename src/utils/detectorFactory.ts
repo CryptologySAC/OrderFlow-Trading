@@ -290,12 +290,12 @@ export class DetectorFactory {
                 enabled: true,
             },
             cvd_confirmation: {
-                supportedSignalTypes: ["cvd_confirmation"],
+                supportedSignalTypes: ["deltacvd"],
                 priority: 50,
                 enabled: true,
             },
             support_resistance: {
-                supportedSignalTypes: ["support_resistance_level"],
+                supportedSignalTypes: ["generic"],
                 priority: 40,
                 enabled: false,
             },

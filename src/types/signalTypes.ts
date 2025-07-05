@@ -18,16 +18,12 @@ export type SignalType =
     | "exhaustion"
     | "accumulation"
     | "distribution"
+    | "deltacvd"
     | "absorption_confirmed"
     | "exhaustion_confirmed"
     | "accumulation_confirmed"
     | "distribution_confirmed"
-    | "flow"
-    | "swingHigh"
-    | "swingLow"
-    | "cvd_confirmation"
-    | "cvd_confirmation_confirmed"
-    | "support_resistance_level"
+    | "deltacvd_confirmed"
     | "generic";
 
 export type SignalSide = "buy" | "sell";
@@ -198,7 +194,7 @@ export interface DeltaCVDConfirmationResult {
 }
 
 interface DeltaCVDConfirmationMetadata {
-    signalType?: "enhanced_cvd" | "cvd_divergence" | "absorption_enhanced";
+    signalType?: "deltacvd" | "deltacvd_confirmed";
     cvdAnalysis?: {
         shortestWindowSlope: number;
         shortestWindowZScore: number;

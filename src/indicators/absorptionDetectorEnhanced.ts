@@ -247,7 +247,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     side: coreAbsorptionResult.side,
                     confidence: coreAbsorptionResult.confidence,
                     signalId: coreAbsorptionResult.id,
-                    signalType: coreAbsorptionResult.type,
+                    signalType: "absorption",
                     timestamp: new Date(
                         coreAbsorptionResult.timestamp
                     ).toISOString(),
@@ -466,7 +466,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     institutionalRatio: volumePressure.pressureRatio,
                 },
                 metadata: {
-                    signalType: "core_absorption",
+                    signalType: "absorption",
                     timestamp: event.timestamp,
                     institutionalRatio: volumePressure.pressureRatio,
                     enhancementType: "standalone_enhanced",
@@ -1067,7 +1067,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 institutionalRatio: absorptionMetrics.institutionalRatio,
             },
             metadata: {
-                signalType: "institutional_absorption",
+                signalType: "absorption",
                 timestamp: event.timestamp,
                 institutionalRatio: absorptionMetrics.institutionalRatio,
                 enhancementType: "zone_based_absorption",
@@ -1104,7 +1104,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 confidenceBoost,
                 absorptionScore: absorptionMetrics.absorptionScore,
                 signalId: signalCandidate.id,
-                signalType: "enhanced_absorption_institutional",
+                signalType: "absorption",
             }
         );
     }

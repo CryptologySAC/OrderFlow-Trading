@@ -240,12 +240,12 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     side: coreExhaustionResult.side,
                     confidence: coreExhaustionResult.confidence,
                     signalId: coreExhaustionResult.id,
-                    signalType: coreExhaustionResult.type,
+                    signalType: "exhaustion",
                 }
             );
 
             // Emit core exhaustion signal immediately
-            this.emit("signal", coreExhaustionResult);
+            this.emit("signalCandidate", coreExhaustionResult);
         }
 
         let totalConfidenceBoost = 0;
@@ -528,7 +528,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 avgSpread: 0, // TODO: Calculate from zone data
                 volumeImbalance: Math.abs(overallAggressiveRatio - 0.5),
                 metadata: {
-                    signalType: "core_exhaustion",
+                    signalType: "exhaustion",
                     timestamp: event.timestamp,
                     exhaustedZones,
                     totalZones: relevantZones.length,
@@ -942,7 +942,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
             avgSpread,
             volumeImbalance,
             metadata: {
-                signalType: "liquidity_depletion",
+                signalType: "exhaustion",
                 timestamp: event.timestamp,
                 affectedZones: depletionResult.affectedZones,
                 enhancementType: "zone_based_exhaustion",
@@ -966,7 +966,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
         };
 
         // ✅ EMIT ENHANCED EXHAUSTION SIGNAL - Independent of base detector
-        this.emit("signal", signalCandidate);
+        this.emit("signalCandidate", signalCandidate);
 
         this.logger.info(
             "ExhaustionDetectorEnhanced: ENHANCED EXHAUSTION SIGNAL EMITTED",
@@ -978,7 +978,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 depletionRatio: depletionResult.depletionRatio,
                 affectedZones: depletionResult.affectedZones,
                 signalId: signalCandidate.id,
-                signalType: "enhanced_exhaustion_depletion",
+                signalType: "exhaustion",
             }
         );
     }

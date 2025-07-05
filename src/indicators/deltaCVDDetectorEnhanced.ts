@@ -419,7 +419,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             slopes: { 300: divergenceResult.divergenceStrength },
             zScores: { 300: divergenceResult.divergenceStrength * 2 },
             metadata: {
-                signalType: "cvd_divergence",
+                signalType: "deltacvd",
                 timestamp: event.timestamp,
                 cvdMovement: {
                     totalCVD: this.calculateZoneVolume(event.zoneData),
@@ -449,8 +449,8 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         };
 
         // ✅ EMIT CVD SIGNAL - Standalone detector signal emission
-        this.emit("signal", {
-            type: "cvd_confirmation",
+        this.emit("signalCandidate", {
+            type: "deltacvd",
             side: signalSide,
             confidence: confidence,
             timestamp: event.timestamp,
@@ -466,7 +466,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 confidence: confidence,
                 divergenceStrength: divergenceResult.divergenceStrength,
                 affectedZones: divergenceResult.affectedZones,
-                signalType: "cvd_divergence",
+                signalType: "deltacvd",
             }
         );
     }
@@ -1249,7 +1249,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             slopes: { 300: divergenceResult.divergenceStrength }, // Enhanced zone-based slope
             zScores: { 300: divergenceResult.divergenceStrength * 2 }, // Enhanced z-score
             metadata: {
-                signalType: "cvd_divergence",
+                signalType: "deltacvd",
                 timestamp: event.timestamp,
                 cvdMovement: {
                     totalCVD: this.calculateZoneVolume(event.zoneData),
@@ -1280,8 +1280,8 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         };
 
         // ✅ EMIT ENHANCED CVD SIGNAL - Standalone detector signal emission
-        this.emit("signal", {
-            type: "cvd_confirmation",
+        this.emit("signalCandidate", {
+            type: "deltacvd",
             side: signalSide,
             confidence: enhancedConfidence,
             timestamp: event.timestamp,
@@ -1297,7 +1297,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 confidence: enhancedConfidence,
                 divergenceStrength: divergenceResult.divergenceStrength,
                 affectedZones: divergenceResult.affectedZones,
-                signalType: "enhanced_cvd_divergence",
+                signalType: "deltacvd",
             }
         );
     }

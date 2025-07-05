@@ -104,7 +104,7 @@
 - [ ] **Integration tests** pass completely
 - [ ] **No broken imports** or dependencies
 
-**🚨 MANDATORY: Run `yarn build` and `yarn test` with ZERO failures before completing task**
+**🚨 MANDATORY <ESSENTIAL>: Run `yarn build` and `yarn test` with ZERO failures before completing task**
 
 ### Documentation and Traceability
 

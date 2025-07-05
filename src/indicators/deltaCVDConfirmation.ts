@@ -219,7 +219,7 @@ const _TICK_SIZE_THRESHOLDS = [0.0001, 0.001, 0.01, 0.1, 1.0];
 /* ------------------------------------------------------------------ */
 export class DeltaCVDConfirmation extends BaseDetector {
     /* ---- immutable config --------------------------------------- */
-    protected readonly detectorType = "cvd_confirmation" as const;
+    protected readonly detectorType = "deltacvd" as const;
     private readonly windows: number[];
     private readonly minZ: number;
     private readonly minTPS: number;
@@ -776,8 +776,9 @@ export class DeltaCVDConfirmation extends BaseDetector {
         confidenceFactors: ConfidenceFactors,
         finalConfidence: number,
         absorption: ReturnType<typeof this.validateAbsorptionConditions> | null,
-        signalType: "enhanced_cvd" | "cvd_divergence" | "absorption_enhanced",
-        timestamp: number
+        signalType: "deltacvd",
+        timestamp: number,
+        enhancedConfidence: boolean = false
     ): DeltaCVDConfirmationResult {
         const shortestWindowState = this.states.get(this.windows[0])!;
         const lastTrade =
@@ -810,7 +811,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
         // If we have absorption, potentially override signal direction
         if (absorption?.detected && absorption.expectedSignal !== "neutral") {
             // In enhanced mode, absorption can provide additional conviction
-            if (signalType === "absorption_enhanced") {
+            if (enhancedConfidence) {
                 // Use absorption signal if it aligns with CVD, otherwise use CVD
                 if (
                     (side === "buy" && absorption.expectedSignal === "buy") ||
@@ -918,10 +919,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
                         Math.abs(zScores[this.windows[0]]) /
                         this.calculateAdaptiveThreshold(),
                     absorptionConfirmation: absorption?.detected || false,
-                    signalPurity:
-                        signalType === "absorption_enhanced"
-                            ? "premium"
-                            : "standard",
+                    signalPurity: enhancedConfidence ? "premium" : "standard",
                 },
             },
         };
@@ -1942,15 +1940,12 @@ export class DeltaCVDConfirmation extends BaseDetector {
         const absorption = this.validateAbsorptionConditions(this.windows[0]);
 
         // STEP 4: Decide signal type based on what we have
-        let signalType:
-            | "enhanced_cvd"
-            | "cvd_divergence"
-            | "absorption_enhanced";
+        let signalType = "deltacvd" as const;
         let enhancedConfidence = false;
 
         if (absorption.detected && absorption.strength > 0.5) {
             // We have BOTH CVD divergence AND absorption - this is the premium signal!
-            signalType = "absorption_enhanced";
+            // signalType is already "deltacvd"
             enhancedConfidence = true;
 
             this.logger.info(
@@ -1963,7 +1958,7 @@ export class DeltaCVDConfirmation extends BaseDetector {
             );
         } else {
             // We have CVD divergence but no absorption confirmation
-            signalType = "cvd_divergence";
+            // signalType is already "deltacvd"
 
             this.logger.info(
                 `[CVD] Standard CVD divergence signal (no absorption confirmation)`,
@@ -2071,7 +2066,8 @@ export class DeltaCVDConfirmation extends BaseDetector {
             finalConfidence,
             absorption.detected ? absorption : null,
             signalType,
-            now
+            now,
+            enhancedConfidence
         );
 
         // Emit signal

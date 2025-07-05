@@ -127,37 +127,67 @@ export class SignalManager extends EventEmitter {
     ) {
         super();
 
-        this.config = {
-            confidenceThreshold: config.confidenceThreshold ?? 0.75,
-            signalTimeout: config.signalTimeout ?? 300000,
-            enableMarketHealthCheck: config.enableMarketHealthCheck ?? true,
-            enableAlerts: config.enableAlerts ?? true,
-            maxQueueSize: config.maxQueueSize ?? 1000,
-            processingBatchSize: config.processingBatchSize ?? 10,
-            backpressureThreshold: config.backpressureThreshold ?? 0.8,
-            detectorThresholds: config.detectorThresholds ?? {},
-            positionSizing: config.positionSizing ?? {},
+        // NUCLEAR CLEANUP: No fallbacks, require explicit configuration
+        if (config.confidenceThreshold === undefined)
+            throw new Error("Missing required config: confidenceThreshold");
+        if (config.signalTimeout === undefined)
+            throw new Error("Missing required config: signalTimeout");
+        if (config.enableMarketHealthCheck === undefined)
+            throw new Error("Missing required config: enableMarketHealthCheck");
+        if (config.enableAlerts === undefined)
+            throw new Error("Missing required config: enableAlerts");
+        if (config.maxQueueSize === undefined)
+            throw new Error("Missing required config: maxQueueSize");
+        if (config.processingBatchSize === undefined)
+            throw new Error("Missing required config: processingBatchSize");
+        if (config.backpressureThreshold === undefined)
+            throw new Error("Missing required config: backpressureThreshold");
+        if (config.detectorThresholds === undefined)
+            throw new Error("Missing required config: detectorThresholds");
+        if (config.positionSizing === undefined)
+            throw new Error("Missing required config: positionSizing");
+        if (config.enableSignalPrioritization === undefined)
+            throw new Error(
+                "Missing required config: enableSignalPrioritization"
+            );
+        if (config.adaptiveBatchSizing === undefined)
+            throw new Error("Missing required config: adaptiveBatchSizing");
+        if (config.maxAdaptiveBatchSize === undefined)
+            throw new Error("Missing required config: maxAdaptiveBatchSize");
+        if (config.minAdaptiveBatchSize === undefined)
+            throw new Error("Missing required config: minAdaptiveBatchSize");
+        if (config.circuitBreakerThreshold === undefined)
+            throw new Error("Missing required config: circuitBreakerThreshold");
+        if (config.circuitBreakerResetMs === undefined)
+            throw new Error("Missing required config: circuitBreakerResetMs");
+        if (config.signalTypePriorities === undefined)
+            throw new Error("Missing required config: signalTypePriorities");
+        if (config.adaptiveBackpressure === undefined)
+            throw new Error("Missing required config: adaptiveBackpressure");
+        if (config.highPriorityBypassThreshold === undefined)
+            throw new Error(
+                "Missing required config: highPriorityBypassThreshold"
+            );
 
-            // 🔧 Enhanced backpressure configuration with institutional defaults
-            enableSignalPrioritization:
-                config.enableSignalPrioritization ?? true,
-            adaptiveBatchSizing: config.adaptiveBatchSizing ?? true,
-            maxAdaptiveBatchSize: config.maxAdaptiveBatchSize ?? 50,
-            minAdaptiveBatchSize: config.minAdaptiveBatchSize ?? 5,
-            circuitBreakerThreshold: config.circuitBreakerThreshold ?? 5,
-            circuitBreakerResetMs: config.circuitBreakerResetMs ?? 30000,
-            signalTypePriorities: {
-                absorption: 10,
-                exhaustion: 9,
-                deltaCVDConfirmation: 8,
-                accumulation: 7,
-                distribution: 7,
-                supportResistance: 6,
-                ...(config.signalTypePriorities || {}),
-            },
-            adaptiveBackpressure: config.adaptiveBackpressure ?? true,
-            highPriorityBypassThreshold:
-                config.highPriorityBypassThreshold ?? 8.5,
+        this.config = {
+            confidenceThreshold: config.confidenceThreshold,
+            signalTimeout: config.signalTimeout,
+            enableMarketHealthCheck: config.enableMarketHealthCheck,
+            enableAlerts: config.enableAlerts,
+            maxQueueSize: config.maxQueueSize,
+            processingBatchSize: config.processingBatchSize,
+            backpressureThreshold: config.backpressureThreshold,
+            detectorThresholds: config.detectorThresholds,
+            positionSizing: config.positionSizing,
+            enableSignalPrioritization: config.enableSignalPrioritization,
+            adaptiveBatchSizing: config.adaptiveBatchSizing,
+            maxAdaptiveBatchSize: config.maxAdaptiveBatchSize,
+            minAdaptiveBatchSize: config.minAdaptiveBatchSize,
+            circuitBreakerThreshold: config.circuitBreakerThreshold,
+            circuitBreakerResetMs: config.circuitBreakerResetMs,
+            signalTypePriorities: config.signalTypePriorities,
+            adaptiveBackpressure: config.adaptiveBackpressure,
+            highPriorityBypassThreshold: config.highPriorityBypassThreshold,
         };
 
         this.logger.info(
@@ -224,10 +254,7 @@ export class SignalManager extends EventEmitter {
                         signalType: signal.type,
                         confidence: signal.confidence,
                         requiredThreshold:
-                            Config.DETECTOR_CONFIDENCE_THRESHOLDS[
-                                signal.type
-                            ] ?? 0.7,
-                        fallbackThreshold: this.config.confidenceThreshold,
+                            Config.DETECTOR_CONFIDENCE_THRESHOLDS[signal.type],
                     }
                 );
 
@@ -283,8 +310,13 @@ export class SignalManager extends EventEmitter {
      */
     private filterSignalByConfidence(signal: ProcessedSignal): boolean {
         const thresholds = Config.DETECTOR_CONFIDENCE_THRESHOLDS;
-        const minConfidence =
-            thresholds[signal.type] ?? this.config.confidenceThreshold;
+        const minConfidence = thresholds[signal.type];
+
+        if (minConfidence === undefined) {
+            throw new Error(
+                `Missing confidence threshold for signal type: ${signal.type}. Expected one of: ${Object.keys(thresholds).join(", ")}`
+            );
+        }
 
         return signal.confidence >= minConfidence;
     }
@@ -294,7 +326,15 @@ export class SignalManager extends EventEmitter {
      */
     private calculatePositionSizeByType(signalType: SignalType): number {
         const positionSizes = Config.DETECTOR_POSITION_SIZING;
-        return positionSizes[signalType] ?? 0.5; // Default 50%
+        const positionSize = positionSizes[signalType];
+
+        if (positionSize === undefined) {
+            throw new Error(
+                `Missing position size for signal type: ${signalType}. Expected one of: ${Object.keys(positionSizes).join(", ")}`
+            );
+        }
+
+        return positionSize;
     }
 
     /**
@@ -668,7 +708,9 @@ export class SignalManager extends EventEmitter {
             if (!confirmedSignal) {
                 this.emit("signalRejected", {
                     signal,
-                    reason: this.lastRejectReason ?? "processing_failed",
+                    reason: this.lastRejectReason
+                        ? this.lastRejectReason
+                        : "processing_failed",
                 });
                 return null;
             }
@@ -1028,6 +1070,8 @@ export class SignalManager extends EventEmitter {
                 return "buy"; // Accumulation indicates buying interest
             case "distribution":
                 return "sell"; // Distribution indicates selling pressure
+            case "deltacvd":
+                return "buy"; // DeltaCVD typically indicates momentum/divergence
             default:
                 return "buy"; // Default fallback
         }
@@ -1046,8 +1090,10 @@ export class SignalManager extends EventEmitter {
                 return "accumulation_confirmed";
             case "distribution":
                 return "distribution_confirmed";
+            case "deltacvd":
+                return "deltacvd_confirmed";
             default:
-                return "flow";
+                return signalType; // Return original if no confirmed variant exists
         }
     }
 
@@ -1326,7 +1372,10 @@ export class SignalManager extends EventEmitter {
 
         // Rejection reason tracking
         if (outcome === "rejected" || outcome === "blocked") {
-            this.recordRejectionMetrics(signal, rejectionReason ?? "unknown");
+            this.recordRejectionMetrics(
+                signal,
+                rejectionReason ? rejectionReason : "unknown"
+            );
         }
 
         // Confirmation metrics with enhanced details
@@ -1495,9 +1544,10 @@ export class SignalManager extends EventEmitter {
                 market_healthy: confirmedSignal.anomalyData.marketHealthy
                     ? "healthy"
                     : "unhealthy",
-                health_recommendation:
-                    confirmedSignal.anomalyData.healthRecommendation ??
-                    "unknown",
+                health_recommendation: confirmedSignal.anomalyData
+                    .healthRecommendation
+                    ? confirmedSignal.anomalyData.healthRecommendation
+                    : "unknown",
             }
         );
 

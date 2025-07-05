@@ -72,7 +72,7 @@
 - [ ] **NO PRODUCTION CODE IN TEST DIRECTORIES** - Maintain clear separation
 - [ ] **NO TYPE CASTING TO BYPASS VALIDATION** - Use proper interfaces
 
-## CONFIRMATION REQUIRED
+## CONFIRMATION REQUIRED <ESSENTIAL>
 
 Before proceeding with any task, confirm:
 
