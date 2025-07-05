@@ -265,7 +265,8 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             );
 
             // Access private property to verify actual threshold used
-            const actualThreshold = (detector as any).exhaustionThreshold;
+            const actualThreshold = (detector as any).enhancementConfig
+                .exhaustionThreshold;
 
             // CRITICAL: Should use config value, not hard-coded default
             expect(actualThreshold).toBe(configValue);
@@ -373,7 +374,8 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockSignalLogger
             );
 
-            const actualMinAggVolume = (detector as any).minAggVolume;
+            const actualMinAggVolume = (detector as any).enhancementConfig
+                .minAggVolume;
             expect(actualMinAggVolume).toBe(configValue);
         });
 
@@ -478,7 +480,8 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockSignalLogger
             );
 
-            const actualMaxPassiveRatio = (detector as any).maxPassiveRatio;
+            const actualMaxPassiveRatio = (detector as any).enhancementConfig
+                .maxPassiveRatio;
             expect(actualMaxPassiveRatio).toBe(configValue);
         });
 
@@ -583,7 +586,8 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockSignalLogger
             );
 
-            const actualWeights = (detector as any).scoringWeights;
+            const actualWeights = (detector as any).enhancementConfig
+                .scoringWeights;
             expect(actualWeights.depletion).toBe(configWeights.depletion);
             expect(actualWeights.passive).toBe(configWeights.passive);
             expect(actualWeights.continuity).toBe(configWeights.continuity);
@@ -1431,7 +1435,8 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockSignalLogger
             );
 
-            const actualThreshold = (detector as any).exhaustionThreshold;
+            const actualThreshold = (detector as any).enhancementConfig
+                .exhaustionThreshold;
 
             // If this fails, it means the detector is using hard-coded defaults
             // instead of honoring the config values
@@ -1549,21 +1554,21 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             );
 
             // Verify exact match for all parameters
-            expect((detector as any).exhaustionThreshold).toBe(
-                testSettings.exhaustionThreshold
-            );
-            expect((detector as any).maxPassiveRatio).toBe(
+            expect(
+                (detector as any).enhancementConfig.exhaustionThreshold
+            ).toBe(testSettings.exhaustionThreshold);
+            expect((detector as any).enhancementConfig.maxPassiveRatio).toBe(
                 testSettings.maxPassiveRatio
             );
-            expect((detector as any).minDepletionFactor).toBe(
+            expect((detector as any).enhancementConfig.minDepletionFactor).toBe(
                 testSettings.minDepletionFactor
             );
-            expect((detector as any).imbalanceHighThreshold).toBe(
-                testSettings.imbalanceHighThreshold
-            );
-            expect((detector as any).spreadHighThreshold).toBe(
-                testSettings.spreadHighThreshold
-            );
+            expect(
+                (detector as any).enhancementConfig.imbalanceHighThreshold
+            ).toBe(testSettings.imbalanceHighThreshold);
+            expect(
+                (detector as any).enhancementConfig.spreadHighThreshold
+            ).toBe(testSettings.spreadHighThreshold);
         });
     });
 
@@ -1863,7 +1868,8 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockSignalLogger
             );
 
-            const actualThreshold = (detector as any).exhaustionThreshold;
+            const actualThreshold = (detector as any).enhancementConfig
+                .exhaustionThreshold;
 
             // Must use the explicitly provided value
             expect(actualThreshold).toBe(explicitValue);

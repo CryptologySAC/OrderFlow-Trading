@@ -68,6 +68,8 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
                     priceLevel: 100.0,
                     aggressiveVolume: 50,
                     passiveVolume: 25, // Low passive for exhaustion
+                    aggressiveBuyVolume: 10, // Low buy volume
+                    aggressiveSellVolume: 40, // High sell volume
                     tradeCount: 8,
                     strength: 0.9,
                     timestamp: Date.now(),
@@ -78,6 +80,8 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
                 priceLevel: 100.0,
                 aggressiveVolume: 50,
                 passiveVolume: 25,
+                aggressiveBuyVolume: 10,
+                aggressiveSellVolume: 40,
                 tradeCount: 8,
                 strength: 0.9,
                 timestamp: Date.now(),
@@ -137,6 +141,8 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
                             priceLevel: 100.0,
                             aggressiveVolume: 50,
                             passiveVolume: 10, // Depleted passive
+                            aggressiveBuyVolume: 10, // Low buy volume (buy-side exhaustion)
+                            aggressiveSellVolume: 40, // High sell volume (suggests sell-side strength)
                             tradeCount: 8,
                             strength: 0.9,
                             timestamp: Date.now(),
