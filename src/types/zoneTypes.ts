@@ -35,6 +35,61 @@ export interface ZoneHistory {
 // Import ZoneSnapshot from marketEvents to avoid circular dependency
 import type { ZoneSnapshot } from "./marketEvents.js";
 
+// Zone event interfaces for enhanced detectors
+// Import the actual condition types from signalTypes
+import type {
+    AccumulationConditions,
+    DistributionConditions,
+    AccumulationMarketRegime,
+    DistributionMarketRegime,
+} from "./signalTypes.js";
+
+export interface ZoneVisualizationData {
+    id: string;
+    type: "accumulation" | "distribution";
+    priceRange: {
+        center: number;
+        min: number;
+        max: number;
+    };
+    strength: number;
+    confidence: number;
+    volume: number;
+    timespan: number;
+    lastUpdate: number;
+    metadata: {
+        buyRatio?: number;
+        sellRatio?: number;
+        conditions: AccumulationConditions | DistributionConditions;
+        marketRegime: AccumulationMarketRegime | DistributionMarketRegime;
+    };
+}
+
+export interface ZoneUpdateEvent {
+    updateType:
+        | "zone_created"
+        | "zone_updated"
+        | "zone_strengthened"
+        | "zone_weakened"
+        | "zone_completed"
+        | "zone_invalidated";
+    zone: ZoneVisualizationData;
+    significance: number;
+    detectorId: string;
+    timestamp: number;
+}
+
+export interface ZoneSignalEvent {
+    signalType: "completion" | "invalidation" | "consumption";
+    zone: ZoneVisualizationData;
+    actionType: string;
+    confidence: number;
+    urgency: "high" | "medium" | "low";
+    expectedDirection: "up" | "down";
+    detectorId: string;
+    timestamp: number;
+}
+
 export interface TradingZone {
     // Zone identification
     id: string;

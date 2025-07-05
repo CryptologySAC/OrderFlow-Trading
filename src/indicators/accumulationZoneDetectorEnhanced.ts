@@ -36,6 +36,7 @@ import type {
 } from "../types/signalTypes.js";
 import { z } from "zod";
 import { AccumulationDetectorSchema } from "../core/config.js";
+import type { ZoneVisualizationData } from "../types/zoneTypes.js";
 
 /**
  * Enhanced configuration interface for accumulation detection - ONLY accumulation-specific parameters
@@ -296,8 +297,11 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             // Store enhanced accumulation metrics for monitoring
             this.storeEnhancedAccumulationMetrics(event, totalConfidenceBoost);
 
-            // ✅ EMIT ENHANCED ACCUMULATION SIGNAL - Independent of base detector
-            this.emitEnhancedAccumulationSignal(event, totalConfidenceBoost);
+            // ✅ EMIT ZONE UPDATE - For visualization in dashboard
+            this.emitAccumulationZoneUpdate(event, totalConfidenceBoost);
+
+            // ✅ EMIT SIGNAL ONLY for actionable zone events (completion/invalidation/consumption)
+            this.emitAccumulationZoneSignal(event, totalConfidenceBoost);
         }
     }
 
@@ -605,6 +609,179 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     }
 
     /**
+     * Emit accumulation zone update for dashboard visualization
+     */
+    private emitAccumulationZoneUpdate(
+        event: EnrichedTradeEvent,
+        confidenceBoost: number
+    ): void {
+        if (!event.zoneData) return;
+
+        // Determine zone update type based on accumulation strength
+        const updateType = this.determineZoneUpdateType(event, confidenceBoost);
+        if (!updateType) return;
+
+        // Create zone data for visualization
+        const zoneData = this.createZoneVisualizationData(
+            event,
+            confidenceBoost
+        );
+        if (!zoneData) return;
+
+        // Emit zoneUpdate event for dashboard visualization
+        this.emit("zoneUpdate", {
+            updateType,
+            zone: zoneData,
+            significance: confidenceBoost,
+            detectorId: this.getId(),
+            timestamp: Date.now(),
+        });
+
+        this.logger.debug(
+            "AccumulationZoneDetectorEnhanced: Zone update emitted",
+            {
+                detectorId: this.getId(),
+                updateType,
+                zoneId: zoneData.id,
+                confidence: confidenceBoost,
+            }
+        );
+    }
+
+    /**
+     * Emit accumulation zone signal for actionable events only
+     */
+    private emitAccumulationZoneSignal(
+        event: EnrichedTradeEvent,
+        confidenceBoost: number
+    ): void {
+        // Only emit signals for actionable zone events (completion, invalidation, consumption)
+        const signalType = this.determineZoneSignalType(event, confidenceBoost);
+        if (!signalType) return; // No actionable event detected
+
+        // Create zone signal for stats tracking
+        const zoneData = this.createZoneVisualizationData(
+            event,
+            confidenceBoost
+        );
+        if (!zoneData) return;
+
+        const signalSide = this.determineAccumulationSignalSide(event);
+        if (signalSide === "neutral") return;
+
+        // Emit zoneSignal event for dashboard signals list
+        this.emit("zoneSignal", {
+            signalType,
+            zone: zoneData,
+            actionType: signalType,
+            confidence: Math.min(
+                1.0,
+                this.enhancementConfig.baseConfidenceRequired + confidenceBoost
+            ),
+            urgency: confidenceBoost > 0.15 ? "high" : "medium",
+            expectedDirection: signalSide === "buy" ? "up" : "down",
+            detectorId: this.getId(),
+            timestamp: Date.now(),
+        });
+
+        this.logger.info(
+            "AccumulationZoneDetectorEnhanced: Zone signal emitted",
+            {
+                detectorId: this.getId(),
+                signalType,
+                zoneId: zoneData.id,
+                confidence: confidenceBoost,
+                side: signalSide,
+            }
+        );
+    }
+
+    /**
+     * Create zone visualization data for dashboard
+     */
+    private createZoneVisualizationData(
+        event: EnrichedTradeEvent,
+        confidenceBoost: number
+    ): ZoneVisualizationData | null {
+        if (!event.zoneData) return null;
+
+        const accumulationMetrics = this.calculateAccumulationMetrics(event);
+        if (!accumulationMetrics) return null;
+
+        return {
+            id: `accumulation_${this.getId()}_${event.price.toFixed(2)}`,
+            type: "accumulation",
+            priceRange: {
+                center: event.price,
+                min: event.price - this.confluenceMaxDistance,
+                max: event.price + this.confluenceMaxDistance,
+            },
+            strength: accumulationMetrics.strength,
+            confidence: Math.min(
+                1.0,
+                this.enhancementConfig.baseConfidenceRequired + confidenceBoost
+            ),
+            volume: accumulationMetrics.volumeConcentration,
+            timespan: accumulationMetrics.duration,
+            lastUpdate: Date.now(),
+            metadata: {
+                buyRatio: accumulationMetrics.buyRatio,
+                conditions: accumulationMetrics.conditions,
+                marketRegime: accumulationMetrics.marketRegime,
+            },
+        };
+    }
+
+    /**
+     * Determine zone update type for visualization
+     */
+    private determineZoneUpdateType(
+        event: EnrichedTradeEvent,
+        confidenceBoost: number
+    ): string | null {
+        // Always create/update zones for visualization
+        if (
+            confidenceBoost >=
+            this.enhancementConfig.minConfidenceBoostThreshold
+        ) {
+            if (confidenceBoost > 0.15) {
+                return "zone_strengthened";
+            } else {
+                return "zone_updated";
+            }
+        }
+        return "zone_created"; // Default for new zones
+    }
+
+    /**
+     * Determine if this should generate an actionable zone signal
+     */
+    private determineZoneSignalType(
+        event: EnrichedTradeEvent,
+        confidenceBoost: number
+    ): string | null {
+        // Only emit signals for high-confidence actionable events
+        if (confidenceBoost < this.enhancementConfig.finalConfidenceRequired) {
+            return null; // Not significant enough for a signal
+        }
+
+        const accumulationMetrics = this.calculateAccumulationMetrics(event);
+        if (!accumulationMetrics) return null;
+
+        // Check if accumulation zone is completing (high buy ratio + strong confidence)
+        if (
+            accumulationMetrics.buyRatio >=
+                this.accumulationRatioThreshold * 1.2 &&
+            confidenceBoost > 0.2
+        ) {
+            return "completion"; // Zone completing - actionable signal
+        }
+
+        // For now, only emit completion signals - invalidation/consumption would need price action tracking
+        return null;
+    }
+
+    /**
      * Emit enhanced accumulation signal independently
      *
      * STANDALONE VERSION: Independent signal emission for enhanced accumulation detection
@@ -684,7 +861,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         };
 
         // ✅ EMIT ENHANCED ACCUMULATION SIGNAL - Independent of base detector
-        this.emit("signal", signalCandidate);
+        this.emit("signalCandidate", signalCandidate);
 
         this.logger.info(
             "AccumulationZoneDetectorEnhanced: ENHANCED ACCUMULATION SIGNAL EMITTED",

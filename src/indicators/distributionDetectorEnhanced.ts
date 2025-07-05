@@ -36,6 +36,7 @@ import type {
 } from "../types/signalTypes.js";
 import { z } from "zod";
 import { DistributionDetectorSchema } from "../core/config.js";
+import type { ZoneVisualizationData } from "../types/zoneTypes.js";
 
 /**
  * Enhanced configuration interface for distribution detection - ONLY distribution-specific parameters
@@ -293,8 +294,11 @@ export class DistributionDetectorEnhanced extends Detector {
             // Store enhanced distribution metrics for monitoring
             this.storeEnhancedDistributionMetrics(event, totalConfidenceBoost);
 
-            // ✅ EMIT ENHANCED DISTRIBUTION SIGNAL - Independent of base detector
-            this.emitEnhancedDistributionSignal(event, totalConfidenceBoost);
+            // ✅ EMIT ZONE UPDATE - For visualization in dashboard
+            this.emitDistributionZoneUpdate(event, totalConfidenceBoost);
+
+            // ✅ EMIT SIGNAL ONLY for actionable zone events (completion/invalidation/consumption)
+            this.emitDistributionZoneSignal(event, totalConfidenceBoost);
         }
     }
 
@@ -603,6 +607,173 @@ export class DistributionDetectorEnhanced extends Detector {
     }
 
     /**
+     * Emit distribution zone update for dashboard visualization
+     */
+    private emitDistributionZoneUpdate(
+        event: EnrichedTradeEvent,
+        confidenceBoost: number
+    ): void {
+        if (!event.zoneData) return;
+
+        // Determine zone update type based on distribution strength
+        const updateType = this.determineZoneUpdateType(event, confidenceBoost);
+        if (!updateType) return;
+
+        // Create zone data for visualization
+        const zoneData = this.createZoneVisualizationData(
+            event,
+            confidenceBoost
+        );
+        if (!zoneData) return;
+
+        // Emit zoneUpdate event for dashboard visualization
+        this.emit("zoneUpdate", {
+            updateType,
+            zone: zoneData,
+            significance: confidenceBoost,
+            detectorId: this.getId(),
+            timestamp: Date.now(),
+        });
+
+        this.logger.debug("DistributionDetectorEnhanced: Zone update emitted", {
+            detectorId: this.getId(),
+            updateType,
+            zoneId: zoneData.id,
+            confidence: confidenceBoost,
+        });
+    }
+
+    /**
+     * Emit distribution zone signal for actionable events only
+     */
+    private emitDistributionZoneSignal(
+        event: EnrichedTradeEvent,
+        confidenceBoost: number
+    ): void {
+        // Only emit signals for actionable zone events (completion, invalidation, consumption)
+        const signalType = this.determineZoneSignalType(event, confidenceBoost);
+        if (!signalType) return; // No actionable event detected
+
+        // Create zone signal for stats tracking
+        const zoneData = this.createZoneVisualizationData(
+            event,
+            confidenceBoost
+        );
+        if (!zoneData) return;
+
+        const signalSide = this.determineDistributionSignalSide(event);
+        if (signalSide === "neutral") return;
+
+        // Emit zoneSignal event for dashboard signals list
+        this.emit("zoneSignal", {
+            signalType,
+            zone: zoneData,
+            actionType: signalType,
+            confidence: Math.min(
+                1.0,
+                this.enhancementConfig.baseConfidenceRequired + confidenceBoost
+            ),
+            urgency: confidenceBoost > 0.15 ? "high" : "medium",
+            expectedDirection: signalSide === "sell" ? "down" : "up",
+            detectorId: this.getId(),
+            timestamp: Date.now(),
+        });
+
+        this.logger.info("DistributionDetectorEnhanced: Zone signal emitted", {
+            detectorId: this.getId(),
+            signalType,
+            zoneId: zoneData.id,
+            confidence: confidenceBoost,
+            side: signalSide,
+        });
+    }
+
+    /**
+     * Create zone visualization data for dashboard
+     */
+    private createZoneVisualizationData(
+        event: EnrichedTradeEvent,
+        confidenceBoost: number
+    ): ZoneVisualizationData | null {
+        if (!event.zoneData) return null;
+
+        const distributionMetrics = this.calculateDistributionMetrics(event);
+        if (!distributionMetrics) return null;
+
+        return {
+            id: `distribution_${this.getId()}_${event.price.toFixed(2)}`,
+            type: "distribution",
+            priceRange: {
+                center: event.price,
+                min: event.price - this.confluenceMaxDistance,
+                max: event.price + this.confluenceMaxDistance,
+            },
+            strength: distributionMetrics.strength,
+            confidence: Math.min(
+                1.0,
+                this.enhancementConfig.baseConfidenceRequired + confidenceBoost
+            ),
+            volume: distributionMetrics.volumeConcentration,
+            timespan: distributionMetrics.duration,
+            lastUpdate: Date.now(),
+            metadata: {
+                sellRatio: distributionMetrics.sellRatio,
+                conditions: distributionMetrics.conditions,
+                marketRegime: distributionMetrics.marketRegime,
+            },
+        };
+    }
+
+    /**
+     * Determine zone update type for visualization
+     */
+    private determineZoneUpdateType(
+        event: EnrichedTradeEvent,
+        confidenceBoost: number
+    ): string | null {
+        // Always create/update zones for visualization
+        if (
+            confidenceBoost >=
+            this.enhancementConfig.minConfidenceBoostThreshold
+        ) {
+            if (confidenceBoost > 0.15) {
+                return "zone_strengthened";
+            } else {
+                return "zone_updated";
+            }
+        }
+        return "zone_created"; // Default for new zones
+    }
+
+    /**
+     * Determine if this should generate an actionable zone signal
+     */
+    private determineZoneSignalType(
+        event: EnrichedTradeEvent,
+        confidenceBoost: number
+    ): string | null {
+        // Only emit signals for high-confidence actionable events
+        if (confidenceBoost < this.enhancementConfig.finalConfidenceRequired) {
+            return null; // Not significant enough for a signal
+        }
+
+        const distributionMetrics = this.calculateDistributionMetrics(event);
+        if (!distributionMetrics) return null;
+
+        // Check if distribution zone is completing (high sell ratio + strong confidence)
+        if (
+            distributionMetrics.sellRatio >=
+                this.distributionRatioThreshold * 1.2 &&
+            confidenceBoost > 0.2
+        ) {
+            return "completion"; // Zone completing - actionable signal
+        }
+
+        // For now, only emit completion signals - invalidation/consumption would need price action tracking
+        return null;
+    }
+
+    /**
      * Emit enhanced distribution signal independently
      *
      * STANDALONE VERSION: Independent signal emission for enhanced distribution detection
@@ -683,7 +854,7 @@ export class DistributionDetectorEnhanced extends Detector {
         };
 
         // ✅ EMIT ENHANCED DISTRIBUTION SIGNAL - Independent of base detector
-        this.emit("signal", signalCandidate);
+        this.emit("signalCandidate", signalCandidate);
 
         this.logger.info(
             "DistributionDetectorEnhanced: ENHANCED DISTRIBUTION SIGNAL EMITTED",
