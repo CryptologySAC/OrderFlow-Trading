@@ -20,6 +20,12 @@ import type { IOrderflowPreprocessor } from "../../src/market/orderFlowPreproces
 import type { EnrichedTradeEvent } from "../../src/types/marketEvents.js";
 import { createMockLogger } from "../../__mocks__/src/infrastructure/loggerInterface.js";
 
+// Import proper mocks from __mocks__/ directory as per CLAUDE.md
+import { MetricsCollector } from "../../__mocks__/src/infrastructure/metricsCollector.js";
+import { SpoofingDetector } from "../../__mocks__/src/services/spoofingDetector.js";
+// Import realistic configurations from mock config
+import mockConfig from "../../__mocks__/config.json";
+
 /**
  * CRITICAL TEST: Exhaustion & CVD Signal Flow Validation
  * 
@@ -43,15 +49,8 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
     beforeEach(() => {
         mockLogger = createMockLogger();
         
-        mockMetrics = {
-            updateMetric: vi.fn(),
-            incrementMetric: vi.fn(),
-            recordGauge: vi.fn(),
-            recordHistogram: vi.fn(),
-            recordTimer: vi.fn(),
-            startTimer: vi.fn(() => ({ stop: vi.fn() })),
-            getMetrics: vi.fn(() => ({})),
-        };
+        // Use proper mock from __mocks__/ directory as per CLAUDE.md
+        mockMetrics = new MetricsCollector();
 
         mockPreprocessor = {
             handleDepth: vi.fn(),
@@ -82,10 +81,8 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
             })),
         };
 
-        mockSpoofingDetector = {
-            wasSpoofed: vi.fn().mockReturnValue(false),
-            setAnomalyDetector: vi.fn(),
-        };
+        // Use proper mock from __mocks__/ directory as per CLAUDE.md
+        mockSpoofingDetector = new SpoofingDetector();
 
         mockSignalLogger = {
             logSignal: vi.fn(),
@@ -103,65 +100,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
 
             const exhaustionDetector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
-                {
-                    // Minimal config to trigger exhaustion signal
-                    minAggVolume: 1,
-                    windowMs: 45000,
-                    eventCooldownMs: 1000,
-                    volumeSurgeMultiplier: 1.0,
-                    imbalanceThreshold: 0.01,
-                    institutionalThreshold: 1,
-                    burstDetectionMs: 2000,
-                    sustainedVolumeMs: 5000,
-                    medianTradeSize: 0.1,
-                    exhaustionThreshold: 0.01,
-                    maxPassiveRatio: 0.9,
-                    minDepletionFactor: 0.01,
-                    imbalanceHighThreshold: 0.1,
-                    imbalanceMediumThreshold: 0.05,
-                    spreadHighThreshold: 0.1,
-                    spreadMediumThreshold: 0.05,
-                    scoringWeights: {
-                        depletion: 0.45,
-                        passive: 0.3,
-                        continuity: 0.12,
-                        imbalance: 0.08,
-                        spread: 0.04,
-                        velocity: 0.01,
-                    },
-                    depletionThresholdRatio: 0.01,
-                    significantChangeThreshold: 0.01,
-                    highQualitySampleCount: 2,
-                    highQualityDataAge: 35000,
-                    mediumQualitySampleCount: 1,
-                    mediumQualityDataAge: 70000,
-                    circuitBreakerMaxErrors: 8,
-                    circuitBreakerWindowMs: 90000,
-                    lowScoreConfidenceAdjustment: 0.7,
-                    lowVolumeConfidenceAdjustment: 0.8,
-                    invalidSurgeConfidenceAdjustment: 0.8,
-                    passiveConsistencyThreshold: 0.1,
-                    imbalanceNeutralThreshold: 0.01,
-                    velocityMinBound: 0.1,
-                    velocityMaxBound: 10,
-                    minInitialMoveTicks: 1,
-                    confirmationTimeoutMs: 40000,
-                    maxRevisitTicks: 8,
-                    maxZones: 75,
-                    zoneAgeLimit: 1200000,
-                    features: {
-                        depletionTracking: true,
-                        spreadAdjustment: true,
-                        volumeVelocity: false,
-                        spoofingDetection: true,
-                        adaptiveZone: true,
-                        multiZone: false,
-                        passiveHistory: true,
-                    },
-                    useStandardizedZones: true,
-                    enhancementMode: "production" as const,
-                    minEnhancedConfidenceThreshold: 0.01,
-                } as any,
+                mockConfig.symbols.LTCUSDT.exhaustion as any,
                 mockPreprocessor,
                 mockLogger,
                 mockSpoofingDetector,
@@ -283,7 +222,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
             };
 
             const lowResult = signalManager.processSignal(lowSignal);
-            expect(lowResult).toBeUndefined();
+            expect(lowResult).toBeNull();
             console.log(`✅ Exhaustion signal below threshold ${EXHAUSTION_THRESHOLD} correctly rejected`);
         });
     });
@@ -297,50 +236,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
 
             const cvdDetector = new DeltaCVDDetectorEnhanced(
                 "test-cvd",
-                {
-                    // Minimal config to trigger CVD signal
-                    windowsSec: [60, 300],
-                    minZ: 0.5, // Lower threshold for testing
-                    priceCorrelationWeight: 0.3,
-                    volumeConcentrationWeight: 0.2,
-                    adaptiveThresholdMultiplier: 0.3,
-                    eventCooldownMs: 1000,
-                    maxZones: 50,
-                    zoneAgeLimit: 1800000,
-                    minTradesPerSec: 0.1,
-                    minVolPerSec: 1,
-                    minSamplesForStats: 5,
-                    volatilityLookbackSec: 300,
-                    maxDivergenceAllowed: 0.8,
-                    stateCleanupIntervalSec: 300,
-                    dynamicThresholds: true,
-                    logDebug: false,
-                    volumeSurgeMultiplier: 2.0,
-                    imbalanceThreshold: 0.1,
-                    institutionalThreshold: 10.0,
-                    burstDetectionMs: 800,
-                    sustainedVolumeMs: 10000,
-                    medianTradeSize: 0.5,
-                    detectionMode: "momentum" as const,
-                    divergenceThreshold: 0.3,
-                    divergenceLookbackSec: 45,
-                    enableDepthAnalysis: false,
-                    usePassiveVolume: false,
-                    maxOrderbookAge: 4000,
-                    absorptionCVDThreshold: 50,
-                    absorptionPriceThreshold: 0.15,
-                    imbalanceWeight: 0.15,
-                    icebergMinRefills: 5,
-                    icebergMinSize: 50,
-                    baseConfidenceRequired: 0.05,
-                    finalConfidenceRequired: 0.1,
-                    strongCorrelationThreshold: 0.8,
-                    weakCorrelationThreshold: 0.4,
-                    depthImbalanceThreshold: 0.3,
-                    useStandardizedZones: true,
-                    enhancementMode: "production" as const,
-                    minEnhancedConfidenceThreshold: 0.05,
-                } as any,
+                mockConfig.symbols.LTCUSDT.deltaCvdConfirmation as any,
                 mockPreprocessor,
                 mockLogger,
                 mockSpoofingDetector,
@@ -463,7 +359,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
             };
 
             const lowResult = signalManager.processSignal(lowSignal);
-            expect(lowResult).toBeUndefined();
+            expect(lowResult).toBeNull();
             console.log(`✅ CVD signal below threshold ${CVD_THRESHOLD} correctly rejected`);
         });
     });
