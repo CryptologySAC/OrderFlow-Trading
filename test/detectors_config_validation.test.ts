@@ -1060,15 +1060,16 @@ describe("Detector Config Validation - Universal Test Suite", () => {
 
             const detector = new DeltaCVDDetectorEnhanced(
                 "test-deltacvd",
+                "LTCUSDT",
                 settings,
                 createMockPreprocessor(),
                 mockLogger,
-                mockSpoofing,
                 mockMetrics,
                 mockSignalLogger
             );
 
-            const actualConfidence = (detector as any).baseConfidenceRequired;
+            const actualConfidence = (detector as any).enhancementConfig
+                .baseConfidenceRequired;
             expect(actualConfidence).toBe(configValue);
         });
 
@@ -1147,15 +1148,16 @@ describe("Detector Config Validation - Universal Test Suite", () => {
 
             const detector = new DeltaCVDDetectorEnhanced(
                 "test-deltacvd",
+                "LTCUSDT",
                 settings,
                 createMockPreprocessor(),
                 mockLogger,
-                mockSpoofing,
                 mockMetrics,
                 mockSignalLogger
             );
 
-            const actualConfidence = (detector as any).finalConfidenceRequired;
+            const actualConfidence = (detector as any).enhancementConfig
+                .finalConfidenceRequired;
             expect(actualConfidence).toBe(configValue);
         });
 
@@ -1234,15 +1236,16 @@ describe("Detector Config Validation - Universal Test Suite", () => {
 
             const detector = new DeltaCVDDetectorEnhanced(
                 "test-deltacvd",
+                "LTCUSDT",
                 settings,
                 createMockPreprocessor(),
                 mockLogger,
-                mockSpoofing,
                 mockMetrics,
                 mockSignalLogger
             );
 
-            const actualFlag = (detector as any).usePassiveVolume;
+            const actualFlag = (detector as any).enhancementConfig
+                .usePassiveVolume;
             expect(actualFlag).toBe(configValue);
         });
 
@@ -1321,15 +1324,16 @@ describe("Detector Config Validation - Universal Test Suite", () => {
 
             const detector = new DeltaCVDDetectorEnhanced(
                 "test-deltacvd",
+                "LTCUSDT",
                 settings,
                 createMockPreprocessor(),
                 mockLogger,
-                mockSpoofing,
                 mockMetrics,
                 mockSignalLogger
             );
 
-            const actualFlag = (detector as any).enableDepthAnalysis;
+            const actualFlag = (detector as any).enhancementConfig
+                .enableDepthAnalysis;
             expect(actualFlag).toBe(configValue);
         });
     });

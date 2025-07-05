@@ -100,11 +100,11 @@
 - [ ] **yarn build** completes with zero errors and warnings (MANDATORY - RUN THIS)
 - [ ] **All lint issues resolved** - yarn build includes linting
 - [ ] **All TypeScript compilation errors fixed** - yarn build includes compilation
-- [ ] **yarn test** passes with >95% coverage
+- [ ] **yarn test** passes with **ZERO failed tests** (MANDATORY - ALL TESTS MUST PASS)
 - [ ] **Integration tests** pass completely
 - [ ] **No broken imports** or dependencies
 
-**🚨 MANDATORY: Run `yarn build` and fix ANY errors or warnings before completing task**
+**🚨 MANDATORY: Run `yarn build` and `yarn test` with ZERO failures before completing task**
 
 ### Documentation and Traceability
 
@@ -144,4 +144,4 @@ If ANY violations are found:
 
 **🚨 ANY REMAINING VIOLATIONS MUST BE ADDRESSED BEFORE TASK COMPLETION**
 
-**Signature**: ****\*\*\*\*****\_****\*\*\*\***** **Date**: ****\*\*\*\*****\_****\*\*\*\*****
+**Signature**: \***\*\*\*\*\*\*\***\_\***\*\*\*\*\*\*\*** **Date**: \***\*\*\*\*\*\*\***\_\***\*\*\*\*\*\*\***

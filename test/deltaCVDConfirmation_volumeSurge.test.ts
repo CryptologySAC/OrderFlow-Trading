@@ -1,15 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { EnrichedTradeEvent } from "../src/types/marketEvents";
+import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
 // ✅ CLAUDE.md COMPLIANCE: Use ONLY __mocks__/ directory - NO inline mocks
 vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
-vi.mock("../src/services/spoofingDetector");
-
 import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
-import { WorkerLogger } from "../src/multithreading/workerLogger";
+import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
-import { SpoofingDetector } from "../src/services/spoofingDetector";
+import { WorkerLogger } from "../src/multithreading/workerLogger";
+
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 
 // Import mock config for complete settings
@@ -30,26 +29,19 @@ const createMockPreprocessor = (): IOrderflowPreprocessor => ({
 
 describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
     let detector: DeltaCVDDetectorEnhanced;
-    let mockLogger: WorkerLogger;
+    let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
-    let mockSpoofing: SpoofingDetector;
     let mockPreprocessor: IOrderflowPreprocessor;
 
     beforeEach(() => {
         // ✅ CLAUDE.md COMPLIANCE: Use mocks from __mocks__/ directory only
         mockLogger = new WorkerLogger({} as any); // ThreadManager mock
         mockMetrics = new MetricsCollector();
-        mockSpoofing = new SpoofingDetector({
-            tickSize: 0.01,
-            wallTicks: 10,
-            minWallSize: 100,
-            dynamicWallWidth: true,
-            testLogMinSpoof: 50,
-        });
         mockPreprocessor = createMockPreprocessor();
 
         detector = new DeltaCVDDetectorEnhanced(
             "test_cvd_surge",
+            "LTCUSDT",
             {
                 ...mockConfig.symbols.LTCUSDT.deltaCvdConfirmation,
                 windowsSec: [60],
@@ -60,7 +52,6 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
             },
             mockPreprocessor,
             mockLogger,
-            mockSpoofing,
             mockMetrics
         );
     });

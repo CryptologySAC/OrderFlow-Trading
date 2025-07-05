@@ -257,10 +257,10 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
 
             const cvdDetector = new DeltaCVDDetectorEnhanced(
                 "test-cvd",
+                "LTCUSDT",
                 mockConfig.symbols.LTCUSDT.deltaCvdConfirmation as any,
                 mockPreprocessor,
                 mockLogger,
-                mockSpoofingDetector,
                 mockMetrics,
                 mockSignalLogger
             );

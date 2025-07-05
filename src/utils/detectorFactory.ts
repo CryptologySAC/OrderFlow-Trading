@@ -214,10 +214,10 @@ export class DetectorFactory {
         // Always use enhanced detector - originals are deprecated
         const detector = new DeltaCVDDetectorEnhanced(
             id,
+            Config.SYMBOL,
             productionSettings,
             dependencies.preprocessor,
             dependencies.logger,
-            dependencies.spoofingDetector,
             dependencies.metricsCollector,
             dependencies.signalLogger
         );

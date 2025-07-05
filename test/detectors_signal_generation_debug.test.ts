@@ -660,21 +660,21 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             const detector = new DeltaCVDDetectorEnhanced(
                 "debug-deltacvd",
+                "LTCUSDT",
                 completeDeltaCVDSettings,
                 mockPreprocessor,
                 mockLogger,
-                mockSpoofing,
                 mockMetrics,
                 mockSignalLogger
             );
 
             // Verify actual parameters match config
-            expect((detector as any).baseConfidenceRequired).toBe(
-                deltaCVDConfig.baseConfidenceRequired
-            );
-            expect((detector as any).finalConfidenceRequired).toBe(
-                deltaCVDConfig.finalConfidenceRequired
-            );
+            expect(
+                (detector as any).enhancementConfig.baseConfidenceRequired
+            ).toBe(deltaCVDConfig.baseConfidenceRequired);
+            expect(
+                (detector as any).enhancementConfig.finalConfidenceRequired
+            ).toBe(deltaCVDConfig.finalConfidenceRequired);
 
             console.log("DeltaCVD Detector Parameters:");
             console.log(
@@ -770,10 +770,10 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             const detector = new DeltaCVDDetectorEnhanced(
                 "debug-deltacvd",
+                "LTCUSDT",
                 completeDeltaCVDSettings,
                 mockPreprocessor,
                 mockLogger,
-                mockSpoofing,
                 mockMetrics,
                 mockSignalLogger
             );
@@ -1001,10 +1001,10 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             const deltaCVDDetector = new DeltaCVDDetectorEnhanced(
                 "compare-deltacvd",
+                "LTCUSDT",
                 completeDeltaCVDSettings,
                 mockPreprocessor,
                 mockLogger,
-                mockSpoofing,
                 mockMetrics,
                 mockSignalLogger
             );
