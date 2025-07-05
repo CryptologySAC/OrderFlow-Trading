@@ -470,7 +470,6 @@ describe("AbsorptionDetector - Specification Compliance", () => {
             // EXPECTED BEHAVIOR: Must NOT detect absorption due to normal efficiency
             expect(signalDetected).toBe(false);
         });
-
     });
 
     describe("SPECIFICATION: Volume Surge Detection", () => {

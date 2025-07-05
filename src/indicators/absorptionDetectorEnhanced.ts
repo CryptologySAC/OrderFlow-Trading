@@ -150,7 +150,25 @@ export class AbsorptionDetectorEnhanced extends Detector {
      * STANDALONE VERSION: Processes trades directly without legacy detector dependency
      */
     public onEnrichedTrade(event: EnrichedTradeEvent): void {
-        // DEBUG: Add logging to understand what's happening
+        // 🔍 DEBUG: Add comprehensive logging to diagnose signal issues
+        const debugInfo = {
+            useStandardizedZones: this.useStandardizedZones,
+            enhancementMode: this.enhancementConfig.enhancementMode,
+            hasZoneData: !!event.zoneData,
+            zoneCount: event.zoneData
+                ? (event.zoneData.zones5Tick?.length || 0) +
+                  (event.zoneData.zones10Tick?.length || 0) +
+                  (event.zoneData.zones20Tick?.length || 0)
+                : 0,
+            tradeQuantity: event.quantity,
+            minAggVolume: this.enhancementConfig.minAggVolume,
+            callCount: this.enhancementStats.callCount,
+        };
+
+        this.logger.debug(
+            "AbsorptionDetectorEnhanced: Processing trade",
+            debugInfo
+        );
 
         // Only process if standardized zones are enabled and available
         if (
@@ -158,6 +176,19 @@ export class AbsorptionDetectorEnhanced extends Detector {
             this.enhancementConfig.enhancementMode === "disabled" ||
             !event.zoneData
         ) {
+            this.logger.warn(
+                "AbsorptionDetectorEnhanced: Skipping trade processing",
+                {
+                    reason: !this.useStandardizedZones
+                        ? "zones_disabled"
+                        : this.enhancementConfig.enhancementMode === "disabled"
+                          ? "detector_disabled"
+                          : !event.zoneData
+                            ? "no_zone_data"
+                            : "unknown",
+                    debugInfo,
+                }
+            );
             return;
         }
 
@@ -208,15 +239,33 @@ export class AbsorptionDetectorEnhanced extends Detector {
             // Emit core absorption signal (signalCandidate event expected by tests)
             this.emit("signalCandidate", coreAbsorptionResult);
 
-            this.logger.debug(
-                "AbsorptionDetectorEnhanced: Core absorption detected",
+            this.logger.info(
+                "🎯 AbsorptionDetectorEnhanced: ABSORPTION SIGNAL GENERATED!",
                 {
                     detectorId: this.getId(),
                     price: event.price,
                     side: coreAbsorptionResult.side,
                     confidence: coreAbsorptionResult.confidence,
                     signalId: coreAbsorptionResult.id,
-                    dataType: typeof coreAbsorptionResult.data,
+                    signalType: coreAbsorptionResult.type,
+                    timestamp: new Date(
+                        coreAbsorptionResult.timestamp
+                    ).toISOString(),
+                    signalManagerThreshold: "Should be 0.3 (was 0.85!)",
+                }
+            );
+        } else {
+            this.logger.debug(
+                "AbsorptionDetectorEnhanced: No core absorption signal generated",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                    quantity: event.quantity,
+                    zoneCount: event.zoneData
+                        ? (event.zoneData.zones5Tick?.length || 0) +
+                          (event.zoneData.zones10Tick?.length || 0) +
+                          (event.zoneData.zones20Tick?.length || 0)
+                        : 0,
                 }
             );
         }
