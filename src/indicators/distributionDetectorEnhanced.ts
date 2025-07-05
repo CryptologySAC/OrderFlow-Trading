@@ -31,7 +31,6 @@ import type {
 import type {
     SignalCandidate,
     EnhancedDistributionSignalData,
-    SignalType,
     DistributionConditions,
     DistributionMarketRegime,
 } from "../types/signalTypes.js";
@@ -676,7 +675,7 @@ export class DistributionDetectorEnhanced extends Detector {
         // Create signal candidate
         const signalCandidate: SignalCandidate = {
             id: `enhanced-distribution-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-            type: "distribution" as SignalType,
+            type: "distribution",
             side: signalSide,
             confidence: enhancedConfidence,
             timestamp: Date.now(),
@@ -697,7 +696,7 @@ export class DistributionDetectorEnhanced extends Detector {
                 strength: distributionMetrics.strength,
                 sellRatio: distributionMetrics.sellRatio,
                 signalId: signalCandidate.id,
-                signalType: "enhanced_distribution_zone",
+                signalType: "distribution",
             }
         );
     }

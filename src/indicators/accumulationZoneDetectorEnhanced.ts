@@ -31,7 +31,6 @@ import type {
 import type {
     SignalCandidate,
     AccumulationResult,
-    SignalType,
     AccumulationConditions,
     AccumulationMarketRegime,
 } from "../types/signalTypes.js";
@@ -677,7 +676,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         // Create signal candidate
         const signalCandidate: SignalCandidate = {
             id: `enhanced-accumulation-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-            type: "accumulation" as SignalType,
+            type: "accumulation",
             side: signalSide,
             confidence: enhancedConfidence,
             timestamp: Date.now(),
@@ -698,7 +697,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
                 strength: accumulationMetrics.strength,
                 buyRatio: accumulationMetrics.buyRatio,
                 signalId: signalCandidate.id,
-                signalType: "enhanced_accumulation_zone",
+                signalType: "accumulation",
             }
         );
     }
