@@ -451,7 +451,7 @@
                 "icebergMinRefills": 5,
                 "icebergMinSize": 50,
                 "baseConfidenceRequired": 0.05,
-                "finalConfidenceRequired": 0.12,
+                "finalConfidenceRequired": 0.4,
                 "strongCorrelationThreshold": 0.8,
                 "weakCorrelationThreshold": 0.4,
                 "depthImbalanceThreshold": 0.3,
