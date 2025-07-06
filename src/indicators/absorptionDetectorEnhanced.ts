@@ -395,11 +395,34 @@ export class AbsorptionDetectorEnhanced extends Detector {
             return null;
         }
 
+        // Check institutional volume ratio threshold (passive volume dominance)
+        const passiveVolumeRatio = FinancialMath.divideQuantities(
+            volumePressure.passivePressure,
+            volumePressure.totalPressure
+        );
+
+        // Use standard threshold for institutional absorption
+        if (passiveVolumeRatio < this.absorptionRatioThreshold) {
+            this.logger.debug(
+                "AbsorptionDetectorEnhanced: Passive volume ratio below threshold",
+                {
+                    passiveVolumeRatio,
+                    threshold: this.absorptionRatioThreshold,
+                    passiveVolume: volumePressure.passivePressure,
+                    totalVolume: volumePressure.totalPressure,
+                }
+            );
+            return null; // Not enough institutional absorption
+        }
+
         // Calculate price efficiency using FinancialMath (institutional precision)
         const priceEfficiency = this.calculatePriceEfficiency(
             event,
             relevantZones
         );
+
+        // Price efficiency calculation completed
+
         if (
             priceEfficiency === null ||
             priceEfficiency > this.enhancementConfig.priceEfficiencyThreshold
@@ -412,6 +435,9 @@ export class AbsorptionDetectorEnhanced extends Detector {
             event,
             volumePressure
         );
+
+        // Absorption ratio calculation completed
+
         if (
             absorptionRatio === null ||
             absorptionRatio > this.enhancementConfig.maxAbsorptionRatio
@@ -419,8 +445,44 @@ export class AbsorptionDetectorEnhanced extends Detector {
             return null; // Not strong enough absorption
         }
 
+        // Check for balanced institutional flow (should return neutral)
+        const isBalancedInstitutional =
+            this.detectBalancedInstitutionalFlow(relevantZones);
+        if (isBalancedInstitutional) {
+            this.logger.debug(
+                "AbsorptionDetectorEnhanced: Balanced institutional flow detected - returning neutral",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                    passiveRatio: passiveVolumeRatio,
+                    balanceScore: isBalancedInstitutional,
+                }
+            );
+            return null; // No directional signal for balanced institutional scenarios
+        }
+
+        // Check for edge case: very low aggressive volume (less than institutional threshold)
+        if (
+            volumePressure.aggressivePressure <
+            this.enhancementConfig.institutionalVolumeThreshold
+        ) {
+            this.logger.debug(
+                "AbsorptionDetectorEnhanced: Insufficient aggressive volume for institutional signal",
+                {
+                    aggressiveVolume: volumePressure.aggressivePressure,
+                    threshold:
+                        this.enhancementConfig.institutionalVolumeThreshold,
+                    passiveRatio: passiveVolumeRatio,
+                }
+            );
+            return null; // No institutional pattern without sufficient aggressive flow
+        }
+
         // Determine dominant side and signal direction
         const dominantSide = this.calculateDominantSide(relevantZones);
+
+        // Dominant side calculation completed
+
         if (!dominantSide) {
             return null;
         }
@@ -432,6 +494,12 @@ export class AbsorptionDetectorEnhanced extends Detector {
             volumePressure,
             relevantZones
         );
+
+        // Confidence calculation completed
+
+        if (confidence === null) {
+            return null; // Cannot proceed without valid confidence calculation
+        }
 
         if (
             confidence < this.enhancementConfig.minEnhancedConfidenceThreshold
@@ -527,6 +595,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
         let totalPassive = 0;
 
         for (const zone of zones) {
+            // Validate inputs before FinancialMath calls to prevent NaN BigInt errors
+            if (isNaN(zone.aggressiveVolume) || isNaN(zone.passiveVolume)) {
+                return null; // Skip this calculation if any zone has NaN values
+            }
+
             totalAggressive = FinancialMath.safeAdd(
                 totalAggressive,
                 zone.aggressiveVolume
@@ -676,27 +749,37 @@ export class AbsorptionDetectorEnhanced extends Detector {
         absorptionRatio: number,
         volumePressure: { pressureRatio: number },
         zones: ZoneSnapshot[]
-    ): number {
-        // Collect confidence factors for statistical analysis
+    ): number | null {
+        // Validate inputs before creating confidence factors
+        if (
+            !FinancialMath.isValidFinancialNumber(priceEfficiency) ||
+            !FinancialMath.isValidFinancialNumber(absorptionRatio) ||
+            !FinancialMath.isValidFinancialNumber(volumePressure.pressureRatio)
+        ) {
+            return null; // Cannot calculate confidence with invalid inputs
+        }
+
+        // Collect confidence factors for statistical analysis with proper bounds
         const confidenceFactors = [
-            1 - priceEfficiency, // Higher efficiency = higher confidence
-            1 - absorptionRatio, // Lower absorption ratio = higher confidence
-            Math.min(1, volumePressure.pressureRatio / 2), // Pressure component
-            Math.min(
-                1,
-                zones.length / this.enhancementConfig.maxZoneCountForScoring
-            ), // Zone count component
+            Math.max(0, Math.min(1, 1 - priceEfficiency)), // Higher efficiency = higher confidence, bounded [0,1]
+            Math.max(0, Math.min(1, 1 - absorptionRatio)), // Lower absorption ratio = higher confidence, bounded [0,1]
+            Math.max(0, Math.min(1, volumePressure.pressureRatio / 2)), // Pressure component, bounded [0,1]
+            Math.max(
+                0,
+                Math.min(
+                    1,
+                    zones.length / this.enhancementConfig.maxZoneCountForScoring
+                )
+            ), // Zone count component, bounded [0,1]
         ];
 
         // Use FinancialMath.calculateMean for statistical precision
         const baseConfidence = FinancialMath.calculateMean(confidenceFactors);
-        if (baseConfidence === null) return 0; // CLAUDE.md compliance: return valid value when calculation fails
 
-        // Apply final confidence scaling using FinancialMath
-        return FinancialMath.multiplyQuantities(
-            baseConfidence,
-            this.enhancementConfig.finalConfidenceRequired
-        );
+        if (baseConfidence === null) return null; // CLAUDE.md compliance: cannot calculate confidence with invalid data
+
+        // Return the calculated confidence without scaling
+        return baseConfidence;
     }
 
     /**
@@ -977,6 +1060,71 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 enhancementStats: this.enhancementStats,
             }
         );
+    }
+
+    /**
+     * Detect balanced institutional flow scenarios that should return neutral
+     *
+     * Balanced scenarios have:
+     * - Aggressive flow: ~50% buy vs ~50% sell (institutional vs institutional)
+     * - Passive flow: ~50% buy vs ~50% sell (balanced institutional absorption)
+     * - High absorption ratio (>60%) but no clear directional bias
+     */
+    private detectBalancedInstitutionalFlow(
+        zones: ZoneSnapshot[]
+    ): number | null {
+        if (zones.length === 0) return null;
+
+        // Calculate total aggressive and passive volumes
+        let totalAggressiveBuy = 0;
+        let totalAggressiveSell = 0;
+        let totalPassiveBuy = 0;
+        let totalPassiveSell = 0;
+
+        for (const zone of zones) {
+            totalAggressiveBuy += zone.aggressiveBuyVolume || 0;
+            totalAggressiveSell += zone.aggressiveSellVolume || 0;
+            totalPassiveBuy += zone.passiveBidVolume || 0;
+            totalPassiveSell += zone.passiveAskVolume || 0;
+        }
+
+        const totalAggressive = totalAggressiveBuy + totalAggressiveSell;
+        const totalPassive = totalPassiveBuy + totalPassiveSell;
+
+        if (totalAggressive === 0 || totalPassive === 0) return null;
+
+        // Calculate balance ratios using FinancialMath
+        const aggressiveBuyRatio = FinancialMath.divideQuantities(
+            totalAggressiveBuy,
+            totalAggressive
+        );
+        const passiveBuyRatio = FinancialMath.divideQuantities(
+            totalPassiveBuy,
+            totalPassive
+        );
+
+        if (aggressiveBuyRatio === null || passiveBuyRatio === null)
+            return null;
+
+        // Check for balanced flow (both ratios close to 0.5)
+        const aggressiveBalance = Math.abs(aggressiveBuyRatio - 0.5);
+        const passiveBalance = Math.abs(passiveBuyRatio - 0.5);
+
+        // Balanced threshold: within 5% of perfect balance (0.45-0.55 range)
+        const balanceThreshold = 0.05;
+
+        const isBalanced =
+            aggressiveBalance <= balanceThreshold &&
+            passiveBalance <= balanceThreshold;
+
+        if (isBalanced) {
+            // Return balance score (higher = more balanced, 0.05 = perfectly balanced)
+            return (
+                balanceThreshold - Math.max(aggressiveBalance, passiveBalance)
+            );
+        }
+
+        return null;
     }
 
     /**

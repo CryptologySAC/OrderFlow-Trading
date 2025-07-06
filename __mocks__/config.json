@@ -156,7 +156,53 @@
                     "accumulation": 0.6,
                     "distribution": 0.7,
                     "deltacvd": 0.7
-                }
+                },
+                "conflictResolution": {
+                    "enabled": true,
+                    "strategy": "confidence_weighted",
+                    "minimumSeparationMs": 30000,
+                    "contradictionPenaltyFactor": 0.5,
+                    "priceTolerance": 0.001,
+                    "volatilityNormalizationFactor": 0.02
+                },
+                "signalPriorityMatrix": {
+                    "highVolatility": {
+                        "absorption": 0.3,
+                        "deltacvd": 0.7,
+                        "exhaustion": 0.8,
+                        "accumulation": 0.5,
+                        "distribution": 0.5
+                    },
+                    "lowVolatility": {
+                        "absorption": 0.7,
+                        "deltacvd": 0.3,
+                        "exhaustion": 0.4,
+                        "accumulation": 0.8,
+                        "distribution": 0.8
+                    },
+                    "balanced": {
+                        "absorption": 0.5,
+                        "deltacvd": 0.5,
+                        "exhaustion": 0.6,
+                        "accumulation": 0.6,
+                        "distribution": 0.6
+                    }
+                },
+                "correlationBoostFactor": 0.7,
+                "priceTolerancePercent": 0.3,
+                "signalThrottleMs": 10000,
+                "correlationWindowMs": 300000,
+                "maxHistorySize": 100,
+                "defaultPriority": 5,
+                "volatilityHighThreshold": 0.05,
+                "volatilityLowThreshold": 0.02,
+                "defaultLowVolatility": 0.02,
+                "defaultVolatilityError": 0.03,
+                "contextBoostHigh": 0.15,
+                "contextBoostLow": 0.1,
+                "priorityQueueHighThreshold": 8.0,
+                "backpressureYieldMs": 1,
+                "marketVolatilityWeight": 0.6
             },
             "signalCoordinator": {
                 "maxConcurrentProcessing": 20,
@@ -243,11 +289,11 @@
                 "maxRevisitTicks": 5,
                 "absorptionThreshold": 0.6,
                 "minPassiveMultiplier": 1.2,
-                "maxAbsorptionRatio": 0.4,
+                "maxAbsorptionRatio": 0.7,
                 "strongAbsorptionRatio": 0.6,
                 "moderateAbsorptionRatio": 0.8,
                 "weakAbsorptionRatio": 1,
-                "priceEfficiencyThreshold": 0.02,
+                "priceEfficiencyThreshold": 0.05,
                 "spreadImpactThreshold": 0.003,
                 "velocityIncreaseThreshold": 1.5,
                 "significantChangeThreshold": 0.1,
@@ -267,12 +313,12 @@
                 },
                 "useStandardizedZones": true,
                 "institutionalVolumeThreshold": 50,
-                "institutionalVolumeRatioThreshold": 0.3,
+                "institutionalVolumeRatioThreshold": 0.6,
                 "volumeNormalizationThreshold": 200,
                 "absorptionRatioNormalization": 3,
                 "highConfidenceThreshold": 0.7,
                 "lowConfidenceReduction": 0.7,
-                "minAbsorptionScore": 0.8,
+                "minAbsorptionScore": 0.6,
                 "patternVarianceReduction": 2,
                 "whaleActivityMultiplier": 2,
                 "maxZoneCountForScoring": 3,
@@ -318,7 +364,7 @@
                 "microstructureCoordinationBonus": 0.3,
                 "microstructureConfidenceBoostMin": 0.8,
                 "microstructureConfidenceBoostMax": 1.5,
-                "finalConfidenceRequired": 0.85
+                "finalConfidenceRequired": 0.7
             },
             "icebergDetector": {
                 "minRefillCount": 3,

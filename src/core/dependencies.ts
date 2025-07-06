@@ -172,8 +172,7 @@ export function createDependencies(threadManager: ThreadManager): Dependencies {
             metricsCollector,
             threadManager,
             signalTracker,
-            marketContextCollector,
-            Config.SIGNAL_MANAGER
+            marketContextCollector
         );
 
         const signalCoordinator = new SignalCoordinator(

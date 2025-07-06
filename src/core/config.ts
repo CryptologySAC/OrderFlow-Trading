@@ -262,8 +262,8 @@ export const AbsorptionDetectorSchema = z.object({
     microstructureConfidenceBoostMin: z.number().min(0.1).max(1.0),
     microstructureConfidenceBoostMax: z.number().min(1.0).max(3.0),
 
-    // ✅ CLAUDE.md COMPLIANCE: Final confidence threshold
-    finalConfidenceRequired: z.number().min(0.01).max(1.0),
+    // ✅ CLAUDE.md COMPLIANCE: Final confidence threshold - RAISED FOR QUALITY SIGNALS
+    finalConfidenceRequired: z.number().min(0.5).max(1.0), // RAISED: 50% minimum (was 1%)
 
     // Features configuration
     features: z.object({
@@ -281,26 +281,26 @@ export const AbsorptionDetectorSchema = z.object({
     enhancementMode: z.enum(["disabled", "testing", "production"]),
     minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
 
-    // Institutional volume detection (enhanced)
+    // Institutional volume detection (enhanced) - RAISED MINIMUMS FOR QUALITY SIGNALS
     institutionalVolumeThreshold: z.number().min(10).max(1000),
-    institutionalVolumeRatioThreshold: z.number().min(0.2).max(0.8),
+    institutionalVolumeRatioThreshold: z.number().min(0.6).max(0.8), // RAISED: 60% minimum (was 20%)
     enableInstitutionalVolumeFilter: z.boolean(),
     institutionalVolumeBoost: z.number().min(0.05).max(0.3),
 
-    // Enhanced calculation parameters
+    // Enhanced calculation parameters - RAISED MINIMUMS FOR QUALITY SIGNALS
     volumeNormalizationThreshold: z.number().min(50).max(5000),
     absorptionRatioNormalization: z.number().min(1).max(10),
-    minAbsorptionScore: z.number().min(0.4).max(0.9),
+    minAbsorptionScore: z.number().min(0.6).max(0.9), // RAISED: 60% minimum (was 40%)
     patternVarianceReduction: z.number().min(1).max(5),
     whaleActivityMultiplier: z.number().min(1.5).max(10.0),
     maxZoneCountForScoring: z.number().int().min(1).max(10),
 
-    // Enhanced thresholds
-    highConfidenceThreshold: z.number().min(0.6).max(0.9),
+    // Enhanced thresholds - RAISED MINIMUMS FOR QUALITY SIGNALS
+    highConfidenceThreshold: z.number().min(0.7).max(0.9), // RAISED: 70% minimum (was 60%)
     lowConfidenceReduction: z.number().min(0.5).max(0.9),
     confidenceBoostReduction: z.number().min(0.3).max(0.8),
-    passiveAbsorptionThreshold: z.number().min(0.4).max(0.8),
-    aggressiveDistributionThreshold: z.number().min(0.4).max(0.8),
+    passiveAbsorptionThreshold: z.number().min(0.6).max(0.8), // RAISED: 60% minimum (was 40%)
+    aggressiveDistributionThreshold: z.number().min(0.6).max(0.8), // RAISED: 60% minimum (was 40%)
     patternDifferenceThreshold: z.number().min(0.05).max(0.3),
     minVolumeForRatio: z.number().min(0.5).max(20),
 
@@ -308,7 +308,7 @@ export const AbsorptionDetectorSchema = z.object({
     distanceWeight: z.number().min(0.2).max(0.6),
     volumeWeight: z.number().min(0.2).max(0.6),
     absorptionWeight: z.number().min(0.1).max(0.5),
-    minConfluenceScore: z.number().min(0.4).max(0.8),
+    minConfluenceScore: z.number().min(0.6).max(0.8), // RAISED: 60% minimum (was 40%)
     volumeConcentrationWeight: z.number().min(0.1).max(0.3),
     patternConsistencyWeight: z.number().min(0.05).max(0.2),
     volumeBoostCap: z.number().min(0.1).max(0.5),
@@ -664,6 +664,39 @@ const BasicSymbolConfigSchema = z
             signalTypePriorities: z.record(z.number()),
             detectorThresholds: z.record(z.number()),
             positionSizing: z.record(z.number()),
+            conflictResolution: z.object({
+                enabled: z.boolean(),
+                strategy: z.enum([
+                    "confidence_weighted",
+                    "priority_based",
+                    "market_context",
+                ]),
+                minimumSeparationMs: z.number().int().positive(),
+                contradictionPenaltyFactor: z.number().min(0).max(1),
+                priceTolerance: z.number().positive(),
+                volatilityNormalizationFactor: z.number().positive(),
+            }),
+            signalPriorityMatrix: z.object({
+                highVolatility: z.record(z.number().min(0).max(1)),
+                lowVolatility: z.record(z.number().min(0).max(1)),
+                balanced: z.record(z.number().min(0).max(1)),
+            }),
+            // 🔧 Configurable parameters to eliminate magic numbers (REQUIRED)
+            correlationBoostFactor: z.number().min(0.1).max(2.0),
+            priceTolerancePercent: z.number().min(0.01).max(10.0),
+            signalThrottleMs: z.number().int().min(1000).max(60000),
+            correlationWindowMs: z.number().int().min(60000).max(3600000),
+            maxHistorySize: z.number().int().min(10).max(1000),
+            defaultPriority: z.number().min(1).max(10),
+            volatilityHighThreshold: z.number().min(0.01).max(0.5),
+            volatilityLowThreshold: z.number().min(0.001).max(0.1),
+            defaultLowVolatility: z.number().min(0.001).max(0.1),
+            defaultVolatilityError: z.number().min(0.01).max(0.2),
+            contextBoostHigh: z.number().min(0.05).max(0.5),
+            contextBoostLow: z.number().min(0.05).max(0.3),
+            priorityQueueHighThreshold: z.number().min(5.0).max(10.0),
+            backpressureYieldMs: z.number().int().min(1).max(100),
+            marketVolatilityWeight: z.number().min(0.1).max(1.0),
         }),
         signalCoordinator: z.object({
             maxConcurrentProcessing: z.number().int().positive(),
@@ -1158,6 +1191,26 @@ export class Config {
             highPriorityBypassThreshold: Number(
                 smConfig.highPriorityBypassThreshold
             ),
+            conflictResolution: smConfig.conflictResolution,
+            signalPriorityMatrix: smConfig.signalPriorityMatrix,
+            // 🔧 Configurable parameters to eliminate magic numbers (REQUIRED)
+            correlationBoostFactor: Number(smConfig.correlationBoostFactor),
+            priceTolerancePercent: Number(smConfig.priceTolerancePercent),
+            signalThrottleMs: Number(smConfig.signalThrottleMs),
+            correlationWindowMs: Number(smConfig.correlationWindowMs),
+            maxHistorySize: Number(smConfig.maxHistorySize),
+            defaultPriority: Number(smConfig.defaultPriority),
+            volatilityHighThreshold: Number(smConfig.volatilityHighThreshold),
+            volatilityLowThreshold: Number(smConfig.volatilityLowThreshold),
+            defaultLowVolatility: Number(smConfig.defaultLowVolatility),
+            defaultVolatilityError: Number(smConfig.defaultVolatilityError),
+            contextBoostHigh: Number(smConfig.contextBoostHigh),
+            contextBoostLow: Number(smConfig.contextBoostLow),
+            priorityQueueHighThreshold: Number(
+                smConfig.priorityQueueHighThreshold
+            ),
+            backpressureYieldMs: Number(smConfig.backpressureYieldMs),
+            marketVolatilityWeight: Number(smConfig.marketVolatilityWeight),
         };
     }
 

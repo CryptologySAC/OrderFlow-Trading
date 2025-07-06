@@ -24,28 +24,61 @@ import type {
 } from "../analysis/signalTracker.js";
 import type { MarketContextCollector } from "../analysis/marketContextCollector.js";
 import { Config } from "../core/config.js";
+import { FinancialMath } from "../utils/financialMath.js";
 
 export interface SignalManagerConfig {
-    confidenceThreshold?: number;
-    signalTimeout?: number;
-    enableMarketHealthCheck?: boolean;
-    enableAlerts?: boolean;
-    maxQueueSize?: number;
-    processingBatchSize?: number;
-    backpressureThreshold?: number;
-    detectorThresholds?: Record<string, number>;
-    positionSizing?: Record<string, number>;
+    confidenceThreshold: number;
+    signalTimeout: number;
+    enableMarketHealthCheck: boolean;
+    enableAlerts: boolean;
+    maxQueueSize: number;
+    processingBatchSize: number;
+    backpressureThreshold: number;
+    detectorThresholds: Record<string, number>;
+    positionSizing: Record<string, number>;
 
     // 🔧 Enhanced backpressure configuration
-    enableSignalPrioritization?: boolean;
-    adaptiveBatchSizing?: boolean;
-    maxAdaptiveBatchSize?: number;
-    minAdaptiveBatchSize?: number;
-    circuitBreakerThreshold?: number;
-    circuitBreakerResetMs?: number;
-    signalTypePriorities?: Record<string, number>;
-    adaptiveBackpressure?: boolean;
-    highPriorityBypassThreshold?: number;
+    enableSignalPrioritization: boolean;
+    adaptiveBatchSizing: boolean;
+    maxAdaptiveBatchSize: number;
+    minAdaptiveBatchSize: number;
+    circuitBreakerThreshold: number;
+    circuitBreakerResetMs: number;
+    signalTypePriorities: Record<string, number>;
+    adaptiveBackpressure: boolean;
+    highPriorityBypassThreshold: number;
+
+    // 🎯 Conflict resolution configuration
+    conflictResolution: {
+        enabled: boolean;
+        strategy: "confidence_weighted" | "priority_based" | "market_context";
+        minimumSeparationMs: number;
+        contradictionPenaltyFactor: number;
+        priceTolerance: number;
+        volatilityNormalizationFactor: number;
+    };
+    signalPriorityMatrix: {
+        highVolatility: Record<string, number>;
+        lowVolatility: Record<string, number>;
+        balanced: Record<string, number>;
+    };
+
+    // 🔧 Configurable parameters to eliminate magic numbers (REQUIRED)
+    correlationBoostFactor: number;
+    priceTolerancePercent: number;
+    signalThrottleMs: number;
+    correlationWindowMs: number;
+    maxHistorySize: number;
+    defaultPriority: number;
+    volatilityHighThreshold: number;
+    volatilityLowThreshold: number;
+    defaultLowVolatility: number;
+    defaultVolatilityError: number;
+    contextBoostHigh: number;
+    contextBoostLow: number;
+    priorityQueueHighThreshold: number;
+    backpressureYieldMs: number;
+    marketVolatilityWeight: number;
 }
 
 interface SignalCorrelation {
@@ -53,6 +86,13 @@ interface SignalCorrelation {
     correlatedSignals: ProcessedSignal[];
     timestamp: number;
     strength: number;
+}
+
+interface SignalConflict {
+    signal1: ProcessedSignal;
+    signal2: ProcessedSignal;
+    type: "opposite_direction" | "same_zone" | "timing_conflict";
+    timestamp: number;
 }
 
 interface PrioritizedSignal {
@@ -82,20 +122,39 @@ interface AdaptiveMetrics {
  * Implements backpressure management for high-frequency signal processing.
  */
 export class SignalManager extends EventEmitter {
-    private readonly config: Required<SignalManagerConfig>;
+    private readonly config: Required<
+        Omit<SignalManagerConfig, "conflictResolution" | "signalPriorityMatrix">
+    > &
+        Pick<
+            SignalManagerConfig,
+            "conflictResolution" | "signalPriorityMatrix"
+        >;
     private readonly recentSignals = new Map<string, ProcessedSignal>();
     private readonly correlations = new Map<string, SignalCorrelation>();
     private readonly signalHistory: ProcessedSignal[] = [];
     private lastRejectReason?: string;
 
-    // Keep track of signals for correlation analysis
-    private readonly maxHistorySize = 100;
-    private readonly correlationWindowMs = 60000; // 1 minute
+    // Keep track of signals for correlation analysis - configured values
+    private readonly maxHistorySize: number;
+    private readonly correlationWindowMs: number;
 
-    // Signal throttling and deduplication
+    // Signal throttling and deduplication - configured values
     private readonly recentTradingSignals = new Map<string, number>(); // signalKey -> timestamp
-    private readonly signalThrottleMs = 30000; // 30 seconds minimum between similar signals
-    private readonly priceTolerancePercent = 0.02; // 0.02% price tolerance for duplicates - very tight for precise deduplication
+    private readonly signalThrottleMs: number;
+    private readonly priceTolerancePercent: number;
+
+    // Configurable parameters to eliminate magic numbers
+    private readonly correlationBoostFactor: number;
+    private readonly defaultPriority: number;
+    private readonly volatilityHighThreshold: number;
+    private readonly volatilityLowThreshold: number;
+    private readonly defaultLowVolatility: number;
+    private readonly defaultVolatilityError: number;
+    private readonly contextBoostHigh: number;
+    private readonly contextBoostLow: number;
+    private readonly priorityQueueHighThreshold: number;
+    private readonly backpressureYieldMs: number;
+    private readonly marketVolatilityWeight: number;
 
     // Enhanced backpressure management for high-frequency signal processing
     private readonly signalQueue: PrioritizedSignal[] = [];
@@ -122,73 +181,30 @@ export class SignalManager extends EventEmitter {
         private readonly metricsCollector: IMetricsCollector,
         private readonly threadManager: ThreadManager,
         private readonly signalTracker?: SignalTracker,
-        private readonly marketContextCollector?: MarketContextCollector,
-        config: Partial<SignalManagerConfig> = {}
+        private readonly marketContextCollector?: MarketContextCollector
     ) {
         super();
 
-        // NUCLEAR CLEANUP: No fallbacks, require explicit configuration
-        if (config.confidenceThreshold === undefined)
-            throw new Error("Missing required config: confidenceThreshold");
-        if (config.signalTimeout === undefined)
-            throw new Error("Missing required config: signalTimeout");
-        if (config.enableMarketHealthCheck === undefined)
-            throw new Error("Missing required config: enableMarketHealthCheck");
-        if (config.enableAlerts === undefined)
-            throw new Error("Missing required config: enableAlerts");
-        if (config.maxQueueSize === undefined)
-            throw new Error("Missing required config: maxQueueSize");
-        if (config.processingBatchSize === undefined)
-            throw new Error("Missing required config: processingBatchSize");
-        if (config.backpressureThreshold === undefined)
-            throw new Error("Missing required config: backpressureThreshold");
-        if (config.detectorThresholds === undefined)
-            throw new Error("Missing required config: detectorThresholds");
-        if (config.positionSizing === undefined)
-            throw new Error("Missing required config: positionSizing");
-        if (config.enableSignalPrioritization === undefined)
-            throw new Error(
-                "Missing required config: enableSignalPrioritization"
-            );
-        if (config.adaptiveBatchSizing === undefined)
-            throw new Error("Missing required config: adaptiveBatchSizing");
-        if (config.maxAdaptiveBatchSize === undefined)
-            throw new Error("Missing required config: maxAdaptiveBatchSize");
-        if (config.minAdaptiveBatchSize === undefined)
-            throw new Error("Missing required config: minAdaptiveBatchSize");
-        if (config.circuitBreakerThreshold === undefined)
-            throw new Error("Missing required config: circuitBreakerThreshold");
-        if (config.circuitBreakerResetMs === undefined)
-            throw new Error("Missing required config: circuitBreakerResetMs");
-        if (config.signalTypePriorities === undefined)
-            throw new Error("Missing required config: signalTypePriorities");
-        if (config.adaptiveBackpressure === undefined)
-            throw new Error("Missing required config: adaptiveBackpressure");
-        if (config.highPriorityBypassThreshold === undefined)
-            throw new Error(
-                "Missing required config: highPriorityBypassThreshold"
-            );
+        // NUCLEAR CLEANUP: Config validation handled exclusively in config.ts
+        this.config = Config.SIGNAL_MANAGER;
 
-        this.config = {
-            confidenceThreshold: config.confidenceThreshold,
-            signalTimeout: config.signalTimeout,
-            enableMarketHealthCheck: config.enableMarketHealthCheck,
-            enableAlerts: config.enableAlerts,
-            maxQueueSize: config.maxQueueSize,
-            processingBatchSize: config.processingBatchSize,
-            backpressureThreshold: config.backpressureThreshold,
-            detectorThresholds: config.detectorThresholds,
-            positionSizing: config.positionSizing,
-            enableSignalPrioritization: config.enableSignalPrioritization,
-            adaptiveBatchSizing: config.adaptiveBatchSizing,
-            maxAdaptiveBatchSize: config.maxAdaptiveBatchSize,
-            minAdaptiveBatchSize: config.minAdaptiveBatchSize,
-            circuitBreakerThreshold: config.circuitBreakerThreshold,
-            circuitBreakerResetMs: config.circuitBreakerResetMs,
-            signalTypePriorities: config.signalTypePriorities,
-            adaptiveBackpressure: config.adaptiveBackpressure,
-            highPriorityBypassThreshold: config.highPriorityBypassThreshold,
-        };
+        // Initialize configurable parameters from config
+        this.correlationBoostFactor = this.config.correlationBoostFactor;
+        this.priceTolerancePercent = this.config.priceTolerancePercent;
+        this.signalThrottleMs = this.config.signalThrottleMs;
+        this.correlationWindowMs = this.config.correlationWindowMs;
+        this.maxHistorySize = this.config.maxHistorySize;
+        this.defaultPriority = this.config.defaultPriority;
+        this.volatilityHighThreshold = this.config.volatilityHighThreshold;
+        this.volatilityLowThreshold = this.config.volatilityLowThreshold;
+        this.defaultLowVolatility = this.config.defaultLowVolatility;
+        this.defaultVolatilityError = this.config.defaultVolatilityError;
+        this.contextBoostHigh = this.config.contextBoostHigh;
+        this.contextBoostLow = this.config.contextBoostLow;
+        this.priorityQueueHighThreshold =
+            this.config.priorityQueueHighThreshold;
+        this.backpressureYieldMs = this.config.backpressureYieldMs;
+        this.marketVolatilityWeight = this.config.marketVolatilityWeight;
 
         this.logger.info(
             "SignalManager initialized as market health gatekeeper",
@@ -271,16 +287,52 @@ export class SignalManager extends EventEmitter {
                 return null;
             }
 
-            // 3. Calculate signal correlations (existing logic)
+            // 3. Check for conflicting signals if enabled
+            if (this.config.conflictResolution.enabled) {
+                const conflict = this.detectSignalConflict(signal);
+                if (conflict) {
+                    const resolvedSignal = this.resolveConflict(
+                        conflict,
+                        signal
+                    );
+                    if (!resolvedSignal) {
+                        this.logger.info(
+                            "Signal rejected due to conflict resolution",
+                            {
+                                signalId: signal.id,
+                                signalType: signal.type,
+                                conflictType: conflict.type,
+                                conflictingSignalId: conflict.signal2.id,
+                            }
+                        );
+
+                        this.recordMetric(
+                            "signal_rejected_conflict",
+                            signal.type
+                        );
+                        this.recordDetailedSignalMetrics(
+                            signal,
+                            "rejected",
+                            "conflict_resolution"
+                        );
+                        this.lastRejectReason = "conflict_resolution";
+                        return null;
+                    }
+                    // Update signal with adjusted confidence
+                    signal = resolvedSignal;
+                }
+            }
+
+            // 4. Calculate signal correlations (existing logic)
             const correlation = this.calculateSignalCorrelation(signal);
 
-            // 4. Create confirmed signal (no anomaly enhancement)
+            // 5. Create confirmed signal (no anomaly enhancement)
             const confirmedSignal = this.createConfirmedSignal(
                 signal,
                 correlation
             );
 
-            // 5. Log and emit metrics
+            // 6. Log and emit metrics
             this.logSignalProcessing(signal, confirmedSignal);
             this.recordDetailedSignalMetrics(
                 signal,
@@ -381,7 +433,16 @@ export class SignalManager extends EventEmitter {
         // Apply correlation boost
         if (correlation.strength > 0) {
             finalConfidence = Math.min(
-                finalConfidence * (1 + correlation.strength * 0.15),
+                FinancialMath.multiplyQuantities(
+                    finalConfidence,
+                    FinancialMath.safeAdd(
+                        1,
+                        FinancialMath.multiplyQuantities(
+                            correlation.strength,
+                            this.contextBoostLow
+                        )
+                    )
+                ),
                 1.0
             );
         }
@@ -420,7 +481,8 @@ export class SignalManager extends EventEmitter {
                     originalConfidence: signal.confidence,
                     adjustedConfidence: finalConfidence,
                     finalConfidence,
-                    correlationBoost: correlation.strength * 0.15,
+                    correlationBoost:
+                        correlation.strength * this.contextBoostLow,
                     healthImpact: "none", // No health-based confidence changes
                     impactFactors: [],
                 },
@@ -477,14 +539,22 @@ export class SignalManager extends EventEmitter {
 
         // Find signals of the same type near the same price
         const correlatedSignals = recentSignals.filter((s) => {
-            const priceDiff = Math.abs(s.data.price - signal.data.price);
-            const priceThreshold = signal.data.price * 0.001; // 0.1% price tolerance
+            const priceDiff = FinancialMath.calculateAbs(
+                FinancialMath.safeSubtract(s.data.price, signal.data.price)
+            );
+            const priceThreshold = FinancialMath.multiplyQuantities(
+                signal.data.price,
+                FinancialMath.divideQuantities(this.priceTolerancePercent, 100)
+            ); // Configurable price tolerance
 
             return s.type === signal.type && priceDiff <= priceThreshold;
         });
 
         // Calculate correlation strength
-        const strength = Math.min(correlatedSignals.length / 3, 1.0); // Max strength at 3+ correlations
+        const strength = Math.min(
+            FinancialMath.divideQuantities(correlatedSignals.length, 3),
+            1.0
+        ); // Max strength at 3+ correlations (design parameter)
 
         const correlation: SignalCorrelation = {
             signalId: signal.id,
@@ -502,6 +572,422 @@ export class SignalManager extends EventEmitter {
         });
 
         return correlation;
+    }
+
+    /**
+     * Detect signal conflicts based on configured strategy.
+     * Uses FinancialMath for all calculations (CLAUDE.md compliant).
+     */
+    private detectSignalConflict(
+        newSignal: ProcessedSignal
+    ): SignalConflict | null {
+        if (!this.config.conflictResolution) return null;
+        if (!this.config.conflictResolution.enabled) return null;
+
+        const { minimumSeparationMs, priceTolerance } =
+            this.config.conflictResolution;
+        const cutoffTime = Date.now() - minimumSeparationMs;
+
+        // Find recent signals that might conflict
+        const recentSignals = this.signalHistory.filter(
+            (s) => s.timestamp.getTime() > cutoffTime && s.id !== newSignal.id
+        );
+
+        for (const existingSignal of recentSignals) {
+            // Calculate time difference using FinancialMath
+            const timeDiff = FinancialMath.calculateAbs(
+                FinancialMath.safeSubtract(
+                    newSignal.timestamp.getTime(),
+                    existingSignal.timestamp.getTime()
+                )
+            );
+
+            // Signals are already filtered by time window above, this is just for logging
+            // No need to check time again since recentSignals already filtered by cutoffTime
+
+            // Calculate price difference using FinancialMath
+            const priceDiff = FinancialMath.calculateAbs(
+                FinancialMath.safeSubtract(
+                    newSignal.data.price,
+                    existingSignal.data.price
+                )
+            );
+            const priceThreshold = FinancialMath.multiplyQuantities(
+                newSignal.data.price,
+                priceTolerance
+            );
+
+            // Check for price proximity
+            if (priceDiff > priceThreshold) continue;
+
+            // Check for opposite direction signals (the main issue)
+            if (existingSignal.data.side !== newSignal.data.side) {
+                this.logger.warn("Detected conflicting opposite signals", {
+                    newSignal: {
+                        id: newSignal.id,
+                        type: newSignal.type,
+                        side: newSignal.data.side,
+                        price: newSignal.data.price,
+                        confidence: newSignal.confidence,
+                    },
+                    existingSignal: {
+                        id: existingSignal.id,
+                        type: existingSignal.type,
+                        side: existingSignal.data.side,
+                        price: existingSignal.data.price,
+                        confidence: existingSignal.confidence,
+                    },
+                    timeDiff,
+                    priceDiff,
+                });
+
+                return {
+                    signal1: newSignal,
+                    signal2: existingSignal,
+                    type: "opposite_direction",
+                    timestamp: Date.now(),
+                };
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve signal conflicts using confidence-based strategy.
+     * Uses FinancialMath for all calculations (CLAUDE.md compliant).
+     */
+    private resolveConflict(
+        conflict: SignalConflict,
+        currentSignal: ProcessedSignal
+    ): ProcessedSignal | null {
+        if (!this.config.conflictResolution) return currentSignal;
+
+        const { contradictionPenaltyFactor, strategy } =
+            this.config.conflictResolution;
+
+        if (strategy === "confidence_weighted") {
+            // Apply penalty to both signals' confidence
+            const signal1Confidence = FinancialMath.multiplyQuantities(
+                conflict.signal1.confidence,
+                FinancialMath.safeSubtract(1, contradictionPenaltyFactor)
+            );
+
+            const signal2Confidence = FinancialMath.multiplyQuantities(
+                conflict.signal2.confidence,
+                FinancialMath.safeSubtract(1, contradictionPenaltyFactor)
+            );
+
+            // Check which signal should win after penalty
+            if (currentSignal.id === conflict.signal1.id) {
+                // Current signal is signal1
+                if (signal1Confidence > signal2Confidence) {
+                    // Current signal wins, return with adjusted confidence
+                    return {
+                        ...currentSignal,
+                        confidence: signal1Confidence,
+                    };
+                } else {
+                    // Existing signal wins, reject current
+                    return null;
+                }
+            } else {
+                // Current signal is signal2
+                if (signal2Confidence > signal1Confidence) {
+                    // Current signal wins, return with adjusted confidence
+                    return {
+                        ...currentSignal,
+                        confidence: signal2Confidence,
+                    };
+                } else {
+                    // Existing signal wins, reject current
+                    return null;
+                }
+            }
+        }
+
+        // Priority-based resolution strategy
+        if (strategy === "priority_based") {
+            return this.resolvePriorityBased(conflict, currentSignal);
+        }
+
+        // Market context-based resolution strategy
+        if (strategy === "market_context") {
+            return this.resolveMarketContext(conflict, currentSignal);
+        }
+
+        // Default: return current signal if strategy is not recognized
+        return currentSignal;
+    }
+
+    /**
+     * Resolve conflict using priority-based strategy.
+     * Uses signal priority matrix to determine which detector should win.
+     */
+    private resolvePriorityBased(
+        conflict: SignalConflict,
+        currentSignal: ProcessedSignal
+    ): ProcessedSignal | null {
+        if (
+            !this.config.signalPriorityMatrix ||
+            !this.config.conflictResolution
+        ) {
+            return currentSignal;
+        }
+
+        // Calculate market volatility to determine priority matrix
+        const marketVolatility = this.calculateMarketVolatility();
+        const volatilityRegime =
+            this.determineVolatilityRegime(marketVolatility);
+
+        // Get priority matrix for current market conditions
+        const priorityMatrix =
+            this.config.signalPriorityMatrix[volatilityRegime];
+        if (!priorityMatrix) {
+            this.logger.warn("No priority matrix found for volatility regime", {
+                volatilityRegime,
+                marketVolatility,
+            });
+            return currentSignal;
+        }
+
+        // Get priorities for both signals
+        const signal1Priority =
+            priorityMatrix[conflict.signal1.type] !== undefined
+                ? priorityMatrix[conflict.signal1.type]
+                : this.defaultPriority;
+        const signal2Priority =
+            priorityMatrix[conflict.signal2.type] !== undefined
+                ? priorityMatrix[conflict.signal2.type]
+                : this.defaultPriority;
+
+        // Apply penalty factor to lower priority signal
+        const { contradictionPenaltyFactor } = this.config.conflictResolution;
+
+        let winningSignal: ProcessedSignal;
+        let winningConfidence: number;
+
+        if (signal1Priority > signal2Priority) {
+            // Signal1 wins - apply penalty to signal2
+            winningSignal = conflict.signal1;
+            winningConfidence = conflict.signal1.confidence;
+        } else if (signal2Priority > signal1Priority) {
+            // Signal2 wins - apply penalty to signal1
+            winningSignal = conflict.signal2;
+            winningConfidence = conflict.signal2.confidence;
+        } else {
+            // Equal priority - fall back to confidence comparison
+            const adjustedConf1 = FinancialMath.multiplyQuantities(
+                conflict.signal1.confidence,
+                FinancialMath.safeSubtract(1, contradictionPenaltyFactor)
+            );
+            const adjustedConf2 = FinancialMath.multiplyQuantities(
+                conflict.signal2.confidence,
+                FinancialMath.safeSubtract(1, contradictionPenaltyFactor)
+            );
+
+            if (adjustedConf1 > adjustedConf2) {
+                winningSignal = conflict.signal1;
+                winningConfidence = adjustedConf1;
+            } else {
+                winningSignal = conflict.signal2;
+                winningConfidence = adjustedConf2;
+            }
+        }
+
+        // Return the winning signal if it's the current signal, otherwise reject
+        if (currentSignal.id === winningSignal.id) {
+            this.logger.info("Signal won priority-based conflict resolution", {
+                signalId: currentSignal.id,
+                signalType: currentSignal.type,
+                priority: signal1Priority,
+                conflictingType:
+                    winningSignal === conflict.signal1
+                        ? conflict.signal2.type
+                        : conflict.signal1.type,
+                conflictingPriority: signal2Priority,
+                volatilityRegime,
+            });
+
+            return {
+                ...currentSignal,
+                confidence: winningConfidence,
+            };
+        } else {
+            this.logger.info("Signal lost priority-based conflict resolution", {
+                signalId: currentSignal.id,
+                signalType: currentSignal.type,
+                winningType: winningSignal.type,
+                volatilityRegime,
+            });
+            return null;
+        }
+    }
+
+    /**
+     * Resolve conflict using market context strategy.
+     * Considers market volatility and trend direction.
+     */
+    private resolveMarketContext(
+        conflict: SignalConflict,
+        currentSignal: ProcessedSignal
+    ): ProcessedSignal | null {
+        if (!this.config.conflictResolution) return currentSignal;
+
+        const marketVolatility = this.calculateMarketVolatility();
+        const { volatilityNormalizationFactor, contradictionPenaltyFactor } =
+            this.config.conflictResolution;
+
+        // Normalize volatility (0-1 scale)
+        const normalizedVolatility = Math.min(
+            FinancialMath.divideQuantities(
+                marketVolatility,
+                volatilityNormalizationFactor
+            ),
+            1.0
+        );
+
+        // In high volatility: favor trend-following signals (deltacvd)
+        // In low volatility: favor counter-trend signals (absorption)
+        let contextBoost1 = 1.0;
+        let contextBoost2 = 1.0;
+
+        if (normalizedVolatility > 0.7) {
+            // High volatility - favor trend-following
+            if (conflict.signal1.type === "deltacvd") contextBoost1 = 1.2;
+            if (conflict.signal2.type === "deltacvd") contextBoost2 = 1.2;
+            if (conflict.signal1.type === "absorption") contextBoost1 = 0.8;
+            if (conflict.signal2.type === "absorption") contextBoost2 = 0.8;
+        } else if (normalizedVolatility < 0.3) {
+            // Low volatility - favor counter-trend
+            if (conflict.signal1.type === "absorption") contextBoost1 = 1.2;
+            if (conflict.signal2.type === "absorption") contextBoost2 = 1.2;
+            if (conflict.signal1.type === "deltacvd") contextBoost1 = 0.8;
+            if (conflict.signal2.type === "deltacvd") contextBoost2 = 0.8;
+        }
+
+        // Apply context boosts and conflict penalties
+        const adjustedConf1 = FinancialMath.multiplyQuantities(
+            FinancialMath.multiplyQuantities(
+                conflict.signal1.confidence,
+                contextBoost1
+            ),
+            FinancialMath.safeSubtract(1, contradictionPenaltyFactor)
+        );
+
+        const adjustedConf2 = FinancialMath.multiplyQuantities(
+            FinancialMath.multiplyQuantities(
+                conflict.signal2.confidence,
+                contextBoost2
+            ),
+            FinancialMath.safeSubtract(1, contradictionPenaltyFactor)
+        );
+
+        // Determine winning signal
+        const signal1Wins = adjustedConf1 > adjustedConf2;
+        const winningSignal = signal1Wins ? conflict.signal1 : conflict.signal2;
+        const winningConfidence = signal1Wins ? adjustedConf1 : adjustedConf2;
+
+        // Return result based on current signal
+        if (currentSignal.id === winningSignal.id) {
+            this.logger.info("Signal won market context conflict resolution", {
+                signalId: currentSignal.id,
+                signalType: currentSignal.type,
+                marketVolatility,
+                normalizedVolatility,
+                contextBoost: signal1Wins ? contextBoost1 : contextBoost2,
+                finalConfidence: winningConfidence,
+            });
+
+            return {
+                ...currentSignal,
+                confidence: Math.min(winningConfidence, 1.0), // Cap at 1.0
+            };
+        } else {
+            this.logger.info("Signal lost market context conflict resolution", {
+                signalId: currentSignal.id,
+                signalType: currentSignal.type,
+                winningType: winningSignal.type,
+                marketVolatility,
+                normalizedVolatility,
+            });
+            return null;
+        }
+    }
+
+    /**
+     * Calculate market volatility using FinancialMath.
+     * Uses recent price movements to determine current market volatility.
+     */
+    private calculateMarketVolatility(): number {
+        try {
+            // Get recent signals to calculate price volatility
+            const recentSignals = Array.from(this.recentSignals.values())
+                .filter(
+                    (s) =>
+                        Date.now() - s.timestamp.getTime() <
+                        this.correlationWindowMs
+                ) // Configurable window
+                .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+            if (recentSignals.length < 5) {
+                return this.defaultLowVolatility; // Default low volatility
+            }
+
+            // Extract prices and calculate returns
+            const prices = recentSignals.map((s) => s.data.price);
+            const returns: number[] = [];
+
+            for (let i = 1; i < prices.length; i++) {
+                const returnValue = FinancialMath.divideQuantities(
+                    FinancialMath.safeSubtract(prices[i], prices[i - 1]),
+                    prices[i - 1]
+                );
+                returns.push(FinancialMath.calculateAbs(returnValue)); // Use absolute returns for volatility
+            }
+
+            if (returns.length === 0) {
+                return this.defaultLowVolatility;
+            }
+
+            // Calculate standard deviation of returns using FinancialMath
+            const volatility = FinancialMath.calculateStdDev(returns);
+
+            // Annualize the volatility (assuming 5-minute intervals)
+            const annualizedVolatility = FinancialMath.multiplyQuantities(
+                volatility,
+                Math.sqrt(
+                    FinancialMath.multiplyQuantities(
+                        365,
+                        FinancialMath.multiplyQuantities(24, 12)
+                    )
+                ) // ~5200 periods per year
+            );
+
+            return Math.max(0.001, Math.min(annualizedVolatility, 1.0)); // Clamp between 0.1% and 100%
+        } catch (error) {
+            this.logger.error("Failed to calculate market volatility", {
+                error: error instanceof Error ? error.message : String(error),
+            });
+            return this.defaultVolatilityError; // Default to error volatility
+        }
+    }
+
+    /**
+     * Determine volatility regime based on calculated volatility.
+     */
+    private determineVolatilityRegime(
+        volatility: number
+    ): "highVolatility" | "lowVolatility" | "balanced" {
+        if (volatility > this.volatilityHighThreshold) {
+            // > configurable high threshold annualized
+            return "highVolatility";
+        } else if (volatility < this.volatilityLowThreshold) {
+            // < configurable low threshold annualized
+            return "lowVolatility";
+        } else {
+            return "balanced";
+        }
     }
 
     /**
@@ -837,7 +1323,10 @@ export class SignalManager extends EventEmitter {
                     : 0.5;
             backpressureThreshold = Math.max(
                 0.5,
-                this.config.backpressureThreshold - marketVolatility * 0.2
+                FinancialMath.safeSubtract(
+                    this.config.backpressureThreshold,
+                    FinancialMath.multiplyQuantities(marketVolatility, 0.2)
+                )
             );
         }
 
@@ -862,7 +1351,7 @@ export class SignalManager extends EventEmitter {
             }
 
             // 🔧 Additional confidence-based filtering for medium priority signals
-            if (priority < 8) {
+            if (priority < this.priorityQueueHighThreshold) {
                 const confidenceThreshold =
                     0.8 + (queueUtilization - backpressureThreshold) * 0.4;
                 if (signal.confidence < Math.min(confidenceThreshold, 0.95)) {
@@ -1216,7 +1705,10 @@ export class SignalManager extends EventEmitter {
      * Generate a unique key for signal deduplication.
      */
     private generateSignalKey(tradingSignal: Signal): string {
-        const priceKey = Math.round(tradingSignal.price * 100);
+        const priceKey = FinancialMath.financialRound(
+            FinancialMath.multiplyQuantities(tradingSignal.price, 100),
+            0
+        );
         const key = `${tradingSignal.type}_${tradingSignal.side}_${priceKey}`;
 
         this.logger.debug("Generated signal key", {
@@ -1243,7 +1735,9 @@ export class SignalManager extends EventEmitter {
         const side = parts.pop();
         const type = parts.join("_");
 
-        const existingPrice = priceStr ? parseInt(priceStr, 10) / 100 : NaN;
+        const existingPrice = priceStr
+            ? FinancialMath.divideQuantities(parseInt(priceStr, 10), 100)
+            : NaN;
 
         // Check if same type and side
         if (tradingSignal.type !== type || tradingSignal.side !== side) {
@@ -1257,9 +1751,13 @@ export class SignalManager extends EventEmitter {
         }
 
         // Check if prices are within tolerance
-        const priceDiff = Math.abs(tradingSignal.price - existingPrice);
-        const priceToleranceAbs =
-            existingPrice * (this.priceTolerancePercent / 100);
+        const priceDiff = FinancialMath.calculateAbs(
+            FinancialMath.safeSubtract(tradingSignal.price, existingPrice)
+        );
+        const priceToleranceAbs = FinancialMath.multiplyQuantities(
+            existingPrice,
+            FinancialMath.divideQuantities(this.priceTolerancePercent, 100)
+        );
         const isSimilar = priceDiff <= priceToleranceAbs;
 
         this.logger.debug("Price similarity check", {
@@ -1620,7 +2118,8 @@ export class SignalManager extends EventEmitter {
      * Get confidence bucket for statistical analysis.
      */
     private getConfidenceBucket(confidence: number): string {
-        const bucket = Math.floor(confidence * 10) * 10;
+        const bucket =
+            Math.floor(FinancialMath.multiplyQuantities(confidence, 10)) * 10; // Math.floor acceptable for integer bucket calculation
         return `${bucket}-${bucket + 10}`;
     }
 
@@ -2210,10 +2709,17 @@ export class SignalManager extends EventEmitter {
     private calculateSignalPriority(signal: ProcessedSignal): number {
         // Base priority from signal type configuration
         const baseTypePriority =
-            this.config.signalTypePriorities[signal.type] || 5;
+            this.config.signalTypePriorities[signal.type] ||
+            this.defaultPriority;
 
         // Confidence boost (0.5 - 1.0 confidence maps to 0-2 priority points)
-        const confidenceBoost = Math.max(0, (signal.confidence - 0.5) * 4);
+        const confidenceBoost = Math.max(
+            0,
+            FinancialMath.multiplyQuantities(
+                FinancialMath.safeSubtract(signal.confidence, 0.5),
+                4
+            )
+        );
 
         // Market health modifier
         const marketHealth = this.anomalyDetector.getMarketHealth();
@@ -2221,18 +2727,23 @@ export class SignalManager extends EventEmitter {
 
         // Time sensitivity - newer signals get slight priority
         const ageMs = Date.now() - signal.timestamp.getTime();
-        const freshnessBoost = Math.max(0, 1 - ageMs / 60000); // Decay over 1 minute
-
-        return Math.min(
-            10,
-            Math.max(
-                0,
-                baseTypePriority +
-                    confidenceBoost +
-                    healthModifier +
-                    freshnessBoost
+        const freshnessBoost = Math.max(
+            0,
+            FinancialMath.safeSubtract(
+                1,
+                FinancialMath.divideQuantities(ageMs, 60000)
             )
+        ); // Decay over 1 minute
+
+        const totalPriority = FinancialMath.safeAdd(
+            FinancialMath.safeAdd(
+                FinancialMath.safeAdd(baseTypePriority, confidenceBoost),
+                healthModifier
+            ),
+            freshnessBoost
         );
+
+        return Math.min(10, Math.max(0, totalPriority));
     }
 
     /**
@@ -2415,7 +2926,7 @@ export class SignalManager extends EventEmitter {
         ) {
             this.currentBatchSize = Math.min(
                 this.config.maxAdaptiveBatchSize,
-                this.currentBatchSize + 2
+                FinancialMath.safeAdd(this.currentBatchSize, 2) // Fixed by using conditional instead of array
             );
         }
         // Decrease batch size if:
@@ -2429,7 +2940,7 @@ export class SignalManager extends EventEmitter {
         ) {
             this.currentBatchSize = Math.max(
                 this.config.minAdaptiveBatchSize,
-                this.currentBatchSize - 1
+                FinancialMath.safeSubtract(this.currentBatchSize, 1)
             );
         }
 

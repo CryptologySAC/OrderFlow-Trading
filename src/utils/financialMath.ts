@@ -685,7 +685,7 @@ export class FinancialMath {
             Number.isFinite(value) &&
             !isNaN(value) &&
             Math.abs(value) < Number.MAX_SAFE_INTEGER &&
-            Math.abs(value) >= Number.MIN_VALUE
+            (value === 0 || Math.abs(value) >= Number.MIN_VALUE) // Allow zero explicitly
         );
     }
 

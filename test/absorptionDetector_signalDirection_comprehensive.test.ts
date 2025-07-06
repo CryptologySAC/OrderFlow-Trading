@@ -8,7 +8,7 @@ import {
 import { OrderFlowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import { Config } from "../src/core/config.js";
 import { createMockLogger } from "../__mocks__/src/infrastructure/loggerInterface.js";
-import mockMetricsCollector from "../__mocks__/src/infrastructure/metricsCollector.js";
+import { MetricsCollector } from "../__mocks__/src/infrastructure/metricsCollector.js";
 
 /**
  * COMPREHENSIVE ABSORPTION DETECTOR SIGNAL DIRECTION VERIFICATION
@@ -54,28 +54,110 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
         mockPreprocessor = {
             findZonesNearPrice: vi.fn().mockReturnValue([
                 {
-                    id: "test-zone",
-                    price: 89.0,
+                    zoneId: "test-zone",
+                    priceLevel: 89.0,
+                    tickSize: 0.01,
                     aggressiveVolume: 100,
                     passiveVolume: 300,
                     aggressiveBuyVolume: 50,
                     aggressiveSellVolume: 50,
-                    passiveBuyVolume: 150,
-                    passiveSellVolume: 150,
+                    passiveBidVolume: 150,
+                    passiveAskVolume: 150,
                     tradeCount: 10,
-                    lastUpdate: Date.now(),
                     timespan: 60000,
-                    strength: 0.8,
+                    boundaries: {
+                        min: 88.975,
+                        max: 89.025,
+                    },
+                    lastUpdate: Date.now(),
+                    volumeWeightedPrice: 89.0,
                 } as ZoneSnapshot,
             ]),
         } as any;
 
-        // Create detector with test configuration
+        // Create detector with production configuration (same as marketRealistic test)
         const testConfig = {
-            ...Config.ABSORPTION_DETECTOR_ENHANCED,
             minAggVolume: 50,
+            windowMs: 60000,
+            eventCooldownMs: 15000,
+            minInitialMoveTicks: 4,
+            confirmationTimeoutMs: 60000,
+            maxRevisitTicks: 5,
             absorptionThreshold: 0.6,
-            absorptionRatioThreshold: 0.6,
+            minPassiveMultiplier: 1.2,
+            maxAbsorptionRatio: 0.75,
+            strongAbsorptionRatio: 0.6,
+            moderateAbsorptionRatio: 0.8,
+            weakAbsorptionRatio: 1,
+            priceEfficiencyThreshold: 0.05,
+            spreadImpactThreshold: 0.003,
+            velocityIncreaseThreshold: 1.5,
+            significantChangeThreshold: 0.1,
+            dominantSideAnalysisWindowMs: 45000,
+            dominantSideFallbackTradeCount: 10,
+            dominantSideMinTradesRequired: 3,
+            dominantSideTemporalWeighting: true,
+            dominantSideWeightDecayFactor: 0.3,
+            features: {
+                adaptiveZone: true,
+                passiveHistory: true,
+                multiZone: false,
+                liquidityGradient: true,
+                absorptionVelocity: true,
+                layeredAbsorption: true,
+                spreadImpact: true,
+            },
+            useStandardizedZones: true,
+            institutionalVolumeThreshold: 50,
+            institutionalVolumeRatioThreshold: 0.6,
+            volumeNormalizationThreshold: 200,
+            absorptionRatioNormalization: 3,
+            highConfidenceThreshold: 0.7,
+            lowConfidenceReduction: 0.7,
+            minAbsorptionScore: 0.6,
+            patternVarianceReduction: 2,
+            whaleActivityMultiplier: 2,
+            maxZoneCountForScoring: 3,
+            confidenceBoostReduction: 0.5,
+            distanceWeight: 0.4,
+            volumeWeight: 0.35,
+            absorptionWeight: 0.25,
+            minConfluenceScore: 0.6,
+            volumeConcentrationWeight: 0.15,
+            patternConsistencyWeight: 0.1,
+            volumeBoostCap: 0.25,
+            volumeBoostMultiplier: 0.25,
+            passiveAbsorptionThreshold: 0.6,
+            aggressiveDistributionThreshold: 0.6,
+            patternDifferenceThreshold: 0.1,
+            minVolumeForRatio: 1,
+            enableInstitutionalVolumeFilter: true,
+            institutionalVolumeBoost: 0.1,
+            enhancementMode: "production",
+            minEnhancedConfidenceThreshold: 0.3,
+            liquidityGradientRange: 5,
+            recentEventsNormalizer: 10,
+            contextTimeWindowMs: 300000,
+            historyMultiplier: 2,
+            refillThreshold: 1.1,
+            consistencyThreshold: 0.7,
+            passiveStrengthPeriods: 3,
+            expectedMovementScalingFactor: 10,
+            contextConfidenceBoostMultiplier: 1.5,
+            microstructureAnalysisEnabled: true,
+            microstructureVolumeWeight: 0.2,
+            microstructurePriceWeight: 0.15,
+            microstructureTimeWeight: 0.1,
+            microstructureMaxLookbackTrades: 50,
+            microstructureToxicityMultiplier: 0.3,
+            microstructureHighToxicityThreshold: 0.8,
+            microstructureLowToxicityThreshold: 0.3,
+            microstructureRiskCapMin: -0.3,
+            microstructureRiskCapMax: 0.3,
+            microstructureCoordinationBonus: 0.3,
+            microstructureConfidenceBoostMin: 0.8,
+            microstructureConfidenceBoostMax: 1.5,
+            finalConfidenceRequired: 0.6,
         };
 
         detector = new AbsorptionDetectorEnhanced(
@@ -84,7 +166,7 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
             testConfig,
             mockPreprocessor,
             createMockLogger(),
-            mockMetricsCollector
+            new MetricsCollector()
         );
     });
 
@@ -139,29 +221,43 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
             if (testIndex <= 10) {
                 // Exactly at threshold boundary
                 passiveRatio = 0.6 + (testIndex - 5) * 0.002; // 0.590 to 0.610
+            } else if (testIndex <= 15) {
+                // Below threshold
+                passiveRatio = 0.55 + (testIndex - 10) * 0.008; // 0.55 to 0.595
+            } else if (testIndex <= 20) {
+                // Equal aggressive/passive (50/50)
+                passiveRatio = 0.5;
+            } else {
+                // Zero aggressive volume edge cases
+                passiveRatio = testIndex % 2 === 0 ? 0.8 : 0.4;
+            }
+
+            const totalVolume = 200;
+            const passiveVol = Math.round(totalVolume * passiveRatio);
+            const aggressiveVol = totalVolume - passiveVol;
+
+            // Recalculate actual passive ratio after rounding to fix test expectations
+            const actualPassiveRatio = passiveVol / totalVolume;
+
+            // Determine expected signal based on ACTUAL ratio after rounding
+            if (testIndex <= 10) {
+                // Exactly at threshold boundary
                 expectedSignal =
-                    passiveRatio >= 0.6
+                    actualPassiveRatio >= 0.6
                         ? testIndex % 2 === 0
                             ? "buy"
                             : "sell"
                         : "neutral";
             } else if (testIndex <= 15) {
                 // Below threshold
-                passiveRatio = 0.55 + (testIndex - 10) * 0.008; // 0.55 to 0.595
                 expectedSignal = "neutral";
             } else if (testIndex <= 20) {
                 // Equal aggressive/passive (50/50)
-                passiveRatio = 0.5;
                 expectedSignal = "neutral";
             } else {
-                // Zero aggressive volume edge cases
-                passiveRatio = testIndex % 2 === 0 ? 0.8 : 0.4;
-                expectedSignal = "neutral"; // No aggressive flow to counter
+                // Zero aggressive volume edge cases - should be neutral since no clear absorption pattern
+                expectedSignal = "neutral"; // No clear institutional absorption pattern
             }
-
-            const totalVolume = 200;
-            const passiveVol = Math.round(totalVolume * passiveRatio);
-            const aggressiveVol = totalVolume - passiveVol;
 
             scenarios.push({
                 id: `neutral_edge_${i}`,
@@ -310,18 +406,23 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
 
         // Mock the zone data that will be returned by findZonesNearPrice
         const mockZone: ZoneSnapshot = {
-            id: `zone-${scenario.id}`,
-            price: scenario.price,
+            zoneId: `zone-${scenario.id}`,
+            priceLevel: scenario.price,
+            tickSize: 0.01,
             aggressiveVolume: scenario.aggressiveVolume,
             passiveVolume: scenario.passiveVolume,
             aggressiveBuyVolume: aggressiveBuy,
             aggressiveSellVolume: aggressiveSell,
-            passiveBuyVolume: scenario.passiveVolume / 2,
-            passiveSellVolume: scenario.passiveVolume / 2,
+            passiveBidVolume: scenario.passiveVolume / 2,
+            passiveAskVolume: scenario.passiveVolume / 2,
             tradeCount: Math.max(Math.round(totalVolume / 20), 3),
-            lastUpdate: Date.now(),
             timespan: 60000,
-            strength: scenario.passiveVolume / totalVolume,
+            boundaries: {
+                min: scenario.price - 0.025,
+                max: scenario.price + 0.025,
+            },
+            lastUpdate: Date.now(),
+            volumeWeightedPrice: scenario.price,
         };
 
         // Update mock to return our scenario-specific zone
@@ -331,7 +432,10 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
 
         const event: EnrichedTradeEvent = {
             price: scenario.price,
-            quantity: 10,
+            quantity: Math.max(
+                scenario.aggressiveVolume / Math.max(mockZone.tradeCount, 1),
+                60
+            ), // Institutional-grade trade size (above 50 LTC minimum)
             timestamp: Date.now(),
             buyerIsMaker: scenario.buyerIsMaker,
             pair: "LTCUSDT",
@@ -348,6 +452,8 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
             } as any,
             spread: 0.02,
             midPrice: scenario.price,
+            bestBid: scenario.price - 0.01,
+            bestAsk: scenario.price + 0.01,
         };
 
         return event;
