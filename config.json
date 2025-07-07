@@ -77,16 +77,16 @@
             "universalZoneConfig": {
                 "maxActiveZones": 50,
                 "zoneTimeoutMs": 1800000,
-                "minZoneVolume": 500,
+                "minZoneVolume": 100,
                 "maxZoneWidth": 0.05,
-                "minZoneStrength": 0.7,
-                "completionThreshold": 0.8,
+                "minZoneStrength": 0.5,
+                "completionThreshold": 0.6,
                 "strengthChangeThreshold": 0.15,
-                "minCandidateDuration": 300000,
+                "minCandidateDuration": 180000,
                 "maxPriceDeviation": 0.02,
-                "minTradeCount": 50,
-                "minBuyRatio": 0.65,
-                "minSellRatio": 0.65,
+                "minTradeCount": 30,
+                "minBuyRatio": 0.6,
+                "minSellRatio": 0.55,
                 "priceStabilityThreshold": 0.85,
                 "strongZoneThreshold": 0.7,
                 "weakZoneThreshold": 0.4,
@@ -146,8 +146,8 @@
                 "detectorThresholds": {
                     "absorption": 0.6,
                     "exhaustion": 0.2,
-                    "accumulation": 0.3,
-                    "distribution": 0.4,
+                    "accumulation": 0.25,
+                    "distribution": 0.25,
                     "deltacvd": 0.4
                 },
                 "positionSizing": {
@@ -525,7 +525,7 @@
             },
             "accumulation": {
                 "useStandardizedZones": true,
-                "confidenceThreshold": 0.4,
+                "confidenceThreshold": 0.3,
                 "confluenceMinZones": 1,
                 "confluenceMaxDistance": 0.1,
                 "confluenceConfidenceBoost": 0.1,
@@ -553,7 +553,7 @@
             },
             "distribution": {
                 "useStandardizedZones": true,
-                "confidenceThreshold": 0.4,
+                "confidenceThreshold": 0.3,
                 "confluenceMinZones": 1,
                 "confluenceMaxDistance": 0.1,
                 "confluenceConfidenceBoost": 0.1,

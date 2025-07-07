@@ -1333,19 +1333,19 @@ describe("AccumulationZoneDetectorEnhanced - 100 Realistic Market Scenarios", ()
                 const baseStrength = test.base;
                 const [buyVol, sellVol] =
                     baseStrength === "strong"
-                        ? [87.5, 12.5]  // 87.5/100 * 0.8 = 70% buy ratio
+                        ? [87.5, 12.5] // 87.5/100 * 0.8 = 70% buy ratio
                         : baseStrength === "medium"
-                          ? [75, 25]     // 75/100 * 0.8 = 60% buy ratio  
+                          ? [75, 25] // 75/100 * 0.8 = 60% buy ratio
                           : baseStrength === "weak"
-                            ? [45, 55]   // 45/100 * 0.8 = 36% buy ratio (should fail)
+                            ? [45, 55] // 45/100 * 0.8 = 36% buy ratio (should fail)
                             : baseStrength === "threshold"
-                              ? [68.75, 31.25]  // 68.75/100 * 0.8 = 55% buy ratio (exact threshold)
+                              ? [68.75, 31.25] // 68.75/100 * 0.8 = 55% buy ratio (exact threshold)
                               : baseStrength === "zero"
                                 ? [0, 0]
                                 : baseStrength === "maximum"
-                                  ? [95, 5]      // 95/100 * 0.8 = 76% buy ratio
+                                  ? [95, 5] // 95/100 * 0.8 = 76% buy ratio
                                   : baseStrength === "minimum"
-                                    ? [51, 49]   // 51/100 * 0.8 = 40.8% buy ratio (should fail)
+                                    ? [51, 49] // 51/100 * 0.8 = 40.8% buy ratio (should fail)
                                     : [50, 50];
 
                 const volumeLevel =

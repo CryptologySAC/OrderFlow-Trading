@@ -1261,19 +1261,19 @@ describe("DistributionDetectorEnhanced - 100 Comprehensive Test Scenarios", () =
                 const baseStrength = test.base;
                 const [buyVol, sellVol] =
                     baseStrength === "strong"
-                        ? [12.5, 87.5]  // 87.5/100 * 0.8 = 70% sell ratio
+                        ? [12.5, 87.5] // 87.5/100 * 0.8 = 70% sell ratio
                         : baseStrength === "medium"
-                          ? [25, 75]     // 75/100 * 0.8 = 60% sell ratio
+                          ? [25, 75] // 75/100 * 0.8 = 60% sell ratio
                           : baseStrength === "weak"
-                            ? [55, 45]   // 45/100 * 0.8 = 36% sell ratio (should fail)
+                            ? [55, 45] // 45/100 * 0.8 = 36% sell ratio (should fail)
                             : baseStrength === "threshold"
-                              ? [37.5, 62.5]  // 62.5/100 * 0.8 = 50% sell ratio (exact threshold)
+                              ? [37.5, 62.5] // 62.5/100 * 0.8 = 50% sell ratio (exact threshold)
                               : baseStrength === "zero"
                                 ? [0, 0]
                                 : baseStrength === "maximum"
-                                  ? [5, 95]      // 95/100 * 0.8 = 76% sell ratio
+                                  ? [5, 95] // 95/100 * 0.8 = 76% sell ratio
                                   : baseStrength === "minimum"
-                                    ? [49, 51]   // 51/100 * 0.8 = 40.8% sell ratio (should fail)
+                                    ? [49, 51] // 51/100 * 0.8 = 40.8% sell ratio (should fail)
                                     : [50, 50];
 
                 const volumeLevel =
