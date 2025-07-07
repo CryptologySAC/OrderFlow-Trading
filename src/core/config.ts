@@ -30,8 +30,8 @@ type DetectorConfigInput =
     | z.infer<typeof AbsorptionEnhancedSettingsSchema>
     | z.infer<typeof ExhaustionEnhancedSettingsSchema>
     | z.infer<typeof DeltaCVDEnhancedSettingsSchema>
-    | z.infer<typeof AccumulationEnhancedSettingsSchema>
-    | z.infer<typeof DistributionEnhancedSettingsSchema>;
+    | z.infer<typeof AccumulationDetectorSchema>
+    | z.infer<typeof DistributionDetectorSchema>;
 
 // Financial tick value validator - EXACT equality required for trading systems
 export const createTickValueValidator = (pricePrecision: number) => {
@@ -385,44 +385,27 @@ export const DeltaCVDDetectorSchema = z.object({
     maxCorrelationBound: z.number().min(0.5).max(1.0),
 });
 
-// ACCUMULATION detector - ALL properties from config.json accumulation section
+// ACCUMULATION detector - Simplified schema for enhanced standalone detector
 export const AccumulationDetectorSchema = z.object({
-    // Core accumulation parameters
+    // Core parameters
     useStandardizedZones: z.boolean(),
-    minDurationMs: z.number().int().min(30000).max(1800000),
-    minRatio: z.number().min(0.5).max(10.0),
-    minRecentActivityMs: z.number().int().min(5000).max(120000),
-    threshold: z.number().min(0.3).max(0.9),
-    volumeSurgeMultiplier: z.number().min(1.5).max(10.0),
-    imbalanceThreshold: z.number().min(0.1).max(0.7),
-    institutionalThreshold: z.number().min(5).max(200),
-    burstDetectionMs: z.number().int().min(500).max(10000),
-    sustainedVolumeMs: z.number().int().min(10000).max(300000),
-    medianTradeSize: z.number().min(0.1).max(50),
     enhancementMode: z.enum(["disabled", "testing", "production"]),
-    minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
 
-    // Enhancement internal parameters (accumulation-specific)
-    enhancementCallFrequency: z.number().int().min(1).max(20),
-    highConfidenceThreshold: z.number().min(0.6).max(0.95),
-    lowConfidenceThreshold: z.number().min(0.2).max(0.6),
-    minConfidenceBoostThreshold: z.number().min(0.01).max(0.2),
-    defaultMinEnhancedConfidenceThreshold: z.number().min(0.2).max(0.8),
-    confidenceReductionFactor: z.number().min(0.5).max(0.95),
-    significanceBoostMultiplier: z.number().min(0.1).max(1.0),
-    neutralBoostReductionFactor: z.number().min(0.3).max(0.8),
-    enhancementSignificanceBoost: z.boolean(),
+    // Single confidence threshold (replaces multiple thresholds)
+    confidenceThreshold: z.number().min(0.1).max(0.9),
 
-    // CLAUDE.md Compliance: All configurable parameters for standalone accumulation detector
-    baseConfidenceRequired: z.number().min(0.1).max(0.9),
-    finalConfidenceRequired: z.number().min(0.1).max(0.9),
+    // Zone confluence parameters
     confluenceMinZones: z.number().int().min(1).max(10),
     confluenceMaxDistance: z.number().min(0.01).max(1.0),
     confluenceConfidenceBoost: z.number().min(0.05).max(0.3),
     crossTimeframeConfidenceBoost: z.number().min(0.05).max(0.3),
+
+    // Accumulation detection parameters
     accumulationVolumeThreshold: z.number().min(10).max(1000),
     accumulationRatioThreshold: z.number().min(0.3).max(0.9),
     alignmentScoreThreshold: z.number().min(0.3).max(0.8),
+
+    // Financial calculation parameters
     defaultDurationMs: z.number().int().min(30000).max(600000),
     tickSize: z.number().min(0.0001).max(1.0),
     maxPriceSupport: z.number().min(0.5).max(5.0),
@@ -431,7 +414,7 @@ export const AccumulationDetectorSchema = z.object({
     defaultVolatility: z.number().min(0.01).max(0.5),
     defaultBaselineVolatility: z.number().min(0.01).max(0.3),
 
-    // Accumulation-specific parameters
+    // Accumulation-specific calculations
     confluenceStrengthDivisor: z.number().min(1).max(10),
     passiveToAggressiveRatio: z.number().min(0.3).max(2.0),
     varianceReductionFactor: z.number().min(0.5).max(3.0),
@@ -439,41 +422,33 @@ export const AccumulationDetectorSchema = z.object({
     aggressiveBuyingReductionFactor: z.number().min(0.3).max(0.8),
     buyingPressureConfidenceBoost: z.number().min(0.05).max(0.3),
 
-    // Zone confluence analysis
+    // Feature toggles
     enableZoneConfluenceFilter: z.boolean(),
     enableBuyingPressureAnalysis: z.boolean(),
     enableCrossTimeframeAnalysis: z.boolean(),
 });
 
-// DISTRIBUTION detector - Distribution-specific logic only (zone properties from universalZoneConfig)
+// DISTRIBUTION detector - Simplified schema for enhanced standalone detector
 export const DistributionDetectorSchema = z.object({
-    // Distribution-specific selling pressure
-    sellingPressureVolumeThreshold: z.number().min(10).max(1000),
-    sellingPressureRatioThreshold: z.number().min(0.3).max(0.9),
-    enableSellingPressureAnalysis: z.boolean(),
-    sellingPressureConfidenceBoost: z.number().min(0.05).max(0.3),
+    // Core parameters
+    useStandardizedZones: z.boolean(),
+    enhancementMode: z.enum(["disabled", "testing", "production"]),
 
-    // Distribution calculation parameters
-    varianceReductionFactor: z.number().min(0.5).max(3.0),
-    alignmentNormalizationFactor: z.number().min(0.5).max(3.0),
-    confluenceStrengthDivisor: z.number().min(1).max(10),
-    passiveToAggressiveRatio: z.number().min(0.3).max(2.0),
-    varianceDivisor: z.number().min(1).max(10),
-    moderateAlignmentThreshold: z.number().min(0.3).max(0.7),
-    aggressiveSellingRatioThreshold: z.number().min(0.4).max(0.8),
-    aggressiveSellingReductionFactor: z.number().min(0.3).max(0.8),
+    // Single confidence threshold (replaces multiple thresholds)
+    confidenceThreshold: z.number().min(0.1).max(0.9),
 
-    // CLAUDE.md Compliance: All configurable parameters for standalone detector
-    baseConfidenceRequired: z.number().min(0.1).max(0.9),
-    finalConfidenceRequired: z.number().min(0.1).max(0.9),
-    minConfidenceBoostThreshold: z.number().min(0.01).max(0.5),
+    // Zone confluence parameters
     confluenceMinZones: z.number().int().min(1).max(10),
     confluenceMaxDistance: z.number().min(0.01).max(1.0),
     confluenceConfidenceBoost: z.number().min(0.05).max(0.3),
     crossTimeframeConfidenceBoost: z.number().min(0.05).max(0.3),
+
+    // Distribution detection parameters
     distributionVolumeThreshold: z.number().min(10).max(1000),
     distributionRatioThreshold: z.number().min(0.3).max(0.9),
     alignmentScoreThreshold: z.number().min(0.3).max(0.8),
+
+    // Financial calculation parameters
     defaultDurationMs: z.number().int().min(30000).max(600000),
     tickSize: z.number().min(0.0001).max(1.0),
     maxPriceResistance: z.number().min(0.5).max(5.0),
@@ -482,55 +457,25 @@ export const DistributionDetectorSchema = z.object({
     defaultVolatility: z.number().min(0.01).max(0.5),
     defaultBaselineVolatility: z.number().min(0.01).max(0.3),
 
-    // Zone confluence analysis
+    // Distribution-specific selling pressure
+    sellingPressureVolumeThreshold: z.number().min(10).max(1000),
+    sellingPressureRatioThreshold: z.number().min(0.3).max(0.9),
+    enableSellingPressureAnalysis: z.boolean(),
+    sellingPressureConfidenceBoost: z.number().min(0.05).max(0.3),
+
+    // Distribution-specific calculations
+    varianceReductionFactor: z.number().min(0.5).max(3.0),
+    confluenceStrengthDivisor: z.number().min(1).max(10),
+    passiveToAggressiveRatio: z.number().min(0.3).max(2.0),
+    aggressiveSellingRatioThreshold: z.number().min(0.4).max(0.8),
+    aggressiveSellingReductionFactor: z.number().min(0.3).max(0.8),
+
+    // Feature toggles
     enableZoneConfluenceFilter: z.boolean(),
     enableCrossTimeframeAnalysis: z.boolean(),
-
-    // Enhancement control
-    useStandardizedZones: z.boolean(),
-    enhancementMode: z.enum(["disabled", "testing", "production"]),
-    minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
 });
 
-const AccumulationEnhancedSettingsSchema = z
-    .object({
-        useStandardizedZones: z.boolean(),
-        enhancementMode: z.enum(["disabled", "testing", "production"]),
-        minEnhancedConfidenceThreshold: z.number(),
-        enhancementCallFrequency: z.number(),
-        highConfidenceThreshold: z.number(),
-        lowConfidenceThreshold: z.number(),
-        minConfidenceBoostThreshold: z.number(),
-        defaultMinEnhancedConfidenceThreshold: z.number(),
-        confidenceReductionFactor: z.number(),
-        significanceBoostMultiplier: z.number(),
-        neutralBoostReductionFactor: z.number(),
-        enhancementSignificanceBoost: z.boolean(),
-    })
-    .passthrough();
-
-const DistributionEnhancedSettingsSchema = z
-    .object({
-        useStandardizedZones: z.boolean(),
-        enhancementMode: z.enum(["disabled", "testing", "production"]),
-        minEnhancedConfidenceThreshold: z.number(),
-        baseConfidenceRequired: z.number().min(0.1).max(0.9),
-        finalConfidenceRequired: z.number().min(0.1).max(0.9),
-        minConfidenceBoostThreshold: z.number().min(0.01).max(0.5),
-        enableSellingPressureAnalysis: z.boolean(),
-        sellingPressureConfidenceBoost: z.number(),
-        sellingPressureVolumeThreshold: z.number(),
-        sellingPressureRatioThreshold: z.number(),
-        varianceReductionFactor: z.number(),
-        alignmentNormalizationFactor: z.number(),
-        confluenceStrengthDivisor: z.number(),
-        passiveToAggressiveRatio: z.number(),
-        varianceDivisor: z.number(),
-        moderateAlignmentThreshold: z.number(),
-        aggressiveSellingRatioThreshold: z.number(),
-        aggressiveSellingReductionFactor: z.number(),
-    })
-    .passthrough();
+// Old schemas removed - using simplified AccumulationDetectorSchema and DistributionDetectorSchema above
 
 const ExhaustionEnhancedSettingsSchema = z
     .object({
@@ -762,8 +707,8 @@ const BasicSymbolConfigSchema = z
         absorption: AbsorptionEnhancedSettingsSchema,
         deltaCvdConfirmation: DeltaCVDEnhancedSettingsSchema,
         universalZoneConfig: UniversalZoneSchema,
-        accumulation: AccumulationEnhancedSettingsSchema,
-        distribution: DistributionEnhancedSettingsSchema,
+        accumulation: AccumulationDetectorSchema,
+        distribution: DistributionDetectorSchema,
     })
     .passthrough();
 
@@ -1331,7 +1276,7 @@ export class Config {
 
     static get DISTRIBUTION_ZONE_DETECTOR() {
         return this.validateDetectorConfig(
-            DistributionEnhancedSettingsSchema,
+            DistributionDetectorSchema,
             SYMBOL_CFG.distribution
         );
     }

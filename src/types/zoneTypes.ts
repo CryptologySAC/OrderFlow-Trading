@@ -1,5 +1,28 @@
 // src/types/zoneTypes.ts
 
+/**
+ * Zone update types for proper type safety
+ */
+export enum ZoneUpdateType {
+    ZONE_CREATED = "zone_created",
+    ZONE_UPDATED = "zone_updated",
+    ZONE_STRENGTHENED = "zone_strengthened",
+    ZONE_WEAKENED = "zone_weakened",
+    ZONE_COMPLETED = "zone_completed",
+    ZONE_INVALIDATED = "zone_invalidated",
+}
+
+/**
+ * Zone signal types for trading signals
+ */
+export enum ZoneSignalType {
+    STRENGTHENED = "strengthened",
+    COMPLETION = "completion",
+    INVALIDATION = "invalidation",
+    ENTRY = "entry",
+    EXIT = "exit",
+}
+
 // NEW: Standardized zone configuration for all detectors
 export interface StandardZoneConfig {
     baseTicks: number; // Base zone size in ticks (e.g., 5)

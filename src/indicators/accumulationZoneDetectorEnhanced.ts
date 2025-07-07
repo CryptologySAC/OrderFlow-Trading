@@ -197,96 +197,42 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     }
 
     /**
-     * Core accumulation pattern analysis using standardized zones
-     *
-     * STANDALONE VERSION: Multi-timeframe accumulation analysis without legacy dependencies
+     * Core accumulation pattern analysis using pure volume calculations
      */
     private analyzeAccumulationPattern(event: EnrichedTradeEvent): void {
         if (!event.zoneData) return;
 
-        let totalConfidenceBoost = 0;
-        let enhancementApplied = false;
+        // Calculate base accumulation strength from pure volume ratios
+        const calculatedAccumulationStrength =
+            this.calculateAccumulationStrength(event);
+        if (calculatedAccumulationStrength === null) return;
 
-        // Zone confluence analysis for accumulation validation (CLAUDE.md compliant)
-        if (this.enhancementConfig.enableZoneConfluenceFilter) {
-            const confluenceResult = this.analyzeZoneConfluence(
-                event.zoneData,
-                event.price
-            );
-            if (confluenceResult.hasConfluence) {
-                this.enhancementStats.confluenceDetectionCount++;
-                totalConfidenceBoost += this.confluenceConfidenceBoost;
-                enhancementApplied = true;
+        // Start with base detection strength
+        let totalConfidence = calculatedAccumulationStrength;
 
-                this.logger.debug(
-                    "AccumulationZoneDetectorEnhanced: Zone confluence detected for accumulation validation",
-                    {
-                        detectorId: this.getId(),
-                        price: event.price,
-                        confluenceZones: confluenceResult.confluenceZones,
-                        confluenceStrength: confluenceResult.confluenceStrength,
-                        confidenceBoost: this.confluenceConfidenceBoost,
-                    }
-                );
-            }
-        }
+        // Add confluence contribution (pure volume concentration)
+        const calculatedConfluenceStrength =
+            this.calculateConfluenceContribution(event.zoneData, event.price);
+        totalConfidence += calculatedConfluenceStrength;
 
-        // Institutional buying pressure analysis across zones
-        if (this.enhancementConfig.enableBuyingPressureAnalysis) {
-            const buyingResult = this.analyzeInstitutionalBuyingPressure(
-                event.zoneData,
-                event
-            );
-            if (buyingResult.hasBuyingPressure) {
-                this.enhancementStats.buyingPressureDetectionCount++;
-                totalConfidenceBoost +=
-                    this.enhancementConfig.buyingPressureConfidenceBoost;
-                enhancementApplied = true;
+        // Add institutional contribution (pure volume size analysis)
+        const calculatedInstitutionalScore =
+            this.calculateInstitutionalContribution(event.zoneData, event);
+        totalConfidence += calculatedInstitutionalScore;
 
-                this.logger.debug(
-                    "AccumulationZoneDetectorEnhanced: Institutional buying pressure detected",
-                    {
-                        detectorId: this.getId(),
-                        price: event.price,
-                        buyingRatio: buyingResult.buyingRatio,
-                        affectedZones: buyingResult.affectedZones,
-                        confidenceBoost:
-                            this.enhancementConfig
-                                .buyingPressureConfidenceBoost,
-                    }
-                );
-            }
-        }
+        // Add alignment contribution (pure volume consistency)
+        const calculatedAlignmentScore = this.calculateAlignmentContribution(
+            event.zoneData,
+            event
+        );
+        totalConfidence += calculatedAlignmentScore;
 
-        // Cross-timeframe accumulation analysis (CLAUDE.md compliant)
-        if (this.enhancementConfig.enableCrossTimeframeAnalysis) {
-            const crossTimeframeResult = this.analyzeCrossTimeframeAccumulation(
-                event.zoneData,
-                event
-            );
-            if (crossTimeframeResult.hasAlignment) {
-                this.enhancementStats.crossTimeframeAnalysisCount++;
-                totalConfidenceBoost += this.crossTimeframeConfidenceBoost;
-                enhancementApplied = true;
-
-                this.logger.debug(
-                    "AccumulationZoneDetectorEnhanced: Cross-timeframe accumulation alignment",
-                    {
-                        detectorId: this.getId(),
-                        price: event.price,
-                        alignmentScore: crossTimeframeResult.alignmentScore,
-                        timeframeBreakdown:
-                            crossTimeframeResult.timeframeBreakdown,
-                        confidenceBoost: this.crossTimeframeConfidenceBoost,
-                    }
-                );
-            }
-        }
-
-        // Update enhancement statistics
-        if (enhancementApplied) {
+        // SINGLE confidence check before any emission
+        if (totalConfidence >= this.enhancementConfig.confidenceThreshold) {
+            // Update enhancement statistics
             this.enhancementStats.enhancementCount++;
-            this.enhancementStats.totalConfidenceBoost += totalConfidenceBoost;
+            this.enhancementStats.totalConfidenceBoost +=
+                totalConfidence - calculatedAccumulationStrength;
             this.enhancementStats.averageConfidenceBoost =
                 this.enhancementStats.totalConfidenceBoost /
                 this.enhancementStats.enhancementCount;
@@ -295,14 +241,275 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
                 this.enhancementStats.callCount;
 
             // Store enhanced accumulation metrics for monitoring
-            this.storeEnhancedAccumulationMetrics(event, totalConfidenceBoost);
+            this.storeEnhancedAccumulationMetrics(event, totalConfidence);
 
             // ✅ EMIT ZONE UPDATE - For visualization in dashboard
-            this.emitAccumulationZoneUpdate(event, totalConfidenceBoost);
+            this.emitAccumulationZoneUpdate(event, totalConfidence);
 
-            // ✅ EMIT SIGNAL ONLY for actionable zone events (completion/invalidation/consumption)
-            this.emitAccumulationZoneSignal(event, totalConfidenceBoost);
+            // ✅ EMIT SIGNAL ONLY for actionable zone events
+            this.emitAccumulationZoneSignal(event, totalConfidence);
+
+            this.logger.debug(
+                "AccumulationZoneDetectorEnhanced: Accumulation pattern detected",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                    baseStrength: calculatedAccumulationStrength,
+                    confluenceContribution: calculatedConfluenceStrength,
+                    institutionalContribution: calculatedInstitutionalScore,
+                    alignmentContribution: calculatedAlignmentScore,
+                    totalConfidence: totalConfidence,
+                }
+            );
         }
+    }
+
+    /**
+     * Calculate base accumulation strength from pure volume ratios
+     */
+    private calculateAccumulationStrength(
+        event: EnrichedTradeEvent
+    ): number | null {
+        if (!event.zoneData) return null;
+
+        const allZones = [
+            ...event.zoneData.zones5Tick,
+            ...event.zoneData.zones10Tick,
+            ...event.zoneData.zones20Tick,
+        ];
+
+        const relevantZones = this.preprocessor.findZonesNearPrice(
+            allZones,
+            event.price,
+            this.confluenceMaxDistance
+        );
+        if (relevantZones.length === 0) return null;
+
+        let totalVolume = 0;
+        let totalBuyVolume = 0;
+
+        relevantZones.forEach((zone) => {
+            totalVolume += zone.aggressiveVolume + zone.passiveVolume;
+            totalBuyVolume += zone.aggressiveBuyVolume;
+        });
+
+        if (totalVolume === 0) return null;
+
+        // Accumulation strength based purely on aggressive buying ratio
+        return FinancialMath.divideQuantities(totalBuyVolume, totalVolume);
+    }
+
+    /**
+     * Calculate confluence contribution based purely on volume concentration
+     */
+    private calculateConfluenceContribution(
+        zoneData: StandardZoneData,
+        price: number
+    ): number {
+        // Find zones near current price
+        const relevantZones: ZoneSnapshot[] = [];
+        relevantZones.push(
+            ...this.preprocessor.findZonesNearPrice(
+                zoneData.zones5Tick,
+                price,
+                this.confluenceMaxDistance
+            ),
+            ...this.preprocessor.findZonesNearPrice(
+                zoneData.zones10Tick,
+                price,
+                this.confluenceMaxDistance
+            ),
+            ...this.preprocessor.findZonesNearPrice(
+                zoneData.zones20Tick,
+                price,
+                this.confluenceMaxDistance
+            )
+        );
+
+        if (relevantZones.length === 0) return 0;
+
+        // Calculate volume concentration in confluence area
+        let totalVolume = 0;
+        let totalAggressiveVolume = 0;
+        let totalBuyVolume = 0;
+
+        relevantZones.forEach((zone) => {
+            totalVolume += zone.aggressiveVolume + zone.passiveVolume;
+            totalAggressiveVolume += zone.aggressiveVolume;
+            totalBuyVolume += zone.aggressiveBuyVolume;
+        });
+
+        if (totalVolume === 0) return 0;
+
+        // Confluence strength based purely on volume ratios:
+        // More zones with higher buy volume concentration = higher confluence
+        const buyRatio = FinancialMath.divideQuantities(
+            totalBuyVolume,
+            totalVolume
+        );
+        const aggressiveRatio = FinancialMath.divideQuantities(
+            totalAggressiveVolume,
+            totalVolume
+        );
+        const zoneConcentration = FinancialMath.divideQuantities(
+            relevantZones.length,
+            relevantZones.length + 1
+        );
+
+        // Pure volume-based confluence: buy activity * aggressive activity * zone density
+        return buyRatio * aggressiveRatio * zoneConcentration;
+    }
+
+    /**
+     * Calculate institutional contribution based purely on volume size patterns
+     */
+    private calculateInstitutionalContribution(
+        zoneData: StandardZoneData,
+        event: EnrichedTradeEvent
+    ): number {
+        const allZones = [
+            ...zoneData.zones5Tick,
+            ...zoneData.zones10Tick,
+            ...zoneData.zones20Tick,
+        ];
+
+        const relevantZones = this.preprocessor.findZonesNearPrice(
+            allZones,
+            event.price,
+            this.confluenceMaxDistance
+        );
+
+        if (relevantZones.length === 0) return 0;
+
+        let totalVolume = 0;
+        let totalAggressiveVolume = 0;
+        let totalBuyVolume = 0;
+        let largeVolumeSum = 0;
+
+        relevantZones.forEach((zone) => {
+            const zoneTotal = zone.aggressiveVolume + zone.passiveVolume;
+            totalVolume += zoneTotal;
+            totalAggressiveVolume += zone.aggressiveVolume;
+            totalBuyVolume += zone.aggressiveBuyVolume;
+
+            // Identify large volume activity (institutional-sized)
+            const avgZoneVolume = zoneTotal / (relevantZones.length || 1);
+            if (zone.aggressiveVolume > avgZoneVolume) {
+                largeVolumeSum += zone.aggressiveVolume;
+            }
+        });
+
+        if (totalVolume === 0) return 0;
+
+        // Institutional contribution based purely on volume patterns:
+        // 1. Buy volume dominance
+        // 2. Large order concentration
+        // 3. Aggressive activity level
+        const buyRatio = FinancialMath.divideQuantities(
+            totalBuyVolume,
+            totalVolume
+        );
+        const largeVolumeRatio = FinancialMath.divideQuantities(
+            largeVolumeSum,
+            totalVolume
+        );
+        const aggressiveRatio = FinancialMath.divideQuantities(
+            totalAggressiveVolume,
+            totalVolume
+        );
+
+        // Pure volume-based institutional score
+        return buyRatio * largeVolumeRatio * aggressiveRatio;
+    }
+
+    /**
+     * Calculate alignment contribution based purely on volume consistency across timeframes
+     */
+    private calculateAlignmentContribution(
+        zoneData: StandardZoneData,
+        event: EnrichedTradeEvent
+    ): number {
+        // Calculate accumulation strength for each timeframe
+        const tick5Accumulation = this.calculateTimeframeAccumulationStrength(
+            zoneData.zones5Tick,
+            event.price
+        );
+        const tick10Accumulation = this.calculateTimeframeAccumulationStrength(
+            zoneData.zones10Tick,
+            event.price
+        );
+        const tick20Accumulation = this.calculateTimeframeAccumulationStrength(
+            zoneData.zones20Tick,
+            event.price
+        );
+
+        const accumulationValues = [
+            tick5Accumulation,
+            tick10Accumulation,
+            tick20Accumulation,
+        ];
+        const avgAccumulation = FinancialMath.calculateMean(accumulationValues);
+        if (avgAccumulation === null || avgAccumulation === 0) {
+            return 0;
+        }
+
+        const stdDev = FinancialMath.calculateStdDev(accumulationValues);
+        if (stdDev === null) {
+            return 0;
+        }
+
+        // Calculate alignment based purely on volume consistency:
+        // High average = strong accumulation across timeframes
+        // Low standard deviation relative to mean = consistent across timeframes
+        if (stdDev === 0) {
+            // Perfect consistency across timeframes
+            return avgAccumulation;
+        }
+
+        const consistencyRatio = FinancialMath.divideQuantities(
+            avgAccumulation,
+            stdDev
+        );
+
+        // Return pure volume-based alignment: strength * consistency
+        return (avgAccumulation * consistencyRatio) / (1 + consistencyRatio);
+    }
+
+    /**
+     * Calculate accumulation strength for a specific timeframe based purely on volume ratios
+     */
+    private calculateTimeframeAccumulationStrength(
+        zones: ZoneSnapshot[],
+        price: number
+    ): number {
+        if (zones.length === 0) return 0;
+
+        const relevantZones = this.preprocessor.findZonesNearPrice(
+            zones,
+            price,
+            this.confluenceMaxDistance
+        );
+        if (relevantZones.length === 0) return 0;
+
+        let totalAccumulationScore = 0;
+
+        for (const zone of relevantZones) {
+            const totalVolume = zone.aggressiveVolume + zone.passiveVolume;
+            if (totalVolume === 0) continue;
+
+            // Accumulation strength based purely on aggressive buying ratio
+            const aggressiveBuyingRatio = FinancialMath.divideQuantities(
+                zone.aggressiveBuyVolume,
+                totalVolume
+            );
+
+            totalAccumulationScore += aggressiveBuyingRatio;
+        }
+
+        return FinancialMath.divideQuantities(
+            totalAccumulationScore,
+            relevantZones.length
+        );
     }
 
     /**
@@ -526,56 +733,6 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     }
 
     /**
-     * Calculate accumulation strength for a specific timeframe
-     *
-     * STANDALONE VERSION: Timeframe-specific analysis
-     */
-    private calculateTimeframeAccumulationStrength(
-        zones: ZoneSnapshot[],
-        price: number
-    ): number {
-        if (zones.length === 0) return 0;
-
-        const relevantZones = this.preprocessor.findZonesNearPrice(
-            zones,
-            price,
-            this.confluenceMaxDistance
-        );
-        if (relevantZones.length === 0) return 0;
-
-        let totalAccumulationScore = 0;
-
-        for (const zone of relevantZones) {
-            const totalVolume = zone.aggressiveVolume + zone.passiveVolume;
-            if (totalVolume === 0) continue;
-
-            // For accumulation, we want high aggressive buying (buyerIsMaker = false trades) using FinancialMath
-            const aggressiveBuyingRatio = FinancialMath.divideQuantities(
-                zone.aggressiveBuyVolume,
-                totalVolume
-            );
-            const aggressiveBuyingRatioThreshold =
-                this.enhancementConfig.aggressiveBuyingRatioThreshold;
-            const aggressiveBuyingReductionFactor =
-                this.enhancementConfig.aggressiveBuyingReductionFactor;
-            const accumulationScore =
-                aggressiveBuyingRatio > aggressiveBuyingRatioThreshold
-                    ? aggressiveBuyingRatio
-                    : FinancialMath.multiplyQuantities(
-                          aggressiveBuyingRatio,
-                          aggressiveBuyingReductionFactor
-                      );
-
-            totalAccumulationScore += accumulationScore;
-        }
-
-        return FinancialMath.divideQuantities(
-            totalAccumulationScore,
-            relevantZones.length
-        );
-    }
-
-    /**
      * Store enhanced accumulation metrics for monitoring and analysis
      *
      * STANDALONE VERSION: Comprehensive metrics tracking
@@ -669,29 +826,37 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         const signalSide = this.determineAccumulationSignalSide(event);
         if (signalSide === "neutral") return;
 
-        // Emit zoneSignal event for dashboard signals list
-        this.emit("zoneSignal", {
+        // Calculate proper confidence using zone strength instead of threshold
+        const calculatedConfidence = Math.min(
+            1.0,
+            zoneData.strength + confidenceBoost
+        );
+
+        // Create signal before emitting
+        const zoneSignal = {
             signalType,
             zone: zoneData,
             actionType: signalType,
-            confidence: Math.min(
-                1.0,
-                this.enhancementConfig.baseConfidenceRequired + confidenceBoost
-            ),
+            confidence: calculatedConfidence,
             urgency: confidenceBoost > 0.15 ? "high" : "medium",
             expectedDirection: signalSide === "buy" ? "up" : "down",
             detectorId: this.getId(),
             timestamp: Date.now(),
-        });
+        };
+
+        // Emit zoneSignal event for dashboard signals list
+        this.emit("zoneSignal", zoneSignal);
 
         this.logger.info(
             "AccumulationZoneDetectorEnhanced: Zone signal emitted",
             {
                 detectorId: this.getId(),
-                signalType,
-                zoneId: zoneData.id,
-                confidence: confidenceBoost,
+                signalType: zoneSignal.signalType,
+                zoneId: zoneSignal.zone.id,
+                confidence: zoneSignal.confidence,
                 side: signalSide,
+                urgency: zoneSignal.urgency,
+                expectedDirection: zoneSignal.expectedDirection,
             }
         );
     }
@@ -719,7 +884,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             strength: accumulationMetrics.strength,
             confidence: Math.min(
                 1.0,
-                this.enhancementConfig.baseConfidenceRequired + confidenceBoost
+                accumulationMetrics.strength + confidenceBoost
             ),
             volume: accumulationMetrics.volumeConcentration,
             timespan: accumulationMetrics.duration,
@@ -740,10 +905,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         confidenceBoost: number
     ): string | null {
         // Always create/update zones for visualization
-        if (
-            confidenceBoost >=
-            this.enhancementConfig.minConfidenceBoostThreshold
-        ) {
+        if (confidenceBoost >= this.enhancementConfig.confidenceThreshold) {
             if (confidenceBoost > 0.15) {
                 return "zone_strengthened";
             } else {
@@ -760,19 +922,19 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         event: EnrichedTradeEvent,
         confidenceBoost: number
     ): string | null {
-        // Use base confidence threshold for signal eligibility
-        if (confidenceBoost < this.enhancementConfig.baseConfidenceRequired) {
-            return null; // Not significant enough for any signal
-        }
-
         const accumulationMetrics = this.calculateAccumulationMetrics(event);
         if (!accumulationMetrics) return null;
 
-        // Check for strong accumulation activity (medium confidence)
-        if (
-            accumulationMetrics.buyRatio >= this.accumulationRatioThreshold &&
-            confidenceBoost >= this.enhancementConfig.baseConfidenceRequired
-        ) {
+        // Calculate actual confidence from strength + boost
+        const actualConfidence = accumulationMetrics.strength + confidenceBoost;
+
+        // Use single confidence threshold for signal eligibility
+        if (actualConfidence < this.enhancementConfig.confidenceThreshold) {
+            return null; // Not significant enough for any signal
+        }
+
+        // Check for strong accumulation activity
+        if (accumulationMetrics.buyRatio >= this.accumulationRatioThreshold) {
             return "strengthened"; // Zone strengthening - actionable signal
         }
 
@@ -789,30 +951,24 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         confidenceBoost: number
     ): void {
         // Only emit signals when enhancement is meaningful
-        if (
-            confidenceBoost < this.enhancementConfig.minConfidenceBoostThreshold
-        ) {
+        if (confidenceBoost < this.enhancementConfig.confidenceThreshold) {
             return;
         }
 
-        // Calculate enhanced accumulation confidence
-        if (
-            typeof this.enhancementConfig.baseConfidenceRequired !== "number" ||
-            this.enhancementConfig.baseConfidenceRequired <= 0
-        ) {
-            return; // Cannot proceed without valid base confidence
+        // Calculate enhanced accumulation confidence using actual detection strength
+        const accumulationMetrics = this.calculateAccumulationMetrics(event);
+        if (!accumulationMetrics) {
+            return; // Cannot calculate confidence without metrics
         }
-        const baseConfidenceValue =
-            this.enhancementConfig.baseConfidenceRequired;
+
+        const baseConfidenceValue = accumulationMetrics.strength;
         const enhancedConfidence = Math.min(
             1.0,
             FinancialMath.addAmounts(baseConfidenceValue, confidenceBoost, 8)
         );
 
         // Only emit high-quality enhanced signals
-        if (
-            enhancedConfidence < this.enhancementConfig.finalConfidenceRequired
-        ) {
+        if (enhancedConfidence < this.enhancementConfig.confidenceThreshold) {
             return;
         }
 
@@ -822,11 +978,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             return;
         }
 
-        // Calculate accumulation metrics
-        const accumulationMetrics = this.calculateAccumulationMetrics(event);
-        if (accumulationMetrics === null) {
-            return;
-        }
+        // Use already calculated accumulation metrics from above
 
         // Create enhanced accumulation signal data
         const accumulationResult: AccumulationResult = {
