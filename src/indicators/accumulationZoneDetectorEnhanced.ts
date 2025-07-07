@@ -187,7 +187,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     public markSignalConfirmed(zone: number, side: "buy" | "sell"): void {
         // Implementation for signal confirmation tracking if needed
         this.logger.debug(
-            "AccumulationZoneDetectorEnhanced: Signal confirmed",
+            "[AccumulationZoneDetectorEnhanced]: Signal confirmed",
             {
                 detectorId: this.getId(),
                 zone,
@@ -249,8 +249,11 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             // ✅ EMIT SIGNAL ONLY for actionable zone events
             this.emitAccumulationZoneSignal(event, totalConfidence);
 
+            // ✅ EMIT ENHANCED ACCUMULATION SIGNAL - For signal tracking
+            this.emitEnhancedAccumulationSignal(event, totalConfidence);
+
             this.logger.debug(
-                "AccumulationZoneDetectorEnhanced: Accumulation pattern detected",
+                "[AccumulationZoneDetectorEnhanced]: Accumulation pattern detected",
                 {
                     detectorId: this.getId(),
                     price: event.price,
@@ -295,8 +298,24 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
 
         if (totalVolume === 0) return null;
 
+        // ✅ CRITICAL: Volume threshold validation - must meet minimum LTC requirement
+        if (totalVolume < this.accumulationVolumeThreshold) {
+            return null; // Insufficient volume - reject immediately
+        }
+
+        // Calculate buy ratio
+        const buyRatio = FinancialMath.divideQuantities(
+            totalBuyVolume,
+            totalVolume
+        );
+
+        // ✅ CRITICAL: Ratio threshold validation - must meet minimum buy ratio
+        if (buyRatio < this.accumulationRatioThreshold) {
+            return null; // Insufficient buy ratio - reject immediately
+        }
+
         // Accumulation strength based purely on aggressive buying ratio
-        return FinancialMath.divideQuantities(totalBuyVolume, totalVolume);
+        return buyRatio;
     }
 
     /**
@@ -746,7 +765,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         // this.metricsCollector.recordCounter('accumulation.enhanced.analysis_count', 1);
 
         this.logger.debug(
-            "AccumulationZoneDetectorEnhanced: Enhanced metrics stored",
+            "[AccumulationZoneDetectorEnhanced]: Enhanced metrics stored",
             {
                 detectorId: this.getId(),
                 price: event.price,
@@ -795,7 +814,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         });
 
         this.logger.debug(
-            "AccumulationZoneDetectorEnhanced: Zone update emitted",
+            "[AccumulationZoneDetectorEnhanced]: Zone update emitted",
             {
                 detectorId: this.getId(),
                 updateType,
@@ -823,8 +842,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         );
         if (!zoneData) return;
 
-        const signalSide = this.determineAccumulationSignalSide(event);
-        if (signalSide === "neutral") return;
+        const signalSide = "buy";
 
         // Calculate proper confidence using zone strength instead of threshold
         const calculatedConfidence = Math.min(
@@ -848,7 +866,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         this.emit("zoneSignal", zoneSignal);
 
         this.logger.info(
-            "AccumulationZoneDetectorEnhanced: Zone signal emitted",
+            "[AccumulationZoneDetectorEnhanced]: Zone signal emitted",
             {
                 detectorId: this.getId(),
                 signalType: zoneSignal.signalType,
@@ -973,10 +991,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         }
 
         // Determine signal side based on accumulation analysis
-        const signalSide = this.determineAccumulationSignalSide(event);
-        if (signalSide === "neutral") {
-            return;
-        }
+        const signalSide = "buy";
 
         // Use already calculated accumulation metrics from above
 
@@ -1014,7 +1029,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         this.emit("signalCandidate", signalCandidate);
 
         this.logger.info(
-            "AccumulationZoneDetectorEnhanced: ENHANCED ACCUMULATION SIGNAL EMITTED",
+            "[AccumulationZoneDetectorEnhanced]: ENHANCED ACCUMULATION SIGNAL EMITTED",
             {
                 detectorId: this.getId(),
                 price: event.price,
@@ -1027,60 +1042,6 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
                 signalType: "accumulation",
             }
         );
-    }
-
-    /**
-     * Determine accumulation signal side based on market conditions
-     */
-    private determineAccumulationSignalSide(
-        event: EnrichedTradeEvent
-    ): "buy" | "sell" | "neutral" {
-        if (!event.zoneData) {
-            return "neutral";
-        }
-
-        // For accumulation, we expect institutions to be buying (accumulating)
-        // This creates buying pressure, so we might see buy signals
-        const allZones = [
-            ...event.zoneData.zones5Tick,
-            ...event.zoneData.zones10Tick,
-            ...event.zoneData.zones20Tick,
-        ];
-
-        const relevantZones = this.preprocessor.findZonesNearPrice(
-            allZones,
-            event.price,
-            this.confluenceMaxDistance
-        );
-        if (relevantZones.length === 0) {
-            return "neutral";
-        }
-
-        let totalBuyVolume = 0;
-        let totalSellVolume = 0;
-
-        relevantZones.forEach((zone) => {
-            totalBuyVolume += zone.aggressiveBuyVolume;
-            totalSellVolume += zone.aggressiveSellVolume;
-        });
-
-        const totalVolume = totalBuyVolume + totalSellVolume;
-        if (totalVolume === 0) {
-            return "neutral";
-        }
-
-        const buyRatio = FinancialMath.divideQuantities(
-            totalBuyVolume,
-            totalVolume
-        );
-        const accumulationThreshold = this.accumulationRatioThreshold;
-
-        // If buying pressure is high, this suggests accumulation pattern
-        if (buyRatio >= accumulationThreshold) {
-            return "buy"; // Accumulation creates bullish pressure
-        }
-
-        return "neutral";
     }
 
     /**
@@ -1212,7 +1173,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     ): void {
         this.enhancementConfig.enhancementMode = mode;
         this.logger.info(
-            "AccumulationZoneDetectorEnhanced: Enhancement mode updated",
+            "[AccumulationZoneDetectorEnhanced]: Enhancement mode updated",
             {
                 detectorId: this.getId(),
                 newMode: mode,
@@ -1227,7 +1188,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
      */
     public cleanup(): void {
         this.logger.info(
-            "AccumulationZoneDetectorEnhanced: Standalone cleanup completed",
+            "[AccumulationZoneDetectorEnhanced]: Standalone cleanup completed",
             {
                 detectorId: this.getId(),
                 enhancementStats: this.enhancementStats,

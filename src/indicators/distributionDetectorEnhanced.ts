@@ -186,7 +186,7 @@ export class DistributionDetectorEnhanced extends Detector {
      */
     public markSignalConfirmed(zone: number, side: "buy" | "sell"): void {
         // Implementation for signal confirmation tracking if needed
-        this.logger.debug("DistributionDetectorEnhanced: Signal confirmed", {
+        this.logger.debug("[DistributionDetectorEnhanced]: Signal confirmed", {
             detectorId: this.getId(),
             zone,
             side,
@@ -246,8 +246,11 @@ export class DistributionDetectorEnhanced extends Detector {
             // ✅ EMIT SIGNAL ONLY for actionable zone events
             this.emitDistributionZoneSignal(event, totalConfidence);
 
+            // ✅ EMIT ENHANCED DISTRIBUTION SIGNAL - For signal tracking
+            this.emitEnhancedDistributionSignal(event, totalConfidence);
+
             this.logger.debug(
-                "DistributionDetectorEnhanced: Distribution pattern detected",
+                "[DistributionDetectorEnhanced]: Distribution pattern detected",
                 {
                     detectorId: this.getId(),
                     price: event.price,
@@ -292,8 +295,24 @@ export class DistributionDetectorEnhanced extends Detector {
 
         if (totalVolume === 0) return null;
 
+        // ✅ CRITICAL: Volume threshold validation - must meet minimum LTC requirement
+        if (totalVolume < this.distributionVolumeThreshold) {
+            return null; // Insufficient volume - reject immediately
+        }
+
+        // Calculate sell ratio
+        const sellRatio = FinancialMath.divideQuantities(
+            totalSellVolume,
+            totalVolume
+        );
+
+        // ✅ CRITICAL: Ratio threshold validation - must meet minimum sell ratio
+        if (sellRatio < this.distributionRatioThreshold) {
+            return null; // Insufficient sell ratio - reject immediately
+        }
+
         // Distribution strength based purely on aggressive selling ratio
-        return FinancialMath.divideQuantities(totalSellVolume, totalVolume);
+        return sellRatio;
     }
 
     /**
@@ -523,7 +542,7 @@ export class DistributionDetectorEnhanced extends Detector {
         // this.metricsCollector.recordCounter('distribution.enhanced.analysis_count', 1);
 
         this.logger.debug(
-            "DistributionDetectorEnhanced: Enhanced metrics stored",
+            "[DistributionDetectorEnhanced]: Enhanced metrics stored",
             {
                 detectorId: this.getId(),
                 price: event.price,
@@ -571,12 +590,15 @@ export class DistributionDetectorEnhanced extends Detector {
             timestamp: Date.now(),
         });
 
-        this.logger.debug("DistributionDetectorEnhanced: Zone update emitted", {
-            detectorId: this.getId(),
-            updateType,
-            zoneId: zoneData.id,
-            confidence: confidenceBoost,
-        });
+        this.logger.debug(
+            "[DistributionDetectorEnhanced]: Zone update emitted",
+            {
+                detectorId: this.getId(),
+                updateType,
+                zoneId: zoneData.id,
+                confidence: confidenceBoost,
+            }
+        );
     }
 
     /**
@@ -597,8 +619,7 @@ export class DistributionDetectorEnhanced extends Detector {
         );
         if (!zoneData) return;
 
-        const signalSide = this.determineDistributionSignalSide(event);
-        if (signalSide === "neutral") return;
+        const signalSide = "sell";
 
         // Calculate proper confidence using zone strength instead of threshold
         const calculatedConfidence = Math.min(
@@ -621,15 +642,18 @@ export class DistributionDetectorEnhanced extends Detector {
         // Emit zoneSignal event for dashboard signals list
         this.emit("zoneSignal", zoneSignal);
 
-        this.logger.info("DistributionDetectorEnhanced: Zone signal emitted", {
-            detectorId: this.getId(),
-            signalType: zoneSignal.signalType,
-            zoneId: zoneSignal.zone.id,
-            confidence: zoneSignal.confidence,
-            side: signalSide,
-            urgency: zoneSignal.urgency,
-            expectedDirection: zoneSignal.expectedDirection,
-        });
+        this.logger.info(
+            "[DistributionDetectorEnhanced]: Zone signal emitted",
+            {
+                detectorId: this.getId(),
+                signalType: zoneSignal.signalType,
+                zoneId: zoneSignal.zone.id,
+                confidence: zoneSignal.confidence,
+                side: signalSide,
+                urgency: zoneSignal.urgency,
+                expectedDirection: zoneSignal.expectedDirection,
+            }
+        );
     }
 
     /**
@@ -748,10 +772,7 @@ export class DistributionDetectorEnhanced extends Detector {
         }
 
         // Determine signal side based on distribution analysis
-        const signalSide = this.determineDistributionSignalSide(event);
-        if (signalSide === "neutral") {
-            return;
-        }
+        const signalSide = "sell";
 
         // distributionMetrics already calculated and validated above
 
@@ -790,7 +811,7 @@ export class DistributionDetectorEnhanced extends Detector {
         this.emit("signalCandidate", signalCandidate);
 
         this.logger.info(
-            "DistributionDetectorEnhanced: ENHANCED DISTRIBUTION SIGNAL EMITTED",
+            "[DistributionDetectorEnhanced]: ENHANCED DISTRIBUTION SIGNAL EMITTED",
             {
                 detectorId: this.getId(),
                 price: event.price,
@@ -803,60 +824,6 @@ export class DistributionDetectorEnhanced extends Detector {
                 signalType: "distribution",
             }
         );
-    }
-
-    /**
-     * Determine distribution signal side based on market conditions
-     */
-    private determineDistributionSignalSide(
-        event: EnrichedTradeEvent
-    ): "buy" | "sell" | "neutral" {
-        if (!event.zoneData) {
-            return "neutral";
-        }
-
-        // For distribution, we expect institutions to be selling (distributing)
-        // This creates selling pressure, so we might see sell signals
-        const allZones = [
-            ...event.zoneData.zones5Tick,
-            ...event.zoneData.zones10Tick,
-            ...event.zoneData.zones20Tick,
-        ];
-
-        const relevantZones = this.preprocessor.findZonesNearPrice(
-            allZones,
-            event.price,
-            this.confluenceMaxDistance
-        );
-        if (relevantZones.length === 0) {
-            return "neutral";
-        }
-
-        let totalSellVolume = 0;
-        let totalBuyVolume = 0;
-
-        relevantZones.forEach((zone) => {
-            totalSellVolume += zone.aggressiveSellVolume;
-            totalBuyVolume += zone.aggressiveBuyVolume;
-        });
-
-        const totalVolume = totalSellVolume + totalBuyVolume;
-        if (totalVolume === 0) {
-            return "neutral";
-        }
-
-        const sellRatio = FinancialMath.divideQuantities(
-            totalSellVolume,
-            totalVolume
-        );
-        const distributionThreshold = this.distributionRatioThreshold;
-
-        // If selling pressure is high, this suggests distribution pattern
-        if (sellRatio >= distributionThreshold) {
-            return "sell"; // Distribution creates bearish pressure
-        }
-
-        return "neutral";
     }
 
     /**
@@ -991,7 +958,7 @@ export class DistributionDetectorEnhanced extends Detector {
     ): void {
         this.enhancementConfig.enhancementMode = mode;
         this.logger.info(
-            "DistributionDetectorEnhanced: Enhancement mode updated",
+            "[DistributionDetectorEnhanced]: Enhancement mode updated",
             {
                 detectorId: this.getId(),
                 newMode: mode,
@@ -1006,7 +973,7 @@ export class DistributionDetectorEnhanced extends Detector {
      */
     public cleanup(): void {
         this.logger.info(
-            "DistributionDetectorEnhanced: Standalone cleanup completed",
+            "[DistributionDetectorEnhanced]: Standalone cleanup completed",
             {
                 detectorId: this.getId(),
                 enhancementStats: this.enhancementStats,
