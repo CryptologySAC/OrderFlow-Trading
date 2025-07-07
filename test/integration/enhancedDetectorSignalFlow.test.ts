@@ -413,7 +413,8 @@ describe("Enhanced Detector Signal Flow Integration", () => {
                     };
 
                     // Process signal through SignalManager
-                    const result = signalManager.processSignal(testSignal);
+                    const result =
+                        signalManager.handleProcessedSignal(testSignal);
 
                     // Verify signal passes threshold check
                     expect(result).toBeDefined();
@@ -476,7 +477,8 @@ describe("Enhanced Detector Signal Flow Integration", () => {
                         tradeIndex: 1,
                     };
 
-                    const result = signalManager.processSignal(testSignal);
+                    const result =
+                        signalManager.handleProcessedSignal(testSignal);
 
                     // Signal should be rejected (null or undefined)
                     expect(result).toBeNull();

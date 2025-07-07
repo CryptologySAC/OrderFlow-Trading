@@ -81,6 +81,12 @@ describe("trading/SignalManager", () => {
                 },
             }
         );
+        const signalData = {
+            price: 100,
+            side: "buy" as const,
+            volume: 100,
+            timestamp: new Date(),
+        };
         const signal = {
             id: "test_signal_1",
             originalCandidate: {} as any,
@@ -89,9 +95,10 @@ describe("trading/SignalManager", () => {
             timestamp: new Date(),
             detectorId: "test_detector",
             processingMetadata: {},
-            data: { price: 100 },
+            data: signalData,
+            metadata: signalData, // Include metadata for direction detection
         } as any;
-        const confirmed = manager.processSignal(signal);
+        const confirmed = manager.handleProcessedSignal(signal);
         expect(confirmed).not.toBeNull();
         expect(confirmed?.id).toContain("confirmed");
         expect(confirmed?.id).toContain("test_signal_1");
@@ -173,17 +180,32 @@ describe("trading/SignalManager", () => {
             processingMetadata: {},
         } as any;
 
+        const signalData1 = {
+            price: 100,
+            side: "buy" as const,
+            volume: 100,
+            timestamp: new Date(),
+        };
+        const signalData2 = {
+            price: 100.01,
+            side: "buy" as const,
+            volume: 100,
+            timestamp: new Date(),
+        };
+
         const s1 = {
             ...baseSignal,
             id: "sig1",
             type: "accumulation" as const,
-            data: { price: 100 },
+            data: signalData1,
+            metadata: signalData1,
         };
         const s2 = {
             ...baseSignal,
             id: "sig2",
             type: "accumulation" as const,
-            data: { price: 100.01 },
+            data: signalData2,
+            metadata: signalData2,
         };
 
         const c1 = manager.handleProcessedSignal(s1 as any);

@@ -9,7 +9,7 @@ import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
 import type { ProcessedSignal } from "../src/types/signalTypes.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 
-// Use proper mocks from __mocks__ directory  
+// Use proper mocks from __mocks__ directory
 vi.mock("../src/core/config.js", () => {
     const mockSignalManagerConfig = {
         confidenceThreshold: 0.3,
@@ -224,7 +224,6 @@ describe("SignalManager Conflict Resolution", () => {
                 undefined
             );
 
-
             const now = Date.now();
             const signal1 = createMockSignal(
                 "sig1",
@@ -251,7 +250,7 @@ describe("SignalManager Conflict Resolution", () => {
 
             // Should detect conflict and apply resolution
             expect(mockLogger.warn).toHaveBeenCalledWith(
-                "Detected conflicting opposite signals",
+                "[SignalManager] Detected conflicting opposite signals",
                 expect.objectContaining({
                     newSignal: expect.objectContaining({
                         id: "sig2",
@@ -290,7 +289,7 @@ describe("SignalManager Conflict Resolution", () => {
 
             // Should not detect conflict
             expect(mockLogger.warn).not.toHaveBeenCalledWith(
-                "Detected conflicting opposite signals",
+                "[SignalManager] Detected conflicting opposite signals",
                 expect.anything()
             );
         });
@@ -320,7 +319,7 @@ describe("SignalManager Conflict Resolution", () => {
 
             // Should not detect conflict due to time separation
             expect(mockLogger.warn).not.toHaveBeenCalledWith(
-                "Detected conflicting opposite signals",
+                "[SignalManager] Detected conflicting opposite signals",
                 expect.anything()
             );
         });
@@ -350,7 +349,7 @@ describe("SignalManager Conflict Resolution", () => {
 
             // Should not detect conflict due to price distance
             expect(mockLogger.warn).not.toHaveBeenCalledWith(
-                "Detected conflicting opposite signals",
+                "[SignalManager] Detected conflicting opposite signals",
                 expect.anything()
             );
         });
@@ -359,7 +358,7 @@ describe("SignalManager Conflict Resolution", () => {
     describe("Confidence-Weighted Resolution", () => {
         test("should apply penalty factor and select higher confidence signal", () => {
             setConflictResolutionEnabled(true); // Explicitly enable conflict resolution
-            
+
             // Recreate SignalManager with updated config
             signalManager = new SignalManager(
                 mockAnomalyDetector,
@@ -370,7 +369,7 @@ describe("SignalManager Conflict Resolution", () => {
                 undefined,
                 undefined
             );
-            
+
             const now = Date.now();
             const signal1 = createMockSignal(
                 "sig1",
@@ -403,7 +402,7 @@ describe("SignalManager Conflict Resolution", () => {
 
         test("should adjust confidence of winning signal after conflict", () => {
             setConflictResolutionEnabled(true); // Explicitly enable conflict resolution
-            
+
             // Recreate SignalManager with updated config
             signalManager = new SignalManager(
                 mockAnomalyDetector,
@@ -414,7 +413,7 @@ describe("SignalManager Conflict Resolution", () => {
                 undefined,
                 undefined
             );
-            
+
             const now = Date.now();
             const signal1 = createMockSignal(
                 "sig1",

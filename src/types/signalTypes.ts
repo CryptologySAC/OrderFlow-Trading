@@ -321,7 +321,10 @@ export interface AnomalyImpactFactors {
     finalConfidence: number;
     anomalyType?: string;
     correlationBoost?: number;
+    contextBoost?: number;
     healthImpact?: string;
+    volatilityRegime: string;
+    marketVolatility: number;
     impactFactors: Array<{
         anomalyType: string;
         impact: "positive" | "negative" | "neutral";

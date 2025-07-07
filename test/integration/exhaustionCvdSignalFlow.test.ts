@@ -263,7 +263,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
                 tradeIndex: 1,
             };
 
-            const result = signalManager.processSignal(testSignal);
+            const result = signalManager.handleProcessedSignal(testSignal);
             expect(result).toBeDefined();
             console.log(
                 `✅ Exhaustion signal passes threshold ${EXHAUSTION_THRESHOLD}`
@@ -275,7 +275,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
                 confidence: EXHAUSTION_THRESHOLD - 0.01,
             };
 
-            const lowResult = signalManager.processSignal(lowSignal);
+            const lowResult = signalManager.handleProcessedSignal(lowSignal);
             expect(lowResult).toBeNull();
             console.log(
                 `✅ Exhaustion signal below threshold ${EXHAUSTION_THRESHOLD} correctly rejected`
@@ -411,7 +411,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
                 tradeIndex: 1,
             };
 
-            const result = signalManager.processSignal(testSignal);
+            const result = signalManager.handleProcessedSignal(testSignal);
             expect(result).toBeDefined();
             console.log(`✅ CVD signal passes threshold ${CVD_THRESHOLD}`);
 
@@ -421,7 +421,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
                 confidence: CVD_THRESHOLD - 0.01,
             };
 
-            const lowResult = signalManager.processSignal(lowSignal);
+            const lowResult = signalManager.handleProcessedSignal(lowSignal);
             expect(lowResult).toBeNull();
             console.log(
                 `✅ CVD signal below threshold ${CVD_THRESHOLD} correctly rejected`

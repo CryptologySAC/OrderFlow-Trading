@@ -760,24 +760,22 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         event: EnrichedTradeEvent,
         confidenceBoost: number
     ): string | null {
-        // Only emit signals for high-confidence actionable events
-        if (confidenceBoost < this.enhancementConfig.finalConfidenceRequired) {
-            return null; // Not significant enough for a signal
+        // Use base confidence threshold for signal eligibility
+        if (confidenceBoost < this.enhancementConfig.baseConfidenceRequired) {
+            return null; // Not significant enough for any signal
         }
 
         const accumulationMetrics = this.calculateAccumulationMetrics(event);
         if (!accumulationMetrics) return null;
 
-        // Check if accumulation zone is completing (high buy ratio + strong confidence)
+        // Check for strong accumulation activity (medium confidence)
         if (
-            accumulationMetrics.buyRatio >=
-                this.accumulationRatioThreshold * 1.2 &&
-            confidenceBoost > 0.2
+            accumulationMetrics.buyRatio >= this.accumulationRatioThreshold &&
+            confidenceBoost >= this.enhancementConfig.baseConfidenceRequired
         ) {
-            return "completion"; // Zone completing - actionable signal
+            return "strengthened"; // Zone strengthening - actionable signal
         }
 
-        // For now, only emit completion signals - invalidation/consumption would need price action tracking
         return null;
     }
 

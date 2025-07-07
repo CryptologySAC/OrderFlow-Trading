@@ -207,7 +207,7 @@ export class SignalManager extends EventEmitter {
         this.marketVolatilityWeight = this.config.marketVolatilityWeight;
 
         this.logger.info(
-            "SignalManager initialized as market health gatekeeper",
+            "[SignalManager] SignalManager initialized as market health gatekeeper",
             {
                 component: "SignalManager",
                 config: this.config,
@@ -240,16 +240,19 @@ export class SignalManager extends EventEmitter {
      * Simplified signal processing - market health gatekeeper + signal coordination.
      * No complex anomaly enhancement, just health-based allow/block decisions.
      */
-    public processSignal(signal: ProcessedSignal): ConfirmedSignal | null {
+    private processSignal(signal: ProcessedSignal): ConfirmedSignal | null {
         this.lastRejectReason = undefined;
         try {
             // 1. Market health check (infrastructure safety)
             if (!this.checkMarketHealth()) {
-                this.logger.info("Signal blocked due to market health", {
-                    signalId: signal.id,
-                    signalType: signal.type,
-                    healthStatus: this.anomalyDetector.getMarketHealth(),
-                });
+                this.logger.info(
+                    "[SignalManager] Signal blocked due to market health",
+                    {
+                        signalId: signal.id,
+                        signalType: signal.type,
+                        healthStatus: this.anomalyDetector.getMarketHealth(),
+                    }
+                );
 
                 this.recordMetric("signal_blocked_by_health", signal.type);
                 this.recordDetailedSignalMetrics(
@@ -264,7 +267,7 @@ export class SignalManager extends EventEmitter {
             // 2. Detector-specific confidence threshold check
             if (!this.filterSignalByConfidence(signal)) {
                 this.logger.debug(
-                    "Signal rejected due to detector-specific confidence threshold",
+                    "[SignalManager] Signal rejected due to detector-specific confidence threshold",
                     {
                         signalId: signal.id,
                         signalType: signal.type,
@@ -297,7 +300,7 @@ export class SignalManager extends EventEmitter {
                     );
                     if (!resolvedSignal) {
                         this.logger.info(
-                            "Signal rejected due to conflict resolution",
+                            "[SignalManager] Signal rejected due to conflict resolution",
                             {
                                 signalId: signal.id,
                                 signalType: signal.type,
@@ -343,7 +346,7 @@ export class SignalManager extends EventEmitter {
             this.lastRejectReason = undefined;
             return confirmedSignal;
         } catch (error) {
-            this.logger.error("Failed to process signal", {
+            this.logger.error("[SignalManager] Failed to process signal", {
                 signalId: signal.id,
                 error: error instanceof Error ? error.message : String(error),
             });
@@ -411,7 +414,7 @@ export class SignalManager extends EventEmitter {
 
             return true;
         } catch (error) {
-            this.logger.error("Failed to check market health", {
+            this.logger.error("[SignalManager] Failed to check market health", {
                 error: error instanceof Error ? error.message : String(error),
             });
             // Default to allow trading if health check fails
@@ -427,28 +430,45 @@ export class SignalManager extends EventEmitter {
         signal: ProcessedSignal,
         correlation: SignalCorrelation
     ): ConfirmedSignal {
-        // Simple confidence calculation with correlation boost only
+        // Enhanced confidence calculation with volatility-based context enhancement
         let finalConfidence = signal.confidence;
 
-        // Apply correlation boost
-        if (correlation.strength > 0) {
-            finalConfidence = Math.min(
-                FinancialMath.multiplyQuantities(
-                    finalConfidence,
-                    FinancialMath.safeAdd(
-                        1,
-                        FinancialMath.multiplyQuantities(
-                            correlation.strength,
-                            this.contextBoostLow
-                        )
-                    )
-                ),
-                1.0
+        // Get market health for context AND enhancement
+        const health = this.anomalyDetector.getMarketHealth();
+
+        // 1. Apply volatility-based context enhancement using AnomalyDetector data
+        const marketVolatility = this.getMarketVolatility();
+        const volatilityRegime =
+            this.determineVolatilityRegime(marketVolatility);
+
+        // Apply context boost based on volatility regime
+        let contextBoost = 0;
+        if (volatilityRegime === "highVolatility") {
+            contextBoost = this.contextBoostHigh;
+        } else if (volatilityRegime === "lowVolatility") {
+            contextBoost = this.contextBoostLow;
+        }
+
+        if (contextBoost > 0) {
+            finalConfidence = FinancialMath.multiplyQuantities(
+                finalConfidence,
+                FinancialMath.safeAdd(1, contextBoost)
             );
         }
 
-        // Get market health for context (not enhancement)
-        const health = this.anomalyDetector.getMarketHealth();
+        // 2. Apply correlation boost
+        if (correlation.strength > 0) {
+            finalConfidence = FinancialMath.multiplyQuantities(
+                finalConfidence,
+                FinancialMath.safeAdd(
+                    1,
+                    FinancialMath.multiplyQuantities(
+                        correlation.strength,
+                        this.correlationBoostFactor
+                    )
+                )
+            );
+        }
 
         const confirmedSignal: ConfirmedSignal = {
             id: `confirmed_${signal.id}`,
@@ -482,9 +502,24 @@ export class SignalManager extends EventEmitter {
                     adjustedConfidence: finalConfidence,
                     finalConfidence,
                     correlationBoost:
-                        correlation.strength * this.contextBoostLow,
-                    healthImpact: "none", // No health-based confidence changes
-                    impactFactors: [],
+                        correlation.strength * this.correlationBoostFactor,
+                    contextBoost: contextBoost,
+                    volatilityRegime: volatilityRegime,
+                    marketVolatility: marketVolatility,
+                    healthImpact:
+                        contextBoost > 0 ? "volatility_enhancement" : "none",
+                    impactFactors:
+                        contextBoost > 0
+                            ? [
+                                  {
+                                      anomalyType: `volatility_${volatilityRegime}`,
+                                      impact: "positive",
+                                      multiplier: 1 + contextBoost,
+                                      decayedMultiplier: 1 + contextBoost,
+                                      reasoning: `Confidence enhanced due to ${volatilityRegime} volatility regime`,
+                                  },
+                              ]
+                            : [],
                 },
             },
         };
@@ -509,17 +544,22 @@ export class SignalManager extends EventEmitter {
                     marketContext
                 );
 
-                this.logger.debug("Signal tracking initiated", {
+                this.logger.debug("[SignalManager] Signal tracking initiated", {
                     signalId: confirmedSignal.id,
                     price: confirmedSignal.finalPrice,
                     confidence: confirmedSignal.confidence,
                 });
             } catch (error) {
-                this.logger.error("Failed to initiate signal tracking", {
-                    signalId: confirmedSignal.id,
-                    error:
-                        error instanceof Error ? error.message : String(error),
-                });
+                this.logger.error(
+                    "[SignalManager] Failed to initiate signal tracking",
+                    {
+                        signalId: confirmedSignal.id,
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    }
+                );
             }
         }
 
@@ -537,7 +577,7 @@ export class SignalManager extends EventEmitter {
             (s) => s.timestamp.getTime() > cutoffTime && s.id !== signal.id
         );
 
-        // Find signals of the same type near the same price
+        // Find signals of the same side near the same price (for correlation analysis)
         const correlatedSignals = recentSignals.filter((s) => {
             const priceDiff = FinancialMath.calculateAbs(
                 FinancialMath.safeSubtract(s.data.price, signal.data.price)
@@ -547,7 +587,9 @@ export class SignalManager extends EventEmitter {
                 FinancialMath.divideQuantities(this.priceTolerancePercent, 100)
             ); // Configurable price tolerance
 
-            return s.type === signal.type && priceDiff <= priceThreshold;
+            return (
+                s.data.side === signal.data.side && priceDiff <= priceThreshold
+            );
         });
 
         // Calculate correlation strength
@@ -565,7 +607,7 @@ export class SignalManager extends EventEmitter {
 
         this.correlations.set(signal.id, correlation);
 
-        this.logger.debug("Signal correlation analyzed", {
+        this.logger.debug("[SignalManager] Signal correlation analyzed", {
             signalId: signal.id,
             correlatedCount: correlatedSignals.length,
             strength,
@@ -586,11 +628,11 @@ export class SignalManager extends EventEmitter {
 
         const { minimumSeparationMs, priceTolerance } =
             this.config.conflictResolution;
-        const cutoffTime = Date.now() - minimumSeparationMs;
+        const cutoffTime = newSignal.timestamp.getTime() - minimumSeparationMs;
 
-        // Find recent signals that might conflict
+        // Find recent signals that might conflict (include signals exactly at boundary)
         const recentSignals = this.signalHistory.filter(
-            (s) => s.timestamp.getTime() > cutoffTime && s.id !== newSignal.id
+            (s) => s.timestamp.getTime() >= cutoffTime && s.id !== newSignal.id
         );
 
         for (const existingSignal of recentSignals) {
@@ -622,24 +664,27 @@ export class SignalManager extends EventEmitter {
 
             // Check for opposite direction signals (the main issue)
             if (existingSignal.data.side !== newSignal.data.side) {
-                this.logger.warn("Detected conflicting opposite signals", {
-                    newSignal: {
-                        id: newSignal.id,
-                        type: newSignal.type,
-                        side: newSignal.data.side,
-                        price: newSignal.data.price,
-                        confidence: newSignal.confidence,
-                    },
-                    existingSignal: {
-                        id: existingSignal.id,
-                        type: existingSignal.type,
-                        side: existingSignal.data.side,
-                        price: existingSignal.data.price,
-                        confidence: existingSignal.confidence,
-                    },
-                    timeDiff,
-                    priceDiff,
-                });
+                this.logger.warn(
+                    "[SignalManager] Detected conflicting opposite signals",
+                    {
+                        newSignal: {
+                            id: newSignal.id,
+                            type: newSignal.type,
+                            side: newSignal.data.side,
+                            price: newSignal.data.price,
+                            confidence: newSignal.confidence,
+                        },
+                        existingSignal: {
+                            id: existingSignal.id,
+                            type: existingSignal.type,
+                            side: existingSignal.data.side,
+                            price: existingSignal.data.price,
+                            confidence: existingSignal.confidence,
+                        },
+                        timeDiff,
+                        priceDiff,
+                    }
+                );
 
                 return {
                     signal1: newSignal,
@@ -736,7 +781,7 @@ export class SignalManager extends EventEmitter {
         }
 
         // Calculate market volatility to determine priority matrix
-        const marketVolatility = this.calculateMarketVolatility();
+        const marketVolatility = this.getMarketVolatility();
         const volatilityRegime =
             this.determineVolatilityRegime(marketVolatility);
 
@@ -744,10 +789,13 @@ export class SignalManager extends EventEmitter {
         const priorityMatrix =
             this.config.signalPriorityMatrix[volatilityRegime];
         if (!priorityMatrix) {
-            this.logger.warn("No priority matrix found for volatility regime", {
-                volatilityRegime,
-                marketVolatility,
-            });
+            this.logger.warn(
+                "[SignalManager] No priority matrix found for volatility regime",
+                {
+                    volatilityRegime,
+                    marketVolatility,
+                }
+            );
             return currentSignal;
         }
 
@@ -797,29 +845,35 @@ export class SignalManager extends EventEmitter {
 
         // Return the winning signal if it's the current signal, otherwise reject
         if (currentSignal.id === winningSignal.id) {
-            this.logger.info("Signal won priority-based conflict resolution", {
-                signalId: currentSignal.id,
-                signalType: currentSignal.type,
-                priority: signal1Priority,
-                conflictingType:
-                    winningSignal === conflict.signal1
-                        ? conflict.signal2.type
-                        : conflict.signal1.type,
-                conflictingPriority: signal2Priority,
-                volatilityRegime,
-            });
+            this.logger.info(
+                "[SignalManager] Signal won priority-based conflict resolution",
+                {
+                    signalId: currentSignal.id,
+                    signalType: currentSignal.type,
+                    priority: signal1Priority,
+                    conflictingType:
+                        winningSignal === conflict.signal1
+                            ? conflict.signal2.type
+                            : conflict.signal1.type,
+                    conflictingPriority: signal2Priority,
+                    volatilityRegime,
+                }
+            );
 
             return {
                 ...currentSignal,
                 confidence: winningConfidence,
             };
         } else {
-            this.logger.info("Signal lost priority-based conflict resolution", {
-                signalId: currentSignal.id,
-                signalType: currentSignal.type,
-                winningType: winningSignal.type,
-                volatilityRegime,
-            });
+            this.logger.info(
+                "[SignalManager] Signal lost priority-based conflict resolution",
+                {
+                    signalId: currentSignal.id,
+                    signalType: currentSignal.type,
+                    winningType: winningSignal.type,
+                    volatilityRegime,
+                }
+            );
             return null;
         }
     }
@@ -834,7 +888,7 @@ export class SignalManager extends EventEmitter {
     ): ProcessedSignal | null {
         if (!this.config.conflictResolution) return currentSignal;
 
-        const marketVolatility = this.calculateMarketVolatility();
+        const marketVolatility = this.getMarketVolatility();
         const { volatilityNormalizationFactor, contradictionPenaltyFactor } =
             this.config.conflictResolution;
 
@@ -890,87 +944,44 @@ export class SignalManager extends EventEmitter {
 
         // Return result based on current signal
         if (currentSignal.id === winningSignal.id) {
-            this.logger.info("Signal won market context conflict resolution", {
-                signalId: currentSignal.id,
-                signalType: currentSignal.type,
-                marketVolatility,
-                normalizedVolatility,
-                contextBoost: signal1Wins ? contextBoost1 : contextBoost2,
-                finalConfidence: winningConfidence,
-            });
+            this.logger.info(
+                "[SignalManager] Signal won market context conflict resolution",
+                {
+                    signalId: currentSignal.id,
+                    signalType: currentSignal.type,
+                    marketVolatility,
+                    normalizedVolatility,
+                    contextBoost: signal1Wins ? contextBoost1 : contextBoost2,
+                    finalConfidence: winningConfidence,
+                }
+            );
 
             return {
                 ...currentSignal,
                 confidence: Math.min(winningConfidence, 1.0), // Cap at 1.0
             };
         } else {
-            this.logger.info("Signal lost market context conflict resolution", {
-                signalId: currentSignal.id,
-                signalType: currentSignal.type,
-                winningType: winningSignal.type,
-                marketVolatility,
-                normalizedVolatility,
-            });
+            this.logger.info(
+                "[SignalManager] Signal lost market context conflict resolution",
+                {
+                    signalId: currentSignal.id,
+                    signalType: currentSignal.type,
+                    winningType: winningSignal.type,
+                    marketVolatility,
+                    normalizedVolatility,
+                }
+            );
             return null;
         }
     }
 
     /**
-     * Calculate market volatility using FinancialMath.
-     * Uses recent price movements to determine current market volatility.
+     * Get market volatility from AnomalyDetector.
+     * No fallbacks, no defaults - use provided data only.
      */
-    private calculateMarketVolatility(): number {
-        try {
-            // Get recent signals to calculate price volatility
-            const recentSignals = Array.from(this.recentSignals.values())
-                .filter(
-                    (s) =>
-                        Date.now() - s.timestamp.getTime() <
-                        this.correlationWindowMs
-                ) // Configurable window
-                .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-
-            if (recentSignals.length < 5) {
-                return this.defaultLowVolatility; // Default low volatility
-            }
-
-            // Extract prices and calculate returns
-            const prices = recentSignals.map((s) => s.data.price);
-            const returns: number[] = [];
-
-            for (let i = 1; i < prices.length; i++) {
-                const returnValue = FinancialMath.divideQuantities(
-                    FinancialMath.safeSubtract(prices[i], prices[i - 1]),
-                    prices[i - 1]
-                );
-                returns.push(FinancialMath.calculateAbs(returnValue)); // Use absolute returns for volatility
-            }
-
-            if (returns.length === 0) {
-                return this.defaultLowVolatility;
-            }
-
-            // Calculate standard deviation of returns using FinancialMath
-            const volatility = FinancialMath.calculateStdDev(returns);
-
-            // Annualize the volatility (assuming 5-minute intervals)
-            const annualizedVolatility = FinancialMath.multiplyQuantities(
-                volatility,
-                Math.sqrt(
-                    FinancialMath.multiplyQuantities(
-                        365,
-                        FinancialMath.multiplyQuantities(24, 12)
-                    )
-                ) // ~5200 periods per year
-            );
-
-            return Math.max(0.001, Math.min(annualizedVolatility, 1.0)); // Clamp between 0.1% and 100%
-        } catch (error) {
-            this.logger.error("Failed to calculate market volatility", {
-                error: error instanceof Error ? error.message : String(error),
-            });
-            return this.defaultVolatilityError; // Default to error volatility
-        }
+    private getMarketVolatility(): number {
+        const health = this.anomalyDetector.getMarketHealth();
+        return health.metrics.volatility;
     }
 
     /**
@@ -1055,11 +1066,37 @@ export class SignalManager extends EventEmitter {
 
         // For normal load, process synchronously (backward compatibility)
         const startTime = Date.now();
-        const result = this.processSignalSync(signal);
-        const processingTime = Date.now() - startTime;
+        let result: ConfirmedSignal | null = null;
 
-        // Update adaptive metrics
-        this.updateProcessingMetrics(processingTime, result !== null);
+        try {
+            result = this.processSignalSync(signal);
+            const processingTime = Date.now() - startTime;
+
+            // Update adaptive metrics and circuit breaker state
+            this.updateProcessingMetrics(processingTime, result !== null);
+
+            if (result !== null) {
+                this.resetCircuitBreaker(signal.detectorId);
+            } else {
+                this.recordCircuitBreakerFailure(signal.detectorId);
+            }
+        } catch (error) {
+            const processingTime = Date.now() - startTime;
+            this.updateProcessingMetrics(processingTime, false);
+            this.recordCircuitBreakerFailure(signal.detectorId);
+
+            this.logger.error(
+                "[SignalManager] Failed to process signal synchronously",
+                {
+                    signalId: signal.id,
+                    detectorId: signal.detectorId,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
+
+            result = null;
+        }
 
         return result;
     }
@@ -1108,15 +1145,18 @@ export class SignalManager extends EventEmitter {
                     // Update adaptive processing metrics
                     this.updateProcessingMetrics(processingTime, success);
                 } catch (error) {
-                    this.logger.error("Failed to process prioritized signal", {
-                        signalId: prioritizedSignal.signal.id,
-                        priority: prioritizedSignal.priority,
-                        attempts: prioritizedSignal.processingAttempts,
-                        error:
-                            error instanceof Error
-                                ? error.message
-                                : String(error),
-                    });
+                    this.logger.error(
+                        "[SignalManager] Failed to process prioritized signal",
+                        {
+                            signalId: prioritizedSignal.signal.id,
+                            priority: prioritizedSignal.priority,
+                            attempts: prioritizedSignal.processingAttempts,
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                        }
+                    );
 
                     this.recordCircuitBreakerFailure(
                         prioritizedSignal.signal.detectorId
@@ -1162,7 +1202,7 @@ export class SignalManager extends EventEmitter {
     private processSignalSync(signal: ProcessedSignal): ConfirmedSignal | null {
         let confirmedSignal: ConfirmedSignal | null = null;
         try {
-            this.logger.info("Processing signal", {
+            this.logger.info("[SignalManager] Processing signal", {
                 component: "SignalManager",
                 operation: "processSignalSync",
                 signalId: signal.id,
@@ -1185,11 +1225,13 @@ export class SignalManager extends EventEmitter {
                 1
             );
 
-            // Store signal for correlation analysis
-            this.storeSignal(signal);
-
             // Process signal through simplified pipeline
             confirmedSignal = this.processSignal(signal);
+
+            // Store signal for correlation analysis only if it succeeds
+            if (confirmedSignal) {
+                this.storeSignal(signal);
+            }
 
             if (!confirmedSignal) {
                 this.emit("signalRejected", {
@@ -1206,12 +1248,15 @@ export class SignalManager extends EventEmitter {
 
             // Check for duplicate/throttled signals
             if (this.isSignalThrottled(tradingSignal)) {
-                this.logger.info("Signal throttled to prevent duplicates", {
-                    signalId: tradingSignal.id,
-                    type: tradingSignal.type,
-                    price: tradingSignal.price,
-                    side: tradingSignal.side,
-                });
+                this.logger.info(
+                    "[SignalManager] Signal throttled to prevent duplicates",
+                    {
+                        signalId: tradingSignal.id,
+                        type: tradingSignal.type,
+                        price: tradingSignal.price,
+                        side: tradingSignal.side,
+                    }
+                );
                 this.recordDetailedSignalMetrics(
                     signal,
                     "rejected",
@@ -1266,21 +1311,27 @@ export class SignalManager extends EventEmitter {
             this.emit("signalGenerated", tradingSignal);
             this.emit("signalConfirmed", confirmedSignal);
 
-            this.logger.info("Signal processed successfully", {
+            this.logger.info("[SignalManager] Signal processed successfully", {
                 signalId: signal.id,
                 finalSignalId: tradingSignal.id,
                 price: tradingSignal.price,
                 side: tradingSignal.side,
                 confidence: confirmedSignal.confidence,
                 marketHealth: confirmedSignal.anomalyData.marketHealthy,
+                confirmedSignal: confirmedSignal,
+                tradingSignal: tradingSignal,
             });
         } catch (error: unknown) {
-            this.logger.error("Failed to handle processed signal", {
-                component: "SignalManager",
-                operation: "handleProcessedSignal",
-                signalId: signal.id,
-                error: error instanceof Error ? error.message : String(error),
-            });
+            this.logger.error(
+                "[SignalManager] Failed to handle processed signal",
+                {
+                    component: "SignalManager",
+                    operation: "handleProcessedSignal",
+                    signalId: signal.id,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
 
             this.metricsCollector.incrementCounter(
                 "signal_manager_errors_total",
@@ -1334,13 +1385,16 @@ export class SignalManager extends EventEmitter {
         if (queueUtilization >= backpressureThreshold) {
             if (!this.backpressureActive) {
                 this.backpressureActive = true;
-                this.logger.warn("Enhanced backpressure activated", {
-                    queueSize: this.signalQueue.length,
-                    maxSize: this.config.maxQueueSize,
-                    utilization: queueUtilization,
-                    adaptiveThreshold: backpressureThreshold,
-                    signalPriority: priority,
-                });
+                this.logger.warn(
+                    "[SignalManager] Enhanced backpressure activated",
+                    {
+                        queueSize: this.signalQueue.length,
+                        maxSize: this.config.maxQueueSize,
+                        utilization: queueUtilization,
+                        adaptiveThreshold: backpressureThreshold,
+                        signalPriority: priority,
+                    }
+                );
             }
 
             // 🔧 Priority-based dropping during backpressure
@@ -1364,10 +1418,13 @@ export class SignalManager extends EventEmitter {
         ) {
             // Deactivate backpressure when queue clears
             this.backpressureActive = false;
-            this.logger.info("Enhanced backpressure deactivated", {
-                queueSize: this.signalQueue.length,
-                utilization: queueUtilization,
-            });
+            this.logger.info(
+                "[SignalManager] Enhanced backpressure deactivated",
+                {
+                    queueSize: this.signalQueue.length,
+                    utilization: queueUtilization,
+                }
+            );
         }
 
         // 🔧 Hard limit: drop signals if queue is completely full (except highest priority)
@@ -1407,15 +1464,18 @@ export class SignalManager extends EventEmitter {
             }
         );
 
-        this.logger.warn("Signal dropped with enhanced tracking", {
-            signalId: signal.id,
-            signalType: signal.type,
-            confidence: signal.confidence,
-            queueSize: this.signalQueue.length,
-            backpressureActive: this.backpressureActive,
-            dropReason,
-            priority: this.calculateSignalPriority(signal),
-        });
+        this.logger.warn(
+            "[SignalManager] Signal dropped with enhanced tracking",
+            {
+                signalId: signal.id,
+                signalType: signal.type,
+                confidence: signal.confidence,
+                queueSize: this.signalQueue.length,
+                backpressureActive: this.backpressureActive,
+                dropReason,
+                priority: this.calculateSignalPriority(signal),
+            }
+        );
     }
 
     /**
@@ -1452,9 +1512,20 @@ export class SignalManager extends EventEmitter {
             throw new Error("No original signal found");
         }
 
-        // Determine trading direction from signal data if available, otherwise use signal type
-        const side: "buy" | "sell" =
-            this.getSignalDirectionFromData(originalSignal);
+        // Determine trading direction from signal data - required
+        const side = this.getSignalDirectionFromData(originalSignal);
+        if (side === null) {
+            this.logger.error(
+                "[SignalManager] Signal missing required direction data",
+                {
+                    signalId: confirmedSignal.id,
+                    signalType: originalSignal.type,
+                }
+            );
+            throw new Error(
+                `Signal ${confirmedSignal.id} missing required direction data`
+            );
+        }
 
         // Validate finalPrice before calculating TP/SL
         if (
@@ -1462,11 +1533,14 @@ export class SignalManager extends EventEmitter {
             isNaN(confirmedSignal.finalPrice) ||
             confirmedSignal.finalPrice <= 0
         ) {
-            this.logger.error("Invalid finalPrice for signal calculations", {
-                signalId: confirmedSignal.id,
-                finalPrice: confirmedSignal.finalPrice,
-                side,
-            });
+            this.logger.error(
+                "[SignalManager] Invalid finalPrice for signal calculations",
+                {
+                    signalId: confirmedSignal.id,
+                    finalPrice: confirmedSignal.finalPrice,
+                    side,
+                }
+            );
             throw new Error(
                 `Invalid finalPrice: ${confirmedSignal.finalPrice}`
             );
@@ -1483,7 +1557,7 @@ export class SignalManager extends EventEmitter {
 
         // Validate calculated values
         if (isNaN(profitTarget) || isNaN(stopLoss)) {
-            this.logger.error("Invalid TP/SL calculations", {
+            this.logger.error("[SignalManager] Invalid TP/SL calculations", {
                 signalId: confirmedSignal.id,
                 finalPrice: confirmedSignal.finalPrice,
                 side,
@@ -1526,12 +1600,12 @@ export class SignalManager extends EventEmitter {
     }
 
     /**
-     * Get trading direction from signal data or fallback to signal type.
+     * Get trading direction from signal data only - no fallbacks.
      */
     private getSignalDirectionFromData(
         signal: ConfirmedSignal["originalSignals"][0]
-    ): "buy" | "sell" {
-        // Try to extract side from signal metadata first (metadata = signal.data from detector)
+    ): "buy" | "sell" | null {
+        // Extract side from signal metadata (metadata = signal.data from detector)
         if (signal.metadata && typeof signal.metadata === "object") {
             const metadata = signal.metadata as unknown as Record<
                 string,
@@ -1542,28 +1616,8 @@ export class SignalManager extends EventEmitter {
             }
         }
 
-        // Fallback to signal type-based direction
-        return this.getSignalDirection(signal.type);
-    }
-
-    /**
-     * Get trading direction based on signal type (fallback method).
-     */
-    private getSignalDirection(signalType: SignalType): "buy" | "sell" {
-        switch (signalType) {
-            case "absorption":
-                return "buy"; // Absorption typically indicates support
-            case "exhaustion":
-                return "sell"; // Exhaustion typically indicates resistance/reversal
-            case "accumulation":
-                return "buy"; // Accumulation indicates buying interest
-            case "distribution":
-                return "sell"; // Distribution indicates selling pressure
-            case "deltacvd":
-                return "buy"; // DeltaCVD typically indicates momentum/divergence
-            default:
-                return "buy"; // Default fallback
-        }
+        // No fallbacks - signal must provide direction data
+        return null;
     }
 
     /**
@@ -1592,7 +1646,7 @@ export class SignalManager extends EventEmitter {
     private async sendAlerts(tradingSignal: Signal): Promise<void> {
         try {
             await this.alertManager.sendAlert(tradingSignal);
-            this.logger.debug("Alert sent for trading signal", {
+            this.logger.debug("[SignalManager] Alert sent for trading signal", {
                 signalId: tradingSignal.id,
             });
             this.metricsCollector.incrementCounter(
@@ -1604,7 +1658,7 @@ export class SignalManager extends EventEmitter {
                 }
             );
         } catch (error) {
-            this.logger.error("Failed to send alert", {
+            this.logger.error("[SignalManager] Failed to send alert", {
                 signalId: tradingSignal.id,
                 error: error instanceof Error ? error.message : String(error),
             });
@@ -1630,7 +1684,7 @@ export class SignalManager extends EventEmitter {
         const signalKey = this.generateSignalKey(tradingSignal);
         const now = Date.now();
 
-        this.logger.debug("Checking signal throttling", {
+        this.logger.debug("[SignalManager] Checking signal throttling", {
             signalId: tradingSignal.id,
             signalKey,
             type: tradingSignal.type,
@@ -1643,12 +1697,15 @@ export class SignalManager extends EventEmitter {
         const lastSignalTime = this.recentTradingSignals.get(signalKey);
         if (lastSignalTime && now - lastSignalTime < this.signalThrottleMs) {
             const timeDiff = now - lastSignalTime;
-            this.logger.info("Signal throttled - exact match found", {
-                signalId: tradingSignal.id,
-                signalKey,
-                timeSinceLastMs: timeDiff,
-                throttleWindowMs: this.signalThrottleMs,
-            });
+            this.logger.info(
+                "[SignalManager] Signal throttled - exact match found",
+                {
+                    signalId: tradingSignal.id,
+                    signalKey,
+                    timeSinceLastMs: timeDiff,
+                    throttleWindowMs: this.signalThrottleMs,
+                }
+            );
             return true; // Signal is throttled
         }
 
@@ -1661,7 +1718,7 @@ export class SignalManager extends EventEmitter {
                 if (this.areSignalsSimilar(tradingSignal, existingKey)) {
                     const timeDiff = now - timestamp;
                     this.logger.info(
-                        "Signal throttled - similar signal found",
+                        "[SignalManager] Signal throttled - similar signal found",
                         {
                             signalId: tradingSignal.id,
                             newSignalKey: signalKey,
@@ -1675,7 +1732,7 @@ export class SignalManager extends EventEmitter {
             }
         }
 
-        this.logger.debug("Signal not throttled - proceeding", {
+        this.logger.debug("[SignalManager] Signal not throttled - proceeding", {
             signalId: tradingSignal.id,
             signalKey,
         });
@@ -1690,12 +1747,15 @@ export class SignalManager extends EventEmitter {
         const timestamp = Date.now();
         this.recentTradingSignals.set(signalKey, timestamp);
 
-        this.logger.debug("Recorded trading signal for throttling", {
-            signalId: tradingSignal.id,
-            signalKey,
-            timestamp,
-            totalRecordedSignals: this.recentTradingSignals.size,
-        });
+        this.logger.debug(
+            "[SignalManager] Recorded trading signal for throttling",
+            {
+                signalId: tradingSignal.id,
+                signalKey,
+                timestamp,
+                totalRecordedSignals: this.recentTradingSignals.size,
+            }
+        );
 
         // Clean up old entries periodically
         this.cleanupThrottledSignals();
@@ -1711,7 +1771,7 @@ export class SignalManager extends EventEmitter {
         );
         const key = `${tradingSignal.type}_${tradingSignal.side}_${priceKey}`;
 
-        this.logger.debug("Generated signal key", {
+        this.logger.debug("[SignalManager] Generated signal key", {
             signalId: tradingSignal.id,
             type: tradingSignal.type,
             side: tradingSignal.side,
@@ -1741,12 +1801,15 @@ export class SignalManager extends EventEmitter {
 
         // Check if same type and side
         if (tradingSignal.type !== type || tradingSignal.side !== side) {
-            this.logger.debug("Signals not similar - different type/side", {
-                newType: tradingSignal.type,
-                newSide: tradingSignal.side,
-                existingType: type,
-                existingSide: side,
-            });
+            this.logger.debug(
+                "[SignalManager] Signals not similar - different type/side",
+                {
+                    newType: tradingSignal.type,
+                    newSide: tradingSignal.side,
+                    existingType: type,
+                    existingSide: side,
+                }
+            );
             return false;
         }
 
@@ -1760,7 +1823,7 @@ export class SignalManager extends EventEmitter {
         );
         const isSimilar = priceDiff <= priceToleranceAbs;
 
-        this.logger.debug("Price similarity check", {
+        this.logger.debug("[SignalManager] Price similarity check", {
             newPrice: tradingSignal.price,
             existingPrice,
             priceDiff,
@@ -1815,7 +1878,7 @@ export class SignalManager extends EventEmitter {
             this.correlations.size
         );
 
-        this.logger.debug("Cleaned up old signals", {
+        this.logger.debug("[SignalManager] Cleaned up old signals", {
             recentSignalsCount: this.recentSignals.size,
             correlationsCount: this.correlations.size,
         });
@@ -2162,23 +2225,27 @@ export class SignalManager extends EventEmitter {
         signal: ProcessedSignal,
         confirmedSignal: ConfirmedSignal
     ): void {
-        this.logger.info("Signal processed with market health check", {
-            signalId: signal.id,
-            signalType: signal.type,
-            confidence: {
-                original: signal.confidence,
-                final: confirmedSignal.confidence,
-                correlationBoost:
-                    confirmedSignal.correlationData.correlationStrength * 0.15,
-            },
-            marketHealth: {
-                healthy: confirmedSignal.anomalyData.marketHealthy,
-                recommendation:
-                    confirmedSignal.anomalyData.healthRecommendation,
-                criticalIssues:
-                    confirmedSignal.anomalyData.criticalIssues?.length || 0,
-            },
-        });
+        this.logger.info(
+            "[SignalManager] Signal processed with market health check",
+            {
+                signalId: signal.id,
+                signalType: signal.type,
+                confidence: {
+                    original: signal.confidence,
+                    final: confirmedSignal.confidence,
+                    correlationBoost:
+                        confirmedSignal.correlationData.correlationStrength *
+                        0.15,
+                },
+                marketHealth: {
+                    healthy: confirmedSignal.anomalyData.marketHealthy,
+                    recommendation:
+                        confirmedSignal.anomalyData.healthRecommendation,
+                    criticalIssues:
+                        confirmedSignal.anomalyData.criticalIssues?.length || 0,
+                },
+            }
+        );
     }
 
     /**
@@ -2381,12 +2448,15 @@ export class SignalManager extends EventEmitter {
                 [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
             );
 
-            this.logger.debug("Enhanced signal metrics initialized", {
-                component: "SignalManager",
-                metricsCount: "legacy + detailed tracking + backpressure",
-            });
+            this.logger.debug(
+                "[SignalManager] Enhanced signal metrics initialized",
+                {
+                    component: "SignalManager",
+                    metricsCount: "legacy + detailed tracking + backpressure",
+                }
+            );
         } catch (error) {
-            this.logger.error("Failed to initialize metrics", {
+            this.logger.error("[SignalManager] Failed to initialize metrics", {
                 component: "SignalManager",
                 error: error instanceof Error ? error.message : String(error),
             });
@@ -2466,7 +2536,7 @@ export class SignalManager extends EventEmitter {
     ): PerformanceMetrics | null {
         if (!this.signalTracker) {
             this.logger.warn(
-                "Performance metrics requested but SignalTracker not available",
+                "[SignalManager] Performance metrics requested but SignalTracker not available",
                 {
                     component: "SignalManager",
                 }
@@ -2477,10 +2547,14 @@ export class SignalManager extends EventEmitter {
         try {
             return this.signalTracker.getPerformanceMetrics(timeWindow);
         } catch (error) {
-            this.logger.error("Failed to get performance metrics", {
-                component: "SignalManager",
-                error: error instanceof Error ? error.message : String(error),
-            });
+            this.logger.error(
+                "[SignalManager] Failed to get performance metrics",
+                {
+                    component: "SignalManager",
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
             return null;
         }
     }
@@ -2634,7 +2708,9 @@ export class SignalManager extends EventEmitter {
         metrics: EnhancedMetrics,
         metricName: string
     ): number {
-        return Number(metrics.counters[metricName]?.value) || 0;
+        const value = metrics.counters[metricName]?.value;
+        const numericValue = Number(value);
+        return isNaN(numericValue) ? 0 : numericValue;
     }
 
     private getCounterValueByLabel(
@@ -2770,7 +2846,9 @@ export class SignalManager extends EventEmitter {
         if (state.isOpen && Date.now() > state.nextRetryTime) {
             // Time to test if circuit can be closed
             state.isOpen = false;
-            this.logger.info("Circuit breaker test mode", { detectorId });
+            this.logger.info("[SignalManager] Circuit breaker test mode", {
+                detectorId,
+            });
         }
 
         return state.isOpen;
@@ -2799,11 +2877,14 @@ export class SignalManager extends EventEmitter {
             state.nextRetryTime =
                 Date.now() + this.config.circuitBreakerResetMs;
 
-            this.logger.warn("Circuit breaker opened for detector", {
-                detectorId,
-                failureCount: state.failureCount,
-                nextRetryTime: new Date(state.nextRetryTime).toISOString(),
-            });
+            this.logger.warn(
+                "[SignalManager] Circuit breaker opened for detector",
+                {
+                    detectorId,
+                    failureCount: state.failureCount,
+                    nextRetryTime: new Date(state.nextRetryTime).toISOString(),
+                }
+            );
 
             this.metricsCollector.incrementCounter(
                 "signal_manager_circuit_breaker_opened_total",
@@ -2822,7 +2903,9 @@ export class SignalManager extends EventEmitter {
             state.failureCount = 0;
             if (state.isOpen) {
                 state.isOpen = false;
-                this.logger.info("Circuit breaker reset", { detectorId });
+                this.logger.info("[SignalManager] Circuit breaker reset", {
+                    detectorId,
+                });
                 this.metricsCollector.incrementCounter(
                     "signal_manager_circuit_breaker_reset_total",
                     1,

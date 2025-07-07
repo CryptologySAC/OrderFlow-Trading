@@ -158,11 +158,11 @@
                     "deltacvd": 0.7
                 },
                 "conflictResolution": {
-                    "enabled": false,
+                    "enabled": true,
                     "strategy": "confidence_weighted",
                     "minimumSeparationMs": 30000,
                     "contradictionPenaltyFactor": 0.5,
-                    "priceTolerance": 0.001,
+                    "priceTolerance": 0.02,
                     "volatilityNormalizationFactor": 0.02
                 },
                 "signalPriorityMatrix": {
@@ -282,7 +282,7 @@
                 "minEnhancedConfidenceThreshold": 0.05
             },
             "absorption": {
-                "minAggVolume": 50,
+                "minAggVolume": 100,
                 "windowMs": 60000,
                 "eventCooldownMs": 15000,
                 "minInitialMoveTicks": 4,
@@ -313,7 +313,7 @@
                     "spreadImpact": true
                 },
                 "useStandardizedZones": true,
-                "institutionalVolumeThreshold": 50,
+                "institutionalVolumeThreshold": 150,
                 "institutionalVolumeRatioThreshold": 0.6,
                 "volumeNormalizationThreshold": 200,
                 "absorptionRatioNormalization": 3,

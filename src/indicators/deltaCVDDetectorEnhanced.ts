@@ -296,10 +296,16 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             if (
                 baseConfidence >= this.enhancementConfig.baseConfidenceRequired
             ) {
-                this.emitStandaloneCVDSignal(
-                    event,
-                    divergenceResult,
-                    baseConfidence
+                // Store divergence result for potential enhancement
+                // Don't emit standalone signal here - let enhancement logic decide
+                this.logger.debug(
+                    "[DeltaCVDDetectorEnhanced DEBUG] CVD divergence detected, proceeding to enhancement check",
+                    {
+                        detectorId: this.getId(),
+                        price: event.price,
+                        confidence: baseConfidence,
+                        divergenceStrength: divergenceResult.divergenceStrength,
+                    }
                 );
             } else {
                 // Emit metrics for rejected signals due to insufficient confidence
@@ -585,7 +591,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             }
         }
 
-        // Update enhancement statistics
+        // Update enhancement statistics and emit appropriate signal
         if (enhancementApplied) {
             this.enhancementStats.enhancementCount++;
             this.enhancementStats.totalConfidenceBoost += totalConfidenceBoost;
@@ -598,6 +604,32 @@ export class DeltaCVDDetectorEnhanced extends Detector {
 
             // Store enhanced CVD metrics for monitoring
             this.storeEnhancedCVDMetrics(event, totalConfidenceBoost);
+        } else {
+            // No enhancements applied - emit standalone signal if divergence was detected
+            const divergenceResult = this.analyzeCVDDivergence(
+                event.zoneData,
+                event
+            );
+            if (divergenceResult.hasDivergence) {
+                const baseConfidence = Math.min(
+                    0.9,
+                    Math.max(
+                        this.enhancementConfig.baseConfidenceRequired,
+                        divergenceResult.divergenceStrength
+                    )
+                );
+
+                if (
+                    baseConfidence >=
+                    this.enhancementConfig.baseConfidenceRequired
+                ) {
+                    this.emitStandaloneCVDSignal(
+                        event,
+                        divergenceResult,
+                        baseConfidence
+                    );
+                }
+            }
         }
     }
 

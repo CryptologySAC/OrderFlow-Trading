@@ -752,24 +752,22 @@ export class DistributionDetectorEnhanced extends Detector {
         event: EnrichedTradeEvent,
         confidenceBoost: number
     ): string | null {
-        // Only emit signals for high-confidence actionable events
-        if (confidenceBoost < this.enhancementConfig.finalConfidenceRequired) {
-            return null; // Not significant enough for a signal
+        // Use base confidence threshold for signal eligibility
+        if (confidenceBoost < this.enhancementConfig.baseConfidenceRequired) {
+            return null; // Not significant enough for any signal
         }
 
         const distributionMetrics = this.calculateDistributionMetrics(event);
         if (!distributionMetrics) return null;
 
-        // Check if distribution zone is completing (high sell ratio + strong confidence)
+        // Check for strong distribution activity (medium confidence)
         if (
-            distributionMetrics.sellRatio >=
-                this.distributionRatioThreshold * 1.2 &&
-            confidenceBoost > 0.2
+            distributionMetrics.sellRatio >= this.distributionRatioThreshold &&
+            confidenceBoost >= this.enhancementConfig.baseConfidenceRequired
         ) {
-            return "completion"; // Zone completing - actionable signal
+            return "strengthened"; // Zone strengthening - actionable signal
         }
 
-        // For now, only emit completion signals - invalidation/consumption would need price action tracking
         return null;
     }
 

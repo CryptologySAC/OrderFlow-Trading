@@ -233,30 +233,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
     private analyzeAbsorptionPattern(event: EnrichedTradeEvent): void {
         if (!event.zoneData) return;
 
-        // STEP 1: CORE ABSORPTION DETECTION (Required for full functionality)
+        // STEP 1: CORE ABSORPTION DETECTION (Required for any signals)
         const coreAbsorptionResult = this.detectCoreAbsorption(event);
-        if (coreAbsorptionResult) {
-            // Emit core absorption signal (signalCandidate event expected by tests)
-            this.emit("signalCandidate", coreAbsorptionResult);
-
-            this.logger.info(
-                "🎯 AbsorptionDetectorEnhanced: ABSORPTION SIGNAL GENERATED!",
-                {
-                    detectorId: this.getId(),
-                    price: event.price,
-                    side: coreAbsorptionResult.side,
-                    confidence: coreAbsorptionResult.confidence,
-                    signalId: coreAbsorptionResult.id,
-                    signalType: "absorption",
-                    timestamp: new Date(
-                        coreAbsorptionResult.timestamp
-                    ).toISOString(),
-                    signalManagerThreshold: "Should be 0.3 (was 0.85!)",
-                }
-            );
-        } else {
+        if (!coreAbsorptionResult) {
             this.logger.debug(
-                "AbsorptionDetectorEnhanced: No core absorption signal generated",
+                "AbsorptionDetectorEnhanced: No core absorption detected - no signals",
                 {
                     detectorId: this.getId(),
                     price: event.price,
@@ -268,9 +249,10 @@ export class AbsorptionDetectorEnhanced extends Detector {
                         : 0,
                 }
             );
+            return; // No core absorption - no signals at all
         }
 
-        // STEP 2: ENHANCEMENT ANALYSIS (Additional confidence and validation)
+        // STEP 2: ENHANCEMENT ANALYSIS (Boost confidence of core signal)
         let totalConfidenceBoost = 0;
         let enhancementApplied = false;
 
@@ -346,8 +328,9 @@ export class AbsorptionDetectorEnhanced extends Detector {
             );
         }
 
-        // Update enhancement statistics
+        // STEP 3: EMIT SINGLE SIGNAL with enhanced confidence
         if (enhancementApplied) {
+            // Update enhancement statistics
             this.enhancementStats.enhancementCount++;
             this.enhancementStats.totalConfidenceBoost += totalConfidenceBoost;
             this.enhancementStats.averageConfidenceBoost =
@@ -360,8 +343,53 @@ export class AbsorptionDetectorEnhanced extends Detector {
             // Store enhanced absorption metrics for monitoring
             this.storeEnhancedAbsorptionMetrics(event, totalConfidenceBoost);
 
-            // ✅ EMIT ENHANCED ABSORPTION SIGNAL - Independent of base detector
-            this.emitEnhancedAbsorptionSignal(event, totalConfidenceBoost);
+            // Boost the core signal confidence and emit enhanced signal
+            const enhancedConfidence = Math.min(
+                1.0,
+                coreAbsorptionResult.confidence + totalConfidenceBoost
+            );
+
+            // Create enhanced signal with boosted confidence
+            const enhancedSignal: SignalCandidate = {
+                ...coreAbsorptionResult,
+                confidence: enhancedConfidence,
+                id: `enhanced-${coreAbsorptionResult.id}`,
+            };
+
+            this.emit("signalCandidate", enhancedSignal);
+
+            this.logger.info(
+                "🎯 AbsorptionDetectorEnhanced: ENHANCED ABSORPTION SIGNAL GENERATED!",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                    side: enhancedSignal.side,
+                    originalConfidence: coreAbsorptionResult.confidence,
+                    enhancedConfidence: enhancedConfidence,
+                    confidenceBoost: totalConfidenceBoost,
+                    signalId: enhancedSignal.id,
+                    signalType: "absorption",
+                    timestamp: new Date(enhancedSignal.timestamp).toISOString(),
+                }
+            );
+        } else {
+            // No enhancements - emit core signal as-is
+            this.emit("signalCandidate", coreAbsorptionResult);
+
+            this.logger.info(
+                "🎯 AbsorptionDetectorEnhanced: CORE ABSORPTION SIGNAL GENERATED!",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                    side: coreAbsorptionResult.side,
+                    confidence: coreAbsorptionResult.confidence,
+                    signalId: coreAbsorptionResult.id,
+                    signalType: "absorption",
+                    timestamp: new Date(
+                        coreAbsorptionResult.timestamp
+                    ).toISOString(),
+                }
+            );
         }
     }
 
@@ -1240,10 +1268,10 @@ export class AbsorptionDetectorEnhanced extends Detector {
         };
 
         // ✅ EMIT ENHANCED ABSORPTION SIGNAL - Independent of base detector
-        this.emit("signal", signalCandidate);
+        this.emit("signalCandidate", signalCandidate);
 
         this.logger.info(
-            "AbsorptionDetectorEnhanced: ENHANCED ABSORPTION SIGNAL EMITTED",
+            "AbsorptionDetectorEnhanced: ABSORPTION CANDIDATE SIGNAL EMITTED",
             {
                 detectorId: this.getId(),
                 price: event.price,
@@ -1253,6 +1281,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 absorptionScore: absorptionMetrics.absorptionScore,
                 signalId: signalCandidate.id,
                 signalType: "absorption",
+                signalCandidate: signalCandidate,
             }
         );
     }
