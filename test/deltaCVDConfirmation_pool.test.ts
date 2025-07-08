@@ -102,7 +102,7 @@ describe("DeltaCVD Standalone Detector - Core Functionality", () => {
         detector = new DeltaCVDDetectorEnhanced(
             "test-cvd",
             "LTCUSDT",
-            mockConfig.symbols.LTCUSDT.deltaCvdConfirmation as any,
+            mockConfig.symbols.LTCUSDT.deltaCVD,
             mockPreprocessor,
             mockLogger,
             mockMetrics
@@ -177,20 +177,21 @@ describe("DeltaCVD Standalone Detector - Core Functionality", () => {
     });
 
     it("should validate CVD detection parameters from config", () => {
-        const config = mockConfig.symbols.LTCUSDT.deltaCvdConfirmation as any;
+        const config = mockConfig.symbols.LTCUSDT.deltaCVD;
 
         // Verify key CVD detection parameters are present
-        expect(config.minZ).toBeDefined();
-        expect(config.divergenceThreshold).toBeDefined();
-        expect(config.baseConfidenceRequired).toBeDefined();
-        expect(config.finalConfidenceRequired).toBeDefined();
-        expect(config.cvdDivergenceVolumeThreshold).toBeDefined();
-        expect(config.cvdDivergenceStrengthThreshold).toBeDefined();
+        expect(config.windowsSec).toBeDefined();
+        expect(config.minTradesPerSec).toBeDefined();
+        expect(config.minVolPerSec).toBeDefined();
+        expect(config.signalThreshold).toBeDefined();
+        expect(config.enhancementMode).toBeDefined();
+        expect(config.cvdImbalanceThreshold).toBeDefined();
 
         // Verify production-grade thresholds
-        expect(config.minZ).toBeGreaterThan(0);
-        expect(config.baseConfidenceRequired).toBeGreaterThan(0);
-        expect(config.finalConfidenceRequired).toBeGreaterThan(0);
+        expect(config.minTradesPerSec).toBeGreaterThan(0);
+        expect(config.minVolPerSec).toBeGreaterThan(0);
+        expect(config.signalThreshold).toBeGreaterThan(0);
+        expect(config.cvdImbalanceThreshold).toBeGreaterThan(0);
     });
 
     it("should handle zone data properly for CVD analysis", () => {

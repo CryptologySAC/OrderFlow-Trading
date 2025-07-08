@@ -156,17 +156,8 @@ describe("DeltaCVD Standalone Validation - Mathematical Stability", () => {
             "standalone_validation_test",
             "LTCUSDT",
             {
-                ...mockConfig.symbols.LTCUSDT.deltaCvdConfirmation,
+                ...mockConfig.symbols.LTCUSDT.deltaCVD,
                 windowsSec: [60],
-                minZ: 1.0,
-                detectionMode: "momentum" as const,
-                baseConfidenceRequired: 0.2,
-                finalConfidenceRequired: 0.3,
-                usePassiveVolume: true,
-                enableDepthAnalysis: false, // Simplified for stability testing
-                volumeSurgeMultiplier: 1.5,
-                imbalanceThreshold: 0.05, // Very low threshold for testing
-                useStandardizedZones: true,
                 enhancementMode: "production" as const,
             },
             mockPreprocessor,

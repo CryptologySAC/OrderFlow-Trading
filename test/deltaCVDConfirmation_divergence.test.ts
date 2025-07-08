@@ -86,10 +86,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 "test_divergence_config",
                 "LTCUSDT",
                 {
-                    ...mockConfig.symbols.LTCUSDT.deltaCvdConfirmation,
+                    ...mockConfig.symbols.LTCUSDT.deltaCVD,
                     windowsSec: [60],
-                    detectionMode: "divergence" as const,
-                    minZ: 2.0,
                 },
                 mockPreprocessor,
                 mockLogger,
@@ -105,7 +103,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
             detector = new DeltaCVDDetectorEnhanced(
                 "test_default_mode",
                 "LTCUSDT",
-                mockConfig.symbols.LTCUSDT.deltaCvdConfirmation as any,
+                mockConfig.symbols.LTCUSDT.deltaCVD,
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics
@@ -120,10 +118,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
             detector = new DeltaCVDDetectorEnhanced(
                 "test_hybrid_mode",
                 "LTCUSDT",
-                {
-                    ...mockConfig.symbols.LTCUSDT.deltaCvdConfirmation,
-                    detectionMode: "hybrid" as const,
-                },
+                mockConfig.symbols.LTCUSDT.deltaCVD,
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics
@@ -139,7 +134,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 "test_divergence_validation",
                 "LTCUSDT",
                 {
-                    ...mockConfig.symbols.LTCUSDT.deltaCvdConfirmation,
+                    ...mockConfig.symbols.LTCUSDT.deltaCVD,
                     windowsSec: [60],
                     detectionMode: "divergence" as const,
                     minZ: 2.0,
@@ -203,7 +198,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 "test_price_cvd_mismatch",
                 "LTCUSDT",
                 {
-                    ...mockConfig.symbols.LTCUSDT.deltaCvdConfirmation,
+                    ...mockConfig.symbols.LTCUSDT.deltaCVD,
                     detectionMode: "divergence" as const,
                 },
                 mockPreprocessor,
@@ -400,7 +395,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
 
         beforeEach(() => {
             const sharedConfig = {
-                ...mockConfig.symbols.LTCUSDT.deltaCvdConfirmation,
+                ...mockConfig.symbols.LTCUSDT.deltaCVD,
                 windowsSec: [60],
                 minZ: 2.0,
                 divergenceThreshold: 0.3,

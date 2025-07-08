@@ -43,11 +43,8 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
             "test_cvd_surge",
             "LTCUSDT",
             {
-                ...mockConfig.symbols.LTCUSDT.deltaCvdConfirmation,
+                ...mockConfig.symbols.LTCUSDT.deltaCVD,
                 windowsSec: [60],
-                minZ: 2.5,
-                volumeSurgeMultiplier: 4.0,
-                imbalanceThreshold: 0.35,
                 enableDepthAnalysis: true,
             },
             mockPreprocessor,

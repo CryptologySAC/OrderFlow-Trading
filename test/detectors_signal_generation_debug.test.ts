@@ -581,7 +581,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
     describe("DeltaCVD Detector with Real Config", () => {
         it("should use actual config.json parameters", () => {
             const deltaCVDConfig =
-                realConfig.symbols.LTCUSDT.deltaCvdConfirmation;
+                realConfig.symbols.LTCUSDT.deltaCVD;
 
             console.log("Real DeltaCVD Config:", deltaCVDConfig);
 
@@ -668,32 +668,32 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 mockSignalLogger
             );
 
-            // Verify actual parameters match config
+            // Verify actual parameters match config (simplified schema)
             expect(
-                (detector as any).enhancementConfig.baseConfidenceRequired
-            ).toBe(deltaCVDConfig.baseConfidenceRequired);
+                (detector as any).enhancementConfig.signalThreshold
+            ).toBe(deltaCVDConfig.signalThreshold);
             expect(
-                (detector as any).enhancementConfig.finalConfidenceRequired
-            ).toBe(deltaCVDConfig.finalConfidenceRequired);
+                (detector as any).enhancementConfig.cvdImbalanceThreshold
+            ).toBe(deltaCVDConfig.cvdImbalanceThreshold);
 
             console.log("DeltaCVD Detector Parameters:");
             console.log(
-                "  baseConfidenceRequired:",
-                (detector as any).baseConfidenceRequired
+                "  signalThreshold:",
+                (detector as any).enhancementConfig.signalThreshold
             );
             console.log(
-                "  finalConfidenceRequired:",
-                (detector as any).finalConfidenceRequired
+                "  cvdImbalanceThreshold:",
+                (detector as any).enhancementConfig.cvdImbalanceThreshold
             );
             console.log(
-                "  usePassiveVolume:",
-                (detector as any).usePassiveVolume
+                "  enhancementMode:",
+                (detector as any).enhancementConfig.enhancementMode
             );
         });
 
         it("should process real market data and show why no signals are generated", () => {
             const deltaCVDConfig =
-                realConfig.symbols.LTCUSDT.deltaCvdConfirmation;
+                realConfig.symbols.LTCUSDT.deltaCVD;
 
             const completeDeltaCVDSettings: DeltaCVDEnhancedSettings = {
                 // Core CVD analysis (12 properties)
@@ -996,7 +996,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 maxCorrelationBound: 0.999,
 
                 // Override with actual config if available
-                ...config.deltaCvdConfirmation,
+                ...config.deltaCVD,
             };
 
             const deltaCVDDetector = new DeltaCVDDetectorEnhanced(
