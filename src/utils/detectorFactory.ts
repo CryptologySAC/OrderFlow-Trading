@@ -227,7 +227,6 @@ export class DetectorFactory {
             {
                 id,
                 enhancementMode: productionSettings.enhancementMode,
-                useStandardizedZones: productionSettings.useStandardizedZones,
             }
         );
 

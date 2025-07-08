@@ -90,8 +90,53 @@ const mockSignalManagerConfig = {
     },
 } as SignalManagerConfig;
 
+// Mock DeltaCVD detector configuration (SIMPLIFIED - matches production schema)
+const mockDeltaCVDConfig = {
+    // Core CVD analysis parameters (only what's actually used)
+    windowsSec: [60, 300],
+    minTradesPerSec: 0.75,
+    minVolPerSec: 10,
+    signalThreshold: 0.4,
+    eventCooldownMs: 5000,
+
+    // Zone enhancement control
+    enhancementMode: "production" as const,
+
+    // CVD divergence analysis (pure divergence mode only)
+    cvdImbalanceThreshold: 0.3,
+};
+
+// Mock Universal Zone Configuration (CRITICAL for DeltaCVD tests)
+const mockUniversalZoneConfig = {
+    maxActiveZones: 50,
+    zoneTimeoutMs: 1800000,
+    minZoneVolume: 100,
+    maxZoneWidth: 0.05,
+    minZoneStrength: 0.5,
+    completionThreshold: 0.6,
+    strengthChangeThreshold: 0.15,
+    minCandidateDuration: 180000,
+    maxPriceDeviation: 0.02,
+    minTradeCount: 30,
+    minBuyRatio: 0.6,
+    minSellRatio: 0.55,
+    priceStabilityThreshold: 0.85,
+    strongZoneThreshold: 0.7,
+    weakZoneThreshold: 0.4,
+    minZoneConfluenceCount: 2,
+    maxZoneConfluenceDistance: 3,
+    enableZoneConfluenceFilter: true,
+    enableCrossTimeframeAnalysis: false,
+    confluenceConfidenceBoost: 0.1,
+    crossTimeframeBoost: 0.05,
+    useStandardizedZones: true,
+    enhancementMode: "production" as const,
+};
+
 export const Config = {
     SIGNAL_MANAGER: mockSignalManagerConfig,
+    DELTACVD_DETECTOR: mockDeltaCVDConfig,
+    UNIVERSAL_ZONE_CONFIG: mockUniversalZoneConfig, // CRITICAL: Missing config added
     DETECTOR_CONFIDENCE_THRESHOLDS: {
         absorption: 0.3,
         deltacvd: 0.3,

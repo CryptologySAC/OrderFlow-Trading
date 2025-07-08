@@ -195,6 +195,11 @@ export interface DeltaCVDConfirmationResult {
 
 interface DeltaCVDConfirmationMetadata {
     signalType?: "deltacvd" | "deltacvd_confirmed";
+    signalDescription?:
+        | "momentum_buy"
+        | "momentum_sell"
+        | "bullish_divergence"
+        | "bearish_divergence";
     cvdAnalysis?: {
         shortestWindowSlope: number;
         shortestWindowZScore: number;
@@ -213,7 +218,6 @@ interface DeltaCVDConfirmationMetadata {
     qualityMetrics?: {
         cvdStatisticalSignificance: number;
         absorptionConfirmation: boolean;
-        signalPurity: "premium" | "standard";
     };
     confidenceFactors?: ConfidenceFactors;
     priceCorrelations?: Record<number, number>;

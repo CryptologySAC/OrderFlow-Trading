@@ -29,7 +29,7 @@ import type { MQTTConfig } from "../types/configTypes.js";
 type DetectorConfigInput =
     | z.infer<typeof AbsorptionEnhancedSettingsSchema>
     | z.infer<typeof ExhaustionEnhancedSettingsSchema>
-    | z.infer<typeof DeltaCVDEnhancedSettingsSchema>
+    | z.infer<typeof DeltaCVDDetectorSchema>
     | z.infer<typeof AccumulationDetectorSchema>
     | z.infer<typeof DistributionDetectorSchema>;
 
@@ -315,74 +315,20 @@ export const AbsorptionDetectorSchema = z.object({
     volumeBoostMultiplier: z.number().min(0.1).max(0.5),
 });
 
-// DELTACVD detector - CVD-specific properties only (no zone settings)
+// DELTACVD detector - Simplified pure divergence CVD detection
 export const DeltaCVDDetectorSchema = z.object({
-    // Core CVD analysis
+    // Core CVD analysis parameters (actually used by detector)
     windowsSec: z.array(z.number().int().min(30).max(3600)),
-    minZ: z.number().min(0.01).max(2.0),
-    priceCorrelationWeight: z.number().min(0.1).max(0.8),
-    volumeConcentrationWeight: z.number().min(0.1).max(0.5),
-    adaptiveThresholdMultiplier: z.number().min(0.3).max(2.0),
-    eventCooldownMs: z.number().int().min(5000).max(60000),
     minTradesPerSec: z.number().min(0.01).max(5.0),
     minVolPerSec: z.number().min(0.1).max(2000.0),
-    minSamplesForStats: z.number().int().min(5).max(100),
-    volatilityLookbackSec: z.number().int().min(600).max(7200),
-    maxDivergenceAllowed: z.number().min(0.1).max(2.0),
-    stateCleanupIntervalSec: z.number().int().min(60).max(1800),
-    dynamicThresholds: z.boolean(),
-    logDebug: z.boolean(),
+    signalThreshold: z.number().min(0.01).max(0.8),
+    eventCooldownMs: z.number().int().min(1000).max(60000),
 
-    // Volume and detection parameters
-    volumeSurgeMultiplier: z.number().min(1.0).max(10.0),
-    imbalanceThreshold: z.number().min(0.05).max(0.5),
-    institutionalThreshold: z.number().min(5).max(100),
-    burstDetectionMs: z.number().int().min(500).max(5000),
-    sustainedVolumeMs: z.number().int().min(10000).max(120000),
-    medianTradeSize: z.number().min(0.1).max(5.0),
-    detectionMode: z.enum(["momentum", "divergence", "hybrid"]),
-    divergenceThreshold: z.number().min(0.1).max(0.8),
-    divergenceLookbackSec: z.number().int().min(30).max(300),
-    enableDepthAnalysis: z.boolean(),
-    usePassiveVolume: z.boolean(),
-    maxOrderbookAge: z.number().int().min(1000).max(30000),
-    absorptionCVDThreshold: z.number().min(10).max(200),
-    absorptionPriceThreshold: z.number().min(0.01).max(1.0),
-    imbalanceWeight: z.number().min(0.05).max(0.5),
-    icebergMinRefills: z.number().int().min(1).max(10),
-    icebergMinSize: z.number().min(5).max(100),
-    baseConfidenceRequired: z.number().min(0.01).max(0.8),
-    finalConfidenceRequired: z.number().min(0.01).max(0.9),
-    strongCorrelationThreshold: z.number().min(0.5).max(0.95),
-    weakCorrelationThreshold: z.number().min(0.1).max(0.6),
-    depthImbalanceThreshold: z.number().min(0.05).max(0.5),
-
-    // Enhancement control
-    useStandardizedZones: z.boolean(),
+    // Zone enhancement control
     enhancementMode: z.enum(["disabled", "monitoring", "production"]),
-    minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
 
-    // Enhanced CVD analysis
-    cvdDivergenceVolumeThreshold: z.number().min(10).max(2000),
-    cvdDivergenceStrengthThreshold: z.number().min(0.2).max(1.0),
-    cvdSignificantImbalanceThreshold: z.number().min(0.2).max(0.8),
-    cvdDivergenceScoreMultiplier: z.number().min(1.0).max(5.0),
-    alignmentMinimumThreshold: z.number().min(0.2).max(0.8),
-    momentumScoreMultiplier: z.number().min(1.0).max(5.0),
-    enableCVDDivergenceAnalysis: z.boolean(),
-    enableMomentumAlignment: z.boolean(),
-    divergenceConfidenceBoost: z.number().min(0.05).max(0.3),
-    momentumAlignmentBoost: z.number().min(0.05).max(0.25),
-
-    // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
-    minTradesForAnalysis: z.number().int().min(5).max(100),
-    minVolumeRatio: z.number().min(0.01).max(1.0),
-    maxVolumeRatio: z.number().min(1.0).max(20.0),
-    priceChangeThreshold: z.number().min(0.0001).max(0.01),
-    minZScoreBound: z.number().min(-50).max(-1),
-    maxZScoreBound: z.number().min(1).max(50),
-    minCorrelationBound: z.number().min(-1.0).max(-0.5),
-    maxCorrelationBound: z.number().min(0.5).max(1.0),
+    // CVD divergence analysis parameters
+    cvdImbalanceThreshold: z.number().min(0.1).max(0.4), // CVD imbalance ratio for detection (lower than signalThreshold)
 });
 
 // ACCUMULATION detector - Simplified schema for enhanced standalone detector
@@ -514,31 +460,7 @@ const AbsorptionEnhancedSettingsSchema = z
     })
     .passthrough();
 
-const DeltaCVDEnhancedSettingsSchema = z
-    .object({
-        useStandardizedZones: z.boolean(),
-        enhancementMode: z.enum(["disabled", "testing", "production"]),
-        minEnhancedConfidenceThreshold: z.number(),
-        enableCVDDivergenceAnalysis: z.boolean(),
-        enableMomentumAlignment: z.boolean(),
-        divergenceConfidenceBoost: z.number(),
-        momentumAlignmentBoost: z.number(),
-        cvdDivergenceVolumeThreshold: z.number(),
-        cvdDivergenceStrengthThreshold: z.number(),
-        cvdSignificantImbalanceThreshold: z.number(),
-        cvdDivergenceScoreMultiplier: z.number(),
-        alignmentMinimumThreshold: z.number(),
-        momentumScoreMultiplier: z.number(),
-        minTradesForAnalysis: z.number(),
-        minVolumeRatio: z.number(),
-        maxVolumeRatio: z.number(),
-        priceChangeThreshold: z.number(),
-        minZScoreBound: z.number(),
-        maxZScoreBound: z.number(),
-        minCorrelationBound: z.number(),
-        maxCorrelationBound: z.number(),
-    })
-    .passthrough();
+// Remove duplicate schema - use DeltaCVDDetectorSchema directly
 
 const MarketDataStorageConfigSchema = z.object({
     enabled: z.boolean(),
@@ -705,7 +627,7 @@ const BasicSymbolConfigSchema = z
         }),
         exhaustion: ExhaustionEnhancedSettingsSchema,
         absorption: AbsorptionEnhancedSettingsSchema,
-        deltaCvdConfirmation: DeltaCVDEnhancedSettingsSchema,
+        deltaCVD: DeltaCVDDetectorSchema,
         universalZoneConfig: UniversalZoneSchema,
         accumulation: AccumulationDetectorSchema,
         distribution: DistributionDetectorSchema,
@@ -802,9 +724,9 @@ function validateMandatoryConfig(): void {
             );
         }
 
-        if (!symbolCfg.deltaCvdConfirmation) {
+        if (!symbolCfg.deltaCVD) {
             errors.push(
-                "MISSING: symbols.LTCUSDT.deltaCvdConfirmation configuration is required"
+                "MISSING: symbols.LTCUSDT.deltaCVD configuration is required"
             );
         }
 
@@ -862,7 +784,7 @@ function validateMandatoryConfig(): void {
         }
 
         try {
-            DeltaCVDDetectorSchema.parse(SYMBOL_CFG.deltaCvdConfirmation);
+            DeltaCVDDetectorSchema.parse(SYMBOL_CFG.deltaCVD);
         } catch (error) {
             console.error(
                 "🚨 CRITICAL CONFIG ERROR - DeltaCVDDetectorEnhanced"
@@ -1217,7 +1139,7 @@ export class Config {
         return SYMBOL_CFG.absorption;
     }
     static get DELTACVD_CONFIG() {
-        return SYMBOL_CFG.deltaCvdConfirmation;
+        return SYMBOL_CFG.deltaCVD;
     }
     static get ACCUMULATION_CONFIG() {
         return SYMBOL_CFG.accumulation;
@@ -1263,7 +1185,7 @@ export class Config {
     static get DELTACVD_DETECTOR() {
         return this.validateDetectorConfig(
             DeltaCVDDetectorSchema,
-            SYMBOL_CFG.deltaCvdConfirmation
+            SYMBOL_CFG.deltaCVD
         );
     }
 
