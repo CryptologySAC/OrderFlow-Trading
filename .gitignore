@@ -11,3 +11,4 @@ coverage/
 test.patch
 server.log
 backtesting_data/
+.DS_Store
