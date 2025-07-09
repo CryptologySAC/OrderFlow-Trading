@@ -253,9 +253,9 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
             // Mock Date.now() to return the trade's timestamp for proper cooldown testing
             const originalDateNow = Date.now;
             Date.now = vi.fn(() => trade.timestamp);
-            
+
             detector.onEnrichedTrade(trade);
-            
+
             // Restore Date.now()
             Date.now = originalDateNow;
         });
@@ -2004,7 +2004,7 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
                 const signals = emittedEvents.filter(
                     (e) => e.type === "signalCandidate"
                 );
-                
+
                 expect(signals.length).toBeGreaterThan(0);
                 expect(signals.length).toBeLessThanOrEqual(10); // Reasonable signal count
             });

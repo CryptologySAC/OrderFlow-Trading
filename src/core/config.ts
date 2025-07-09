@@ -262,8 +262,8 @@ export const AbsorptionDetectorSchema = z.object({
     microstructureConfidenceBoostMin: z.number().min(0.1).max(1.0),
     microstructureConfidenceBoostMax: z.number().min(1.0).max(3.0),
 
-    // ✅ CLAUDE.md COMPLIANCE: Final confidence threshold - RAISED FOR QUALITY SIGNALS
-    finalConfidenceRequired: z.number().min(0.5).max(1.0), // RAISED: 50% minimum (was 1%)
+    // ✅ CLAUDE.md COMPLIANCE: Final confidence threshold - RELAXED FOR LOW-VOLUME MARKETS
+    finalConfidenceRequired: z.number().min(0.1).max(1.0), // RELAXED: 10% minimum for low-volume markets
 
     // Features configuration
     features: z.object({
@@ -281,16 +281,16 @@ export const AbsorptionDetectorSchema = z.object({
     enhancementMode: z.enum(["disabled", "testing", "production"]),
     minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
 
-    // Institutional volume detection (enhanced) - RAISED MINIMUMS FOR QUALITY SIGNALS
-    institutionalVolumeThreshold: z.number().min(10).max(1000),
-    institutionalVolumeRatioThreshold: z.number().min(0.6).max(0.8), // RAISED: 60% minimum (was 20%)
+    // Institutional volume detection (enhanced) - RELAXED FOR LOW-VOLUME MARKETS
+    institutionalVolumeThreshold: z.number().min(1).max(1000),
+    institutionalVolumeRatioThreshold: z.number().min(0.3).max(0.8), // RELAXED: 30% minimum for low-volume markets
     enableInstitutionalVolumeFilter: z.boolean(),
     institutionalVolumeBoost: z.number().min(0.05).max(0.3),
 
     // Enhanced calculation parameters - RAISED MINIMUMS FOR QUALITY SIGNALS
-    volumeNormalizationThreshold: z.number().min(50).max(5000),
+    volumeNormalizationThreshold: z.number().min(5).max(5000),
     absorptionRatioNormalization: z.number().min(1).max(10),
-    minAbsorptionScore: z.number().min(0.6).max(0.9), // RAISED: 60% minimum (was 40%)
+    minAbsorptionScore: z.number().min(0.3).max(0.9), // RELAXED: 30% minimum for low-volume markets
     patternVarianceReduction: z.number().min(1).max(5),
     whaleActivityMultiplier: z.number().min(1.5).max(10.0),
     maxZoneCountForScoring: z.number().int().min(1).max(10),
@@ -319,8 +319,8 @@ export const AbsorptionDetectorSchema = z.object({
 export const DeltaCVDDetectorSchema = z.object({
     // Core CVD analysis parameters (actually used by detector)
     windowsSec: z.array(z.number().int().min(30).max(3600)),
-    minTradesPerSec: z.number().min(0.01).max(5.0),
-    minVolPerSec: z.number().min(0.1).max(2000.0),
+    minTradesPerSec: z.number().min(0.001).max(5.0),
+    minVolPerSec: z.number().min(0.01).max(2000.0),
     signalThreshold: z.number().min(0.01).max(0.8),
     eventCooldownMs: z.number().int().min(1000).max(60000),
 
@@ -328,7 +328,7 @@ export const DeltaCVDDetectorSchema = z.object({
     enhancementMode: z.enum(["disabled", "monitoring", "production"]),
 
     // CVD divergence analysis parameters
-    cvdImbalanceThreshold: z.number().min(0.1).max(0.4), // CVD imbalance ratio for detection (lower than signalThreshold)
+    cvdImbalanceThreshold: z.number().min(0.05).max(0.4), // CVD imbalance ratio for detection (lower than signalThreshold)
 });
 
 // ACCUMULATION detector - Simplified schema for enhanced standalone detector
@@ -347,7 +347,7 @@ export const AccumulationDetectorSchema = z.object({
     crossTimeframeConfidenceBoost: z.number().min(0.05).max(0.3),
 
     // Accumulation detection parameters
-    accumulationVolumeThreshold: z.number().min(10).max(1000),
+    accumulationVolumeThreshold: z.number().min(1).max(1000),
     accumulationRatioThreshold: z.number().min(0.3).max(0.9),
     alignmentScoreThreshold: z.number().min(0.3).max(0.8),
 
@@ -390,7 +390,7 @@ export const DistributionDetectorSchema = z.object({
     crossTimeframeConfidenceBoost: z.number().min(0.05).max(0.3),
 
     // Distribution detection parameters
-    distributionVolumeThreshold: z.number().min(10).max(1000),
+    distributionVolumeThreshold: z.number().min(1).max(1000),
     distributionRatioThreshold: z.number().min(0.3).max(0.9),
     alignmentScoreThreshold: z.number().min(0.3).max(0.8),
 
@@ -404,7 +404,7 @@ export const DistributionDetectorSchema = z.object({
     defaultBaselineVolatility: z.number().min(0.01).max(0.3),
 
     // Distribution-specific selling pressure
-    sellingPressureVolumeThreshold: z.number().min(10).max(1000),
+    sellingPressureVolumeThreshold: z.number().min(1).max(1000),
     sellingPressureRatioThreshold: z.number().min(0.3).max(0.9),
     enableSellingPressureAnalysis: z.boolean(),
     sellingPressureConfidenceBoost: z.number().min(0.05).max(0.3),
