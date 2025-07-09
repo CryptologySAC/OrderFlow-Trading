@@ -38,14 +38,16 @@ describe("ExhaustionDetector Debug", () => {
             console.log(`  zones.length: ${zones.length}`);
             console.log(`  price: ${price}`);
             console.log(`  maxDistance: ${maxDistance}`);
-            
+
             const filtered = zones.filter((zone: ZoneSnapshot) => {
                 const distance = Math.abs(zone.priceLevel - price);
                 const withinDistance = distance <= maxDistance;
-                console.log(`  zone at ${zone.priceLevel}, distance: ${distance}, within: ${withinDistance}`);
+                console.log(
+                    `  zone at ${zone.priceLevel}, distance: ${distance}, within: ${withinDistance}`
+                );
                 return withinDistance;
             });
-            
+
             console.log(`  returning ${filtered.length} zones`);
             return filtered;
         }),
@@ -86,8 +88,16 @@ describe("ExhaustionDetector Debug", () => {
         const zoneData: StandardZoneData = {
             timestamp: Date.now(),
             zones5Tick: [createZoneSnapshot(price, aggressiveVol, passiveVol)],
-            zones10Tick: [createZoneSnapshot(price, aggressiveVol * 1.5, passiveVol * 1.5)],
-            zones20Tick: [createZoneSnapshot(price, aggressiveVol * 2, passiveVol * 2)],
+            zones10Tick: [
+                createZoneSnapshot(
+                    price,
+                    aggressiveVol * 1.5,
+                    passiveVol * 1.5
+                ),
+            ],
+            zones20Tick: [
+                createZoneSnapshot(price, aggressiveVol * 2, passiveVol * 2),
+            ],
         };
 
         return {
@@ -144,7 +154,7 @@ describe("ExhaustionDetector Debug", () => {
         } as any;
 
         const exhaustionConfig = mockConfig.symbols.LTCUSDT.exhaustion;
-        
+
         console.log("DEBUG: Exhaustion config being used:", exhaustionConfig);
 
         detector = new ExhaustionDetectorEnhanced(
@@ -163,14 +173,14 @@ describe("ExhaustionDetector Debug", () => {
 
     it("should debug exhaustion detection step by step", () => {
         console.log("\n=== DEBUG TEST START ===");
-        
+
         // Create a very clear exhaustion scenario
         const trade = createTradeEvent(
-            87.50,  // price
-            25,     // quantity (above minAggVolume: 15) 
-            false,  // aggressive buy
-            50,     // aggressive volume (above depletionVolumeThreshold: 15)
-            5       // passive volume (ratio will be 50/(50+5) = 0.909 > depletionRatioThreshold: 0.4)
+            87.5, // price
+            25, // quantity (above minAggVolume: 15)
+            false, // aggressive buy
+            50, // aggressive volume (above depletionVolumeThreshold: 15)
+            5 // passive volume (ratio will be 50/(50+5) = 0.909 > depletionRatioThreshold: 0.4)
         );
 
         console.log("Trade event:", {
@@ -178,9 +188,11 @@ describe("ExhaustionDetector Debug", () => {
             quantity: trade.quantity,
             aggressiveVol: trade.zoneData?.zones5Tick[0]?.aggressiveVolume,
             passiveVol: trade.zoneData?.zones5Tick[0]?.passiveVolume,
-            ratio: trade.zoneData?.zones5Tick[0] ? 
-                trade.zoneData.zones5Tick[0].aggressiveVolume / 
-                (trade.zoneData.zones5Tick[0].aggressiveVolume + trade.zoneData.zones5Tick[0].passiveVolume) : 0
+            ratio: trade.zoneData?.zones5Tick[0]
+                ? trade.zoneData.zones5Tick[0].aggressiveVolume /
+                  (trade.zoneData.zones5Tick[0].aggressiveVolume +
+                      trade.zoneData.zones5Tick[0].passiveVolume)
+                : 0,
         });
 
         detector.onEnrichedTrade(trade);

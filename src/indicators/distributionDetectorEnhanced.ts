@@ -151,12 +151,34 @@ export class DistributionDetectorEnhanced extends Detector {
      * STANDALONE VERSION: Processes trades directly without legacy detector dependency
      */
     public onEnrichedTrade(event: EnrichedTradeEvent): void {
+        // Debug logging to understand what's happening
+        this.logger.debug(
+            "DistributionDetectorEnhanced: onEnrichedTrade called",
+            {
+                detectorId: this.getId(),
+                price: event.price,
+                quantity: event.quantity,
+                useStandardizedZones: this.useStandardizedZones,
+                enhancementMode: this.enhancementConfig.enhancementMode,
+                hasZoneData: !!event.zoneData,
+                callCount: this.enhancementStats.callCount,
+            }
+        );
+
         // Only process if standardized zones are enabled and available
         if (
             !this.useStandardizedZones ||
             this.enhancementConfig.enhancementMode === "disabled" ||
             !event.zoneData
         ) {
+            this.logger.debug("DistributionDetectorEnhanced: Skipping trade", {
+                detectorId: this.getId(),
+                reason: !this.useStandardizedZones
+                    ? "zones_disabled"
+                    : this.enhancementConfig.enhancementMode === "disabled"
+                      ? "enhancement_disabled"
+                      : "no_zone_data",
+            });
             return;
         }
 
@@ -283,7 +305,29 @@ export class DistributionDetectorEnhanced extends Detector {
             event.price,
             this.confluenceMaxDistance
         );
-        if (relevantZones.length === 0) return null;
+
+        this.logger.debug(
+            "DistributionDetectorEnhanced: calculateDistributionStrength",
+            {
+                detectorId: this.getId(),
+                price: event.price,
+                allZonesCount: allZones.length,
+                relevantZonesCount: relevantZones.length,
+                confluenceMaxDistance: this.confluenceMaxDistance,
+                distributionVolumeThreshold: this.distributionVolumeThreshold,
+            }
+        );
+
+        if (relevantZones.length === 0) {
+            this.logger.debug(
+                "DistributionDetectorEnhanced: No relevant zones found",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                }
+            );
+            return null;
+        }
 
         let totalVolume = 0;
         let totalSellVolume = 0;
@@ -293,10 +337,28 @@ export class DistributionDetectorEnhanced extends Detector {
             totalSellVolume += zone.aggressiveSellVolume;
         });
 
+        this.logger.debug("DistributionDetectorEnhanced: Volume analysis", {
+            detectorId: this.getId(),
+            price: event.price,
+            totalVolume,
+            totalSellVolume,
+            volumeThreshold: this.distributionVolumeThreshold,
+            meetsVolumeThreshold:
+                totalVolume >= this.distributionVolumeThreshold,
+        });
+
         if (totalVolume === 0) return null;
 
         // ✅ CRITICAL: Volume threshold validation - must meet minimum LTC requirement
         if (totalVolume < this.distributionVolumeThreshold) {
+            this.logger.debug(
+                "DistributionDetectorEnhanced: Volume below threshold",
+                {
+                    detectorId: this.getId(),
+                    totalVolume,
+                    threshold: this.distributionVolumeThreshold,
+                }
+            );
             return null; // Insufficient volume - reject immediately
         }
 

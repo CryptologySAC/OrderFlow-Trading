@@ -32,7 +32,6 @@ export interface OrderflowPreprocessorOptions {
     dashboardUpdateInterval: number;
     maxDashboardInterval: number;
     significantChangeThreshold: number;
-    enableStandardizedZones: boolean;
     standardZoneConfig: StandardZoneConfig;
     maxZoneCacheAgeMs: number; // 90 minutes for cross-detector zone persistence
     adaptiveZoneLookbackTrades: number; // 500 trades ≈ meaningful zone formation over 12-15 min
@@ -102,7 +101,6 @@ export class OrderflowPreprocessor
     private readonly microstructureAnalyzer?: MicrostructureAnalyzer;
 
     // NEW: Standardized zone cache and configuration - PERFORMANCE OPTIMIZED
-    private readonly enableStandardizedZones: boolean;
     private readonly standardZoneConfig: StandardZoneConfig;
     private readonly adaptiveZoneCalculator?: AdaptiveZoneCalculator;
     // High-performance zone cache using arrays instead of Maps
@@ -170,7 +168,6 @@ export class OrderflowPreprocessor
             opts.defaultInstitutionalVolumeAbsolute; // <1% whale trades
 
         // NEW: Initialize standardized zone configuration (LTCUSDT data-driven defaults) - AFTER defaults set
-        this.enableStandardizedZones = opts.enableStandardizedZones; // Default enabled
         this.standardZoneConfig = opts.standardZoneConfig;
 
         // LTCUSDT 90-minute cross-detector zone analysis (1.54s avg trade frequency, 3,500 trades/90min)
@@ -211,10 +208,7 @@ export class OrderflowPreprocessor
         }
 
         // Initialize adaptive zone calculator if enabled
-        if (
-            this.enableStandardizedZones &&
-            this.standardZoneConfig.adaptiveMode
-        ) {
+        if (this.standardZoneConfig.adaptiveMode) {
             this.adaptiveZoneCalculator = new AdaptiveZoneCalculator(
                 this.adaptiveZoneLookbackTrades
             );
@@ -231,7 +225,6 @@ export class OrderflowPreprocessor
             hasIndividualTradesManager: !!this.individualTradesManager,
             hasMicrostructureAnalyzer: !!this.microstructureAnalyzer,
             // NEW: Zone configuration logging
-            enableStandardizedZones: this.enableStandardizedZones,
             zoneBaseTicks: this.standardZoneConfig?.baseTicks,
             zoneMultipliers: this.standardZoneConfig?.zoneMultipliers,
             adaptiveMode: this.standardZoneConfig?.adaptiveMode,
@@ -325,7 +318,9 @@ export class OrderflowPreprocessor
                 this.tickSize
             );
 
-            // Create basic enriched trade
+            // Remove dual aggregation - we'll aggregate once after final trade is ready
+
+            // Create basic enriched trade with updated zone data
             const enriched: EnrichedTradeEvent = {
                 ...aggressive,
                 passiveBidVolume: bookLevel?.bid ?? 0,
@@ -339,13 +334,8 @@ export class OrderflowPreprocessor
                     aggressive.quantity > this.getLargeTradeThreshold()
                         ? this.bookState.snapshot()
                         : undefined,
-                // NEW: Add standardized zone data
-                zoneData: this.enableStandardizedZones
-                    ? this.calculateStandardizedZones(
-                          aggressive.price,
-                          aggressive.timestamp
-                      )
-                    : undefined,
+                // Zone data will be populated after trade aggregation
+                zoneData: undefined,
             };
 
             // Check if we should enhance with individual trades data
@@ -432,10 +422,49 @@ export class OrderflowPreprocessor
 
             this.processedTrades++;
 
-            // CRITICAL FIX: Aggregate trade into standardized zones
-            if (this.enableStandardizedZones && finalTrade) {
+            // DEBUG: Confirm we reach the aggregation call
+            this.logger.debug(
+                "[OrderflowPreprocessor] About to call aggregateTradeIntoZones",
+                {
+                    finalTradeExists: !!finalTrade,
+                    finalTradePrice: finalTrade?.price,
+                    finalTradeQuantity: finalTrade?.quantity,
+                    processedTrades: this.processedTrades,
+                }
+            );
+
+            // CRITICAL FIX: Final trade aggregation for detectors
+            // This ensures zones contain the complete finalTrade data (including any individual trades enhancements)
+            try {
                 this.aggregateTradeIntoZones(finalTrade);
+                this.logger.debug(
+                    "[OrderflowPreprocessor] aggregateTradeIntoZones completed successfully"
+                );
+            } catch (error) {
+                this.logger.error(
+                    "[OrderflowPreprocessor] ERROR in aggregateTradeIntoZones",
+                    {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                        stack:
+                            error instanceof Error ? error.stack : "No stack",
+                        finalTrade: {
+                            price: finalTrade?.price,
+                            quantity: finalTrade?.quantity,
+                            timestamp: finalTrade?.timestamp,
+                        },
+                    }
+                );
             }
+
+            // CRITICAL FIX: Calculate complete zone data with trade aggregation
+            // This ensures we get all zones AND the ones updated by trade aggregation
+            finalTrade.zoneData = this.calculateStandardizedZones(
+                finalTrade.price,
+                finalTrade.timestamp
+            );
 
             this.emit("enriched_trade", finalTrade);
 
@@ -504,9 +533,7 @@ export class OrderflowPreprocessor
             this.emitDashboardUpdate();
 
             // Clean up zone cache periodically to prevent memory leaks
-            if (this.enableStandardizedZones) {
-                this.cleanupZoneCache();
-            }
+            this.cleanupZoneCache();
         }, this.dashboardUpdateInterval);
 
         this.logger.info(
@@ -514,7 +541,6 @@ export class OrderflowPreprocessor
             {
                 interval: this.dashboardUpdateInterval,
                 maxInterval: this.maxDashboardInterval,
-                zoneCleanupEnabled: this.enableStandardizedZones,
             }
         );
     }
@@ -660,7 +686,6 @@ export class OrderflowPreprocessor
                 {
                     price,
                     timestamp,
-                    enableStandardizedZones: this.enableStandardizedZones,
                     baseTicks: this.standardZoneConfig.baseTicks,
                     adaptiveMode: this.standardZoneConfig.adaptiveMode,
                     timeWindows: this.standardZoneConfig.timeWindows,
@@ -887,7 +912,7 @@ export class OrderflowPreprocessor
         );
 
         const snapshots: ZoneSnapshot[] = [];
-        const zoneSize = zoneTicks * this.tickSize;
+        const zoneSize = FinancialMath.safeMultiply(zoneTicks, this.tickSize);
         const rangeZones = this.zoneCalculationRange; // Configurable zones above and below current price
 
         // Calculate zone center for the current price
@@ -907,13 +932,15 @@ export class OrderflowPreprocessor
         for (let i = -rangeZones; i <= rangeZones; i++) {
             const zoneCenter = FinancialMath.safeAdd(
                 currentZoneCenter,
-                i * zoneSize
+                FinancialMath.safeMultiply(i, zoneSize)
             );
-            const zoneSnapshot = this.createZoneSnapshot(
-                zoneCenter,
-                zoneTicks,
-                timestamp
-            );
+            // Check cache first for existing zone with trade data
+            const zoneId = `${this.symbol}_${zoneTicks}T_${zoneCenter.toFixed(this.pricePrecision)}`;
+            const cachedZone = this.getZoneFromCache(zoneId);
+
+            const zoneSnapshot =
+                cachedZone ||
+                this.createZoneSnapshot(zoneCenter, zoneTicks, timestamp);
 
             if (zoneSnapshot) {
                 snapshots.push(zoneSnapshot);
@@ -932,21 +959,23 @@ export class OrderflowPreprocessor
         timestamp: number
     ): ZoneSnapshot | undefined {
         try {
-            // CRITICAL FIX: Expand zone boundaries for better trade capture
-            // Original calculation was too restrictive, causing zero volume zones
-            const baseZoneSize = zoneTicks * this.tickSize;
+            // CRITICAL FIX: Proper tick-aligned zone boundaries
+            // Zone boundaries must align to valid tick prices, not fractional values
 
-            // Expand boundaries by 50% to ensure overlapping coverage
-            // This prevents trade gaps between adjacent zones
-            const expandedZoneSize = baseZoneSize * 1.5;
-
-            const minPrice = FinancialMath.safeSubtract(
+            // For N-tick zones: zoneCenter to zoneCenter + (N-1) ticks
+            // Example: 5-tick zone at 89.05 = 89.05, 89.06, 89.07, 89.08, 89.09
+            const minPrice = FinancialMath.normalizePriceToTick(
                 zoneCenter,
-                expandedZoneSize / 2
+                this.tickSize
             );
-            const maxPrice = FinancialMath.safeAdd(
-                zoneCenter,
-                expandedZoneSize / 2
+            // Use FinancialMath with tick normalization for exact boundaries
+            const tickOffset = FinancialMath.safeMultiply(
+                zoneTicks - 1,
+                this.tickSize
+            );
+            const maxPrice = FinancialMath.normalizePriceToTick(
+                FinancialMath.safeAdd(zoneCenter, tickOffset),
+                this.tickSize
             );
 
             this.logger.debug(
@@ -954,11 +983,11 @@ export class OrderflowPreprocessor
                 {
                     zoneCenter,
                     zoneTicks,
-                    baseZoneSize,
-                    expandedZoneSize,
+                    tickSize: this.tickSize,
                     minPrice,
                     maxPrice,
-                    expansionFactor: 1.5,
+                    zoneWidth: maxPrice - minPrice,
+                    expectedTicks: zoneTicks,
                 }
             );
 
@@ -1058,9 +1087,30 @@ export class OrderflowPreprocessor
     private addZoneToCache(zone: ZoneSnapshot): void {
         // Check if zone already exists in cache
         const existingIndex = this.zoneCacheIndex.get(zone.zoneId);
+
+        // DEBUG: Log cache update details
+        this.logger.debug("[OrderflowPreprocessor] Zone cache update", {
+            zoneId: zone.zoneId,
+            existingIndex,
+            zoneExists: existingIndex !== undefined,
+            aggressiveVolume: zone.aggressiveVolume,
+            tradeCount: zone.tradeCount,
+            operation: existingIndex !== undefined ? "update" : "create",
+        });
+
         if (existingIndex !== undefined) {
             // Update existing zone
+            const oldZone = this.zoneCache[existingIndex];
             this.zoneCache[existingIndex] = zone;
+
+            // DEBUG: Confirm the update
+            this.logger.debug("[OrderflowPreprocessor] Zone cache updated", {
+                zoneId: zone.zoneId,
+                index: existingIndex,
+                oldVolume: oldZone?.aggressiveVolume || 0,
+                newVolume: zone.aggressiveVolume,
+                cacheUpdated: this.zoneCache[existingIndex] === zone,
+            });
             return;
         }
 
@@ -1093,16 +1143,44 @@ export class OrderflowPreprocessor
      */
     private getZoneFromCache(zoneId: string): ZoneSnapshot | undefined {
         const index = this.zoneCacheIndex.get(zoneId);
+
+        // DEBUG: Log zone lookup details
+        this.logger.debug("[OrderflowPreprocessor] Zone lookup debug", {
+            zoneId,
+            indexFound: index !== undefined,
+            index,
+            zoneExists:
+                index !== undefined ? this.zoneCache[index] !== null : false,
+            cacheSize: this.zoneCacheIndex.size,
+        });
+
         if (index !== undefined && this.zoneCache[index]) {
             const zone = this.zoneCache[index];
+            const currentTime = Date.now();
+            const age = currentTime - (zone.lastUpdate || 0);
+
+            // DEBUG: Log age validation details
+            this.logger.debug("[OrderflowPreprocessor] Zone age validation", {
+                zoneId,
+                age,
+                maxAge: this.maxZoneCacheAge,
+                isValid: age <= this.maxZoneCacheAge,
+                aggressiveVolume: zone.aggressiveVolume,
+            });
+
             // Check if zone is still valid (not expired)
-            if (
-                zone.lastUpdate &&
-                Date.now() - zone.lastUpdate <= this.maxZoneCacheAge
-            ) {
+            if (zone.lastUpdate && age <= this.maxZoneCacheAge) {
                 return zone;
             } else {
                 // Remove expired zone
+                this.logger.debug(
+                    "[OrderflowPreprocessor] Zone expired - removing",
+                    {
+                        zoneId,
+                        age,
+                        maxAge: this.maxZoneCacheAge,
+                    }
+                );
                 this.zoneCacheIndex.delete(zoneId);
                 this.zoneCache[index] = null;
             }
@@ -1121,23 +1199,64 @@ export class OrderflowPreprocessor
      */
     private aggregateTradeIntoZones(trade: EnrichedTradeEvent): void {
         try {
-            if (!this.enableStandardizedZones || !this.standardZoneConfig) {
+            // DEBUG: Log entry into trade aggregation
+            this.logger.debug(
+                "[OrderflowPreprocessor] TRADE AGGREGATION STARTED",
+                {
+                    price: trade.price,
+                    quantity: trade.quantity,
+                    buyerIsMaker: trade.buyerIsMaker,
+                    timestamp: trade.timestamp,
+                }
+            );
+
+            if (!this.standardZoneConfig) {
+                this.logger.debug(
+                    "[OrderflowPreprocessor] TRADE AGGREGATION SKIPPED - No standard zone config"
+                );
                 return;
             }
 
             const { price, timestamp } = trade;
 
             // Process each zone size configured in standardZoneConfig
+            this.logger.debug(
+                "[OrderflowPreprocessor] TRADE AGGREGATION - Processing zone multipliers",
+                {
+                    zoneMultipliers: this.standardZoneConfig.zoneMultipliers,
+                    baseTicks: this.standardZoneConfig.baseTicks,
+                }
+            );
+
             for (const zoneMultiplier of this.standardZoneConfig
                 .zoneMultipliers) {
                 const zoneTicks =
                     this.standardZoneConfig.baseTicks * zoneMultiplier;
+
+                this.logger.debug(
+                    "[OrderflowPreprocessor] TRADE AGGREGATION - Processing zone size",
+                    {
+                        zoneMultiplier,
+                        zoneTicks,
+                        tradePrice: price,
+                    }
+                );
 
                 // Calculate which zone this trade belongs to using FinancialMath
                 const zoneCenter = FinancialMath.calculateZone(
                     price,
                     zoneTicks,
                     this.pricePrecision
+                );
+
+                this.logger.debug(
+                    "[OrderflowPreprocessor] TRADE AGGREGATION - Zone center calculated",
+                    {
+                        price,
+                        zoneTicks,
+                        zoneCenter,
+                        pricePrecision: this.pricePrecision,
+                    }
                 );
 
                 if (zoneCenter === null) {
@@ -1155,29 +1274,87 @@ export class OrderflowPreprocessor
                 // Generate zone ID for cache lookup
                 const zoneId = `${this.symbol}_${zoneTicks}T_${zoneCenter.toFixed(this.pricePrecision)}`;
 
+                this.logger.debug(
+                    "[OrderflowPreprocessor] TRADE AGGREGATION - Zone ID generated",
+                    {
+                        zoneId,
+                        symbol: this.symbol,
+                        zoneTicks,
+                        zoneCenter: zoneCenter.toFixed(this.pricePrecision),
+                    }
+                );
+
                 // Get existing zone from cache or create new one
                 let zone = this.getZoneFromCache(zoneId);
+
+                this.logger.debug(
+                    "[OrderflowPreprocessor] TRADE AGGREGATION - Zone lookup completed",
+                    {
+                        zoneId,
+                        zoneFound: !!zone,
+                        existingVolume: zone?.aggressiveVolume || 0,
+                        existingTradeCount: zone?.tradeCount || 0,
+                    }
+                );
+
+                // NOTE: Duplicate debug log removed - already logged above
+
                 if (!zone) {
+                    this.logger.debug(
+                        "[OrderflowPreprocessor] TRADE AGGREGATION - Creating new zone",
+                        { zoneId, zoneCenter, zoneTicks }
+                    );
                     zone = this.createZoneSnapshot(
                         zoneCenter,
                         zoneTicks,
                         timestamp
                     );
                     if (!zone) {
+                        this.logger.warn(
+                            "[OrderflowPreprocessor] TRADE AGGREGATION - Zone creation failed",
+                            { zoneId }
+                        );
                         continue; // Skip if zone creation failed
                     }
                 }
 
+                this.logger.debug(
+                    "[OrderflowPreprocessor] TRADE AGGREGATION - About to update zone with trade",
+                    {
+                        zoneId,
+                        currentVolume: zone.aggressiveVolume,
+                        currentTradeCount: zone.tradeCount,
+                        tradeQuantity: trade.quantity,
+                    }
+                );
+
                 // Update zone with trade data using FinancialMath
                 const updatedZone = this.updateZoneWithTrade(zone, trade);
+
+                this.logger.debug(
+                    "[OrderflowPreprocessor] TRADE AGGREGATION - Zone update result",
+                    {
+                        zoneId,
+                        updateSuccessful: !!updatedZone,
+                        oldVolume: zone.aggressiveVolume,
+                        newVolume: updatedZone?.aggressiveVolume,
+                        oldTradeCount: zone.tradeCount,
+                        newTradeCount: updatedZone?.tradeCount,
+                    }
+                );
+
                 if (updatedZone) {
                     // Update cache with aggregated data
                     this.addZoneToCache(updatedZone);
+                    this.logger.debug(
+                        "[OrderflowPreprocessor] TRADE AGGREGATION - Zone cached successfully",
+                        { zoneId, finalVolume: updatedZone.aggressiveVolume }
+                    );
                 }
             }
 
-            // CRITICAL FIX: Populate zone data on trade event for CVD detectors
-            trade.zoneData = this.getCurrentZoneData(price, timestamp);
+            // NOTE: Zone data is populated AFTER aggregation in main handler
+            // Do not populate zone data here to avoid overriding aggregated data
 
             // Emit metrics for monitoring
             this.metricsCollector.incrementCounter(
@@ -1389,7 +1566,7 @@ export class OrderflowPreprocessor
         timestamp: number
     ): StandardZoneData | undefined {
         try {
-            if (!this.enableStandardizedZones || !this.standardZoneConfig) {
+            if (!this.standardZoneConfig) {
                 return undefined;
             }
 
@@ -1399,10 +1576,17 @@ export class OrderflowPreprocessor
             const zones20Tick: ZoneSnapshot[] = [];
             const adaptiveZones: ZoneSnapshot[] = [];
 
-            // Search range: ±5 price levels around current price for performance
-            const searchRange = FinancialMath.safeMultiply(this.tickSize, 5);
-            const minPrice = FinancialMath.safeSubtract(price, searchRange);
-            const maxPrice = FinancialMath.safeAdd(price, searchRange);
+            // CRITICAL FIX: Remove price range filtering to return all zones
+            // This ensures we get the complete zone calculation (25 zones for each size)
+
+            // DEBUG: Log zone retrieval details
+            this.logger.debug(
+                "[OrderflowPreprocessor] Zone retrieval from cache",
+                {
+                    searchPrice: price,
+                    cacheSize: this.zoneCacheIndex.size,
+                }
+            );
 
             // Collect zones for each multiplier
             for (const zoneMultiplier of this.standardZoneConfig
@@ -1411,18 +1595,38 @@ export class OrderflowPreprocessor
                     this.standardZoneConfig.baseTicks * zoneMultiplier;
                 const zonesForSize: ZoneSnapshot[] = [];
 
-                // Search through cache for zones in price range
+                // CRITICAL FIX: Use proper zone lookup instead of sequential search
+                // This ensures we get the updated zones with accumulated volume
+                let zonesFound = 0;
                 for (let i = 0; i < this.zoneCacheSize; i++) {
                     const cachedZone = this.zoneCache[i];
                     if (
                         cachedZone &&
-                        cachedZone.priceLevel >= minPrice &&
-                        cachedZone.priceLevel <= maxPrice &&
                         cachedZone.zoneId.includes(`${zoneTicks}T`)
                     ) {
-                        zonesForSize.push(cachedZone);
+                        zonesFound++;
+                        // CRITICAL FIX: Include ALL zones for complete analysis (no price filtering)
+                        // This ensures we return the complete zone calculation (25 zones, not 5)
+                        // CRITICAL: Use getZoneFromCache to ensure we get the most recent version
+                        const currentZone = this.getZoneFromCache(
+                            cachedZone.zoneId
+                        );
+                        if (currentZone) {
+                            zonesForSize.push(currentZone);
+                        }
                     }
                 }
+
+                // DEBUG: Log zone collection results
+                this.logger.debug(
+                    "[OrderflowPreprocessor] Zone collection for size",
+                    {
+                        zoneTicks,
+                        zonesFoundInCache: zonesFound,
+                        zonesInRange: zonesForSize.length,
+                        searchPrice: price,
+                    }
+                );
 
                 // Sort zones by price level for consistent ordering
                 zonesForSize.sort((a, b) => a.priceLevel - b.priceLevel);

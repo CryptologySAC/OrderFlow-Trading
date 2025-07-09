@@ -5,6 +5,7 @@ import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterf
 import type { PassiveLevel, OrderBookHealth } from "../types/marketEvents.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { ThreadManager } from "../multithreading/threadManager.js";
+import { FinancialMath } from "../utils/financialMath.js";
 
 type SnapShot = Map<number, PassiveLevel>;
 
@@ -272,15 +273,20 @@ export class OrderBookState implements IOrderBookState {
 
     public getSpread(): number {
         if (this._bestBid === 0 || this._bestAsk === Infinity) return 0;
-        return this._bestAsk - this._bestBid;
+        return FinancialMath.calculateSpread(
+            this._bestAsk,
+            this._bestBid,
+            this.pricePrecision
+        );
     }
 
     public getMidPrice(): number {
         if (this._bestBid === 0 || this._bestAsk === Infinity) return 0;
-        // Use integer arithmetic for financial precision
-        const scale = Math.pow(10, this.pricePrecision);
-        const midPrice = (this._bestBid + this._bestAsk) / 2;
-        return Math.round(midPrice * scale) / scale;
+        return FinancialMath.calculateMidPrice(
+            this._bestBid,
+            this._bestAsk,
+            this.pricePrecision
+        );
     }
 
     public sumBand(
@@ -292,19 +298,15 @@ export class OrderBookState implements IOrderBookState {
         let sumAsk = 0;
         let levels = 0;
 
-        // Use integer arithmetic for financial precision
-        const scale = Math.pow(10, this.pricePrecision || 8);
-        const scaledCenter = Math.round(center * scale);
-        const scaledTickSize = Math.round(tickSize * scale);
-        const scaledBandSize = bandTicks * scaledTickSize;
-
-        const min = (scaledCenter - scaledBandSize) / scale;
-        const max = (scaledCenter + scaledBandSize) / scale;
+        // Use FinancialMath for precise band calculation
+        const bandSize = FinancialMath.safeMultiply(bandTicks, tickSize);
+        const min = FinancialMath.safeSubtract(center, bandSize);
+        const max = FinancialMath.safeAdd(center, bandSize);
 
         for (const [price, lvl] of this.book) {
             if (price >= min && price <= max) {
-                sumBid += lvl.bid;
-                sumAsk += lvl.ask;
+                sumBid = FinancialMath.safeAdd(sumBid, lvl.bid);
+                sumAsk = FinancialMath.safeAdd(sumAsk, lvl.ask);
                 levels++;
             }
         }
@@ -337,18 +339,33 @@ export class OrderBookState implements IOrderBookState {
         for (const level of this.book.values()) {
             if (level.bid > 0) {
                 bidLevels++;
-                totalBidVolume += level.bid;
+                totalBidVolume = FinancialMath.safeAdd(
+                    totalBidVolume,
+                    level.bid
+                );
             }
             if (level.ask > 0) {
                 askLevels++;
-                totalAskVolume += level.ask;
+                totalAskVolume = FinancialMath.safeAdd(
+                    totalAskVolume,
+                    level.ask
+                );
             }
         }
 
-        const totalVolume = totalBidVolume + totalAskVolume;
+        const totalVolume = FinancialMath.safeAdd(
+            totalBidVolume,
+            totalAskVolume
+        );
         const imbalance =
             totalVolume > 0
-                ? (totalBidVolume - totalAskVolume) / totalVolume
+                ? FinancialMath.safeDivide(
+                      FinancialMath.safeSubtract(
+                          totalBidVolume,
+                          totalAskVolume
+                      ),
+                      totalVolume
+                  )
                 : 0;
 
         return {
@@ -572,9 +589,8 @@ export class OrderBookState implements IOrderBookState {
     }
 
     private normalizePrice(price: number): number {
-        // Use integer arithmetic for financial precision
-        const scale = Math.pow(10, this.pricePrecision);
-        return Math.round(price * scale) / scale;
+        // Use FinancialMath for consistent precision
+        return FinancialMath.financialRound(price, this.pricePrecision);
     }
 
     private recalculateBestQuotes(): void {
@@ -595,15 +611,13 @@ export class OrderBookState implements IOrderBookState {
         const mid = this.getMidPrice();
         if (!mid) return;
 
-        // Use integer arithmetic for financial precision
-        const scale = Math.pow(10, this.pricePrecision);
-        const scaledMid = Math.round(mid * scale);
-        const scaledDistance = Math.round(this.maxPriceDistance * scale);
-
-        const minPrice =
-            (scaledMid * (scale - scaledDistance)) / (scale * scale);
-        const maxPrice =
-            (scaledMid * (scale + scaledDistance)) / (scale * scale);
+        // Use FinancialMath for precise distance calculation
+        const distanceAmount = FinancialMath.safeMultiply(
+            mid,
+            this.maxPriceDistance
+        );
+        const minPrice = FinancialMath.safeSubtract(mid, distanceAmount);
+        const maxPrice = FinancialMath.safeAdd(mid, distanceAmount);
 
         for (const [price, level] of this.book) {
             void level; // Ensure level is defined

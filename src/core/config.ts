@@ -951,7 +951,6 @@ export class Config {
             dashboardUpdateInterval: SYMBOL_CFG.dashboardUpdateInterval,
             maxDashboardInterval: SYMBOL_CFG.maxDashboardInterval,
             significantChangeThreshold: SYMBOL_CFG.significantChangeThreshold,
-            enableStandardizedZones: Config.ENABLE_STANDARDIZED_ZONES,
             standardZoneConfig: Config.STANDARD_ZONE_CONFIG,
 
             enableIndividualTrades: true,
@@ -1206,12 +1205,6 @@ export class Config {
     // CRITICAL: Zone configuration with Zod validation for CVD signal generation
     static get STANDARD_ZONE_CONFIG() {
         return StandardZoneConfigSchema.parse(SYMBOL_CFG.standardZoneConfig);
-    }
-
-    static get ENABLE_STANDARDIZED_ZONES(): boolean {
-        // Zod validation for boolean value - no type casting allowed
-        const enabledSchema = z.boolean();
-        return enabledSchema.parse(SYMBOL_CFG.enableStandardizedZones);
     }
 
     static get INDIVIDUAL_TRADES_MANAGER(): IndividualTradesManagerConfig {

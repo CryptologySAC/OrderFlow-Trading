@@ -27,6 +27,9 @@ describe("Zone Standardization Integration", () => {
                 console.log(`[ERROR] ${msg}`, data),
             debug: (msg: string, data?: any) =>
                 console.log(`[DEBUG] ${msg}`, data),
+            isDebugEnabled: () => false,
+            setCorrelationId: (id: string, context: string) => {},
+            removeCorrelationId: (id: string) => {},
         };
 
         mockMetricsCollector = {
@@ -70,7 +73,6 @@ describe("Zone Standardization Integration", () => {
                 dashboardUpdateInterval: 200,
                 maxDashboardInterval: 1000,
                 significantChangeThreshold: 0.001,
-                enableStandardizedZones: true,
                 standardZoneConfig: {
                     baseTicks: 5,
                     zoneMultipliers: [1, 2, 4],

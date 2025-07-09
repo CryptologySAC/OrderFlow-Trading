@@ -151,12 +151,37 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
      * STANDALONE VERSION: Processes trades directly without legacy detector dependency
      */
     public onEnrichedTrade(event: EnrichedTradeEvent): void {
+        // Debug logging to understand what's happening
+        this.logger.debug(
+            "AccumulationZoneDetectorEnhanced: onEnrichedTrade called",
+            {
+                detectorId: this.getId(),
+                price: event.price,
+                quantity: event.quantity,
+                useStandardizedZones: this.useStandardizedZones,
+                enhancementMode: this.enhancementConfig.enhancementMode,
+                hasZoneData: !!event.zoneData,
+                callCount: this.enhancementStats.callCount,
+            }
+        );
+
         // Only process if standardized zones are enabled and available
         if (
             !this.useStandardizedZones ||
             this.enhancementConfig.enhancementMode === "disabled" ||
             !event.zoneData
         ) {
+            this.logger.debug(
+                "AccumulationZoneDetectorEnhanced: Skipping trade",
+                {
+                    detectorId: this.getId(),
+                    reason: !this.useStandardizedZones
+                        ? "zones_disabled"
+                        : this.enhancementConfig.enhancementMode === "disabled"
+                          ? "enhancement_disabled"
+                          : "no_zone_data",
+                }
+            );
             return;
         }
 
@@ -286,7 +311,29 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             event.price,
             this.confluenceMaxDistance
         );
-        if (relevantZones.length === 0) return null;
+
+        this.logger.debug(
+            "AccumulationZoneDetectorEnhanced: calculateAccumulationStrength",
+            {
+                detectorId: this.getId(),
+                price: event.price,
+                allZonesCount: allZones.length,
+                relevantZonesCount: relevantZones.length,
+                confluenceMaxDistance: this.confluenceMaxDistance,
+                accumulationVolumeThreshold: this.accumulationVolumeThreshold,
+            }
+        );
+
+        if (relevantZones.length === 0) {
+            this.logger.debug(
+                "AccumulationZoneDetectorEnhanced: No relevant zones found",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                }
+            );
+            return null;
+        }
 
         let totalVolume = 0;
         let totalBuyVolume = 0;
@@ -296,10 +343,28 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             totalBuyVolume += zone.aggressiveBuyVolume;
         });
 
+        this.logger.debug("AccumulationZoneDetectorEnhanced: Volume analysis", {
+            detectorId: this.getId(),
+            price: event.price,
+            totalVolume,
+            totalBuyVolume,
+            volumeThreshold: this.accumulationVolumeThreshold,
+            meetsVolumeThreshold:
+                totalVolume >= this.accumulationVolumeThreshold,
+        });
+
         if (totalVolume === 0) return null;
 
         // ✅ CRITICAL: Volume threshold validation - must meet minimum LTC requirement
         if (totalVolume < this.accumulationVolumeThreshold) {
+            this.logger.debug(
+                "AccumulationZoneDetectorEnhanced: Volume below threshold",
+                {
+                    detectorId: this.getId(),
+                    totalVolume,
+                    threshold: this.accumulationVolumeThreshold,
+                }
+            );
             return null; // Insufficient volume - reject immediately
         }
 

@@ -52,7 +52,6 @@
             "dashboardUpdateInterval": 500,
             "maxDashboardInterval": 1000,
             "significantChangeThreshold": 0.001,
-            "enableStandardizedZones": true,
             "standardZoneConfig": {
                 "baseTicks": 5,
                 "zoneMultipliers": [1, 2, 4],

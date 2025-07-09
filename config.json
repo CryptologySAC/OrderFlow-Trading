@@ -52,7 +52,6 @@
             "dashboardUpdateInterval": 500,
             "maxDashboardInterval": 1000,
             "significantChangeThreshold": 0.001,
-            "enableStandardizedZones": true,
             "standardZoneConfig": {
                 "baseTicks": 5,
                 "zoneMultipliers": [1, 2, 4],
@@ -283,9 +282,9 @@
             },
             "absorption": {
                 "minAggVolume": 30,
-                "windowMs": 45000,
-                "eventCooldownMs": 8000,
-                "minInitialMoveTicks": 2,
+                "windowMs": 30000,
+                "eventCooldownMs": 15000,
+                "minInitialMoveTicks": 5,
                 "confirmationTimeoutMs": 45000,
                 "maxRevisitTicks": 3,
                 "absorptionThreshold": 0.4,
@@ -465,7 +464,7 @@
             "deltaCVD": {
                 "windowsSec": [60, 180],
                 "minTradesPerSec": 0.01,
-                "minVolPerSec": 0.01,
+                "minVolPerSec": 0.5,
                 "signalThreshold": 0.2,
                 "eventCooldownMs": 3000,
                 "enhancementMode": "production",
