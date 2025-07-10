@@ -497,22 +497,20 @@ describe("Absorption Detector Real Market Flow Validation", () => {
                     quantity: trade.quantity,
                     buyerIsMaker: trade.buyerIsMaker,
                     hasZoneData: !!trade.zoneData,
-                    zones5TickCount: trade.zoneData?.zones5Tick?.length || 0,
-                    zones10TickCount: trade.zoneData?.zones10Tick?.length || 0,
-                    zones20TickCount: trade.zoneData?.zones20Tick?.length || 0,
-                    firstZone: trade.zoneData?.zones5Tick?.[0]
+                    zonesCount: trade.zoneData?.zones?.length || 0,
+                    firstZone: trade.zoneData?.zones?.[0]
                         ? {
-                              id: trade.zoneData.zones5Tick[0].id,
-                              price: trade.zoneData.zones5Tick[0].price,
+                              id: trade.zoneData.zones[0].id,
+                              price: trade.zoneData.zones[0].price,
                               aggressiveVolume:
-                                  trade.zoneData.zones5Tick[0].aggressiveVolume,
+                                  trade.zoneData.zones[0].aggressiveVolume,
                               passiveVolume:
-                                  trade.zoneData.zones5Tick[0].passiveVolume,
+                                  trade.zoneData.zones[0].passiveVolume,
                               absorptionRatio:
-                                  trade.zoneData.zones5Tick[0].passiveVolume /
-                                  (trade.zoneData.zones5Tick[0]
+                                  trade.zoneData.zones[0].passiveVolume /
+                                  (trade.zoneData.zones[0]
                                       .aggressiveVolume +
-                                      trade.zoneData.zones5Tick[0]
+                                      trade.zoneData.zones[0]
                                           .passiveVolume),
                           }
                         : "NO_ZONE",

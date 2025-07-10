@@ -130,9 +130,7 @@ function createRealisticMarketEvent(
     price: number,
     quantity: number,
     buyerIsMaker: boolean,
-    zones5T: ZoneSnapshot[],
-    zones10T: ZoneSnapshot[] = [],
-    zones20T: ZoneSnapshot[] = []
+    zones: ZoneSnapshot[]
 ): EnrichedTradeEvent {
     return {
         symbol: "LTCUSDT",
@@ -142,9 +140,12 @@ function createRealisticMarketEvent(
         tradeId: Math.floor(Math.random() * 1000000),
         buyerIsMaker,
         zoneData: {
-            zones5Tick: zones5T,
-            zones10Tick: zones10T,
-            zones20Tick: zones20T,
+            zones: zones,
+            zoneConfig: {
+                zoneTicks: 10,
+                tickValue: 0.01,
+                timeWindow: 60000,
+            },
         },
         spread: 0.01, // 1-cent spread typical for LTCUSDT
         midPrice: price,
