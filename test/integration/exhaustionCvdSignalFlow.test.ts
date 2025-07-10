@@ -172,7 +172,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
                 midPrice: 100.025,
                 imbalance: -0.8, // Strong sell imbalance
                 zoneData: {
-                    zones5Tick: [
+                    zones: [
                         {
                             priceLevel: 100.0,
                             aggressiveVolume: 50,
@@ -184,8 +184,11 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
                             timestamp: Date.now(),
                         },
                     ],
-                    zones10Tick: [],
-                    zones20Tick: [],
+                    zoneConfig: {
+                        zoneTicks: 10,
+                        tickValue: 0.01,
+                        timeWindow: 60000,
+                    },
                 },
             };
 
@@ -321,7 +324,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
                 midPrice: 100.005,
                 imbalance: 1.0, // Strong buy imbalance
                 zoneData: {
-                    zones5Tick: [
+                    zones: [
                         {
                             priceLevel: 100.0,
                             aggressiveVolume: 100,
@@ -331,8 +334,11 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
                             timestamp: Date.now(),
                         },
                     ],
-                    zones10Tick: [],
-                    zones20Tick: [],
+                    zoneConfig: {
+                        zoneTicks: 10,
+                        tickValue: 0.01,
+                        timeWindow: 60000,
+                    },
                 },
             };
 
