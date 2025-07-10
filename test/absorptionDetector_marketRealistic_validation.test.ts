@@ -510,9 +510,12 @@ describe("Absorption Detector Market-Realistic Signal Validation", () => {
             tradeId: `trade-${testCase.id}`,
             originalTrade: {} as any,
             zoneData: {
-                zones5Tick: [zone],
-                zones10Tick: [zone],
-                zones20Tick: [zone],
+                zones: [zone],
+                zoneConfig: {
+                    zoneTicks: 10,
+                    tickValue: 0.01,
+                    timeWindow: 60000,
+                },
             } as StandardZoneData,
             depth: {
                 bids: [[data.price - 0.01, data.passiveBuyVolume]],

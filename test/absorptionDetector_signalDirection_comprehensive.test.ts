@@ -442,9 +442,12 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
             tradeId: `trade-${scenario.id}`,
             originalTrade: {} as any,
             zoneData: {
-                zones5Tick: [mockZone],
-                zones10Tick: [mockZone],
-                zones20Tick: [mockZone],
+                zones: [mockZone],
+                zoneConfig: {
+                    zoneTicks: 10,
+                    tickValue: 0.01,
+                    timeWindow: 60000,
+                },
             } as StandardZoneData,
             depth: {
                 bids: [[scenario.price - 0.01, scenario.passiveVolume / 2]],

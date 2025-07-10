@@ -335,8 +335,8 @@ describe("AbsorptionDetectorEnhanced - REAL Integration Tests", () => {
             expect(lastTradeEvent).toBeDefined();
             expect(lastTradeEvent!.zoneData).toBeDefined();
 
-            const zones5Tick = lastTradeEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = lastTradeEvent!.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - absorptionPrice) < TICK_SIZE / 2
             );
 
@@ -382,8 +382,8 @@ describe("AbsorptionDetectorEnhanced - REAL Integration Tests", () => {
             expect(secondTradeEvent).toBeDefined();
             expect(secondTradeEvent.zoneData).toBeDefined();
 
-            const zones5Tick = secondTradeEvent.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = secondTradeEvent.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - absorptionPrice) < TICK_SIZE / 2
             );
 
@@ -437,8 +437,8 @@ describe("AbsorptionDetectorEnhanced - REAL Integration Tests", () => {
             }
 
             // Verify zone has significant aggressive volume
-            const zones5Tick = lastEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = lastEvent!.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - absorptionPrice) < TICK_SIZE / 2
             );
 
@@ -478,16 +478,16 @@ describe("AbsorptionDetectorEnhanced - REAL Integration Tests", () => {
             const zoneData = lastEvent!.zoneData!;
 
             // 5-tick zones should show individual absorption points
-            expect(zoneData.zones5Tick.length).toBeGreaterThanOrEqual(0);
+            expect(zoneData.zones.length).toBeGreaterThanOrEqual(0);
 
             // 10-tick zones should show broader absorption cluster
-            expect(zoneData.zones10Tick.length).toBeGreaterThanOrEqual(0);
+            expect(zoneData.zones.length).toBeGreaterThanOrEqual(0);
 
             // 20-tick zones should capture the overall absorption area
-            expect(zoneData.zones20Tick.length).toBeGreaterThanOrEqual(0);
+            expect(zoneData.zones.length).toBeGreaterThanOrEqual(0);
 
             // Verify zones have accumulated significant volume
-            const centerZone5Tick = zoneData.zones5Tick.find(
+            const centerZone5Tick = zoneData.zones.find(
                 (z) => Math.abs(z.priceLevel - centerPrice) < TICK_SIZE / 2
             );
             expect(centerZone5Tick!.aggressiveVolume).toBeGreaterThan(5);
@@ -517,8 +517,8 @@ describe("AbsorptionDetectorEnhanced - REAL Integration Tests", () => {
             }
 
             // Verify zone shows mixed activity with dominant buying
-            const zones5Tick = lastEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = lastEvent!.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - absorptionPrice) < TICK_SIZE / 2
             );
 
@@ -597,8 +597,8 @@ describe("AbsorptionDetectorEnhanced - REAL Integration Tests", () => {
             );
 
             // Zone should show accumulated volume from both time periods
-            const zones5Tick = lastEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = lastEvent!.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - absorptionPrice) < TICK_SIZE / 2
             );
 
@@ -650,8 +650,8 @@ describe("AbsorptionDetectorEnhanced - REAL Integration Tests", () => {
             expect(lastEvent!.zonePassiveAskVolume).toBe(5000); // Zone passive ask volume
 
             // Zone should show significant aggressive volume
-            const zones5Tick = lastEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = lastEvent!.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - absorptionPrice) < TICK_SIZE / 2
             );
 
