@@ -3,7 +3,7 @@
 // 🔢 EXACT NUMBERS VALIDATION TEST SUITE
 //
 // Tests validate EXACT NUMERICAL OUTPUTS:
-// - Exact array lengths (zones5Tick.length = 25)
+// - Exact array lengths (zones.length = 25)
 // - Exact volume accumulation (37.75 LTC)
 // - Exact trade counts (3 trades)
 // - Exact price levels ($89.05)
@@ -44,8 +44,7 @@ const CONFIG = {
         maxDashboardInterval: 1000,
         significantChangeThreshold: 0.001,
         standardZoneConfig: {
-            baseTicks: 5,
-            zoneMultipliers: [1, 2, 4],
+            zoneTicks: 10,
             timeWindows: [300000, 900000, 1800000, 3600000, 5400000],
             adaptiveMode: false,
             volumeThresholds: {
@@ -148,16 +147,14 @@ describe("OrderFlowPreprocessor - Exact Numbers Validation", () => {
     });
 
     describe("Exact Array Lengths", () => {
-        it("should create exactly 25 zones5Tick, 13 zones10Tick, 7 zones20Tick", async () => {
+        it("should create exactly 25 zones in simplified structure", async () => {
             const trade = createExactTrade(89.05, 15.5, false);
             await preprocessor.handleAggTrade(trade);
 
             const enrichedTrade = enrichedTrades[0];
 
-            // EXACT NUMBERS: Zone array lengths based on zoneCalculationRange=12
-            expect(enrichedTrade.zoneData!.zones5Tick.length).toBe(25); // 2*12+1 = 25 zones
-            expect(enrichedTrade.zoneData!.zones10Tick.length).toBe(25); // 2*12+1 = 25 zones
-            expect(enrichedTrade.zoneData!.zones20Tick.length).toBe(25); // 2*12+1 = 25 zones
+            // EXACT NUMBERS: Zone array lengths based on simplified single zone structure
+            expect(enrichedTrade.zoneData!.zones.length).toBe(25); // 2*12+1 = 25 zones
         });
 
         it("should create exactly 3 active zones across price levels", async () => {
@@ -172,22 +169,22 @@ describe("OrderFlowPreprocessor - Exact Numbers Validation", () => {
             }
 
             const finalTrade = enrichedTrades[2];
-            const zones5Tick = finalTrade.zoneData!.zones5Tick;
+            const zones = finalTrade.zoneData!.zones;
 
             // EXACT NUMBERS: Count zones with volume > 0
-            const activeZones = zones5Tick.filter(
+            const activeZones = zones.filter(
                 (z) => z.aggressiveVolume > 0
             );
             expect(activeZones.length).toBe(3);
 
             // EXACT NUMBERS: Each zone should have exact volume
-            const zone1 = zones5Tick.find(
+            const zone1 = zones.find(
                 (z) => Math.abs(z.priceLevel - 89.0) < 0.005
             );
-            const zone2 = zones5Tick.find(
+            const zone2 = zones.find(
                 (z) => Math.abs(z.priceLevel - 89.05) < 0.005
             );
-            const zone3 = zones5Tick.find(
+            const zone3 = zones.find(
                 (z) => Math.abs(z.priceLevel - 89.1) < 0.005
             );
 
@@ -211,7 +208,7 @@ describe("OrderFlowPreprocessor - Exact Numbers Validation", () => {
             }
 
             const finalTrade = enrichedTrades[2];
-            const targetZone = finalTrade.zoneData!.zones5Tick.find(
+            const targetZone = finalTrade.zoneData!.zones.find(
                 (z) => Math.abs(z.priceLevel - exactPrice) < 0.005
             );
 
@@ -236,7 +233,7 @@ describe("OrderFlowPreprocessor - Exact Numbers Validation", () => {
             }
 
             const finalTrade = enrichedTrades[3];
-            const targetZone = finalTrade.zoneData!.zones5Tick.find(
+            const targetZone = finalTrade.zoneData!.zones.find(
                 (z) => Math.abs(z.priceLevel - exactPrice) < 0.005
             );
 
@@ -254,10 +251,10 @@ describe("OrderFlowPreprocessor - Exact Numbers Validation", () => {
             await preprocessor.handleAggTrade(trade);
 
             const enrichedTrade = enrichedTrades[0];
-            const zones5Tick = enrichedTrade.zoneData!.zones5Tick;
+            const zones = enrichedTrade.zoneData!.zones;
 
             // Find target zone and validate exact price
-            const targetZone = zones5Tick.find(
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - 89.05) < 0.005
             );
 
@@ -268,15 +265,15 @@ describe("OrderFlowPreprocessor - Exact Numbers Validation", () => {
             expect(targetZone!.boundaries.max).toBe(89.09); // Zone ends at center + 4 ticks
         });
 
-        it("should create zones at exact 5-tick intervals", async () => {
+        it("should create zones at exact 10-tick intervals", async () => {
             const trade = createExactTrade(89.05, 10.0, false);
             await preprocessor.handleAggTrade(trade);
 
             const enrichedTrade = enrichedTrades[0];
-            const zones5Tick = enrichedTrade.zoneData!.zones5Tick;
+            const zones = enrichedTrade.zoneData!.zones;
 
-            // EXACT NUMBERS: Zone prices should be 5 ticks apart (0.05)
-            const zonePrices = zones5Tick
+            // EXACT NUMBERS: Zone prices should be 10 ticks apart (0.10)
+            const zonePrices = zones
                 .map((z) => z.priceLevel)
                 .sort((a, b) => a - b);
 
@@ -286,7 +283,7 @@ describe("OrderFlowPreprocessor - Exact Numbers Validation", () => {
                     zonePrices[i - 1],
                     2
                 );
-                expect(priceDiff).toBe(0.05); // Exactly 5 ticks = 0.05
+                expect(priceDiff).toBe(0.10); // Exactly 10 ticks = 0.10
             }
         });
     });
@@ -306,7 +303,7 @@ describe("OrderFlowPreprocessor - Exact Numbers Validation", () => {
                 await preprocessor.handleAggTrade(trades[i]);
 
                 const tradeEvent = enrichedTrades[i];
-                const targetZone = tradeEvent.zoneData!.zones5Tick.find(
+                const targetZone = tradeEvent.zoneData!.zones.find(
                     (z) => Math.abs(z.priceLevel - exactPrice) < 0.005
                 );
 
@@ -329,50 +326,24 @@ describe("OrderFlowPreprocessor - Exact Numbers Validation", () => {
             await preprocessor.handleAggTrade(trade);
 
             const enrichedTrade = enrichedTrades[0];
-            const zones5Tick = enrichedTrade.zoneData!.zones5Tick;
-            const zones10Tick = enrichedTrade.zoneData!.zones10Tick;
-            const zones20Tick = enrichedTrade.zoneData!.zones20Tick;
+            const zones = enrichedTrade.zoneData!.zones;
 
-            // Find zones containing our trade based on boundaries
+            // Find zone containing our trade based on boundaries
             const tradePrice = 89.05;
-            const zone5 = zones5Tick.find(
-                (z) =>
-                    tradePrice >= z.boundaries.min &&
-                    tradePrice <= z.boundaries.max
-            );
-            const zone10 = zones10Tick.find(
-                (z) =>
-                    tradePrice >= z.boundaries.min &&
-                    tradePrice <= z.boundaries.max
-            );
-            const zone20 = zones20Tick.find(
+            const targetZone = zones.find(
                 (z) =>
                     tradePrice >= z.boundaries.min &&
                     tradePrice <= z.boundaries.max
             );
 
-            // EXACT NUMBERS: Zone boundaries (N-tick zone spans N-1 tick intervals)
+            // EXACT NUMBERS: Zone boundaries (10-tick zone spans 9 tick intervals)
             expect(
                 FinancialMath.calculateSpread(
-                    zone5!.boundaries.max,
-                    zone5!.boundaries.min,
+                    targetZone!.boundaries.max,
+                    targetZone!.boundaries.min,
                     2
                 )
-            ).toBe(0.04); // 4 tick intervals (5 ticks)
-            expect(
-                FinancialMath.calculateSpread(
-                    zone10!.boundaries.max,
-                    zone10!.boundaries.min,
-                    2
-                )
-            ).toBe(0.09); // 9 tick intervals (10 ticks)
-            expect(
-                FinancialMath.calculateSpread(
-                    zone20!.boundaries.max,
-                    zone20!.boundaries.min,
-                    2
-                )
-            ).toBe(0.19); // 19 tick intervals (20 ticks)
+            ).toBe(0.09); // 9 tick intervals (10 ticks configured)
         });
     });
 
@@ -410,7 +381,7 @@ describe("OrderFlowPreprocessor - Exact Numbers Validation", () => {
             expect(tradeEvent.quantity).toBe(150.0);
             expect(tradeEvent.depthSnapshot).toBeTruthy(); // Should have depth snapshot
 
-            const targetZone = tradeEvent.zoneData!.zones5Tick.find(
+            const targetZone = tradeEvent.zoneData!.zones.find(
                 (z) => Math.abs(z.priceLevel - 89.0) < 0.005
             );
 
