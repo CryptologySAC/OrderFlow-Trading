@@ -23,10 +23,9 @@ export enum ZoneSignalType {
     EXIT = "exit",
 }
 
-// NEW: Standardized zone configuration for all detectors
+// NEW: Simplified zone configuration - single zone size for all detectors
 export interface StandardZoneConfig {
-    baseTicks: number; // Base zone size in ticks (e.g., 5)
-    zoneMultipliers: number[]; // Zone size multipliers [1, 2, 4] for 5, 10, 20 tick zones
+    zoneTicks: number; // Zone size in ticks (configured to 10)
     timeWindows: number[]; // Time windows for zone analysis [30s, 60s, 300s]
     adaptiveMode: boolean; // Enable dynamic zone sizing based on market conditions
     volumeThresholds: {

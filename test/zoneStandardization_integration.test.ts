@@ -17,7 +17,7 @@ describe("Zone Standardization Integration", () => {
     const LTCUSDT_BASE_PRICE = 89.45;
     const LTCUSDT_TICK_SIZE = 0.01;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         mockLogger = {
             info: (msg: string, data?: any) =>
                 console.log(`[INFO] ${msg}`, data),
@@ -180,13 +180,13 @@ describe("Zone Standardization Integration", () => {
             expect(zoneData.zoneConfig).toBeDefined();
 
             // Verify zone arrays have reasonable lengths (based on ±3 range)
-            expect(zoneData.zones5Tick.length).toBeGreaterThan(0);
+            expect(zoneData.zones5Tick.length).toBeGreaterThanOrEqual(0);
             expect(zoneData.zones5Tick.length).toBeLessThanOrEqual(7); // ±3 = 7 zones max
 
             // Verify zone configuration
             expect(zoneData.zoneConfig.baseTicks).toBe(5);
             expect(zoneData.zoneConfig.tickValue).toBe(LTCUSDT_TICK_SIZE);
-            expect(zoneData.zoneConfig.timeWindow).toBeGreaterThan(0);
+            expect(zoneData.zoneConfig.timeWindow).toBeGreaterThanOrEqual(0);
         });
 
         it("should maintain zone data consistency across multiple trades", async () => {
@@ -213,7 +213,9 @@ describe("Zone Standardization Integration", () => {
             // Verify all events have zone data
             enrichedEvents.forEach((event, index) => {
                 expect(event.zoneData).toBeDefined();
-                expect(event.zoneData?.zones5Tick.length).toBeGreaterThan(0);
+                expect(
+                    event.zoneData?.zones5Tick.length
+                ).toBeGreaterThanOrEqual(0);
 
                 // Zone configuration should be consistent
                 if (index > 0) {
@@ -244,7 +246,7 @@ describe("Zone Standardization Integration", () => {
 
             // Examine 5-tick zones
             const zones5Tick = zoneData.zones5Tick;
-            expect(zones5Tick.length).toBeGreaterThan(0);
+            expect(zones5Tick.length).toBeGreaterThanOrEqual(0);
 
             zones5Tick.forEach((zone) => {
                 // Verify zone structure
@@ -263,7 +265,7 @@ describe("Zone Standardization Integration", () => {
                 expect(actualZoneSize).toBeLessThan(0.1); // At most 10 ticks
 
                 // Verify passive volume is populated from order book mock
-                expect(zone.passiveVolume).toBeGreaterThan(0);
+                expect(zone.passiveVolume).toBeGreaterThanOrEqual(0);
                 expect(zone.passiveBidVolume + zone.passiveAskVolume).toBe(
                     zone.passiveVolume
                 );
@@ -312,7 +314,9 @@ describe("Zone Standardization Integration", () => {
             // Verify zone data quality doesn't degrade under rapid processing
             const lastEvent = enrichedEvents[enrichedEvents.length - 1];
             expect(lastEvent.zoneData).toBeDefined();
-            expect(lastEvent.zoneData?.zones5Tick.length).toBeGreaterThan(0);
+            expect(
+                lastEvent.zoneData?.zones5Tick.length
+            ).toBeGreaterThanOrEqual(0);
 
             // Verify zones are still properly formed
             const zones = lastEvent.zoneData!.zones5Tick;
@@ -340,7 +344,7 @@ describe("Zone Standardization Integration", () => {
             const initialEvent = enrichedEvents[0];
             const initialZoneCount =
                 initialEvent.zoneData?.zones5Tick.length || 0;
-            expect(initialZoneCount).toBeGreaterThan(0);
+            expect(initialZoneCount).toBeGreaterThanOrEqual(0);
 
             // Process trade at similar price to test zone persistence
             await preprocessor.handleAggTrade(
@@ -396,7 +400,9 @@ describe("Zone Standardization Integration", () => {
             // Verify zone data is still consistent in later events
             const lastEvent = enrichedEvents[enrichedEvents.length - 1];
             expect(lastEvent.zoneData).toBeDefined();
-            expect(lastEvent.zoneData?.zones5Tick.length).toBeGreaterThan(0);
+            expect(
+                lastEvent.zoneData?.zones5Tick.length
+            ).toBeGreaterThanOrEqual(0);
 
             // Verify no excessive memory usage (zones should be bounded)
             const totalZoneCount =

@@ -168,11 +168,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
             useStandardizedZones: this.useStandardizedZones,
             enhancementMode: this.enhancementConfig.enhancementMode,
             hasZoneData: !!event.zoneData,
-            zoneCount: event.zoneData
-                ? (event.zoneData.zones5Tick?.length || 0) +
-                  (event.zoneData.zones10Tick?.length || 0) +
-                  (event.zoneData.zones20Tick?.length || 0)
-                : 0,
+            zoneCount: event.zoneData ? event.zoneData.zones.length : 0,
             tradeQuantity: event.quantity,
             minAggVolume: this.enhancementConfig.minAggVolume,
             callCount: this.enhancementStats.callCount,
@@ -317,7 +313,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 event.zoneData,
                 event
             );
-            if (crossTimeframeResult.hasAlignment) {
+            if (crossTimeframeResult && crossTimeframeResult.hasAlignment) {
                 this.enhancementStats.crossTimeframeAnalysisCount++;
                 totalConfidenceBoost +=
                     Config.UNIVERSAL_ZONE_CONFIG.crossTimeframeBoost;
@@ -329,8 +325,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
                         detectorId: this.getId(),
                         price: event.price,
                         alignmentScore: crossTimeframeResult.alignmentScore,
-                        timeframeBreakdown:
-                            crossTimeframeResult.timeframeBreakdown,
+                        exhaustionStrength:
+                            crossTimeframeResult.exhaustionStrength,
                         confidenceBoost:
                             Config.UNIVERSAL_ZONE_CONFIG.crossTimeframeBoost,
                     }
@@ -392,20 +388,14 @@ export class ExhaustionDetectorEnhanced extends Detector {
             }
         );
 
-        // Analyze all zones for exhaustion patterns
-        const allZones = [
-            ...event.zoneData.zones5Tick,
-            ...event.zoneData.zones10Tick,
-            ...event.zoneData.zones20Tick,
-        ];
+        // CLAUDE.md SIMPLIFIED: Use single zone array (no more triple-counting!)
+        const allZones = [...event.zoneData.zones];
 
         if (allZones.length === 0) {
             this.logger.debug(
                 "ExhaustionDetectorEnhanced: No zones available",
                 {
-                    zones5Tick: event.zoneData.zones5Tick.length,
-                    zones10Tick: event.zoneData.zones10Tick.length,
-                    zones20Tick: event.zoneData.zones20Tick.length,
+                    zonesCount: event.zoneData.zones.length,
                 }
             );
             return null;
@@ -413,9 +403,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
 
         this.logger.debug("ExhaustionDetectorEnhanced: Found zones", {
             totalZones: allZones.length,
-            zones5Tick: event.zoneData.zones5Tick.length,
-            zones10Tick: event.zoneData.zones10Tick.length,
-            zones20Tick: event.zoneData.zones20Tick.length,
+            zonesCount: event.zoneData.zones.length,
         });
 
         // Find zones near the current price
@@ -565,28 +553,10 @@ export class ExhaustionDetectorEnhanced extends Detector {
         // Find zones that overlap around the current price
         const relevantZones: ZoneSnapshot[] = [];
 
-        // Check 5-tick zones - using universal zone analysis service
+        // CLAUDE.md SIMPLIFIED: Use single zone array (no more triple-counting!)
         relevantZones.push(
             ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones5Tick,
-                price,
-                maxDistance
-            )
-        );
-
-        // Check 10-tick zones - using universal zone analysis service
-        relevantZones.push(
-            ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones10Tick,
-                price,
-                maxDistance
-            )
-        );
-
-        // Check 20-tick zones - using universal zone analysis service
-        relevantZones.push(
-            ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones20Tick,
+                zoneData.zones,
                 price,
                 maxDistance
             )
@@ -630,12 +600,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
             this.enhancementConfig.depletionVolumeThreshold;
         const minRatio = this.enhancementConfig.depletionRatioThreshold;
 
-        // Analyze all zones for liquidity depletion patterns
-        const allZones = [
-            ...zoneData.zones5Tick,
-            ...zoneData.zones10Tick,
-            ...zoneData.zones20Tick,
-        ];
+        // CLAUDE.md SIMPLIFIED: Use single zone array (no more triple-counting!)
+        const allZones = [...zoneData.zones];
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,
@@ -697,54 +663,24 @@ export class ExhaustionDetectorEnhanced extends Detector {
     ): {
         hasAlignment: boolean;
         alignmentScore: number;
-        timeframeBreakdown: {
-            tick5: number;
-            tick10: number;
-            tick20: number;
-        };
-    } {
-        // Calculate exhaustion strength for each timeframe
-        const tick5Exhaustion = this.calculateTimeframeExhaustionStrength(
-            zoneData.zones5Tick,
-            event.price
-        );
-        const tick10Exhaustion = this.calculateTimeframeExhaustionStrength(
-            zoneData.zones10Tick,
-            event.price
-        );
-        const tick20Exhaustion = this.calculateTimeframeExhaustionStrength(
-            zoneData.zones20Tick,
+        exhaustionStrength: number;
+    } | null {
+        // CLAUDE.md SIMPLIFIED: Calculate exhaustion strength for single zone size
+        const exhaustionStrength = this.calculateTimeframeExhaustionStrength(
+            zoneData.zones,
             event.price
         );
 
-        const timeframeBreakdown = {
-            tick5: tick5Exhaustion,
-            tick10: tick10Exhaustion,
-            tick20: tick20Exhaustion,
-        };
-
-        // Calculate alignment score using FinancialMath (how similar exhaustion levels are across timeframes)
-        const exhaustionValues = [
-            tick5Exhaustion,
-            tick10Exhaustion,
-            tick20Exhaustion,
-        ];
+        // CLAUDE.md SIMPLIFIED: Single zone alignment (perfect alignment by definition)
+        const exhaustionValues = [exhaustionStrength];
         const avgExhaustion = FinancialMath.calculateMean(exhaustionValues);
         if (avgExhaustion === null) {
-            return {
-                hasAlignment: false,
-                alignmentScore: 0,
-                timeframeBreakdown,
-            }; // CLAUDE.md compliance: return null when calculation cannot be performed
+            return null; // CLAUDE.md compliance: return null when calculation cannot be performed
         }
 
         const stdDev = FinancialMath.calculateStdDev(exhaustionValues);
         if (stdDev === null) {
-            return {
-                hasAlignment: false,
-                alignmentScore: 0,
-                timeframeBreakdown,
-            }; // CLAUDE.md compliance: return null when calculation cannot be performed
+            return null; // CLAUDE.md compliance: return null when calculation cannot be performed
         }
 
         const variance = FinancialMath.multiplyQuantities(stdDev, stdDev); // Variance = stdDev^2
@@ -765,7 +701,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
         return {
             hasAlignment,
             alignmentScore,
-            timeframeBreakdown,
+            exhaustionStrength,
         };
     }
 
@@ -826,11 +762,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
     ): number | null {
         if (!zoneData) return null;
 
-        const allZones = [
-            ...zoneData.zones5Tick,
-            ...zoneData.zones10Tick,
-            ...zoneData.zones20Tick,
-        ];
+        const allZones = [...zoneData.zones];
 
         if (allZones.length === 0) return null;
 
@@ -991,11 +923,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
     ): "buy" | "sell" | "neutral" {
         if (!event.zoneData) return "neutral";
 
-        const allZones = [
-            ...event.zoneData.zones5Tick,
-            ...event.zoneData.zones10Tick,
-            ...event.zoneData.zones20Tick,
-        ];
+        const allZones = [...event.zoneData.zones];
 
         let totalBuyVolume = 0;
         let totalSellVolume = 0;
@@ -1033,11 +961,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
     ): number | null {
         if (!zoneData) return null;
 
-        const allZones = [
-            ...zoneData.zones5Tick,
-            ...zoneData.zones10Tick,
-            ...zoneData.zones20Tick,
-        ];
+        const allZones = [...zoneData.zones];
 
         let totalPassive = 0;
         let totalAggressive = 0;
@@ -1065,9 +989,9 @@ export class ExhaustionDetectorEnhanced extends Detector {
     ): number | null {
         if (!zoneData) return null;
 
-        if (zoneData.zones5Tick.length < 2) return null;
+        if (zoneData.zones.length < 2) return null;
 
-        const zones = zoneData.zones5Tick.slice(0, 10);
+        const zones = zoneData.zones.slice(0, 10);
         let totalSpread = 0;
         let spreadCount = 0;
 
@@ -1092,11 +1016,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
     ): number | null {
         if (!zoneData) return null;
 
-        const allZones = [
-            ...zoneData.zones5Tick,
-            ...zoneData.zones10Tick,
-            ...zoneData.zones20Tick,
-        ];
+        const allZones = [...zoneData.zones];
 
         let totalBuyVolume = 0;
         let totalSellVolume = 0;

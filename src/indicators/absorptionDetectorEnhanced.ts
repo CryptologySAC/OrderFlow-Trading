@@ -155,11 +155,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
             useStandardizedZones: this.useStandardizedZones,
             enhancementMode: this.enhancementConfig.enhancementMode,
             hasZoneData: !!event.zoneData,
-            zoneCount: event.zoneData
-                ? (event.zoneData.zones5Tick?.length || 0) +
-                  (event.zoneData.zones10Tick?.length || 0) +
-                  (event.zoneData.zones20Tick?.length || 0)
-                : 0,
+            zoneCount: event.zoneData ? event.zoneData.zones.length : 0,
             tradeQuantity: event.quantity,
             minAggVolume: this.enhancementConfig.minAggVolume,
             callCount: this.enhancementStats.callCount,
@@ -242,11 +238,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     detectorId: this.getId(),
                     price: event.price,
                     quantity: event.quantity,
-                    zoneCount: event.zoneData
-                        ? (event.zoneData.zones5Tick?.length || 0) +
-                          (event.zoneData.zones10Tick?.length || 0) +
-                          (event.zoneData.zones20Tick?.length || 0)
-                        : 0,
+                    zoneCount: event.zoneData ? event.zoneData.zones.length : 0,
                 }
             );
             return; // No core absorption - no signals at all
@@ -591,11 +583,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
             0.01 // tickSize from config
         );
 
-        const allZones = [
-            ...event.zoneData.zones5Tick,
-            ...event.zoneData.zones10Tick,
-            ...event.zoneData.zones20Tick,
-        ];
+        const allZones = [...event.zoneData.zones];
 
         return this.preprocessor.findZonesNearPrice(
             allZones,
@@ -832,7 +820,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
         // Check 5-tick zones - using universal zone analysis service
         relevantZones.push(
             ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones5Tick,
+                zoneData.zones,
                 price,
                 maxDistance
             )
@@ -841,7 +829,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
         // Check 10-tick zones - using universal zone analysis service
         relevantZones.push(
             ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones10Tick,
+                zoneData.zones,
                 price,
                 maxDistance
             )
@@ -850,7 +838,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
         // Check 20-tick zones - using universal zone analysis service
         relevantZones.push(
             ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones20Tick,
+                zoneData.zones,
                 price,
                 maxDistance
             )
@@ -892,11 +880,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
         const minRatio = this.absorptionRatioThreshold;
 
         // Analyze all zones for institutional absorption patterns
-        const allZones = [
-            ...zoneData.zones5Tick,
-            ...zoneData.zones10Tick,
-            ...zoneData.zones20Tick,
-        ];
+        const allZones = [...zoneData.zones];
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,
@@ -962,32 +946,20 @@ export class AbsorptionDetectorEnhanced extends Detector {
             tick20: number;
         };
     } {
-        // Calculate absorption strength for each timeframe
-        const tick5Absorption = this.calculateTimeframeAbsorptionStrength(
-            zoneData.zones5Tick,
-            event.price
-        );
-        const tick10Absorption = this.calculateTimeframeAbsorptionStrength(
-            zoneData.zones10Tick,
-            event.price
-        );
-        const tick20Absorption = this.calculateTimeframeAbsorptionStrength(
-            zoneData.zones20Tick,
+        // CLAUDE.md SIMPLIFIED: Calculate absorption strength for single zone size
+        const absorptionStrength = this.calculateTimeframeAbsorptionStrength(
+            zoneData.zones,
             event.price
         );
 
         const timeframeBreakdown = {
-            tick5: tick5Absorption,
-            tick10: tick10Absorption,
-            tick20: tick20Absorption,
+            tick5: absorptionStrength,
+            tick10: absorptionStrength,
+            tick20: absorptionStrength,
         };
 
         // Calculate alignment score using FinancialMath (how similar absorption levels are across timeframes)
-        const absorptionValues = [
-            tick5Absorption,
-            tick10Absorption,
-            tick20Absorption,
-        ];
+        const absorptionValues = [absorptionStrength];
         const avgAbsorption = FinancialMath.calculateMean(absorptionValues);
         if (avgAbsorption === null) {
             return {
@@ -1297,11 +1269,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
         }
 
         // For absorption, we analyze which side is being absorbed
-        const allZones = [
-            ...event.zoneData.zones5Tick,
-            ...event.zoneData.zones10Tick,
-            ...event.zoneData.zones20Tick,
-        ];
+        const allZones = [...event.zoneData.zones];
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,
@@ -1355,11 +1323,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
             return null;
         }
 
-        const allZones = [
-            ...event.zoneData.zones5Tick,
-            ...event.zoneData.zones10Tick,
-            ...event.zoneData.zones20Tick,
-        ];
+        const allZones = [...event.zoneData.zones];
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,

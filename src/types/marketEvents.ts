@@ -42,14 +42,12 @@ export interface ZoneSnapshot {
     volumeWeightedPrice: number; // Volume weighted average price
 }
 
-// Zone data collection for multiple zone sizes
+// Simplified zone data - single zone size for all detectors
 export interface StandardZoneData {
-    zones5Tick: ZoneSnapshot[]; // 5-tick zones (base size)
-    zones10Tick: ZoneSnapshot[]; // 10-tick zones (2x base)
-    zones20Tick: ZoneSnapshot[]; // 20-tick zones (4x base)
+    zones: ZoneSnapshot[]; // Single zone array (configured size)
     adaptiveZones?: ZoneSnapshot[]; // Market-condition adapted zones
     zoneConfig: {
-        baseTicks: number; // Base zone size in ticks
+        zoneTicks: number; // Zone size in ticks (10)
         tickValue: number; // Value of one tick
         timeWindow: number; // Time window for zone calculations
     };

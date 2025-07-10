@@ -387,11 +387,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         // Simple zone-based validation without caching live data
         if (!event.zoneData) return false;
 
-        const allZones = [
-            ...event.zoneData.zones5Tick,
-            ...event.zoneData.zones10Tick,
-            ...event.zoneData.zones20Tick,
-        ];
+        const allZones = [...event.zoneData.zones];
 
         // Calculate current volume rate from zones (no caching)
         const totalVolume = allZones.reduce(
@@ -459,11 +455,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         sellVolume: number;
         cvdDelta: number;
     } {
-        const allZones = [
-            ...zoneData.zones5Tick,
-            ...zoneData.zones10Tick,
-            ...zoneData.zones20Tick,
-        ];
+        const allZones = [...zoneData.zones];
 
         let totalBuyVolume = 0;
         let totalSellVolume = 0;
@@ -633,9 +625,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             {
                 detectorId: this.getId(),
                 price: price,
-                zones5TickCount: zoneData.zones5Tick.length,
-                zones10TickCount: zoneData.zones10Tick.length,
-                zones20TickCount: zoneData.zones20Tick.length,
+                zonesCount: zoneData.zones.length,
             }
         );
 
@@ -656,29 +646,13 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         // Find zones that overlap around the current price
         const relevantZones: ZoneSnapshot[] = [];
 
-        // Check 5-tick zones - using universal zone analysis service
-        const zones5Near = this.preprocessor.findZonesNearPrice(
-            zoneData.zones5Tick,
+        // CLAUDE.md SIMPLIFIED: Use single zone array (no more triple-counting!)
+        const zonesNear = this.preprocessor.findZonesNearPrice(
+            zoneData.zones,
             price,
             maxDistance
         );
-        relevantZones.push(...zones5Near);
-
-        // Check 10-tick zones - using universal zone analysis service
-        const zones10Near = this.preprocessor.findZonesNearPrice(
-            zoneData.zones10Tick,
-            price,
-            maxDistance
-        );
-        relevantZones.push(...zones10Near);
-
-        // Check 20-tick zones - using universal zone analysis service
-        const zones20Near = this.preprocessor.findZonesNearPrice(
-            zoneData.zones20Tick,
-            price,
-            maxDistance
-        );
-        relevantZones.push(...zones20Near);
+        relevantZones.push(...zonesNear);
 
         const confluenceZones = relevantZones.length;
         const hasConfluence = confluenceZones >= minConfluenceZones;
@@ -697,9 +671,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             {
                 detectorId: this.getId(),
                 price,
-                zones5Near: zones5Near.length,
-                zones10Near: zones10Near.length,
-                zones20Near: zones20Near.length,
+                zonesNear: zonesNear.length,
                 confluenceZones,
                 hasConfluence,
                 confluenceStrength,
@@ -733,32 +705,19 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 detectorId: this.getId(),
                 price: event.price,
                 quantity: event.quantity,
-                totalZones5: zoneData.zones5Tick.length,
-                totalZones10: zoneData.zones10Tick.length,
-                totalZones20: zoneData.zones20Tick.length,
-                sampleZone5: zoneData.zones5Tick[0]
+                totalZones: zoneData.zones.length,
+                sampleZone: zoneData.zones[0]
                     ? {
-                          priceLevel: zoneData.zones5Tick[0].priceLevel,
-                          aggressiveVolume:
-                              zoneData.zones5Tick[0].aggressiveVolume,
+                          priceLevel: zoneData.zones[0].priceLevel,
+                          aggressiveVolume: zoneData.zones[0].aggressiveVolume,
                           aggressiveBuyVolume:
-                              zoneData.zones5Tick[0].aggressiveBuyVolume,
+                              zoneData.zones[0].aggressiveBuyVolume,
                           aggressiveSellVolume:
-                              zoneData.zones5Tick[0].aggressiveSellVolume,
-                          passiveVolume: zoneData.zones5Tick[0].passiveVolume,
+                              zoneData.zones[0].aggressiveSellVolume,
+                          passiveVolume: zoneData.zones[0].passiveVolume,
                           totalVolume:
-                              zoneData.zones5Tick[0].aggressiveVolume +
-                              zoneData.zones5Tick[0].passiveVolume,
-                      }
-                    : "no zones",
-                sampleZone10: zoneData.zones10Tick[0]
-                    ? {
-                          priceLevel: zoneData.zones10Tick[0].priceLevel,
-                          aggressiveVolume:
-                              zoneData.zones10Tick[0].aggressiveVolume,
-                          totalVolume:
-                              zoneData.zones10Tick[0].aggressiveVolume +
-                              zoneData.zones10Tick[0].passiveVolume,
+                              zoneData.zones[0].aggressiveVolume +
+                              zoneData.zones[0].passiveVolume,
                       }
                     : "no zones",
             }
@@ -780,11 +739,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         );
 
         // Analyze all zones for CVD divergence patterns
-        const allZones = [
-            ...zoneData.zones5Tick,
-            ...zoneData.zones10Tick,
-            ...zoneData.zones20Tick,
-        ];
+        const allZones = [...zoneData.zones];
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,
@@ -1108,11 +1063,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     ): "buy" | "sell" | null {
         if (!event.zoneData) return null;
 
-        const allZones = [
-            ...event.zoneData.zones5Tick,
-            ...event.zoneData.zones10Tick,
-            ...event.zoneData.zones20Tick,
-        ];
+        const allZones = [...event.zoneData.zones];
 
         let totalBuyVolume = 0;
         let totalSellVolume = 0;
@@ -1144,11 +1095,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     ): number {
         if (!zoneData) return 0;
 
-        const allZones = [
-            ...zoneData.zones5Tick,
-            ...zoneData.zones10Tick,
-            ...zoneData.zones20Tick,
-        ];
+        const allZones = [...zoneData.zones];
 
         return allZones.reduce(
             (total, zone) => total + (zone.aggressiveVolume || 0),
@@ -1164,11 +1111,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     ): number {
         if (!zoneData) return 0;
 
-        const allZones = [
-            ...zoneData.zones5Tick,
-            ...zoneData.zones10Tick,
-            ...zoneData.zones20Tick,
-        ];
+        const allZones = [...zoneData.zones];
 
         return allZones.reduce(
             (total, zone) => total + (zone.tradeCount || 0),

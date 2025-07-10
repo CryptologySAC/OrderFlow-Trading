@@ -294,14 +294,11 @@ export class DistributionDetectorEnhanced extends Detector {
     ): number | null {
         if (!event.zoneData) return null;
 
-        const allZones = [
-            ...event.zoneData.zones5Tick,
-            ...event.zoneData.zones10Tick,
-            ...event.zoneData.zones20Tick,
-        ];
-
+        // CLAUDE.md FIX: Use only 5-tick zones to avoid triple-counting volume
+        // Previous bug: Combined all zone sizes causing volume to be counted multiple times
+        // (17 LTC trade counted in 5T, 10T, 20T zones = 51 LTC total - WRONG!)
         const relevantZones = this.preprocessor.findZonesNearPrice(
-            allZones,
+            event.zoneData.zones,
             event.price,
             this.confluenceMaxDistance
         );
@@ -311,7 +308,7 @@ export class DistributionDetectorEnhanced extends Detector {
             {
                 detectorId: this.getId(),
                 price: event.price,
-                allZonesCount: allZones.length,
+                zonesCount: event.zoneData.zones.length,
                 relevantZonesCount: relevantZones.length,
                 confluenceMaxDistance: this.confluenceMaxDistance,
                 distributionVolumeThreshold: this.distributionVolumeThreshold,
@@ -388,17 +385,17 @@ export class DistributionDetectorEnhanced extends Detector {
         const relevantZones: ZoneSnapshot[] = [];
         relevantZones.push(
             ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones5Tick,
+                zoneData.zones,
                 price,
                 this.confluenceMaxDistance
             ),
             ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones10Tick,
+                zoneData.zones,
                 price,
                 this.confluenceMaxDistance
             ),
             ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones20Tick,
+                zoneData.zones,
                 price,
                 this.confluenceMaxDistance
             )
@@ -445,11 +442,7 @@ export class DistributionDetectorEnhanced extends Detector {
         zoneData: StandardZoneData,
         event: EnrichedTradeEvent
     ): number {
-        const allZones = [
-            ...zoneData.zones5Tick,
-            ...zoneData.zones10Tick,
-            ...zoneData.zones20Tick,
-        ];
+        const allZones = [...zoneData.zones];
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,
@@ -507,25 +500,14 @@ export class DistributionDetectorEnhanced extends Detector {
         zoneData: StandardZoneData,
         event: EnrichedTradeEvent
     ): number {
-        // Calculate distribution strength for each timeframe
-        const tick5Distribution = this.calculateTimeframeDistributionStrength(
-            zoneData.zones5Tick,
-            event.price
-        );
-        const tick10Distribution = this.calculateTimeframeDistributionStrength(
-            zoneData.zones10Tick,
-            event.price
-        );
-        const tick20Distribution = this.calculateTimeframeDistributionStrength(
-            zoneData.zones20Tick,
-            event.price
-        );
+        // CLAUDE.md SIMPLIFIED: Calculate distribution strength for single zone size
+        const distributionStrength =
+            this.calculateTimeframeDistributionStrength(
+                zoneData.zones,
+                event.price
+            );
 
-        const distributionValues = [
-            tick5Distribution,
-            tick10Distribution,
-            tick20Distribution,
-        ];
+        const distributionValues = [distributionStrength];
         const avgDistribution = FinancialMath.calculateMean(distributionValues);
         if (avgDistribution === null || avgDistribution === 0) {
             return 0;
@@ -904,11 +886,7 @@ export class DistributionDetectorEnhanced extends Detector {
             return null;
         }
 
-        const allZones = [
-            ...event.zoneData.zones5Tick,
-            ...event.zoneData.zones10Tick,
-            ...event.zoneData.zones20Tick,
-        ];
+        const allZones = [...event.zoneData.zones];
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,

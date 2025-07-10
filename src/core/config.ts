@@ -85,9 +85,8 @@ export const UniversalZoneSchema = z.object({
 // STANDARDIZED ZONE CONFIG - Zone volume aggregation for CVD detectors
 // ============================================================================
 export const StandardZoneConfigSchema = z.object({
-    // Core zone configuration
-    baseTicks: z.number().int().min(1).max(50), // Base zone size in ticks
-    zoneMultipliers: z.array(z.number().int().min(1).max(10)), // Zone size multipliers [1, 2, 4]
+    // CLAUDE.md SIMPLIFIED: Single zone configuration
+    zoneTicks: z.number().int().min(1).max(50), // Zone size in ticks (configured to 10)
     timeWindows: z.array(z.number().int().min(60000).max(7200000)), // Time windows [5min, 15min, etc]
     adaptiveMode: z.boolean(), // Enable dynamic zone sizing
 
@@ -336,6 +335,9 @@ export const AccumulationDetectorSchema = z.object({
     // Core parameters
     useStandardizedZones: z.boolean(),
     enhancementMode: z.enum(["disabled", "testing", "production"]),
+
+    // Signal deduplication parameter (CLAUDE.md compliance - no magic numbers)
+    eventCooldownMs: z.number().int().min(1000).max(60000),
 
     // Single confidence threshold (replaces multiple thresholds)
     confidenceThreshold: z.number().min(0.1).max(0.9),

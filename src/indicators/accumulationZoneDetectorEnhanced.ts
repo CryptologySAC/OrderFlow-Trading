@@ -93,6 +93,10 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     private readonly accumulationVolumeThreshold: number;
     private readonly accumulationRatioThreshold: number;
     private readonly alignmentScoreThreshold: number;
+    private readonly eventCooldownMs: number;
+
+    // Signal deduplication tracking (CLAUDE.md compliance - no magic cooldown values)
+    private lastSignalTimestamp: number = 0;
 
     constructor(
         id: string,
@@ -124,6 +128,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         this.accumulationVolumeThreshold = settings.accumulationVolumeThreshold;
         this.accumulationRatioThreshold = settings.accumulationRatioThreshold;
         this.alignmentScoreThreshold = settings.alignmentScoreThreshold;
+        this.eventCooldownMs = settings.eventCooldownMs;
 
         // Initialize enhancement statistics
         this.enhancementStats = {
@@ -254,6 +259,28 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
 
         // SINGLE confidence check before any emission
         if (totalConfidence >= this.enhancementConfig.confidenceThreshold) {
+            // CLAUDE.md Compliance: Signal deduplication to prevent multiple signals per pattern
+            const currentTimestamp = Date.now();
+            const timeSinceLastSignal =
+                currentTimestamp - this.lastSignalTimestamp;
+
+            if (timeSinceLastSignal < this.eventCooldownMs) {
+                this.logger.debug(
+                    "[AccumulationZoneDetectorEnhanced]: Signal suppressed by cooldown",
+                    {
+                        detectorId: this.getId(),
+                        timeSinceLastSignal,
+                        cooldownMs: this.eventCooldownMs,
+                        price: event.price,
+                        totalConfidence,
+                    }
+                );
+                return; // Skip signal emission during cooldown period
+            }
+
+            // Update last signal timestamp for cooldown tracking
+            this.lastSignalTimestamp = currentTimestamp;
+
             // Update enhancement statistics
             this.enhancementStats.enhancementCount++;
             this.enhancementStats.totalConfidenceBoost +=
@@ -300,14 +327,9 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     ): number | null {
         if (!event.zoneData) return null;
 
-        const allZones = [
-            ...event.zoneData.zones5Tick,
-            ...event.zoneData.zones10Tick,
-            ...event.zoneData.zones20Tick,
-        ];
-
+        // CLAUDE.md SIMPLIFIED: Use single zone array (no more triple-counting!)
         const relevantZones = this.preprocessor.findZonesNearPrice(
-            allZones,
+            event.zoneData.zones,
             event.price,
             this.confluenceMaxDistance
         );
@@ -317,7 +339,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             {
                 detectorId: this.getId(),
                 price: event.price,
-                allZonesCount: allZones.length,
+                zonesCount: event.zoneData.zones.length,
                 relevantZonesCount: relevantZones.length,
                 confluenceMaxDistance: this.confluenceMaxDistance,
                 accumulationVolumeThreshold: this.accumulationVolumeThreshold,
@@ -391,23 +413,10 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         price: number
     ): number {
         // Find zones near current price
-        const relevantZones: ZoneSnapshot[] = [];
-        relevantZones.push(
-            ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones5Tick,
-                price,
-                this.confluenceMaxDistance
-            ),
-            ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones10Tick,
-                price,
-                this.confluenceMaxDistance
-            ),
-            ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones20Tick,
-                price,
-                this.confluenceMaxDistance
-            )
+        const relevantZones = this.preprocessor.findZonesNearPrice(
+            zoneData.zones,
+            price,
+            this.confluenceMaxDistance
         );
 
         if (relevantZones.length === 0) return 0;
@@ -451,11 +460,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         zoneData: StandardZoneData,
         event: EnrichedTradeEvent
     ): number {
-        const allZones = [
-            ...zoneData.zones5Tick,
-            ...zoneData.zones10Tick,
-            ...zoneData.zones20Tick,
-        ];
+        const allZones = zoneData.zones;
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,
@@ -514,24 +519,12 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         event: EnrichedTradeEvent
     ): number {
         // Calculate accumulation strength for each timeframe
-        const tick5Accumulation = this.calculateTimeframeAccumulationStrength(
-            zoneData.zones5Tick,
-            event.price
-        );
-        const tick10Accumulation = this.calculateTimeframeAccumulationStrength(
-            zoneData.zones10Tick,
-            event.price
-        );
-        const tick20Accumulation = this.calculateTimeframeAccumulationStrength(
-            zoneData.zones20Tick,
+        const zoneAccumulation = this.calculateTimeframeAccumulationStrength(
+            zoneData.zones,
             event.price
         );
 
-        const accumulationValues = [
-            tick5Accumulation,
-            tick10Accumulation,
-            tick20Accumulation,
-        ];
+        const accumulationValues = [zoneAccumulation];
         const avgAccumulation = FinancialMath.calculateMean(accumulationValues);
         if (avgAccumulation === null || avgAccumulation === 0) {
             return 0;
@@ -615,28 +608,10 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         // Find zones that overlap around the current price
         const relevantZones: ZoneSnapshot[] = [];
 
-        // Check 5-tick zones - using universal zone analysis service
+        // CLAUDE.md SIMPLIFIED: Use single zone array (no more triple-counting!)
         relevantZones.push(
             ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones5Tick,
-                price,
-                maxDistance
-            )
-        );
-
-        // Check 10-tick zones - using universal zone analysis service
-        relevantZones.push(
-            ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones10Tick,
-                price,
-                maxDistance
-            )
-        );
-
-        // Check 20-tick zones - using universal zone analysis service
-        relevantZones.push(
-            ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones20Tick,
+                zoneData.zones,
                 price,
                 maxDistance
             )
@@ -680,11 +655,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         const minRatio = this.accumulationRatioThreshold;
 
         // Analyze all zones for institutional buying pressure patterns
-        const allZones = [
-            ...zoneData.zones5Tick,
-            ...zoneData.zones10Tick,
-            ...zoneData.zones20Tick,
-        ];
+        const allZones = zoneData.zones;
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,
@@ -746,73 +717,23 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     ): {
         hasAlignment: boolean;
         alignmentScore: number;
-        timeframeBreakdown: {
-            tick5: number;
-            tick10: number;
-            tick20: number;
-        };
-    } {
-        // Calculate accumulation strength for each timeframe
-        const tick5Accumulation = this.calculateTimeframeAccumulationStrength(
-            zoneData.zones5Tick,
-            event.price
-        );
-        const tick10Accumulation = this.calculateTimeframeAccumulationStrength(
-            zoneData.zones10Tick,
-            event.price
-        );
-        const tick20Accumulation = this.calculateTimeframeAccumulationStrength(
-            zoneData.zones20Tick,
-            event.price
-        );
+        accumulationStrength: number;
+    } | null {
+        // CLAUDE.md SIMPLIFIED: Single zone accumulation strength
+        const accumulationStrength =
+            this.calculateTimeframeAccumulationStrength(
+                zoneData.zones,
+                event.price
+            );
 
-        const timeframeBreakdown = {
-            tick5: tick5Accumulation,
-            tick10: tick10Accumulation,
-            tick20: tick20Accumulation,
-        };
-
-        // Calculate alignment score using FinancialMath (how similar accumulation levels are across timeframes)
-        const accumulationValues = [
-            tick5Accumulation,
-            tick10Accumulation,
-            tick20Accumulation,
-        ];
-        const avgAccumulation = FinancialMath.calculateMean(accumulationValues);
-        if (avgAccumulation === null) {
-            return {
-                hasAlignment: false,
-                alignmentScore: 0,
-                timeframeBreakdown,
-            }; // CLAUDE.md compliance: return null when calculation cannot be performed
-        }
-
-        const stdDev = FinancialMath.calculateStdDev(accumulationValues);
-        if (stdDev === null) {
-            return {
-                hasAlignment: false,
-                alignmentScore: 0,
-                timeframeBreakdown,
-            }; // CLAUDE.md compliance: return null when calculation cannot be performed
-        }
-
-        const variance = FinancialMath.multiplyQuantities(stdDev, stdDev); // Variance = stdDev^2
-        const varianceReductionFactor =
-            this.enhancementConfig.varianceReductionFactor;
-        const normalizedVariance = FinancialMath.multiplyQuantities(
-            variance,
-            varianceReductionFactor
-        );
-        const alignmentScore = FinancialMath.multiplyQuantities(
-            avgAccumulation,
-            Math.max(0, 1 - normalizedVariance)
-        ); // Penalize high variance
-        const hasAlignment = alignmentScore >= this.alignmentScoreThreshold; // Require moderate alignment for accumulation
+        // Single zone means perfect alignment
+        const alignmentScore = accumulationStrength;
+        const hasAlignment = alignmentScore >= this.alignmentScoreThreshold;
 
         return {
             hasAlignment,
             alignmentScore,
-            timeframeBreakdown,
+            accumulationStrength,
         };
     }
 
@@ -1125,11 +1046,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             return null;
         }
 
-        const allZones = [
-            ...event.zoneData.zones5Tick,
-            ...event.zoneData.zones10Tick,
-            ...event.zoneData.zones20Tick,
-        ];
+        const allZones = event.zoneData.zones;
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,

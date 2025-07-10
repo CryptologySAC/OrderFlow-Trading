@@ -53,8 +53,7 @@
             "maxDashboardInterval": 1000,
             "significantChangeThreshold": 0.001,
             "standardZoneConfig": {
-                "baseTicks": 5,
-                "zoneMultipliers": [1, 2, 4],
+                "zoneTicks": 10,
                 "timeWindows": [300000, 900000, 1800000, 3600000, 5400000],
                 "adaptiveMode": false,
                 "volumeThresholds": {
@@ -472,6 +471,7 @@
             },
             "accumulation": {
                 "useStandardizedZones": true,
+                "eventCooldownMs": 15000,
                 "confidenceThreshold": 0.2,
                 "confluenceMinZones": 1,
                 "confluenceMaxDistance": 0.1,
