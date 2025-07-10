@@ -420,9 +420,12 @@ describe("Absorption Detector Real Market Flow Validation", () => {
 
         // Update all trades with proper zone data
         const zoneData: StandardZoneData = {
-            zones5Tick: [zone],
-            zones10Tick: [zone],
-            zones20Tick: [zone],
+            zones: [zone],
+            zoneConfig: {
+                zoneTicks: 10,
+                tickValue: 0.01,
+                timeWindow: 60000,
+            },
         };
 
         trades.forEach((trade) => {
