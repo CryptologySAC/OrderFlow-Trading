@@ -92,7 +92,7 @@ function createEnrichedTradeEvent(
     zoneData?: StandardZoneData
 ): EnrichedTradeEvent {
     const defaultZoneData: StandardZoneData = zoneData || {
-        zones5Tick: [
+        zones: [
             {
                 priceLevel: price,
                 aggressiveVolume: 50,
@@ -104,8 +104,11 @@ function createEnrichedTradeEvent(
                 timestamp: Date.now(),
             },
         ],
-        zones10Tick: [],
-        zones20Tick: [],
+        zoneConfig: {
+            zoneTicks: 10,
+            tickValue: 0.01,
+            timeWindow: 60000,
+        },
     };
 
     return {
