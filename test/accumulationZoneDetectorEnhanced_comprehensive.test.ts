@@ -243,8 +243,8 @@ describe("AccumulationZoneDetectorEnhanced - REAL Integration Tests", () => {
             expect(lastTradeEvent).toBeDefined();
             expect(lastTradeEvent!.zoneData).toBeDefined();
 
-            const zones5Tick = lastTradeEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = lastTradeEvent!.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
             );
 
@@ -286,8 +286,8 @@ describe("AccumulationZoneDetectorEnhanced - REAL Integration Tests", () => {
             expect(secondTradeEvent).toBeDefined();
             expect(secondTradeEvent.zoneData).toBeDefined();
 
-            const zones5Tick = secondTradeEvent.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = secondTradeEvent.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
             );
 
@@ -340,8 +340,8 @@ describe("AccumulationZoneDetectorEnhanced - REAL Integration Tests", () => {
             }
 
             // Verify zone has volume but wrong ratio
-            const zones5Tick = lastEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = lastEvent!.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
             );
 
@@ -382,13 +382,7 @@ describe("AccumulationZoneDetectorEnhanced - REAL Integration Tests", () => {
             const zoneData = lastEvent!.zoneData!;
 
             // 5-tick zones should show individual accumulation points
-            expect(zoneData.zones5Tick.length).toBeGreaterThanOrEqual(0);
-
-            // 10-tick zones should show broader accumulation
-            expect(zoneData.zones10Tick.length).toBeGreaterThanOrEqual(0);
-
-            // 20-tick zones should capture the overall buying cluster
-            expect(zoneData.zones20Tick.length).toBeGreaterThanOrEqual(0);
+            expect(zoneData.zones.length).toBeGreaterThanOrEqual(0);
 
             // Should generate accumulation signal from confluence across zone sizes
             expect(detectedSignals.length).toBe(1);
@@ -458,8 +452,8 @@ describe("AccumulationZoneDetectorEnhanced - REAL Integration Tests", () => {
             );
 
             // Zone should show accumulated volume from both time periods
-            const zones5Tick = lastEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = lastEvent!.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
             );
 
