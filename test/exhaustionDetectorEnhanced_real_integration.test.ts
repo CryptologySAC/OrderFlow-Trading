@@ -263,8 +263,8 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
             expect(lastTradeEvent).toBeDefined();
             expect(lastTradeEvent!.zoneData).toBeDefined();
 
-            const zones5Tick = lastTradeEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = lastTradeEvent!.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - exhaustionPrice) < TICK_SIZE / 2
             );
 
@@ -311,8 +311,8 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
             expect(secondTradeEvent).toBeDefined();
             expect(secondTradeEvent.zoneData).toBeDefined();
 
-            const zones5Tick = secondTradeEvent.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = secondTradeEvent.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - exhaustionPrice) < TICK_SIZE / 2
             );
 
@@ -385,8 +385,8 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
             }
 
             // Verify zone captured the velocity decay pattern
-            const zones5Tick = lastEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = lastEvent!.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - exhaustionPrice) < TICK_SIZE / 2
             );
 
@@ -424,8 +424,8 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
             }
 
             // Verify zone shows momentum loss pattern
-            const zones5Tick = lastEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = lastEvent!.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - exhaustionPrice) < TICK_SIZE / 2
             );
 
@@ -467,7 +467,7 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
             const zoneData = lastEvent!.zoneData!;
 
             // 5-tick zones should show individual exhaustion points
-            expect(zoneData.zones5Tick.length).toBeGreaterThanOrEqual(0);
+            expect(zoneData.zones.length).toBeGreaterThanOrEqual(0);
 
             // 10-tick zones should show broader exhaustion area
             expect(zoneData.zones10Tick.length).toBeGreaterThanOrEqual(0);
@@ -507,8 +507,8 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
             }
 
             // Verify zone shows mixed exhaustion pattern
-            const zones5Tick = lastEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = lastEvent!.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - exhaustionPrice) < TICK_SIZE / 2
             );
 
@@ -609,8 +609,8 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
             expect(lastEvent!.zonePassiveAskVolume).toBeDefined();
 
             // Zone should show aggressive volume exceeding passive liquidity
-            const zones5Tick = lastEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = lastEvent!.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - exhaustionPrice) < TICK_SIZE / 2
             );
 
@@ -654,8 +654,8 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
             });
 
             // Zone should show exhaustion pattern across time
-            const zones5Tick = lastEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = lastEvent!.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - exhaustionPrice) < TICK_SIZE / 2
             );
 
