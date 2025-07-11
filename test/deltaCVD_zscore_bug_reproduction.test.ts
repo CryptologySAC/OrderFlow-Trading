@@ -61,20 +61,7 @@ function createStrongCVDZoneData(
     sellVolume: number
 ): StandardZoneData {
     return {
-        zones5Tick: [
-            createCVDZoneSnapshot(
-                price - 0.05,
-                buyVolume * 0.5,
-                sellVolume * 0.5
-            ),
-            createCVDZoneSnapshot(price, buyVolume, sellVolume),
-            createCVDZoneSnapshot(
-                price + 0.05,
-                buyVolume * 0.5,
-                sellVolume * 0.5
-            ),
-        ],
-        zones10Tick: [
+        zones: [
             createCVDZoneSnapshot(
                 price - 0.1,
                 buyVolume * 0.7,
@@ -87,16 +74,12 @@ function createStrongCVDZoneData(
                 sellVolume * 0.7
             ),
         ],
-        zones20Tick: [
-            createCVDZoneSnapshot(price - 0.2, buyVolume, sellVolume),
-            createCVDZoneSnapshot(price, buyVolume * 2, sellVolume * 2),
-            createCVDZoneSnapshot(price + 0.2, buyVolume, sellVolume),
-        ],
         zoneConfig: {
-            baseTicks: 5,
+            zoneTicks: 10,
             tickValue: 0.01,
             timeWindow: 60000,
         },
+        timestamp: Date.now(),
     };
 }
 
@@ -209,7 +192,7 @@ describe("DeltaCVD Standalone Validation - Mathematical Stability", () => {
 
             if (index % 25 === 0) {
                 console.log(
-                    `Processed ${index + 1}/${tradeCount} trades - Price: ${trade.price.toFixed(3)}, Buy Vol: ${trade.zoneData?.zones5Tick[1]?.aggressiveBuyVolume}`
+                    `Processed ${index + 1}/${tradeCount} trades - Price: ${trade.price.toFixed(3)}, Buy Vol: ${trade.zoneData?.zones[1]?.aggressiveBuyVolume}`
                 );
             }
         });
@@ -217,7 +200,7 @@ describe("DeltaCVD Standalone Validation - Mathematical Stability", () => {
         console.log("\\n--- CVD Analysis Results ---");
 
         // Verify the detector processed all trades successfully
-        expect(mockLogger.error).toHaveBeenCalled(); // Debug logging expected
+        expect(mockLogger.error).not.toHaveBeenCalled(); // No errors expected
 
         // Check that analysis is occurring (debug logs should show CVD processing)
         const debugCalls = (mockLogger.debug as vi.Mock).mock.calls;

@@ -57,20 +57,7 @@ function createCVDDivergenceZoneData(
     sellPressure: number
 ): StandardZoneData {
     return {
-        zones5Tick: [
-            createCVDZoneSnapshot(
-                price - 0.05,
-                buyPressure * 0.5,
-                sellPressure * 0.5
-            ),
-            createCVDZoneSnapshot(price, buyPressure, sellPressure),
-            createCVDZoneSnapshot(
-                price + 0.05,
-                buyPressure * 0.5,
-                sellPressure * 0.5
-            ),
-        ],
-        zones10Tick: [
+        zones: [
             createCVDZoneSnapshot(
                 price - 0.1,
                 buyPressure * 0.7,
@@ -83,16 +70,12 @@ function createCVDDivergenceZoneData(
                 sellPressure * 0.7
             ),
         ],
-        zones20Tick: [
-            createCVDZoneSnapshot(price - 0.2, buyPressure, sellPressure),
-            createCVDZoneSnapshot(price, buyPressure * 2, sellPressure * 2),
-            createCVDZoneSnapshot(price + 0.2, buyPressure, sellPressure),
-        ],
         zoneConfig: {
-            baseTicks: 5,
+            zoneTicks: 10,
             tickValue: 0.01,
             timeWindow: 60000,
         },
+        timestamp: Date.now(),
     };
 }
 

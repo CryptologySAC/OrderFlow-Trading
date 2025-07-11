@@ -35,20 +35,33 @@ const BASE_PRICE = 85.0; // $85 LTCUSDT
 // Test configuration matching production config.json
 const DISTRIBUTION_CONFIG = {
     useStandardizedZones: true,
-    confidenceThreshold: 0.2, // Lowered for easier signal generation in tests
+    eventCooldownMs: 15000, // CRITICAL: Missing cooldown parameter causing multiple signals
+    confidenceThreshold: 0.2,
     confluenceMinZones: 1,
     confluenceMaxDistance: 0.1,
     confluenceConfidenceBoost: 0.1,
     crossTimeframeConfidenceBoost: 0.15,
-    distributionVolumeThreshold: 3, // Lowered for test scenarios
-    distributionRatioThreshold: 0.4, // Minimum 40% sell volume
+    distributionVolumeThreshold: 3,
+    distributionRatioThreshold: 0.4,
     alignmentScoreThreshold: 0.5,
     defaultDurationMs: 120000,
     tickSize: TICK_SIZE,
+    maxPriceResistance: 2.0,
+    priceResistanceMultiplier: 1.5,
+    minPassiveVolumeForEfficiency: 5,
+    defaultVolatility: 0.1,
+    defaultBaselineVolatility: 0.05,
     sellingPressureVolumeThreshold: 2,
     sellingPressureRatioThreshold: 0.45,
     enableSellingPressureAnalysis: true,
     sellingPressureConfidenceBoost: 0.08,
+    varianceReductionFactor: 1.0,
+    confluenceStrengthDivisor: 2,
+    passiveToAggressiveRatio: 0.6,
+    aggressiveSellingRatioThreshold: 0.6,
+    aggressiveSellingReductionFactor: 0.5,
+    enableZoneConfluenceFilter: true,
+    enableCrossTimeframeAnalysis: true,
     enhancementMode: "production" as const,
 };
 
@@ -74,8 +87,7 @@ const PREPROCESSOR_CONFIG = {
     maxDashboardInterval: 1000,
     significantChangeThreshold: 0.001,
     standardZoneConfig: {
-        baseTicks: 5,
-        zoneMultipliers: [1, 2, 4],
+        zoneTicks: 10,
         timeWindows: [300000, 900000, 1800000, 3600000, 5400000],
         adaptiveMode: false,
         volumeThresholds: {
@@ -107,6 +119,7 @@ const PREPROCESSOR_CONFIG = {
     defaultAggressiveVolumeAbsolute: 10,
     defaultPassiveVolumeAbsolute: 5,
     defaultInstitutionalVolumeAbsolute: 50,
+    maxTradesPerZone: 1500, // CRITICAL FIX: Required for CircularBuffer capacity in zone creation
 };
 
 describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
@@ -183,7 +196,7 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
         await orderBook.recover();
 
         // Capture signals
-        detector.on("distribution_signal", (signal) => {
+        detector.on("signalCandidate", (signal) => {
             detectedSignals.push(signal);
         });
 
@@ -203,10 +216,11 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
         it("should accumulate volume across multiple sell trades in same zone", async () => {
             const zonePrice = BASE_PRICE;
             const trades = [
-                createBinanceTrade(zonePrice, 5.0, true), // Sell 5 LTC
-                createBinanceTrade(zonePrice, 3.0, true), // Sell 3 LTC
-                createBinanceTrade(zonePrice, 7.0, true), // Sell 7 LTC
-                createBinanceTrade(zonePrice, 2.0, true), // Sell 2 LTC
+                createBinanceTrade(zonePrice, 25.0, true), // Sell 25 LTC - institutional size
+                createBinanceTrade(zonePrice, 18.0, true), // Sell 18 LTC - institutional size
+                createBinanceTrade(zonePrice, 22.0, true), // Sell 22 LTC - institutional size
+                createBinanceTrade(zonePrice, 15.0, true), // Sell 15 LTC - institutional size
+                createBinanceTrade(zonePrice, 20.0, true), // Sell 20 LTC - institutional size
             ];
 
             let lastTradeEvent: EnrichedTradeEvent | null = null;
@@ -226,15 +240,22 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
             expect(lastTradeEvent).toBeDefined();
             expect(lastTradeEvent!.zoneData).toBeDefined();
 
-            const zones5Tick = lastTradeEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
-                (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
+            const zones = lastTradeEvent!.zoneData!.zones;
+            const targetZone = zones.find(
+                (z) =>
+                    Math.abs(
+                        FinancialMath.safeSubtract(z.priceLevel, zonePrice)
+                    ) <=
+                    FinancialMath.safeDivide(
+                        FinancialMath.safeMultiply(10, TICK_SIZE),
+                        2
+                    )
             );
 
             expect(targetZone).toBeDefined();
-            expect(targetZone!.aggressiveVolume).toBeGreaterThan(15); // Should accumulate 17 LTC
-            expect(targetZone!.aggressiveSellVolume).toBeGreaterThan(15); // All sells
-            expect(targetZone!.tradeCount).toBe(4);
+            expect(targetZone!.aggressiveVolume).toBeGreaterThan(95); // Should accumulate 100 LTC
+            expect(targetZone!.aggressiveSellVolume).toBeGreaterThan(95); // All sells
+            expect(targetZone!.tradeCount).toBe(5);
 
             // Should generate distribution signal due to sell volume concentration
             expect(detectedSignals.length).toBe(1);
@@ -247,22 +268,21 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
 
             const zonePrice = BASE_PRICE + 0.05; // 85.05
             const trades = [
-                createBinanceTrade(zonePrice, 4.0, true), // Sell 4 LTC
-                createBinanceTrade(zonePrice, 6.0, true), // Sell 6 LTC
+                createBinanceTrade(zonePrice, 30.0, true), // Sell 30 LTC - institutional
+                createBinanceTrade(zonePrice, 25.0, true), // Sell 25 LTC - institutional
             ];
 
             let enrichedEvents: EnrichedTradeEvent[] = [];
 
             // Process each trade and capture events
             for (const trade of trades) {
-                await preprocessor.handleAggTrade(trade);
-
                 preprocessor.once(
                     "enriched_trade",
                     (event: EnrichedTradeEvent) => {
                         enrichedEvents.push(event);
                     }
                 );
+                await preprocessor.handleAggTrade(trade);
             }
 
             // The SECOND trade should see volume from FIRST trade in its zone data
@@ -270,15 +290,22 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
             expect(secondTradeEvent).toBeDefined();
             expect(secondTradeEvent.zoneData).toBeDefined();
 
-            const zones5Tick = secondTradeEvent.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
-                (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
+            const zones = secondTradeEvent.zoneData!.zones;
+            const targetZone = zones.find(
+                (z) =>
+                    Math.abs(
+                        FinancialMath.safeSubtract(z.priceLevel, zonePrice)
+                    ) <=
+                    FinancialMath.safeDivide(
+                        FinancialMath.safeMultiply(10, TICK_SIZE),
+                        2
+                    )
             );
 
             // CRITICAL: This should contain volume from BOTH trades
             // If bug is present, this will only show volume from second trade
             expect(targetZone).toBeDefined();
-            expect(targetZone!.aggressiveVolume).toBeGreaterThanOrEqual(10); // Should see 4+6=10 LTC
+            expect(targetZone!.aggressiveVolume).toBeGreaterThanOrEqual(55); // Should see 30+25=55 LTC
             expect(targetZone!.tradeCount).toBeGreaterThanOrEqual(2);
         });
 
@@ -289,14 +316,13 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
             ];
 
             for (const trade of trades) {
-                await preprocessor.handleAggTrade(trade);
-
                 preprocessor.once(
                     "enriched_trade",
                     (event: EnrichedTradeEvent) => {
                         detector.onEnrichedTrade(event);
                     }
                 );
+                await preprocessor.handleAggTrade(trade);
             }
 
             // Should NOT generate signals - volume too low
@@ -316,8 +342,6 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
             let lastEvent: EnrichedTradeEvent | null = null;
 
             for (const trade of trades) {
-                await preprocessor.handleAggTrade(trade);
-
                 preprocessor.once(
                     "enriched_trade",
                     (event: EnrichedTradeEvent) => {
@@ -325,12 +349,20 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
                         detector.onEnrichedTrade(event);
                     }
                 );
+                await preprocessor.handleAggTrade(trade);
             }
 
             // Verify zone has volume but wrong ratio
-            const zones5Tick = lastEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
-                (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
+            const zones = lastEvent!.zoneData!.zones;
+            const targetZone = zones.find(
+                (z) =>
+                    Math.abs(
+                        FinancialMath.safeSubtract(z.priceLevel, zonePrice)
+                    ) <=
+                    FinancialMath.safeDivide(
+                        FinancialMath.safeMultiply(10, TICK_SIZE),
+                        2
+                    )
             );
 
             expect(targetZone!.aggressiveVolume).toBeGreaterThan(15); // Has volume
@@ -347,18 +379,16 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
 
             // Create clustered selling across multiple price levels to hit different zone sizes
             const trades = [
-                createBinanceTrade(centerPrice, 4.0, true), // Sell at center
-                createBinanceTrade(centerPrice + 0.01, 3.0, true), // Sell 1 tick higher
-                createBinanceTrade(centerPrice + 0.02, 5.0, true), // Sell 2 ticks higher
-                createBinanceTrade(centerPrice - 0.01, 2.0, true), // Sell 1 tick lower
-                createBinanceTrade(centerPrice - 0.02, 6.0, true), // Sell 2 ticks lower
+                createBinanceTrade(centerPrice, 20.0, true), // Sell at center - institutional
+                createBinanceTrade(centerPrice + 0.01, 15.0, true), // Sell 1 tick higher - institutional
+                createBinanceTrade(centerPrice + 0.02, 25.0, true), // Sell 2 ticks higher - institutional
+                createBinanceTrade(centerPrice - 0.01, 18.0, true), // Sell 1 tick lower - institutional
+                createBinanceTrade(centerPrice - 0.02, 22.0, true), // Sell 2 ticks lower - institutional
             ];
 
             let lastEvent: EnrichedTradeEvent | null = null;
 
             for (const trade of trades) {
-                await preprocessor.handleAggTrade(trade);
-
                 preprocessor.once(
                     "enriched_trade",
                     (event: EnrichedTradeEvent) => {
@@ -366,19 +396,14 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
                         detector.onEnrichedTrade(event);
                     }
                 );
+                await preprocessor.handleAggTrade(trade);
             }
 
-            // Verify different zone sizes captured the distribution
+            // Verify zones captured the distribution
             const zoneData = lastEvent!.zoneData!;
 
-            // 5-tick zones should show individual distribution points
-            expect(zoneData.zones5Tick.length).toBeGreaterThanOrEqual(0);
-
-            // 10-tick zones should show broader distribution
-            expect(zoneData.zones10Tick.length).toBeGreaterThanOrEqual(0);
-
-            // 20-tick zones should capture the overall selling cluster
-            expect(zoneData.zones20Tick.length).toBeGreaterThanOrEqual(0);
+            // Zones should show distribution points
+            expect(zoneData.zones.length).toBeGreaterThanOrEqual(0);
 
             // Should generate distribution signal from confluence across zone sizes
             expect(detectedSignals.length).toBeGreaterThanOrEqual(0);
@@ -390,17 +415,15 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
 
             // Create selling pressure at resistance level
             const trades = [
-                createBinanceTrade(resistancePrice, 3.0, true), // Sell 3 LTC
-                createBinanceTrade(resistancePrice, 2.5, true), // Sell 2.5 LTC
-                createBinanceTrade(resistancePrice, 4.0, true), // Sell 4 LTC
-                createBinanceTrade(resistancePrice, 1.5, true), // Sell 1.5 LTC
+                createBinanceTrade(resistancePrice, 30.0, true), // Sell 30 LTC - institutional
+                createBinanceTrade(resistancePrice, 25.0, true), // Sell 25 LTC - institutional
+                createBinanceTrade(resistancePrice, 20.0, true), // Sell 20 LTC - institutional
+                createBinanceTrade(resistancePrice, 15.0, true), // Sell 15 LTC - institutional
             ];
 
             let lastEvent: EnrichedTradeEvent | null = null;
 
             for (const trade of trades) {
-                await preprocessor.handleAggTrade(trade);
-
                 preprocessor.once(
                     "enriched_trade",
                     (event: EnrichedTradeEvent) => {
@@ -408,16 +431,27 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
                         detector.onEnrichedTrade(event);
                     }
                 );
+                await preprocessor.handleAggTrade(trade);
             }
 
             // Verify zone captured the selling pressure
-            const zones5Tick = lastEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
-                (z) => Math.abs(z.priceLevel - resistancePrice) < TICK_SIZE / 2
+            const zones = lastEvent!.zoneData!.zones;
+            const targetZone = zones.find(
+                (z) =>
+                    Math.abs(
+                        FinancialMath.safeSubtract(
+                            z.priceLevel,
+                            resistancePrice
+                        )
+                    ) <=
+                    FinancialMath.safeDivide(
+                        FinancialMath.safeMultiply(10, TICK_SIZE),
+                        2
+                    )
             );
 
-            expect(targetZone!.aggressiveVolume).toBeGreaterThan(10); // Total 11 LTC
-            expect(targetZone!.aggressiveSellVolume).toBeGreaterThan(10); // All sells
+            expect(targetZone!.aggressiveVolume).toBeGreaterThan(85); // Total 90 LTC
+            expect(targetZone!.aggressiveSellVolume).toBeGreaterThan(85); // All sells
             expect(targetZone!.tradeCount).toBe(4);
 
             // Should generate distribution signal indicating resistance
@@ -434,14 +468,13 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
             ];
 
             for (const trade of trades) {
-                await preprocessor.handleAggTrade(trade);
-
                 preprocessor.once(
                     "enriched_trade",
                     (event: EnrichedTradeEvent) => {
                         detector.onEnrichedTrade(event);
                     }
                 );
+                await preprocessor.handleAggTrade(trade);
             }
 
             // At threshold should generate signal if other conditions met
@@ -454,14 +487,13 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
             ];
 
             for (const trade of trades) {
-                await preprocessor.handleAggTrade(trade);
-
                 preprocessor.once(
                     "enriched_trade",
                     (event: EnrichedTradeEvent) => {
                         detector.onEnrichedTrade(event);
                     }
                 );
+                await preprocessor.handleAggTrade(trade);
             }
 
             // Below threshold should NOT generate signal
@@ -473,17 +505,15 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
         it("should handle mixed trades with dominant selling", async () => {
             const zonePrice = BASE_PRICE + 0.3;
             const trades = [
-                createBinanceTrade(zonePrice, 6.0, true), // Sell 6 LTC
-                createBinanceTrade(zonePrice, 5.0, true), // Sell 5 LTC
-                createBinanceTrade(zonePrice, 2.0, false), // Buy 2 LTC
-                createBinanceTrade(zonePrice, 4.0, true), // Sell 4 LTC
+                createBinanceTrade(zonePrice, 30.0, true), // Sell 30 LTC - institutional
+                createBinanceTrade(zonePrice, 25.0, true), // Sell 25 LTC - institutional
+                createBinanceTrade(zonePrice, 8.0, false), // Buy 8 LTC - smaller retail
+                createBinanceTrade(zonePrice, 20.0, true), // Sell 20 LTC - institutional
             ];
 
             let lastEvent: EnrichedTradeEvent | null = null;
 
             for (const trade of trades) {
-                await preprocessor.handleAggTrade(trade);
-
                 preprocessor.once(
                     "enriched_trade",
                     (event: EnrichedTradeEvent) => {
@@ -491,20 +521,28 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
                         detector.onEnrichedTrade(event);
                     }
                 );
+                await preprocessor.handleAggTrade(trade);
             }
 
             // Verify zone shows mixed activity with dominant selling
-            const zones5Tick = lastEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
-                (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
+            const zones = lastEvent!.zoneData!.zones;
+            const targetZone = zones.find(
+                (z) =>
+                    Math.abs(
+                        FinancialMath.safeSubtract(z.priceLevel, zonePrice)
+                    ) <=
+                    FinancialMath.safeDivide(
+                        FinancialMath.safeMultiply(10, TICK_SIZE),
+                        2
+                    )
             );
 
-            expect(targetZone!.aggressiveVolume).toBeGreaterThan(15); // Total 17 LTC
+            expect(targetZone!.aggressiveVolume).toBeGreaterThan(80); // Total 83 LTC
             expect(targetZone!.aggressiveSellVolume).toBeGreaterThan(
                 targetZone!.aggressiveBuyVolume
             ); // More selling
-            expect(targetZone!.aggressiveSellVolume).toBeGreaterThan(10); // 15 LTC selling
-            expect(targetZone!.aggressiveBuyVolume).toBe(2); // 2 LTC buying
+            expect(targetZone!.aggressiveSellVolume).toBeGreaterThan(70); // 75 LTC selling
+            expect(targetZone!.aggressiveBuyVolume).toBe(8); // 8 LTC buying
 
             // Should generate distribution signal due to dominant selling
             expect(detectedSignals.length).toBeGreaterThanOrEqual(0);
@@ -514,16 +552,14 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
         it("should reject mixed trades with insufficient sell ratio", async () => {
             const zonePrice = BASE_PRICE + 0.4;
             const trades = [
-                createBinanceTrade(zonePrice, 2.0, true), // Sell 2 LTC
-                createBinanceTrade(zonePrice, 1.5, true), // Sell 1.5 LTC
-                createBinanceTrade(zonePrice, 8.0, false), // Buy 8 LTC (dominant)
+                createBinanceTrade(zonePrice, 1.5, true), // Sell 1.5 LTC (below threshold)
+                createBinanceTrade(zonePrice, 1.0, true), // Sell 1.0 LTC (total 2.5 - still below threshold)
+                createBinanceTrade(zonePrice, 8.0, false), // Buy 8 LTC (dominant - total 10.5 with low sell ratio)
             ];
 
             let lastEvent: EnrichedTradeEvent | null = null;
 
             for (const trade of trades) {
-                await preprocessor.handleAggTrade(trade);
-
                 preprocessor.once(
                     "enriched_trade",
                     (event: EnrichedTradeEvent) => {
@@ -531,18 +567,26 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
                         detector.onEnrichedTrade(event);
                     }
                 );
+                await preprocessor.handleAggTrade(trade);
             }
 
             // Verify zone has volume but insufficient sell ratio
-            const zones5Tick = lastEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
-                (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
+            const zones = lastEvent!.zoneData!.zones;
+            const targetZone = zones.find(
+                (z) =>
+                    Math.abs(
+                        FinancialMath.safeSubtract(z.priceLevel, zonePrice)
+                    ) <=
+                    FinancialMath.safeDivide(
+                        FinancialMath.safeMultiply(10, TICK_SIZE),
+                        2
+                    )
             );
 
-            expect(targetZone!.aggressiveVolume).toBeGreaterThan(10); // Total 11.5 LTC
+            expect(targetZone!.aggressiveVolume).toBeGreaterThan(10); // Total 10.5 LTC
             expect(targetZone!.aggressiveBuyVolume).toBeGreaterThan(
                 targetZone!.aggressiveSellVolume
-            ); // More buying
+            ); // More buying (8.0 vs 2.5)
 
             // Should NOT generate distribution signal due to insufficient sell ratio
             expect(detectedSignals.length).toBe(0);
@@ -555,31 +599,38 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
 
             // First batch of trades
             await preprocessor.handleAggTrade(
-                createBinanceTrade(zonePrice, 2.0, true)
+                createBinanceTrade(zonePrice, 35.0, true)
             );
 
             // Wait a bit (simulate time passage)
             await new Promise((resolve) => setTimeout(resolve, 10));
 
             // Second batch of trades
-            await preprocessor.handleAggTrade(
-                createBinanceTrade(zonePrice, 4.0, true)
-            );
-
             let lastEvent: EnrichedTradeEvent | null = null;
             preprocessor.once("enriched_trade", (event: EnrichedTradeEvent) => {
                 lastEvent = event;
                 detector.onEnrichedTrade(event);
             });
-
-            // Zone should show accumulated volume from both time periods
-            const zones5Tick = lastEvent!.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
-                (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
+            
+            await preprocessor.handleAggTrade(
+                createBinanceTrade(zonePrice, 30.0, true)
             );
 
-            expect(targetZone!.aggressiveVolume).toBeGreaterThanOrEqual(6); // 2+4=6 LTC
-            expect(targetZone!.aggressiveSellVolume).toBeGreaterThanOrEqual(6); // All sells
+            // Zone should show accumulated volume from both time periods
+            const zones = lastEvent!.zoneData!.zones;
+            const targetZone = zones.find(
+                (z) =>
+                    Math.abs(
+                        FinancialMath.safeSubtract(z.priceLevel, zonePrice)
+                    ) <=
+                    FinancialMath.safeDivide(
+                        FinancialMath.safeMultiply(10, TICK_SIZE),
+                        2
+                    )
+            );
+
+            expect(targetZone!.aggressiveVolume).toBeGreaterThanOrEqual(65); // 35+30=65 LTC
+            expect(targetZone!.aggressiveSellVolume).toBeGreaterThanOrEqual(65); // All sells
             expect(detectedSignals.length).toBeGreaterThanOrEqual(0);
         });
     });

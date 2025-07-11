@@ -490,6 +490,7 @@
             },
             "distribution": {
                 "useStandardizedZones": true,
+                "eventCooldownMs": 15000,
                 "confidenceThreshold": 0.4,
                 "confluenceMinZones": 1,
                 "confluenceMaxDistance": 0.1,

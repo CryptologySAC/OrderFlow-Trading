@@ -87,8 +87,7 @@ const PREPROCESSOR_CONFIG = {
     maxDashboardInterval: 1000,
     significantChangeThreshold: 0.001,
     standardZoneConfig: {
-        baseTicks: 5,
-        zoneMultipliers: [1, 2, 4],
+        zoneTicks: 10,
         timeWindows: [300000, 900000, 1800000, 3600000, 5400000],
         adaptiveMode: false,
         volumeThresholds: {
@@ -120,6 +119,7 @@ const PREPROCESSOR_CONFIG = {
     defaultAggressiveVolumeAbsolute: 10,
     defaultPassiveVolumeAbsolute: 5,
     defaultInstitutionalVolumeAbsolute: 50,
+    maxTradesPerZone: 1500, // CRITICAL FIX: Required for CircularBuffer capacity in zone creation
 };
 
 describe("AccumulationZoneDetectorEnhanced - REAL Integration Tests", () => {
@@ -245,7 +245,7 @@ describe("AccumulationZoneDetectorEnhanced - REAL Integration Tests", () => {
 
             const zones = lastTradeEvent!.zoneData!.zones;
             const targetZone = zones.find(
-                (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
+                (z) => Math.abs(z.priceLevel - zonePrice) < (10 * TICK_SIZE) / 2
             );
 
             expect(targetZone).toBeDefined();
@@ -288,7 +288,7 @@ describe("AccumulationZoneDetectorEnhanced - REAL Integration Tests", () => {
 
             const zones = secondTradeEvent.zoneData!.zones;
             const targetZone = zones.find(
-                (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
+                (z) => Math.abs(z.priceLevel - zonePrice) < (10 * TICK_SIZE) / 2
             );
 
             // CRITICAL: This should contain volume from BOTH trades
@@ -342,7 +342,7 @@ describe("AccumulationZoneDetectorEnhanced - REAL Integration Tests", () => {
             // Verify zone has volume but wrong ratio
             const zones = lastEvent!.zoneData!.zones;
             const targetZone = zones.find(
-                (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
+                (z) => Math.abs(z.priceLevel - zonePrice) < (10 * TICK_SIZE) / 2
             );
 
             expect(targetZone!.aggressiveVolume).toBeGreaterThan(15); // Has volume
@@ -454,7 +454,7 @@ describe("AccumulationZoneDetectorEnhanced - REAL Integration Tests", () => {
             // Zone should show accumulated volume from both time periods
             const zones = lastEvent!.zoneData!.zones;
             const targetZone = zones.find(
-                (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
+                (z) => Math.abs(z.priceLevel - zonePrice) < (10 * TICK_SIZE) / 2
             );
 
             expect(targetZone!.aggressiveVolume).toBeGreaterThanOrEqual(6); // 2+4=6 LTC

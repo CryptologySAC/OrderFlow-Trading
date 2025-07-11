@@ -71,9 +71,13 @@ function createRealisticTrade(
         tradeId: Math.floor(Math.random() * 1000000),
         buyerIsMaker: side === "sell",
         zoneData: {
-            zones5Tick: [],
-            zones10Tick: [],
-            zones20Tick: [],
+            zones: [],
+            zoneConfig: {
+                zoneTicks: 10,
+                tickValue: 0.01,
+                timeWindow: 60000,
+            },
+            timestamp: Date.now(),
         },
     };
 }
@@ -168,20 +172,7 @@ function generateRealisticCVDPattern(
             const sequenceTimespan = tradeCount * 1000; // 1 second per trade
 
             trade.zoneData = {
-                zones5Tick: [
-                    createZoneSnapshot(
-                        zonePrice,
-                        zoneVolume,
-                        zoneVolume * buyRatio,
-                        zoneVolume * 0.5,
-                        zoneVolume * 0.5 * buyRatio,
-                        pattern === "bullish_divergence"
-                            ? "accumulation"
-                            : "distribution",
-                        sequenceTimespan
-                    ),
-                ],
-                zones10Tick: [
+                zones: [
                     createZoneSnapshot(
                         zonePrice,
                         zoneVolume * 1.5,
@@ -194,19 +185,12 @@ function generateRealisticCVDPattern(
                         sequenceTimespan
                     ),
                 ],
-                zones20Tick: [
-                    createZoneSnapshot(
-                        zonePrice,
-                        zoneVolume * 2,
-                        zoneVolume * 2 * buyRatio,
-                        zoneVolume * 1.2,
-                        zoneVolume * 1.2 * buyRatio,
-                        pattern === "bullish_divergence"
-                            ? "accumulation"
-                            : "distribution",
-                        sequenceTimespan
-                    ),
-                ],
+                zoneConfig: {
+                    zoneTicks: 10,
+                    tickValue: 0.01,
+                    timeWindow: 60000,
+                },
+                timestamp: Date.now(),
             };
         }
 
@@ -266,9 +250,13 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
         setupDetector();
         const trade = createRealisticTrade(BASE_PRICE, 1.0, "buy");
         trade.zoneData = {
-            zones5Tick: [createZoneSnapshot(BASE_PRICE, 15, 10, 5, 3)],
-            zones10Tick: [createZoneSnapshot(BASE_PRICE, 25, 18, 8, 5)],
-            zones20Tick: [createZoneSnapshot(BASE_PRICE, 40, 28, 12, 7)],
+            zones: [createZoneSnapshot(BASE_PRICE, 25, 18, 8, 5)],
+            zoneConfig: {
+                zoneTicks: 10,
+                tickValue: 0.01,
+                timeWindow: 60000,
+            },
+            timestamp: Date.now(),
         };
 
         detector.onEnrichedTrade(trade);
@@ -277,11 +265,7 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
         expect(emittedEvents.length).toBeGreaterThanOrEqual(0);
 
         // Debug: Calculate CVD metrics to verify logic
-        const zones = [
-            ...(trade.zoneData?.zones5Tick || []),
-            ...(trade.zoneData?.zones10Tick || []),
-            ...(trade.zoneData?.zones20Tick || []),
-        ];
+        const zones = trade.zoneData?.zones || [];
         let totalBuy = 0,
             totalSell = 0;
         zones.forEach((zone) => {
@@ -1490,15 +1474,15 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
                         "buy"
                     );
                     trade.zoneData = {
-                        zones5Tick: [
-                            createZoneSnapshot(volatilePrice, 20, 12, 8, 5),
-                        ],
-                        zones10Tick: [
+                        zones: [
                             createZoneSnapshot(volatilePrice, 35, 22, 15, 9),
                         ],
-                        zones20Tick: [
-                            createZoneSnapshot(volatilePrice, 60, 38, 25, 15),
-                        ],
+                        zoneConfig: {
+                            zoneTicks: 10,
+                            tickValue: 0.01,
+                            timeWindow: 60000,
+                        },
+                        timestamp: Date.now(),
                     };
                     trades.push(trade);
                 }
@@ -1548,15 +1532,15 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
                         "buy"
                     );
                     trade.zoneData = {
-                        zones5Tick: [
-                            createZoneSnapshot(trendingPrice, 25, 18, 10, 6),
-                        ],
-                        zones10Tick: [
+                        zones: [
                             createZoneSnapshot(trendingPrice, 45, 32, 18, 11),
                         ],
-                        zones20Tick: [
-                            createZoneSnapshot(trendingPrice, 80, 58, 30, 18),
-                        ],
+                        zoneConfig: {
+                            zoneTicks: 10,
+                            tickValue: 0.01,
+                            timeWindow: 60000,
+                        },
+                        timestamp: Date.now(),
                     };
                     trades.push(trade);
                 }

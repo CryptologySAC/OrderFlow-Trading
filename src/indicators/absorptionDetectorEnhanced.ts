@@ -393,15 +393,40 @@ export class AbsorptionDetectorEnhanced extends Detector {
     private detectCoreAbsorption(
         event: EnrichedTradeEvent
     ): SignalCandidate | null {
+        // DEBUG: Log entry conditions
+        this.logger.info(
+            "AbsorptionDetectorEnhanced: detectCoreAbsorption called",
+            {
+                hasZoneData: !!event.zoneData,
+                quantity: event.quantity,
+                minAggVolume: this.enhancementConfig.minAggVolume,
+                quantityAboveThreshold:
+                    event.quantity >= this.enhancementConfig.minAggVolume,
+            }
+        );
+
         if (
             !event.zoneData ||
             event.quantity < this.enhancementConfig.minAggVolume
         ) {
+            this.logger.info(
+                "AbsorptionDetectorEnhanced: Failed initial checks",
+                {
+                    hasZoneData: !!event.zoneData,
+                    quantity: event.quantity,
+                    minAggVolume: this.enhancementConfig.minAggVolume,
+                }
+            );
             return null;
         }
 
         // Find relevant zones for this trade using FinancialMath distance calculations
         const relevantZones = this.findRelevantZonesForTrade(event);
+        this.logger.info("AbsorptionDetectorEnhanced: Found relevant zones", {
+            relevantZoneCount: relevantZones.length,
+            totalZones: event.zoneData.zones.length,
+        });
+
         if (relevantZones.length === 0) {
             return null;
         }
@@ -411,6 +436,15 @@ export class AbsorptionDetectorEnhanced extends Detector {
             event,
             relevantZones
         );
+        this.logger.info(
+            "AbsorptionDetectorEnhanced: Volume pressure calculated",
+            {
+                hasVolumePressure: !!volumePressure,
+                passivePressure: volumePressure?.passivePressure,
+                totalPressure: volumePressure?.totalPressure,
+            }
+        );
+
         if (!volumePressure) {
             return null;
         }
@@ -421,10 +455,23 @@ export class AbsorptionDetectorEnhanced extends Detector {
             volumePressure.totalPressure
         );
 
+        // DEBUG: Log passive volume ratio check
+        this.logger.info(
+            "AbsorptionDetectorEnhanced: Passive volume ratio check",
+            {
+                passiveVolumeRatio,
+                threshold: this.absorptionRatioThreshold,
+                passiveVolume: volumePressure.passivePressure,
+                totalVolume: volumePressure.totalPressure,
+                ratioAboveThreshold:
+                    passiveVolumeRatio >= this.absorptionRatioThreshold,
+            }
+        );
+
         // Use standard threshold for institutional absorption
         if (passiveVolumeRatio < this.absorptionRatioThreshold) {
-            this.logger.debug(
-                "AbsorptionDetectorEnhanced: Passive volume ratio below threshold",
+            this.logger.info(
+                "AbsorptionDetectorEnhanced: Passive volume ratio below threshold - REJECTED",
                 {
                     passiveVolumeRatio,
                     threshold: this.absorptionRatioThreshold,
@@ -441,12 +488,34 @@ export class AbsorptionDetectorEnhanced extends Detector {
             relevantZones
         );
 
+        // DEBUG: Log price efficiency calculation
+        this.logger.info(
+            "AbsorptionDetectorEnhanced: Price efficiency calculated",
+            {
+                priceEfficiency,
+                threshold: this.enhancementConfig.priceEfficiencyThreshold,
+                isNull: priceEfficiency === null,
+                aboveThreshold:
+                    priceEfficiency !== null &&
+                    priceEfficiency >
+                        this.enhancementConfig.priceEfficiencyThreshold,
+            }
+        );
+
         // Price efficiency calculation completed
 
         if (
             priceEfficiency === null ||
             priceEfficiency > this.enhancementConfig.priceEfficiencyThreshold
         ) {
+            this.logger.info(
+                "AbsorptionDetectorEnhanced: Price efficiency check failed - REJECTED",
+                {
+                    priceEfficiency,
+                    threshold: this.enhancementConfig.priceEfficiencyThreshold,
+                    isNull: priceEfficiency === null,
+                }
+            );
             return null; // Not efficient enough for absorption
         }
 
@@ -655,11 +724,30 @@ export class AbsorptionDetectorEnhanced extends Detector {
     ): number | null {
         if (zones.length === 0) return null;
 
+        // DEBUG: Log zone VWAP status
+        this.logger.info(
+            "AbsorptionDetectorEnhanced: calculatePriceEfficiency zones",
+            {
+                totalZones: zones.length,
+                zonesWithVWAP: zones.filter(
+                    (z) => z.volumeWeightedPrice !== null
+                ).length,
+                zonesWithVolume: zones.filter((z) => z.aggressiveVolume > 0)
+                    .length,
+                sampleZones: zones.slice(0, 3).map((z) => ({
+                    priceLevel: z.priceLevel,
+                    volumeWeightedPrice: z.volumeWeightedPrice,
+                    aggressiveVolume: z.aggressiveVolume,
+                })),
+            }
+        );
+
         // Calculate volume-weighted average price using FinancialMath
         let totalVolumeWeightedPrice = 0;
         let totalVolume = 0;
 
         for (const zone of zones) {
+            if (zone.volumeWeightedPrice === null) continue;
             const zoneWeight = FinancialMath.multiplyQuantities(
                 zone.volumeWeightedPrice,
                 zone.aggressiveVolume
@@ -673,6 +761,16 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 zone.aggressiveVolume
             );
         }
+
+        // DEBUG: Log calculation status
+        this.logger.info(
+            "AbsorptionDetectorEnhanced: Price efficiency calculation",
+            {
+                totalVolumeWeightedPrice,
+                totalVolume,
+                willReturnNull: totalVolume === 0,
+            }
+        );
 
         if (totalVolume === 0) return null;
 

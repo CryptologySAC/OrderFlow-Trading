@@ -76,6 +76,7 @@ const CONFIG = {
         defaultAggressiveVolumeAbsolute: 10,
         defaultPassiveVolumeAbsolute: 5,
         defaultInstitutionalVolumeAbsolute: 50,
+        maxTradesPerZone: 1500, // CRITICAL FIX: Required for CircularBuffer capacity in zone creation
     },
 };
 
@@ -172,9 +173,7 @@ describe("OrderFlowPreprocessor - Exact Numbers Validation", () => {
             const zones = finalTrade.zoneData!.zones;
 
             // EXACT NUMBERS: Count zones with volume > 0
-            const activeZones = zones.filter(
-                (z) => z.aggressiveVolume > 0
-            );
+            const activeZones = zones.filter((z) => z.aggressiveVolume > 0);
             expect(activeZones.length).toBe(2);
 
             // EXACT NUMBERS: Each zone should have exact volume
@@ -229,8 +228,11 @@ describe("OrderFlowPreprocessor - Exact Numbers Validation", () => {
             }
 
             const finalTrade = enrichedTrades[3];
+            // Fix: Look for zone by lower boundary, not trade price
+            // Price 89.15 belongs to zone with lower boundary 89.10
+            const zoneLowerBoundary = 89.1; // exactPrice 89.15 maps to zone 89.10-89.19
             const targetZone = finalTrade.zoneData!.zones.find(
-                (z) => Math.abs(z.priceLevel - exactPrice) < 0.05
+                (z) => Math.abs(z.priceLevel - zoneLowerBoundary) < 0.01
             );
 
             // EXACT NUMBERS: Buy/sell split
@@ -251,14 +253,14 @@ describe("OrderFlowPreprocessor - Exact Numbers Validation", () => {
 
             // Find target zone and validate exact price
             const targetZone = zones.find(
-                (z) => Math.abs(z.priceLevel - 89.05) < 0.05
+                (z) => Math.abs(z.priceLevel - 89.0) < 0.05 // Zone center is 89.0
             );
 
-            // EXACT NUMBERS: Price level
-            expect(targetZone!.priceLevel).toBe(89.05);
+            // EXACT NUMBERS: Price level (zone lower boundary)
+            expect(targetZone!.priceLevel).toBe(89.0); // 89.05 belongs to zone 89.00-89.09
             expect(targetZone!.tickSize).toBe(0.01);
-            expect(targetZone!.boundaries.min).toBe(89.05); // Zone starts at center
-            expect(targetZone!.boundaries.max).toBe(89.09); // Zone ends at center + 4 ticks
+            expect(targetZone!.boundaries.min).toBe(89.0); // Zone starts at lower boundary
+            expect(targetZone!.boundaries.max).toBe(89.09); // Zone ends 9 ticks later
         });
 
         it("should create zones at exact 10-tick intervals", async () => {
@@ -279,7 +281,7 @@ describe("OrderFlowPreprocessor - Exact Numbers Validation", () => {
                     zonePrices[i - 1],
                     2
                 );
-                expect(priceDiff).toBe(0.10); // Exactly 10 ticks = 0.10
+                expect(priceDiff).toBe(0.1); // Exactly 10 ticks = 0.10
             }
         });
     });
@@ -339,7 +341,7 @@ describe("OrderFlowPreprocessor - Exact Numbers Validation", () => {
                     targetZone!.boundaries.min,
                     2
                 )
-            ).toBe(0.09); // 9 tick intervals (10 ticks configured)
+            ).toBe(0.09); // 9 tick intervals (89.00-89.09 = 0.09)
         });
     });
 

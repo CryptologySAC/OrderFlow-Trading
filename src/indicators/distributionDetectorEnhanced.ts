@@ -93,6 +93,10 @@ export class DistributionDetectorEnhanced extends Detector {
     private readonly distributionVolumeThreshold: number;
     private readonly distributionRatioThreshold: number;
     private readonly alignmentScoreThreshold: number;
+    private readonly eventCooldownMs: number;
+
+    // Signal deduplication tracking
+    private lastSignalTime: number = 0;
 
     constructor(
         id: string,
@@ -124,6 +128,7 @@ export class DistributionDetectorEnhanced extends Detector {
         this.distributionVolumeThreshold = settings.distributionVolumeThreshold;
         this.distributionRatioThreshold = settings.distributionRatioThreshold;
         this.alignmentScoreThreshold = settings.alignmentScoreThreshold;
+        this.eventCooldownMs = settings.eventCooldownMs;
 
         // Initialize enhancement statistics
         this.enhancementStats = {
@@ -851,8 +856,25 @@ export class DistributionDetectorEnhanced extends Detector {
             data: distributionResult,
         };
 
+        // SIGNAL DEDUPLICATION: Check cooldown period
+        const currentTime = Date.now();
+        if (currentTime - this.lastSignalTime < this.eventCooldownMs) {
+            this.logger.debug(
+                "[DistributionDetectorEnhanced]: Signal suppressed due to cooldown",
+                {
+                    detectorId: this.getId(),
+                    timeSinceLastSignal: currentTime - this.lastSignalTime,
+                    cooldownMs: this.eventCooldownMs,
+                }
+            );
+            return;
+        }
+
         // ✅ EMIT ENHANCED DISTRIBUTION SIGNAL - Independent of base detector
         this.emit("signalCandidate", signalCandidate);
+
+        // Update last signal time for cooldown tracking
+        this.lastSignalTime = currentTime;
 
         this.logger.info(
             "[DistributionDetectorEnhanced]: ENHANCED DISTRIBUTION SIGNAL EMITTED",

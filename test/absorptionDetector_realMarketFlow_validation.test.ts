@@ -508,10 +508,8 @@ describe("Absorption Detector Real Market Flow Validation", () => {
                                   trade.zoneData.zones[0].passiveVolume,
                               absorptionRatio:
                                   trade.zoneData.zones[0].passiveVolume /
-                                  (trade.zoneData.zones[0]
-                                      .aggressiveVolume +
-                                      trade.zoneData.zones[0]
-                                          .passiveVolume),
+                                  (trade.zoneData.zones[0].aggressiveVolume +
+                                      trade.zoneData.zones[0].passiveVolume),
                           }
                         : "NO_ZONE",
                 });

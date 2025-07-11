@@ -57,26 +57,17 @@ function createZoneSnapshot(
 // Helper function to create standardized zone data
 function createStandardizedZoneData(price: number): StandardZoneData {
     return {
-        zones5Tick: [
-            createZoneSnapshot(price - 0.05, 1),
-            createZoneSnapshot(price, 2),
-            createZoneSnapshot(price + 0.05, 1),
-        ],
-        zones10Tick: [
+        zones: [
             createZoneSnapshot(price - 0.1, 1.5),
             createZoneSnapshot(price, 2.5),
             createZoneSnapshot(price + 0.1, 1.5),
         ],
-        zones20Tick: [
-            createZoneSnapshot(price - 0.2, 2),
-            createZoneSnapshot(price, 3),
-            createZoneSnapshot(price + 0.2, 2),
-        ],
         zoneConfig: {
-            baseTicks: 5,
+            zoneTicks: 10,
             tickValue: 0.01,
             timeWindow: 60000,
         },
+        timestamp: Date.now(),
     };
 }
 
@@ -171,9 +162,8 @@ describe("DeltaCVD Standalone Detector - Core Functionality", () => {
             expect(() => detector.onEnrichedTrade(trade)).not.toThrow();
         });
 
-        // The detector logs debug info during CVD analysis - this is expected
-        // The "CRITICAL ISSUE" is actually debug logging, not a real error
-        expect(mockLogger.error).toHaveBeenCalled(); // CVD analysis debug logging
+        // The detector should process trades without errors now that zone structure is fixed
+        expect(mockLogger.error).not.toHaveBeenCalled(); // No errors expected
     });
 
     it("should validate CVD detection parameters from config", () => {

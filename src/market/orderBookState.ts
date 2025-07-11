@@ -205,6 +205,17 @@ export class OrderBookState implements IOrderBookState {
     public updateDepth(
         update: SpotWebsocketStreams.DiffBookDepthResponse
     ): void {
+        // DEBUG: Log updateDepth call details
+        this.logger.debug("[OrderBookState] updateDepth called", {
+            symbol: update.s,
+            isInitialized: this.isInitialized,
+            bidCount: update.b?.length || 0,
+            askCount: update.a?.length || 0,
+            asks: update.a, // Log all asks to see if 89.05 is there
+            bids: update.b,
+            updateId: update.u,
+        });
+
         if (this.circuitOpen && Date.now() < this.circuitOpenUntil) {
             this.metricsCollector.incrementMetric("orderbookCircuitRejected");
             return; // Reject updates while circuit is open
@@ -227,6 +238,13 @@ export class OrderBookState implements IOrderBookState {
 
         if (!this.isInitialized) {
             // Buffer updates until initialized
+            this.logger.warn(
+                "[OrderBookState] Buffering update - not initialized",
+                {
+                    symbol: update.s,
+                    bufferSize: this.snapshotBuffer.length + 1,
+                }
+            );
             this.snapshotBuffer.push(update);
             return;
         }
@@ -250,6 +268,13 @@ export class OrderBookState implements IOrderBookState {
         // Process asks and accumulate recalculation flag
         needsBestRecalc =
             this.processAsks(asks, needsBestRecalc) || needsBestRecalc;
+
+        // DEBUG: Log book state after processing
+        this.logger.debug("[OrderBookState] Book state after processing", {
+            bookSize: this.book.size,
+            bookKeys: Array.from(this.book.keys()),
+            bookEntries: Array.from(this.book.entries()).slice(0, 5), // First 5 entries
+        });
 
         // Recalculate best bid/ask if needed
         if (needsBestRecalc) {
@@ -303,13 +328,41 @@ export class OrderBookState implements IOrderBookState {
         const min = FinancialMath.safeSubtract(center, bandSize);
         const max = FinancialMath.safeAdd(center, bandSize);
 
+        // DEBUG: Log band calculation details
+        this.logger.debug("[OrderBookState] sumBand calculation", {
+            center,
+            bandTicks,
+            tickSize,
+            bandSize,
+            min,
+            max,
+            bookSize: this.book.size,
+            bookPrices: Array.from(this.book.keys()).slice(0, 10), // First 10 prices
+        });
+
         for (const [price, lvl] of this.book) {
             if (price >= min && price <= max) {
+                this.logger.debug("[OrderBookState] Found level in band", {
+                    price,
+                    bid: lvl.bid,
+                    ask: lvl.ask,
+                    withinBand: true,
+                });
                 sumBid = FinancialMath.safeAdd(sumBid, lvl.bid);
                 sumAsk = FinancialMath.safeAdd(sumAsk, lvl.ask);
                 levels++;
             }
         }
+
+        // DEBUG: Log final results
+        this.logger.debug("[OrderBookState] sumBand result", {
+            center,
+            bandSize: `${min} to ${max}`,
+            sumBid,
+            sumAsk,
+            levels,
+            totalVolume: sumBid + sumAsk,
+        });
 
         return { bid: sumBid, ask: sumAsk, levels };
     }
@@ -557,13 +610,27 @@ export class OrderBookState implements IOrderBookState {
             const price = this.normalizePrice(parseFloat(priceStr));
             const qty = parseFloat(qtyStr);
 
+            // DEBUG: Log ask processing
+            this.logger.debug("[OrderBookState] Processing ask", {
+                originalPrice: priceStr,
+                normalizedPrice: price,
+                quantity: qty,
+                isZeroQty: qty === 0,
+            });
+
             if (qty === 0) {
                 const level = this.book.get(price);
                 if (level && level.bid === 0) {
                     this.book.delete(price);
+                    this.logger.debug("[OrderBookState] Deleted empty level", {
+                        price,
+                    });
                 } else if (level) {
                     level.ask = 0;
                     level.timestamp = now;
+                    this.logger.debug("[OrderBookState] Zeroed ask volume", {
+                        price,
+                    });
                 }
                 if (price === this._bestAsk) needsBestRecalc = true;
             } else {
@@ -576,6 +643,14 @@ export class OrderBookState implements IOrderBookState {
                 level.ask = qty;
                 level.timestamp = now;
                 this.book.set(price, level);
+
+                // DEBUG: Log stored level
+                this.logger.debug("[OrderBookState] Stored ask level", {
+                    price,
+                    askVolume: qty,
+                    bidVolume: level.bid,
+                    isNewLevel: !this.book.has(price),
+                });
 
                 // Update best ask if necessary
                 if (price < this._bestAsk) {
@@ -590,7 +665,23 @@ export class OrderBookState implements IOrderBookState {
 
     private normalizePrice(price: number): number {
         // Use FinancialMath for consistent precision
-        return FinancialMath.financialRound(price, this.pricePrecision);
+        const normalized = FinancialMath.financialRound(
+            price,
+            this.pricePrecision
+        );
+
+        // DEBUG: Always log price normalization for debugging
+        this.logger.debug("[OrderBookState] Price normalization", {
+            original: price,
+            normalized,
+            precision: this.pricePrecision,
+            isNull: normalized === null,
+            isNaN: isNaN(normalized),
+            typeofOriginal: typeof price,
+            typeofNormalized: typeof normalized,
+        });
+
+        return normalized;
     }
 
     private recalculateBestQuotes(): void {

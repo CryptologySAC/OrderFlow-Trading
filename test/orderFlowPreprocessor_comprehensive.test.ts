@@ -59,8 +59,7 @@ const PREPROCESSOR_CONFIG = {
     maxDashboardInterval: 1000,
     significantChangeThreshold: 0.001,
     standardZoneConfig: {
-        baseTicks: 5,
-        zoneMultipliers: [1, 2, 4],
+        zoneTicks: 10,
         timeWindows: [300000, 900000, 1800000, 3600000, 5400000],
         adaptiveMode: false,
         volumeThresholds: {
@@ -92,6 +91,7 @@ const PREPROCESSOR_CONFIG = {
     defaultAggressiveVolumeAbsolute: 10,
     defaultPassiveVolumeAbsolute: 5,
     defaultInstitutionalVolumeAbsolute: 50,
+    maxTradesPerZone: 1500, // CRITICAL FIX: Required for CircularBuffer capacity in zone creation
 };
 
 describe("OrderFlowPreprocessor - Comprehensive Test Suite", () => {
@@ -195,14 +195,18 @@ describe("OrderFlowPreprocessor - Comprehensive Test Suite", () => {
 
             // CRITICAL: Zone data must be populated
             expect(enrichedTrade.zoneData).toBeTruthy();
-            expect(enrichedTrade.zoneData!.zones5Tick).toBeTruthy();
-            expect(enrichedTrade.zoneData!.zones10Tick).toBeTruthy();
-            expect(enrichedTrade.zoneData!.zones20Tick).toBeTruthy();
+            expect(enrichedTrade.zoneData!.zones).toBeTruthy();
 
             // Find the zone that should contain our trade
-            const zones5Tick = enrichedTrade.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
-                (z) => Math.abs(z.priceLevel - testPrice) < TICK_SIZE / 2
+            const zones = enrichedTrade.zoneData!.zones;
+            // For 10-tick zones, calculate the expected zone boundary
+            // Round price to nearest tick to handle floating point precision
+            const roundedPrice = Math.round(testPrice / TICK_SIZE) * TICK_SIZE;
+            const expectedZoneStart =
+                Math.floor(roundedPrice / (10 * TICK_SIZE)) * (10 * TICK_SIZE);
+            const targetZone = zones.find(
+                (z) =>
+                    Math.abs(z.priceLevel - expectedZoneStart) < TICK_SIZE / 2
             );
 
             // CRITICAL: Zone must exist and contain trade data
@@ -241,11 +245,11 @@ describe("OrderFlowPreprocessor - Comprehensive Test Suite", () => {
             const lastTrade = enrichedTrades[2];
             expect(lastTrade.zoneData).toBeTruthy();
 
-            const zones5Tick = lastTrade.zoneData!.zones5Tick;
+            const zones = lastTrade.zoneData!.zones;
             console.log("Zone data debug:", {
                 zonePrice,
-                zones5TickCount: zones5Tick.length,
-                zones5Tick: zones5Tick.map((z) => ({
+                zonesCount: zones.length,
+                zones: zones.map((z) => ({
                     priceLevel: z.priceLevel,
                     aggressiveVolume: z.aggressiveVolume,
                     tradeCount: z.tradeCount,
@@ -253,8 +257,14 @@ describe("OrderFlowPreprocessor - Comprehensive Test Suite", () => {
                 })),
             });
 
-            const targetZone = zones5Tick.find(
-                (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
+            // For 10-tick zones, calculate the expected zone boundary
+            // Round price to nearest tick to handle floating point precision
+            const roundedPrice = Math.round(zonePrice / TICK_SIZE) * TICK_SIZE;
+            const expectedZoneStart =
+                Math.floor(roundedPrice / (10 * TICK_SIZE)) * (10 * TICK_SIZE);
+            const targetZone = zones.find(
+                (z) =>
+                    Math.abs(z.priceLevel - expectedZoneStart) < TICK_SIZE / 2
             );
 
             // CRITICAL: Zone must show accumulated volume from all trades
@@ -278,9 +288,15 @@ describe("OrderFlowPreprocessor - Comprehensive Test Suite", () => {
             }
 
             const lastTrade = enrichedTrades[2];
-            const zones5Tick = lastTrade.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
-                (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
+            const zones = lastTrade.zoneData!.zones;
+            // For 10-tick zones, calculate the expected zone boundary
+            // Round price to nearest tick to handle floating point precision
+            const roundedPrice = Math.round(zonePrice / TICK_SIZE) * TICK_SIZE;
+            const expectedZoneStart =
+                Math.floor(roundedPrice / (10 * TICK_SIZE)) * (10 * TICK_SIZE);
+            const targetZone = zones.find(
+                (z) =>
+                    Math.abs(z.priceLevel - expectedZoneStart) < TICK_SIZE / 2
             );
 
             expect(targetZone!.aggressiveVolume).toBe(20.0); // 10 + 6 + 4 = 20
@@ -297,25 +313,15 @@ describe("OrderFlowPreprocessor - Comprehensive Test Suite", () => {
             const enrichedTrade = enrichedTrades[0];
             const zoneData = enrichedTrade.zoneData!;
 
-            // All zone sizes should be populated
-            expect(zoneData.zones5Tick.length).toBeGreaterThan(0);
-            expect(zoneData.zones10Tick.length).toBeGreaterThan(0);
-            expect(zoneData.zones20Tick.length).toBeGreaterThan(0);
+            // Zones should be populated
+            expect(zoneData.zones.length).toBeGreaterThan(0);
 
-            // Each zone size should have the trade data
-            const zones5 = zoneData.zones5Tick.find(
+            // Zone should have the trade data
+            const targetZone = zoneData.zones.find(
                 (z) => Math.abs(z.priceLevel - testPrice) < TICK_SIZE / 2
             );
-            const zones10 = zoneData.zones10Tick.find(
-                (z) => Math.abs(z.priceLevel - testPrice) < TICK_SIZE
-            );
-            const zones20 = zoneData.zones20Tick.find(
-                (z) => Math.abs(z.priceLevel - testPrice) < TICK_SIZE * 2
-            );
 
-            expect(zones5?.aggressiveVolume).toBe(20.0);
-            expect(zones10?.aggressiveVolume).toBe(20.0);
-            expect(zones20?.aggressiveVolume).toBe(20.0);
+            expect(targetZone?.aggressiveVolume).toBe(20.0);
         });
 
         it("MUST FAIL when aggregation flow is broken", async () => {
@@ -334,8 +340,8 @@ describe("OrderFlowPreprocessor - Comprehensive Test Suite", () => {
             const secondEnriched = enrichedTrades[1];
 
             // CRITICAL: Second trade's zone data MUST show accumulated volume from BOTH trades
-            const zones5Tick = secondEnriched.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = secondEnriched.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
             );
 
@@ -421,8 +427,8 @@ describe("OrderFlowPreprocessor - Comprehensive Test Suite", () => {
             );
 
             const secondTrade = enrichedTrades[1];
-            const zones5Tick = secondTrade.zoneData!.zones5Tick;
-            const targetZone = zones5Tick.find(
+            const zones = secondTrade.zoneData!.zones;
+            const targetZone = zones.find(
                 (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
             );
 
@@ -442,19 +448,30 @@ describe("OrderFlowPreprocessor - Comprehensive Test Suite", () => {
             }
 
             const lastTrade = enrichedTrades[2];
-            const zones5Tick = lastTrade.zoneData!.zones5Tick;
+            const zones = lastTrade.zoneData!.zones;
 
-            // Should have zones at all price levels
-            expect(zones5Tick.length).toBeGreaterThanOrEqual(3);
+            // Should have zones created (multiple time windows create multiple zones)
+            expect(zones.length).toBeGreaterThanOrEqual(3);
 
-            // Each zone should have correct volume
-            for (let i = 0; i < prices.length; i++) {
-                const zone = zones5Tick.find(
-                    (z) => Math.abs(z.priceLevel - prices[i]) < TICK_SIZE / 2
-                );
-                expect(zone).toBeTruthy();
-                expect(zone!.aggressiveVolume).toBe(volumes[i]);
-            }
+            // Verify zones have accumulated volume correctly
+            // Price 89.0 and 89.05 should both go to zone 89.00 (89.00-89.09)
+            // Price 89.1 should go to zone 89.10 (89.10-89.19)
+
+            // Check zone 89.00 (should have 5 + 8 = 13 LTC)
+            const zone89 = zones.find(
+                (z) => Math.abs(z.priceLevel - 89.0) < TICK_SIZE / 2
+            );
+            expect(zone89).toBeTruthy();
+            expect(zone89!.aggressiveVolume).toBe(13.0); // 5 + 8 = 13
+            expect(zone89!.tradeCount).toBe(2);
+
+            // Check zone 89.10 (should have 12 LTC)
+            const zone89_10 = zones.find(
+                (z) => Math.abs(z.priceLevel - 89.1) < TICK_SIZE / 2
+            );
+            expect(zone89_10).toBeTruthy();
+            expect(zone89_10!.aggressiveVolume).toBe(12.0);
+            expect(zone89_10!.tradeCount).toBe(1);
         });
     });
 
@@ -555,9 +572,7 @@ describe("OrderFlowPreprocessor - Comprehensive Test Suite", () => {
 
             // Should still have zone data even with individual trades
             expect(enrichedTrade.zoneData).toBeTruthy();
-            expect(enrichedTrade.zoneData!.zones5Tick.length).toBeGreaterThan(
-                0
-            );
+            expect(enrichedTrade.zoneData!.zones.length).toBeGreaterThan(0);
         });
     });
 });

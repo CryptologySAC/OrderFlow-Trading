@@ -128,31 +128,13 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
 
         return {
             timestamp: Date.now(),
-            zones5Tick: defaultZones5.map((z) =>
+            zones: defaultZones5.map((z) =>
                 createZoneSnapshot(
                     price + z.priceOffset,
                     z.aggressiveVol,
                     z.passiveVol,
                     1
                 )
-            ),
-            zones10Tick: defaultZones10.map(
-                (z) =>
-                    createZoneSnapshot(
-                        price + z.priceOffset,
-                        z.aggressiveVol,
-                        z.passiveVol,
-                        1
-                    ) // Use 1x, not 2x
-            ),
-            zones20Tick: defaultZones20.map(
-                (z) =>
-                    createZoneSnapshot(
-                        price + z.priceOffset,
-                        z.aggressiveVol,
-                        z.passiveVol,
-                        1
-                    ) // Use 1x, not 4x
             ),
         };
     }
@@ -300,17 +282,9 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
                 zones5: [{ aggressiveVol: 50, passiveVol: 5, priceOffset: 0 }], // Working exhaustion ratio
             });
             // Override the zone to have more sell volume (30% buy, 70% sell)
-            if (zoneData.zones5Tick[0]) {
-                zoneData.zones5Tick[0].aggressiveBuyVolume = 15; // 30% of 50
-                zoneData.zones5Tick[0].aggressiveSellVolume = 35; // 70% of 50
-            }
-            if (zoneData.zones10Tick[0]) {
-                zoneData.zones10Tick[0].aggressiveBuyVolume = 22.5; // 30% of 75
-                zoneData.zones10Tick[0].aggressiveSellVolume = 52.5; // 70% of 75
-            }
-            if (zoneData.zones20Tick[0]) {
-                zoneData.zones20Tick[0].aggressiveBuyVolume = 30; // 30% of 100
-                zoneData.zones20Tick[0].aggressiveSellVolume = 70; // 70% of 100
+            if (zoneData.zones[0]) {
+                zoneData.zones[0].aggressiveBuyVolume = 15; // 30% of 50
+                zoneData.zones[0].aggressiveSellVolume = 35; // 70% of 50
             }
 
             const trade = createTradeEvent(87.5, 25, true, zoneData); // buyerIsMaker=true = aggressive sell
@@ -495,11 +469,7 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
                 ],
             });
             // Override all zones to have more sell volume (30% buy, 70% sell)
-            [
-                sellZoneData.zones5Tick[0],
-                sellZoneData.zones10Tick[0],
-                sellZoneData.zones20Tick[0],
-            ].forEach((zone) => {
+            [sellZoneData.zones[0]].forEach((zone) => {
                 if (zone) {
                     const totalAggressive = zone.aggressiveVolume;
                     zone.aggressiveBuyVolume = totalAggressive * 0.3; // 30% buy

@@ -1,6 +1,7 @@
 // src/types/marketEvents.ts
 
 import type { SpotWebsocketStreams } from "@binance/spot";
+import type { CircularBuffer } from "../utils/circularBuffer.js";
 
 export interface AggressiveTrade {
     price: number;
@@ -24,10 +25,19 @@ export interface PassiveLevel {
     addedBid?: number;
 }
 
+// Individual trade record for precise VWAP calculation
+export interface ZoneTradeRecord {
+    price: number;
+    quantity: number;
+    timestamp: number;
+    tradeId: string; // For deduplication and tracking
+    buyerIsMaker: boolean;
+}
+
 // Standardized zone data for unified detector access
 export interface ZoneSnapshot {
     zoneId: string; // Unique zone identifier
-    priceLevel: number; // Zone center price
+    priceLevel: number; // Zone lower boundary price
     tickSize: number; // Tick size for this zone
     aggressiveVolume: number; // Total aggressive volume in zone
     passiveVolume: number; // Total passive volume in zone
@@ -39,7 +49,8 @@ export interface ZoneSnapshot {
     timespan: number; // Time span of zone data (ms)
     boundaries: { min: number; max: number }; // Zone price boundaries
     lastUpdate: number; // Last update timestamp
-    volumeWeightedPrice: number; // Volume weighted average price
+    volumeWeightedPrice: number | null; // Volume weighted average price (calculated live from tradeHistory)
+    tradeHistory: CircularBuffer<ZoneTradeRecord>; // Individual trades for precise VWAP calculation (high-performance circular buffer)
 }
 
 // Simplified zone data - single zone size for all detectors

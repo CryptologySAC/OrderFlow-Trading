@@ -320,7 +320,7 @@ export const DeltaCVDDetectorSchema = z.object({
     windowsSec: z.array(z.number().int().min(30).max(3600)),
     minTradesPerSec: z.number().min(0.001).max(5.0),
     minVolPerSec: z.number().min(0.01).max(2000.0),
-    signalThreshold: z.number().min(0.01).max(0.8),
+    signalThreshold: z.number().min(0.01).max(1.8),
     eventCooldownMs: z.number().int().min(1000).max(60000),
 
     // Zone enhancement control
@@ -381,6 +381,9 @@ export const DistributionDetectorSchema = z.object({
     // Core parameters
     useStandardizedZones: z.boolean(),
     enhancementMode: z.enum(["disabled", "testing", "production"]),
+
+    // Signal deduplication parameter (CLAUDE.md compliance - no magic numbers)
+    eventCooldownMs: z.number().int().min(1000).max(60000),
 
     // Single confidence threshold (replaces multiple thresholds)
     confidenceThreshold: z.number().min(0.1).max(0.9),
@@ -969,6 +972,8 @@ export class Config {
             defaultAggressiveVolumeAbsolute: 10.0, // LTCUSDT: 10+ LTC (top 5% of trades)
             defaultPassiveVolumeAbsolute: 5.0, // LTCUSDT: 5+ LTC (top 15% of trades)
             defaultInstitutionalVolumeAbsolute: 50.0,
+            maxTradesPerZone: 1500, // Maximum individual trades stored per zone for VWAP calculation
+            // TODO: Move all these hardcoded preprocessor configurations to config.json
         };
     }
 

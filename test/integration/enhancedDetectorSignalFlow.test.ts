@@ -227,22 +227,10 @@ describe("Enhanced Detector Signal Flow Integration", () => {
                 midPrice: 89.505,
                 imbalance: 1.0, // Strong buy imbalance
                 zoneData: {
-                    zones5Tick: [
+                    zones: [
                         {
                             priceLevel: 89.5,
-                            aggressiveVolume: 200, // Above thresholds
-                            passiveVolume: 800, // Strong passive volume
-                            aggressiveBuyVolume: 200,
-                            aggressiveSellVolume: 0,
-                            tradeCount: 12, // Above minimum trade counts
-                            strength: 0.9,
-                            timestamp: Date.now(),
-                        },
-                    ],
-                    zones10Tick: [
-                        {
-                            priceLevel: 89.5,
-                            aggressiveVolume: 400, // Higher for 10-tick zone
+                            aggressiveVolume: 400, // 10-tick zone volume
                             passiveVolume: 1200,
                             aggressiveBuyVolume: 400,
                             aggressiveSellVolume: 0,
@@ -251,18 +239,12 @@ describe("Enhanced Detector Signal Flow Integration", () => {
                             timestamp: Date.now(),
                         },
                     ],
-                    zones20Tick: [
-                        {
-                            priceLevel: 89.5,
-                            aggressiveVolume: 600, // Highest for 20-tick zone
-                            passiveVolume: 1800,
-                            aggressiveBuyVolume: 600,
-                            aggressiveSellVolume: 0,
-                            tradeCount: 35,
-                            strength: 0.8,
-                            timestamp: Date.now(),
-                        },
-                    ],
+                    zoneConfig: {
+                        zoneTicks: 10,
+                        tickValue: 0.01,
+                        timeWindow: 60000,
+                    },
+                    timestamp: Date.now(),
                 },
             };
 

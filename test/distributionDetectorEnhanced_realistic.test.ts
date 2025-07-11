@@ -48,6 +48,7 @@ const REAL_DISTRIBUTION_CONFIG = {
     crossTimeframeConfidenceBoost: 0.15,
     distributionVolumeThreshold: 15, // 15 LTC minimum volume
     distributionRatioThreshold: 0.5, // 50% sell ratio threshold
+    maxTradesPerZone: 1500, // Required for CircularBuffer capacity
     alignmentScoreThreshold: 0.5,
     defaultDurationMs: 120000, // 2 minutes
     tickSize: TICK_SIZE,
@@ -135,21 +136,28 @@ function createRealisticMarketEvent(
     price: number,
     quantity: number,
     buyerIsMaker: boolean,
-    zones5T: ZoneSnapshot[],
-    zones10T: ZoneSnapshot[] = [],
-    zones20T: ZoneSnapshot[] = []
+    zones: ZoneSnapshot[]
 ): EnrichedTradeEvent {
     return {
-        symbol: "LTCUSDT",
+        pair: "LTCUSDT", // Correct property name for AggressiveTrade
         price,
         quantity,
         timestamp: Date.now(),
-        tradeId: Math.floor(Math.random() * 1000000),
+        tradeId: Math.floor(Math.random() * 1000000).toString(), // tradeId should be string
         buyerIsMaker,
+        passiveBidVolume: 0,
+        passiveAskVolume: 0,
+        zonePassiveBidVolume: 0,
+        zonePassiveAskVolume: 0,
+        originalTrade: {} as any, // Mock original trade for AggressiveTrade compliance
         zoneData: {
-            zones5Tick: zones5T,
-            zones10Tick: zones10T,
-            zones20Tick: zones20T,
+            zones: zones, // Use the provided zones
+            zoneConfig: {
+                zoneTicks: 10,
+                tickValue: 0.01,
+                timeWindow: 60000,
+            },
+            timestamp: Date.now(),
         },
         spread: 0.01, // 1-cent spread typical for LTCUSDT
         midPrice: price,
@@ -220,19 +228,10 @@ describe("DistributionDetectorEnhanced - Realistic Market Scenarios", () => {
         });
 
         it("Test 2: Multi-Timeframe Distribution Alignment - Consistent Selling Across All Frames", () => {
-            // SCENARIO: Consistent 70% selling across 5T, 10T, 20T zones
+            // SCENARIO: Consistent 70% selling - use single zone with combined volume
             const price = LTCUSDT_PRICE;
-            const zones5T = [createDistributionZone(price, 100, 70)];
-            const zones10T = [createDistributionZone(price, 200, 70)];
-            const zones20T = [createDistributionZone(price, 400, 70)];
-            const event = createRealisticMarketEvent(
-                price,
-                30,
-                true,
-                zones5T,
-                zones10T,
-                zones20T
-            );
+            const zones = [createDistributionZone(price, 200, 70)]; // Combined volume
+            const event = createRealisticMarketEvent(price, 30, true, zones);
 
             detector.onEnrichedTrade(event);
 

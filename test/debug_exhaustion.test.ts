@@ -87,17 +87,12 @@ describe("ExhaustionDetector Debug", () => {
     ): EnrichedTradeEvent {
         const zoneData: StandardZoneData = {
             timestamp: Date.now(),
-            zones5Tick: [createZoneSnapshot(price, aggressiveVol, passiveVol)],
-            zones10Tick: [
-                createZoneSnapshot(
-                    price,
-                    aggressiveVol * 1.5,
-                    passiveVol * 1.5
-                ),
-            ],
-            zones20Tick: [
-                createZoneSnapshot(price, aggressiveVol * 2, passiveVol * 2),
-            ],
+            zones: [createZoneSnapshot(price, aggressiveVol, passiveVol)],
+            zoneConfig: {
+                zoneTicks: 10,
+                tickValue: 0.01,
+                timeWindow: 60000,
+            },
         };
 
         return {
@@ -186,12 +181,12 @@ describe("ExhaustionDetector Debug", () => {
         console.log("Trade event:", {
             price: trade.price,
             quantity: trade.quantity,
-            aggressiveVol: trade.zoneData?.zones5Tick[0]?.aggressiveVolume,
-            passiveVol: trade.zoneData?.zones5Tick[0]?.passiveVolume,
-            ratio: trade.zoneData?.zones5Tick[0]
-                ? trade.zoneData.zones5Tick[0].aggressiveVolume /
-                  (trade.zoneData.zones5Tick[0].aggressiveVolume +
-                      trade.zoneData.zones5Tick[0].passiveVolume)
+            aggressiveVol: trade.zoneData?.zones[0]?.aggressiveVolume,
+            passiveVol: trade.zoneData?.zones[0]?.passiveVolume,
+            ratio: trade.zoneData?.zones[0]
+                ? trade.zoneData.zones[0].aggressiveVolume /
+                  (trade.zoneData.zones[0].aggressiveVolume +
+                      trade.zoneData.zones[0].passiveVolume)
                 : 0,
         });
 

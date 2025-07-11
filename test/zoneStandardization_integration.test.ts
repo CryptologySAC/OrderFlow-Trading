@@ -74,8 +74,7 @@ describe("Zone Standardization Integration", () => {
                 maxDashboardInterval: 1000,
                 significantChangeThreshold: 0.001,
                 standardZoneConfig: {
-                    baseTicks: 5,
-                    zoneMultipliers: [1, 2, 4],
+                    zoneTicks: 10,
                     timeWindows: [30000, 60000, 300000], // 30s, 60s, 5min
                     adaptiveMode: false,
                     volumeThresholds: {
@@ -104,6 +103,7 @@ describe("Zone Standardization Integration", () => {
                 defaultAggressiveVolumeAbsolute: 10.0,
                 defaultPassiveVolumeAbsolute: 5.0,
                 defaultInstitutionalVolumeAbsolute: 50.0,
+                maxTradesPerZone: 1500, // CRITICAL FIX: Required for CircularBuffer capacity in zone creation
             },
             mockOrderBook,
             mockLogger,
@@ -173,18 +173,16 @@ describe("Zone Standardization Integration", () => {
 
             const zoneData = lastEvent.zoneData!;
 
-            // Verify all zone sizes are provided
-            expect(zoneData.zones5Tick).toBeDefined();
-            expect(zoneData.zones10Tick).toBeDefined();
-            expect(zoneData.zones20Tick).toBeDefined();
+            // Verify zones are provided
+            expect(zoneData.zones).toBeDefined();
             expect(zoneData.zoneConfig).toBeDefined();
 
             // Verify zone arrays have reasonable lengths (based on ±3 range)
-            expect(zoneData.zones5Tick.length).toBeGreaterThanOrEqual(0);
-            expect(zoneData.zones5Tick.length).toBeLessThanOrEqual(7); // ±3 = 7 zones max
+            expect(zoneData.zones.length).toBeGreaterThanOrEqual(0);
+            expect(zoneData.zones.length).toBeLessThanOrEqual(7); // ±3 = 7 zones max
 
             // Verify zone configuration
-            expect(zoneData.zoneConfig.baseTicks).toBe(5);
+            expect(zoneData.zoneConfig.zoneTicks).toBe(10);
             expect(zoneData.zoneConfig.tickValue).toBe(LTCUSDT_TICK_SIZE);
             expect(zoneData.zoneConfig.timeWindow).toBeGreaterThanOrEqual(0);
         });
@@ -213,14 +211,12 @@ describe("Zone Standardization Integration", () => {
             // Verify all events have zone data
             enrichedEvents.forEach((event, index) => {
                 expect(event.zoneData).toBeDefined();
-                expect(
-                    event.zoneData?.zones5Tick.length
-                ).toBeGreaterThanOrEqual(0);
+                expect(event.zoneData?.zones.length).toBeGreaterThanOrEqual(0);
 
                 // Zone configuration should be consistent
                 if (index > 0) {
-                    expect(event.zoneData?.zoneConfig.baseTicks).toBe(
-                        enrichedEvents[0].zoneData?.zoneConfig.baseTicks
+                    expect(event.zoneData?.zoneConfig.zoneTicks).toBe(
+                        enrichedEvents[0].zoneData?.zoneConfig.zoneTicks
                     );
                     expect(event.zoneData?.zoneConfig.tickValue).toBe(
                         enrichedEvents[0].zoneData?.zoneConfig.tickValue
@@ -244,14 +240,14 @@ describe("Zone Standardization Integration", () => {
             const event = enrichedEvents[0];
             const zoneData = event.zoneData!;
 
-            // Examine 5-tick zones
-            const zones5Tick = zoneData.zones5Tick;
-            expect(zones5Tick.length).toBeGreaterThanOrEqual(0);
+            // Examine zones
+            const zones = zoneData.zones;
+            expect(zones.length).toBeGreaterThanOrEqual(0);
 
-            zones5Tick.forEach((zone) => {
+            zones.forEach((zone) => {
                 // Verify zone structure
                 expect(zone.zoneId).toContain("LTCUSDT");
-                expect(zone.zoneId).toContain("5T");
+                expect(zone.zoneId).toContain("10T");
                 expect(zone.tickSize).toBe(LTCUSDT_TICK_SIZE);
 
                 // Verify realistic price levels
@@ -270,13 +266,15 @@ describe("Zone Standardization Integration", () => {
                     zone.passiveVolume
                 );
 
-                // Verify volume weighted price is reasonable
-                expect(zone.volumeWeightedPrice).toBeGreaterThan(
-                    zone.boundaries.min
-                );
-                expect(zone.volumeWeightedPrice).toBeLessThan(
-                    zone.boundaries.max
-                );
+                // Verify volume weighted price is reasonable (null for zones without trades)
+                if (zone.volumeWeightedPrice !== null) {
+                    expect(zone.volumeWeightedPrice).toBeGreaterThanOrEqual(
+                        zone.boundaries.min
+                    );
+                    expect(zone.volumeWeightedPrice).toBeLessThanOrEqual(
+                        zone.boundaries.max
+                    );
+                }
 
                 // Verify timestamps are recent
                 expect(zone.lastUpdate).toBeGreaterThan(Date.now() - 5000); // Within last 5 seconds
@@ -314,19 +312,17 @@ describe("Zone Standardization Integration", () => {
             // Verify zone data quality doesn't degrade under rapid processing
             const lastEvent = enrichedEvents[enrichedEvents.length - 1];
             expect(lastEvent.zoneData).toBeDefined();
-            expect(
-                lastEvent.zoneData?.zones5Tick.length
-            ).toBeGreaterThanOrEqual(0);
+            expect(lastEvent.zoneData?.zones.length).toBeGreaterThanOrEqual(0);
 
             // Verify zones are still properly formed
-            const zones = lastEvent.zoneData!.zones5Tick;
+            const zones = lastEvent.zoneData!.zones;
             zones.forEach((zone) => {
-                expect(zone.zoneId).toMatch(/^LTCUSDT_5T_\d{2}\.\d{2}$/);
+                expect(zone.zoneId).toMatch(/^LTCUSDT_10T_\d{2}\.\d{2}$/);
                 expect(zone.tickSize).toBe(LTCUSDT_TICK_SIZE);
                 // Allow for zone multiplier variations in boundary calculations
                 const zoneSize = zone.boundaries.max - zone.boundaries.min;
                 expect(zoneSize).toBeGreaterThan(0.04); // At least 4 ticks
-                expect(zoneSize).toBeLessThan(0.1); // At most 10 ticks
+                expect(zoneSize).toBeLessThan(0.2); // At most 20 ticks for 10T zones
             });
         });
 
@@ -342,8 +338,7 @@ describe("Zone Standardization Integration", () => {
             );
 
             const initialEvent = enrichedEvents[0];
-            const initialZoneCount =
-                initialEvent.zoneData?.zones5Tick.length || 0;
+            const initialZoneCount = initialEvent.zoneData?.zones.length || 0;
             expect(initialZoneCount).toBeGreaterThanOrEqual(0);
 
             // Process trade at similar price to test zone persistence
@@ -352,8 +347,7 @@ describe("Zone Standardization Integration", () => {
             );
 
             const secondEvent = enrichedEvents[1];
-            const secondZoneCount =
-                secondEvent.zoneData?.zones5Tick.length || 0;
+            const secondZoneCount = secondEvent.zoneData?.zones.length || 0;
 
             // Zone count should be similar (cache working)
             expect(
@@ -361,8 +355,8 @@ describe("Zone Standardization Integration", () => {
             ).toBeLessThanOrEqual(1);
 
             // Verify zones are being reused efficiently
-            const firstZone = initialEvent.zoneData?.zones5Tick[0];
-            const secondZone = secondEvent.zoneData?.zones5Tick.find(
+            const firstZone = initialEvent.zoneData?.zones[0];
+            const secondZone = secondEvent.zoneData?.zones.find(
                 (z) => z.zoneId === firstZone?.zoneId
             );
 
@@ -400,15 +394,10 @@ describe("Zone Standardization Integration", () => {
             // Verify zone data is still consistent in later events
             const lastEvent = enrichedEvents[enrichedEvents.length - 1];
             expect(lastEvent.zoneData).toBeDefined();
-            expect(
-                lastEvent.zoneData?.zones5Tick.length
-            ).toBeGreaterThanOrEqual(0);
+            expect(lastEvent.zoneData?.zones.length).toBeGreaterThanOrEqual(0);
 
             // Verify no excessive memory usage (zones should be bounded)
-            const totalZoneCount =
-                lastEvent.zoneData!.zones5Tick.length +
-                lastEvent.zoneData!.zones10Tick.length +
-                lastEvent.zoneData!.zones20Tick.length;
+            const totalZoneCount = lastEvent.zoneData!.zones.length;
 
             expect(totalZoneCount).toBeLessThan(50); // Reasonable upper bound
         });

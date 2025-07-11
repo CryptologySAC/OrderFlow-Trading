@@ -83,8 +83,7 @@ const PREPROCESSOR_CONFIG = {
     maxDashboardInterval: 1000,
     significantChangeThreshold: 0.001,
     standardZoneConfig: {
-        baseTicks: 5,
-        zoneMultipliers: [1, 2, 4],
+        zoneTicks: 10,
         timeWindows: [300000, 900000, 1800000, 3600000, 5400000],
         adaptiveMode: false,
         volumeThresholds: {
@@ -116,6 +115,7 @@ const PREPROCESSOR_CONFIG = {
     defaultAggressiveVolumeAbsolute: 10,
     defaultPassiveVolumeAbsolute: 5,
     defaultInstitutionalVolumeAbsolute: 50,
+    maxTradesPerZone: 1500, // CRITICAL FIX: Required for CircularBuffer capacity in zone creation
 };
 
 describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
@@ -264,8 +264,13 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
             expect(lastTradeEvent!.zoneData).toBeDefined();
 
             const zones = lastTradeEvent!.zoneData!.zones;
+            // Find the zone that contains exhaustionPrice using proper zone boundary logic
+            const expectedZoneStart =
+                Math.floor(exhaustionPrice / (10 * TICK_SIZE)) *
+                (10 * TICK_SIZE);
             const targetZone = zones.find(
-                (z) => Math.abs(z.priceLevel - exhaustionPrice) < TICK_SIZE / 2
+                (z) =>
+                    Math.abs(z.priceLevel - expectedZoneStart) < TICK_SIZE / 2
             );
 
             expect(targetZone).toBeDefined();
@@ -312,8 +317,13 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
             expect(secondTradeEvent.zoneData).toBeDefined();
 
             const zones = secondTradeEvent.zoneData!.zones;
+            // Find the zone that contains exhaustionPrice using proper zone boundary logic
+            const expectedZoneStart =
+                Math.floor(exhaustionPrice / (10 * TICK_SIZE)) *
+                (10 * TICK_SIZE);
             const targetZone = zones.find(
-                (z) => Math.abs(z.priceLevel - exhaustionPrice) < TICK_SIZE / 2
+                (z) =>
+                    Math.abs(z.priceLevel - expectedZoneStart) < TICK_SIZE / 2
             );
 
             // CRITICAL: This should contain volume from BOTH trades
@@ -386,8 +396,13 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
 
             // Verify zone captured the velocity decay pattern
             const zones = lastEvent!.zoneData!.zones;
+            // Find the zone that contains exhaustionPrice using proper zone boundary logic
+            const expectedZoneStart =
+                Math.floor(exhaustionPrice / (10 * TICK_SIZE)) *
+                (10 * TICK_SIZE);
             const targetZone = zones.find(
-                (z) => Math.abs(z.priceLevel - exhaustionPrice) < TICK_SIZE / 2
+                (z) =>
+                    Math.abs(z.priceLevel - expectedZoneStart) < TICK_SIZE / 2
             );
 
             expect(targetZone!.aggressiveVolume).toBeGreaterThan(20); // Total 26 LTC
@@ -425,8 +440,13 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
 
             // Verify zone shows momentum loss pattern
             const zones = lastEvent!.zoneData!.zones;
+            // Find the zone that contains exhaustionPrice using proper zone boundary logic
+            const expectedZoneStart =
+                Math.floor(exhaustionPrice / (10 * TICK_SIZE)) *
+                (10 * TICK_SIZE);
             const targetZone = zones.find(
-                (z) => Math.abs(z.priceLevel - exhaustionPrice) < TICK_SIZE / 2
+                (z) =>
+                    Math.abs(z.priceLevel - expectedZoneStart) < TICK_SIZE / 2
             );
 
             expect(targetZone!.aggressiveVolume).toBeGreaterThan(50); // Total 55 LTC
@@ -463,17 +483,11 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
                 );
             }
 
-            // Verify different zone sizes captured the exhaustion
+            // Verify zones captured the exhaustion
             const zoneData = lastEvent!.zoneData!;
 
-            // 5-tick zones should show individual exhaustion points
+            // Zones should show exhaustion points
             expect(zoneData.zones.length).toBeGreaterThanOrEqual(0);
-
-            // 10-tick zones should show broader exhaustion area
-            expect(zoneData.zones10Tick.length).toBeGreaterThanOrEqual(0);
-
-            // 20-tick zones should capture the overall exhaustion cluster
-            expect(zoneData.zones20Tick.length).toBeGreaterThanOrEqual(0);
 
             // Should generate exhaustion signal from confluence across zone sizes
             expect(detectedSignals.length).toBeGreaterThanOrEqual(0);
@@ -508,8 +522,13 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
 
             // Verify zone shows mixed exhaustion pattern
             const zones = lastEvent!.zoneData!.zones;
+            // Find the zone that contains exhaustionPrice using proper zone boundary logic
+            const expectedZoneStart =
+                Math.floor(exhaustionPrice / (10 * TICK_SIZE)) *
+                (10 * TICK_SIZE);
             const targetZone = zones.find(
-                (z) => Math.abs(z.priceLevel - exhaustionPrice) < TICK_SIZE / 2
+                (z) =>
+                    Math.abs(z.priceLevel - expectedZoneStart) < TICK_SIZE / 2
             );
 
             expect(targetZone!.aggressiveVolume).toBeGreaterThan(40); // Total 44 LTC
@@ -610,8 +629,13 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
 
             // Zone should show aggressive volume exceeding passive liquidity
             const zones = lastEvent!.zoneData!.zones;
+            // Find the zone that contains exhaustionPrice using proper zone boundary logic
+            const expectedZoneStart =
+                Math.floor(exhaustionPrice / (10 * TICK_SIZE)) *
+                (10 * TICK_SIZE);
             const targetZone = zones.find(
-                (z) => Math.abs(z.priceLevel - exhaustionPrice) < TICK_SIZE / 2
+                (z) =>
+                    Math.abs(z.priceLevel - expectedZoneStart) < TICK_SIZE / 2
             );
 
             expect(targetZone!.aggressiveVolume).toBeGreaterThan(45); // 48 LTC total
@@ -655,8 +679,13 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
 
             // Zone should show exhaustion pattern across time
             const zones = lastEvent!.zoneData!.zones;
+            // Find the zone that contains exhaustionPrice using proper zone boundary logic
+            const expectedZoneStart =
+                Math.floor(exhaustionPrice / (10 * TICK_SIZE)) *
+                (10 * TICK_SIZE);
             const targetZone = zones.find(
-                (z) => Math.abs(z.priceLevel - exhaustionPrice) < TICK_SIZE / 2
+                (z) =>
+                    Math.abs(z.priceLevel - expectedZoneStart) < TICK_SIZE / 2
             );
 
             expect(targetZone!.aggressiveVolume).toBeGreaterThanOrEqual(39); // 15+12+8+4=39 LTC

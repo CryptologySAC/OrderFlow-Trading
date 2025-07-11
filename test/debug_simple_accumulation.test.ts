@@ -68,8 +68,7 @@ const PREPROCESSOR_CONFIG = {
     maxDashboardInterval: 1000,
     significantChangeThreshold: 0.001,
     standardZoneConfig: {
-        baseTicks: 5,
-        zoneMultipliers: [1, 2, 4],
+        zoneTicks: 10,
         timeWindows: [300000, 900000, 1800000, 3600000, 5400000],
         adaptiveMode: false,
         volumeThresholds: {
@@ -101,6 +100,7 @@ const PREPROCESSOR_CONFIG = {
     defaultAggressiveVolumeAbsolute: 1,
     defaultPassiveVolumeAbsolute: 1,
     defaultInstitutionalVolumeAbsolute: 10,
+    maxTradesPerZone: 1500, // CRITICAL FIX: Required for CircularBuffer capacity in zone creation
 };
 
 function createBinanceTrade(
@@ -150,13 +150,9 @@ describe("Accumulation Detector DEBUG", () => {
             updateMetric: vi.fn(),
             incrementMetric: vi.fn(),
             incrementCounter: vi.fn(),
-            decrementMetric: vi.fn(),
             recordGauge: vi.fn(),
             recordHistogram: vi.fn(),
-            recordTimer: vi.fn(() => ({ stop: vi.fn() })),
-            startTimer: vi.fn(() => ({ stop: vi.fn() })),
             getMetrics: vi.fn(() => ({}) as any),
-            shutdown: vi.fn(),
         };
 
         const mockThreadManager = {
@@ -246,13 +242,11 @@ describe("Accumulation Detector DEBUG", () => {
 
             if (event.zoneData) {
                 console.log("📍 Zone counts:", {
-                    zones5Tick: event.zoneData.zones5Tick.length,
-                    zones10Tick: event.zoneData.zones10Tick.length,
-                    zones20Tick: event.zoneData.zones20Tick.length,
+                    zonesTick: event.zoneData.zones.length,
                 });
 
-                if (event.zoneData.zones5Tick.length > 0) {
-                    const zone = event.zoneData.zones5Tick[0];
+                if (event.zoneData.zones.length > 0) {
+                    const zone = event.zoneData.zones[0];
                     console.log("📈 First zone data:", {
                         priceLevel: zone.priceLevel,
                         aggressiveVolume: zone.aggressiveVolume,
@@ -280,7 +274,7 @@ describe("Accumulation Detector DEBUG", () => {
             console.log("❌ NO SIGNALS - Check detector logic");
 
             // Print debug info
-            const zones = lastEvent!.zoneData!.zones5Tick;
+            const zones = lastEvent!.zoneData!.zones;
             if (zones.length > 0) {
                 const targetZone = zones.find(
                     (z) => Math.abs(z.priceLevel - zonePrice) < TICK_SIZE / 2
