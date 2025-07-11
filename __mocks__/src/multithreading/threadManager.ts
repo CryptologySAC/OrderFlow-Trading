@@ -6,4 +6,9 @@ export class ThreadManager {
     shutdown = vi.fn();
     isStarted = vi.fn().mockReturnValue(true);
     startWorkers = vi.fn().mockResolvedValue(undefined);
+    requestDepthSnapshot = vi.fn().mockResolvedValue({
+        lastUpdateId: 1000,
+        bids: [],
+        asks: [],
+    });
 }

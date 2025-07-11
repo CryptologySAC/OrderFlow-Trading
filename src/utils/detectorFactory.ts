@@ -214,10 +214,10 @@ export class DetectorFactory {
         // Always use enhanced detector - originals are deprecated
         const detector = new DeltaCVDDetectorEnhanced(
             id,
+            Config.SYMBOL,
             productionSettings,
             dependencies.preprocessor,
             dependencies.logger,
-            dependencies.spoofingDetector,
             dependencies.metricsCollector,
             dependencies.signalLogger
         );
@@ -227,7 +227,6 @@ export class DetectorFactory {
             {
                 id,
                 enhancementMode: productionSettings.enhancementMode,
-                useStandardizedZones: productionSettings.useStandardizedZones,
             }
         );
 
@@ -290,12 +289,12 @@ export class DetectorFactory {
                 enabled: true,
             },
             cvd_confirmation: {
-                supportedSignalTypes: ["cvd_confirmation"],
+                supportedSignalTypes: ["deltacvd"],
                 priority: 50,
                 enabled: true,
             },
             support_resistance: {
-                supportedSignalTypes: ["support_resistance_level"],
+                supportedSignalTypes: ["generic"],
                 priority: 40,
                 enabled: false,
             },

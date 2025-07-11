@@ -1,6 +1,7 @@
 // src/types/marketEvents.ts
 
 import type { SpotWebsocketStreams } from "@binance/spot";
+import type { CircularBuffer } from "../utils/circularBuffer.js";
 
 export interface AggressiveTrade {
     price: number;
@@ -24,10 +25,19 @@ export interface PassiveLevel {
     addedBid?: number;
 }
 
+// Individual trade record for precise VWAP calculation
+export interface ZoneTradeRecord {
+    price: number;
+    quantity: number;
+    timestamp: number;
+    tradeId: string; // For deduplication and tracking
+    buyerIsMaker: boolean;
+}
+
 // Standardized zone data for unified detector access
 export interface ZoneSnapshot {
     zoneId: string; // Unique zone identifier
-    priceLevel: number; // Zone center price
+    priceLevel: number; // Zone lower boundary price
     tickSize: number; // Tick size for this zone
     aggressiveVolume: number; // Total aggressive volume in zone
     passiveVolume: number; // Total passive volume in zone
@@ -39,17 +49,16 @@ export interface ZoneSnapshot {
     timespan: number; // Time span of zone data (ms)
     boundaries: { min: number; max: number }; // Zone price boundaries
     lastUpdate: number; // Last update timestamp
-    volumeWeightedPrice: number; // Volume weighted average price
+    volumeWeightedPrice: number | null; // Volume weighted average price (calculated live from tradeHistory)
+    tradeHistory: CircularBuffer<ZoneTradeRecord>; // Individual trades for precise VWAP calculation (high-performance circular buffer)
 }
 
-// Zone data collection for multiple zone sizes
+// Simplified zone data - single zone size for all detectors
 export interface StandardZoneData {
-    zones5Tick: ZoneSnapshot[]; // 5-tick zones (base size)
-    zones10Tick: ZoneSnapshot[]; // 10-tick zones (2x base)
-    zones20Tick: ZoneSnapshot[]; // 20-tick zones (4x base)
+    zones: ZoneSnapshot[]; // Single zone array (configured size)
     adaptiveZones?: ZoneSnapshot[]; // Market-condition adapted zones
     zoneConfig: {
-        baseTicks: number; // Base zone size in ticks
+        zoneTicks: number; // Zone size in ticks (10)
         tickValue: number; // Value of one tick
         timeWindow: number; // Time window for zone calculations
     };

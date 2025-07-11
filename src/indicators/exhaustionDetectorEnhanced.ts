@@ -18,7 +18,7 @@
 // - Institutional liquidity exhaustion detection
 //
 
-import { ExhaustionDetector } from "./exhaustionDetector.js";
+import { Detector } from "./base/detectorEnrichedTrade.js";
 import { FinancialMath } from "../utils/financialMath.js";
 import { Config } from "../core/config.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
@@ -72,18 +72,27 @@ export interface ExhaustionEnhancementStats {
 }
 
 /**
- * ExhaustionDetectorEnhanced - Production-safe enhanced exhaustion detector
+ * ExhaustionDetectorEnhanced - Standalone enhanced exhaustion detector
  *
- * EXHAUSTION PHASE 1: Standardized zone integration with multi-timeframe analysis
+ * STANDALONE VERSION: CLAUDE.md compliant exhaustion detection without legacy dependencies
  *
- * This enhanced detector adds sophisticated multi-timeframe exhaustion analysis while
- * preserving the original detector's behavior as the production baseline.
+ * This enhanced detector provides sophisticated multi-timeframe exhaustion analysis using
+ * Universal Zones from the preprocessor, with all parameters configurable and no magic numbers.
  */
-export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
+export class ExhaustionDetectorEnhanced extends Detector {
     private readonly useStandardizedZones: boolean;
     private readonly enhancementConfig: ExhaustionEnhancedSettings;
     private readonly enhancementStats: ExhaustionEnhancementStats;
     private readonly preprocessor: IOrderflowPreprocessor;
+
+    // CLAUDE.md compliant configuration parameters - NO MAGIC NUMBERS
+    private readonly confluenceMinZones: number;
+    private readonly confluenceMaxDistance: number;
+    private readonly confluenceConfidenceBoost: number;
+    private readonly crossTimeframeConfidenceBoost: number;
+    private readonly exhaustionVolumeThreshold: number;
+    private readonly exhaustionRatioThreshold: number;
+    private readonly exhaustionScoreThreshold: number;
 
     constructor(
         id: string,
@@ -107,20 +116,26 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
             );
         }
 
-        // Initialize parent detector with original settings
-        super(
-            id,
-            settings,
-            logger,
-            spoofingDetector,
-            metricsCollector,
-            signalLogger
-        );
+        // Initialize parent Detector (not ExhaustionDetector)
+        super(id, logger, metricsCollector, signalLogger);
 
         // Initialize enhancement configuration
         this.useStandardizedZones = settings.useStandardizedZones;
         this.enhancementConfig = settings;
         this.preprocessor = preprocessor;
+
+        // Initialize CLAUDE.md compliant configuration parameters - NO MAGIC NUMBERS
+        this.confluenceMinZones =
+            Config.UNIVERSAL_ZONE_CONFIG.minZoneConfluenceCount;
+        this.confluenceMaxDistance =
+            Config.UNIVERSAL_ZONE_CONFIG.maxZoneConfluenceDistance;
+        this.confluenceConfidenceBoost =
+            Config.UNIVERSAL_ZONE_CONFIG.confluenceConfidenceBoost;
+        this.crossTimeframeConfidenceBoost =
+            Config.UNIVERSAL_ZONE_CONFIG.crossTimeframeBoost;
+        this.exhaustionVolumeThreshold = settings.depletionVolumeThreshold;
+        this.exhaustionRatioThreshold = settings.depletionRatioThreshold;
+        this.exhaustionScoreThreshold = settings.minEnhancedConfidenceThreshold;
 
         // Initialize enhancement statistics
         this.enhancementStats = {
@@ -145,26 +160,52 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
     /**
      * Enhanced trade event processing with standardized zone analysis
      *
-     * EXHAUSTION PHASE 1: Production-safe enhancement wrapper
+     * STANDALONE VERSION: Processes trades directly without legacy detector dependency
      */
-    public override onEnrichedTrade(event: EnrichedTradeEvent): void {
-        // Always call the original detector first (production baseline)
-        super.onEnrichedTrade(event);
+    public onEnrichedTrade(event: EnrichedTradeEvent): void {
+        // 🔍 DEBUG: Add comprehensive logging to diagnose signal issues
+        const debugInfo = {
+            useStandardizedZones: this.useStandardizedZones,
+            enhancementMode: this.enhancementConfig.enhancementMode,
+            hasZoneData: !!event.zoneData,
+            zoneCount: event.zoneData ? event.zoneData.zones.length : 0,
+            tradeQuantity: event.quantity,
+            minAggVolume: this.enhancementConfig.minAggVolume,
+            callCount: this.enhancementStats.callCount,
+        };
 
-        // Only apply enhancements if enabled and standardized zones are available
+        this.logger.debug(
+            "ExhaustionDetectorEnhanced: Processing trade",
+            debugInfo
+        );
+
+        // Only process if standardized zones are enabled and available
         if (
             !this.useStandardizedZones ||
             this.enhancementConfig.enhancementMode === "disabled" ||
             !event.zoneData
         ) {
+            this.logger.warn(
+                "ExhaustionDetectorEnhanced: Skipping trade processing",
+                {
+                    reason: !this.useStandardizedZones
+                        ? "zones_disabled"
+                        : this.enhancementConfig.enhancementMode === "disabled"
+                          ? "detector_disabled"
+                          : !event.zoneData
+                            ? "no_zone_data"
+                            : "unknown",
+                    debugInfo,
+                }
+            );
             return;
         }
 
         this.enhancementStats.callCount++;
 
         try {
-            // Apply standardized zone enhancements
-            this.enhanceExhaustionAnalysis(event);
+            // Apply standalone exhaustion analysis
+            this.analyzeExhaustionPattern(event);
         } catch (error) {
             this.enhancementStats.errorCount++;
             this.logger.error("ExhaustionDetectorEnhanced: Enhancement error", {
@@ -173,17 +214,35 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
                 price: event.price,
                 quantity: event.quantity,
             });
-            // Continue with original detector behavior - no impact on production signals
         }
     }
 
     /**
-     * Core enhancement analysis using standardized zones
+     * Core exhaustion analysis using standardized zones
      *
-     * EXHAUSTION PHASE 1: Multi-timeframe exhaustion analysis
+     * STANDALONE VERSION: Multi-timeframe exhaustion analysis
      */
-    private enhanceExhaustionAnalysis(event: EnrichedTradeEvent): void {
+    private analyzeExhaustionPattern(event: EnrichedTradeEvent): void {
         if (!event.zoneData) return;
+
+        // 🔍 DEBUG: Core exhaustion detection first
+        const coreExhaustionResult = this.detectCoreExhaustion(event);
+        if (coreExhaustionResult) {
+            this.logger.info(
+                "ExhaustionDetectorEnhanced: CORE EXHAUSTION DETECTED",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                    side: coreExhaustionResult.side,
+                    confidence: coreExhaustionResult.confidence,
+                    signalId: coreExhaustionResult.id,
+                    signalType: "exhaustion",
+                }
+            );
+
+            // Emit core exhaustion signal immediately
+            this.emit("signalCandidate", coreExhaustionResult);
+        }
 
         let totalConfidenceBoost = 0;
         let enhancementApplied = false;
@@ -254,7 +313,7 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
                 event.zoneData,
                 event
             );
-            if (crossTimeframeResult.hasAlignment) {
+            if (crossTimeframeResult && crossTimeframeResult.hasAlignment) {
                 this.enhancementStats.crossTimeframeAnalysisCount++;
                 totalConfidenceBoost +=
                     Config.UNIVERSAL_ZONE_CONFIG.crossTimeframeBoost;
@@ -266,8 +325,8 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
                         detectorId: this.getId(),
                         price: event.price,
                         alignmentScore: crossTimeframeResult.alignmentScore,
-                        timeframeBreakdown:
-                            crossTimeframeResult.timeframeBreakdown,
+                        exhaustionStrength:
+                            crossTimeframeResult.exhaustionStrength,
                         confidenceBoost:
                             Config.UNIVERSAL_ZONE_CONFIG.crossTimeframeBoost,
                     }
@@ -292,6 +351,223 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
     }
 
     /**
+     * Detect core exhaustion patterns using zone data
+     *
+     * STANDALONE VERSION: Core exhaustion detection logic
+     */
+    private detectCoreExhaustion(
+        event: EnrichedTradeEvent
+    ): SignalCandidate | null {
+        if (!event.zoneData) {
+            this.logger.debug(
+                "ExhaustionDetectorEnhanced: No zone data available"
+            );
+            return null;
+        }
+
+        // Check minimum volume requirement
+        if (event.quantity < this.enhancementConfig.minAggVolume) {
+            this.logger.debug(
+                "ExhaustionDetectorEnhanced: Volume below threshold",
+                {
+                    quantity: event.quantity,
+                    minAggVolume: this.enhancementConfig.minAggVolume,
+                }
+            );
+            return null;
+        }
+
+        this.logger.debug(
+            "ExhaustionDetectorEnhanced: Starting core exhaustion detection",
+            {
+                price: event.price,
+                quantity: event.quantity,
+                minAggVolume: this.enhancementConfig.minAggVolume,
+                exhaustionVolumeThreshold: this.exhaustionVolumeThreshold,
+                exhaustionRatioThreshold: this.exhaustionRatioThreshold,
+            }
+        );
+
+        // CLAUDE.md SIMPLIFIED: Use single zone array (no more triple-counting!)
+        const allZones = [...event.zoneData.zones];
+
+        if (allZones.length === 0) {
+            this.logger.debug(
+                "ExhaustionDetectorEnhanced: No zones available",
+                {
+                    zonesCount: event.zoneData.zones.length,
+                }
+            );
+            return null;
+        }
+
+        this.logger.debug("ExhaustionDetectorEnhanced: Found zones", {
+            totalZones: allZones.length,
+            zonesCount: event.zoneData.zones.length,
+        });
+
+        // Find zones near the current price
+        let relevantZones = this.preprocessor.findZonesNearPrice(
+            allZones,
+            event.price,
+            this.confluenceMaxDistance
+        );
+
+        // STRUCTURAL FIX: If no zones found with primary method, find nearest zone with volume
+        if (relevantZones.length === 0) {
+            this.logger.debug(
+                "ExhaustionDetectorEnhanced: No zones found with primary method, using fallback",
+                {
+                    price: event.price,
+                    maxDistance: this.confluenceMaxDistance,
+                    totalZones: allZones.length,
+                }
+            );
+            
+            // Find the zone with the smallest distance to the trade price that has volume
+            const zonesWithVolume = allZones.filter(z => 
+                z.aggressiveVolume > 0 || z.passiveVolume > 0
+            );
+            
+            if (zonesWithVolume.length > 0) {
+                const nearestZone = zonesWithVolume.reduce((closest, zone) => 
+                    Math.abs(zone.priceLevel - event.price) < Math.abs(closest.priceLevel - event.price) 
+                        ? zone : closest
+                );
+                relevantZones = [nearestZone];
+                
+                this.logger.debug(
+                    "ExhaustionDetectorEnhanced: Using fallback zone",
+                    {
+                        price: event.price,
+                        zonePrice: nearestZone.priceLevel,
+                        distance: Math.abs(nearestZone.priceLevel - event.price),
+                        aggressiveVolume: nearestZone.aggressiveVolume,
+                    }
+                );
+            }
+        }
+
+        if (relevantZones.length === 0) {
+            this.logger.debug(
+                "ExhaustionDetectorEnhanced: No relevant zones found even with fallback",
+                {
+                    price: event.price,
+                    totalZones: allZones.length,
+                }
+            );
+            return null;
+        }
+
+        this.logger.debug("ExhaustionDetectorEnhanced: Found relevant zones", {
+            relevantZones: relevantZones.length,
+            maxDistance: this.confluenceMaxDistance,
+        });
+
+        // Calculate exhaustion metrics
+        let totalAggressiveVolume = 0;
+        let totalPassiveVolume = 0;
+        let exhaustedZones = 0;
+
+        for (const zone of relevantZones) {
+            totalAggressiveVolume += zone.aggressiveVolume;
+            totalPassiveVolume += zone.passiveVolume;
+
+            // Check for exhaustion: high aggressive volume, low passive volume
+            const totalZoneVolume = zone.aggressiveVolume + zone.passiveVolume;
+            if (totalZoneVolume === 0) continue;
+
+            const aggressiveRatio = FinancialMath.divideQuantities(
+                zone.aggressiveVolume,
+                totalZoneVolume
+            );
+            const passiveRatio = FinancialMath.divideQuantities(
+                zone.passiveVolume,
+                totalZoneVolume
+            );
+
+            // Exhaustion: aggressive volume > threshold AND passive volume depleted
+            if (
+                zone.aggressiveVolume >= this.exhaustionVolumeThreshold &&
+                aggressiveRatio >= this.exhaustionRatioThreshold &&
+                passiveRatio < 0.5 // More aggressive than passive
+            ) {
+                exhaustedZones++;
+            }
+        }
+
+        // Require at least one exhausted zone
+        if (exhaustedZones === 0) {
+            return null;
+        }
+
+        // Calculate overall exhaustion confidence
+        const totalVolume = totalAggressiveVolume + totalPassiveVolume;
+        if (totalVolume === 0) {
+            return null;
+        }
+
+        const overallAggressiveRatio = FinancialMath.divideQuantities(
+            totalAggressiveVolume,
+            totalVolume
+        );
+
+        // Base confidence from aggressive ratio
+        let confidence = overallAggressiveRatio;
+
+        // Boost confidence based on number of exhausted zones
+        confidence += exhaustedZones * 0.1;
+
+        // Apply minimum confidence threshold
+        if (confidence < this.exhaustionScoreThreshold) {
+            return null;
+        }
+
+        // Determine signal side based on exhaustion
+        const signalSide = this.determineExhaustionSignalSide(event);
+        if (signalSide === "neutral") {
+            return null;
+        }
+
+        // Create core exhaustion signal
+        const signalCandidate: SignalCandidate = {
+            id: `core-exhaustion-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+            type: "exhaustion" as SignalType,
+            side: signalSide,
+            confidence: Math.min(1.0, confidence),
+            timestamp: Date.now(),
+            data: {
+                price: event.price,
+                side: signalSide,
+                aggressive: totalAggressiveVolume,
+                oppositeQty: totalPassiveVolume,
+                avgLiquidity: totalPassiveVolume / relevantZones.length,
+                spread: 0, // TODO: Calculate from zone data
+                exhaustionScore: overallAggressiveRatio,
+                confidence: Math.min(1.0, confidence),
+                depletionRatio: overallAggressiveRatio,
+                passiveVolumeRatio: 1 - overallAggressiveRatio,
+                avgSpread: 0, // TODO: Calculate from zone data
+                volumeImbalance: Math.abs(overallAggressiveRatio - 0.5),
+                metadata: {
+                    signalType: "exhaustion",
+                    timestamp: event.timestamp,
+                    exhaustedZones,
+                    totalZones: relevantZones.length,
+                    enhancementType: "standalone_exhaustion",
+                    qualityMetrics: {
+                        exhaustionStatisticalSignificance: confidence,
+                        depletionConfirmation: exhaustedZones >= 1,
+                        signalPurity: confidence > 0.7 ? "premium" : "standard",
+                    },
+                },
+            },
+        };
+
+        return signalCandidate;
+    }
+
+    /**
      * Analyze zone confluence for exhaustion pattern validation
      *
      * EXHAUSTION PHASE 1: Multi-timeframe confluence analysis
@@ -311,28 +587,10 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
         // Find zones that overlap around the current price
         const relevantZones: ZoneSnapshot[] = [];
 
-        // Check 5-tick zones - using universal zone analysis service
+        // CLAUDE.md SIMPLIFIED: Use single zone array (no more triple-counting!)
         relevantZones.push(
             ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones5Tick,
-                price,
-                maxDistance
-            )
-        );
-
-        // Check 10-tick zones - using universal zone analysis service
-        relevantZones.push(
-            ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones10Tick,
-                price,
-                maxDistance
-            )
-        );
-
-        // Check 20-tick zones - using universal zone analysis service
-        relevantZones.push(
-            ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones20Tick,
+                zoneData.zones,
                 price,
                 maxDistance
             )
@@ -376,12 +634,8 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
             this.enhancementConfig.depletionVolumeThreshold;
         const minRatio = this.enhancementConfig.depletionRatioThreshold;
 
-        // Analyze all zones for liquidity depletion patterns
-        const allZones = [
-            ...zoneData.zones5Tick,
-            ...zoneData.zones10Tick,
-            ...zoneData.zones20Tick,
-        ];
+        // CLAUDE.md SIMPLIFIED: Use single zone array (no more triple-counting!)
+        const allZones = [...zoneData.zones];
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,
@@ -443,54 +697,24 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
     ): {
         hasAlignment: boolean;
         alignmentScore: number;
-        timeframeBreakdown: {
-            tick5: number;
-            tick10: number;
-            tick20: number;
-        };
-    } {
-        // Calculate exhaustion strength for each timeframe
-        const tick5Exhaustion = this.calculateTimeframeExhaustionStrength(
-            zoneData.zones5Tick,
-            event.price
-        );
-        const tick10Exhaustion = this.calculateTimeframeExhaustionStrength(
-            zoneData.zones10Tick,
-            event.price
-        );
-        const tick20Exhaustion = this.calculateTimeframeExhaustionStrength(
-            zoneData.zones20Tick,
+        exhaustionStrength: number;
+    } | null {
+        // CLAUDE.md SIMPLIFIED: Calculate exhaustion strength for single zone size
+        const exhaustionStrength = this.calculateTimeframeExhaustionStrength(
+            zoneData.zones,
             event.price
         );
 
-        const timeframeBreakdown = {
-            tick5: tick5Exhaustion,
-            tick10: tick10Exhaustion,
-            tick20: tick20Exhaustion,
-        };
-
-        // Calculate alignment score using FinancialMath (how similar exhaustion levels are across timeframes)
-        const exhaustionValues = [
-            tick5Exhaustion,
-            tick10Exhaustion,
-            tick20Exhaustion,
-        ];
+        // CLAUDE.md SIMPLIFIED: Single zone alignment (perfect alignment by definition)
+        const exhaustionValues = [exhaustionStrength];
         const avgExhaustion = FinancialMath.calculateMean(exhaustionValues);
         if (avgExhaustion === null) {
-            return {
-                hasAlignment: false,
-                alignmentScore: 0,
-                timeframeBreakdown,
-            }; // CLAUDE.md compliance: return null when calculation cannot be performed
+            return null; // CLAUDE.md compliance: return null when calculation cannot be performed
         }
 
         const stdDev = FinancialMath.calculateStdDev(exhaustionValues);
         if (stdDev === null) {
-            return {
-                hasAlignment: false,
-                alignmentScore: 0,
-                timeframeBreakdown,
-            }; // CLAUDE.md compliance: return null when calculation cannot be performed
+            return null; // CLAUDE.md compliance: return null when calculation cannot be performed
         }
 
         const variance = FinancialMath.multiplyQuantities(stdDev, stdDev); // Variance = stdDev^2
@@ -511,7 +735,7 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
         return {
             hasAlignment,
             alignmentScore,
-            timeframeBreakdown,
+            exhaustionStrength,
         };
     }
 
@@ -572,11 +796,7 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
     ): number | null {
         if (!zoneData) return null;
 
-        const allZones = [
-            ...zoneData.zones5Tick,
-            ...zoneData.zones10Tick,
-            ...zoneData.zones20Tick,
-        ];
+        const allZones = [...zoneData.zones];
 
         if (allZones.length === 0) return null;
 
@@ -688,7 +908,7 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
             avgSpread,
             volumeImbalance,
             metadata: {
-                signalType: "liquidity_depletion",
+                signalType: "exhaustion",
                 timestamp: event.timestamp,
                 affectedZones: depletionResult.affectedZones,
                 enhancementType: "zone_based_exhaustion",
@@ -712,7 +932,7 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
         };
 
         // ✅ EMIT ENHANCED EXHAUSTION SIGNAL - Independent of base detector
-        this.emitSignalCandidate(signalCandidate);
+        this.emit("signalCandidate", signalCandidate);
 
         this.logger.info(
             "ExhaustionDetectorEnhanced: ENHANCED EXHAUSTION SIGNAL EMITTED",
@@ -724,7 +944,7 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
                 depletionRatio: depletionResult.depletionRatio,
                 affectedZones: depletionResult.affectedZones,
                 signalId: signalCandidate.id,
-                signalType: "enhanced_exhaustion_depletion",
+                signalType: "exhaustion",
             }
         );
     }
@@ -737,11 +957,7 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
     ): "buy" | "sell" | "neutral" {
         if (!event.zoneData) return "neutral";
 
-        const allZones = [
-            ...event.zoneData.zones5Tick,
-            ...event.zoneData.zones10Tick,
-            ...event.zoneData.zones20Tick,
-        ];
+        const allZones = [...event.zoneData.zones];
 
         let totalBuyVolume = 0;
         let totalSellVolume = 0;
@@ -756,7 +972,9 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
         });
 
         const totalVolume = totalBuyVolume + totalSellVolume;
-        if (totalVolume === 0) return "neutral";
+        if (totalVolume === 0) {
+            return "neutral";
+        }
 
         const buyRatio = FinancialMath.divideQuantities(
             totalBuyVolume,
@@ -777,11 +995,7 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
     ): number | null {
         if (!zoneData) return null;
 
-        const allZones = [
-            ...zoneData.zones5Tick,
-            ...zoneData.zones10Tick,
-            ...zoneData.zones20Tick,
-        ];
+        const allZones = [...zoneData.zones];
 
         let totalPassive = 0;
         let totalAggressive = 0;
@@ -809,9 +1023,9 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
     ): number | null {
         if (!zoneData) return null;
 
-        if (zoneData.zones5Tick.length < 2) return null;
+        if (zoneData.zones.length < 2) return null;
 
-        const zones = zoneData.zones5Tick.slice(0, 10);
+        const zones = zoneData.zones.slice(0, 10);
         let totalSpread = 0;
         let spreadCount = 0;
 
@@ -836,11 +1050,7 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
     ): number | null {
         if (!zoneData) return null;
 
-        const allZones = [
-            ...zoneData.zones5Tick,
-            ...zoneData.zones10Tick,
-            ...zoneData.zones20Tick,
-        ];
+        const allZones = [...zoneData.zones];
 
         let totalBuyVolume = 0;
         let totalSellVolume = 0;
@@ -892,13 +1102,37 @@ export class ExhaustionDetectorEnhanced extends ExhaustionDetector {
     }
 
     /**
+     * Get detector status - implements required BaseDetector interface
+     */
+    public getStatus(): string {
+        return `Exhaustion Enhanced - Mode: ${this.enhancementConfig.enhancementMode}, Zones: ${this.useStandardizedZones ? "enabled" : "disabled"}`;
+    }
+
+    /**
+     * Mark signal as confirmed - implements required BaseDetector interface
+     */
+    public markSignalConfirmed(zone: number, side: "buy" | "sell"): void {
+        // Implementation for signal confirmation tracking if needed
+        this.logger.debug("ExhaustionDetectorEnhanced: Signal confirmed", {
+            detectorId: this.getId(),
+            zone,
+            side,
+        });
+    }
+
+    /**
+     * Get detector ID - required by base class
+     */
+    public getId(): string {
+        return this.id;
+    }
+
+    /**
      * Enhanced cleanup with zone-aware resource management
      *
-     * EXHAUSTION PHASE 1: Resource management
+     * STANDALONE VERSION: Resource management
      */
-    public override cleanup(): void {
-        super.cleanup();
-
+    public cleanup(): void {
         this.logger.info(
             "ExhaustionDetectorEnhanced: Enhanced cleanup completed",
             {

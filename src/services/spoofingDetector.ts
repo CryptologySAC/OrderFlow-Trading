@@ -609,12 +609,15 @@ export class SpoofingDetector extends EventEmitter {
         if (spoofDetected && maxSpoofEvent && wallBand > 1) {
             // Summarize all spoofed prices in the band (for logging)
             // Optional: extend logic here to merge contiguous spoofed prices
-            this.logger?.info("Spoofing detected in band", {
-                component: "SpoofingDetector",
-                operation: "wasSpoofed",
-                band: [maxSpoofEvent.priceStart, maxSpoofEvent.priceEnd],
-                ...maxSpoofEvent,
-            });
+            this.logger?.info(
+                `Spoofing detected in band: ${maxSpoofEvent.spoofType}`,
+                {
+                    component: "SpoofingDetector",
+                    operation: "wasSpoofed",
+                    band: [maxSpoofEvent.priceStart, maxSpoofEvent.priceEnd],
+                    ...maxSpoofEvent,
+                }
+            );
         }
 
         // Emit anomaly event for legacy spoofing detection if found

@@ -907,33 +907,34 @@ export class AnomalyDetector extends EventEmitter {
         criticalIssues: string[];
         recentAnomalyTypes: string[];
         metrics: {
-            spreadBps?: number;
-            flowImbalance?: number;
-            volatility?: number;
+            spreadBps: number;
+            flowImbalance: number;
+            volatility: number;
             lastUpdateAge: number;
         };
     } {
-        const recentTime = Date.now() - this.marketHealthWindowMs;
-        const recentSnapshots = this.marketHistory
-            .toArray()
-            .filter((s) => s.timestamp > recentTime);
-
-        if (recentSnapshots.length < 10) {
+        // Check if we have sufficient data for market health assessment
+        if (this.marketHistory.count() < this.minHistory) {
             return {
                 isHealthy: false,
                 recentAnomalies: 0,
                 highestSeverity: null,
                 recommendation: "insufficient_data",
-                criticalIssues: ["Insufficient market data"],
+                criticalIssues: [],
                 recentAnomalyTypes: [],
                 metrics: {
-                    lastUpdateAge:
-                        Date.now() -
-                        (this.marketHistory.toArray().slice(-1)[0]?.timestamp ||
-                            0),
+                    spreadBps: 0,
+                    flowImbalance: 0,
+                    volatility: 0,
+                    lastUpdateAge: 0,
                 },
             };
         }
+
+        const recentTime = Date.now() - this.marketHealthWindowMs;
+        const recentSnapshots = this.marketHistory
+            .toArray()
+            .filter((s) => s.timestamp > recentTime);
 
         // Calculate current metrics
         const prices = recentSnapshots.map((s) => s.price);
@@ -948,11 +949,9 @@ export class AnomalyDetector extends EventEmitter {
 
         const flowMetrics = this.calculateFlowMetrics();
         const currentSpreadBps =
-            this.currentBestAsk > 0 && this.currentBestBid > 0
-                ? ((this.currentBestAsk - this.currentBestBid) /
-                      prices[prices.length - 1]) *
-                  10000
-                : undefined;
+            ((this.currentBestAsk - this.currentBestBid) /
+                prices[prices.length - 1]) *
+            10000;
 
         // Analyze recent anomalies
         const recentAnoms = this.recentAnomalies.filter(

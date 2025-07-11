@@ -1,9 +1,31 @@
 // src/types/zoneTypes.ts
 
-// NEW: Standardized zone configuration for all detectors
+/**
+ * Zone update types for proper type safety
+ */
+export enum ZoneUpdateType {
+    ZONE_CREATED = "zone_created",
+    ZONE_UPDATED = "zone_updated",
+    ZONE_STRENGTHENED = "zone_strengthened",
+    ZONE_WEAKENED = "zone_weakened",
+    ZONE_COMPLETED = "zone_completed",
+    ZONE_INVALIDATED = "zone_invalidated",
+}
+
+/**
+ * Zone signal types for trading signals
+ */
+export enum ZoneSignalType {
+    STRENGTHENED = "strengthened",
+    COMPLETION = "completion",
+    INVALIDATION = "invalidation",
+    ENTRY = "entry",
+    EXIT = "exit",
+}
+
+// NEW: Simplified zone configuration - single zone size for all detectors
 export interface StandardZoneConfig {
-    baseTicks: number; // Base zone size in ticks (e.g., 5)
-    zoneMultipliers: number[]; // Zone size multipliers [1, 2, 4] for 5, 10, 20 tick zones
+    zoneTicks: number; // Zone size in ticks (configured to 10)
     timeWindows: number[]; // Time windows for zone analysis [30s, 60s, 300s]
     adaptiveMode: boolean; // Enable dynamic zone sizing based on market conditions
     volumeThresholds: {
@@ -34,6 +56,61 @@ export interface ZoneHistory {
 
 // Import ZoneSnapshot from marketEvents to avoid circular dependency
 import type { ZoneSnapshot } from "./marketEvents.js";
+
+// Zone event interfaces for enhanced detectors
+// Import the actual condition types from signalTypes
+import type {
+    AccumulationConditions,
+    DistributionConditions,
+    AccumulationMarketRegime,
+    DistributionMarketRegime,
+} from "./signalTypes.js";
+
+export interface ZoneVisualizationData {
+    id: string;
+    type: "accumulation" | "distribution";
+    priceRange: {
+        center: number;
+        min: number;
+        max: number;
+    };
+    strength: number;
+    confidence: number;
+    volume: number;
+    timespan: number;
+    lastUpdate: number;
+    metadata: {
+        buyRatio?: number;
+        sellRatio?: number;
+        conditions: AccumulationConditions | DistributionConditions;
+        marketRegime: AccumulationMarketRegime | DistributionMarketRegime;
+    };
+}
+
+export interface ZoneUpdateEvent {
+    updateType:
+        | "zone_created"
+        | "zone_updated"
+        | "zone_strengthened"
+        | "zone_weakened"
+        | "zone_completed"
+        | "zone_invalidated";
+    zone: ZoneVisualizationData;
+    significance: number;
+    detectorId: string;
+    timestamp: number;
+}
+
+export interface ZoneSignalEvent {
+    signalType: "completion" | "invalidation" | "consumption";
+    zone: ZoneVisualizationData;
+    actionType: string;
+    confidence: number;
+    urgency: "high" | "medium" | "low";
+    expectedDirection: "up" | "down";
+    detectorId: string;
+    timestamp: number;
+}
 
 export interface TradingZone {
     // Zone identification

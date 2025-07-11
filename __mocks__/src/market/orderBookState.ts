@@ -16,7 +16,31 @@ export const createMockOrderBookState = (): IOrderBookState =>
         getSpread: vi.fn().mockReturnValue(0.02),
         getMidPrice: vi.fn().mockReturnValue(89.0),
         sumBand: vi.fn().mockReturnValue({ bid: 10.5, ask: 12.3, levels: 10 }),
-        snapshot: vi.fn().mockReturnValue(new Map()),
+        snapshot: vi.fn(() => {
+            const snapshot = new Map([
+                [
+                    88.99,
+                    { price: 88.99, bid: 10.5, ask: 0, timestamp: Date.now() },
+                ],
+                [
+                    89.01,
+                    { price: 89.01, bid: 0, ask: 12.3, timestamp: Date.now() },
+                ],
+                [
+                    89.02,
+                    { price: 89.02, bid: 0, ask: 8.7, timestamp: Date.now() },
+                ],
+                [
+                    88.98,
+                    { price: 88.98, bid: 15.2, ask: 0, timestamp: Date.now() },
+                ],
+            ]);
+            console.log(
+                "DEBUG: Mock snapshot called, returning size:",
+                snapshot.size
+            );
+            return snapshot;
+        }),
         getDepthMetrics: vi.fn().mockReturnValue({
             totalLevels: 100,
             bidLevels: 50,

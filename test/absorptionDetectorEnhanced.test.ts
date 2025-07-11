@@ -73,23 +73,13 @@ function createZoneSnapshot(
 // Helper function to create standardized zone data
 function createStandardizedZoneData(price: number): StandardZoneData {
     return {
-        zones5Tick: [
-            createZoneSnapshot(price - 0.05, 1),
+        zones: [
+            createZoneSnapshot(price - 0.1, 1),
             createZoneSnapshot(price, 2),
-            createZoneSnapshot(price + 0.05, 1),
-        ],
-        zones10Tick: [
-            createZoneSnapshot(price - 0.1, 1.5),
-            createZoneSnapshot(price, 2.5),
-            createZoneSnapshot(price + 0.1, 1.5),
-        ],
-        zones20Tick: [
-            createZoneSnapshot(price - 0.2, 2),
-            createZoneSnapshot(price, 3),
-            createZoneSnapshot(price + 0.2, 2),
+            createZoneSnapshot(price + 0.1, 1),
         ],
         zoneConfig: {
-            baseTicks: 5,
+            zoneTicks: 10,
             tickValue: 0.01,
             timeWindow: 60000,
         },

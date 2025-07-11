@@ -227,7 +227,7 @@ The nuclear cleanup project established **absolute zero tolerance** for missing 
 - `yarn start:dev` - Run in development mode with hot reload
 - `yarn start` - Start the production build
 - `yarn test` - Run all tests with Vitest
-- `yarn test:coverage` - Run tests with coverage report (MUST be >95%)
+- `yarn test:coverage` - Run tests with coverage report (MUST be >95% and all tests MUST pass)
 - `yarn lint` - Run ESLint (MUST pass with zero warnings)
 
 ### Institutional Testing Requirements
@@ -836,7 +836,7 @@ Code review will reject any occurrence of:
 2. Implement the `detect(trade: EnrichedTradeEvent)` method
 3. Register in `DetectorFactory`
 4. Add configuration options to symbol config
-5. Include comprehensive tests (>95% coverage)
+5. Include comprehensive tests (>95% coverage, all tests MUST pass)
 6. Performance benchmark against existing detectors
 7. Risk assessment for false positive/negative rates
 

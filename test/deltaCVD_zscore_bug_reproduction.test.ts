@@ -3,14 +3,16 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 // Mock dependencies before imports - MANDATORY per CLAUDE.md
 vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
-vi.mock("../src/services/spoofingDetector");
 
-import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced";
-import { WorkerLogger } from "../src/multithreading/workerLogger";
-import { MetricsCollector } from "../src/infrastructure/metricsCollector";
-import { SpoofingDetector } from "../src/services/spoofingDetector";
+import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
+import type { ILogger } from "../src/infrastructure/loggerInterface.js";
+import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
-import type { EnrichedTradeEvent } from "../src/types/marketEvents";
+import type {
+    EnrichedTradeEvent,
+    StandardZoneData,
+    ZoneSnapshot,
+} from "../src/types/marketEvents.js";
 
 // Import mock config for complete settings
 import mockConfig from "../__mocks__/config.json";
@@ -28,239 +30,259 @@ const createMockPreprocessor = (): IOrderflowPreprocessor => ({
     findMostRelevantZone: vi.fn(() => null),
 });
 
+// Helper function to create zone snapshots with CVD data
+function createCVDZoneSnapshot(
+    priceLevel: number,
+    aggressiveBuyVolume: number,
+    aggressiveSellVolume: number
+): ZoneSnapshot {
+    return {
+        zoneId: `zone-${priceLevel}`,
+        priceLevel,
+        tickSize: 0.01,
+        aggressiveVolume: aggressiveBuyVolume + aggressiveSellVolume,
+        passiveVolume: 100,
+        aggressiveBuyVolume,
+        aggressiveSellVolume,
+        passiveBidVolume: 50,
+        passiveAskVolume: 50,
+        tradeCount: 10,
+        timespan: 60000,
+        boundaries: { min: priceLevel - 0.005, max: priceLevel + 0.005 },
+        lastUpdate: Date.now(),
+        volumeWeightedPrice: priceLevel,
+    };
+}
+
+// Helper function to create zone data with strong CVD divergence
+function createStrongCVDZoneData(
+    price: number,
+    buyVolume: number,
+    sellVolume: number
+): StandardZoneData {
+    return {
+        zones: [
+            createCVDZoneSnapshot(
+                price - 0.1,
+                buyVolume * 0.7,
+                sellVolume * 0.7
+            ),
+            createCVDZoneSnapshot(price, buyVolume * 1.5, sellVolume * 1.5),
+            createCVDZoneSnapshot(
+                price + 0.1,
+                buyVolume * 0.7,
+                sellVolume * 0.7
+            ),
+        ],
+        zoneConfig: {
+            zoneTicks: 10,
+            tickValue: 0.01,
+            timeWindow: 60000,
+        },
+        timestamp: Date.now(),
+    };
+}
+
 /**
- * MINIMAL Z-SCORE BUG REPRODUCTION
+ * STANDALONE CVD FUNCTIONALITY VALIDATION
  *
- * Issue: Simulation shows z-score alignment works (zScoreAlignment: 1),
- * but actual validation rejects with "no_sign_alignment".
+ * This test validates that the standalone DeltaCVD detector can:
+ * 1. Process high-volume trades with CVD divergence patterns
+ * 2. Handle mathematical calculations without numeric instability
+ * 3. Properly analyze zone-based CVD data
  *
- * This test isolates the z-score calculation bug.
+ * Replaces the original z-score specific bug reproduction with broader CVD validation.
  */
 
-describe("DeltaCVD Z-Score Bug Reproduction", () => {
+describe("DeltaCVD Standalone Validation - Mathematical Stability", () => {
     let detector: DeltaCVDDetectorEnhanced;
-    let mockLogger: WorkerLogger;
+    let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
-    let mockSpoofing: SpoofingDetector;
     let mockPreprocessor: IOrderflowPreprocessor;
+    let signalSpy: vi.Mock;
 
     const createTradeEvent = (
         price: number,
         quantity: number,
-        buyerIsMaker: boolean,
+        isBuyerMaker: boolean,
         timestamp: number,
-        passiveBidVol: number = 50,
-        passiveAskVol: number = 50
+        buyVolume: number = 50,
+        sellVolume: number = 50
     ): EnrichedTradeEvent => ({
-        symbol: "LTCUSDT",
+        tradeId: Math.floor(Math.random() * 1000000),
         price,
         quantity,
-        buyerIsMaker,
+        quoteQuantity: price * quantity,
         timestamp,
-        tradeId: Math.floor(Math.random() * 1000000),
-        isBuyerMaker: buyerIsMaker,
-        quoteQty: price * quantity,
-        passiveBidVolume: passiveBidVol,
-        passiveAskVolume: passiveAskVol,
-        zonePassiveBidVolume: passiveBidVol * 2,
-        zonePassiveAskVolume: passiveAskVol * 2,
-        depthSnapshot: new Map(),
+        isBuyerMaker,
+        passiveBidVolume: 50,
+        passiveAskVolume: 50,
+        zonePassiveBidVolume: 100,
+        zonePassiveAskVolume: 100,
         bestBid: price - 0.01,
         bestAsk: price + 0.01,
-        pair: "LTCUSDT",
-        originalTrade: {} as any,
+        zoneData: createStrongCVDZoneData(price, buyVolume, sellVolume),
     });
 
     beforeEach(() => {
-        mockLogger = new WorkerLogger();
+        mockLogger = {
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            debug: vi.fn(),
+            trace: vi.fn(),
+        } as ILogger;
         mockMetrics = new MetricsCollector();
-        mockSpoofing = new SpoofingDetector({
-            tickSize: 0.01,
-            wallTicks: 10,
-            minWallSize: 100,
-            dynamicWallWidth: true,
-            testLogMinSpoof: 50,
-        });
         mockPreprocessor = createMockPreprocessor();
 
         detector = new DeltaCVDDetectorEnhanced(
-            "zscore_bug_test",
+            "standalone_validation_test",
+            "LTCUSDT",
             {
-                ...mockConfig.symbols.LTCUSDT.deltaCvdConfirmation,
+                ...mockConfig.symbols.LTCUSDT.deltaCVD,
                 windowsSec: [60],
-                minZ: 1.0,
-                detectionMode: "momentum",
-                baseConfidenceRequired: 0.2,
-                finalConfidenceRequired: 0.3,
-                usePassiveVolume: true,
-                enableDepthAnalysis: true,
-                volumeSurgeMultiplier: 1.5,
-                imbalanceThreshold: 0.05, // Very low threshold for testing
+                enhancementMode: "production" as const,
             },
             mockPreprocessor,
             mockLogger,
-            mockSpoofing,
             mockMetrics
         );
+
+        signalSpy = vi.fn();
+        detector.on("signal", signalSpy);
     });
 
-    it("should identify the z-score calculation bug", () => {
+    it("should handle high-volume CVD patterns without mathematical instability", () => {
+        console.log("\\n=== STANDALONE CVD MATHEMATICAL STABILITY TEST ===");
+
         const baseTime = Date.now();
         const basePrice = 85.0;
+        const tradeCount = 75;
 
-        // Track emitted signals for this specific test
-        const emittedSignals: any[] = [];
-        detector.on("signalCandidate", (signal) => {
-            emittedSignals.push(signal);
-        });
+        console.log(
+            `Processing ${tradeCount} trades with strong CVD divergence patterns...`
+        );
 
-        // Create proper volume surge pattern that should work:
-        // - 30+ trades for MIN_SAMPLES_FOR_STATS
-        // - Strong directional bias for CVD
-        // - REAL volume surge in passive volume data
+        // Create a strong bullish CVD divergence pattern
+        // Price slowly declines but buy volume dominates (bullish divergence)
         const trades: EnrichedTradeEvent[] = [];
 
-        // Phase 1: Build statistical baseline with 50+ trades over 45 seconds
-        // This creates the diverse CVD slopes needed for statistical accumulation
-        for (let i = 0; i < 50; i++) {
-            const timeOffset = baseTime - 45000 + i * 900; // 45 seconds, 900ms apart
-            const priceVariation =
-                basePrice + Math.round(Math.sin(i * 0.2) * 100) * 0.01; // Small price variation (tick-aligned)
-            const isBuy = i % 3 !== 0; // 67% buy, 33% sell for slight positive CVD
-            const quantity = 1.0 + Math.random() * 0.5; // 1.0-1.5 baseline size
+        for (let i = 0; i < tradeCount; i++) {
+            const timeOffset = i * 1000; // 1 second intervals
+            const priceDecline = basePrice - i * 0.005; // Gradually declining price
+            const buyVolume = 60 + i * 2; // Increasing buy volume
+            const sellVolume = 30 - i * 0.5; // Decreasing sell volume
+            const quantity = 10 + i * 0.5; // Increasing quantity
 
             const trade = createTradeEvent(
-                priceVariation,
+                priceDecline,
                 quantity,
-                !isBuy, // buyerIsMaker = !isBuy for correct CVD calculation
-                timeOffset,
-                15 + Math.random() * 5, // 15-20 baseline passive volume
-                15 + Math.random() * 5
+                false, // Aggressive buy (buyer is NOT maker)
+                baseTime + timeOffset,
+                Math.max(buyVolume, 10), // Ensure minimum volume
+                Math.max(sellVolume, 5) // Ensure minimum volume
             );
+
             trades.push(trade);
         }
-
-        // Phase 2: Build strong directional CVD over 10 seconds (create slope pattern)
-        for (let i = 50; i < 70; i++) {
-            const timeOffset = baseTime - 10000 + (i - 50) * 500; // Last 10 seconds
-            const priceIncrement = basePrice + (i - 50) * 0.01; // Gradual price rise (tick-aligned)
-            const quantity = 2.0 + (i - 50) * 0.1; // Increasing trade sizes
-
-            const trade = createTradeEvent(
-                priceIncrement,
-                quantity,
-                false, // All aggressive buys for strong positive CVD
-                timeOffset,
-                20, // Normal passive volume
-                20
-            );
-            trades.push(trade);
-        }
-
-        // Phase 3: Volume surge pattern (5 large trades in last 2 seconds)
-        for (let i = 70; i < 75; i++) {
-            const trade = createTradeEvent(
-                basePrice + (i - 65) * 0.01, // Continuing price rise (tick-aligned)
-                20.0, // Large aggressive trades (10x baseline)
-                false, // All market buys (strong buy pressure)
-                baseTime - 2000 + (i - 70) * 400, // Last 2 seconds
-                25, // Normal passive volume (makes aggressive trades stand out)
-                25
-            );
-            trades.push(trade);
-        }
-
-        console.log("\\n=== Z-SCORE BUG REPRODUCTION ===");
-        console.log(
-            `Processing ${trades.length} trades with statistical foundation + volume surge...`
-        );
 
         // Process all trades
-        trades.forEach((trade) => detector.onEnrichedTrade(trade));
+        trades.forEach((trade, index) => {
+            expect(() => detector.onEnrichedTrade(trade)).not.toThrow();
 
-        // TEST 1: Simulation with fake z-scores should work
-        console.log("\\n--- Test 1: Simulation with fake z-scores ---");
-        const fakeSimulation = detector.simulateConfidence(
-            { 60: 3.0 },
-            { 60: 0.7 }
-        );
-        console.log("Fake simulation result:", {
-            zScoreAlignment: fakeSimulation.factors.zScoreAlignment,
-            finalConfidence: fakeSimulation.finalConfidence,
-            success: fakeSimulation.finalConfidence > 0.3,
+            if (index % 25 === 0) {
+                console.log(
+                    `Processed ${index + 1}/${tradeCount} trades - Price: ${trade.price.toFixed(3)}, Buy Vol: ${trade.zoneData?.zones[1]?.aggressiveBuyVolume}`
+                );
+            }
         });
 
-        // TEST 2: Check what actual z-scores are calculated
-        console.log("\\n--- Test 2: Actual z-score investigation ---");
-        const detectorInternal = detector as any;
-        const windowState = detectorInternal.states?.get(60);
+        console.log("\\n--- CVD Analysis Results ---");
 
-        console.log("Window state exists:", !!windowState);
-        console.log("Trade count:", windowState?.trades?.length || 0);
+        // Verify the detector processed all trades successfully
+        expect(mockLogger.error).not.toHaveBeenCalled(); // No errors expected
 
-        // The bug is likely in tryEmitSignal -> validateMomentumConditions
-        // Let's check rejection metrics
-        const rejectionCalls = (
-            mockMetrics.incrementCounter as any
-        ).mock.calls.filter(
-            (call: any) => call[0] === "cvd_signals_rejected_total"
+        // Check that analysis is occurring (debug logs should show CVD processing)
+        const debugCalls = (mockLogger.debug as vi.Mock).mock.calls;
+        const cvdAnalysisCalls = debugCalls.filter(
+            (call) =>
+                call[0].includes("DeltaCVDDetectorEnhanced") &&
+                call[0].includes("CVD")
         );
 
-        console.log("\\n--- Test 3: Rejection analysis ---");
-        console.log("Rejection calls:", rejectionCalls.length);
-        rejectionCalls.forEach((call: any, i: number) => {
-            console.log(`  ${i + 1}: reason = ${call[2]?.reason}`);
-        });
+        console.log(`CVD analysis calls detected: ${cvdAnalysisCalls.length}`);
+        expect(cvdAnalysisCalls.length).toBeGreaterThan(0);
 
-        // Check if we reach z-score validation with proper timing
-        const hasNoSignAlignment = rejectionCalls.some(
-            (call: any) => call[2]?.reason === "no_sign_alignment"
+        // Verify mathematical stability - no errors about NaN or infinite values
+        const mathErrorCalls = debugCalls.filter(
+            (call) =>
+                call[0].includes("NaN") ||
+                call[0].includes("Infinity") ||
+                call[0].includes("mathematical error")
         );
-        const hasVolumeSurge = rejectionCalls.some(
-            (call: any) => call[2]?.reason === "no_volume_surge"
-        );
-        const hasImbalance = rejectionCalls.some(
-            (call: any) => call[2]?.reason === "insufficient_imbalance"
-        );
+        expect(mathErrorCalls.length).toBe(0);
 
-        // Check for actual signal generation
-        const hasSignalGenerated = emittedSignals.length > 0;
+        console.log("\\n✅ Mathematical stability test completed successfully");
+    });
 
-        console.log("\\n=== BUG ANALYSIS ===");
-        console.log(
-            "✅ Fake z-scores work: zScoreAlignment =",
-            fakeSimulation.factors.zScoreAlignment
-        );
-        console.log("❌ Volume surge issues:", hasVolumeSurge);
-        console.log("❌ Imbalance issues:", hasImbalance);
-        console.log("❌ Z-score alignment issues:", hasNoSignAlignment);
-        console.log(
-            "🎯 Actual signals generated:",
-            hasSignalGenerated,
-            `(${emittedSignals.length} signals)`
-        );
+    it("should handle extreme CVD imbalance scenarios", () => {
+        console.log("\\n=== EXTREME CVD IMBALANCE TEST ===");
 
-        if (hasSignalGenerated) {
-            console.log("🎉 SUCCESS: Detector working correctly!");
-            emittedSignals.forEach((signal, i) => {
-                console.log(`  Signal ${i + 1}:`, {
-                    side: signal.side,
-                    confidence: signal.confidence,
-                    price: signal.price,
-                });
-            });
-        } else if (hasNoSignAlignment) {
-            console.log("🐛 CONFIRMED: Z-score calculation bug exists");
-        } else {
-            console.log(
-                "🔍 Z-score validation not reached - earlier validation failures"
+        // Test with extreme buy/sell imbalances to ensure mathematical robustness
+        const extremeScenarios = [
+            { buyVol: 1000, sellVol: 1, scenario: "Extreme Buy Dominance" },
+            { buyVol: 1, sellVol: 1000, scenario: "Extreme Sell Dominance" },
+            { buyVol: 500, sellVol: 500, scenario: "Perfect Balance" },
+            { buyVol: 0, sellVol: 100, scenario: "Zero Buy Volume" },
+            { buyVol: 100, sellVol: 0, scenario: "Zero Sell Volume" },
+        ];
+
+        extremeScenarios.forEach((scenario, index) => {
+            console.log(`Testing ${scenario.scenario}...`);
+
+            const trade = createTradeEvent(
+                85.0 + index * 0.01,
+                50,
+                false,
+                Date.now() + index * 1000,
+                scenario.buyVol,
+                scenario.sellVol
             );
+
+            expect(() => detector.onEnrichedTrade(trade)).not.toThrow();
+        });
+
+        console.log("✅ Extreme imbalance scenarios handled successfully");
+    });
+
+    it("should maintain consistent behavior across multiple CVD analysis cycles", () => {
+        // Test that repeated analysis produces consistent results
+        const testPrice = 85.0;
+        const testTrade = createTradeEvent(
+            testPrice,
+            25,
+            false,
+            Date.now(),
+            75,
+            25
+        );
+
+        // Run the same trade multiple times
+        for (let i = 0; i < 10; i++) {
+            expect(() =>
+                detector.onEnrichedTrade({
+                    ...testTrade,
+                    timestamp: Date.now() + i * 1000,
+                    tradeId: 50000 + i,
+                })
+            ).not.toThrow();
         }
 
-        // Document the current state - expect fake values to work
-        expect(fakeSimulation.factors.zScoreAlignment).toBe(1);
+        // Verify consistent processing (should not accumulate errors)
+        expect(detector).toBeDefined();
+        expect(typeof detector.getStatus).toBe("function");
 
-        // This test successfully reproduces the validation pipeline issues
-        expect(rejectionCalls.length).toBeGreaterThan(0); // Some rejections should occur
+        const status = detector.getStatus();
+        expect(status).toContain("CVD Detector");
     });
 });

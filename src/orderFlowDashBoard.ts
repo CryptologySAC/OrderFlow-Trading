@@ -68,6 +68,7 @@ import { TradeData } from "./utils/interfaces.js";
 // Types
 import type { Dependencies } from "./core/dependencies.js";
 import type { Signal, ConfirmedSignal } from "./types/signalTypes.js";
+import type { ZoneUpdateEvent, ZoneSignalEvent } from "./types/zoneTypes.js";
 import type { ConnectivityIssue } from "./infrastructure/apiConnectivityMonitor.js";
 import type {
     TimeContext,
@@ -386,7 +387,7 @@ export class OrderFlowDashboard {
             );
         this.signalCoordinator.registerDetector(
             this.deltaCVDConfirmation,
-            ["cvd_confirmation"],
+            ["deltacvd"],
             500,
             true
         );
@@ -429,6 +430,9 @@ export class OrderFlowDashboard {
             true
         );
 
+        // Setup enhanced detector zone event listeners
+        this.setupEnhancedDetectorZoneEvents();
+
         // Start signal coordinator
         void this.signalCoordinator.start();
 
@@ -451,6 +455,117 @@ export class OrderFlowDashboard {
             void this.signalCoordinator.stop();
             process.exit(0);
         });
+    }
+
+    /**
+     * Setup zone event listeners for enhanced detectors
+     */
+    private setupEnhancedDetectorZoneEvents(): void {
+        // Accumulation Zone Detector Events
+        this.accumulationZoneDetector.on(
+            "zoneUpdate",
+            (update: ZoneUpdateEvent) => {
+                this.logger.debug("Accumulation zone update received", {
+                    updateType: update.updateType,
+                    zoneId: update.zone.id,
+                    confidence: update.zone.confidence,
+                });
+
+                // Broadcast zone update to clients
+                const message: WebSocketMessage = {
+                    type: "zoneUpdate",
+                    now: Date.now(),
+                    data: {
+                        updateType: update.updateType,
+                        zone: update.zone,
+                        significance: update.significance,
+                        detectorId: update.detectorId,
+                    },
+                };
+                this.threadManager.broadcast(message);
+            }
+        );
+
+        this.accumulationZoneDetector.on(
+            "zoneSignal",
+            (signal: ZoneSignalEvent) => {
+                this.logger.info("Accumulation zone signal received", {
+                    signalType: signal.signalType,
+                    actionType: signal.actionType,
+                    confidence: signal.confidence,
+                    zoneId: signal.zone.id,
+                });
+
+                // Broadcast zone signal to clients
+                const message: WebSocketMessage = {
+                    type: "zoneSignal",
+                    now: Date.now(),
+                    data: {
+                        signalType: signal.signalType,
+                        zone: signal.zone,
+                        actionType: signal.actionType,
+                        confidence: signal.confidence,
+                        urgency: signal.urgency,
+                        expectedDirection: signal.expectedDirection,
+                        detectorId: signal.detectorId,
+                    },
+                };
+                this.threadManager.broadcast(message);
+            }
+        );
+
+        // Distribution Zone Detector Events
+        this.distributionZoneDetector.on(
+            "zoneUpdate",
+            (update: ZoneUpdateEvent) => {
+                this.logger.debug("Distribution zone update received", {
+                    updateType: update.updateType,
+                    zoneId: update.zone.id,
+                    confidence: update.zone.confidence,
+                });
+
+                // Broadcast zone update to clients
+                const message: WebSocketMessage = {
+                    type: "zoneUpdate",
+                    now: Date.now(),
+                    data: {
+                        updateType: update.updateType,
+                        zone: update.zone,
+                        significance: update.significance,
+                        detectorId: update.detectorId,
+                    },
+                };
+                this.threadManager.broadcast(message);
+            }
+        );
+
+        this.distributionZoneDetector.on(
+            "zoneSignal",
+            (signal: ZoneSignalEvent) => {
+                this.logger.info("Distribution zone signal received", {
+                    signalType: signal.signalType,
+                    actionType: signal.actionType,
+                    confidence: signal.confidence,
+                    zoneId: signal.zone.id,
+                });
+
+                // Broadcast zone signal to clients
+                const message: WebSocketMessage = {
+                    type: "zoneSignal",
+                    now: Date.now(),
+                    data: {
+                        signalType: signal.signalType,
+                        zone: signal.zone,
+                        actionType: signal.actionType,
+                        confidence: signal.confidence,
+                        urgency: signal.urgency,
+                        expectedDirection: signal.expectedDirection,
+                        detectorId: signal.detectorId,
+                    },
+                };
+                this.threadManager.broadcast(message);
+            }
+        );
     }
 
     private DeltaCVDConfirmationCallback = (event: unknown): void => {

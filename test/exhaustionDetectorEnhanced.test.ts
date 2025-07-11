@@ -1,24 +1,26 @@
 // test/exhaustionDetectorEnhanced.test.ts
 //
-// ✅ EXHAUSTION PHASE 1: ExhaustionDetectorEnhanced comprehensive test suite
+// ✅ EXHAUSTION STANDALONE: ExhaustionDetectorEnhanced comprehensive test suite
 //
-// Tests cover the enhanced exhaustion detector with standardized zone integration,
+// Tests cover the standalone enhanced exhaustion detector without legacy dependencies,
 // including multi-timeframe analysis, liquidity depletion detection, and
 // cross-timeframe exhaustion validation.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ExhaustionDetectorEnhanced } from "../src/indicators/exhaustionDetectorEnhanced.js";
-import { Config } from "../src/core/config.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ISignalLogger } from "../src/infrastructure/signalLoggerInterface.js";
-import type { IOrderBookState } from "../src/market/orderBookState.js";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type {
     EnrichedTradeEvent,
     StandardZoneData,
     ZoneSnapshot,
 } from "../src/types/marketEvents.js";
+import type { SignalCandidate } from "../src/types/signalTypes.js";
+// Use proper mock from __mocks__/ directory as per CLAUDE.md
+import mockConfig from "../__mocks__/config.json";
+import { SpoofingDetector } from "../__mocks__/src/services/spoofingDetector.js";
 
 // Mock dependencies
 const mockLogger: ILogger = {
@@ -35,13 +37,15 @@ const mockMetricsCollector: IMetricsCollector = {
     recordHistogram: vi.fn(),
     recordTiming: vi.fn(),
     incrementMetric: vi.fn(),
+    updateMetric: vi.fn(),
     getMetrics: vi.fn(() => ({}) as any),
     cleanup: vi.fn(),
 };
 
 const mockSignalLogger: ISignalLogger = {
     logSignal: vi.fn(),
-    cleanup: vi.fn(),
+    logSignalCandidate: vi.fn(),
+    logSignalValidation: vi.fn(),
 };
 
 const mockPreprocessor: IOrderflowPreprocessor = {
@@ -52,262 +56,92 @@ const mockPreprocessor: IOrderflowPreprocessor = {
         processedDepthUpdates: 0,
         bookMetrics: {} as any,
     })),
-    findZonesNearPrice: vi.fn(() => []),
-    calculateZoneRelevanceScore: vi.fn(() => 0.5),
-    findMostRelevantZone: vi.fn(() => null),
+    findZonesNearPrice: vi.fn(() => [
+        {
+            priceLevel: 100.0,
+            aggressiveVolume: 50,
+            passiveVolume: 10, // Low passive for exhaustion
+            aggressiveBuyVolume: 10, // Low buy volume
+            aggressiveSellVolume: 40, // High sell volume (triggers buy signal)
+            tradeCount: 8,
+            strength: 0.9,
+            timestamp: Date.now(),
+        },
+    ]),
+    calculateZoneRelevanceScore: vi.fn(() => 0.8),
+    findMostRelevantZone: vi.fn(() => ({
+        priceLevel: 100.0,
+        aggressiveVolume: 50,
+        passiveVolume: 10,
+        aggressiveBuyVolume: 10,
+        aggressiveSellVolume: 40,
+        tradeCount: 8,
+        strength: 0.9,
+        timestamp: Date.now(),
+    })),
 };
 
-const mockSpoofingDetector = {
-    analyzeOrderPlacement: vi.fn(),
-    cleanup: vi.fn(),
-};
+// Use proper mock from __mocks__/ directory as per CLAUDE.md
+let mockSpoofingDetector: SpoofingDetector;
 
-const mockOrderBook: IOrderBookState = {
-    getBestBid: vi.fn(() => 88.5),
-    getBestAsk: vi.fn(() => 88.6),
-    getSpread: vi.fn(() => 0.1),
-    getMidPrice: vi.fn(() => 88.55),
-    getBookLevel: vi.fn(),
-    getBidAskImbalance: vi.fn(() => 0.5),
-    updateFromTrade: vi.fn(),
-    updateFromDepth: vi.fn(),
-    cleanup: vi.fn(),
-    getLastUpdateAge: vi.fn(() => 100),
-} as unknown as IOrderBookState;
-
-// Helper function to create zone snapshots
-function createZoneSnapshot(
-    priceLevel: number,
-    multiplier: number
-): ZoneSnapshot {
-    return {
-        zoneId: `zone-${priceLevel}-${multiplier}`,
-        priceLevel,
-        tickSize: 0.01,
-        aggressiveVolume: 50 * multiplier,
-        passiveVolume: 100 * multiplier,
-        aggressiveBuyVolume: 25 * multiplier,
-        aggressiveSellVolume: 25 * multiplier,
-        passiveBidVolume: 50 * multiplier,
-        passiveAskVolume: 50 * multiplier,
-        tradeCount: 10 * multiplier,
-        timespan: 60000,
-        boundaries: { min: priceLevel - 0.005, max: priceLevel + 0.005 },
-        lastUpdate: Date.now(),
-        volumeWeightedPrice: priceLevel,
-    };
-}
-
-// Helper function to create standardized zone data
-function createStandardizedZoneData(price: number): StandardZoneData {
-    return {
-        zones5Tick: [
-            createZoneSnapshot(price - 0.05, 1),
-            createZoneSnapshot(price, 2),
-            createZoneSnapshot(price + 0.05, 1),
-        ],
-        zones10Tick: [
-            createZoneSnapshot(price - 0.1, 1.5),
-            createZoneSnapshot(price, 2.5),
-            createZoneSnapshot(price + 0.1, 1.5),
-        ],
-        zones20Tick: [
-            createZoneSnapshot(price - 0.2, 2),
-            createZoneSnapshot(price, 3),
-            createZoneSnapshot(price + 0.2, 2),
-        ],
-    };
-}
-
-// Helper function to create enriched trade events
+// Helper function to create enriched trade events with complete zone data
 function createEnrichedTradeEvent(
     price: number,
     quantity: number,
-    isBuy: boolean
+    isBuy: boolean,
+    zoneData?: StandardZoneData
 ): EnrichedTradeEvent {
+    const defaultZoneData: StandardZoneData = zoneData || {
+        zones: [
+            {
+                priceLevel: price,
+                aggressiveVolume: 50,
+                passiveVolume: 10, // Low passive for exhaustion
+                aggressiveBuyVolume: 10, // Low buy volume
+                aggressiveSellVolume: 40, // High sell volume
+                tradeCount: 8,
+                strength: 0.9,
+                timestamp: Date.now(),
+            },
+        ],
+        zoneConfig: {
+            zoneTicks: 10,
+            tickValue: 0.01,
+            timeWindow: 60000,
+        },
+    };
+
     return {
-        id: `test-trade-${Date.now()}`,
-        symbol: "LTCUSDT",
+        tradeId: `test-trade-${Date.now()}`,
         price,
         quantity,
-        side: isBuy ? "buy" : "sell",
         timestamp: Date.now(),
-        isBuyerMaker: !isBuy,
-        zoneData: createStandardizedZoneData(price),
-        // Add required fields for EnrichedTradeEvent
-        passiveBidVolume: 100,
-        passiveAskVolume: 100,
-        bookImbalance: 0.5,
-        spread: 0.01,
-        midPrice: price,
-    } as EnrichedTradeEvent;
+        buyerIsMaker: !isBuy, // Aggressive side
+        totalVolume: 100,
+        passiveBidVolume: 20,
+        passiveAskVolume: 30,
+        aggressiveBuyVolume: isBuy ? quantity : 0,
+        aggressiveSellVolume: !isBuy ? quantity : 0,
+        spread: 0.05,
+        midPrice: price + 0.025,
+        imbalance: isBuy ? 0.6 : -0.6,
+        zoneData: defaultZoneData,
+    };
 }
 
-// MOCK Config BEFORE any imports to prevent constructor issues
-vi.mock("../src/core/config.js", async (importOriginal) => {
-    const actual = (await importOriginal()) as any;
-    return {
-        ...actual,
-        Config: {
-            get EXHAUSTION_DETECTOR() {
-                return {
-                    // ALL 51+ ExhaustionDetectorSchema properties - COMPLETE COMPLIANCE
-                    minAggVolume: 20,
-                    windowMs: 45000,
-                    pricePrecision: 2,
-                    zoneTicks: 3,
-                    eventCooldownMs: 10000,
-                    minInitialMoveTicks: 1,
-                    confirmationTimeoutMs: 40000,
-                    maxRevisitTicks: 8,
-                    volumeSurgeMultiplier: 2.0,
-                    imbalanceThreshold: 0.3,
-                    institutionalThreshold: 15,
-                    burstDetectionMs: 2000,
-                    sustainedVolumeMs: 20000,
-                    medianTradeSize: 0.8,
-                    exhaustionThreshold: 0.3,
-                    maxPassiveRatio: 0.35,
-                    minDepletionFactor: 0.2,
-                    imbalanceHighThreshold: 0.75,
-                    imbalanceMediumThreshold: 0.55,
-                    spreadHighThreshold: 0.004,
-                    spreadMediumThreshold: 0.0015,
-                    scoringWeights: {
-                        depletion: 0.45,
-                        passive: 0.3,
-                        continuity: 0.12,
-                        imbalance: 0.08,
-                        spread: 0.04,
-                        velocity: 0.01,
-                    },
-                    depletionThresholdRatio: 0.15,
-                    significantChangeThreshold: 0.08,
-                    highQualitySampleCount: 6,
-                    highQualityDataAge: 35000,
-                    mediumQualitySampleCount: 3,
-                    mediumQualityDataAge: 70000,
-                    circuitBreakerMaxErrors: 8,
-                    circuitBreakerWindowMs: 90000,
-                    lowScoreConfidenceAdjustment: 0.7,
-                    lowVolumeConfidenceAdjustment: 0.8,
-                    invalidSurgeConfidenceAdjustment: 0.8,
-                    passiveConsistencyThreshold: 0.7,
-                    imbalanceNeutralThreshold: 0.1,
-                    velocityMinBound: 0.1,
-                    velocityMaxBound: 10,
-                    maxZones: 75,
-                    zoneAgeLimit: 1200000,
-                    features: {
-                        depletionTracking: true,
-                        spreadAdjustment: true,
-                        volumeVelocity: false,
-                        spoofingDetection: true,
-                        adaptiveZone: true,
-                        multiZone: false,
-                        passiveHistory: true,
-                    },
-                    useStandardizedZones: true,
-                    enhancementMode: "production",
-                    minEnhancedConfidenceThreshold: 0.3,
-                    depletionVolumeThreshold: 30,
-                    depletionRatioThreshold: 0.6,
-                    varianceReductionFactor: 1,
-                    alignmentNormalizationFactor: 1,
-                    distanceNormalizationDivisor: 2,
-                    passiveVolumeExhaustionRatio: 0.5,
-                    aggressiveVolumeExhaustionThreshold: 0.7,
-                    aggressiveVolumeReductionFactor: 0.5,
-                    enableDepletionAnalysis: true,
-                    depletionConfidenceBoost: 0.1,
-                };
-            },
-        },
-    };
-});
-
-describe("ExhaustionDetectorEnhanced - Nuclear Cleanup Reality", () => {
+describe("ExhaustionDetectorEnhanced - Standalone Architecture", () => {
     let enhancedDetector: ExhaustionDetectorEnhanced;
-
-    // Mock Config.EXHAUSTION_DETECTOR - COMPLETE Zod schema compliance
-    const mockExhaustionConfig = {
-        // ALL ExhaustionDetectorSchema properties (complete from Zod schema)
-        minAggVolume: 20,
-        windowMs: 45000,
-        pricePrecision: 2,
-        zoneTicks: 3,
-        eventCooldownMs: 10000,
-        minInitialMoveTicks: 1,
-        confirmationTimeoutMs: 40000,
-        maxRevisitTicks: 8,
-        volumeSurgeMultiplier: 2.0,
-        imbalanceThreshold: 0.3,
-        institutionalThreshold: 15,
-        burstDetectionMs: 2000,
-        sustainedVolumeMs: 20000,
-        medianTradeSize: 0.8,
-        exhaustionThreshold: 0.3,
-        maxPassiveRatio: 0.35,
-        minDepletionFactor: 0.2,
-        imbalanceHighThreshold: 0.75,
-        imbalanceMediumThreshold: 0.55,
-        spreadHighThreshold: 0.004,
-        spreadMediumThreshold: 0.0015,
-        scoringWeights: {
-            depletion: 0.45,
-            passive: 0.3,
-            continuity: 0.12,
-            imbalance: 0.08,
-            spread: 0.04,
-            velocity: 0.01,
-        },
-        depletionThresholdRatio: 0.15,
-        significantChangeThreshold: 0.08,
-        highQualitySampleCount: 6,
-        highQualityDataAge: 35000,
-        mediumQualitySampleCount: 3,
-        mediumQualityDataAge: 70000,
-        circuitBreakerMaxErrors: 8,
-        circuitBreakerWindowMs: 90000,
-        lowScoreConfidenceAdjustment: 0.7,
-        lowVolumeConfidenceAdjustment: 0.8,
-        invalidSurgeConfidenceAdjustment: 0.8,
-        passiveConsistencyThreshold: 0.7,
-        imbalanceNeutralThreshold: 0.1,
-        velocityMinBound: 0.1,
-        velocityMaxBound: 10,
-        maxZones: 75,
-        zoneAgeLimit: 1200000,
-        features: {
-            depletionTracking: true,
-            spreadAdjustment: true,
-            volumeVelocity: false,
-            spoofingDetection: true,
-            adaptiveZone: true,
-            multiZone: false,
-            passiveHistory: true,
-        },
-        useStandardizedZones: true,
-        enhancementMode: "production" as const,
-        minEnhancedConfidenceThreshold: 0.3,
-        depletionVolumeThreshold: 30,
-        depletionRatioThreshold: 0.6,
-        varianceReductionFactor: 1,
-        alignmentNormalizationFactor: 1,
-        distanceNormalizationDivisor: 2,
-        passiveVolumeExhaustionRatio: 0.5,
-        aggressiveVolumeExhaustionThreshold: 0.7,
-        aggressiveVolumeReductionFactor: 0.5,
-        enableDepletionAnalysis: true,
-        depletionConfidenceBoost: 0.1,
-    };
+    const exhaustionConfig = mockConfig.symbols.LTCUSDT.exhaustion as any;
 
     beforeEach(() => {
         vi.clearAllMocks();
 
+        // Use proper mock from __mocks__/ directory as per CLAUDE.md
+        mockSpoofingDetector = new SpoofingDetector();
+
         enhancedDetector = new ExhaustionDetectorEnhanced(
             "test-enhanced-exhaustion",
-            mockExhaustionConfig,
+            exhaustionConfig,
             mockPreprocessor,
             mockLogger,
             mockSpoofingDetector,
@@ -316,214 +150,326 @@ describe("ExhaustionDetectorEnhanced - Nuclear Cleanup Reality", () => {
         );
     });
 
-    describe("Pure Wrapper Architecture", () => {
-        it("should be a pure wrapper around ExhaustionDetector with no defaults", () => {
-            // Verify detector is initialized from Config with no internal defaults
+    describe("Standalone Architecture", () => {
+        it("should extend Detector base class directly (not ExhaustionDetector)", () => {
             expect(enhancedDetector).toBeDefined();
-            // Config.EXHAUSTION_DETECTOR is a getter, not a spy - verify it exists
-            expect(Config.EXHAUSTION_DETECTOR).toBeDefined();
+            expect(enhancedDetector.getId()).toBe("test-enhanced-exhaustion");
+            expect(enhancedDetector.getStatus()).toContain(
+                "Exhaustion Enhanced"
+            );
         });
 
-        it("should use config-driven initialization with no fallbacks", () => {
-            // Verify it uses production config from Config.EXHAUSTION_DETECTOR
-            expect(mockExhaustionConfig.enhancementMode).toBe("production");
-            expect(mockExhaustionConfig.useStandardizedZones).toBe(true);
-            expect(mockExhaustionConfig.minAggVolume).toBe(20);
+        it("should implement required abstract methods", () => {
+            expect(typeof enhancedDetector.getStatus).toBe("function");
+            expect(typeof enhancedDetector.markSignalConfirmed).toBe(
+                "function"
+            );
+            expect(typeof enhancedDetector.getId).toBe("function");
+            expect(typeof enhancedDetector.onEnrichedTrade).toBe("function");
         });
 
-        it("should delegate all functionality to underlying detector", () => {
-            const tradeEvent = createEnrichedTradeEvent(89.0, 25, true);
-
-            expect(() =>
-                enhancedDetector.onEnrichedTrade(tradeEvent)
-            ).not.toThrow();
-
-            // Verify it's working as a pure wrapper - delegate processes the trade
-            expect(mockMetricsCollector.incrementMetric).toHaveBeenCalled();
-        });
-
-        it("should require all mandatory configuration properties", () => {
-            // Test that enhanced detector cannot be created without proper config
-            // NOTE: Enhanced detectors now use Config.EXHAUSTION_DETECTOR getter for validation
-            // This test validates the nuclear cleanup pattern where missing config causes crash
-
-            // Mock Config.EXHAUSTION_DETECTOR to return incomplete config
-            const originalSpy = vi.spyOn(Config, "EXHAUSTION_DETECTOR", "get");
-            originalSpy.mockImplementation(() => {
-                throw new Error("Missing required configuration properties");
-            });
-
-            expect(() => {
-                new ExhaustionDetectorEnhanced(
-                    "test-no-config",
-                    {} as any, // This shouldn't matter since Config getter is used
-                    mockPreprocessor,
-                    mockLogger,
-                    mockSpoofingDetector,
-                    mockMetricsCollector,
-                    mockSignalLogger
-                );
-            }).toThrow();
-
-            // Restore original implementation
-            originalSpy.mockRestore();
+        it("should have cleanup method for resource management", () => {
+            expect(typeof enhancedDetector.cleanup).toBe("function");
+            expect(() => enhancedDetector.cleanup()).not.toThrow();
         });
     });
 
     describe("Configuration Validation", () => {
+        it("should use configuration from config.json", () => {
+            expect(exhaustionConfig.minAggVolume).toBe(15);
+            expect(exhaustionConfig.enhancementMode).toBe("production");
+            expect(exhaustionConfig.useStandardizedZones).toBe(true);
+        });
+
         it("should validate all required threshold properties", () => {
-            // Verify that all critical thresholds are present in config
-            expect(mockExhaustionConfig.exhaustionThreshold).toBeDefined();
-            expect(mockExhaustionConfig.volumeSurgeMultiplier).toBeDefined();
-            expect(mockExhaustionConfig.imbalanceThreshold).toBeDefined();
-            expect(mockExhaustionConfig.minAggVolume).toBeDefined();
+            expect(exhaustionConfig.depletionVolumeThreshold).toBeDefined();
+            expect(exhaustionConfig.depletionRatioThreshold).toBeDefined();
+            expect(
+                exhaustionConfig.minEnhancedConfidenceThreshold
+            ).toBeDefined();
         });
 
-        it("should use production-grade thresholds from config", () => {
-            // Verify production config values match expected institutional standards
-            expect(mockExhaustionConfig.minAggVolume).toBe(20);
-            expect(mockExhaustionConfig.exhaustionThreshold).toBe(0.3);
-            expect(mockExhaustionConfig.enhancementMode).toBe("production");
-        });
-
-        it("should reject configuration with missing mandatory properties", () => {
-            // Mock Config.EXHAUSTION_DETECTOR to simulate Zod validation failure
-            const originalSpy = vi.spyOn(Config, "EXHAUSTION_DETECTOR", "get");
-            originalSpy.mockImplementation(() => {
-                // Simulate Zod validation throwing on incomplete config
-                throw new Error("ZodError: Required property missing");
-            });
-
-            expect(() => {
-                new ExhaustionDetectorEnhanced(
-                    "test-incomplete",
-                    {} as any, // Config comes from Config getter, not constructor parameter
-                    mockPreprocessor,
-                    mockLogger,
-                    mockSpoofingDetector,
-                    mockMetricsCollector,
-                    mockSignalLogger
-                );
-            }).toThrow();
-
-            originalSpy.mockRestore();
-        });
-    });
-
-    describe("Zero Tolerance Configuration Testing", () => {
-        it("should crash immediately on invalid configuration values", () => {
-            // Mock Config.EXHAUSTION_DETECTOR to simulate Zod validation failure on invalid values
-            const originalSpy = vi.spyOn(Config, "EXHAUSTION_DETECTOR", "get");
-            originalSpy.mockImplementation(() => {
-                // Simulate Zod validation throwing on invalid threshold value
-                throw new Error(
-                    "ZodError: exhaustionThreshold must be between 0 and 1"
-                );
-            });
-
+        it("should reject invalid configuration", () => {
             expect(() => {
                 new ExhaustionDetectorEnhanced(
                     "test-invalid",
-                    {} as any, // Config validation happens in Config getter
+                    {} as any, // Missing required properties
                     mockPreprocessor,
                     mockLogger,
                     mockSpoofingDetector,
                     mockMetricsCollector,
                     mockSignalLogger
                 );
-            }).toThrow();
-
-            originalSpy.mockRestore();
-        });
-
-        it("should require all numeric thresholds to be within valid ranges", () => {
-            // Verify all thresholds are within institutional-grade ranges
-            expect(mockExhaustionConfig.exhaustionThreshold).toBeGreaterThan(0);
-            expect(
-                mockExhaustionConfig.exhaustionThreshold
-            ).toBeLessThanOrEqual(1);
-            expect(mockExhaustionConfig.minAggVolume).toBeGreaterThan(0);
-            expect(mockExhaustionConfig.windowMs).toBeGreaterThan(0);
+            }).toThrow("Missing required configuration properties");
         });
     });
 
-    describe("Pure Wrapper Functionality", () => {
-        it("should delegate all trade processing to underlying detector", () => {
-            const largeVolumeEvent = createEnrichedTradeEvent(89.0, 30, true);
+    describe("Signal Generation", () => {
+        it("should emit signals with correct type and structure", (done) => {
+            const signalCaptures: SignalCandidate[] = [];
 
+            enhancedDetector.on("signal", (signal: SignalCandidate) => {
+                signalCaptures.push(signal);
+
+                try {
+                    expect(signal.type).toBe("exhaustion");
+                    expect(signal.side).toMatch(/^(buy|sell)$/);
+                    expect(signal.confidence).toBeGreaterThan(0);
+                    expect(signal.confidence).toBeLessThanOrEqual(1);
+                    expect(signal.timestamp).toBeTypeOf("number");
+                    expect(signal.id).toContain("core-exhaustion");
+                    expect(signal.data).toBeDefined();
+
+                    done();
+                } catch (error) {
+                    done(error);
+                }
+            });
+
+            // Create exhaustion scenario
+            const exhaustionTrade = createEnrichedTradeEvent(100.0, 50, false); // Large sell
+            enhancedDetector.onEnrichedTrade(exhaustionTrade);
+        });
+
+        it("should calculate confidence correctly", (done) => {
+            enhancedDetector.on("signal", (signal: SignalCandidate) => {
+                try {
+                    // With our test data: aggressiveRatio ~0.833 + zoneBoost 0.1 = ~0.933
+                    expect(signal.confidence).toBeGreaterThan(0.7);
+                    expect(signal.confidence).toBeLessThanOrEqual(1.0);
+                    done();
+                } catch (error) {
+                    done(error);
+                }
+            });
+
+            const trade = createEnrichedTradeEvent(100.0, 50, false);
+            enhancedDetector.onEnrichedTrade(trade);
+        });
+
+        it("should determine signal side based on buy/sell volume ratio", (done) => {
+            enhancedDetector.on("signal", (signal: SignalCandidate) => {
+                try {
+                    // With aggressiveBuyVolume: 10, aggressiveSellVolume: 40
+                    // buyRatio = 10/50 = 0.2 < 0.35, should return "buy"
+                    expect(signal.side).toBe("buy");
+                    done();
+                } catch (error) {
+                    done(error);
+                }
+            });
+
+            const trade = createEnrichedTradeEvent(100.0, 50, false);
+            enhancedDetector.onEnrichedTrade(trade);
+        });
+    });
+
+    describe("Zone-Based Analysis", () => {
+        it("should require zone data for processing", () => {
+            const tradeWithoutZones = createEnrichedTradeEvent(
+                100.0,
+                50,
+                false
+            );
+            tradeWithoutZones.zoneData = undefined;
+
+            // Should skip processing without throwing
             expect(() =>
-                enhancedDetector.onEnrichedTrade(largeVolumeEvent)
+                enhancedDetector.onEnrichedTrade(tradeWithoutZones)
             ).not.toThrow();
 
-            // Should process the trade through the underlying ExhaustionDetector
-            expect(mockMetricsCollector.incrementMetric).toHaveBeenCalled();
-        });
-    });
-
-    describe("Nuclear Cleanup Compliance Testing", () => {
-        it("should have no internal default methods", () => {
-            // Verify the enhanced detector has no getDefault* methods
-            const detectorMethods = Object.getOwnPropertyNames(
-                Object.getPrototypeOf(enhancedDetector)
+            // Should log warning about skipped processing
+            expect(mockLogger.warn).toHaveBeenCalledWith(
+                expect.stringContaining("Skipping trade processing"),
+                expect.objectContaining({
+                    reason: "no_zone_data",
+                })
             );
-            const defaultMethods = detectorMethods.filter((method) =>
-                method.startsWith("getDefault")
-            );
-            expect(defaultMethods).toHaveLength(0);
         });
 
-        it("should have no fallback operators in configuration usage", () => {
-            // Test verifies that no ?? or || operators are used for config values
-            expect(mockExhaustionConfig.exhaustionThreshold).toBeDefined();
-            expect(mockExhaustionConfig.minAggVolume).toBeDefined();
-            expect(mockExhaustionConfig.enhancementMode).toBeDefined();
-        });
-    });
+        it("should analyze exhaustion patterns in zones", () => {
+            const trade = createEnrichedTradeEvent(100.0, 50, false);
 
-    describe("Institutional Grade Standards", () => {
-        it("should enforce production-grade configuration values", () => {
-            // Verify that config contains institutional-grade thresholds
-            expect(mockExhaustionConfig.minAggVolume).toBeGreaterThanOrEqual(
-                10
-            );
-            expect(
-                mockExhaustionConfig.exhaustionThreshold
-            ).toBeGreaterThanOrEqual(0.1);
-            expect(mockExhaustionConfig.enhancementMode).toBe("production");
-        });
-    });
-
-    describe("Production Safety", () => {
-        it("should be a reliable wrapper with no internal complexity", () => {
-            const trade = createEnrichedTradeEvent(89.0, 25, true);
-
-            // Should not throw - pure wrapper should be extremely stable
             expect(() => enhancedDetector.onEnrichedTrade(trade)).not.toThrow();
 
-            // Should delegate to underlying detector
-            expect(mockMetricsCollector.incrementMetric).toHaveBeenCalled();
+            // Should call preprocessor to find zones near price
+            expect(mockPreprocessor.findZonesNearPrice).toHaveBeenCalled();
         });
 
-        it("should provide cleanup without internal state", () => {
-            expect(() => enhancedDetector.cleanup()).not.toThrow();
+        it("should skip processing when standardized zones are disabled", () => {
+            const disabledConfig = {
+                ...exhaustionConfig,
+                useStandardizedZones: false,
+            };
 
-            // Pure wrapper should have minimal cleanup since it has no internal state
-            expect(mockLogger.info).toHaveBeenCalled();
+            const detectorWithDisabledZones = new ExhaustionDetectorEnhanced(
+                "test-disabled-zones",
+                disabledConfig,
+                mockPreprocessor,
+                mockLogger,
+                mockSpoofingDetector,
+                mockMetricsCollector,
+                mockSignalLogger
+            );
+
+            const trade = createEnrichedTradeEvent(100.0, 50, false);
+
+            expect(() =>
+                detectorWithDisabledZones.onEnrichedTrade(trade)
+            ).not.toThrow();
+
+            // Should log warning about zones being disabled
+            expect(mockLogger.warn).toHaveBeenCalledWith(
+                expect.stringContaining("Skipping trade processing"),
+                expect.objectContaining({
+                    reason: "zones_disabled",
+                })
+            );
         });
     });
 
-    describe("Zero Defaults Verification", () => {
-        it("should never use defaults - all config must be explicit", () => {
-            // This test verifies the nuclear cleanup principle:
-            // Enhanced detectors CANNOT have any default values
+    describe("Volume and Ratio Thresholds", () => {
+        it("should reject trades below minimum volume threshold", () => {
+            const lowVolumeTrade = createEnrichedTradeEvent(100.0, 5, false); // Below minAggVolume: 15
 
-            // Verify that the detector uses explicit configuration values
-            expect(mockExhaustionConfig.exhaustionThreshold).toBeDefined();
-            expect(mockExhaustionConfig.minAggVolume).toBeDefined();
-            expect(mockExhaustionConfig.enhancementMode).toBe("production");
+            expect(() =>
+                enhancedDetector.onEnrichedTrade(lowVolumeTrade)
+            ).not.toThrow();
 
-            // Verify the detector was created with explicit configuration
-            expect(enhancedDetector).toBeDefined();
+            // Should not emit any signals for low volume
+            const signalCaptures: SignalCandidate[] = [];
+            enhancedDetector.on("signal", (signal) =>
+                signalCaptures.push(signal)
+            );
+
+            enhancedDetector.onEnrichedTrade(lowVolumeTrade);
+
+            // Wait for potential async processing
+            setTimeout(() => {
+                expect(signalCaptures).toHaveLength(0);
+            }, 50);
+        });
+
+        it("should detect exhaustion when aggressive volume exceeds thresholds", (done) => {
+            enhancedDetector.on("signal", (signal: SignalCandidate) => {
+                try {
+                    expect(signal.type).toBe("exhaustion");
+                    expect(signal.data).toMatchObject({
+                        aggressive: expect.any(Number),
+                        exhaustionScore: expect.any(Number),
+                        confidence: expect.any(Number),
+                        side: expect.stringMatching(/^(buy|sell)$/),
+                    });
+                    done();
+                } catch (error) {
+                    done(error);
+                }
+            });
+
+            // High volume trade that should trigger exhaustion
+            const highVolumeTrade = createEnrichedTradeEvent(100.0, 50, false);
+            enhancedDetector.onEnrichedTrade(highVolumeTrade);
+        });
+    });
+
+    describe("Enhancement Statistics", () => {
+        it("should track enhancement statistics", () => {
+            const stats = enhancedDetector.getEnhancementStats();
+
+            expect(stats).toMatchObject({
+                callCount: expect.any(Number),
+                enhancementCount: expect.any(Number),
+                errorCount: expect.any(Number),
+                confluenceDetectionCount: expect.any(Number),
+                depletionDetectionCount: expect.any(Number),
+                crossTimeframeAnalysisCount: expect.any(Number),
+                averageConfidenceBoost: expect.any(Number),
+                totalConfidenceBoost: expect.any(Number),
+                enhancementSuccessRate: expect.any(Number),
+            });
+        });
+
+        it("should increment call count on each trade", () => {
+            const initialStats = enhancedDetector.getEnhancementStats();
+            const initialCallCount = initialStats.callCount;
+
+            const trade = createEnrichedTradeEvent(100.0, 50, false);
+            enhancedDetector.onEnrichedTrade(trade);
+
+            const updatedStats = enhancedDetector.getEnhancementStats();
+            expect(updatedStats.callCount).toBe(initialCallCount + 1);
+        });
+    });
+
+    describe("Enhancement Mode Control", () => {
+        it("should support runtime enhancement mode changes", () => {
+            expect(() =>
+                enhancedDetector.setEnhancementMode("monitoring")
+            ).not.toThrow();
+            expect(() =>
+                enhancedDetector.setEnhancementMode("disabled")
+            ).not.toThrow();
+            expect(() =>
+                enhancedDetector.setEnhancementMode("production")
+            ).not.toThrow();
+
+            expect(mockLogger.info).toHaveBeenCalledWith(
+                expect.stringContaining("Enhancement mode updated"),
+                expect.any(Object)
+            );
+        });
+
+        it("should skip processing when enhancement mode is disabled", () => {
+            enhancedDetector.setEnhancementMode("disabled");
+
+            const trade = createEnrichedTradeEvent(100.0, 50, false);
+
+            expect(() => enhancedDetector.onEnrichedTrade(trade)).not.toThrow();
+
+            // Should log warning about detector being disabled
+            expect(mockLogger.warn).toHaveBeenCalledWith(
+                expect.stringContaining("Skipping trade processing"),
+                expect.objectContaining({
+                    reason: "detector_disabled",
+                })
+            );
+        });
+    });
+
+    describe("Error Handling", () => {
+        it("should handle errors gracefully during processing", () => {
+            // Mock preprocessor to throw an error
+            mockPreprocessor.findZonesNearPrice.mockImplementation(() => {
+                throw new Error("Mock preprocessor error");
+            });
+
+            const trade = createEnrichedTradeEvent(100.0, 50, false);
+
+            // Most important test: should not crash on errors
+            expect(() => enhancedDetector.onEnrichedTrade(trade)).not.toThrow();
+
+            // Detector should continue to function after error
+            expect(enhancedDetector.getId()).toBe("test-enhanced-exhaustion");
+            expect(enhancedDetector.getStatus()).toContain(
+                "Exhaustion Enhanced"
+            );
+        });
+    });
+
+    describe("Signal Confirmation", () => {
+        it("should handle signal confirmation tracking", () => {
+            expect(() =>
+                enhancedDetector.markSignalConfirmed(100.0, "buy")
+            ).not.toThrow();
+
+            expect(mockLogger.debug).toHaveBeenCalledWith(
+                expect.stringContaining("Signal confirmed"),
+                expect.objectContaining({
+                    detectorId: "test-enhanced-exhaustion",
+                    zone: 100.0,
+                    side: "buy",
+                })
+            );
         });
     });
 });

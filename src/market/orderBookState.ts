@@ -5,6 +5,7 @@ import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterf
 import type { PassiveLevel, OrderBookHealth } from "../types/marketEvents.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { ThreadManager } from "../multithreading/threadManager.js";
+import { FinancialMath } from "../utils/financialMath.js";
 
 type SnapShot = Map<number, PassiveLevel>;
 
@@ -204,6 +205,17 @@ export class OrderBookState implements IOrderBookState {
     public updateDepth(
         update: SpotWebsocketStreams.DiffBookDepthResponse
     ): void {
+        // DEBUG: Log updateDepth call details
+        this.logger.debug("[OrderBookState] updateDepth called", {
+            symbol: update.s,
+            isInitialized: this.isInitialized,
+            bidCount: update.b?.length || 0,
+            askCount: update.a?.length || 0,
+            asks: update.a, // Log all asks to see if 89.05 is there
+            bids: update.b,
+            updateId: update.u,
+        });
+
         if (this.circuitOpen && Date.now() < this.circuitOpenUntil) {
             this.metricsCollector.incrementMetric("orderbookCircuitRejected");
             return; // Reject updates while circuit is open
@@ -226,6 +238,13 @@ export class OrderBookState implements IOrderBookState {
 
         if (!this.isInitialized) {
             // Buffer updates until initialized
+            this.logger.warn(
+                "[OrderBookState] Buffering update - not initialized",
+                {
+                    symbol: update.s,
+                    bufferSize: this.snapshotBuffer.length + 1,
+                }
+            );
             this.snapshotBuffer.push(update);
             return;
         }
@@ -250,6 +269,13 @@ export class OrderBookState implements IOrderBookState {
         needsBestRecalc =
             this.processAsks(asks, needsBestRecalc) || needsBestRecalc;
 
+        // DEBUG: Log book state after processing
+        this.logger.debug("[OrderBookState] Book state after processing", {
+            bookSize: this.book.size,
+            bookKeys: Array.from(this.book.keys()),
+            bookEntries: Array.from(this.book.entries()).slice(0, 5), // First 5 entries
+        });
+
         // Recalculate best bid/ask if needed
         if (needsBestRecalc) {
             this.recalculateBestQuotes();
@@ -272,15 +298,20 @@ export class OrderBookState implements IOrderBookState {
 
     public getSpread(): number {
         if (this._bestBid === 0 || this._bestAsk === Infinity) return 0;
-        return this._bestAsk - this._bestBid;
+        return FinancialMath.calculateSpread(
+            this._bestAsk,
+            this._bestBid,
+            this.pricePrecision
+        );
     }
 
     public getMidPrice(): number {
         if (this._bestBid === 0 || this._bestAsk === Infinity) return 0;
-        // Use integer arithmetic for financial precision
-        const scale = Math.pow(10, this.pricePrecision);
-        const midPrice = (this._bestBid + this._bestAsk) / 2;
-        return Math.round(midPrice * scale) / scale;
+        return FinancialMath.calculateMidPrice(
+            this._bestBid,
+            this._bestAsk,
+            this.pricePrecision
+        );
     }
 
     public sumBand(
@@ -292,22 +323,46 @@ export class OrderBookState implements IOrderBookState {
         let sumAsk = 0;
         let levels = 0;
 
-        // Use integer arithmetic for financial precision
-        const scale = Math.pow(10, this.pricePrecision || 8);
-        const scaledCenter = Math.round(center * scale);
-        const scaledTickSize = Math.round(tickSize * scale);
-        const scaledBandSize = bandTicks * scaledTickSize;
+        // Use FinancialMath for precise band calculation
+        const bandSize = FinancialMath.safeMultiply(bandTicks, tickSize);
+        const min = FinancialMath.safeSubtract(center, bandSize);
+        const max = FinancialMath.safeAdd(center, bandSize);
 
-        const min = (scaledCenter - scaledBandSize) / scale;
-        const max = (scaledCenter + scaledBandSize) / scale;
+        // DEBUG: Log band calculation details
+        this.logger.debug("[OrderBookState] sumBand calculation", {
+            center,
+            bandTicks,
+            tickSize,
+            bandSize,
+            min,
+            max,
+            bookSize: this.book.size,
+            bookPrices: Array.from(this.book.keys()).slice(0, 10), // First 10 prices
+        });
 
         for (const [price, lvl] of this.book) {
             if (price >= min && price <= max) {
-                sumBid += lvl.bid;
-                sumAsk += lvl.ask;
+                this.logger.debug("[OrderBookState] Found level in band", {
+                    price,
+                    bid: lvl.bid,
+                    ask: lvl.ask,
+                    withinBand: true,
+                });
+                sumBid = FinancialMath.safeAdd(sumBid, lvl.bid);
+                sumAsk = FinancialMath.safeAdd(sumAsk, lvl.ask);
                 levels++;
             }
         }
+
+        // DEBUG: Log final results
+        this.logger.debug("[OrderBookState] sumBand result", {
+            center,
+            bandSize: `${min} to ${max}`,
+            sumBid,
+            sumAsk,
+            levels,
+            totalVolume: sumBid + sumAsk,
+        });
 
         return { bid: sumBid, ask: sumAsk, levels };
     }
@@ -337,18 +392,33 @@ export class OrderBookState implements IOrderBookState {
         for (const level of this.book.values()) {
             if (level.bid > 0) {
                 bidLevels++;
-                totalBidVolume += level.bid;
+                totalBidVolume = FinancialMath.safeAdd(
+                    totalBidVolume,
+                    level.bid
+                );
             }
             if (level.ask > 0) {
                 askLevels++;
-                totalAskVolume += level.ask;
+                totalAskVolume = FinancialMath.safeAdd(
+                    totalAskVolume,
+                    level.ask
+                );
             }
         }
 
-        const totalVolume = totalBidVolume + totalAskVolume;
+        const totalVolume = FinancialMath.safeAdd(
+            totalBidVolume,
+            totalAskVolume
+        );
         const imbalance =
             totalVolume > 0
-                ? (totalBidVolume - totalAskVolume) / totalVolume
+                ? FinancialMath.safeDivide(
+                      FinancialMath.safeSubtract(
+                          totalBidVolume,
+                          totalAskVolume
+                      ),
+                      totalVolume
+                  )
                 : 0;
 
         return {
@@ -540,13 +610,27 @@ export class OrderBookState implements IOrderBookState {
             const price = this.normalizePrice(parseFloat(priceStr));
             const qty = parseFloat(qtyStr);
 
+            // DEBUG: Log ask processing
+            this.logger.debug("[OrderBookState] Processing ask", {
+                originalPrice: priceStr,
+                normalizedPrice: price,
+                quantity: qty,
+                isZeroQty: qty === 0,
+            });
+
             if (qty === 0) {
                 const level = this.book.get(price);
                 if (level && level.bid === 0) {
                     this.book.delete(price);
+                    this.logger.debug("[OrderBookState] Deleted empty level", {
+                        price,
+                    });
                 } else if (level) {
                     level.ask = 0;
                     level.timestamp = now;
+                    this.logger.debug("[OrderBookState] Zeroed ask volume", {
+                        price,
+                    });
                 }
                 if (price === this._bestAsk) needsBestRecalc = true;
             } else {
@@ -560,6 +644,14 @@ export class OrderBookState implements IOrderBookState {
                 level.timestamp = now;
                 this.book.set(price, level);
 
+                // DEBUG: Log stored level
+                this.logger.debug("[OrderBookState] Stored ask level", {
+                    price,
+                    askVolume: qty,
+                    bidVolume: level.bid,
+                    isNewLevel: !this.book.has(price),
+                });
+
                 // Update best ask if necessary
                 if (price < this._bestAsk) {
                     this._bestAsk = price;
@@ -572,9 +664,24 @@ export class OrderBookState implements IOrderBookState {
     }
 
     private normalizePrice(price: number): number {
-        // Use integer arithmetic for financial precision
-        const scale = Math.pow(10, this.pricePrecision);
-        return Math.round(price * scale) / scale;
+        // Use FinancialMath for consistent precision
+        const normalized = FinancialMath.financialRound(
+            price,
+            this.pricePrecision
+        );
+
+        // DEBUG: Always log price normalization for debugging
+        this.logger.debug("[OrderBookState] Price normalization", {
+            original: price,
+            normalized,
+            precision: this.pricePrecision,
+            isNull: normalized === null,
+            isNaN: isNaN(normalized),
+            typeofOriginal: typeof price,
+            typeofNormalized: typeof normalized,
+        });
+
+        return normalized;
     }
 
     private recalculateBestQuotes(): void {
@@ -595,15 +702,13 @@ export class OrderBookState implements IOrderBookState {
         const mid = this.getMidPrice();
         if (!mid) return;
 
-        // Use integer arithmetic for financial precision
-        const scale = Math.pow(10, this.pricePrecision);
-        const scaledMid = Math.round(mid * scale);
-        const scaledDistance = Math.round(this.maxPriceDistance * scale);
-
-        const minPrice =
-            (scaledMid * (scale - scaledDistance)) / (scale * scale);
-        const maxPrice =
-            (scaledMid * (scale + scaledDistance)) / (scale * scale);
+        // Use FinancialMath for precise distance calculation
+        const distanceAmount = FinancialMath.safeMultiply(
+            mid,
+            this.maxPriceDistance
+        );
+        const minPrice = FinancialMath.safeSubtract(mid, distanceAmount);
+        const maxPrice = FinancialMath.safeAdd(mid, distanceAmount);
 
         for (const [price, level] of this.book) {
             void level; // Ensure level is defined

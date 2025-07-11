@@ -134,7 +134,7 @@ describe("Config Usage Audit", () => {
                 "symbols.LTCUSDT.spoofingDetector", // container object
                 "symbols.LTCUSDT.hiddenOrderDetector", // container object
                 "symbols.LTCUSDT.anomalyDetector", // container object
-                "symbols.LTCUSDT.deltaCvdConfirmation", // container object
+                "symbols.LTCUSDT.deltaCVD", // container object
                 "symbols.LTCUSDT.accumulation", // container object
                 "symbols.LTCUSDT.distribution", // container object
                 "symbols.LTCUSDT.universalZoneConfig", // container object

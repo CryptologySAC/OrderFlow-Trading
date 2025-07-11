@@ -527,14 +527,14 @@ describe("Mathematical Property Testing for All Detectors", () => {
                 };
                 const detector = new DeltaCVDDetectorEnhanced(
                     "test-deltacvd",
+                    "LTCUSDT",
                     completeDeltaCVDSettings,
                     mockPreprocessor,
                     mockLogger,
-                    mockSpoofingDetector,
                     mockMetrics
                 );
 
-                detector.on("signalCandidate", (signal: SignalCandidate) => {
+                detector.on("signal", (signal: SignalCandidate) => {
                     signals.push(signal);
                 });
 

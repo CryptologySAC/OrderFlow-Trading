@@ -31,12 +31,12 @@ import type {
 import type {
     SignalCandidate,
     EnhancedDistributionSignalData,
-    SignalType,
     DistributionConditions,
     DistributionMarketRegime,
 } from "../types/signalTypes.js";
 import { z } from "zod";
 import { DistributionDetectorSchema } from "../core/config.js";
+import type { ZoneVisualizationData } from "../types/zoneTypes.js";
 
 /**
  * Enhanced configuration interface for distribution detection - ONLY distribution-specific parameters
@@ -93,6 +93,10 @@ export class DistributionDetectorEnhanced extends Detector {
     private readonly distributionVolumeThreshold: number;
     private readonly distributionRatioThreshold: number;
     private readonly alignmentScoreThreshold: number;
+    private readonly eventCooldownMs: number;
+
+    // Signal deduplication tracking
+    private lastSignalTime: number = 0;
 
     constructor(
         id: string,
@@ -124,6 +128,7 @@ export class DistributionDetectorEnhanced extends Detector {
         this.distributionVolumeThreshold = settings.distributionVolumeThreshold;
         this.distributionRatioThreshold = settings.distributionRatioThreshold;
         this.alignmentScoreThreshold = settings.alignmentScoreThreshold;
+        this.eventCooldownMs = settings.eventCooldownMs;
 
         // Initialize enhancement statistics
         this.enhancementStats = {
@@ -151,12 +156,34 @@ export class DistributionDetectorEnhanced extends Detector {
      * STANDALONE VERSION: Processes trades directly without legacy detector dependency
      */
     public onEnrichedTrade(event: EnrichedTradeEvent): void {
+        // Debug logging to understand what's happening
+        this.logger.debug(
+            "DistributionDetectorEnhanced: onEnrichedTrade called",
+            {
+                detectorId: this.getId(),
+                price: event.price,
+                quantity: event.quantity,
+                useStandardizedZones: this.useStandardizedZones,
+                enhancementMode: this.enhancementConfig.enhancementMode,
+                hasZoneData: !!event.zoneData,
+                callCount: this.enhancementStats.callCount,
+            }
+        );
+
         // Only process if standardized zones are enabled and available
         if (
             !this.useStandardizedZones ||
             this.enhancementConfig.enhancementMode === "disabled" ||
             !event.zoneData
         ) {
+            this.logger.debug("DistributionDetectorEnhanced: Skipping trade", {
+                detectorId: this.getId(),
+                reason: !this.useStandardizedZones
+                    ? "zones_disabled"
+                    : this.enhancementConfig.enhancementMode === "disabled"
+                      ? "enhancement_disabled"
+                      : "no_zone_data",
+            });
             return;
         }
 
@@ -186,7 +213,7 @@ export class DistributionDetectorEnhanced extends Detector {
      */
     public markSignalConfirmed(zone: number, side: "buy" | "sell"): void {
         // Implementation for signal confirmation tracking if needed
-        this.logger.debug("DistributionDetectorEnhanced: Signal confirmed", {
+        this.logger.debug("[DistributionDetectorEnhanced]: Signal confirmed", {
             detectorId: this.getId(),
             zone,
             side,
@@ -194,96 +221,42 @@ export class DistributionDetectorEnhanced extends Detector {
     }
 
     /**
-     * Core distribution pattern analysis using standardized zones
-     *
-     * STANDALONE VERSION: Multi-timeframe distribution analysis without legacy dependencies
+     * Core distribution pattern analysis using pure volume calculations
      */
     private analyzeDistributionPattern(event: EnrichedTradeEvent): void {
         if (!event.zoneData) return;
 
-        let totalConfidenceBoost = 0;
-        let enhancementApplied = false;
+        // Calculate base distribution strength from pure volume ratios
+        const calculatedDistributionStrength =
+            this.calculateDistributionStrength(event);
+        if (calculatedDistributionStrength === null) return;
 
-        // Zone confluence analysis for distribution validation (CLAUDE.md compliant)
-        if (this.enhancementConfig.enableZoneConfluenceFilter) {
-            const confluenceResult = this.analyzeZoneConfluence(
-                event.zoneData,
-                event.price
-            );
-            if (confluenceResult.hasConfluence) {
-                this.enhancementStats.confluenceDetectionCount++;
-                totalConfidenceBoost += this.confluenceConfidenceBoost;
-                enhancementApplied = true;
+        // Start with base detection strength
+        let totalConfidence = calculatedDistributionStrength;
 
-                this.logger.debug(
-                    "DistributionDetectorEnhanced: Zone confluence detected for distribution validation",
-                    {
-                        detectorId: this.getId(),
-                        price: event.price,
-                        confluenceZones: confluenceResult.confluenceZones,
-                        confluenceStrength: confluenceResult.confluenceStrength,
-                        confidenceBoost: this.confluenceConfidenceBoost,
-                    }
-                );
-            }
-        }
+        // Add confluence contribution (pure volume concentration)
+        const calculatedConfluenceStrength =
+            this.calculateConfluenceContribution(event.zoneData, event.price);
+        totalConfidence += calculatedConfluenceStrength;
 
-        // Institutional selling pressure analysis across zones
-        if (this.enhancementConfig.enableSellingPressureAnalysis) {
-            const sellingResult = this.analyzeInstitutionalSellingPressure(
-                event.zoneData,
-                event
-            );
-            if (sellingResult.hasSellingPressure) {
-                this.enhancementStats.sellingPressureDetectionCount++;
-                totalConfidenceBoost +=
-                    this.enhancementConfig.sellingPressureConfidenceBoost;
-                enhancementApplied = true;
+        // Add institutional contribution (pure volume size analysis)
+        const calculatedInstitutionalScore =
+            this.calculateInstitutionalContribution(event.zoneData, event);
+        totalConfidence += calculatedInstitutionalScore;
 
-                this.logger.debug(
-                    "DistributionDetectorEnhanced: Institutional selling pressure detected",
-                    {
-                        detectorId: this.getId(),
-                        price: event.price,
-                        sellingRatio: sellingResult.sellingRatio,
-                        affectedZones: sellingResult.affectedZones,
-                        confidenceBoost:
-                            this.enhancementConfig
-                                .sellingPressureConfidenceBoost,
-                    }
-                );
-            }
-        }
+        // Add alignment contribution (pure volume consistency)
+        const calculatedAlignmentScore = this.calculateAlignmentContribution(
+            event.zoneData,
+            event
+        );
+        totalConfidence += calculatedAlignmentScore;
 
-        // Cross-timeframe distribution analysis (CLAUDE.md compliant)
-        if (this.enhancementConfig.enableCrossTimeframeAnalysis) {
-            const crossTimeframeResult = this.analyzeCrossTimeframeDistribution(
-                event.zoneData,
-                event
-            );
-            if (crossTimeframeResult.hasAlignment) {
-                this.enhancementStats.crossTimeframeAnalysisCount++;
-                totalConfidenceBoost += this.crossTimeframeConfidenceBoost;
-                enhancementApplied = true;
-
-                this.logger.debug(
-                    "DistributionDetectorEnhanced: Cross-timeframe distribution alignment",
-                    {
-                        detectorId: this.getId(),
-                        price: event.price,
-                        alignmentScore: crossTimeframeResult.alignmentScore,
-                        timeframeBreakdown:
-                            crossTimeframeResult.timeframeBreakdown,
-                        confidenceBoost: this.crossTimeframeConfidenceBoost,
-                    }
-                );
-            }
-        }
-
-        // Update enhancement statistics
-        if (enhancementApplied) {
+        // SINGLE confidence check before any emission
+        if (totalConfidence >= this.enhancementConfig.confidenceThreshold) {
+            // Update enhancement statistics
             this.enhancementStats.enhancementCount++;
-            this.enhancementStats.totalConfidenceBoost += totalConfidenceBoost;
+            this.enhancementStats.totalConfidenceBoost +=
+                totalConfidence - calculatedDistributionStrength;
             this.enhancementStats.averageConfidenceBoost =
                 this.enhancementStats.totalConfidenceBoost /
                 this.enhancementStats.enhancementCount;
@@ -292,102 +265,189 @@ export class DistributionDetectorEnhanced extends Detector {
                 this.enhancementStats.callCount;
 
             // Store enhanced distribution metrics for monitoring
-            this.storeEnhancedDistributionMetrics(event, totalConfidenceBoost);
+            this.storeEnhancedDistributionMetrics(event, totalConfidence);
 
-            // ✅ EMIT ENHANCED DISTRIBUTION SIGNAL - Independent of base detector
-            this.emitEnhancedDistributionSignal(event, totalConfidenceBoost);
+            // ✅ EMIT ZONE UPDATE - For visualization in dashboard
+            this.emitDistributionZoneUpdate(event, totalConfidence);
+
+            // ✅ EMIT SIGNAL ONLY for actionable zone events
+            this.emitDistributionZoneSignal(event, totalConfidence);
+
+            // ✅ EMIT ENHANCED DISTRIBUTION SIGNAL - For signal tracking
+            this.emitEnhancedDistributionSignal(event, totalConfidence);
+
+            this.logger.debug(
+                "[DistributionDetectorEnhanced]: Distribution pattern detected",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                    baseStrength: calculatedDistributionStrength,
+                    confluenceContribution: calculatedConfluenceStrength,
+                    institutionalContribution: calculatedInstitutionalScore,
+                    alignmentContribution: calculatedAlignmentScore,
+                    totalConfidence: totalConfidence,
+                }
+            );
         }
     }
 
     /**
-     * Analyze zone confluence for distribution pattern validation
-     *
-     * STANDALONE VERSION: Multi-timeframe confluence analysis
+     * Calculate base distribution strength from pure volume ratios
      */
-    private analyzeZoneConfluence(
-        zoneData: StandardZoneData,
-        price: number
-    ): {
-        hasConfluence: boolean;
-        confluenceZones: number;
-        confluenceStrength: number;
-    } {
-        const minConfluenceZones = this.confluenceMinZones;
-        const maxDistance = this.confluenceMaxDistance;
+    private calculateDistributionStrength(
+        event: EnrichedTradeEvent
+    ): number | null {
+        if (!event.zoneData) return null;
 
-        // Find zones that overlap around the current price
-        const relevantZones: ZoneSnapshot[] = [];
-
-        // Check 5-tick zones - using universal zone analysis service
-        relevantZones.push(
-            ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones5Tick,
-                price,
-                maxDistance
-            )
+        // CLAUDE.md FIX: Use only 5-tick zones to avoid triple-counting volume
+        // Previous bug: Combined all zone sizes causing volume to be counted multiple times
+        // (17 LTC trade counted in 5T, 10T, 20T zones = 51 LTC total - WRONG!)
+        const relevantZones = this.preprocessor.findZonesNearPrice(
+            event.zoneData.zones,
+            event.price,
+            this.confluenceMaxDistance
         );
 
-        // Check 10-tick zones - using universal zone analysis service
-        relevantZones.push(
-            ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones10Tick,
-                price,
-                maxDistance
-            )
+        this.logger.debug(
+            "DistributionDetectorEnhanced: calculateDistributionStrength",
+            {
+                detectorId: this.getId(),
+                price: event.price,
+                zonesCount: event.zoneData.zones.length,
+                relevantZonesCount: relevantZones.length,
+                confluenceMaxDistance: this.confluenceMaxDistance,
+                distributionVolumeThreshold: this.distributionVolumeThreshold,
+            }
         );
 
-        // Check 20-tick zones - using universal zone analysis service
-        relevantZones.push(
-            ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones20Tick,
-                price,
-                maxDistance
-            )
+        if (relevantZones.length === 0) {
+            this.logger.debug(
+                "DistributionDetectorEnhanced: No relevant zones found",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                }
+            );
+            return null;
+        }
+
+        let totalVolume = 0;
+        let totalSellVolume = 0;
+
+        relevantZones.forEach((zone) => {
+            totalVolume += zone.aggressiveVolume + zone.passiveVolume;
+            totalSellVolume += zone.aggressiveSellVolume;
+        });
+
+        this.logger.debug("DistributionDetectorEnhanced: Volume analysis", {
+            detectorId: this.getId(),
+            price: event.price,
+            totalVolume,
+            totalSellVolume,
+            volumeThreshold: this.distributionVolumeThreshold,
+            meetsVolumeThreshold:
+                totalVolume >= this.distributionVolumeThreshold,
+        });
+
+        if (totalVolume === 0) return null;
+
+        // ✅ CRITICAL: Volume threshold validation - must meet minimum LTC requirement
+        if (totalVolume < this.distributionVolumeThreshold) {
+            this.logger.debug(
+                "DistributionDetectorEnhanced: Volume below threshold",
+                {
+                    detectorId: this.getId(),
+                    totalVolume,
+                    threshold: this.distributionVolumeThreshold,
+                }
+            );
+            return null; // Insufficient volume - reject immediately
+        }
+
+        // Calculate sell ratio
+        const sellRatio = FinancialMath.divideQuantities(
+            totalSellVolume,
+            totalVolume
         );
 
-        const confluenceZones = relevantZones.length;
-        const hasConfluence = confluenceZones >= minConfluenceZones;
+        // ✅ CRITICAL: Ratio threshold validation - must meet minimum sell ratio
+        if (sellRatio < this.distributionRatioThreshold) {
+            return null; // Insufficient sell ratio - reject immediately
+        }
 
-        // Calculate confluence strength using FinancialMath (higher = more zones overlapping)
-        const confluenceStrengthDivisor =
-            this.enhancementConfig.confluenceStrengthDivisor;
-        const confluenceStrength = Math.min(
-            1.0,
-            FinancialMath.divideQuantities(
-                confluenceZones,
-                minConfluenceZones * confluenceStrengthDivisor
-            )
-        );
-
-        return {
-            hasConfluence,
-            confluenceZones,
-            confluenceStrength,
-        };
+        // Distribution strength based purely on aggressive selling ratio
+        return sellRatio;
     }
 
     /**
-     * Analyze institutional selling pressure across standardized zones
-     *
-     * STANDALONE VERSION: Enhanced selling pressure detection
+     * Calculate confluence contribution based purely on volume concentration
      */
-    private analyzeInstitutionalSellingPressure(
+    private calculateConfluenceContribution(
+        zoneData: StandardZoneData,
+        price: number
+    ): number {
+        // Find zones near current price
+        const relevantZones: ZoneSnapshot[] = [];
+        relevantZones.push(
+            ...this.preprocessor.findZonesNearPrice(
+                zoneData.zones,
+                price,
+                this.confluenceMaxDistance
+            ),
+            ...this.preprocessor.findZonesNearPrice(
+                zoneData.zones,
+                price,
+                this.confluenceMaxDistance
+            ),
+            ...this.preprocessor.findZonesNearPrice(
+                zoneData.zones,
+                price,
+                this.confluenceMaxDistance
+            )
+        );
+
+        if (relevantZones.length === 0) return 0;
+
+        // Calculate volume concentration in confluence area
+        let totalVolume = 0;
+        let totalAggressiveVolume = 0;
+        let totalSellVolume = 0;
+
+        relevantZones.forEach((zone) => {
+            totalVolume += zone.aggressiveVolume + zone.passiveVolume;
+            totalAggressiveVolume += zone.aggressiveVolume;
+            totalSellVolume += zone.aggressiveSellVolume;
+        });
+
+        if (totalVolume === 0) return 0;
+
+        // Confluence strength based purely on volume ratios:
+        // More zones with higher sell volume concentration = higher confluence
+        const sellRatio = FinancialMath.divideQuantities(
+            totalSellVolume,
+            totalVolume
+        );
+        const aggressiveRatio = FinancialMath.divideQuantities(
+            totalAggressiveVolume,
+            totalVolume
+        );
+        const zoneConcentration = FinancialMath.divideQuantities(
+            relevantZones.length,
+            relevantZones.length + 1
+        );
+
+        // Pure volume-based confluence: sell activity * aggressive activity * zone density
+        return sellRatio * aggressiveRatio * zoneConcentration;
+    }
+
+    /**
+     * Calculate institutional contribution based purely on volume size patterns
+     */
+    private calculateInstitutionalContribution(
         zoneData: StandardZoneData,
         event: EnrichedTradeEvent
-    ): {
-        hasSellingPressure: boolean;
-        sellingRatio: number;
-        affectedZones: number;
-    } {
-        const sellingThreshold = this.distributionVolumeThreshold;
-        const minRatio = this.distributionRatioThreshold;
-
-        // Analyze all zones for institutional selling pressure patterns
-        const allZones = [
-            ...zoneData.zones5Tick,
-            ...zoneData.zones10Tick,
-            ...zoneData.zones20Tick,
-        ];
+    ): number {
+        const allZones = [...zoneData.zones];
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,
@@ -395,135 +455,93 @@ export class DistributionDetectorEnhanced extends Detector {
             this.confluenceMaxDistance
         );
 
-        let totalPassiveVolume = 0;
+        if (relevantZones.length === 0) return 0;
+
+        let totalVolume = 0;
         let totalAggressiveVolume = 0;
-        let affectedZones = 0;
+        let totalSellVolume = 0;
+        let largeVolumeSum = 0;
 
         relevantZones.forEach((zone) => {
-            const passiveVolume = zone.passiveVolume;
-            const aggressiveVolume = zone.aggressiveVolume;
+            const zoneTotal = zone.aggressiveVolume + zone.passiveVolume;
+            totalVolume += zoneTotal;
+            totalAggressiveVolume += zone.aggressiveVolume;
+            totalSellVolume += zone.aggressiveSellVolume;
 
-            totalPassiveVolume += passiveVolume;
-            totalAggressiveVolume += aggressiveVolume;
-
-            // Check if this zone shows distribution (high aggressive selling volume)
-            // For distribution: institutions are aggressively selling (buyerIsMaker = true)
-            const aggressiveSellVolume = zone.aggressiveSellVolume;
-            if (
-                aggressiveSellVolume >= sellingThreshold &&
-                aggressiveVolume >
-                    FinancialMath.multiplyQuantities(
-                        passiveVolume,
-                        this.enhancementConfig.passiveToAggressiveRatio
-                    )
-            ) {
-                affectedZones++;
+            // Identify large volume activity (institutional-sized)
+            const avgZoneVolume = zoneTotal / (relevantZones.length || 1);
+            if (zone.aggressiveVolume > avgZoneVolume) {
+                largeVolumeSum += zone.aggressiveVolume;
             }
         });
 
-        const totalVolume = totalPassiveVolume + totalAggressiveVolume;
-        const sellingRatio =
-            totalVolume > 0
-                ? FinancialMath.divideQuantities(
-                      totalAggressiveVolume,
-                      totalVolume
-                  )
-                : 0;
-        const hasSellingPressure =
-            sellingRatio >= minRatio && affectedZones > 0;
+        if (totalVolume === 0) return 0;
 
-        return {
-            hasSellingPressure,
-            sellingRatio,
-            affectedZones,
-        };
+        // Institutional contribution based purely on volume patterns:
+        // 1. Sell volume dominance
+        // 2. Large order concentration
+        // 3. Aggressive activity level
+        const sellRatio = FinancialMath.divideQuantities(
+            totalSellVolume,
+            totalVolume
+        );
+        const largeVolumeRatio = FinancialMath.divideQuantities(
+            largeVolumeSum,
+            totalVolume
+        );
+        const aggressiveRatio = FinancialMath.divideQuantities(
+            totalAggressiveVolume,
+            totalVolume
+        );
+
+        // Pure volume-based institutional score
+        return sellRatio * largeVolumeRatio * aggressiveRatio;
     }
 
     /**
-     * Analyze cross-timeframe distribution patterns
-     *
-     * STANDALONE VERSION: Multi-timeframe alignment analysis
+     * Calculate alignment contribution based purely on volume consistency across timeframes
      */
-    private analyzeCrossTimeframeDistribution(
+    private calculateAlignmentContribution(
         zoneData: StandardZoneData,
         event: EnrichedTradeEvent
-    ): {
-        hasAlignment: boolean;
-        alignmentScore: number;
-        timeframeBreakdown: {
-            tick5: number;
-            tick10: number;
-            tick20: number;
-        };
-    } {
-        // Calculate distribution strength for each timeframe
-        const tick5Distribution = this.calculateTimeframeDistributionStrength(
-            zoneData.zones5Tick,
-            event.price
-        );
-        const tick10Distribution = this.calculateTimeframeDistributionStrength(
-            zoneData.zones10Tick,
-            event.price
-        );
-        const tick20Distribution = this.calculateTimeframeDistributionStrength(
-            zoneData.zones20Tick,
-            event.price
-        );
+    ): number {
+        // CLAUDE.md SIMPLIFIED: Calculate distribution strength for single zone size
+        const distributionStrength =
+            this.calculateTimeframeDistributionStrength(
+                zoneData.zones,
+                event.price
+            );
 
-        const timeframeBreakdown = {
-            tick5: tick5Distribution,
-            tick10: tick10Distribution,
-            tick20: tick20Distribution,
-        };
-
-        // Calculate alignment score using FinancialMath (how similar distribution levels are across timeframes)
-        const distributionValues = [
-            tick5Distribution,
-            tick10Distribution,
-            tick20Distribution,
-        ];
+        const distributionValues = [distributionStrength];
         const avgDistribution = FinancialMath.calculateMean(distributionValues);
-        if (avgDistribution === null) {
-            return {
-                hasAlignment: false,
-                alignmentScore: 0,
-                timeframeBreakdown,
-            }; // CLAUDE.md compliance: return null when calculation cannot be performed
+        if (avgDistribution === null || avgDistribution === 0) {
+            return 0;
         }
 
         const stdDev = FinancialMath.calculateStdDev(distributionValues);
         if (stdDev === null) {
-            return {
-                hasAlignment: false,
-                alignmentScore: 0,
-                timeframeBreakdown,
-            }; // CLAUDE.md compliance: return null when calculation cannot be performed
+            return 0;
         }
 
-        const variance = FinancialMath.multiplyQuantities(stdDev, stdDev); // Variance = stdDev^2
-        const varianceReductionFactor =
-            this.enhancementConfig.varianceReductionFactor;
-        const normalizedVariance = FinancialMath.multiplyQuantities(
-            variance,
-            varianceReductionFactor
-        );
-        const alignmentScore = FinancialMath.multiplyQuantities(
-            avgDistribution,
-            Math.max(0, 1 - normalizedVariance)
-        ); // Penalize high variance
-        const hasAlignment = alignmentScore >= this.alignmentScoreThreshold; // Require moderate alignment for distribution
+        // Calculate alignment based purely on volume consistency:
+        // High average = strong distribution across timeframes
+        // Low standard deviation relative to mean = consistent across timeframes
+        if (stdDev === 0) {
+            // Perfect consistency across timeframes
+            return avgDistribution;
+        }
 
-        return {
-            hasAlignment,
-            alignmentScore,
-            timeframeBreakdown,
-        };
+        const consistencyRatio = FinancialMath.divideQuantities(
+            avgDistribution,
+            stdDev
+        );
+
+        // Return pure volume-based alignment: strength * consistency
+        return (avgDistribution * consistencyRatio) / (1 + consistencyRatio);
     }
 
     /**
-     * Calculate distribution strength for a specific timeframe
-     *
-     * STANDALONE VERSION: Timeframe-specific analysis
+     * Calculate distribution strength for a specific timeframe based purely on volume ratios
      */
     private calculateTimeframeDistributionStrength(
         zones: ZoneSnapshot[],
@@ -544,24 +562,13 @@ export class DistributionDetectorEnhanced extends Detector {
             const totalVolume = zone.aggressiveVolume + zone.passiveVolume;
             if (totalVolume === 0) continue;
 
-            // For distribution, we want high aggressive selling (buyerIsMaker = true trades) using FinancialMath
+            // Distribution strength based purely on aggressive selling ratio
             const aggressiveSellingRatio = FinancialMath.divideQuantities(
                 zone.aggressiveSellVolume,
                 totalVolume
             );
-            const aggressiveSellingRatioThreshold =
-                this.enhancementConfig.aggressiveSellingRatioThreshold;
-            const aggressiveSellingReductionFactor =
-                this.enhancementConfig.aggressiveSellingReductionFactor;
-            const distributionScore =
-                aggressiveSellingRatio > aggressiveSellingRatioThreshold
-                    ? aggressiveSellingRatio
-                    : FinancialMath.multiplyQuantities(
-                          aggressiveSellingRatio,
-                          aggressiveSellingReductionFactor
-                      );
 
-            totalDistributionScore += distributionScore;
+            totalDistributionScore += aggressiveSellingRatio;
         }
 
         return FinancialMath.divideQuantities(
@@ -584,7 +591,7 @@ export class DistributionDetectorEnhanced extends Detector {
         // this.metricsCollector.recordCounter('distribution.enhanced.analysis_count', 1);
 
         this.logger.debug(
-            "DistributionDetectorEnhanced: Enhanced metrics stored",
+            "[DistributionDetectorEnhanced]: Enhanced metrics stored",
             {
                 detectorId: this.getId(),
                 price: event.price,
@@ -604,6 +611,181 @@ export class DistributionDetectorEnhanced extends Detector {
     }
 
     /**
+     * Emit distribution zone update for dashboard visualization
+     */
+    private emitDistributionZoneUpdate(
+        event: EnrichedTradeEvent,
+        confidenceBoost: number
+    ): void {
+        if (!event.zoneData) return;
+
+        // Determine zone update type based on distribution strength
+        const updateType = this.determineZoneUpdateType(event, confidenceBoost);
+        if (!updateType) return;
+
+        // Create zone data for visualization
+        const zoneData = this.createZoneVisualizationData(
+            event,
+            confidenceBoost
+        );
+        if (!zoneData) return;
+
+        // Emit zoneUpdate event for dashboard visualization
+        this.emit("zoneUpdate", {
+            updateType,
+            zone: zoneData,
+            significance: confidenceBoost,
+            detectorId: this.getId(),
+            timestamp: Date.now(),
+        });
+
+        this.logger.debug(
+            "[DistributionDetectorEnhanced]: Zone update emitted",
+            {
+                detectorId: this.getId(),
+                updateType,
+                zoneId: zoneData.id,
+                confidence: confidenceBoost,
+            }
+        );
+    }
+
+    /**
+     * Emit distribution zone signal for actionable events only
+     */
+    private emitDistributionZoneSignal(
+        event: EnrichedTradeEvent,
+        confidenceBoost: number
+    ): void {
+        // Only emit signals for actionable zone events (completion, invalidation, consumption)
+        const signalType = this.determineZoneSignalType(event, confidenceBoost);
+        if (!signalType) return; // No actionable event detected
+
+        // Create zone signal for stats tracking
+        const zoneData = this.createZoneVisualizationData(
+            event,
+            confidenceBoost
+        );
+        if (!zoneData) return;
+
+        const signalSide = "sell";
+
+        // Calculate proper confidence using zone strength instead of threshold
+        const calculatedConfidence = Math.min(
+            1.0,
+            zoneData.strength + confidenceBoost
+        );
+
+        // Create signal before emitting
+        const zoneSignal = {
+            signalType,
+            zone: zoneData,
+            actionType: signalType,
+            confidence: calculatedConfidence,
+            urgency: confidenceBoost > 0.15 ? "high" : "medium",
+            expectedDirection: signalSide === "sell" ? "down" : "up",
+            detectorId: this.getId(),
+            timestamp: Date.now(),
+        };
+
+        // Emit zoneSignal event for dashboard signals list
+        this.emit("zoneSignal", zoneSignal);
+
+        this.logger.info(
+            "[DistributionDetectorEnhanced]: Zone signal emitted",
+            {
+                detectorId: this.getId(),
+                signalType: zoneSignal.signalType,
+                zoneId: zoneSignal.zone.id,
+                confidence: zoneSignal.confidence,
+                side: signalSide,
+                urgency: zoneSignal.urgency,
+                expectedDirection: zoneSignal.expectedDirection,
+            }
+        );
+    }
+
+    /**
+     * Create zone visualization data for dashboard
+     */
+    private createZoneVisualizationData(
+        event: EnrichedTradeEvent,
+        confidenceBoost: number
+    ): ZoneVisualizationData | null {
+        if (!event.zoneData) return null;
+
+        const distributionMetrics = this.calculateDistributionMetrics(event);
+        if (!distributionMetrics) return null;
+
+        return {
+            id: `distribution_${this.getId()}_${event.price.toFixed(2)}`,
+            type: "distribution",
+            priceRange: {
+                center: event.price,
+                min: event.price - this.confluenceMaxDistance,
+                max: event.price + this.confluenceMaxDistance,
+            },
+            strength: distributionMetrics.strength,
+            confidence: Math.min(
+                1.0,
+                distributionMetrics.strength + confidenceBoost
+            ),
+            volume: distributionMetrics.volumeConcentration,
+            timespan: distributionMetrics.duration,
+            lastUpdate: Date.now(),
+            metadata: {
+                sellRatio: distributionMetrics.sellRatio,
+                conditions: distributionMetrics.conditions,
+                marketRegime: distributionMetrics.marketRegime,
+            },
+        };
+    }
+
+    /**
+     * Determine zone update type for visualization
+     */
+    private determineZoneUpdateType(
+        event: EnrichedTradeEvent,
+        confidenceBoost: number
+    ): string | null {
+        // Always create/update zones for visualization
+        if (confidenceBoost >= this.enhancementConfig.confidenceThreshold) {
+            if (confidenceBoost > 0.15) {
+                return "zone_strengthened";
+            } else {
+                return "zone_updated";
+            }
+        }
+        return "zone_created"; // Default for new zones
+    }
+
+    /**
+     * Determine if this should generate an actionable zone signal
+     */
+    private determineZoneSignalType(
+        event: EnrichedTradeEvent,
+        confidenceBoost: number
+    ): string | null {
+        const distributionMetrics = this.calculateDistributionMetrics(event);
+        if (!distributionMetrics) return null;
+
+        // Calculate actual confidence from strength + boost
+        const actualConfidence = distributionMetrics.strength + confidenceBoost;
+
+        // Use single confidence threshold for signal eligibility
+        if (actualConfidence < this.enhancementConfig.confidenceThreshold) {
+            return null; // Not significant enough for any signal
+        }
+
+        // Check for strong distribution activity
+        if (distributionMetrics.sellRatio >= this.distributionRatioThreshold) {
+            return "strengthened"; // Zone strengthening - actionable signal
+        }
+
+        return null;
+    }
+
+    /**
      * Emit enhanced distribution signal independently
      *
      * STANDALONE VERSION: Independent signal emission for enhanced distribution detection
@@ -613,44 +795,35 @@ export class DistributionDetectorEnhanced extends Detector {
         confidenceBoost: number
     ): void {
         // Only emit signals when enhancement is meaningful
-        if (
-            confidenceBoost < this.enhancementConfig.minConfidenceBoostThreshold
-        ) {
+        if (confidenceBoost < this.enhancementConfig.confidenceThreshold) {
             return;
         }
 
-        // Calculate enhanced distribution confidence
-        if (
-            typeof this.enhancementConfig.baseConfidenceRequired !== "number" ||
-            this.enhancementConfig.baseConfidenceRequired <= 0
-        ) {
-            return; // Cannot proceed without valid base confidence
+        // Calculate distribution metrics to get the base confidence from strength
+        const distributionMetrics = this.calculateDistributionMetrics(event);
+        if (!distributionMetrics) {
+            return; // Cannot proceed without valid metrics
         }
-        const baseConfidenceValue =
-            this.enhancementConfig.baseConfidenceRequired;
+
+        // Calculate enhanced distribution confidence using strength as base
         const enhancedConfidence = Math.min(
             1.0,
-            FinancialMath.addAmounts(baseConfidenceValue, confidenceBoost, 8)
+            FinancialMath.addAmounts(
+                distributionMetrics.strength,
+                confidenceBoost,
+                8
+            )
         );
 
         // Only emit high-quality enhanced signals
-        if (
-            enhancedConfidence < this.enhancementConfig.finalConfidenceRequired
-        ) {
+        if (enhancedConfidence < this.enhancementConfig.confidenceThreshold) {
             return;
         }
 
         // Determine signal side based on distribution analysis
-        const signalSide = this.determineDistributionSignalSide(event);
-        if (signalSide === "neutral") {
-            return;
-        }
+        const signalSide = "sell";
 
-        // Calculate distribution metrics
-        const distributionMetrics = this.calculateDistributionMetrics(event);
-        if (distributionMetrics === null) {
-            return;
-        }
+        // distributionMetrics already calculated and validated above
 
         // Create enhanced distribution signal data
         const distributionResult: EnhancedDistributionSignalData = {
@@ -676,18 +849,35 @@ export class DistributionDetectorEnhanced extends Detector {
         // Create signal candidate
         const signalCandidate: SignalCandidate = {
             id: `enhanced-distribution-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-            type: "distribution" as SignalType,
+            type: "distribution",
             side: signalSide,
             confidence: enhancedConfidence,
             timestamp: Date.now(),
             data: distributionResult,
         };
 
+        // SIGNAL DEDUPLICATION: Check cooldown period
+        const currentTime = Date.now();
+        if (currentTime - this.lastSignalTime < this.eventCooldownMs) {
+            this.logger.debug(
+                "[DistributionDetectorEnhanced]: Signal suppressed due to cooldown",
+                {
+                    detectorId: this.getId(),
+                    timeSinceLastSignal: currentTime - this.lastSignalTime,
+                    cooldownMs: this.eventCooldownMs,
+                }
+            );
+            return;
+        }
+
         // ✅ EMIT ENHANCED DISTRIBUTION SIGNAL - Independent of base detector
-        this.emit("signal", signalCandidate);
+        this.emit("signalCandidate", signalCandidate);
+
+        // Update last signal time for cooldown tracking
+        this.lastSignalTime = currentTime;
 
         this.logger.info(
-            "DistributionDetectorEnhanced: ENHANCED DISTRIBUTION SIGNAL EMITTED",
+            "[DistributionDetectorEnhanced]: ENHANCED DISTRIBUTION SIGNAL EMITTED",
             {
                 detectorId: this.getId(),
                 price: event.price,
@@ -697,63 +887,9 @@ export class DistributionDetectorEnhanced extends Detector {
                 strength: distributionMetrics.strength,
                 sellRatio: distributionMetrics.sellRatio,
                 signalId: signalCandidate.id,
-                signalType: "enhanced_distribution_zone",
+                signalType: "distribution",
             }
         );
-    }
-
-    /**
-     * Determine distribution signal side based on market conditions
-     */
-    private determineDistributionSignalSide(
-        event: EnrichedTradeEvent
-    ): "buy" | "sell" | "neutral" {
-        if (!event.zoneData) {
-            return "neutral";
-        }
-
-        // For distribution, we expect institutions to be selling (distributing)
-        // This creates selling pressure, so we might see sell signals
-        const allZones = [
-            ...event.zoneData.zones5Tick,
-            ...event.zoneData.zones10Tick,
-            ...event.zoneData.zones20Tick,
-        ];
-
-        const relevantZones = this.preprocessor.findZonesNearPrice(
-            allZones,
-            event.price,
-            this.confluenceMaxDistance
-        );
-        if (relevantZones.length === 0) {
-            return "neutral";
-        }
-
-        let totalSellVolume = 0;
-        let totalBuyVolume = 0;
-
-        relevantZones.forEach((zone) => {
-            totalSellVolume += zone.aggressiveSellVolume;
-            totalBuyVolume += zone.aggressiveBuyVolume;
-        });
-
-        const totalVolume = totalSellVolume + totalBuyVolume;
-        if (totalVolume === 0) {
-            return "neutral";
-        }
-
-        const sellRatio = FinancialMath.divideQuantities(
-            totalSellVolume,
-            totalVolume
-        );
-        const distributionThreshold = this.distributionRatioThreshold;
-
-        // If selling pressure is high, this suggests distribution pattern
-        if (sellRatio >= distributionThreshold) {
-            return "sell"; // Distribution creates bearish pressure
-        }
-
-        return "neutral";
     }
 
     /**
@@ -772,11 +908,7 @@ export class DistributionDetectorEnhanced extends Detector {
             return null;
         }
 
-        const allZones = [
-            ...event.zoneData.zones5Tick,
-            ...event.zoneData.zones10Tick,
-            ...event.zoneData.zones20Tick,
-        ];
+        const allZones = [...event.zoneData.zones];
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,
@@ -888,7 +1020,7 @@ export class DistributionDetectorEnhanced extends Detector {
     ): void {
         this.enhancementConfig.enhancementMode = mode;
         this.logger.info(
-            "DistributionDetectorEnhanced: Enhancement mode updated",
+            "[DistributionDetectorEnhanced]: Enhancement mode updated",
             {
                 detectorId: this.getId(),
                 newMode: mode,
@@ -903,7 +1035,7 @@ export class DistributionDetectorEnhanced extends Detector {
      */
     public cleanup(): void {
         this.logger.info(
-            "DistributionDetectorEnhanced: Standalone cleanup completed",
+            "[DistributionDetectorEnhanced]: Standalone cleanup completed",
             {
                 detectorId: this.getId(),
                 enhancementStats: this.enhancementStats,

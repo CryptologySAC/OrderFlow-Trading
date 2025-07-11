@@ -33,7 +33,7 @@ import {
 import type { ILogger } from "./loggerInterface.js";
 import { DetectorStub } from "../utils/detectorStub.js";
 
-import type { BaseDetector } from "../indicators/base/baseDetector.js";
+import type { Detector } from "../indicators/base/detectorEnrichedTrade.js";
 import type {
     SignalCandidate,
     ProcessedSignal,
@@ -627,9 +627,7 @@ export class PipelineStorage implements IPipelineStorage {
             const candidate = JSON.parse(r.candidateJson) as SignalCandidate;
             const job: ProcessingJob = {
                 id: r.jobId,
-                detector: new DetectorStub(
-                    r.detectorId
-                ) as unknown as BaseDetector,
+                detector: new DetectorStub(r.detectorId) as unknown as Detector,
                 candidate,
                 priority: r.priority,
                 retryCount: r.retryCount,
@@ -663,9 +661,7 @@ export class PipelineStorage implements IPipelineStorage {
                 "startedAt" in r ? (r as ActiveRow).startedAt : r.enqueuedAt;
             return {
                 id: r.jobId,
-                detector: new DetectorStub(
-                    r.detectorId
-                ) as unknown as BaseDetector,
+                detector: new DetectorStub(r.detectorId) as unknown as Detector,
                 candidate: cand,
                 priority: r.priority,
                 retryCount: r.retryCount,

@@ -289,34 +289,12 @@ describe("AbsorptionDetector - Specification Compliance", () => {
 
                     // Add zone data to trigger enhanced detector logic
                     zoneData: {
-                        zones5Tick: [
+                        zones: [
                             {
-                                zoneId: `zone-5-${params.price}`,
+                                zoneId: `zone-${params.price}`,
                                 priceLevel: params.price,
                                 tickSize: 0.01,
-                                aggressiveVolume: params.volume,
-                                passiveVolume: params.passiveAskVolume ?? 15000,
-                                aggressiveBuyVolume: params.volume,
-                                aggressiveSellVolume: 0,
-                                passiveBidVolume: 7500,
-                                passiveAskVolume:
-                                    (params.passiveAskVolume ?? 15000) / 2,
-                                tradeCount: 10,
-                                timespan: 60000,
-                                boundaries: {
-                                    min: params.price - 0.025,
-                                    max: params.price + 0.025,
-                                },
-                                lastUpdate: timestamp,
-                                volumeWeightedPrice: params.price,
-                            },
-                        ],
-                        zones10Tick: [
-                            {
-                                zoneId: `zone-10-${params.price}`,
-                                priceLevel: params.price,
-                                tickSize: 0.01,
-                                aggressiveVolume: params.volume * 2,
+                                aggressiveVolume: params.volume * 2, // Use 10-tick equivalent values
                                 passiveVolume:
                                     (params.passiveAskVolume ?? 15000) * 1.5,
                                 aggressiveBuyVolume: params.volume * 2,
@@ -327,38 +305,15 @@ describe("AbsorptionDetector - Specification Compliance", () => {
                                 tradeCount: 20,
                                 timespan: 60000,
                                 boundaries: {
-                                    min: params.price - 0.05,
+                                    min: params.price - 0.05, // 10-tick boundaries
                                     max: params.price + 0.05,
                                 },
                                 lastUpdate: timestamp,
                                 volumeWeightedPrice: params.price,
                             },
                         ],
-                        zones20Tick: [
-                            {
-                                zoneId: `zone-20-${params.price}`,
-                                priceLevel: params.price,
-                                tickSize: 0.01,
-                                aggressiveVolume: params.volume * 3,
-                                passiveVolume:
-                                    (params.passiveAskVolume ?? 15000) * 2,
-                                aggressiveBuyVolume: params.volume * 3,
-                                aggressiveSellVolume: 0,
-                                passiveBidVolume: 20000,
-                                passiveAskVolume:
-                                    (params.passiveAskVolume ?? 15000) * 1.5,
-                                tradeCount: 30,
-                                timespan: 60000,
-                                boundaries: {
-                                    min: params.price - 0.1,
-                                    max: params.price + 0.1,
-                                },
-                                lastUpdate: timestamp,
-                                volumeWeightedPrice: params.price,
-                            },
-                        ],
                         zoneConfig: {
-                            baseTicks: 5,
+                            zoneTicks: 10,
                             tickValue: 0.01,
                             timeWindow: 60000,
                         },

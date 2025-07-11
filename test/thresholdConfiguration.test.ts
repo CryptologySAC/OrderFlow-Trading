@@ -2,7 +2,6 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
-import { ExhaustionDetector } from "../src/indicators/exhaustionDetector.js";
 import { ExhaustionDetectorEnhanced } from "../src/indicators/exhaustionDetectorEnhanced.js";
 import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
@@ -188,7 +187,7 @@ describe("Threshold Configuration Chain", () => {
         });
     });
 
-    describe("ExhaustionDetector Threshold Configuration", () => {
+    describe("ExhaustionDetectorEnhanced Threshold Configuration", () => {
         it("should use default threshold values when not provided", () => {
             const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
@@ -200,11 +199,19 @@ describe("Threshold Configuration Chain", () => {
                 { logSignal: vi.fn() } as any
             );
 
-            // Check all threshold defaults from mock config
-            expect((detector as any).imbalanceHighThreshold).toBe(0.75);
-            expect((detector as any).imbalanceMediumThreshold).toBe(0.55);
-            expect((detector as any).spreadHighThreshold).toBe(0.004);
-            expect((detector as any).spreadMediumThreshold).toBe(0.0015);
+            // Check all threshold defaults from mock config - accessing through enhancementConfig
+            expect(
+                (detector as any).enhancementConfig.imbalanceHighThreshold
+            ).toBe(0.75);
+            expect(
+                (detector as any).enhancementConfig.imbalanceMediumThreshold
+            ).toBe(0.55);
+            expect(
+                (detector as any).enhancementConfig.spreadHighThreshold
+            ).toBe(0.004);
+            expect(
+                (detector as any).enhancementConfig.spreadMediumThreshold
+            ).toBe(0.0015);
         });
 
         it("should use custom threshold values when provided", () => {
@@ -310,10 +317,18 @@ describe("Threshold Configuration Chain", () => {
                 { logSignal: vi.fn() } as any
             );
 
-            expect((detector as any).imbalanceHighThreshold).toBe(0.9);
-            expect((detector as any).imbalanceMediumThreshold).toBe(0.7);
-            expect((detector as any).spreadHighThreshold).toBe(0.008);
-            expect((detector as any).spreadMediumThreshold).toBe(0.003);
+            expect(
+                (detector as any).enhancementConfig.imbalanceHighThreshold
+            ).toBe(0.9);
+            expect(
+                (detector as any).enhancementConfig.imbalanceMediumThreshold
+            ).toBe(0.7);
+            expect(
+                (detector as any).enhancementConfig.spreadHighThreshold
+            ).toBe(0.008);
+            expect(
+                (detector as any).enhancementConfig.spreadMediumThreshold
+            ).toBe(0.003);
         });
 
         it("should validate threshold configuration ranges", () => {
@@ -337,7 +352,9 @@ describe("Threshold Configuration Chain", () => {
 
             // 🚫 NUCLEAR CLEANUP: Validation now happens in config.ts via Zod
             // Instead verify the configuration was accepted
-            expect((detector as any).imbalanceHighThreshold).toBe(0.85);
+            expect(
+                (detector as any).enhancementConfig.imbalanceHighThreshold
+            ).toBe(0.85);
         });
     });
 
@@ -492,11 +509,15 @@ describe("Threshold Configuration Chain", () => {
                 { logSignal: vi.fn() } as any
             );
 
-            expect((detector as any).imbalanceMediumThreshold).toBeLessThan(
-                (detector as any).imbalanceHighThreshold
+            expect(
+                (detector as any).enhancementConfig.imbalanceMediumThreshold
+            ).toBeLessThan(
+                (detector as any).enhancementConfig.imbalanceHighThreshold
             );
-            expect((detector as any).spreadMediumThreshold).toBeLessThan(
-                (detector as any).spreadHighThreshold
+            expect(
+                (detector as any).enhancementConfig.spreadMediumThreshold
+            ).toBeLessThan(
+                (detector as any).enhancementConfig.spreadHighThreshold
             );
         });
     });

@@ -18,16 +18,12 @@ export type SignalType =
     | "exhaustion"
     | "accumulation"
     | "distribution"
+    | "deltacvd"
     | "absorption_confirmed"
     | "exhaustion_confirmed"
     | "accumulation_confirmed"
     | "distribution_confirmed"
-    | "flow"
-    | "swingHigh"
-    | "swingLow"
-    | "cvd_confirmation"
-    | "cvd_confirmation_confirmed"
-    | "support_resistance_level"
+    | "deltacvd_confirmed"
     | "generic";
 
 export type SignalSide = "buy" | "sell";
@@ -198,7 +194,12 @@ export interface DeltaCVDConfirmationResult {
 }
 
 interface DeltaCVDConfirmationMetadata {
-    signalType?: "enhanced_cvd" | "cvd_divergence" | "absorption_enhanced";
+    signalType?: "deltacvd" | "deltacvd_confirmed";
+    signalDescription?:
+        | "momentum_buy"
+        | "momentum_sell"
+        | "bullish_divergence"
+        | "bearish_divergence";
     cvdAnalysis?: {
         shortestWindowSlope: number;
         shortestWindowZScore: number;
@@ -217,7 +218,6 @@ interface DeltaCVDConfirmationMetadata {
     qualityMetrics?: {
         cvdStatisticalSignificance: number;
         absorptionConfirmation: boolean;
-        signalPurity: "premium" | "standard";
     };
     confidenceFactors?: ConfidenceFactors;
     priceCorrelations?: Record<number, number>;
@@ -325,7 +325,10 @@ export interface AnomalyImpactFactors {
     finalConfidence: number;
     anomalyType?: string;
     correlationBoost?: number;
+    contextBoost?: number;
     healthImpact?: string;
+    volatilityRegime: string;
+    marketVolatility: number;
     impactFactors: Array<{
         anomalyType: string;
         impact: "positive" | "negative" | "neutral";
