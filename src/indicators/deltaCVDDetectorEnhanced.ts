@@ -320,9 +320,11 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             event
         );
 
+
         if (divergenceResult.hasDivergence) {
             // Use the real calculated confidence value
             const realConfidence = divergenceResult.divergenceStrength;
+
 
             // Only proceed if real confidence meets threshold
             if (realConfidence >= this.enhancementConfig.signalThreshold) {
@@ -427,6 +429,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 meetsTradeRate,
             }
         );
+
 
         // Config-driven validation: must meet BOTH volume AND trade rate requirements
         return meetsVolumeRate && meetsTradeRate;

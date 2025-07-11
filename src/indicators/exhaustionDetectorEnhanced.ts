@@ -407,18 +407,52 @@ export class ExhaustionDetectorEnhanced extends Detector {
         });
 
         // Find zones near the current price
-        const relevantZones = this.preprocessor.findZonesNearPrice(
+        let relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,
             event.price,
             this.confluenceMaxDistance
         );
 
+        // STRUCTURAL FIX: If no zones found with primary method, find nearest zone with volume
         if (relevantZones.length === 0) {
             this.logger.debug(
-                "ExhaustionDetectorEnhanced: No relevant zones near price",
+                "ExhaustionDetectorEnhanced: No zones found with primary method, using fallback",
                 {
                     price: event.price,
                     maxDistance: this.confluenceMaxDistance,
+                    totalZones: allZones.length,
+                }
+            );
+            
+            // Find the zone with the smallest distance to the trade price that has volume
+            const zonesWithVolume = allZones.filter(z => 
+                z.aggressiveVolume > 0 || z.passiveVolume > 0
+            );
+            
+            if (zonesWithVolume.length > 0) {
+                const nearestZone = zonesWithVolume.reduce((closest, zone) => 
+                    Math.abs(zone.priceLevel - event.price) < Math.abs(closest.priceLevel - event.price) 
+                        ? zone : closest
+                );
+                relevantZones = [nearestZone];
+                
+                this.logger.debug(
+                    "ExhaustionDetectorEnhanced: Using fallback zone",
+                    {
+                        price: event.price,
+                        zonePrice: nearestZone.priceLevel,
+                        distance: Math.abs(nearestZone.priceLevel - event.price),
+                        aggressiveVolume: nearestZone.aggressiveVolume,
+                    }
+                );
+            }
+        }
+
+        if (relevantZones.length === 0) {
+            this.logger.debug(
+                "ExhaustionDetectorEnhanced: No relevant zones found even with fallback",
+                {
+                    price: event.price,
                     totalZones: allZones.length,
                 }
             );

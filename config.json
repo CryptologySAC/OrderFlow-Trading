@@ -463,8 +463,8 @@
             "deltaCVD": {
                 "windowsSec": [60, 180],
                 "minTradesPerSec": 1,
-                "minVolPerSec": 12,
-                "signalThreshold": 1.2,
+                "minVolPerSec": 5,
+                "signalThreshold": 0.9,
                 "eventCooldownMs": 15000,
                 "enhancementMode": "production",
                 "cvdImbalanceThreshold": 0.2
