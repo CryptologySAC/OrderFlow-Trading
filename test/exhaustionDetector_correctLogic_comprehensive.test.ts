@@ -79,7 +79,10 @@ describe("ExhaustionDetector Correct Logic - 100 Comprehensive Tests", () => {
         } as any;
 
         // Create detector with realistic config and debug logger
-        const testConfig = Config.EXHAUSTION_DETECTOR;
+        const testConfig = {
+            ...Config.EXHAUSTION_DETECTOR,
+            eventCooldownMs: 0, // Disable cooldown in tests
+        };
 
         // Create a debug logger that shows ALL info for debugging failures
         const debugLogger = {
@@ -221,12 +224,12 @@ describe("ExhaustionDetector Correct Logic - 100 Comprehensive Tests", () => {
                 });
             } else if (testIndex <= 14) {
                 // Insufficient aggressive volume (below threshold)
-                const aggressiveVol = 10 + (testIndex - 7) * 8; // 18-74 LTC (below 80 threshold)
-                const passiveVol = 50 + (testIndex - 7) * 5; // 55-85 LTC
+                const aggressiveVol = 2 + (testIndex - 7) * 1; // 3-9 LTC (below 10 threshold)
+                const passiveVol = 5 + (testIndex - 7) * 1; // 6-12 LTC
 
                 scenarios.push({
                     id: `no_exhaustion_insufficient_${i}`,
-                    description: `No exhaustion: Insufficient aggressive volume (${aggressiveVol} LTC, threshold: 80, passive: ${passiveVol} each)`,
+                    description: `No exhaustion: Insufficient aggressive volume (${aggressiveVol} LTC, threshold: 10, passive: ${passiveVol} each)`,
                     passiveBidVolume: passiveVol,
                     passiveAskVolume: passiveVol,
                     aggressiveVolume: aggressiveVol,
