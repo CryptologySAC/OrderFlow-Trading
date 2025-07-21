@@ -1,0 +1,3 @@
+src/indicators/accumulationZoneDetector.ts production-critical
+src/indicators/distributionZoneDetector.ts production-critical  
+src/indicators/enhancedZoneFormation.ts production-critical

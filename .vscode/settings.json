@@ -1,0 +1,5 @@
+{
+    "python.createEnvironment.contentButton": "show",
+    "python.defaultInterpreterPath": "python3",
+    "typescript.tsdk": "node_modules/typescript/lib"
+}

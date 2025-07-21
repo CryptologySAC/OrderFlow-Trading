@@ -1,0 +1,102 @@
+{
+    "name": "orderflow-trading",
+    "type": "module",
+    "version": "0.2",
+    "license": "MIT",
+    "author": "Cryptology",
+    "description": "Cryptology OrderFlow Trading",
+    "private": true,
+    "files": [
+        "dist",
+        "bin"
+    ],
+    "main": "dist/app",
+    "types": "dist/app",
+    "bin": {
+        "streamer": "bin/app"
+    },
+    "scripts": {
+        "start": "bin/app",
+        "start:dev": "NODE_ENV=development bin/app",
+        "rebuild": "yarn build && yarn start:dev",
+        "build:watch": "yarn clean && yarn compile -w",
+        "check": "yarn lint && yarn build && yarn test",
+        "clean": "rm -r dist",
+        "compile": "yarn format && tsc --noEmit",
+        "format": "yarn prettier && yarn lint",
+        "format:check": "prettier --check './**/*.{ts,tsx,js,json,css,html,md}'",
+        "lint": "eslint \"src/**/*.{ts,tsx}\" --fix",
+        "docs": "typedoc src --out docs",
+        "prettier": "prettier --write './**/*.{ts,tsx,js,json,css,html,md}'",
+        "setup": "yarn && yarn clean && yarn build",
+        "snyk": "snyk test",
+        "deps:missing": "node ./scripts/deps/missing.js",
+        "updates": "npx npm-check-updates",
+        "update": "npx npm-check-updates -u",
+        "prepare": "husky",
+        "build": "yarn format && tsc -p tsconfig.build.json",
+        "test": "vitest --run",
+        "test:coverage": "vitest run --coverage",
+        "test:deltacvd-ab": "tsx scripts/runDeltaCVDABTest.ts",
+        "test:deltacvd-ab:all": "tsx scripts/runDeltaCVDABTest.ts --profile all --parallel",
+        "dev": "ts-node --transpile-only src/index.ts",
+        "backtest": "node --max-old-space-size=8192 --expose-gc --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"));' scripts/runBacktest.ts",
+        "protect-production": "echo 'Files protected from automated modification'",
+        "validate-protection": "grep -l 'PRODUCTION-READY' src/indicators/*.ts"
+    },
+    "devDependencies": {
+        "@types/better-sqlite3": "7.6.13",
+        "@types/node": "^22.15.3",
+        "@types/ws": "^8.18.1",
+        "@typescript-eslint/eslint-plugin": "^8.32.1",
+        "@typescript-eslint/parser": "^8.32.1",
+        "@vitest/coverage-v8": "3.1.4",
+        "cross-env": "^7.0.3",
+        "eslint": "^9.27.0",
+        "eslint-config-prettier": "^10.1.5",
+        "eslint-plugin-prettier": "^5.4.0",
+        "husky": "^9.1.7",
+        "jsdoc": "^4.0.4",
+        "lint-staged": "^16.0.0",
+        "node-fetch": "^3.3.2",
+        "nodemon": "^3.1.10",
+        "npm-check-updates": "^18.0.1",
+        "prettier": "3.5.3",
+        "snyk": "^1.100.0",
+        "ts-node": "^10.9.2",
+        "typedoc": "0.28.3",
+        "typescript": "^5.8.3",
+        "vitest": "^3.1.4"
+    },
+    "lint-staged": {
+        "*.{ts,tsx,js,json,css,html,md}": "prettier --write"
+    },
+    "engines": {
+        "node": ">=23.x"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "prettier": {
+        "tabWidth": 4,
+        "trailingComma": "es5"
+    },
+    "dependencies": {
+        "@binance/common": "^1.0.2",
+        "@binance/spot": "^4.0.0",
+        "@types/express": "^5.0.1",
+        "async-mutex": "^0.5.0",
+        "better-sqlite3": "^11.9.1",
+        "dotenv": "^16.5.0",
+        "express": "^5.1.0",
+        "fastpriorityqueue": "^0.7.5",
+        "lightweight-charts": "^5.0.6",
+        "mqtt": "5.13.1",
+        "openai": "^5.1.1",
+        "pino": "^9.6.0",
+        "pino-pretty": "^13.0.0",
+        "ulid": "^3.0.0",
+        "ws": "^8.18.2",
+        "zod": "^3.25.57"
+    }
+}

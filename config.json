@@ -1,0 +1,374 @@
+{
+    "nodeEnv": "development",
+    "httpPort": 3000,
+    "wsPort": 3001,
+    "mqtt": {
+        "url": "wss://mqtt.cryptology.pe",
+        "username": "orderflow",
+        "password": "orderflow",
+        "statsTopic": "orderflow/stats",
+        "clientId": "orderflow-dashboard",
+        "keepalive": 60,
+        "connectTimeout": 4000,
+        "reconnectPeriod": 1000
+    },
+    "alertWebhookUrl": "https://lima.cryptology.pe/api/webhook/OcdSY61opli9-n7unmlw4CmO",
+    "alertCooldownMs": 300000,
+    "maxStorageTime": 5400000,
+    "dataStream": {
+        "reconnectDelay": 1000,
+        "maxReconnectAttempts": 5,
+        "depthUpdateSpeed": "100ms",
+        "enableHeartbeat": true,
+        "heartbeatInterval": 30000,
+        "maxBackoffDelay": 30000,
+        "streamHealthTimeout": 10000,
+        "enableStreamHealthCheck": true,
+        "reconnectOnHealthFailure": true,
+        "enableHardReload": false,
+        "hardReloadAfterAttempts": 3,
+        "hardReloadCooldownMs": 60000,
+        "maxHardReloads": 2,
+        "hardReloadRestartCommand": "pm2 restart orderflow"
+    },
+    "marketDataStorage": {
+        "enabled": false,
+        "dataDirectory": "./backtesting_data",
+        "format": "csv",
+        "maxFileSize": 25,
+        "depthLevels": 20,
+        "rotationHours": 3,
+        "compressionEnabled": false,
+        "monitoringInterval": 30
+    },
+    "symbols": {
+        "LTCUSDT": {
+            "pricePrecision": 2,
+            "quantityPrecision": 8,
+            "windowMs": 90000,
+            "bandTicks": 7,
+            "largeTradeThreshold": 100,
+            "maxEventListeners": 50,
+            "dashboardUpdateInterval": 500,
+            "maxDashboardInterval": 1000,
+            "significantChangeThreshold": 0.001,
+            "standardZoneConfig": {
+                "zoneTicks": 10,
+                "timeWindows": [
+                    180000, 300000, 600000, 1200000, 2700000, 5400000
+                ],
+                "adaptiveMode": false,
+                "volumeThresholds": {
+                    "aggressive": 8.0,
+                    "passive": 4.0,
+                    "institutional": 50.0
+                },
+                "priceThresholds": {
+                    "tickValue": 0.01,
+                    "minZoneWidth": 0.02,
+                    "maxZoneWidth": 0.1
+                },
+                "performanceConfig": {
+                    "maxZoneHistory": 3000,
+                    "cleanupInterval": 5400000,
+                    "maxMemoryMB": 100
+                }
+            },
+            "universalZoneConfig": {
+                "maxActiveZones": 30,
+                "zoneTimeoutMs": 1800000,
+                "minZoneVolume": 200,
+                "maxZoneWidth": 0.05,
+                "minZoneStrength": 0.65,
+                "completionThreshold": 0.7,
+                "strengthChangeThreshold": 0.2,
+                "minCandidateDuration": 300000,
+                "maxPriceDeviation": 0.02,
+                "minTradeCount": 50,
+                "minBuyRatio": 0.65,
+                "minSellRatio": 0.6,
+                "priceStabilityThreshold": 0.85,
+                "strongZoneThreshold": 0.75,
+                "weakZoneThreshold": 0.5,
+                "minZoneConfluenceCount": 3,
+                "maxZoneConfluenceDistance": 3,
+                "enableZoneConfluenceFilter": true,
+                "enableCrossTimeframeAnalysis": false,
+                "confluenceConfidenceBoost": 0.1,
+                "crossTimeframeBoost": 0.05,
+                "useStandardizedZones": true,
+                "enhancementMode": "production"
+            },
+            "orderBookState": {
+                "maxLevels": 150,
+                "snapshotIntervalMs": 1000,
+                "maxPriceDistance": 10.0,
+                "pruneIntervalMs": 30000,
+                "maxErrorRate": 0.05,
+                "staleThresholdMs": 5000
+            },
+            "orderBookProcessor": {
+                "binSize": 10,
+                "numLevels": 150,
+                "maxBufferSize": 100000
+            },
+            "tradesProcessor": {
+                "storageTime": 5400000,
+                "maxBacklogRetries": 3,
+                "backlogBatchSize": 500,
+                "maxMemoryTrades": 100000,
+                "saveQueueSize": 1000,
+                "healthCheckInterval": 45000
+            },
+            "signalManager": {
+                "confidenceThreshold": 0.4,
+                "signalTimeout": 5400000,
+                "enableMarketHealthCheck": true,
+                "enableAlerts": true,
+                "maxQueueSize": 1000,
+                "processingBatchSize": 10,
+                "backpressureThreshold": 800,
+                "enableSignalPrioritization": true,
+                "adaptiveBatchSizing": true,
+                "maxAdaptiveBatchSize": 50,
+                "minAdaptiveBatchSize": 5,
+                "circuitBreakerThreshold": 5,
+                "circuitBreakerResetMs": 60000,
+                "adaptiveBackpressure": true,
+                "highPriorityBypassThreshold": 8.5,
+                "signalTypePriorities": {
+                    "absorption": 10,
+                    "exhaustion": 9,
+                    "deltacvd": 8,
+                    "accumulation": 7,
+                    "distribution": 7
+                },
+                "detectorThresholds": {
+                    "absorption": 0.5,
+                    "exhaustion": 0.3,
+                    "accumulation": 0.25,
+                    "distribution": 0.25,
+                    "deltacvd": 0.5
+                },
+                "positionSizing": {
+                    "absorption": 0.4,
+                    "exhaustion": 0.6,
+                    "accumulation": 0.4,
+                    "distribution": 0.4,
+                    "deltacvd": 0.6
+                },
+                "conflictResolution": {
+                    "enabled": true,
+                    "strategy": "confidence_weighted",
+                    "minimumSeparationMs": 1800000,
+                    "contradictionPenaltyFactor": 0.7,
+                    "priceTolerance": 0.02,
+                    "volatilityNormalizationFactor": 0.02
+                },
+                "signalPriorityMatrix": {
+                    "highVolatility": {
+                        "absorption": 0.4,
+                        "deltacvd": 0.8,
+                        "exhaustion": 0.9,
+                        "accumulation": 0.5,
+                        "distribution": 0.5
+                    },
+                    "lowVolatility": {
+                        "absorption": 0.8,
+                        "deltacvd": 0.4,
+                        "exhaustion": 0.5,
+                        "accumulation": 0.9,
+                        "distribution": 0.9
+                    },
+                    "balanced": {
+                        "absorption": 0.6,
+                        "deltacvd": 0.6,
+                        "exhaustion": 0.7,
+                        "accumulation": 0.7,
+                        "distribution": 0.7
+                    }
+                },
+                "correlationBoostFactor": 0.8,
+                "priceTolerancePercent": 0.7,
+                "signalThrottleMs": 30000,
+                "correlationWindowMs": 300000,
+                "maxHistorySize": 200,
+                "defaultPriority": 5,
+                "volatilityHighThreshold": 0.04,
+                "volatilityLowThreshold": 0.015,
+                "defaultLowVolatility": 0.02,
+                "defaultVolatilityError": 0.03,
+                "contextBoostHigh": 0.2,
+                "contextBoostLow": 0.15,
+                "priorityQueueHighThreshold": 8.0,
+                "backpressureYieldMs": 1,
+                "marketVolatilityWeight": 0.7
+            },
+            "signalCoordinator": {
+                "maxConcurrentProcessing": 20,
+                "processingTimeoutMs": 5000,
+                "retryAttempts": 2,
+                "retryDelayMs": 1000,
+                "enableMetrics": true,
+                "logLevel": "info"
+            },
+            "exhaustion": {
+                "minAggVolume": 10000,
+                "exhaustionThreshold": 0.875,
+                "windowMs": 15000,
+                "eventCooldownMs": 30000,
+
+                "useStandardizedZones": true,
+                "enhancementMode": "production",
+                "minEnhancedConfidenceThreshold": 0.25,
+
+                "enableDepletionAnalysis": true,
+                "depletionVolumeThreshold": 1000,
+                "depletionRatioThreshold": 0.25,
+                "depletionConfidenceBoost": 0.15,
+
+                "passiveVolumeExhaustionRatio": 0.4,
+
+                "varianceReductionFactor": 1.0,
+                "alignmentNormalizationFactor": 0.4,
+                "aggressiveVolumeExhaustionThreshold": 0.65,
+                "aggressiveVolumeReductionFactor": 0.5
+            },
+            "absorption": {
+                "minAggVolume": 5000,
+                "windowMs": 10000,
+                "eventCooldownMs": 30000,
+                "priceEfficiencyThreshold": 0.0002,
+                "maxAbsorptionRatio": 0.65,
+                "minPassiveMultiplier": 1.2,
+                "passiveAbsorptionThreshold": 0.35,
+                "expectedMovementScalingFactor": 10,
+                "contextConfidenceBoostMultiplier": 0.3,
+                "liquidityGradientRange": 5,
+                "institutionalVolumeThreshold": 10000,
+                "institutionalVolumeRatioThreshold": 0.75,
+                "enableInstitutionalVolumeFilter": true,
+                "institutionalVolumeBoost": 0.1,
+                "minAbsorptionScore": 0.5,
+                "finalConfidenceRequired": 0.8,
+                "confidenceBoostReduction": 0.5,
+                "maxZoneCountForScoring": 3,
+                "minEnhancedConfidenceThreshold": 0.3,
+                "useStandardizedZones": true,
+                "enhancementMode": "production"
+            },
+
+            "spoofingDetector": {
+                "wallTicks": 10,
+                "minWallSize": 20,
+                "dynamicWallWidth": false,
+                "testLogMinSpoof": 50,
+                "maxCancellationRatio": 0.8,
+                "rapidCancellationMs": 500,
+                "algorithmicPatternThreshold": 0.9,
+                "layeringDetectionLevels": 3,
+                "ghostLiquidityThresholdMs": 200,
+                "passiveHistoryCacheTTL": 300000,
+                "orderPlacementCacheTTL": 300000,
+                "cancellationPatternCacheTTL": 300000,
+                "maxPlacementHistoryPerPrice": 20,
+                "maxPassiveHistoryPerPrice": 10,
+                "wallPullThresholdRatio": 0.6,
+                "wallPullTimeThresholdMs": 1200,
+                "canceledToExecutedRatio": 0.7,
+                "bandOffsetDivisor": 2,
+                "pricePrecisionDecimals": 8,
+                "priceScalingFactor": 100000000,
+                "minConfidenceScore": 0.95,
+                "historyScanTimeWindowMs": 2000,
+                "priceDeviationTickMultiplier": 2,
+                "layeringMinCoordinatedLevels": 2,
+                "layeringMaxConfidence": 0.9,
+                "ghostLiquidityDisappearanceRatio": 0.85,
+                "ghostLiquidityConfidence": 0.85,
+                "highSignificanceThreshold": 0.8,
+                "mediumSignificanceThreshold": 0.6,
+                "spoofingDetectionWindowMs": 5000
+            },
+            "hiddenOrderDetector": {
+                "minHiddenVolume": 10,
+                "minTradeSize": 5,
+                "priceTolerance": 0.0001,
+                "maxDepthAgeMs": 1000,
+                "minConfidence": 0.8,
+                "zoneHeightPercentage": 0.002
+            },
+            "anomalyDetector": {
+                "windowSize": 100,
+                "anomalyCooldownMs": 30000,
+                "volumeImbalanceThreshold": 0.7,
+                "normalSpreadBps": 5,
+                "minHistory": 50,
+                "flowWindowMs": 60000,
+                "orderSizeWindowMs": 300000,
+                "volatilityThreshold": 0.05,
+                "spreadThresholdBps": 10,
+                "extremeVolatilityWindowMs": 30000,
+                "liquidityCheckWindowMs": 120000,
+                "whaleCooldownMs": 300000,
+                "marketHealthWindowMs": 600000
+            },
+            "deltaCVD": {
+                "minTradesPerSec": 1.0,
+                "minVolPerSec": 12,
+                "signalThreshold": 0.85,
+                "eventCooldownMs": 90000,
+                "enhancementMode": "production",
+                "cvdImbalanceThreshold": 0.35
+            },
+            "accumulation": {
+                "eventCooldownMs": 30000,
+                "confidenceThreshold": 0.45,
+                "confluenceMinZones": 2,
+                "confluenceMaxDistance": 0.1,
+                "confluenceConfidenceBoost": 0.1,
+                "crossTimeframeConfidenceBoost": 0.15,
+                "accumulationVolumeThreshold": 15,
+                "accumulationRatioThreshold": 0.55,
+                "alignmentScoreThreshold": 0.65,
+                "defaultDurationMs": 120000,
+                "maxPriceSupport": 2.5,
+                "priceSupportMultiplier": 2.0,
+                "minPassiveVolumeForEfficiency": 8,
+                "defaultVolatility": 0.08,
+                "defaultBaselineVolatility": 0.04,
+                "confluenceStrengthDivisor": 1.5,
+                "passiveToAggressiveRatio": 0.7,
+                "enhancementMode": "production"
+            },
+            "distribution": {
+                "eventCooldownMs": 30000,
+                "confidenceThreshold": 0.45,
+                "confluenceMinZones": 2,
+                "confluenceMaxDistance": 0.1,
+                "confluenceConfidenceBoost": 0.1,
+                "crossTimeframeConfidenceBoost": 0.15,
+                "distributionVolumeThreshold": 15,
+                "distributionRatioThreshold": 0.55,
+                "alignmentScoreThreshold": 0.65,
+                "defaultDurationMs": 120000,
+                "maxPriceResistance": 2.5,
+                "priceResistanceMultiplier": 2.0,
+                "minPassiveVolumeForEfficiency": 8,
+                "defaultVolatility": 0.08,
+                "defaultBaselineVolatility": 0.04,
+                "enhancementMode": "production"
+            },
+            "simpleIceberg": {
+                "enhancementMode": "production",
+                "minOrderCount": 3,
+                "minTotalSize": 500,
+                "maxOrderGapMs": 30000,
+                "trackingWindowMs": 300000,
+                "maxActivePatterns": 50,
+                "maxRecentTrades": 100
+            }
+        }
+    },
+    "symbol": "LTCUSDT"
+}

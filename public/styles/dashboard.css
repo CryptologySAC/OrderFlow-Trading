@@ -1,0 +1,717 @@
+/* CSS Variables for Light/Dark Mode */
+:root {
+    --bg-primary: #f4f4f4;
+    --bg-secondary: #ffffff;
+    --text-primary: #000000;
+    --text-secondary: #333333;
+    --border-color: #ccc;
+    --border-light: #eee;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    --gauge-bg: #fff;
+    --chart-grid: rgba(102, 102, 102, 0.1);
+    --chart-annotation: rgba(102, 102, 102, 0.4);
+    --button-bg: #ffffff;
+    --button-border: #ccc;
+    --button-hover: #e6e6e6;
+    --anomaly-info-bg: #e3f2fd;
+    --anomaly-medium-bg: #fffde7;
+    --resize-handle-hover: #007bff;
+    --resize-handle-active: #0056b3;
+}
+
+/* Dark mode variables */
+[data-theme="dark"] {
+    --bg-primary: #1a1a1a;
+    --bg-secondary: #2d2d2d;
+    --text-primary: #ffffff;
+    --text-secondary: #e0e0e0;
+    --border-color: #404040;
+    --border-light: #333333;
+    --shadow-color: rgba(0, 0, 0, 0.3);
+    --gauge-bg: #2d2d2d;
+    --chart-grid: rgba(255, 255, 255, 0.25);
+    --chart-annotation: rgba(255, 255, 255, 0.6);
+    --button-bg: #3d3d3d;
+    --button-border: #555555;
+    --button-hover: #4a4a4a;
+    --anomaly-info-bg: #1e3a5f;
+    --anomaly-medium-bg: #3d3b00;
+    --resize-handle-hover: #4dabf7;
+    --resize-handle-active: #339af0;
+}
+
+/* Auto dark mode based on system preference */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+        --bg-primary: #1a1a1a;
+        --bg-secondary: #2d2d2d;
+        --text-primary: #ffffff;
+        --text-secondary: #e0e0e0;
+        --border-color: #404040;
+        --border-light: #333333;
+        --shadow-color: rgba(0, 0, 0, 0.3);
+        --gauge-bg: #2d2d2d;
+        --chart-grid: rgba(255, 255, 255, 0.25);
+        --chart-annotation: rgba(255, 255, 255, 0.6);
+        --button-bg: #3d3d3d;
+        --button-border: #555555;
+        --button-hover: #4a4a4a;
+        --anomaly-info-bg: #1e3a5f;
+        --anomaly-medium-bg: #3d3b00;
+        --resize-handle-hover: #4dabf7;
+        --resize-handle-active: #339af0;
+    }
+}
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    overflow: hidden;
+    transition:
+        background-color 0.3s ease,
+        color 0.3s ease;
+}
+
+.dashboard {
+    display: flex;
+    height: calc(100vh - 40px);
+    gap: 0;
+}
+
+.column {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+#column1 {
+    flex: 0 0 25%;
+    min-width: 200px;
+    max-width: 50%;
+}
+
+#column2 {
+    flex: 1;
+    min-width: 300px;
+}
+
+#column3 {
+    flex: 0 0 15%;
+    min-width: 150px;
+    max-width: 30%;
+}
+
+.chart-container,
+.gauge-container,
+.signals-container,
+.anomaly-list-container {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    padding: 10px;
+    box-shadow: 0 2px 5px var(--shadow-color);
+    box-sizing: border-box;
+    transition:
+        background-color 0.3s ease,
+        border-color 0.3s ease;
+}
+
+.chart-container,
+.gauge-container,
+.signals-container {
+    margin: 1vh 0;
+}
+
+.signals-container,
+.anomaly-list-container {
+    margin: 1vh 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 200px;
+    overflow: hidden;
+}
+
+/* Trade delay indicator styling */
+.trade-delay-indicator {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    margin-top: 10px;
+    font-size: 12px;
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 120px;
+    justify-content: space-between;
+}
+
+.delay-title {
+    font-size: 11px;
+    font-weight: normal;
+    opacity: 0.8;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+#tradeDelayValue {
+    font-family: "Courier New", monospace;
+    font-size: 12px;
+    min-width: 45px;
+    text-align: right;
+}
+
+.trade-delay-indicator.delay-green {
+    color: #4caf50;
+    border-color: rgba(76, 175, 80, 0.3);
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.trade-delay-indicator.delay-orange {
+    color: #ff9800;
+    border-color: rgba(255, 152, 0, 0.3);
+    background: rgba(255, 152, 0, 0.1);
+}
+
+.trade-delay-indicator.delay-red {
+    color: #f44336;
+    border-color: rgba(244, 67, 54, 0.3);
+    background: rgba(244, 67, 54, 0.1);
+}
+
+/* Signals container specific styling */
+.signals-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    margin-bottom: 8px;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.signals-filter label {
+    margin-right: 10px;
+    font-weight: normal;
+    font-size: 12px;
+}
+
+.signals-filter input[type="checkbox"] {
+    margin-right: 4px;
+}
+
+.signals-list {
+    overflow-y: auto;
+    flex: 1;
+    font-size: 14px;
+    min-height: 0;
+}
+
+.signal-row {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    flex-direction: column;
+    font-family: "Courier New", monospace;
+    font-size: 11px;
+    line-height: 1.3;
+    width: 100%;
+    box-sizing: border-box;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-left: 3px solid transparent;
+}
+
+.signal-row:hover {
+    background: rgba(66, 165, 245, 0.1);
+    border-left-color: #42a5f5;
+}
+
+.signal-row.signal-buy {
+    border-left-color: #4caf50;
+}
+
+.signal-row.signal-sell {
+    border-left-color: #f44336;
+}
+
+.signal-row-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+}
+
+.signal-type {
+    font-weight: bold;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    font-size: 10px;
+}
+
+.signal-side {
+    font-weight: bold;
+    font-size: 10px;
+}
+
+.signal-side.buy {
+    color: #4caf50;
+}
+
+.signal-side.sell {
+    color: #f44336;
+}
+
+.signal-time {
+    font-size: 9px;
+    opacity: 0.7;
+    text-align: right;
+}
+
+.signal-details {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+}
+
+.signal-price {
+    font-weight: bold;
+    color: var(--text-primary);
+}
+
+.signal-confidence {
+    color: var(--text-secondary);
+    opacity: 0.8;
+}
+
+.signal-targets {
+    font-size: 9px;
+    opacity: 0.6;
+    margin-top: 2px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.signal-tooltip {
+    position: absolute;
+    z-index: 1000;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 8px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    font-size: 11px;
+    max-width: 300px;
+    word-wrap: break-word;
+    pointer-events: none;
+    transform: translate(-50%, -100%);
+    margin-top: -8px;
+}
+
+.signal-tooltip::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 4px solid transparent;
+    border-top-color: var(--border-color);
+}
+
+/* Remove margin between signals and anomaly list in column 3 */
+#column3 .signals-container {
+    margin-bottom: 0;
+}
+
+#column3 .anomaly-list-container {
+    margin-top: 0;
+}
+
+.gauge-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 20vh;
+    min-height: 180px;
+    max-height: 220px;
+    flex-shrink: 1;
+}
+
+#orderBookContainer {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+#tradesContainer {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.resize-handle {
+    position: absolute;
+    top: 0;
+    right: -5px;
+    width: 10px;
+    height: 100%;
+    background: transparent;
+    cursor: col-resize;
+    z-index: 1000;
+    border-right: 2px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.resize-handle:hover {
+    border-right-color: var(--resize-handle-hover);
+}
+
+.resize-handle:active {
+    border-right-color: var(--resize-handle-active);
+}
+
+canvas {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+}
+
+/* Ensure charts and content fill their containers properly */
+.chart-container {
+    height: 100%;
+}
+
+.chartAreaWrapper,
+.chartAreaWrapper50 {
+    height: 100%;
+}
+
+.indicator-text {
+    text-align: center;
+    margin-top: 5px;
+    font-weight: bold;
+}
+
+.direction-text {
+    color: red;
+}
+
+.ratio-text {
+    color: blue;
+}
+
+.support-text {
+    color: orange;
+}
+
+.stability-text {
+    color: green;
+}
+
+.rangeSelector {
+    margin: 10px;
+    text-align: center;
+}
+
+.rangeSelector button {
+    margin: 0 5px;
+    padding: 5px 10px;
+    cursor: pointer;
+    background: var(--button-bg);
+    border: 1px solid var(--button-border);
+    color: var(--text-primary);
+    transition:
+        background-color 0.3s ease,
+        border-color 0.3s ease;
+}
+
+.rangeSelector button:hover {
+    background: var(--button-hover);
+}
+
+.rangeSelector button.active {
+    background: var(--resize-handle-hover);
+    color: white;
+    border-color: var(--resize-handle-hover);
+}
+
+.reset-layout-btn {
+    background-color: #dc3545 !important;
+    color: white !important;
+    border: 1px solid #dc3545 !important;
+    border-radius: 3px;
+    font-size: 12px;
+    margin-left: 15px !important;
+}
+
+.reset-layout-btn:hover {
+    background-color: #c82333 !important;
+    border-color: #bd2130 !important;
+}
+
+.theme-toggle-btn {
+    background: var(--button-bg) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--button-border) !important;
+    border-radius: 3px;
+    font-size: 12px;
+    margin-left: 10px !important;
+    padding: 5px 10px !important;
+    cursor: pointer;
+    transition:
+        background-color 0.3s ease,
+        border-color 0.3s ease;
+}
+
+.theme-toggle-btn:hover {
+    background: var(--button-hover) !important;
+}
+
+.chartAreaWrapper {
+    position: relative;
+    flex: 1;
+    padding: 10px;
+    box-sizing: border-box;
+    overflow: hidden;
+    height: 100%;
+}
+
+.chartAreaWrapper50 {
+    position: relative;
+    height: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.anomaly-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    margin-bottom: 8px;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+.anomaly-filter label {
+    margin-right: 10px;
+    font-weight: normal;
+}
+
+.anomaly-list {
+    overflow-y: auto;
+    flex: 1;
+    font-size: 14px;
+    min-height: 0;
+}
+.anomaly-row {
+    padding: 3px 5px 3px 5px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    font-family: "Courier New", monospace;
+    font-size: 12px;
+    line-height: 1.2;
+    width: 100%;
+    box-sizing: border-box;
+    cursor: help;
+    transition: border-color 0.3s ease;
+}
+.anomaly-row.critical {
+    color: #fff;
+    background: #e53935;
+    font-weight: bold;
+}
+.anomaly-row.high {
+    color: #fff;
+    background: #ffb300;
+    font-weight: bold;
+}
+.anomaly-row.medium {
+    color: var(--text-secondary);
+    background: var(--anomaly-medium-bg);
+}
+.anomaly-row.info {
+    color: var(--text-secondary);
+    background: var(--anomaly-info-bg);
+}
+/* Flexible columns that distribute available space evenly */
+.anomaly-icon {
+    flex: 0 0 24px;
+    text-align: center;
+    font-size: 14px;
+    margin-right: 8px;
+}
+
+.anomaly-label {
+    flex: 3;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-right: 8px;
+    min-width: 0;
+}
+
+.anomaly-price {
+    flex: 2;
+    text-align: left;
+    margin-right: 8px;
+    font-weight: bold;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.anomaly-action {
+    flex: 1.5;
+    text-align: center;
+    margin-right: 8px;
+    font-weight: normal;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.anomaly-time {
+    flex: 0 0 50px;
+    text-align: right;
+    opacity: 0.8;
+    padding-right: 5px;
+    box-sizing: border-box;
+}
+
+/* Legacy class for backwards compatibility */
+.anomaly-type {
+    display: inline-block;
+    width: 20px;
+    text-align: center;
+    font-size: 14px;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.anomaly-badge {
+    position: absolute;
+    z-index: 50;
+    right: 50px;
+    top: 80px;
+    padding: 8px 16px;
+    border-radius: 16px;
+    color: #fff;
+    font-weight: bold;
+    font-size: 18px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    pointer-events: none;
+    animation: badgefade 4s linear forwards;
+}
+.anomaly-badge.critical {
+    background: #e53935;
+}
+.anomaly-badge.high {
+    background: #ffb300;
+    color: #333;
+}
+@keyframes badgefade {
+    0% {
+        opacity: 1;
+    }
+    80% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard {
+        flex-direction: column;
+        height: auto;
+        min-height: calc(100vh - 40px);
+    }
+
+    .column {
+        flex: none;
+        height: auto;
+        min-height: 30vh;
+    }
+
+    #column1,
+    #column2,
+    #column3 {
+        flex: none;
+        width: 100%;
+        max-width: none;
+        min-width: auto;
+    }
+
+    .resize-handle {
+        display: none;
+    }
+
+    .gauge-container {
+        height: 15vh;
+        min-height: 140px;
+        max-height: 180px;
+        flex-shrink: 1;
+    }
+
+    .anomaly-list-container {
+        min-height: 150px;
+    }
+}
+
+/* Handle very short windows */
+@media (max-height: 600px) {
+    .gauge-container {
+        height: 15vh;
+        min-height: 120px;
+        max-height: 160px;
+    }
+
+    .anomaly-list-container {
+        min-height: 120px;
+    }
+
+    .anomaly-list-header {
+        margin-bottom: 4px;
+        font-size: 14px;
+    }
+}
+
+/* Support/Resistance Tooltip Styles */
+.sr-tooltip {
+    background: var(--bg-secondary) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+    font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 11px;
+    border-radius: 4px;
+    padding: 8px;
+    box-shadow: 0 2px 8px var(--shadow-color);
+    white-space: nowrap;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.sr-tooltip div {
+    margin: 2px 0;
+}
+
+.sr-tooltip div:first-child {
+    margin-top: 0;
+}
+
+.sr-tooltip div:last-child {
+    margin-bottom: 0;
+}

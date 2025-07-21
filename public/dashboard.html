@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>LTCUSDT Trading Dashboard</title>
+        <link rel="stylesheet" href="styles/dashboard.css" />
+    </head>
+    <body>
+        <main class="dashboard">
+            <!-- Column 1: Order Book -->
+            <section class="column" id="column1">
+                <div class="chart-container" id="orderBookContainer">
+                    <div class="chartAreaWrapper50">
+                        <canvas id="orderBookChart"></canvas>
+                    </div>
+                </div>
+                <div class="resize-handle" id="resize1"></div>
+            </section>
+
+            <!-- Column 2: Trading Chart -->
+            <section class="column" id="column2">
+                <div class="chart-container" id="tradesContainer">
+                    <div class="rangeSelector">
+                        <button data-range="60000">1m</button>
+                        <button data-range="900000">15m</button>
+                        <button data-range="2700000">45m</button>
+                        <button data-range="5400000">90m</button>
+                        <button data-range="all">All</button>
+                        <button
+                            id="themeToggle"
+                            class="theme-toggle-btn"
+                            title="Toggle theme"
+                        >
+                            🔄 System
+                        </button>
+                        <button
+                            id="resetLayout"
+                            class="reset-layout-btn"
+                            title="Reset all dashboard settings to default"
+                        >
+                            Reset All
+                        </button>
+                        <div
+                            class="trade-delay-indicator"
+                            id="tradeDelayIndicator"
+                        >
+                            <span class="delay-title">Server Delay:</span>
+                            <span id="tradeDelayValue">0ms</span>
+                        </div>
+                    </div>
+                    <div class="chartAreaWrapper">
+                        <canvas id="tradesChart"></canvas>
+                    </div>
+                </div>
+                <div class="resize-handle" id="resize2"></div>
+            </section>
+
+            <!-- Column 3: Signals and Anomalies -->
+            <section class="column" id="column3">
+                <div class="signals-container" id="signalsContainer">
+                    <div class="signals-header">
+                        <span>Trading Signals</span>
+                        <span class="signals-filter">
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    value="buy"
+                                    checked
+                                />Buy</label
+                            >
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    value="sell"
+                                    checked
+                                />Sell</label
+                            >
+                        </span>
+                    </div>
+                    <div class="signals-list" id="signalsList"></div>
+                </div>
+                <div class="anomaly-list-container" id="anomalyListContainer">
+                    <div class="anomaly-list-header">
+                        <span>Market Health</span>
+                        <span class="anomaly-filter">
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    value="critical"
+                                    checked
+                                />Critical</label
+                            >
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    value="high"
+                                    checked
+                                />High</label
+                            >
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    value="medium"
+                                />Medium</label
+                            >
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    value="info"
+                                />Info</label
+                            >
+                        </span>
+                    </div>
+                    <div class="anomaly-list" id="anomalyList"></div>
+                </div>
+            </section>
+        </main>
+        <script
+            defer
+            src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.min.js"
+        ></script>
+        <script
+            defer
+            src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"
+        ></script>
+        <script
+            defer
+            src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"
+        ></script>
+        <script
+            defer
+            src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation/dist/chartjs-plugin-annotation.min.js"
+        ></script>
+        <script
+            defer
+            src="https://cdn.jsdelivr.net/npm/canvas-gauges/gauge.min.js"
+        ></script>
+        <script defer src="scripts/dashboard.js" type="module"></script>
+    </body>
+</html>
