@@ -236,6 +236,15 @@ describe("Config.ts - Comprehensive Test Suite", () => {
             expect(Config.DISTRIBUTION_ZONE_DETECTOR).toBeDefined();
         });
 
+        it("should validate ABSORPTION_DETECTOR windowMs parameter", () => {
+            const absorptionConfig = Config.ABSORPTION_DETECTOR;
+            expect(absorptionConfig).toBeDefined();
+            expect(absorptionConfig.windowMs).toBeDefined();
+            expect(typeof absorptionConfig.windowMs).toBe("number");
+            expect(absorptionConfig.windowMs).toBeGreaterThan(0);
+            expect(absorptionConfig.windowMs).toBeLessThanOrEqual(300000); // 5 minutes max
+        });
+
         it("should provide detector threshold configurations", () => {
             const thresholds = Config.DETECTOR_CONFIDENCE_THRESHOLDS;
             expect(thresholds).toBeDefined();
@@ -289,9 +298,13 @@ describe("Config.ts - Comprehensive Test Suite", () => {
         it("should provide ICEBERG_DETECTOR configuration", () => {
             const icebergConfig = Config.ICEBERG_DETECTOR;
             expect(icebergConfig).toBeDefined();
-            expect(typeof icebergConfig.minRefillCount).toBe("number");
-            expect(typeof icebergConfig.maxSizeVariation).toBe("number");
+            expect(typeof icebergConfig.minOrderCount).toBe("number");
             expect(typeof icebergConfig.minTotalSize).toBe("number");
+            expect(typeof icebergConfig.maxOrderGapMs).toBe("number");
+            expect(typeof icebergConfig.trackingWindowMs).toBe("number");
+            expect(typeof icebergConfig.maxActivePatterns).toBe("number");
+            expect(typeof icebergConfig.maxRecentTrades).toBe("number");
+            expect(icebergConfig.enhancementMode).toBe("production");
         });
 
         it("should provide HIDDEN_ORDER_DETECTOR configuration", () => {

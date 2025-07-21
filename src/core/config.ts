@@ -6,7 +6,6 @@ import { resolve } from "path";
 import { z } from "zod";
 import { AnomalyDetectorOptions } from "../services/anomalyDetector.js";
 import { SpoofingDetectorConfig } from "../services/spoofingDetector.js";
-import type { IcebergDetectorConfig } from "../services/icebergDetector.js";
 import type { HiddenOrderDetectorConfig } from "../services/hiddenOrderDetector.js";
 import { OrderBookStateOptions } from "../market/orderBookState.js";
 import type {
@@ -31,7 +30,8 @@ type DetectorConfigInput =
     | z.infer<typeof ExhaustionEnhancedSettingsSchema>
     | z.infer<typeof DeltaCVDDetectorSchema>
     | z.infer<typeof AccumulationDetectorSchema>
-    | z.infer<typeof DistributionDetectorSchema>;
+    | z.infer<typeof DistributionDetectorSchema>
+    | z.infer<typeof SimpleIcebergDetectorSchema>;
 
 // Financial tick value validator - EXACT equality required for trading systems
 export const createTickValueValidator = (pricePrecision: number) => {
@@ -112,74 +112,13 @@ export const StandardZoneConfigSchema = z.object({
     }),
 });
 
-// EXHAUSTION detector - ALL properties from config.json exhaustion section
+// EXHAUSTION detector - CLEANED UP - Only used settings remain (16 core parameters)
 export const ExhaustionDetectorSchema = z.object({
-    // Base detector settings (from config.json)
+    // Core detection
     minAggVolume: z.number().int().min(1).max(10000),
     windowMs: z.number().int().min(5000).max(300000),
-    eventCooldownMs: z.number().int().min(1000).max(60000),
-    minInitialMoveTicks: z.number().int().min(1).max(50),
-    confirmationTimeoutMs: z.number().int().min(10000).max(300000),
-    maxRevisitTicks: z.number().int().min(1).max(20),
-
-    // Exhaustion-specific thresholds
-    volumeSurgeMultiplier: z.number().min(0.5).max(10.0),
-    imbalanceThreshold: z.number().min(0.05).max(0.8),
-    institutionalThreshold: z.number().min(1).max(100),
-    burstDetectionMs: z.number().int().min(500).max(10000),
-    sustainedVolumeMs: z.number().int().min(5000).max(60000),
-    medianTradeSize: z.number().min(0.1).max(10.0),
     exhaustionThreshold: z.number().min(0.01).max(1.0),
-    maxPassiveRatio: z.number().min(0.1).max(1.0),
-    minDepletionFactor: z.number().min(0.05).max(0.5),
-    imbalanceHighThreshold: z.number().min(0.5).max(1.0),
-    imbalanceMediumThreshold: z.number().min(0.3).max(0.8),
-    spreadHighThreshold: z.number().min(0.001).max(0.01),
-    spreadMediumThreshold: z.number().min(0.0005).max(0.005),
-
-    // Scoring weights
-    scoringWeights: z.object({
-        depletion: z.number().min(0.1).max(0.8),
-        passive: z.number().min(0.1).max(0.6),
-        continuity: z.number().min(0.05).max(0.3),
-        imbalance: z.number().min(0.02).max(0.2),
-        spread: z.number().min(0.01).max(0.1),
-        velocity: z.number().min(0.005).max(0.05),
-    }),
-
-    // Quality and performance settings
-    depletionThresholdRatio: z.number().min(0.05).max(0.5),
-    significantChangeThreshold: z.number().min(0.02).max(0.3),
-    highQualitySampleCount: z.number().int().min(2).max(20),
-    highQualityDataAge: z.number().int().min(10000).max(120000),
-    mediumQualitySampleCount: z.number().int().min(1).max(10),
-    mediumQualityDataAge: z.number().int().min(20000).max(300000),
-    circuitBreakerMaxErrors: z.number().int().min(1).max(20),
-    circuitBreakerWindowMs: z.number().int().min(30000).max(300000),
-
-    // Confidence adjustments
-    lowScoreConfidenceAdjustment: z.number().min(0.3).max(1.0),
-    lowVolumeConfidenceAdjustment: z.number().min(0.3).max(1.0),
-    invalidSurgeConfidenceAdjustment: z.number().min(0.3).max(1.0),
-    passiveConsistencyThreshold: z.number().min(0.3).max(0.9),
-    imbalanceNeutralThreshold: z.number().min(0.05).max(0.3),
-    velocityMinBound: z.number().min(0.01).max(1.0),
-    velocityMaxBound: z.number().min(5).max(50),
-
-    // Zone management
-    maxZones: z.number().int().min(10).max(200),
-    zoneAgeLimit: z.number().int().min(300000).max(3600000),
-
-    // Features configuration
-    features: z.object({
-        depletionTracking: z.boolean(),
-        spreadAdjustment: z.boolean(),
-        volumeVelocity: z.boolean(),
-        spoofingDetection: z.boolean(),
-        adaptiveZone: z.boolean(),
-        multiZone: z.boolean(),
-        passiveHistory: z.boolean(),
-    }),
+    eventCooldownMs: z.number().int().min(1000).max(300000),
 
     // Enhancement control
     useStandardizedZones: z.boolean(),
@@ -188,140 +127,61 @@ export const ExhaustionDetectorSchema = z.object({
 
     // Enhanced depletion analysis
     depletionVolumeThreshold: z.number().min(10).max(1000),
-    depletionRatioThreshold: z.number().min(0.4).max(0.9),
+    depletionRatioThreshold: z.number().min(0.1).max(0.9),
+    enableDepletionAnalysis: z.boolean(),
+    depletionConfidenceBoost: z.number().min(0.05).max(0.3),
+
+    // Cross-timeframe calculations
     varianceReductionFactor: z.number().min(0.5).max(3.0),
-    alignmentNormalizationFactor: z.number().min(0.5).max(3.0),
-    distanceNormalizationDivisor: z.number().min(1).max(10),
+    alignmentNormalizationFactor: z.number().min(0.2).max(3.0),
     passiveVolumeExhaustionRatio: z.number().min(0.3).max(0.8),
     aggressiveVolumeExhaustionThreshold: z.number().min(0.5).max(1.0),
     aggressiveVolumeReductionFactor: z.number().min(0.3).max(0.8),
-    enableDepletionAnalysis: z.boolean(),
-    depletionConfidenceBoost: z.number().min(0.05).max(0.3),
 });
 
-// ABSORPTION detector - ALL properties from config.json absorption section
+// ABSORPTION detector - CLEANED UP - Only used settings remain
 export const AbsorptionDetectorSchema = z.object({
-    // Base detector settings (from config.json)
+    // Core detection
     minAggVolume: z.number().int().min(1).max(10000),
-    windowMs: z.number().int().min(5000).max(300000),
+    windowMs: z.number().int().min(5000).max(300000), // 5s to 5min absorption analysis window
     eventCooldownMs: z.number().int().min(1000).max(60000),
-    minInitialMoveTicks: z.number().int().min(1).max(50),
-    confirmationTimeoutMs: z.number().int().min(10000).max(300000),
-    maxRevisitTicks: z.number().int().min(1).max(20),
 
-    // Absorption-specific thresholds
-    absorptionThreshold: z.number().min(0.1).max(1.0),
-    minPassiveMultiplier: z.number().min(0.5).max(5.0),
+    // Absorption thresholds
+    priceEfficiencyThreshold: z.number().min(0.0001).max(0.1),
     maxAbsorptionRatio: z.number().min(0.1).max(1.0),
-    strongAbsorptionRatio: z.number().min(0.1).max(1.0),
-    moderateAbsorptionRatio: z.number().min(0.1).max(1.0),
-    weakAbsorptionRatio: z.number().min(0.1).max(2.0),
-    priceEfficiencyThreshold: z.number().min(0.001).max(0.1),
-    spreadImpactThreshold: z.number().min(0.0001).max(0.01),
-    velocityIncreaseThreshold: z.number().min(0.5).max(5.0),
-    significantChangeThreshold: z.number().min(0.01).max(0.5),
+    minPassiveMultiplier: z.number().min(0.5).max(5.0),
+    passiveAbsorptionThreshold: z.number().min(0.3).max(0.8),
 
-    // Dominant side analysis
-    dominantSideAnalysisWindowMs: z.number().int().min(10000).max(300000),
-    dominantSideFallbackTradeCount: z.number().int().min(1).max(100),
-    dominantSideMinTradesRequired: z.number().int().min(1).max(20),
-    dominantSideTemporalWeighting: z.boolean(),
-    dominantSideWeightDecayFactor: z.number().min(0.1).max(1.0),
-
-    // ✅ CLAUDE.md COMPLIANCE: Calculation parameters (no magic numbers)
-    liquidityGradientRange: z.number().int().min(1).max(20),
-    recentEventsNormalizer: z.number().int().min(1).max(100),
-    contextTimeWindowMs: z.number().int().min(60000).max(1800000),
-    historyMultiplier: z.number().int().min(1).max(10),
-    refillThreshold: z.number().min(1.01).max(2.0),
-    consistencyThreshold: z.number().min(0.1).max(1.0),
-    passiveStrengthPeriods: z.number().int().min(1).max(10),
-
-    // ✅ CLAUDE.md COMPLIANCE: Expected movement scaling
+    // Calculation parameters
     expectedMovementScalingFactor: z.number().int().min(1).max(100),
-
-    // ✅ CLAUDE.md COMPLIANCE: Confidence and urgency thresholds
     contextConfidenceBoostMultiplier: z.number().min(0.1).max(1.0),
-    highUrgencyThreshold: z.number().min(1.0).max(3.0),
-    lowUrgencyThreshold: z.number().min(0.1).max(1.0),
-    reversalStrengthThreshold: z.number().min(0.1).max(1.0),
-    pricePercentileHighThreshold: z.number().min(0.5).max(1.0),
+    liquidityGradientRange: z.number().int().min(1).max(20),
 
-    // ✅ CLAUDE.md COMPLIANCE: Microstructure thresholds
-    microstructureSustainabilityThreshold: z.number().min(0.1).max(1.0),
-    microstructureEfficiencyThreshold: z.number().min(0.1).max(1.0),
-    microstructureFragmentationThreshold: z.number().min(0.1).max(1.0),
-    microstructureSustainabilityBonus: z.number().min(0.1).max(1.0),
-    microstructureToxicityMultiplier: z.number().min(0.1).max(1.0),
-    microstructureHighToxicityThreshold: z.number().min(0.1).max(1.0),
-    microstructureLowToxicityThreshold: z.number().min(0.1).max(1.0),
-    microstructureRiskCapMin: z.number().min(-1.0).max(0.0),
-    microstructureRiskCapMax: z.number().min(0.0).max(1.0),
-    microstructureCoordinationBonus: z.number().min(0.1).max(1.0),
-    microstructureConfidenceBoostMin: z.number().min(0.1).max(1.0),
-    microstructureConfidenceBoostMax: z.number().min(1.0).max(3.0),
+    // Institutional analysis
+    institutionalVolumeThreshold: z.number().min(1).max(20000),
+    institutionalVolumeRatioThreshold: z.number().min(0.3).max(0.8),
+    enableInstitutionalVolumeFilter: z.boolean(),
+    institutionalVolumeBoost: z.number().min(0.05).max(0.3),
 
-    // ✅ CLAUDE.md COMPLIANCE: Final confidence threshold - RELAXED FOR LOW-VOLUME MARKETS
-    finalConfidenceRequired: z.number().min(0.1).max(1.0), // RELAXED: 10% minimum for low-volume markets
-
-    // Features configuration
-    features: z.object({
-        adaptiveZone: z.boolean(),
-        passiveHistory: z.boolean(),
-        multiZone: z.boolean(),
-        liquidityGradient: z.boolean(),
-        absorptionVelocity: z.boolean(),
-        layeredAbsorption: z.boolean(),
-        spreadImpact: z.boolean(),
-    }),
+    // Confidence and scoring
+    minAbsorptionScore: z.number().min(0.3).max(0.9),
+    finalConfidenceRequired: z.number().min(0.1).max(3.0),
+    confidenceBoostReduction: z.number().min(0.3).max(0.8),
+    maxZoneCountForScoring: z.number().int().min(1).max(10),
+    minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
 
     // Enhancement control
     useStandardizedZones: z.boolean(),
     enhancementMode: z.enum(["disabled", "testing", "production"]),
-    minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
-
-    // Institutional volume detection (enhanced) - RELAXED FOR LOW-VOLUME MARKETS
-    institutionalVolumeThreshold: z.number().min(1).max(1000),
-    institutionalVolumeRatioThreshold: z.number().min(0.3).max(0.8), // RELAXED: 30% minimum for low-volume markets
-    enableInstitutionalVolumeFilter: z.boolean(),
-    institutionalVolumeBoost: z.number().min(0.05).max(0.3),
-
-    // Enhanced calculation parameters - RAISED MINIMUMS FOR QUALITY SIGNALS
-    volumeNormalizationThreshold: z.number().min(5).max(5000),
-    absorptionRatioNormalization: z.number().min(1).max(10),
-    minAbsorptionScore: z.number().min(0.3).max(0.9), // RELAXED: 30% minimum for low-volume markets
-    patternVarianceReduction: z.number().min(1).max(5),
-    whaleActivityMultiplier: z.number().min(1.5).max(10.0),
-    maxZoneCountForScoring: z.number().int().min(1).max(10),
-
-    // Enhanced thresholds - RAISED MINIMUMS FOR QUALITY SIGNALS
-    highConfidenceThreshold: z.number().min(0.7).max(0.9), // RAISED: 70% minimum (was 60%)
-    lowConfidenceReduction: z.number().min(0.5).max(0.9),
-    confidenceBoostReduction: z.number().min(0.3).max(0.8),
-    passiveAbsorptionThreshold: z.number().min(0.6).max(0.8), // RAISED: 60% minimum (was 40%)
-    aggressiveDistributionThreshold: z.number().min(0.6).max(0.8), // RAISED: 60% minimum (was 40%)
-    patternDifferenceThreshold: z.number().min(0.05).max(0.3),
-    minVolumeForRatio: z.number().min(0.5).max(20),
-
-    // Enhanced scoring weights
-    distanceWeight: z.number().min(0.2).max(0.6),
-    volumeWeight: z.number().min(0.2).max(0.6),
-    absorptionWeight: z.number().min(0.1).max(0.5),
-    minConfluenceScore: z.number().min(0.6).max(0.8), // RAISED: 60% minimum (was 40%)
-    volumeConcentrationWeight: z.number().min(0.1).max(0.3),
-    patternConsistencyWeight: z.number().min(0.05).max(0.2),
-    volumeBoostCap: z.number().min(0.1).max(0.5),
-    volumeBoostMultiplier: z.number().min(0.1).max(0.5),
 });
 
-// DELTACVD detector - Simplified pure divergence CVD detection
+// DELTACVD detector - CLEANED UP - Only used settings remain
 export const DeltaCVDDetectorSchema = z.object({
     // Core CVD analysis parameters (actually used by detector)
-    windowsSec: z.array(z.number().int().min(30).max(3600)),
     minTradesPerSec: z.number().min(0.001).max(5.0),
     minVolPerSec: z.number().min(0.01).max(2000.0),
     signalThreshold: z.number().min(0.01).max(1.8),
-    eventCooldownMs: z.number().int().min(1000).max(60000),
+    eventCooldownMs: z.number().int().min(1000).max(90000),
 
     // Zone enhancement control
     enhancementMode: z.enum(["disabled", "monitoring", "production"]),
@@ -330,10 +190,9 @@ export const DeltaCVDDetectorSchema = z.object({
     cvdImbalanceThreshold: z.number().min(0.05).max(0.4), // CVD imbalance ratio for detection (lower than signalThreshold)
 });
 
-// ACCUMULATION detector - Simplified schema for enhanced standalone detector
+// ACCUMULATION detector - CLEANED UP - Only used settings remain
 export const AccumulationDetectorSchema = z.object({
     // Core parameters
-    useStandardizedZones: z.boolean(),
     enhancementMode: z.enum(["disabled", "testing", "production"]),
 
     // Signal deduplication parameter (CLAUDE.md compliance - no magic numbers)
@@ -355,7 +214,6 @@ export const AccumulationDetectorSchema = z.object({
 
     // Financial calculation parameters
     defaultDurationMs: z.number().int().min(30000).max(600000),
-    tickSize: z.number().min(0.0001).max(1.0),
     maxPriceSupport: z.number().min(0.5).max(5.0),
     priceSupportMultiplier: z.number().min(1.0).max(10.0),
     minPassiveVolumeForEfficiency: z.number().min(1).max(100),
@@ -365,21 +223,11 @@ export const AccumulationDetectorSchema = z.object({
     // Accumulation-specific calculations
     confluenceStrengthDivisor: z.number().min(1).max(10),
     passiveToAggressiveRatio: z.number().min(0.3).max(2.0),
-    varianceReductionFactor: z.number().min(0.5).max(3.0),
-    aggressiveBuyingRatioThreshold: z.number().min(0.4).max(0.8),
-    aggressiveBuyingReductionFactor: z.number().min(0.3).max(0.8),
-    buyingPressureConfidenceBoost: z.number().min(0.05).max(0.3),
-
-    // Feature toggles
-    enableZoneConfluenceFilter: z.boolean(),
-    enableBuyingPressureAnalysis: z.boolean(),
-    enableCrossTimeframeAnalysis: z.boolean(),
 });
 
-// DISTRIBUTION detector - Simplified schema for enhanced standalone detector
+// DISTRIBUTION detector - CLEANED UP - Only used settings remain
 export const DistributionDetectorSchema = z.object({
     // Core parameters
-    useStandardizedZones: z.boolean(),
     enhancementMode: z.enum(["disabled", "testing", "production"]),
 
     // Signal deduplication parameter (CLAUDE.md compliance - no magic numbers)
@@ -401,69 +249,38 @@ export const DistributionDetectorSchema = z.object({
 
     // Financial calculation parameters
     defaultDurationMs: z.number().int().min(30000).max(600000),
-    tickSize: z.number().min(0.0001).max(1.0),
     maxPriceResistance: z.number().min(0.5).max(5.0),
     priceResistanceMultiplier: z.number().min(1.0).max(10.0),
     minPassiveVolumeForEfficiency: z.number().min(1).max(100),
     defaultVolatility: z.number().min(0.01).max(0.5),
     defaultBaselineVolatility: z.number().min(0.01).max(0.3),
+});
 
-    // Distribution-specific selling pressure
-    sellingPressureVolumeThreshold: z.number().min(1).max(1000),
-    sellingPressureRatioThreshold: z.number().min(0.3).max(0.9),
-    enableSellingPressureAnalysis: z.boolean(),
-    sellingPressureConfidenceBoost: z.number().min(0.05).max(0.3),
+// SIMPLE ICEBERG detector - Minimal, correct iceberg pattern detection
+export const SimpleIcebergDetectorSchema = z.object({
+    // Core parameters
+    enhancementMode: z.enum(["disabled", "testing", "production"]),
 
-    // Distribution-specific calculations
-    varianceReductionFactor: z.number().min(0.5).max(3.0),
-    confluenceStrengthDivisor: z.number().min(1).max(10),
-    passiveToAggressiveRatio: z.number().min(0.3).max(2.0),
-    aggressiveSellingRatioThreshold: z.number().min(0.4).max(0.8),
-    aggressiveSellingReductionFactor: z.number().min(0.3).max(0.8),
+    // Pattern detection parameters - EXACT matching only
+    minOrderCount: z.number().int().min(2).max(1000), // Min identical orders to qualify
+    minTotalSize: z.number().min(10).max(100000000), // Min total volume for significance (starts at 10 LTC)
 
-    // Feature toggles
-    enableZoneConfluenceFilter: z.boolean(),
-    enableCrossTimeframeAnalysis: z.boolean(),
+    // Timing parameters
+    maxOrderGapMs: z.number().int().min(100).max(3600000), // Max gap between orders
+    trackingWindowMs: z.number().int().min(60000).max(86400000), // Pattern tracking window
+
+    // Performance parameters
+    maxActivePatterns: z.number().int().min(5).max(10000), // Memory management
+    maxRecentTrades: z.number().int().min(10).max(10000), // Recent trades buffer for order book analysis
 });
 
 // Old schemas removed - using simplified AccumulationDetectorSchema and DistributionDetectorSchema above
 
-const ExhaustionEnhancedSettingsSchema = z
-    .object({
-        useStandardizedZones: z.boolean(),
-        enhancementMode: z.enum(["disabled", "testing", "production"]),
-        minEnhancedConfidenceThreshold: z.number(),
-        enableDepletionAnalysis: z.boolean(),
-        depletionConfidenceBoost: z.number(),
-        depletionVolumeThreshold: z.number(),
-        depletionRatioThreshold: z.number(),
-        varianceReductionFactor: z.number(),
-        alignmentNormalizationFactor: z.number(),
-        distanceNormalizationDivisor: z.number(),
-        passiveVolumeExhaustionRatio: z.number(),
-        aggressiveVolumeExhaustionThreshold: z.number(),
-        aggressiveVolumeReductionFactor: z.number(),
-    })
-    .passthrough();
+// Use the main ExhaustionDetectorSchema directly - no separate enhanced schema needed
+const ExhaustionEnhancedSettingsSchema = ExhaustionDetectorSchema;
 
-const AbsorptionEnhancedSettingsSchema = z
-    .object({
-        useStandardizedZones: z.boolean(),
-        enhancementMode: z.enum(["disabled", "testing", "production"]),
-        minEnhancedConfidenceThreshold: z.number(),
-        institutionalVolumeThreshold: z.number(),
-        institutionalVolumeRatioThreshold: z.number(),
-        enableInstitutionalVolumeFilter: z.boolean(),
-        institutionalVolumeBoost: z.number(),
-        volumeConcentrationWeight: z.number(),
-        patternConsistencyWeight: z.number(),
-        volumeBoostCap: z.number(),
-        volumeBoostMultiplier: z.number(),
-        patternVarianceReduction: z.number(),
-        whaleActivityMultiplier: z.number(),
-        maxZoneCountForScoring: z.number(),
-    })
-    .passthrough();
+// Use the main AbsorptionDetectorSchema directly - no separate enhanced schema needed
+const AbsorptionEnhancedSettingsSchema = AbsorptionDetectorSchema;
 
 // Remove duplicate schema - use DeltaCVDDetectorSchema directly
 
@@ -583,14 +400,7 @@ const BasicSymbolConfigSchema = z
             numLevels: z.number().int().positive(),
             maxBufferSize: z.number().int().positive(),
         }),
-        supportResistanceDetector: z.object({
-            priceTolerancePercent: z.number().positive(),
-            minTouchCount: z.number().int().positive(),
-            minStrength: z.number().positive(),
-            timeWindowMs: z.number().int().positive(),
-            volumeWeightFactor: z.number().positive(),
-            rejectionConfirmationTicks: z.number().int().positive(),
-        }),
+
         spoofingDetector: z.object({
             wallTicks: z.number().int().positive(),
             minWallSize: z.number().positive(),
@@ -612,16 +422,6 @@ const BasicSymbolConfigSchema = z
             whaleCooldownMs: z.number().int().positive(),
             marketHealthWindowMs: z.number().int().positive(),
         }),
-        icebergDetector: z.object({
-            minRefillCount: z.number().int().positive(),
-            maxSizeVariation: z.number().positive(),
-            minTotalSize: z.number().positive(),
-            maxRefillTimeMs: z.number().int().positive(),
-            priceStabilityTolerance: z.number().positive(),
-            institutionalSizeThreshold: z.number().positive(),
-            trackingWindowMs: z.number().int().positive(),
-            maxActiveIcebergs: z.number().int().positive(),
-        }),
         hiddenOrderDetector: z.object({
             minHiddenVolume: z.number().positive(),
             minTradeSize: z.number().positive(),
@@ -636,6 +436,7 @@ const BasicSymbolConfigSchema = z
         universalZoneConfig: UniversalZoneSchema,
         accumulation: AccumulationDetectorSchema,
         distribution: DistributionDetectorSchema,
+        simpleIceberg: SimpleIcebergDetectorSchema,
     })
     .passthrough();
 
@@ -1209,6 +1010,25 @@ export class Config {
         );
     }
 
+    static get SIMPLE_ICEBERG_DETECTOR() {
+        try {
+            return SimpleIcebergDetectorSchema.parse(SYMBOL_CFG.simpleIceberg);
+        } catch (error) {
+            console.error("🚨 CRITICAL CONFIG ERROR - SimpleIcebergDetector");
+            console.error("Missing mandatory configuration properties:");
+            console.error(error);
+            console.error(
+                "Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT"
+            );
+            process.exit(1);
+        }
+    }
+
+    // Backward compatibility getter for tests expecting ICEBERG_DETECTOR
+    static get ICEBERG_DETECTOR() {
+        return this.SIMPLE_ICEBERG_DETECTOR;
+    }
+
     // CRITICAL: Zone configuration with Zod validation for CVD signal generation
     static get STANDARD_ZONE_CONFIG() {
         return StandardZoneConfigSchema.parse(SYMBOL_CFG.standardZoneConfig);
@@ -1339,24 +1159,6 @@ export class Config {
             marketHealthWindowMs: Number(
                 cfg.symbols[cfg.symbol].anomalyDetector.marketHealthWindowMs
             ),
-        };
-    }
-
-    static get ICEBERG_DETECTOR(): Partial<IcebergDetectorConfig> {
-        const icebergConfig = cfg.symbols[cfg.symbol].icebergDetector;
-        return {
-            minRefillCount: Number(icebergConfig.minRefillCount),
-            maxSizeVariation: Number(icebergConfig.maxSizeVariation),
-            minTotalSize: Number(icebergConfig.minTotalSize),
-            maxRefillTimeMs: Number(icebergConfig.maxRefillTimeMs),
-            priceStabilityTolerance: Number(
-                icebergConfig.priceStabilityTolerance
-            ),
-            institutionalSizeThreshold: Number(
-                icebergConfig.institutionalSizeThreshold
-            ),
-            trackingWindowMs: Number(icebergConfig.trackingWindowMs),
-            maxActiveIcebergs: Number(icebergConfig.maxActiveIcebergs),
         };
     }
 

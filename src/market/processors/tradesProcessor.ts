@@ -658,7 +658,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
 
             const memoryTrades = this.recentTrades.getAll();
             if (memoryTrades.length >= safeAmount) {
-                return memoryTrades.slice(-safeAmount).reverse();
+                return memoryTrades.slice(0, safeAmount); // Get oldest N trades in chronological order
             }
 
             const storageTrades = (await this.threadManager.callStorage(

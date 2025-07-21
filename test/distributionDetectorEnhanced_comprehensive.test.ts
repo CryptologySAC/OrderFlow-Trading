@@ -611,7 +611,7 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
                 lastEvent = event;
                 detector.onEnrichedTrade(event);
             });
-            
+
             await preprocessor.handleAggTrade(
                 createBinanceTrade(zonePrice, 30.0, true)
             );

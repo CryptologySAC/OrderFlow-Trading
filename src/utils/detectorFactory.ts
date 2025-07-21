@@ -104,7 +104,6 @@ export class DetectorFactory {
             productionSettings,
             dependencies.preprocessor,
             dependencies.logger,
-            dependencies.spoofingDetector,
             dependencies.metricsCollector,
             dependencies.signalLogger!
         );
@@ -115,7 +114,6 @@ export class DetectorFactory {
                 id,
                 settings: productionSettings,
                 enhancementMode: productionSettings.enhancementMode,
-                features: productionSettings.features,
             }
         );
 
@@ -152,7 +150,6 @@ export class DetectorFactory {
             {
                 id,
                 enhancementMode: productionSettings.enhancementMode,
-                useStandardizedZones: productionSettings.useStandardizedZones,
             }
         );
 

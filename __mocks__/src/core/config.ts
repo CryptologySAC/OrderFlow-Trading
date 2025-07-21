@@ -133,9 +133,55 @@ const mockUniversalZoneConfig = {
     enhancementMode: "production" as const,
 };
 
+// Mock Absorption detector configuration (very permissive for testing)
+const mockAbsorptionConfig = {
+    minAggVolume: 10, // Very low threshold for testing
+    windowMs: 10000,
+    eventCooldownMs: 0, // Disable cooldown for testing
+    priceEfficiencyThreshold: 0.001, // Very permissive for testing
+    maxAbsorptionRatio: 0.95,
+    minPassiveMultiplier: 1.05, // Very low multiplier
+    passiveAbsorptionThreshold: 0.6, // Minimum valid threshold per schema
+    institutionalVolumeThreshold: 5, // Very low threshold for testing
+    institutionalVolumeRatioThreshold: 0.4, // More permissive for testing
+    enableInstitutionalVolumeFilter: false, // Disable strict filtering for tests
+    institutionalVolumeBoost: 0.1,
+    minAbsorptionScore: 0.3, // Minimum valid score per schema
+    finalConfidenceRequired: 0.2, // Very low confidence requirement for testing
+    minEnhancedConfidenceThreshold: 0.1,
+    useStandardizedZones: true,
+    enhancementMode: "production" as const,
+    liquidityGradientRange: 5,
+    contextConfidenceBoostMultiplier: 0.2,
+    expectedMovementScalingFactor: 8,
+    confidenceBoostReduction: 0.4,
+    maxZoneCountForScoring: 3,
+};
+
+// Mock Exhaustion detector configuration (test-friendly thresholds)
+const mockExhaustionConfig = {
+    minAggVolume: 10, // Very low threshold for testing
+    exhaustionThreshold: 0.05, // Very low threshold for testing (5% aggressive volume indicates exhaustion)
+    windowMs: 60000, // Longer window to capture more trades
+    useStandardizedZones: true,
+    enhancementMode: "production" as const,
+    minEnhancedConfidenceThreshold: 0.01, // Very low threshold for testing
+    enableDepletionAnalysis: true,
+    depletionVolumeThreshold: 10, // Very low threshold for testing
+    depletionRatioThreshold: 0.05, // Very low threshold for testing (5%)
+    depletionConfidenceBoost: 0.15,
+    passiveVolumeExhaustionRatio: 0.4,
+    varianceReductionFactor: 1.0,
+    alignmentNormalizationFactor: 0.4,
+    aggressiveVolumeExhaustionThreshold: 0.05, // Very low threshold for testing
+    aggressiveVolumeReductionFactor: 0.5,
+};
+
 export const Config = {
     SIGNAL_MANAGER: mockSignalManagerConfig,
     DELTACVD_DETECTOR: mockDeltaCVDConfig,
+    ABSORPTION_DETECTOR: mockAbsorptionConfig, // Add missing absorption config
+    EXHAUSTION_DETECTOR: mockExhaustionConfig, // Add missing exhaustion config
     UNIVERSAL_ZONE_CONFIG: mockUniversalZoneConfig, // CRITICAL: Missing config added
     DETECTOR_CONFIDENCE_THRESHOLDS: {
         absorption: 0.3,

@@ -6,9 +6,10 @@ import {
     ZoneSnapshot,
 } from "../src/types/marketEvents.js";
 import { OrderFlowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
-import { Config } from "../src/core/config.js";
+import { Config } from "../__mocks__/src/core/config.js";
 import { createMockLogger } from "../__mocks__/src/infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../__mocks__/src/infrastructure/metricsCollector.js";
+import { CircularBuffer } from "../src/utils/circularBuffer.js";
 
 /**
  * REAL MARKET FLOW ABSORPTION DETECTOR VALIDATION
@@ -96,8 +97,8 @@ describe("Absorption Detector Real Market Flow Validation", () => {
             // Expected movement scaling
             expectedMovementScalingFactor: 10,
 
-            // Confidence and urgency thresholds - RELAXED FOR TESTING
-            contextConfidenceBoostMultiplier: 0.2,
+            // Confidence and urgency thresholds - ENHANCED FOR HIGH CONFIDENCE
+            contextConfidenceBoostMultiplier: 1.5,
             highUrgencyThreshold: 2.0,
             lowUrgencyThreshold: 0.5,
             reversalStrengthThreshold: 0.3,
@@ -117,8 +118,8 @@ describe("Absorption Detector Real Market Flow Validation", () => {
             microstructureConfidenceBoostMin: 0.2,
             microstructureConfidenceBoostMax: 2.0,
 
-            // Final confidence threshold - STRICT FOR QUALITY SIGNALS
-            finalConfidenceRequired: 0.7, // Require 70% confidence to filter garbage signals
+            // Final confidence threshold - INSTITUTIONAL GRADE
+            finalConfidenceRequired: 2.0, // Require 2.0 confidence for institutional-grade signals
 
             // Features configuration
             features: {
@@ -189,7 +190,7 @@ describe("Absorption Detector Real Market Flow Validation", () => {
                     dominantSide: "sell" as const, // Retail selling pressure
                     institutionalRatio: 0.7 + i * 0.008, // 70-89% institutional absorption
                 },
-                expectedSignal: "buy" as const, // Counter-trend to retail selling
+                expectedSignal: "buy" as const, // Follow institutional buying flow
                 reasoning: `Institution absorbing retail selling wave with ${(0.7 + i * 0.008) * 100}% passive ratio`,
                 confidence: i < 15 ? ("high" as const) : ("medium" as const),
             })),
@@ -206,7 +207,7 @@ describe("Absorption Detector Real Market Flow Validation", () => {
                     dominantSide: "buy" as const, // Retail buying pressure
                     institutionalRatio: 0.68 + i * 0.009, // 68-90% institutional absorption
                 },
-                expectedSignal: "sell" as const, // Counter-trend to retail buying
+                expectedSignal: "sell" as const, // Follow institutional selling flow
                 reasoning: `Institution absorbing retail buying wave with ${(0.68 + i * 0.009) * 100}% passive ratio`,
                 confidence: i < 15 ? ("high" as const) : ("medium" as const),
             })),
@@ -245,8 +246,8 @@ describe("Absorption Detector Real Market Flow Validation", () => {
                 expectedSignal:
                     i < 12
                         ? i % 2 === 0
-                            ? ("buy" as const)
-                            : ("sell" as const)
+                            ? ("buy" as const) // dominantSide = "sell", follow institutional buying
+                            : ("sell" as const) // dominantSide = "buy", follow institutional selling
                         : ("neutral" as const),
                 reasoning:
                     i < 12
@@ -391,8 +392,9 @@ describe("Absorption Detector Real Market Flow Validation", () => {
         const zonePrice = 89.5; // Fixed price to ensure all trades are within liquidityGradientRange
 
         const zone: ZoneSnapshot = {
-            id: `zone-${testCase.id}`,
-            price: zonePrice,
+            zoneId: `zone-${testCase.id}`,
+            priceLevel: zonePrice,
+            tickSize: 0.01,
             volumeWeightedPrice: zonePrice, // Add missing property for price efficiency calculation
             aggressiveVolume: cumulativeAggressiveVolume,
             passiveVolume: cumulativePassiveVolume,
@@ -404,18 +406,22 @@ describe("Absorption Detector Real Market Flow Validation", () => {
                 tradeFlow.dominantSide === "sell"
                     ? cumulativeAggressiveVolume * 0.75
                     : cumulativeAggressiveVolume * 0.25,
-            passiveBuyVolume:
+            passiveBidVolume:
                 tradeFlow.dominantSide === "sell"
                     ? cumulativePassiveVolume * 0.8 // Institution providing buy liquidity
                     : cumulativePassiveVolume * 0.4,
-            passiveSellVolume:
+            passiveAskVolume:
                 tradeFlow.dominantSide === "buy"
                     ? cumulativePassiveVolume * 0.8 // Institution providing sell liquidity
                     : cumulativePassiveVolume * 0.4,
             tradeCount: tradeFlow.totalTrades,
             lastUpdate: Date.now(),
             timespan: tradeFlow.durationMs,
-            strength: finalAbsorptionRatio,
+            boundaries: {
+                min: zonePrice - 0.025,
+                max: zonePrice + 0.025,
+            },
+            tradeHistory: new CircularBuffer(100),
         };
 
         // Update all trades with proper zone data

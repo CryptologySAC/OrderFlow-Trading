@@ -73,11 +73,13 @@ function generateStrongCVDPattern(
         if (pattern === "bullish_divergence") {
             // Strong bullish divergence with massive volume progression
             quantity = baseVolume + (i / tradeCount) * baseVolume * 2; // baseVolume to 3x baseVolume
-            side = Math.random() < 0.85 + (i / tradeCount) * 0.1 ? "buy" : "sell"; // 85-95% buy
+            side =
+                Math.random() < 0.85 + (i / tradeCount) * 0.1 ? "buy" : "sell"; // 85-95% buy
         } else {
             // Strong bearish divergence with massive volume progression
             quantity = baseVolume + (i / tradeCount) * baseVolume * 2;
-            side = Math.random() < 0.15 - (i / tradeCount) * 0.1 ? "buy" : "sell"; // 5-15% buy
+            side =
+                Math.random() < 0.15 - (i / tradeCount) * 0.1 ? "buy" : "sell"; // 5-15% buy
         }
 
         const trade = createRealisticTrade(
@@ -89,7 +91,8 @@ function generateStrongCVDPattern(
 
         // Create extremely strong zone data
         const zonePrice = Math.round(tradePrice / TICK_SIZE) * TICK_SIZE;
-        const zoneVolume = quantity * (30 + Math.random() * 20) * Math.max(2, tradeCount / 10);
+        const zoneVolume =
+            quantity * (30 + Math.random() * 20) * Math.max(2, tradeCount / 10);
         const buyRatio = pattern === "bullish_divergence" ? 0.9 : 0.1; // Extreme ratios
 
         trade.zoneData = {
@@ -100,7 +103,9 @@ function generateStrongCVDPattern(
                     zoneVolume * 2 * buyRatio,
                     zoneVolume * 1.5, // Strong passive volume
                     zoneVolume * 1.5 * buyRatio,
-                    pattern === "bullish_divergence" ? "accumulation" : "distribution",
+                    pattern === "bullish_divergence"
+                        ? "accumulation"
+                        : "distribution",
                     tradeCount * 800 // Longer timespan for stronger signals
                 ),
             ],
@@ -454,22 +459,27 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
                     30, // Fewer trades but massive institutional volumes
                     "bullish_divergence",
                     true
-                ).map(trade => ({
+                ).map((trade) => ({
                     ...trade,
                     quantity: trade.quantity * 20, // 20x larger trades (10-50 LTC per trade)
-                    zoneData: trade.zoneData ? {
-                        ...trade.zoneData,
-                        zones: trade.zoneData.zones.map(zone => ({
-                            ...zone,
-                            // INSTITUTIONAL PATTERN: 95% buy, 5% sell for 90% CVD imbalance
-                            aggressiveVolume: zone.aggressiveVolume * 20,
-                            aggressiveBuyVolume: zone.aggressiveVolume * 20 * 0.95, // 95% institutional buying
-                            aggressiveSellVolume: zone.aggressiveVolume * 20 * 0.05, // 5% institutional selling
-                            passiveVolume: zone.passiveVolume * 20,
-                            passiveBuyVolume: zone.passiveBuyVolume * 20,
-                            passiveSellVolume: zone.passiveSellVolume * 20,
-                        }))
-                    } : undefined
+                    zoneData: trade.zoneData
+                        ? {
+                              ...trade.zoneData,
+                              zones: trade.zoneData.zones.map((zone) => ({
+                                  ...zone,
+                                  // INSTITUTIONAL PATTERN: 95% buy, 5% sell for 90% CVD imbalance
+                                  aggressiveVolume: zone.aggressiveVolume * 20,
+                                  aggressiveBuyVolume:
+                                      zone.aggressiveVolume * 20 * 0.95, // 95% institutional buying
+                                  aggressiveSellVolume:
+                                      zone.aggressiveVolume * 20 * 0.05, // 5% institutional selling
+                                  passiveVolume: zone.passiveVolume * 20,
+                                  passiveBuyVolume: zone.passiveBuyVolume * 20,
+                                  passiveSellVolume:
+                                      zone.passiveSellVolume * 20,
+                              })),
+                          }
+                        : undefined,
                 }));
 
                 processTradeSequence(trades);
@@ -700,28 +710,33 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
                     signalThreshold: 0.9, // HIGH signal threshold for institutional activity
                 });
 
-                // Generate INSTITUTIONAL-GRADE high-volume trades for 90%+ confidence  
+                // Generate INSTITUTIONAL-GRADE high-volume trades for 90%+ confidence
                 const trades = generateRealisticCVDPattern(
                     BASE_PRICE,
                     30, // Fewer trades but massive institutional volumes
                     "bearish_divergence",
                     true
-                ).map(trade => ({
+                ).map((trade) => ({
                     ...trade,
                     quantity: trade.quantity * 20, // 20x larger trades (10-50 LTC per trade)
-                    zoneData: trade.zoneData ? {
-                        ...trade.zoneData,
-                        zones: trade.zoneData.zones.map(zone => ({
-                            ...zone,
-                            // INSTITUTIONAL PATTERN: 5% buy, 95% sell for 90% CVD imbalance
-                            aggressiveVolume: zone.aggressiveVolume * 20,
-                            aggressiveBuyVolume: zone.aggressiveVolume * 20 * 0.05, // 5% institutional buying
-                            aggressiveSellVolume: zone.aggressiveVolume * 20 * 0.95, // 95% institutional selling
-                            passiveVolume: zone.passiveVolume * 20,
-                            passiveBuyVolume: zone.passiveBuyVolume * 20,
-                            passiveSellVolume: zone.passiveSellVolume * 20,
-                        }))
-                    } : undefined
+                    zoneData: trade.zoneData
+                        ? {
+                              ...trade.zoneData,
+                              zones: trade.zoneData.zones.map((zone) => ({
+                                  ...zone,
+                                  // INSTITUTIONAL PATTERN: 5% buy, 95% sell for 90% CVD imbalance
+                                  aggressiveVolume: zone.aggressiveVolume * 20,
+                                  aggressiveBuyVolume:
+                                      zone.aggressiveVolume * 20 * 0.05, // 5% institutional buying
+                                  aggressiveSellVolume:
+                                      zone.aggressiveVolume * 20 * 0.95, // 95% institutional selling
+                                  passiveVolume: zone.passiveVolume * 20,
+                                  passiveBuyVolume: zone.passiveBuyVolume * 20,
+                                  passiveSellVolume:
+                                      zone.passiveSellVolume * 20,
+                              })),
+                          }
+                        : undefined,
                 }));
 
                 processTradeSequence(trades);
@@ -1621,7 +1636,7 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
             it("Test 53: Rapid Price Movement", () => {
                 setupDetector({
                     cvdDivergenceVolumeThreshold: 15, // Reduced threshold
-                    signalThreshold: 0.25, // Reduced threshold  
+                    signalThreshold: 0.25, // Reduced threshold
                 });
 
                 // Generate MUCH stronger rapid price movement pattern
@@ -1637,13 +1652,13 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
                     quantity: trade.quantity * 3, // Triple the quantity for strong signal
                     zoneData: {
                         ...trade.zoneData!,
-                        zones: trade.zoneData!.zones.map(zone => ({
+                        zones: trade.zoneData!.zones.map((zone) => ({
                             ...zone,
                             aggressiveVolume: zone.aggressiveVolume * 4, // Quadruple zone volume
                             aggressiveBuyVolume: zone.aggressiveBuyVolume * 4,
                             aggressiveSellVolume: zone.aggressiveSellVolume * 4,
-                        }))
-                    }
+                        })),
+                    },
                 }));
 
                 processTradeSequence(trades);
@@ -1746,13 +1761,19 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
                         quantity: trade.quantity * (isWhaleOrder ? 20 : 5), // Whale orders 20x, others 5x
                         zoneData: {
                             ...trade.zoneData!,
-                            zones: trade.zoneData!.zones.map(zone => ({
+                            zones: trade.zoneData!.zones.map((zone) => ({
                                 ...zone,
-                                aggressiveVolume: zone.aggressiveVolume * (isWhaleOrder ? 25 : 8),
-                                aggressiveBuyVolume: zone.aggressiveBuyVolume * (isWhaleOrder ? 25 : 8),
-                                aggressiveSellVolume: zone.aggressiveSellVolume * (isWhaleOrder ? 25 : 8),
-                            }))
-                        }
+                                aggressiveVolume:
+                                    zone.aggressiveVolume *
+                                    (isWhaleOrder ? 25 : 8),
+                                aggressiveBuyVolume:
+                                    zone.aggressiveBuyVolume *
+                                    (isWhaleOrder ? 25 : 8),
+                                aggressiveSellVolume:
+                                    zone.aggressiveSellVolume *
+                                    (isWhaleOrder ? 25 : 8),
+                            })),
+                        },
                     };
                 });
 
@@ -1841,18 +1862,18 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
                     100, // High frequency but realistic count
                     "bullish_divergence",
                     60 // Massive base volume for high-frequency stream
-                ).map(trade => ({
+                ).map((trade) => ({
                     ...trade,
                     quantity: trade.quantity * 4, // Quadruple base quantity
                     zoneData: {
                         ...trade.zoneData!,
-                        zones: trade.zoneData!.zones.map(zone => ({
+                        zones: trade.zoneData!.zones.map((zone) => ({
                             ...zone,
                             aggressiveVolume: zone.aggressiveVolume * 6, // 6x zone volume
                             aggressiveBuyVolume: zone.aggressiveBuyVolume * 6,
                             aggressiveSellVolume: zone.aggressiveSellVolume * 6,
-                        }))
-                    }
+                        })),
+                    },
                 }));
 
                 processTradeSequence(trades);

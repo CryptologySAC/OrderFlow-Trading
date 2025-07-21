@@ -78,6 +78,7 @@ export interface ZoneVisualizationData {
     confidence: number;
     volume: number;
     timespan: number;
+    startTime: number;
     lastUpdate: number;
     metadata: {
         buyRatio?: number;

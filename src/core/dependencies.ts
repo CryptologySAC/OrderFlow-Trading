@@ -15,7 +15,7 @@ import { SignalCoordinator } from "../services/signalCoordinator.js";
 import { AnomalyDetector } from "../services/anomalyDetector.js";
 import { SignalManager } from "../trading/signalManager.js";
 import { SpoofingDetector } from "../services/spoofingDetector.js";
-import { IcebergDetector } from "../services/icebergDetector.js";
+import { SimpleIcebergDetector } from "../services/icebergDetector.js";
 import { HiddenOrderDetector } from "../services/hiddenOrderDetector.js";
 import { IndividualTradesManager } from "../data/individualTradesManager.js";
 import { MicrostructureAnalyzer } from "../data/microstructureAnalyzer.js";
@@ -52,7 +52,7 @@ export interface Dependencies {
     anomalyDetector: AnomalyDetector;
     signalManager: SignalManager;
     spoofingDetector: SpoofingDetector;
-    icebergDetector: IcebergDetector;
+    icebergDetector: SimpleIcebergDetector;
     hiddenOrderDetector: HiddenOrderDetector;
     individualTradesManager?: IndividualTradesManager;
     microstructureAnalyzer?: MicrostructureAnalyzer;
@@ -127,10 +127,9 @@ export function createDependencies(threadManager: ThreadManager): Dependencies {
         // Connect spoofing detector to anomaly detector for event forwarding
         spoofingDetector.setAnomalyDetector?.(anomalyDetector);
 
-        // Create IcebergDetector with anomaly integration
-        const icebergDetector = new IcebergDetector(
+        // Create SimpleIcebergDetector with anomaly integration
+        const icebergDetector = new SimpleIcebergDetector(
             "iceberg-detector",
-            Config.ICEBERG_DETECTOR,
             logger,
             metricsCollector,
             signalLogger

@@ -2847,6 +2847,16 @@ function handleZoneSignal(signalData) {
         expectedDirection,
     } = signalData;
 
+    // Filter out accumulation and distribution zone signals from signals list
+    // These zones are drawn via zoneUpdate messages, but signals shouldn't appear in the list
+    if (zone.type === "accumulation" || zone.type === "distribution") {
+        console.log(
+            `${zone.type} zone signal filtered out - zones draw but signals don't show`,
+            zone.id
+        );
+        return;
+    }
+
     // Create a normalized signal for the signals list
     const normalizedSignal = {
         id: `zone_${zone.id}_${Date.now()}`,
@@ -2926,6 +2936,9 @@ function updateZoneBox(zone) {
             annotation.label.content = getZoneLabel(zone);
 
             tradesChart.update("none");
+        } else {
+            // Zone doesn't exist yet, create it
+            addZoneToChart(zone);
         }
     }
 }
@@ -2992,6 +3005,7 @@ function removeZoneBox(zoneId) {
  */
 function addZoneToChart(zone) {
     if (!tradesChart?.options?.plugins?.annotation?.annotations) return;
+    console.log("Adding zone to chart:", zone.type, zone.id, zone.priceRange);
     let zoneAnnotation;
 
     if (zone.type === "hidden_liquidity" || zone.type === "iceberg") {

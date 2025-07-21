@@ -169,13 +169,13 @@ describe("DeltaCVD Standalone Detector - Core Functionality", () => {
     it("should validate CVD detection parameters from config", () => {
         const config = mockConfig.symbols.LTCUSDT.deltaCVD;
 
-        // Verify key CVD detection parameters are present
-        expect(config.windowsSec).toBeDefined();
+        // Verify key CVD detection parameters are present (post nuclear cleanup)
         expect(config.minTradesPerSec).toBeDefined();
         expect(config.minVolPerSec).toBeDefined();
         expect(config.signalThreshold).toBeDefined();
         expect(config.enhancementMode).toBeDefined();
         expect(config.cvdImbalanceThreshold).toBeDefined();
+        expect(config.eventCooldownMs).toBeDefined();
 
         // Verify production-grade thresholds
         expect(config.minTradesPerSec).toBeGreaterThan(0);

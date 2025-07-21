@@ -74,6 +74,7 @@ describe("Threshold Configuration Chain", () => {
             const completeConfig = {
                 ...mockConfig.symbols.LTCUSDT.absorption,
                 priceEfficiencyThreshold: 0.7,
+                windowMs: 60000, // Include windowMs parameter
             };
 
             const detector = new AbsorptionDetectorEnhanced(
@@ -88,6 +89,7 @@ describe("Threshold Configuration Chain", () => {
             // Enhanced detector uses configuration values directly, no internal defaults
             expect(detector).toBeDefined();
             expect(completeConfig.priceEfficiencyThreshold).toBe(0.7);
+            expect(completeConfig.windowMs).toBe(60000);
         });
 
         it("should use custom priceEfficiencyThreshold when provided", () => {
@@ -95,6 +97,7 @@ describe("Threshold Configuration Chain", () => {
             const completeConfig = {
                 ...mockConfig.symbols.LTCUSDT.absorption,
                 priceEfficiencyThreshold: customThreshold,
+                windowMs: 45000, // Include windowMs parameter
             };
 
             const detector = new AbsorptionDetectorEnhanced(
@@ -111,6 +114,7 @@ describe("Threshold Configuration Chain", () => {
             expect(completeConfig.priceEfficiencyThreshold).toBe(
                 customThreshold
             );
+            expect(completeConfig.windowMs).toBe(45000);
         });
 
         it("should process trades with custom priceEfficiencyThreshold", () => {
@@ -118,6 +122,7 @@ describe("Threshold Configuration Chain", () => {
             const completeConfig = {
                 ...mockConfig.symbols.LTCUSDT.absorption,
                 priceEfficiencyThreshold: customThreshold,
+                windowMs: 30000, // Include windowMs parameter
             };
 
             const detector = new AbsorptionDetectorEnhanced(
@@ -155,11 +160,13 @@ describe("Threshold Configuration Chain", () => {
             const config1 = {
                 ...mockConfig.symbols.LTCUSDT.absorption,
                 priceEfficiencyThreshold: 0.1, // Very low
+                windowMs: 5000, // Minimum window
             };
 
             const config2 = {
                 ...mockConfig.symbols.LTCUSDT.absorption,
                 priceEfficiencyThreshold: 0.99, // Very high
+                windowMs: 300000, // Maximum window
             };
 
             const detector1 = new AbsorptionDetectorEnhanced(
@@ -199,112 +206,52 @@ describe("Threshold Configuration Chain", () => {
                 { logSignal: vi.fn() } as any
             );
 
-            // Check all threshold defaults from mock config - accessing through enhancementConfig
+            // Check actual threshold defaults from cleaned mock config - accessing through enhancementConfig
             expect(
-                (detector as any).enhancementConfig.imbalanceHighThreshold
-            ).toBe(0.75);
+                (detector as any).enhancementConfig.exhaustionThreshold
+            ).toBe(0.05);
             expect(
-                (detector as any).enhancementConfig.imbalanceMediumThreshold
-            ).toBe(0.55);
+                (detector as any).enhancementConfig.depletionVolumeThreshold
+            ).toBe(15);
             expect(
-                (detector as any).enhancementConfig.spreadHighThreshold
-            ).toBe(0.004);
+                (detector as any).enhancementConfig.depletionRatioThreshold
+            ).toBe(0.4);
             expect(
-                (detector as any).enhancementConfig.spreadMediumThreshold
-            ).toBe(0.0015);
+                (detector as any).enhancementConfig
+                    .minEnhancedConfidenceThreshold
+            ).toBe(0.05);
         });
 
         it("should use custom threshold values when provided", () => {
             const customSettings = {
-                imbalanceHighThreshold: 0.9,
-                imbalanceMediumThreshold: 0.7,
-                spreadHighThreshold: 0.008,
-                spreadMediumThreshold: 0.003,
+                exhaustionThreshold: 0.15,
+                depletionVolumeThreshold: 25,
+                depletionRatioThreshold: 0.6,
+                minEnhancedConfidenceThreshold: 0.1,
             };
 
             const completeSettings = {
-                // Base detector settings
+                // Core detection parameters (cleaned schema)
                 minAggVolume: 20,
                 windowMs: 45000,
-                pricePrecision: 2,
-                zoneTicks: 3,
-                eventCooldownMs: 10000,
-                minInitialMoveTicks: 1,
-                confirmationTimeoutMs: 40000,
-                maxRevisitTicks: 8,
-
-                // Exhaustion-specific thresholds
-                volumeSurgeMultiplier: 2.0,
-                imbalanceThreshold: 0.3,
-                institutionalThreshold: 15,
-                burstDetectionMs: 2000,
-                sustainedVolumeMs: 20000,
-                medianTradeSize: 0.8,
-                exhaustionThreshold: 0.3,
-                maxPassiveRatio: 0.35,
-                minDepletionFactor: 0.2,
-                ...customSettings, // Override with custom values
-
-                // Scoring weights
-                scoringWeights: {
-                    depletion: 0.45,
-                    passive: 0.3,
-                    continuity: 0.12,
-                    imbalance: 0.08,
-                    spread: 0.04,
-                    velocity: 0.01,
-                },
-
-                // Quality and performance settings
-                depletionThresholdRatio: 0.15,
-                significantChangeThreshold: 0.08,
-                highQualitySampleCount: 6,
-                highQualityDataAge: 35000,
-                mediumQualitySampleCount: 3,
-                mediumQualityDataAge: 70000,
-                circuitBreakerMaxErrors: 8,
-                circuitBreakerWindowMs: 90000,
-
-                // Confidence adjustments
-                lowScoreConfidenceAdjustment: 0.7,
-                lowVolumeConfidenceAdjustment: 0.8,
-                invalidSurgeConfidenceAdjustment: 0.8,
-                passiveConsistencyThreshold: 0.7,
-                imbalanceNeutralThreshold: 0.1,
-                velocityMinBound: 0.1,
-                velocityMaxBound: 10,
-
-                // Zone management
-                maxZones: 75,
-                zoneAgeLimit: 1200000,
-
-                // Features configuration
-                features: {
-                    depletionTracking: true,
-                    spreadAdjustment: true,
-                    volumeVelocity: false,
-                    spoofingDetection: true,
-                    adaptiveZone: true,
-                    multiZone: false,
-                    passiveHistory: true,
-                },
 
                 // Enhancement control
                 useStandardizedZones: true,
                 enhancementMode: "production" as const,
-                minEnhancedConfidenceThreshold: 0.3,
 
                 // Enhanced depletion analysis
-                depletionVolumeThreshold: 30,
-                depletionRatioThreshold: 0.6,
-                varianceReductionFactor: 1,
-                alignmentNormalizationFactor: 1,
-                distanceNormalizationDivisor: 2,
-                passiveVolumeExhaustionRatio: 0.5,
-                aggressiveVolumeExhaustionThreshold: 0.7,
-                aggressiveVolumeReductionFactor: 0.5,
                 enableDepletionAnalysis: true,
-                depletionConfidenceBoost: 0.1,
+                depletionConfidenceBoost: 0.15,
+
+                // Cross-timeframe calculations
+                varianceReductionFactor: 1.5,
+                alignmentNormalizationFactor: 1.2,
+                passiveVolumeExhaustionRatio: 0.6,
+                aggressiveVolumeExhaustionThreshold: 0.8,
+                aggressiveVolumeReductionFactor: 0.6,
+
+                // Apply custom settings last to override defaults
+                ...customSettings,
             };
 
             const detector = new ExhaustionDetectorEnhanced(
@@ -317,31 +264,33 @@ describe("Threshold Configuration Chain", () => {
                 { logSignal: vi.fn() } as any
             );
 
+            // Verify custom values were applied correctly
             expect(
-                (detector as any).enhancementConfig.imbalanceHighThreshold
-            ).toBe(0.9);
+                (detector as any).enhancementConfig.exhaustionThreshold
+            ).toBe(0.15);
             expect(
-                (detector as any).enhancementConfig.imbalanceMediumThreshold
-            ).toBe(0.7);
+                (detector as any).enhancementConfig.depletionVolumeThreshold
+            ).toBe(25);
             expect(
-                (detector as any).enhancementConfig.spreadHighThreshold
-            ).toBe(0.008);
+                (detector as any).enhancementConfig.depletionRatioThreshold
+            ).toBe(0.6);
             expect(
-                (detector as any).enhancementConfig.spreadMediumThreshold
-            ).toBe(0.003);
+                (detector as any).enhancementConfig
+                    .minEnhancedConfidenceThreshold
+            ).toBe(0.1);
         });
 
         it("should validate threshold configuration ranges", () => {
-            // 🚫 NUCLEAR CLEANUP: validateConfigValue method was removed during nuclear cleanup
-            // This test is no longer valid since validation moved to Zod in config.ts
+            // Validation now happens in config.ts via Zod schema
+            // Test that valid configuration values are accepted
 
-            // Complete configuration for nuclear cleanup compliance
             const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 {
                     ...mockConfig.symbols.LTCUSDT.exhaustion,
-                    // Override with test-specific values
-                    imbalanceHighThreshold: 0.85,
+                    // Override with test-specific boundary values
+                    exhaustionThreshold: 0.01, // Minimum allowed value
+                    depletionVolumeThreshold: 1000, // Maximum allowed value
                 },
                 mockPreprocessor,
                 mockLogger,
@@ -350,11 +299,13 @@ describe("Threshold Configuration Chain", () => {
                 { logSignal: vi.fn() } as any
             );
 
-            // 🚫 NUCLEAR CLEANUP: Validation now happens in config.ts via Zod
-            // Instead verify the configuration was accepted
+            // Verify the configuration was accepted correctly
             expect(
-                (detector as any).enhancementConfig.imbalanceHighThreshold
-            ).toBe(0.85);
+                (detector as any).enhancementConfig.exhaustionThreshold
+            ).toBe(0.01);
+            expect(
+                (detector as any).enhancementConfig.depletionVolumeThreshold
+            ).toBe(1000);
         });
     });
 
@@ -368,6 +319,7 @@ describe("Threshold Configuration Chain", () => {
                 ...mockConfig.symbols.LTCUSDT.absorption,
                 priceEfficiencyThreshold: 0.88,
                 absorptionThreshold: 0.65,
+                windowMs: 75000, // Include windowMs parameter
             };
 
             const detector = new AbsorptionDetectorEnhanced(
@@ -413,6 +365,7 @@ describe("Threshold Configuration Chain", () => {
             const validConfig = {
                 ...mockConfig.symbols.LTCUSDT.absorption,
                 priceEfficiencyThreshold: 0.75,
+                windowMs: 60000, // Include windowMs parameter
             };
 
             expect(() => {
@@ -435,6 +388,7 @@ describe("Threshold Configuration Chain", () => {
                 ...mockConfig.symbols.LTCUSDT.absorption,
                 priceEfficiencyThreshold: 0.85, // From config.json
                 absorptionThreshold: 0.6, // From config.json
+                windowMs: 60000, // Include windowMs parameter
             };
 
             const absorptionDetector = new AbsorptionDetectorEnhanced(
@@ -472,6 +426,7 @@ describe("Threshold Configuration Chain", () => {
             const edgeCaseSettings = {
                 ...mockConfig.symbols.LTCUSDT.absorption,
                 priceEfficiencyThreshold: 1.0, // Maximum theoretical efficiency
+                windowMs: 150000, // Include windowMs parameter
             };
 
             expect(() => {

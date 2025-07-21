@@ -586,24 +586,18 @@ describe("Mathematical Property Testing for All Detectors", () => {
 
     describe("Service Detector Properties", () => {
         it("should validate IcebergDetector mathematical properties", async () => {
-            const candidates: any[] = [];
+            const signals: SignalCandidate[] = [];
 
             const detectorFactory = () => {
                 const detector = new IcebergDetector(
                     "test-iceberg",
-                    {
-                        minRefillCount: 3,
-                        maxSizeVariation: 0.2,
-                        minTotalSize: 50,
-                        maxRefillTimeMs: 30000,
-                        institutionalSizeThreshold: 10,
-                        trackingWindowMs: 300000,
-                        maxActiveIcebergs: 20,
-                        minConfidenceThreshold: 0.6,
-                    },
                     mockLogger,
                     mockMetrics
                 );
+
+                detector.on("signalCandidate", (signal: SignalCandidate) => {
+                    signals.push(signal);
+                });
 
                 return detector;
             };
@@ -615,19 +609,7 @@ describe("Mathematical Property Testing for All Detectors", () => {
                 detector.onEnrichedTrade(trade);
             };
 
-            const signalCollector = (detector: IcebergDetector) => {
-                return detector.getActiveCandidates().map((candidate) => ({
-                    id: candidate.id,
-                    type: "iceberg" as const,
-                    side: candidate.side,
-                    confidence: 0.8, // Mock confidence
-                    timestamp: candidate.lastActivity,
-                    data: {
-                        price: candidate.price,
-                        pieces: candidate.pieces.length,
-                    },
-                }));
-            };
+            const signalCollector = () => [...signals];
 
             await propertyTestRunner.runDetectorPropertyTests(
                 detectorFactory,

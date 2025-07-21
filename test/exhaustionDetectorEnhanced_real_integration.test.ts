@@ -57,7 +57,7 @@ const EXHAUSTION_CONFIG = {
         continuity: 0.12,
         imbalance: 0.08,
         spread: 0.04,
-        velocity: 0.01
+        velocity: 0.01,
     },
     depletionThresholdRatio: 0.15,
     significantChangeThreshold: 0.08,
@@ -86,7 +86,7 @@ const EXHAUSTION_CONFIG = {
         spoofingDetection: true,
         adaptiveZone: true,
         multiZone: false,
-        passiveHistory: true
+        passiveHistory: true,
     },
     useStandardizedZones: true,
     depletionVolumeThreshold: 15,
@@ -100,7 +100,7 @@ const EXHAUSTION_CONFIG = {
     enableDepletionAnalysis: true,
     depletionConfidenceBoost: 0.1,
     enhancementMode: "production" as const,
-    minEnhancedConfidenceThreshold: 0.05
+    minEnhancedConfidenceThreshold: 0.05,
 };
 
 const ORDERBOOK_CONFIG = {
@@ -111,7 +111,7 @@ const ORDERBOOK_CONFIG = {
     maxErrorRate: 0.05,
     staleThresholdMs: 5000,
     pricePrecision: 2,
-    symbol: "LTCUSDT"
+    symbol: "LTCUSDT",
 };
 
 const PREPROCESSOR_CONFIG = {
@@ -291,7 +291,7 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
     describe("Real Zone Exhaustion Flow", () => {
         it("should accumulate volume and detect liquidity exhaustion patterns", async () => {
             let lastTradeEvent: EnrichedTradeEvent | null = null;
-            
+
             // Use price that exactly matches 10-tick zone boundaries (87.0 zones at 87.0)
             const exhaustionPrice = 87.0; // Use exact zone boundary for controlled test
 
@@ -313,31 +313,47 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
                         // Find the zone this trade is hitting
                         const zones = event.zoneData?.zones || [];
                         // For 10-tick zones, calculate the expected zone boundary
-                        const expectedZoneStart = Math.floor(event.price / (10 * TICK_SIZE)) * (10 * TICK_SIZE);
-                        const relevantZone = zones.find(z => Math.abs(z.priceLevel - expectedZoneStart) < TICK_SIZE / 2);
-                        const nearestZone = zones.reduce((closest, zone) => 
-                            Math.abs(zone.priceLevel - event.price) < Math.abs(closest.priceLevel - event.price) ? zone : closest
-                        , zones[0]);
-                        
+                        const expectedZoneStart =
+                            Math.floor(event.price / (10 * TICK_SIZE)) *
+                            (10 * TICK_SIZE);
+                        const relevantZone = zones.find(
+                            (z) =>
+                                Math.abs(z.priceLevel - expectedZoneStart) <
+                                TICK_SIZE / 2
+                        );
+                        const nearestZone = zones.reduce(
+                            (closest, zone) =>
+                                Math.abs(zone.priceLevel - event.price) <
+                                Math.abs(closest.priceLevel - event.price)
+                                    ? zone
+                                    : closest,
+                            zones[0]
+                        );
+
                         console.log("🔍 DEBUG: Trade", {
                             tradePrice: event.price,
                             quantity: event.quantity,
                             signalsBefore: detectedSignals.length,
                             expectedZoneStart: expectedZoneStart,
-                            correctZoneAggVol: relevantZone?.aggressiveVolume || 0,
-                            correctZonePrice: relevantZone?.priceLevel || "none",
-                            nearestZonePrice: nearestZone?.priceLevel || "none", 
-                            nearestZoneAggVol: nearestZone?.aggressiveVolume || 0,
+                            correctZoneAggVol:
+                                relevantZone?.aggressiveVolume || 0,
+                            correctZonePrice:
+                                relevantZone?.priceLevel || "none",
+                            nearestZonePrice: nearestZone?.priceLevel || "none",
+                            nearestZoneAggVol:
+                                nearestZone?.aggressiveVolume || 0,
                             nearestZonePassVol: nearestZone?.passiveVolume || 0,
-                            distance: nearestZone ? Math.abs(nearestZone.priceLevel - event.price) : "none"
+                            distance: nearestZone
+                                ? Math.abs(nearestZone.priceLevel - event.price)
+                                : "none",
                         });
                         detector.onEnrichedTrade(event);
                         console.log("🔍 DEBUG: After detector", {
-                            signalsAfter: detectedSignals.length
+                            signalsAfter: detectedSignals.length,
                         });
                     }
                 );
-                
+
                 await preprocessor.handleAggTrade(trade);
             }
 
@@ -363,16 +379,19 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
             // Should generate exhaustion signal due to diminishing volume pattern
             expect(detectedSignals.length).toBeGreaterThanOrEqual(1);
 
-            console.log("🔍 DEBUG: Collected signals:", detectedSignals.map(s => ({
-                signalType: s.signalType,
-                type: s.type,
-                side: s.side,
-                confidence: s.confidence,
-                id: s.id
-            })));
+            console.log(
+                "🔍 DEBUG: Collected signals:",
+                detectedSignals.map((s) => ({
+                    signalType: s.signalType,
+                    type: s.type,
+                    side: s.side,
+                    confidence: s.confidence,
+                    id: s.id,
+                }))
+            );
 
-            const exhaustionSignal = detectedSignals.find((s) =>
-                s.type === "exhaustion"
+            const exhaustionSignal = detectedSignals.find(
+                (s) => s.type === "exhaustion"
             );
             expect(exhaustionSignal).toBeDefined();
         });
@@ -435,7 +454,7 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
                         detector.onEnrichedTrade(event);
                     }
                 );
-                
+
                 await preprocessor.handleAggTrade(trade);
             }
 
@@ -479,7 +498,7 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
                         detector.onEnrichedTrade(event);
                     }
                 );
-                
+
                 await preprocessor.handleAggTrade(trade);
             }
 
@@ -524,7 +543,7 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
                         detector.onEnrichedTrade(event);
                     }
                 );
-                
+
                 await preprocessor.handleAggTrade(trade);
             }
 
@@ -570,7 +589,7 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
                         detector.onEnrichedTrade(event);
                     }
                 );
-                
+
                 await preprocessor.handleAggTrade(trade);
             }
 
@@ -607,7 +626,7 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
                         detector.onEnrichedTrade(event);
                     }
                 );
-                
+
                 await preprocessor.handleAggTrade(trade);
             }
 
@@ -644,7 +663,7 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
                         detector.onEnrichedTrade(event);
                     }
                 );
-                
+
                 await preprocessor.handleAggTrade(trade);
             }
 
@@ -664,7 +683,7 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
                         detector.onEnrichedTrade(event);
                     }
                 );
-                
+
                 await preprocessor.handleAggTrade(trade);
             }
 
@@ -710,7 +729,7 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
                         detector.onEnrichedTrade(event);
                     }
                 );
-                
+
                 await preprocessor.handleAggTrade(trade);
             }
 
@@ -744,7 +763,7 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
             const exhaustionPrice = BASE_PRICE + 0.3;
 
             let lastEvent: EnrichedTradeEvent | null = null;
-            
+
             // Set up event listener FIRST
             preprocessor.on("enriched_trade", (event: EnrichedTradeEvent) => {
                 lastEvent = event;
@@ -778,20 +797,27 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
             const expectedZoneStart =
                 Math.floor(exhaustionPrice / (10 * TICK_SIZE)) *
                 (10 * TICK_SIZE);
-            
+
             console.log("🔍 DEBUG: Time-based test zone lookup", {
                 exhaustionPrice,
                 expectedZoneStart,
-                zonesWithVolume: zones.filter(z => z.aggressiveVolume > 0).map(z => ({
-                    priceLevel: z.priceLevel,
-                    aggressiveVolume: z.aggressiveVolume,
-                    tradeCount: z.tradeCount
-                }))
+                zonesWithVolume: zones
+                    .filter((z) => z.aggressiveVolume > 0)
+                    .map((z) => ({
+                        priceLevel: z.priceLevel,
+                        aggressiveVolume: z.aggressiveVolume,
+                        tradeCount: z.tradeCount,
+                    })),
             });
-            
+
             // Look for the zone that actually has the volume (87.3 in this case)
-            const targetZone = zones.find(z => z.aggressiveVolume >= 130) || 
-                             zones.find((z) => Math.abs(z.priceLevel - expectedZoneStart) < TICK_SIZE / 2);
+            const targetZone =
+                zones.find((z) => z.aggressiveVolume >= 130) ||
+                zones.find(
+                    (z) =>
+                        Math.abs(z.priceLevel - expectedZoneStart) <
+                        TICK_SIZE / 2
+                );
 
             expect(targetZone!.aggressiveVolume).toBeGreaterThanOrEqual(130); // 50+40+25+15=130 LTC
             expect(targetZone!.tradeCount).toBeGreaterThanOrEqual(4);

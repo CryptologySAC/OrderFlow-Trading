@@ -12,3 +12,6 @@ test.patch
 server.log
 backtesting_data/
 .DS_Store
+*.csv
+logs/
+.DS_Store

@@ -73,7 +73,8 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
         priceLevel: number,
         aggressiveVolume: number,
         passiveVolume: number,
-        multiplier: number = 1
+        multiplier: number = 1,
+        timestamp: number = Date.now()
     ): ZoneSnapshot {
         return {
             zoneId: `zone-${priceLevel}-${multiplier}`,
@@ -83,14 +84,15 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
             passiveVolume: passiveVolume * multiplier,
             aggressiveBuyVolume: aggressiveVolume * 0.7 * multiplier, // 70% buy for clearer signals
             aggressiveSellVolume: aggressiveVolume * 0.3 * multiplier, // 30% sell
-            passiveBidVolume: passiveVolume * 0.5 * multiplier,
-            passiveAskVolume: passiveVolume * 0.5 * multiplier,
+            passiveBidVolume: passiveVolume * 0.6 * multiplier, // Higher bid volume for sell signal
+            passiveAskVolume: passiveVolume * 0.4 * multiplier, // Lower ask volume
             tradeCount:
                 Math.max(1, Math.floor(aggressiveVolume / 5)) * multiplier,
             timespan: 60000,
             boundaries: { min: priceLevel - 0.005, max: priceLevel + 0.005 },
-            lastUpdate: Date.now(),
+            lastUpdate: timestamp, // Use synchronized timestamp
             volumeWeightedPrice: priceLevel,
+            tradeHistory: [], // Add missing tradeHistory field
         };
     }
 
@@ -113,29 +115,40 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
                 passiveVol: number;
                 priceOffset: number;
             }>;
-        } = {}
+        } = {},
+        timestamp?: number // Add optional timestamp parameter
     ): StandardZoneData {
-        // Use working values from debug test: high aggressive, low passive for exhaustion
+        // Use synchronized timestamp for zones and trade events
+        const currentTime = timestamp || Date.now();
+
+        // Use working values that meet exhaustion detector thresholds
+        // depletionVolumeThreshold: 15, depletionRatioThreshold: 0.4
         const defaultZones5 = config.zones5 || [
-            { aggressiveVol: 50, passiveVol: 5, priceOffset: 0 }, // Working ratio: 0.909
+            { aggressiveVol: 200, passiveVol: 50, priceOffset: 0 }, // 80% aggressive ratio - exceeds 0.4 threshold
         ];
         const defaultZones10 = config.zones10 || [
-            { aggressiveVol: 75, passiveVol: 7.5, priceOffset: 0 }, // 1.5x multiplier
+            { aggressiveVol: 300, passiveVol: 75, priceOffset: 0 }, // 1.5x multiplier
         ];
         const defaultZones20 = config.zones20 || [
-            { aggressiveVol: 100, passiveVol: 10, priceOffset: 0 }, // 2x multiplier
+            { aggressiveVol: 400, passiveVol: 100, priceOffset: 0 }, // 2x multiplier
         ];
 
         return {
-            timestamp: Date.now(),
+            timestamp: currentTime,
             zones: defaultZones5.map((z) =>
                 createZoneSnapshot(
                     price + z.priceOffset,
                     z.aggressiveVol,
                     z.passiveVol,
-                    1
+                    1,
+                    currentTime // Use synchronized timestamp
                 )
             ),
+            zoneConfig: {
+                zoneTicks: 10,
+                tickValue: 0.01,
+                timeWindow: 60000,
+            },
         };
     }
 
@@ -144,24 +157,28 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
         price: number,
         quantity: number,
         isBuy: boolean,
-        zoneData?: StandardZoneData
+        zoneData?: StandardZoneData,
+        timestamp?: number
     ): EnrichedTradeEvent {
+        // Use synchronized timestamp for trade events and zone data
+        const currentTime = timestamp || Date.now();
+
         return {
             eventType: "aggTrade",
             symbol: "LTCUSDT",
             price,
             quantity,
-            timestamp: Date.now(),
-            tradeId: Date.now(),
+            timestamp: currentTime,
+            tradeId: currentTime.toString(),
             buyerOrderId: 1,
             sellerOrderId: 2,
-            tradeTime: Date.now(),
+            tradeTime: currentTime,
             buyerIsMaker: !isBuy, // buyerIsMaker=false means aggressive buy
             marketPrice: price,
             zoneData:
                 zoneData !== undefined
                     ? zoneData
-                    : createStandardizedZoneData(price), // Only create default if not explicitly undefined
+                    : createStandardizedZoneData(price, {}, currentTime), // Pass timestamp for sync
             bookMetrics: {
                 spread: 0.01,
                 spreadBps: 1,
@@ -184,6 +201,9 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
             info: vi.fn(),
             warn: vi.fn(),
             error: vi.fn(),
+            isDebugEnabled: vi.fn().mockReturnValue(true),
+            setCorrelationId: vi.fn(),
+            removeCorrelationId: vi.fn(),
         } as ILogger;
 
         mockMetrics = {
@@ -197,13 +217,11 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
         // Mock signal logger
         const mockSignalLogger = {
             logSignal: vi.fn(),
+            logEvent: vi.fn(),
             getSignalHistory: vi.fn(() => []),
         };
 
-        // Mock spoofer detector
-        const mockSpoofingDetector = {
-            analyzeOrder: vi.fn(() => ({ isSpoof: false, confidence: 0 })),
-        } as any;
+        // Remove unused mockSpoofingDetector - not needed for ExhaustionDetectorEnhanced constructor
 
         // Use config values from actual config.json for realistic thresholds
         const exhaustionConfig = mockConfig.symbols.LTCUSDT.exhaustion;
@@ -214,7 +232,6 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
             exhaustionConfig,
             mockPreprocessor,
             mockLogger,
-            mockSpoofingDetector,
             mockMetrics,
             mockSignalLogger
         );
@@ -230,10 +247,34 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
 
     describe("Core Exhaustion Detection", () => {
         it("should detect exhaustion when aggressive volume exceeds threshold with high ratio", () => {
-            const zoneData = createStandardizedZoneData(87.5, {
-                zones5: [{ aggressiveVol: 50, passiveVol: 5, priceOffset: 0 }], // Working ratio from debug: 0.909
-            });
-            const trade = createTradeEvent(87.5, 25, false, zoneData); // Above minAggVolume (15)
+            // Create zone data that meets ALL exhaustion detection criteria:
+            // 1. totalAggressiveVolume >= 10 (depletionVolumeThreshold)
+            // 2. accumulatedAggressiveRatio >= 0.05 (depletionRatioThreshold)
+            // 3. accumulatedPassiveRatio < 0.5 (more aggressive than passive)
+            // 4. confidence >= 0.01 (minEnhancedConfidenceThreshold)
+
+            const timestamp = Date.now();
+            const zoneData = createStandardizedZoneData(
+                87.5,
+                {
+                    zones5: [
+                        { aggressiveVol: 100, passiveVol: 25, priceOffset: 0 },
+                        {
+                            aggressiveVol: 80,
+                            passiveVol: 20,
+                            priceOffset: 0.01,
+                        },
+                    ], // Multiple zones for spread calculation
+                },
+                timestamp
+            );
+            const trade = createTradeEvent(
+                87.5,
+                25,
+                false,
+                zoneData,
+                timestamp
+            );
 
             detector.onEnrichedTrade(trade);
 
@@ -248,11 +289,11 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
 
         it("should NOT detect exhaustion when volume below minimum threshold", () => {
             const zoneData = createStandardizedZoneData(87.5, {
-                zones5: [{ aggressiveVol: 5, passiveVol: 2, priceOffset: 0 }],
-                zones10: [{ aggressiveVol: 6, passiveVol: 3, priceOffset: 0 }],
-                zones20: [{ aggressiveVol: 7, passiveVol: 4, priceOffset: 0 }],
+                zones5: [{ aggressiveVol: 9, passiveVol: 4, priceOffset: 0 }], // Below depletionVolumeThreshold (10)
+                zones10: [{ aggressiveVol: 8, passiveVol: 4, priceOffset: 0 }],
+                zones20: [{ aggressiveVol: 7, passiveVol: 3, priceOffset: 0 }],
             });
-            const trade = createTradeEvent(87.5, 5, false, zoneData); // Below minAggVolume (15)
+            const trade = createTradeEvent(87.5, 5, false, zoneData); // Below depletionVolumeThreshold (10)
 
             detector.onEnrichedTrade(trade);
 
@@ -261,8 +302,15 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
 
         it("should detect BUY exhaustion with high buying pressure", () => {
             const zoneData = createStandardizedZoneData(87.5, {
-                zones5: [{ aggressiveVol: 50, passiveVol: 5, priceOffset: 0 }], // Working exhaustion ratio
+                zones5: [
+                    { aggressiveVol: 200, passiveVol: 50, priceOffset: 0 },
+                ], // 80% aggressive ratio - meets threshold
             });
+            // Override passive volumes to simulate bid exhaustion (more bid liquidity consumed)
+            if (zoneData.zones[0]) {
+                zoneData.zones[0].passiveBidVolume = 40; // Higher bid consumption
+                zoneData.zones[0].passiveAskVolume = 10; // Lower ask consumption
+            }
             const trade = createTradeEvent(87.5, 25, false, zoneData); // buyerIsMaker=false = aggressive buy
 
             detector.onEnrichedTrade(trade);
@@ -279,12 +327,14 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
         it("should detect SELL exhaustion with high selling pressure", () => {
             // Create zone with more sell volume than buy volume for sell exhaustion
             const zoneData = createStandardizedZoneData(87.5, {
-                zones5: [{ aggressiveVol: 50, passiveVol: 5, priceOffset: 0 }], // Working exhaustion ratio
+                zones5: [
+                    { aggressiveVol: 200, passiveVol: 50, priceOffset: 0 },
+                ], // 80% aggressive ratio - meets threshold
             });
-            // Override the zone to have more sell volume (30% buy, 70% sell)
+            // Override passive volumes to simulate ask exhaustion (more ask liquidity consumed)
             if (zoneData.zones[0]) {
-                zoneData.zones[0].aggressiveBuyVolume = 15; // 30% of 50
-                zoneData.zones[0].aggressiveSellVolume = 35; // 70% of 50
+                zoneData.zones[0].passiveBidVolume = 10; // Lower bid consumption
+                zoneData.zones[0].passiveAskVolume = 40; // Higher ask consumption
             }
 
             const trade = createTradeEvent(87.5, 25, true, zoneData); // buyerIsMaker=true = aggressive sell
@@ -367,13 +417,20 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
                 price: 87.5,
                 quantity: 15,
                 timestamp: Date.now(),
-                tradeId: Date.now(),
+                tradeId: Date.now().toString(),
                 buyerOrderId: 1,
                 sellerOrderId: 2,
                 tradeTime: Date.now(),
                 buyerIsMaker: false,
                 marketPrice: 87.5,
-                zoneData: undefined, // Explicitly no zone data
+                zoneData: {
+                    zones: [],
+                    zoneConfig: {
+                        zoneTicks: 10,
+                        tickValue: 0.01,
+                        timeWindow: 60000,
+                    },
+                } as StandardZoneData, // Empty zone data instead of undefined
                 bookMetrics: {
                     spread: 0.01,
                     spreadBps: 1,
@@ -445,6 +502,11 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
             const buyZoneData = createStandardizedZoneData(87.5, {
                 zones5: [{ aggressiveVol: 50, passiveVol: 5, priceOffset: 0 }], // Default is 70% buy
             });
+            // Override passive volumes to simulate ask exhaustion (more ask liquidity consumed)
+            if (buyZoneData.zones[0]) {
+                buyZoneData.zones[0].passiveBidVolume = 2; // Lower bid consumption
+                buyZoneData.zones[0].passiveAskVolume = 8; // Higher ask consumption
+            }
 
             // Test buy exhaustion (high buy volume → sell signal)
             const buyTrade = createTradeEvent(87.5, 25, false, buyZoneData);
@@ -474,6 +536,9 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
                     const totalAggressive = zone.aggressiveVolume;
                     zone.aggressiveBuyVolume = totalAggressive * 0.3; // 30% buy
                     zone.aggressiveSellVolume = totalAggressive * 0.7; // 70% sell
+                    // Set passive volumes to simulate bid exhaustion (more bid liquidity consumed)
+                    zone.passiveBidVolume = 8; // Higher bid consumption
+                    zone.passiveAskVolume = 2; // Lower ask consumption
                 }
             });
 

@@ -35,7 +35,7 @@ import type {
     DistributionMarketRegime,
 } from "../types/signalTypes.js";
 import { z } from "zod";
-import { DistributionDetectorSchema } from "../core/config.js";
+import { DistributionDetectorSchema, Config } from "../core/config.js";
 import type { ZoneVisualizationData } from "../types/zoneTypes.js";
 
 /**
@@ -79,7 +79,6 @@ export interface DistributionEnhancementStats {
  * Universal Zones from the preprocessor, with all parameters configurable and no magic numbers.
  */
 export class DistributionDetectorEnhanced extends Detector {
-    private readonly useStandardizedZones: boolean;
     private readonly enhancementConfig: DistributionEnhancedSettings;
     private readonly enhancementStats: DistributionEnhancementStats;
     private readonly preprocessor: IOrderflowPreprocessor;
@@ -115,7 +114,6 @@ export class DistributionDetectorEnhanced extends Detector {
         this.symbol = symbol;
 
         // Initialize enhancement configuration
-        this.useStandardizedZones = settings.useStandardizedZones;
         this.enhancementConfig = settings;
         this.preprocessor = preprocessor;
 
@@ -145,7 +143,6 @@ export class DistributionDetectorEnhanced extends Detector {
 
         this.logger.info("DistributionDetectorEnhanced initialized", {
             detectorId: id,
-            useStandardizedZones: this.useStandardizedZones,
             enhancementMode: this.enhancementConfig.enhancementMode,
         });
     }
@@ -163,7 +160,6 @@ export class DistributionDetectorEnhanced extends Detector {
                 detectorId: this.getId(),
                 price: event.price,
                 quantity: event.quantity,
-                useStandardizedZones: this.useStandardizedZones,
                 enhancementMode: this.enhancementConfig.enhancementMode,
                 hasZoneData: !!event.zoneData,
                 callCount: this.enhancementStats.callCount,
@@ -172,17 +168,15 @@ export class DistributionDetectorEnhanced extends Detector {
 
         // Only process if standardized zones are enabled and available
         if (
-            !this.useStandardizedZones ||
             this.enhancementConfig.enhancementMode === "disabled" ||
             !event.zoneData
         ) {
             this.logger.debug("DistributionDetectorEnhanced: Skipping trade", {
                 detectorId: this.getId(),
-                reason: !this.useStandardizedZones
-                    ? "zones_disabled"
-                    : this.enhancementConfig.enhancementMode === "disabled"
-                      ? "enhancement_disabled"
-                      : "no_zone_data",
+                reason:
+                    this.enhancementConfig.enhancementMode === "disabled"
+                        ? "enhancement_disabled"
+                        : "no_zone_data",
             });
             return;
         }
@@ -205,7 +199,7 @@ export class DistributionDetectorEnhanced extends Detector {
      * Get detector status - implements required BaseDetector interface
      */
     public getStatus(): string {
-        return `Distribution Enhanced - Mode: ${this.enhancementConfig.enhancementMode}, Zones: ${this.useStandardizedZones ? "enabled" : "disabled"}`;
+        return `Distribution Enhanced - Mode: ${this.enhancementConfig.enhancementMode}, Zones: enabled`;
     }
 
     /**
@@ -226,9 +220,27 @@ export class DistributionDetectorEnhanced extends Detector {
     private analyzeDistributionPattern(event: EnrichedTradeEvent): void {
         if (!event.zoneData) return;
 
+        // Find relevant zones ONCE for all calculations
+        const relevantZones = this.preprocessor.findZonesNearPrice(
+            event.zoneData.zones,
+            event.price,
+            this.confluenceMaxDistance
+        );
+
+        if (relevantZones.length === 0) {
+            this.logger.debug(
+                "DistributionDetectorEnhanced: No relevant zones found",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                }
+            );
+            return;
+        }
+
         // Calculate base distribution strength from pure volume ratios
         const calculatedDistributionStrength =
-            this.calculateDistributionStrength(event);
+            this.calculateDistributionStrength(event, relevantZones);
         if (calculatedDistributionStrength === null) return;
 
         // Start with base detection strength
@@ -267,14 +279,26 @@ export class DistributionDetectorEnhanced extends Detector {
             // Store enhanced distribution metrics for monitoring
             this.storeEnhancedDistributionMetrics(event, totalConfidence);
 
-            // ✅ EMIT ZONE UPDATE - For visualization in dashboard
-            this.emitDistributionZoneUpdate(event, totalConfidence);
+            // ✅ EMIT ZONE UPDATE - For visualization in dashboard (using pre-found zones)
+            this.emitDistributionZoneUpdate(
+                event,
+                totalConfidence,
+                relevantZones
+            );
 
             // ✅ EMIT SIGNAL ONLY for actionable zone events
-            this.emitDistributionZoneSignal(event, totalConfidence);
+            this.emitDistributionZoneSignal(
+                event,
+                totalConfidence,
+                relevantZones
+            );
 
             // ✅ EMIT ENHANCED DISTRIBUTION SIGNAL - For signal tracking
-            this.emitEnhancedDistributionSignal(event, totalConfidence);
+            this.emitEnhancedDistributionSignal(
+                event,
+                totalConfidence,
+                relevantZones
+            );
 
             this.logger.debug(
                 "[DistributionDetectorEnhanced]: Distribution pattern detected",
@@ -295,18 +319,10 @@ export class DistributionDetectorEnhanced extends Detector {
      * Calculate base distribution strength from pure volume ratios
      */
     private calculateDistributionStrength(
-        event: EnrichedTradeEvent
+        event: EnrichedTradeEvent,
+        relevantZones: ZoneSnapshot[]
     ): number | null {
         if (!event.zoneData) return null;
-
-        // CLAUDE.md FIX: Use only 5-tick zones to avoid triple-counting volume
-        // Previous bug: Combined all zone sizes causing volume to be counted multiple times
-        // (17 LTC trade counted in 5T, 10T, 20T zones = 51 LTC total - WRONG!)
-        const relevantZones = this.preprocessor.findZonesNearPrice(
-            event.zoneData.zones,
-            event.price,
-            this.confluenceMaxDistance
-        );
 
         this.logger.debug(
             "DistributionDetectorEnhanced: calculateDistributionStrength",
@@ -615,7 +631,8 @@ export class DistributionDetectorEnhanced extends Detector {
      */
     private emitDistributionZoneUpdate(
         event: EnrichedTradeEvent,
-        confidenceBoost: number
+        confidenceBoost: number,
+        relevantZones: ZoneSnapshot[]
     ): void {
         if (!event.zoneData) return;
 
@@ -623,10 +640,11 @@ export class DistributionDetectorEnhanced extends Detector {
         const updateType = this.determineZoneUpdateType(event, confidenceBoost);
         if (!updateType) return;
 
-        // Create zone data for visualization
+        // Create zone data for visualization (using pre-found zones)
         const zoneData = this.createZoneVisualizationData(
             event,
-            confidenceBoost
+            confidenceBoost,
+            relevantZones
         );
         if (!zoneData) return;
 
@@ -655,16 +673,22 @@ export class DistributionDetectorEnhanced extends Detector {
      */
     private emitDistributionZoneSignal(
         event: EnrichedTradeEvent,
-        confidenceBoost: number
+        confidenceBoost: number,
+        relevantZones: ZoneSnapshot[]
     ): void {
         // Only emit signals for actionable zone events (completion, invalidation, consumption)
-        const signalType = this.determineZoneSignalType(event, confidenceBoost);
+        const signalType = this.determineZoneSignalType(
+            event,
+            confidenceBoost,
+            relevantZones
+        );
         if (!signalType) return; // No actionable event detected
 
         // Create zone signal for stats tracking
         const zoneData = this.createZoneVisualizationData(
             event,
-            confidenceBoost
+            confidenceBoost,
+            relevantZones
         );
         if (!zoneData) return;
 
@@ -710,11 +734,15 @@ export class DistributionDetectorEnhanced extends Detector {
      */
     private createZoneVisualizationData(
         event: EnrichedTradeEvent,
-        confidenceBoost: number
+        confidenceBoost: number,
+        relevantZones: ZoneSnapshot[]
     ): ZoneVisualizationData | null {
         if (!event.zoneData) return null;
 
-        const distributionMetrics = this.calculateDistributionMetrics(event);
+        const distributionMetrics = this.calculateDistributionMetrics(
+            event,
+            relevantZones
+        );
         if (!distributionMetrics) return null;
 
         return {
@@ -732,6 +760,7 @@ export class DistributionDetectorEnhanced extends Detector {
             ),
             volume: distributionMetrics.volumeConcentration,
             timespan: distributionMetrics.duration,
+            startTime: Date.now() - distributionMetrics.duration,
             lastUpdate: Date.now(),
             metadata: {
                 sellRatio: distributionMetrics.sellRatio,
@@ -764,9 +793,13 @@ export class DistributionDetectorEnhanced extends Detector {
      */
     private determineZoneSignalType(
         event: EnrichedTradeEvent,
-        confidenceBoost: number
+        confidenceBoost: number,
+        relevantZones: ZoneSnapshot[]
     ): string | null {
-        const distributionMetrics = this.calculateDistributionMetrics(event);
+        const distributionMetrics = this.calculateDistributionMetrics(
+            event,
+            relevantZones
+        );
         if (!distributionMetrics) return null;
 
         // Calculate actual confidence from strength + boost
@@ -792,7 +825,8 @@ export class DistributionDetectorEnhanced extends Detector {
      */
     private emitEnhancedDistributionSignal(
         event: EnrichedTradeEvent,
-        confidenceBoost: number
+        confidenceBoost: number,
+        relevantZones: ZoneSnapshot[]
     ): void {
         // Only emit signals when enhancement is meaningful
         if (confidenceBoost < this.enhancementConfig.confidenceThreshold) {
@@ -800,7 +834,10 @@ export class DistributionDetectorEnhanced extends Detector {
         }
 
         // Calculate distribution metrics to get the base confidence from strength
-        const distributionMetrics = this.calculateDistributionMetrics(event);
+        const distributionMetrics = this.calculateDistributionMetrics(
+            event,
+            relevantZones
+        );
         if (!distributionMetrics) {
             return; // Cannot proceed without valid metrics
         }
@@ -895,7 +932,10 @@ export class DistributionDetectorEnhanced extends Detector {
     /**
      * Calculate distribution metrics for signal data
      */
-    private calculateDistributionMetrics(event: EnrichedTradeEvent): {
+    private calculateDistributionMetrics(
+        event: EnrichedTradeEvent,
+        relevantZones: ZoneSnapshot[]
+    ): {
         duration: number;
         zone: number;
         sellRatio: number;
@@ -908,13 +948,6 @@ export class DistributionDetectorEnhanced extends Detector {
             return null;
         }
 
-        const allZones = [...event.zoneData.zones];
-
-        const relevantZones = this.preprocessor.findZonesNearPrice(
-            allZones,
-            event.price,
-            this.confluenceMaxDistance
-        );
         if (relevantZones.length === 0) {
             return null;
         }
@@ -945,7 +978,7 @@ export class DistributionDetectorEnhanced extends Detector {
         // Calculate zone (price level using FinancialMath)
         const zone = FinancialMath.normalizePriceToTick(
             event.price,
-            this.enhancementConfig.tickSize
+            Config.STANDARD_ZONE_CONFIG.priceThresholds.tickValue
         );
 
         // Volume concentration

@@ -35,7 +35,7 @@ import type {
     AccumulationMarketRegime,
 } from "../types/signalTypes.js";
 import { z } from "zod";
-import { AccumulationDetectorSchema } from "../core/config.js";
+import { AccumulationDetectorSchema, Config } from "../core/config.js";
 import type { ZoneVisualizationData } from "../types/zoneTypes.js";
 
 /**
@@ -79,7 +79,6 @@ export interface AccumulationEnhancementStats {
  * Universal Zones from the preprocessor, with all parameters configurable and no magic numbers.
  */
 export class AccumulationZoneDetectorEnhanced extends Detector {
-    private readonly useStandardizedZones: boolean;
     private readonly enhancementConfig: AccumulationEnhancedSettings;
     private readonly enhancementStats: AccumulationEnhancementStats;
     private readonly preprocessor: IOrderflowPreprocessor;
@@ -115,7 +114,6 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         this.symbol = symbol;
 
         // Initialize enhancement configuration
-        this.useStandardizedZones = settings.useStandardizedZones;
         this.enhancementConfig = settings;
         this.preprocessor = preprocessor;
 
@@ -145,7 +143,6 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
 
         this.logger.info("AccumulationZoneDetectorEnhanced initialized", {
             detectorId: id,
-            useStandardizedZones: this.useStandardizedZones,
             enhancementMode: this.enhancementConfig.enhancementMode,
         });
     }
@@ -163,7 +160,6 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
                 detectorId: this.getId(),
                 price: event.price,
                 quantity: event.quantity,
-                useStandardizedZones: this.useStandardizedZones,
                 enhancementMode: this.enhancementConfig.enhancementMode,
                 hasZoneData: !!event.zoneData,
                 callCount: this.enhancementStats.callCount,
@@ -172,7 +168,6 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
 
         // Only process if standardized zones are enabled and available
         if (
-            !this.useStandardizedZones ||
             this.enhancementConfig.enhancementMode === "disabled" ||
             !event.zoneData
         ) {
@@ -180,11 +175,10 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
                 "AccumulationZoneDetectorEnhanced: Skipping trade",
                 {
                     detectorId: this.getId(),
-                    reason: !this.useStandardizedZones
-                        ? "zones_disabled"
-                        : this.enhancementConfig.enhancementMode === "disabled"
-                          ? "enhancement_disabled"
-                          : "no_zone_data",
+                    reason:
+                        this.enhancementConfig.enhancementMode === "disabled"
+                            ? "enhancement_disabled"
+                            : "no_zone_data",
                 }
             );
             return;
@@ -208,7 +202,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
      * Get detector status - implements required BaseDetector interface
      */
     public getStatus(): string {
-        return `Accumulation Enhanced - Mode: ${this.enhancementConfig.enhancementMode}, Zones: ${this.useStandardizedZones ? "enabled" : "disabled"}`;
+        return `Accumulation Enhanced - Mode: ${this.enhancementConfig.enhancementMode}`;
     }
 
     /**
@@ -232,9 +226,27 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     private analyzeAccumulationPattern(event: EnrichedTradeEvent): void {
         if (!event.zoneData) return;
 
+        // Find relevant zones ONCE for all calculations
+        const relevantZones = this.preprocessor.findZonesNearPrice(
+            event.zoneData.zones,
+            event.price,
+            this.confluenceMaxDistance
+        );
+
+        if (relevantZones.length === 0) {
+            this.logger.debug(
+                "AccumulationZoneDetectorEnhanced: No relevant zones found",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                }
+            );
+            return;
+        }
+
         // Calculate base accumulation strength from pure volume ratios
         const calculatedAccumulationStrength =
-            this.calculateAccumulationStrength(event);
+            this.calculateAccumulationStrength(event, relevantZones);
         if (calculatedAccumulationStrength === null) return;
 
         // Start with base detection strength
@@ -295,14 +307,26 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             // Store enhanced accumulation metrics for monitoring
             this.storeEnhancedAccumulationMetrics(event, totalConfidence);
 
-            // ✅ EMIT ZONE UPDATE - For visualization in dashboard
-            this.emitAccumulationZoneUpdate(event, totalConfidence);
+            // ✅ EMIT ZONE UPDATE - For visualization in dashboard (using pre-found zones)
+            this.emitAccumulationZoneUpdate(
+                event,
+                totalConfidence,
+                relevantZones
+            );
 
             // ✅ EMIT SIGNAL ONLY for actionable zone events
-            this.emitAccumulationZoneSignal(event, totalConfidence);
+            this.emitAccumulationZoneSignal(
+                event,
+                totalConfidence,
+                relevantZones
+            );
 
             // ✅ EMIT ENHANCED ACCUMULATION SIGNAL - For signal tracking
-            this.emitEnhancedAccumulationSignal(event, totalConfidence);
+            this.emitEnhancedAccumulationSignal(
+                event,
+                totalConfidence,
+                relevantZones
+            );
 
             this.logger.debug(
                 "[AccumulationZoneDetectorEnhanced]: Accumulation pattern detected",
@@ -323,16 +347,10 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
      * Calculate base accumulation strength from pure volume ratios
      */
     private calculateAccumulationStrength(
-        event: EnrichedTradeEvent
+        event: EnrichedTradeEvent,
+        relevantZones: ZoneSnapshot[]
     ): number | null {
         if (!event.zoneData) return null;
-
-        // CLAUDE.md SIMPLIFIED: Use single zone array (no more triple-counting!)
-        const relevantZones = this.preprocessor.findZonesNearPrice(
-            event.zoneData.zones,
-            event.price,
-            this.confluenceMaxDistance
-        );
 
         this.logger.debug(
             "AccumulationZoneDetectorEnhanced: calculateAccumulationStrength",
@@ -775,7 +793,8 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
      */
     private emitAccumulationZoneUpdate(
         event: EnrichedTradeEvent,
-        confidenceBoost: number
+        confidenceBoost: number,
+        relevantZones: ZoneSnapshot[]
     ): void {
         if (!event.zoneData) return;
 
@@ -783,10 +802,11 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         const updateType = this.determineZoneUpdateType(event, confidenceBoost);
         if (!updateType) return;
 
-        // Create zone data for visualization
+        // Create zone data for visualization (using pre-found zones)
         const zoneData = this.createZoneVisualizationData(
             event,
-            confidenceBoost
+            confidenceBoost,
+            relevantZones
         );
         if (!zoneData) return;
 
@@ -815,16 +835,22 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
      */
     private emitAccumulationZoneSignal(
         event: EnrichedTradeEvent,
-        confidenceBoost: number
+        confidenceBoost: number,
+        relevantZones: ZoneSnapshot[]
     ): void {
         // Only emit signals for actionable zone events (completion, invalidation, consumption)
-        const signalType = this.determineZoneSignalType(event, confidenceBoost);
+        const signalType = this.determineZoneSignalType(
+            event,
+            confidenceBoost,
+            relevantZones
+        );
         if (!signalType) return; // No actionable event detected
 
         // Create zone signal for stats tracking
         const zoneData = this.createZoneVisualizationData(
             event,
-            confidenceBoost
+            confidenceBoost,
+            relevantZones
         );
         if (!zoneData) return;
 
@@ -870,11 +896,15 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
      */
     private createZoneVisualizationData(
         event: EnrichedTradeEvent,
-        confidenceBoost: number
+        confidenceBoost: number,
+        relevantZones: ZoneSnapshot[]
     ): ZoneVisualizationData | null {
         if (!event.zoneData) return null;
 
-        const accumulationMetrics = this.calculateAccumulationMetrics(event);
+        const accumulationMetrics = this.calculateAccumulationMetrics(
+            event,
+            relevantZones
+        );
         if (!accumulationMetrics) return null;
 
         return {
@@ -892,6 +922,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             ),
             volume: accumulationMetrics.volumeConcentration,
             timespan: accumulationMetrics.duration,
+            startTime: Date.now() - accumulationMetrics.duration,
             lastUpdate: Date.now(),
             metadata: {
                 buyRatio: accumulationMetrics.buyRatio,
@@ -924,9 +955,13 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
      */
     private determineZoneSignalType(
         event: EnrichedTradeEvent,
-        confidenceBoost: number
+        confidenceBoost: number,
+        relevantZones: ZoneSnapshot[]
     ): string | null {
-        const accumulationMetrics = this.calculateAccumulationMetrics(event);
+        const accumulationMetrics = this.calculateAccumulationMetrics(
+            event,
+            relevantZones
+        );
         if (!accumulationMetrics) return null;
 
         // Calculate actual confidence from strength + boost
@@ -952,7 +987,8 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
      */
     private emitEnhancedAccumulationSignal(
         event: EnrichedTradeEvent,
-        confidenceBoost: number
+        confidenceBoost: number,
+        relevantZones: ZoneSnapshot[]
     ): void {
         // Only emit signals when enhancement is meaningful
         if (confidenceBoost < this.enhancementConfig.confidenceThreshold) {
@@ -960,7 +996,10 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         }
 
         // Calculate enhanced accumulation confidence using actual detection strength
-        const accumulationMetrics = this.calculateAccumulationMetrics(event);
+        const accumulationMetrics = this.calculateAccumulationMetrics(
+            event,
+            relevantZones
+        );
         if (!accumulationMetrics) {
             return; // Cannot calculate confidence without metrics
         }
@@ -1033,7 +1072,10 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     /**
      * Calculate accumulation metrics for signal data
      */
-    private calculateAccumulationMetrics(event: EnrichedTradeEvent): {
+    private calculateAccumulationMetrics(
+        event: EnrichedTradeEvent,
+        relevantZones: ZoneSnapshot[]
+    ): {
         duration: number;
         zone: number;
         buyRatio: number;
@@ -1046,13 +1088,6 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             return null;
         }
 
-        const allZones = event.zoneData.zones;
-
-        const relevantZones = this.preprocessor.findZonesNearPrice(
-            allZones,
-            event.price,
-            this.confluenceMaxDistance
-        );
         if (relevantZones.length === 0) {
             return null;
         }
@@ -1083,7 +1118,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         // Calculate zone (price level using FinancialMath)
         const zone = FinancialMath.normalizePriceToTick(
             event.price,
-            this.enhancementConfig.tickSize
+            Config.STANDARD_ZONE_CONFIG.priceThresholds.tickValue
         );
 
         // Volume concentration

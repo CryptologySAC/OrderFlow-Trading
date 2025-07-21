@@ -74,7 +74,7 @@ export interface EnrichedTradeEvent extends AggressiveTrade {
     bestAsk?: number;
 
     // NEW: Standardized zone data for all detectors
-    zoneData?: StandardZoneData;
+    zoneData: StandardZoneData;
 }
 
 export interface IndividualTrade {
