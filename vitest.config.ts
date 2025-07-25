@@ -11,5 +11,16 @@ export default defineConfig({
             reportsDirectory: "./coverage",
             include: ["src"],
         },
+        pool: 'threads', // or 'forks' for separate processes
+        poolOptions: {
+            threads: {
+                maxThreads: 2, // Limit to 2 threads
+                minThreads: 1
+            },
+            forks: {
+                maxForks: 2, // Limit to 2 processes if using forks                    
+                minForks: 1
+            }
+        }
     },
 });

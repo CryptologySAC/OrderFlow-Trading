@@ -318,7 +318,7 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
             expect(signalSpy).toHaveBeenCalledWith(
                 expect.objectContaining({
                     type: "exhaustion",
-                    side: "sell", // High buy volume → sell signal (buy exhaustion)
+                    side: "buy", // More bid liquidity available (40 vs 10) → ask exhaustion → buy signal
                     confidence: expect.any(Number),
                 })
             );
@@ -344,7 +344,7 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
             expect(signalSpy).toHaveBeenCalledWith(
                 expect.objectContaining({
                     type: "exhaustion",
-                    side: "buy", // High sell volume → buy signal (sell exhaustion)
+                    side: "sell", // More ask liquidity available (40 vs 10) → bid exhaustion → sell signal
                     confidence: expect.any(Number),
                 })
             );
@@ -497,7 +497,7 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
             expect(signal.confidence).toBeLessThanOrEqual(1.0); // Confidence capped at 1.0
         });
 
-        it("should distinguish between buy and sell exhaustion", () => {
+        it("should distinguish between buy and sell exhaustion", async () => {
             // Create zone with more buy volume (70% buy, 30% sell) for buy exhaustion
             const buyZoneData = createStandardizedZoneData(87.5, {
                 zones5: [{ aggressiveVol: 50, passiveVol: 5, priceOffset: 0 }], // Default is 70% buy
@@ -508,17 +508,20 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
                 buyZoneData.zones[0].passiveAskVolume = 8; // Higher ask consumption
             }
 
-            // Test buy exhaustion (high buy volume → sell signal)
+            // Test ask exhaustion (more ask liquidity consumed → buy signal)
             const buyTrade = createTradeEvent(87.5, 25, false, buyZoneData);
             detector.onEnrichedTrade(buyTrade);
 
             expect(signalSpy).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    side: "sell", // Buy exhaustion = sell signal
+                    side: "sell", // More ask liquidity available (8 vs 2) → bid exhaustion → sell signal
                 })
             );
 
             signalSpy.mockClear();
+
+            // Wait briefly to ensure signal is processed (eventCooldownMs is 0 in test config)
+            await new Promise(resolve => setTimeout(resolve, 10)); // Minimal delay since cooldown is disabled
 
             // Create zone with more sell volume (30% buy, 70% sell) for sell exhaustion
             const sellZoneData = createStandardizedZoneData(87.5, {
@@ -542,13 +545,13 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
                 }
             });
 
-            // Test sell exhaustion (high sell volume → buy signal)
+            // Test bid exhaustion (more bid liquidity consumed → sell signal)
             const sellTrade = createTradeEvent(87.5, 25, true, sellZoneData);
             detector.onEnrichedTrade(sellTrade);
 
             expect(signalSpy).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    side: "buy", // Sell exhaustion = buy signal
+                    side: "buy", // More bid liquidity available (8 vs 2) → ask exhaustion → buy signal
                 })
             );
         });

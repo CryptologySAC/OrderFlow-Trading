@@ -38,6 +38,7 @@ const EXHAUSTION_CONFIG = {
     minAggVolume: 15,
     windowMs: 45000,
     eventCooldownMs: 5000,
+    timeWindowIndex: 0, // Use first time window (300000ms = 5 minutes)
     volumeSurgeMultiplier: 1.2,
     imbalanceThreshold: 0.1,
     institutionalThreshold: 15,
@@ -312,6 +313,20 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
                         lastTradeEvent = event;
                         // Find the zone this trade is hitting
                         const zones = event.zoneData?.zones || [];
+                        
+                        // Add realistic but LOW passive volumes to create exhaustion conditions
+                        zones.forEach((zone, index) => {
+                            // Set LOW passive volumes to allow exhaustion detection
+                            const distanceFromTrade = Math.abs(zone.priceLevel - event.price);
+                            if (distanceFromTrade < 0.1) { // Very close zones get minimal passive volume
+                                zone.passiveBidVolume = 3 + (index % 2) * 2; // 3-5 LTC
+                                zone.passiveAskVolume = 2 + (index % 2) * 1; // 2-3 LTC
+                            } else {
+                                zone.passiveBidVolume = 1 + (index % 2); // 1-2 LTC  
+                                zone.passiveAskVolume = 1; // 1 LTC
+                            }
+                            zone.passiveVolume = (zone.passiveBidVolume || 0) + (zone.passiveAskVolume || 0);
+                        });
                         // For 10-tick zones, calculate the expected zone boundary
                         const expectedZoneStart =
                             Math.floor(event.price / (10 * TICK_SIZE)) *
@@ -540,6 +555,20 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
                     "enriched_trade",
                     (event: EnrichedTradeEvent) => {
                         lastEvent = event;
+                        // Add realistic but LOW passive volumes to create exhaustion conditions
+                        const zones = event.zoneData?.zones || [];
+                        zones.forEach((zone, index) => {
+                            // Set LOW passive volumes to allow exhaustion detection
+                            const distanceFromTrade = Math.abs(zone.priceLevel - event.price);
+                            if (distanceFromTrade < 0.1) { // Very close zones get minimal passive volume
+                                zone.passiveBidVolume = 3 + (index % 2) * 2; // 3-5 LTC
+                                zone.passiveAskVolume = 2 + (index % 2) * 1; // 2-3 LTC
+                            } else {
+                                zone.passiveBidVolume = 1 + (index % 2); // 1-2 LTC  
+                                zone.passiveAskVolume = 1; // 1 LTC
+                            }
+                            zone.passiveVolume = (zone.passiveBidVolume || 0) + (zone.passiveAskVolume || 0);
+                        });
                         detector.onEnrichedTrade(event);
                     }
                 );
@@ -586,6 +615,20 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
                     "enriched_trade",
                     (event: EnrichedTradeEvent) => {
                         lastEvent = event;
+                        // Add realistic but LOW passive volumes to create exhaustion conditions
+                        const zones = event.zoneData?.zones || [];
+                        zones.forEach((zone, index) => {
+                            // Set LOW passive volumes to allow exhaustion detection
+                            const distanceFromTrade = Math.abs(zone.priceLevel - event.price);
+                            if (distanceFromTrade < 0.1) { // Very close zones get minimal passive volume
+                                zone.passiveBidVolume = 3 + (index % 2) * 2; // 3-5 LTC
+                                zone.passiveAskVolume = 2 + (index % 2) * 1; // 2-3 LTC
+                            } else {
+                                zone.passiveBidVolume = 1 + (index % 2); // 1-2 LTC  
+                                zone.passiveAskVolume = 1; // 1 LTC
+                            }
+                            zone.passiveVolume = (zone.passiveBidVolume || 0) + (zone.passiveAskVolume || 0);
+                        });
                         detector.onEnrichedTrade(event);
                     }
                 );

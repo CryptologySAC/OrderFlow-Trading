@@ -1133,12 +1133,12 @@ export class ExhaustionDetectorEnhanced extends Detector {
             }
         );
 
-        // CORRECT exhaustion logic (CLAUDE.md compliance - simple and reliable)
+        // CORRECTED exhaustion logic - Variables contain AVAILABLE volumes, not consumed
         if (totalPassiveBidExhaustion > totalPassiveAskExhaustion) {
-            // More bid liquidity consumed → aggressive buying pressure → BUY signal
+            // More bid liquidity AVAILABLE → ask side MORE exhausted → price resistance weakened → BUY signal
             return "buy";
         } else if (totalPassiveAskExhaustion > totalPassiveBidExhaustion) {
-            // More ask liquidity consumed → aggressive selling pressure → SELL signal
+            // More ask liquidity AVAILABLE → bid side MORE exhausted → price support weakened → SELL signal
             return "sell";
         }
 

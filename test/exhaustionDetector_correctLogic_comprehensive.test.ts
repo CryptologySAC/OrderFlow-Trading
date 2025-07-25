@@ -451,14 +451,14 @@ ${
     /**
      * SPECIFIC VALIDATION TESTS
      */
-    it("should emit BUY signal for clear bid exhaustion", () => {
+    it("should emit SELL signal for clear bid exhaustion", () => {
         const scenario: ExhaustionTestScenario = {
             id: "test_clear_bid_exhaustion",
             description: "Clear bid exhaustion test",
             passiveBidVolume: 100, // Bids being consumed
             passiveAskVolume: 30, // Low ask volume
             aggressiveVolume: 2500, // High aggressive volume dominates (above 2000 LTC threshold)
-            expectedSignal: "buy", // Should generate BUY signal for clear bid exhaustion
+            expectedSignal: "buy", // Should generate BUY signal for clear bid exhaustion (bid liquidity depleted → ask resistance weakened)
             confidence: "high",
             category: "clear_bid_exhaustion",
         };
