@@ -21,6 +21,10 @@ export default defineConfig({
                 maxForks: 2, // Limit to 2 processes if using forks                    
                 minForks: 1
             }
-        }
+        },
+        isolate: true,
+        clearMocks: true,
+        restoreMocks: true,
+        fileParallelism: false
     },
 });
