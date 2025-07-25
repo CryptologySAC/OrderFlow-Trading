@@ -662,7 +662,7 @@ describe("AbsorptionDetector - Specification Compliance", () => {
 
             const customDetector = new AbsorptionDetectorEnhanced(
                 "CUSTOM",
-                "LTCUSDT", 
+                "LTCUSDT",
                 customSettings,
                 mockPreprocessor,
                 mockLogger,
@@ -859,8 +859,10 @@ describe("AbsorptionDetector - Specification Compliance", () => {
                         tickSize: 0.01,
                         aggressiveVolume: params.volume,
                         passiveVolume: 2000, // High passive volume for absorption
-                        aggressiveBuyVolume: params.side === "buy" ? params.volume : 0,
-                        aggressiveSellVolume: params.side === "sell" ? params.volume : 0,
+                        aggressiveBuyVolume:
+                            params.side === "buy" ? params.volume : 0,
+                        aggressiveSellVolume:
+                            params.side === "sell" ? params.volume : 0,
                         passiveBidVolume: 1000,
                         passiveAskVolume: 1000,
                         tradeCount: 1,

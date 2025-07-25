@@ -521,7 +521,7 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
             signalSpy.mockClear();
 
             // Wait briefly to ensure signal is processed (eventCooldownMs is 0 in test config)
-            await new Promise(resolve => setTimeout(resolve, 10)); // Minimal delay since cooldown is disabled
+            await new Promise((resolve) => setTimeout(resolve, 10)); // Minimal delay since cooldown is disabled
 
             // Create zone with more sell volume (30% buy, 70% sell) for sell exhaustion
             const sellZoneData = createStandardizedZoneData(87.5, {

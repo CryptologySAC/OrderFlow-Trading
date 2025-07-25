@@ -183,6 +183,9 @@ export const DeltaCVDDetectorSchema = z.object({
     signalThreshold: z.number().min(0.01).max(1.8),
     eventCooldownMs: z.number().int().min(1000).max(90000),
 
+    // Zone time window configuration
+    timeWindowIndex: z.number().int().min(0).max(5),
+
     // Zone enhancement control
     enhancementMode: z.enum(["disabled", "monitoring", "production"]),
 

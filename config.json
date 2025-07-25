@@ -333,7 +333,8 @@
                 "signalThreshold": 0.85,
                 "eventCooldownMs": 90000,
                 "enhancementMode": "production",
-                "cvdImbalanceThreshold": 0.35
+                "cvdImbalanceThreshold": 0.35,
+                "timeWindowIndex": 0
             },
             "accumulation": {
                 "timeWindowIndex": 1,

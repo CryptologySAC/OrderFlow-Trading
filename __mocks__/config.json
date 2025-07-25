@@ -365,6 +365,7 @@
                 "minVolPerSec": 10,
                 "signalThreshold": 0.4,
                 "eventCooldownMs": 5000,
+                "timeWindowIndex": 0,
                 "enhancementMode": "production",
                 "cvdImbalanceThreshold": 0.3
             },

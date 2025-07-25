@@ -763,11 +763,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
             windowMs: this.windowMs,
             windowStartTime,
             tradeTimestamp: event.timestamp,
-            zoneLastUpdates: allZones.map(z => ({ 
-                zoneId: z.zoneId, 
+            zoneLastUpdates: allZones.map((z) => ({
+                zoneId: z.zoneId,
                 lastUpdate: z.lastUpdate,
-                withinWindow: z.lastUpdate >= windowStartTime 
-            }))
+                withinWindow: z.lastUpdate >= windowStartTime,
+            })),
         });
 
         return this.preprocessor.findZonesNearPrice(

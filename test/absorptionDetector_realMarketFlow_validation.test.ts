@@ -53,7 +53,7 @@ describe("Absorption Detector Real Market Flow Validation", () => {
     beforeEach(() => {
         // Create mock preprocessor that will be updated per test
         let currentZones: any[] = [];
-        
+
         mockPreprocessor = {
             findZonesNearPrice: vi.fn().mockReturnValue([]),
             // Add method to update zones from trade data
@@ -476,8 +476,11 @@ describe("Absorption Detector Real Market Flow Validation", () => {
             .mockImplementation(
                 (zones: any[], price: number, distance: number) => {
                     // Use stored zones if empty zones array is passed (common in tests)
-                    const zonesToSearch = zones.length > 0 ? zones : (mockPreprocessor as any).getCurrentZones();
-                    
+                    const zonesToSearch =
+                        zones.length > 0
+                            ? zones
+                            : (mockPreprocessor as any).getCurrentZones();
+
                     console.log("🔍 MOCK findZonesNearPrice called:", {
                         zonesCount: zonesToSearch.length,
                         tradePrice: price,
@@ -487,10 +490,11 @@ describe("Absorption Detector Real Market Flow Validation", () => {
                             ? Math.abs(zonesToSearch[0].priceLevel - price)
                             : "N/A",
                     });
-                    
+
                     // Filter zones within distance
-                    return zonesToSearch.filter((zone: any) => 
-                        Math.abs(zone.priceLevel - price) <= distance
+                    return zonesToSearch.filter(
+                        (zone: any) =>
+                            Math.abs(zone.priceLevel - price) <= distance
                     );
                 }
             );
@@ -536,7 +540,9 @@ describe("Absorption Detector Real Market Flow Validation", () => {
 
             // Update mock preprocessor with zones from this trade
             if (trade.zoneData?.zones) {
-                (mockPreprocessor as any).updateZonesFromTrade(trade.zoneData.zones);
+                (mockPreprocessor as any).updateZonesFromTrade(
+                    trade.zoneData.zones
+                );
             }
 
             detector.onEnrichedTrade(trade);

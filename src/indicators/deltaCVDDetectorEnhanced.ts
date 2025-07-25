@@ -292,7 +292,10 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         }
 
         // Extract CVD data from zones for analysis
-        const cvdData = this.extractCVDFromZones(event.zoneData);
+        const cvdData = this.extractCVDFromZones(
+            event.zoneData,
+            event.timestamp
+        );
 
         if (!cvdData.hasSignificantVolume) {
             // Emit metrics for insufficient samples
@@ -387,7 +390,28 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         // Simple zone-based validation without caching live data
         if (!event.zoneData) return false;
 
-        const allZones = [...event.zoneData.zones];
+        // CRITICAL FIX: Filter zones by time window using trade timestamp
+        const windowStartTime =
+            event.timestamp -
+            Config.getTimeWindow(this.enhancementConfig.timeWindowIndex);
+        const recentZones = event.zoneData.zones.filter(
+            (zone) => zone.lastUpdate >= windowStartTime
+        );
+
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] Time-window filtering",
+            {
+                totalZones: event.zoneData.zones.length,
+                recentZones: recentZones.length,
+                windowMs: Config.getTimeWindow(
+                    this.enhancementConfig.timeWindowIndex
+                ),
+                windowStartTime,
+                tradeTimestamp: event.timestamp,
+            }
+        );
+
+        const allZones = [...recentZones];
 
         // Calculate current volume rate from zones (no caching)
         const totalVolume = allZones.reduce(
@@ -448,14 +472,40 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     /**
      * Extract CVD data from standardized zones
      */
-    private extractCVDFromZones(zoneData: StandardZoneData): {
+    private extractCVDFromZones(
+        zoneData: StandardZoneData,
+        tradeTimestamp?: number
+    ): {
         hasSignificantVolume: boolean;
         totalVolume: number;
         buyVolume: number;
         sellVolume: number;
         cvdDelta: number;
     } {
-        const allZones = [...zoneData.zones];
+        let allZones = [...zoneData.zones];
+
+        // Apply temporal filtering if timestamp provided
+        if (tradeTimestamp !== undefined) {
+            const windowStartTime =
+                tradeTimestamp -
+                Config.getTimeWindow(this.enhancementConfig.timeWindowIndex);
+            allZones = allZones.filter(
+                (zone) => zone.lastUpdate >= windowStartTime
+            );
+
+            this.logger.debug(
+                "[DeltaCVDDetectorEnhanced DEBUG] extractCVDFromZones temporal filtering",
+                {
+                    totalZones: zoneData.zones.length,
+                    recentZones: allZones.length,
+                    windowMs: Config.getTimeWindow(
+                        this.enhancementConfig.timeWindowIndex
+                    ),
+                    windowStartTime,
+                    tradeTimestamp,
+                }
+            );
+        }
 
         let totalBuyVolume = 0;
         let totalSellVolume = 0;
@@ -738,8 +788,29 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             }
         );
 
-        // Analyze all zones for CVD divergence patterns
-        const allZones = [...zoneData.zones];
+        // CRITICAL FIX: Apply temporal filtering before analyzing CVD divergence
+        const windowStartTime =
+            event.timestamp -
+            Config.getTimeWindow(this.enhancementConfig.timeWindowIndex);
+        const recentZones = zoneData.zones.filter(
+            (zone) => zone.lastUpdate >= windowStartTime
+        );
+
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] analyzeCVDDivergence temporal filtering",
+            {
+                totalZones: zoneData.zones.length,
+                recentZones: recentZones.length,
+                windowMs: Config.getTimeWindow(
+                    this.enhancementConfig.timeWindowIndex
+                ),
+                windowStartTime,
+                tradeTimestamp: event.timestamp,
+            }
+        );
+
+        // Analyze recent zones for CVD divergence patterns
+        const allZones = [...recentZones];
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,
@@ -996,8 +1067,14 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             price: event.price,
             side: signalSide,
             rateOfChange: enhancedResult.coreResult.divergenceStrength,
-            windowVolume: this.calculateZoneVolume(event.zoneData),
-            tradesInWindow: this.calculateZoneTrades(event.zoneData),
+            windowVolume: this.calculateZoneVolume(
+                event.zoneData,
+                event.timestamp
+            ),
+            tradesInWindow: this.calculateZoneTrades(
+                event.zoneData,
+                event.timestamp
+            ),
             confidence: realConfidence,
             slopes: { 300: enhancedResult.coreResult.divergenceStrength }, // Enhanced zone-based slope
             zScores: { 300: enhancedResult.coreResult.divergenceStrength }, // Real divergence strength, no artificial multiplication
@@ -1006,7 +1083,10 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 signalDescription: signalDescription,
                 timestamp: event.timestamp,
                 cvdMovement: {
-                    totalCVD: this.calculateZoneVolume(event.zoneData),
+                    totalCVD: this.calculateZoneVolume(
+                        event.zoneData,
+                        event.timestamp
+                    ),
                     normalizedCVD: enhancedResult.coreResult.divergenceStrength,
                     direction: signalSide === "buy" ? "bullish" : "bearish",
                 },
@@ -1063,7 +1143,28 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     ): "buy" | "sell" | null {
         if (!event.zoneData) return null;
 
-        const allZones = [...event.zoneData.zones];
+        // CRITICAL FIX: Apply temporal filtering for signal side determination
+        const windowStartTime =
+            event.timestamp -
+            Config.getTimeWindow(this.enhancementConfig.timeWindowIndex);
+        const recentZones = event.zoneData.zones.filter(
+            (zone) => zone.lastUpdate >= windowStartTime
+        );
+
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] determineCVDSignalSide temporal filtering",
+            {
+                totalZones: event.zoneData.zones.length,
+                recentZones: recentZones.length,
+                windowMs: Config.getTimeWindow(
+                    this.enhancementConfig.timeWindowIndex
+                ),
+                windowStartTime,
+                tradeTimestamp: event.timestamp,
+            }
+        );
+
+        const allZones = [...recentZones];
 
         let totalBuyVolume = 0;
         let totalSellVolume = 0;
@@ -1088,14 +1189,25 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     }
 
     /**
-     * Calculate total volume across all zones
+     * Calculate total volume across all zones (with temporal filtering)
      */
     private calculateZoneVolume(
-        zoneData: StandardZoneData | undefined
+        zoneData: StandardZoneData | undefined,
+        tradeTimestamp?: number
     ): number {
         if (!zoneData) return 0;
 
-        const allZones = [...zoneData.zones];
+        let allZones = [...zoneData.zones];
+
+        // Apply temporal filtering if timestamp provided
+        if (tradeTimestamp !== undefined) {
+            const windowStartTime =
+                tradeTimestamp -
+                Config.getTimeWindow(this.enhancementConfig.timeWindowIndex);
+            allZones = allZones.filter(
+                (zone) => zone.lastUpdate >= windowStartTime
+            );
+        }
 
         return allZones.reduce(
             (total, zone) => total + (zone.aggressiveVolume || 0),
@@ -1104,14 +1216,25 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     }
 
     /**
-     * Calculate total trades across all zones
+     * Calculate total trades across all zones (with temporal filtering)
      */
     private calculateZoneTrades(
-        zoneData: StandardZoneData | undefined
+        zoneData: StandardZoneData | undefined,
+        tradeTimestamp?: number
     ): number {
         if (!zoneData) return 0;
 
-        const allZones = [...zoneData.zones];
+        let allZones = [...zoneData.zones];
+
+        // Apply temporal filtering if timestamp provided
+        if (tradeTimestamp !== undefined) {
+            const windowStartTime =
+                tradeTimestamp -
+                Config.getTimeWindow(this.enhancementConfig.timeWindowIndex);
+            allZones = allZones.filter(
+                (zone) => zone.lastUpdate >= windowStartTime
+            );
+        }
 
         return allZones.reduce(
             (total, zone) => total + (zone.tradeCount || 0),
