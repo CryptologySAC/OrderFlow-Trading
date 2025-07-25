@@ -52,14 +52,22 @@ describe("Absorption Detector Real Market Flow Validation", () => {
 
     beforeEach(() => {
         // Create mock preprocessor that will be updated per test
+        let currentZones: any[] = [];
+        
         mockPreprocessor = {
             findZonesNearPrice: vi.fn().mockReturnValue([]),
+            // Add method to update zones from trade data
+            updateZonesFromTrade: (tradeZones: any[]) => {
+                currentZones = tradeZones;
+            },
+            getCurrentZones: () => currentZones,
         } as any;
 
         // Use production configuration values directly (Config.ABSORPTION_DETECTOR_ENHANCED returns undefined values)
         const productionConfig = {
             // Base detector settings
             minAggVolume: 10,
+            timeWindowIndex: 2, // Index into preprocessor timeWindows array (maps to ~300s window)
             windowMs: 120000,
             eventCooldownMs: 10000,
             minInitialMoveTicks: 3,
@@ -467,18 +475,23 @@ describe("Absorption Detector Real Market Flow Validation", () => {
             .fn()
             .mockImplementation(
                 (zones: any[], price: number, distance: number) => {
-                    // For testing, always return the zones to ensure absorption detection can proceed
-                    // In production, zones would be closer to trade prices
+                    // Use stored zones if empty zones array is passed (common in tests)
+                    const zonesToSearch = zones.length > 0 ? zones : (mockPreprocessor as any).getCurrentZones();
+                    
                     console.log("🔍 MOCK findZonesNearPrice called:", {
-                        zonesCount: zones.length,
+                        zonesCount: zonesToSearch.length,
                         tradePrice: price,
                         maxDistance: distance,
-                        firstZonePrice: zones[0]?.price,
-                        actualDistance: zones[0]
-                            ? Math.abs(zones[0].price - price)
+                        firstZonePrice: zonesToSearch[0]?.priceLevel,
+                        actualDistance: zonesToSearch[0]
+                            ? Math.abs(zonesToSearch[0].priceLevel - price)
                             : "N/A",
                     });
-                    return zones; // Return all zones for testing
+                    
+                    // Filter zones within distance
+                    return zonesToSearch.filter((zone: any) => 
+                        Math.abs(zone.priceLevel - price) <= distance
+                    );
                 }
             );
 
@@ -506,8 +519,8 @@ describe("Absorption Detector Real Market Flow Validation", () => {
                     zonesCount: trade.zoneData?.zones?.length || 0,
                     firstZone: trade.zoneData?.zones?.[0]
                         ? {
-                              id: trade.zoneData.zones[0].id,
-                              price: trade.zoneData.zones[0].price,
+                              id: trade.zoneData.zones[0].zoneId,
+                              price: trade.zoneData.zones[0].priceLevel,
                               aggressiveVolume:
                                   trade.zoneData.zones[0].aggressiveVolume,
                               passiveVolume:
@@ -519,6 +532,11 @@ describe("Absorption Detector Real Market Flow Validation", () => {
                           }
                         : "NO_ZONE",
                 });
+            }
+
+            // Update mock preprocessor with zones from this trade
+            if (trade.zoneData?.zones) {
+                (mockPreprocessor as any).updateZonesFromTrade(trade.zoneData.zones);
             }
 
             detector.onEnrichedTrade(trade);

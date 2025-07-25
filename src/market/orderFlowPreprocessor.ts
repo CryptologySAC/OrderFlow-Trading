@@ -1430,44 +1430,52 @@ export class OrderflowPreprocessor
                 return null; // Trade outside zone boundaries
             }
 
-            // Update aggressive volume using FinancialMath
-            const newAggressiveVolume = FinancialMath.safeAdd(
-                zone.aggressiveVolume,
-                quantity
-            );
+            // 🔄 CRITICAL FIX: Calculate time-windowed volumes from tradeHistory instead of cumulative
+            // Add current trade to history first
+            const currentTradeRecord: ZoneTradeRecord = {
+                price,
+                quantity,
+                timestamp,
+                tradeId: trade.tradeId,
+                buyerIsMaker,
+            };
+            zone.tradeHistory.add(currentTradeRecord);
 
-            // Update buy/sell volumes based on trade direction
-            let newBuyVolume = zone.aggressiveBuyVolume;
-            let newSellVolume = zone.aggressiveSellVolume;
+            // Calculate volumes from trades within active time window
+            const timeWindowMs = zone.timespan; // Use zone's configured time window
+            const cutoffTime = timestamp - timeWindowMs;
 
-            if (buyerIsMaker) {
-                // Buyer is maker = sell side trade (seller is taker)
-                newSellVolume = FinancialMath.safeAdd(newSellVolume, quantity);
-            } else {
-                // Buyer is taker = buy side trade
-                newBuyVolume = FinancialMath.safeAdd(newBuyVolume, quantity);
-            }
+            let newAggressiveVolume = 0;
+            let newBuyVolume = 0;
+            let newSellVolume = 0;
+            let newTradeCount = 0;
 
-            // Update trade count
-            const newTradeCount = zone.tradeCount + 1;
+            // Sum volumes from all trades within time window
+            for (const tradeRecord of zone.tradeHistory.getAll()) {
+                if (tradeRecord.timestamp >= cutoffTime) {
+                    newAggressiveVolume = FinancialMath.safeAdd(
+                        newAggressiveVolume,
+                        tradeRecord.quantity
+                    );
+                    newTradeCount++;
 
-            // Extract individual trades for precise VWAP calculation
-            // Handles both aggregated trades and HybridTradeEvent with individual trade data
-            const individualTrades = this.extractIndividualTrades(
-                trade,
-                trade.tradeId
-            );
-
-            // Add all individual trades to zone's trade history
-            for (const tradeRecord of individualTrades) {
-                // Verify trade is within zone boundaries before storing
-                if (
-                    tradeRecord.price >= zone.boundaries.min &&
-                    tradeRecord.price <= zone.boundaries.max
-                ) {
-                    zone.tradeHistory.add(tradeRecord);
+                    if (tradeRecord.buyerIsMaker) {
+                        // Buyer is maker = sell side trade
+                        newSellVolume = FinancialMath.safeAdd(
+                            newSellVolume,
+                            tradeRecord.quantity
+                        );
+                    } else {
+                        // Buyer is taker = buy side trade
+                        newBuyVolume = FinancialMath.safeAdd(
+                            newBuyVolume,
+                            tradeRecord.quantity
+                        );
+                    }
                 }
             }
+
+            // Note: Trade already added to history above for time-windowed calculation
 
             // Calculate live VWAP from individual trades with time-based expiration
             const newVolumeWeightedPrice = this.calculateLiveVWAP(

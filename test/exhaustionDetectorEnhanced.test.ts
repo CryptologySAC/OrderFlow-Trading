@@ -172,7 +172,7 @@ describe("ExhaustionDetectorEnhanced - Standalone Architecture", () => {
 
     describe("Configuration Validation", () => {
         it("should use configuration from config.json", () => {
-            expect(exhaustionConfig.minAggVolume).toBe(15);
+            expect(exhaustionConfig.minAggVolume).toBe(10); // From mock config
             expect(exhaustionConfig.enhancementMode).toBe("production");
             expect(exhaustionConfig.useStandardizedZones).toBe(true);
         });

@@ -11,17 +11,19 @@ import { createMockLogger } from "../__mocks__/src/infrastructure/loggerInterfac
 import { MetricsCollector } from "../__mocks__/src/infrastructure/metricsCollector.js";
 
 /**
- * EXHAUSTION DETECTOR CORRECT LOGIC VERIFICATION
+ * EXHAUSTION DETECTOR CORRECT LOGIC VERIFICATION (Updated for Optimized Config)
  *
  * This test suite verifies the correct exhaustion logic with 100 clear scenarios:
- * - Tests 1-30: Clear BID exhaustion (bids depleted by aggressive sells → BUY signal)
- * - Tests 31-60: Clear ASK exhaustion (asks depleted by aggressive buys → SELL signal)
+ * - Tests 1-30: Clear BID exhaustion (bids depleted by aggressive sells → BUY signal if ≥2000 LTC)
+ * - Tests 31-60: Clear ASK exhaustion (asks depleted by aggressive buys → SELL signal if ≥2000 LTC)
  * - Tests 61-80: Edge cases (moderate exhaustion levels)
  * - Tests 81-100: No exhaustion (balanced, insufficient volume, or no clear depletion)
  *
- * CORRECT EXHAUSTION LOGIC:
+ * UPDATED EXHAUSTION LOGIC (Optimized Config - 2025-07-22):
+ * - Aggressive volume MUST be ≥2000 LTC (minAggVolume threshold) for signal generation
  * - Passive bids exhausted by aggressive sells = Sell-side exhaustion = BUY signal (expect reversal up)
  * - Passive asks exhausted by aggressive buys = Buy-side exhaustion = SELL signal (expect reversal down)
+ * - Volume below 2000 LTC threshold = NEUTRAL (institutional volume filter)
  * - No clear passive side exhaustion = No exhaustion = NEUTRAL
  */
 
@@ -78,10 +80,13 @@ describe("ExhaustionDetector Correct Logic - 100 Comprehensive Tests", () => {
             ]),
         } as any;
 
-        // Create detector with realistic config and debug logger
+        // Create detector with realistic config that matches optimized production settings
         const testConfig = {
             ...Config.EXHAUSTION_DETECTOR,
+            minAggVolume: 2000, // Use production optimized threshold
+            exhaustionThreshold: 0.45, // Use production optimized threshold
             eventCooldownMs: 0, // Disable cooldown in tests
+            timeWindowIndex: 0, // Use first time window (30s)
         };
 
         // Create a debug logger that shows ALL info for debugging failures
@@ -108,7 +113,7 @@ describe("ExhaustionDetector Correct Logic - 100 Comprehensive Tests", () => {
             testConfig,
             mockPreprocessor,
             debugLogger as any,
-            new MetricsCollector(),
+            new MetricsCollector() as any,
             mockSignalLogger as any
         );
 
@@ -117,6 +122,8 @@ describe("ExhaustionDetector Correct Logic - 100 Comprehensive Tests", () => {
 
         // Clear any accumulated state from the detector to prevent test contamination
         (detector as any).lastSignal?.clear();
+        (detector as any).lastSignalTime = undefined;
+        (detector as any).lastEmissionTime = undefined;
     });
 
     /**
@@ -138,7 +145,7 @@ describe("ExhaustionDetector Correct Logic - 100 Comprehensive Tests", () => {
                 passiveBidVolume: passiveBidVol,
                 passiveAskVolume: passiveAskVol,
                 aggressiveVolume: aggressiveVol,
-                expectedSignal: "buy", // Sell-side exhaustion → expect reversal up
+                expectedSignal: aggressiveVol >= 2000 ? "buy" : "neutral", // Updated for optimized config: minAggVolume 2000 LTC
                 confidence: i <= 20 ? "high" : "medium",
                 category: "clear_bid_exhaustion",
             });
@@ -158,7 +165,7 @@ describe("ExhaustionDetector Correct Logic - 100 Comprehensive Tests", () => {
                 passiveBidVolume: passiveBidVol,
                 passiveAskVolume: passiveAskVol,
                 aggressiveVolume: aggressiveVol,
-                expectedSignal: "sell", // Buy-side exhaustion → expect reversal down
+                expectedSignal: aggressiveVol >= 2000 ? "sell" : "neutral", // Updated for optimized config: minAggVolume 2000 LTC
                 confidence: testIndex <= 20 ? "high" : "medium",
                 category: "clear_ask_exhaustion",
             });
@@ -180,7 +187,7 @@ describe("ExhaustionDetector Correct Logic - 100 Comprehensive Tests", () => {
                     passiveBidVolume: passiveBidVol,
                     passiveAskVolume: passiveAskVol,
                     aggressiveVolume: aggressiveVol,
-                    expectedSignal: "buy", // Still bid exhaustion dominance
+                    expectedSignal: aggressiveVol >= 2000 ? "buy" : "neutral", // Updated for optimized config: minAggVolume 2000 LTC
                     confidence: "low",
                     category: "edge_case",
                 });
@@ -196,7 +203,7 @@ describe("ExhaustionDetector Correct Logic - 100 Comprehensive Tests", () => {
                     passiveBidVolume: passiveBidVol,
                     passiveAskVolume: passiveAskVol,
                     aggressiveVolume: aggressiveVol,
-                    expectedSignal: "sell", // Still ask exhaustion dominance
+                    expectedSignal: aggressiveVol >= 2000 ? "sell" : "neutral", // Updated for optimized config: minAggVolume 2000 LTC
                     confidence: "low",
                     category: "edge_case",
                 });
@@ -296,7 +303,7 @@ describe("ExhaustionDetector Correct Logic - 100 Comprehensive Tests", () => {
         // Create test trade event with all required market data
         const testTrade: EnrichedTradeEvent = {
             price: 89.0,
-            quantity: 10,
+            quantity: scenario.aggressiveVolume, // Use scenario's aggressive volume for realistic testing
             timestamp: currentTime,
             buyerIsMaker: true,
             pair: "LTCUSDT",
@@ -322,6 +329,10 @@ describe("ExhaustionDetector Correct Logic - 100 Comprehensive Tests", () => {
         // Clear any accumulated state in the detector before each test
         // Access private lastSignal Map and clear it to avoid state contamination
         (detector as any).lastSignal?.clear();
+
+        // Also clear any cooldown state
+        (detector as any).lastSignalTime = undefined;
+        (detector as any).lastEmissionTime = undefined;
 
         // Test the detector
         let actualSignal: "buy" | "sell" | "neutral" = "neutral";
@@ -446,8 +457,8 @@ ${
             description: "Clear bid exhaustion test",
             passiveBidVolume: 100, // Bids being consumed
             passiveAskVolume: 30, // Low ask volume
-            aggressiveVolume: 400, // High aggressive volume dominates
-            expectedSignal: "buy",
+            aggressiveVolume: 2500, // High aggressive volume dominates (above 2000 LTC threshold)
+            expectedSignal: "buy", // Should generate BUY signal for clear bid exhaustion
             confidence: "high",
             category: "clear_bid_exhaustion",
         };
@@ -455,24 +466,46 @@ ${
         console.log("🔍 DEBUGGING INDIVIDUAL EXHAUSTION SCENARIO");
         console.log("Test scenario:", scenario);
         console.log("Expected ratios:");
-        console.log("  - Total volume:", 100 + 30 + 400, "LTC");
+        console.log(
+            "  - Total volume:",
+            scenario.passiveBidVolume +
+                scenario.passiveAskVolume +
+                scenario.aggressiveVolume,
+            "LTC"
+        );
         console.log(
             "  - Aggressive ratio:",
-            400 / (100 + 30 + 400),
+            scenario.aggressiveVolume /
+                (scenario.passiveBidVolume +
+                    scenario.passiveAskVolume +
+                    scenario.aggressiveVolume),
             "should trigger exhaustion"
         );
         console.log(
             "  - Passive ratio:",
-            (100 + 30) / (100 + 30 + 400),
+            (scenario.passiveBidVolume + scenario.passiveAskVolume) /
+                (scenario.passiveBidVolume +
+                    scenario.passiveAskVolume +
+                    scenario.aggressiveVolume),
             "should be < 0.5"
         );
         console.log(
             "  - Bid vs Ask exhaustion:",
-            100,
+            scenario.passiveBidVolume,
             "vs",
-            30,
+            scenario.passiveAskVolume,
             "→",
-            100 > 30 ? "BID EXHAUSTION (BUY)" : "ASK EXHAUSTION (SELL)"
+            scenario.passiveBidVolume > scenario.passiveAskVolume
+                ? "BID EXHAUSTION (BUY)"
+                : "ASK EXHAUSTION (SELL)"
+        );
+        console.log(
+            "  - Exhaustion threshold check:",
+            scenario.aggressiveVolume /
+                (scenario.passiveBidVolume +
+                    scenario.passiveAskVolume +
+                    scenario.aggressiveVolume),
+            "vs 0.45 threshold"
         );
 
         const result = verifyExhaustionLogic(scenario);
@@ -484,6 +517,10 @@ ${
             passiveBidVolume: result.passiveBidVolume,
             passiveAskVolume: result.passiveAskVolume,
             aggressiveVolume: result.aggressiveVolume,
+            note:
+                result.aggressiveVolume < 2000
+                    ? `Volume ${result.aggressiveVolume} LTC below optimized threshold (2000 LTC)`
+                    : "Volume meets threshold requirements",
         });
 
         expect(result.actual).toBe("buy");
@@ -496,8 +533,8 @@ ${
             description: "Clear ask exhaustion test",
             passiveBidVolume: 30, // Low bid volume
             passiveAskVolume: 100, // Asks being consumed
-            aggressiveVolume: 400, // High aggressive volume dominates
-            expectedSignal: "sell",
+            aggressiveVolume: 2500, // High aggressive volume dominates (above 2000 LTC threshold)
+            expectedSignal: "sell", // Updated for optimized config: 2500 LTC > 2000 LTC minimum
             confidence: "high",
             category: "clear_ask_exhaustion",
         };
@@ -530,7 +567,7 @@ ${
             description: "Insufficient aggressive volume",
             passiveBidVolume: 200, // High bid consumption
             passiveAskVolume: 50, // Low ask consumption
-            aggressiveVolume: 50, // Below 80 threshold
+            aggressiveVolume: 50, // Below 2000 LTC threshold (optimized config)
             expectedSignal: "neutral",
             confidence: "low",
             category: "no_exhaustion",

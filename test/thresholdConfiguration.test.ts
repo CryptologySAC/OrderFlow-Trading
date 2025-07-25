@@ -212,14 +212,14 @@ describe("Threshold Configuration Chain", () => {
             ).toBe(0.05);
             expect(
                 (detector as any).enhancementConfig.depletionVolumeThreshold
-            ).toBe(15);
+            ).toBe(10); // From mock config (test environment uses different values than production)
             expect(
                 (detector as any).enhancementConfig.depletionRatioThreshold
-            ).toBe(0.4);
+            ).toBe(0.05); // From mock config
             expect(
                 (detector as any).enhancementConfig
                     .minEnhancedConfidenceThreshold
-            ).toBe(0.05);
+            ).toBe(0.01); // From mock config
         });
 
         it("should use custom threshold values when provided", () => {

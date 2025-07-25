@@ -65,14 +65,12 @@ describe("Config.ts - Comprehensive Test Suite", () => {
             expect(Config.PRICE_PRECISION).toBeDefined();
             expect(Config.TICK_SIZE).toBeDefined();
             expect(Config.MAX_STORAGE_TIME).toBeDefined();
-            expect(Config.WINDOW_MS).toBeDefined();
         });
 
         it("should handle numeric conversions properly", () => {
             expect(typeof Config.PRICE_PRECISION).toBe("number");
             expect(typeof Config.TICK_SIZE).toBe("number");
             expect(typeof Config.MAX_STORAGE_TIME).toBe("number");
-            expect(typeof Config.WINDOW_MS).toBe("number");
         });
     });
 
@@ -236,13 +234,13 @@ describe("Config.ts - Comprehensive Test Suite", () => {
             expect(Config.DISTRIBUTION_ZONE_DETECTOR).toBeDefined();
         });
 
-        it("should validate ABSORPTION_DETECTOR windowMs parameter", () => {
+        it("should validate ABSORPTION_DETECTOR timeWindowIndex parameter", () => {
             const absorptionConfig = Config.ABSORPTION_DETECTOR;
             expect(absorptionConfig).toBeDefined();
-            expect(absorptionConfig.windowMs).toBeDefined();
-            expect(typeof absorptionConfig.windowMs).toBe("number");
-            expect(absorptionConfig.windowMs).toBeGreaterThan(0);
-            expect(absorptionConfig.windowMs).toBeLessThanOrEqual(300000); // 5 minutes max
+            expect(absorptionConfig.timeWindowIndex).toBeDefined();
+            expect(typeof absorptionConfig.timeWindowIndex).toBe("number");
+            expect(absorptionConfig.timeWindowIndex).toBeGreaterThanOrEqual(0);
+            expect(absorptionConfig.timeWindowIndex).toBeLessThanOrEqual(5); // Index into timeWindows array
         });
 
         it("should provide detector threshold configurations", () => {
@@ -301,7 +299,7 @@ describe("Config.ts - Comprehensive Test Suite", () => {
             expect(typeof icebergConfig.minOrderCount).toBe("number");
             expect(typeof icebergConfig.minTotalSize).toBe("number");
             expect(typeof icebergConfig.maxOrderGapMs).toBe("number");
-            expect(typeof icebergConfig.trackingWindowMs).toBe("number");
+            expect(typeof icebergConfig.timeWindowIndex).toBe("number");
             expect(typeof icebergConfig.maxActivePatterns).toBe("number");
             expect(typeof icebergConfig.maxRecentTrades).toBe("number");
             expect(icebergConfig.enhancementMode).toBe("production");
@@ -375,7 +373,6 @@ describe("Config.ts - Comprehensive Test Suite", () => {
                 "PRICE_PRECISION",
                 "TICK_SIZE",
                 "MAX_STORAGE_TIME",
-                "WINDOW_MS",
                 "HTTP_PORT",
                 "WS_PORT",
                 "MQTT",
@@ -466,7 +463,6 @@ describe("Config.ts - Comprehensive Test Suite", () => {
             expect(typeof Config.NODE_ENV).toBe("string");
             expect(typeof Config.ALERT_COOLDOWN_MS).toBe("number");
             expect(typeof Config.MAX_STORAGE_TIME).toBe("number");
-            expect(typeof Config.WINDOW_MS).toBe("number");
         });
 
         it("should return objects for complex configurations", () => {

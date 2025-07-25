@@ -115,8 +115,8 @@ export const StandardZoneConfigSchema = z.object({
 // EXHAUSTION detector - CLEANED UP - Only used settings remain (16 core parameters)
 export const ExhaustionDetectorSchema = z.object({
     // Core detection
-    minAggVolume: z.number().int().min(1).max(10000),
-    windowMs: z.number().int().min(5000).max(300000),
+    minAggVolume: z.number().int().min(1).max(100000),
+    timeWindowIndex: z.number().int().min(0).max(5),
     exhaustionThreshold: z.number().min(0.01).max(1.0),
     eventCooldownMs: z.number().int().min(1000).max(300000),
 
@@ -142,15 +142,15 @@ export const ExhaustionDetectorSchema = z.object({
 // ABSORPTION detector - CLEANED UP - Only used settings remain
 export const AbsorptionDetectorSchema = z.object({
     // Core detection
-    minAggVolume: z.number().int().min(1).max(10000),
-    windowMs: z.number().int().min(5000).max(300000), // 5s to 5min absorption analysis window
+    minAggVolume: z.number().int().min(1).max(100000),
+    timeWindowIndex: z.number().int().min(0).max(5), // Index into preprocessor timeWindows array
     eventCooldownMs: z.number().int().min(1000).max(60000),
 
     // Absorption thresholds
     priceEfficiencyThreshold: z.number().min(0.0001).max(0.1),
     maxAbsorptionRatio: z.number().min(0.1).max(1.0),
     minPassiveMultiplier: z.number().min(0.5).max(5.0),
-    passiveAbsorptionThreshold: z.number().min(0.3).max(0.8),
+    passiveAbsorptionThreshold: z.number().min(0.3).max(1),
 
     // Calculation parameters
     expectedMovementScalingFactor: z.number().int().min(1).max(100),
@@ -159,7 +159,7 @@ export const AbsorptionDetectorSchema = z.object({
 
     // Institutional analysis
     institutionalVolumeThreshold: z.number().min(1).max(20000),
-    institutionalVolumeRatioThreshold: z.number().min(0.3).max(0.8),
+    institutionalVolumeRatioThreshold: z.number().min(0.3).max(1),
     enableInstitutionalVolumeFilter: z.boolean(),
     institutionalVolumeBoost: z.number().min(0.05).max(0.3),
 
@@ -266,8 +266,8 @@ export const SimpleIcebergDetectorSchema = z.object({
     minTotalSize: z.number().min(10).max(100000000), // Min total volume for significance (starts at 10 LTC)
 
     // Timing parameters
+    timeWindowIndex: z.number().int().min(0).max(5), // Index into preprocessor timeWindows array
     maxOrderGapMs: z.number().int().min(100).max(3600000), // Max gap between orders
-    trackingWindowMs: z.number().int().min(60000).max(86400000), // Pattern tracking window
 
     // Performance parameters
     maxActivePatterns: z.number().int().min(5).max(10000), // Memory management
@@ -333,6 +333,18 @@ const BasicSymbolConfigSchema = z
             maxMemoryTrades: z.number().int().positive(),
             saveQueueSize: z.number().int().positive(),
             healthCheckInterval: z.number().int().positive(),
+        }),
+        preprocessor: z.object({
+            defaultZoneMultipliers: z.array(z.number().int().positive()),
+            defaultTimeWindows: z.array(z.number().int().positive()),
+            defaultMinZoneWidthMultiplier: z.number().int().positive(),
+            defaultMaxZoneWidthMultiplier: z.number().int().positive(),
+            defaultMaxZoneHistory: z.number().int().positive(),
+            defaultMaxMemoryMB: z.number().int().positive(),
+            defaultAggressiveVolumeAbsolute: z.number().positive(),
+            defaultPassiveVolumeAbsolute: z.number().positive(),
+            defaultInstitutionalVolumeAbsolute: z.number().positive(),
+            maxTradesPerZone: z.number().int().positive(),
         }),
         signalManager: z.object({
             confidenceThreshold: z.number().positive(),
@@ -709,8 +721,8 @@ export class Config {
     static get MAX_STORAGE_TIME(): number {
         return Number(cfg.maxStorageTime);
     }
-    static get WINDOW_MS(): number {
-        return Number(SYMBOL_CFG.windowMs);
+    static getTimeWindow(timeWindowIndex: number): number {
+        return Config.STANDARD_ZONE_CONFIG.timeWindows[timeWindowIndex];
     }
 
     // Server configuration
@@ -764,17 +776,23 @@ export class Config {
             adaptiveZoneLookbackTrades: 500, // 500 trades ≈ meaningful zone formation over 12-15 min
             zoneCalculationRange: 12, // ±12 zones for broader price action coverage
             zoneCacheSize: 375, // Pre-allocated cache size for 90-minute analysis
-            defaultZoneMultipliers: [1, 2, 4],
-            defaultTimeWindows: [300000, 900000, 1800000, 3600000, 5400000],
-            defaultMinZoneWidthMultiplier: 2, // Based on LTCUSDT: 2 ticks minimum
-            defaultMaxZoneWidthMultiplier: 10, // Based on LTCUSDT: 10 ticks maximum
-            defaultMaxZoneHistory: 2000, // 2000 zones ≈ 90+ minutes comprehensive coverage
-            defaultMaxMemoryMB: 50, // 50MB for 90-minute zone structures and history
-            defaultAggressiveVolumeAbsolute: 10.0, // LTCUSDT: 10+ LTC (top 5% of trades)
-            defaultPassiveVolumeAbsolute: 5.0, // LTCUSDT: 5+ LTC (top 15% of trades)
-            defaultInstitutionalVolumeAbsolute: 50.0,
-            maxTradesPerZone: 1500, // Maximum individual trades stored per zone for VWAP calculation
-            // TODO: Move all these hardcoded preprocessor configurations to config.json
+            defaultZoneMultipliers:
+                SYMBOL_CFG.preprocessor.defaultZoneMultipliers,
+            defaultTimeWindows: SYMBOL_CFG.preprocessor.defaultTimeWindows,
+            defaultMinZoneWidthMultiplier:
+                SYMBOL_CFG.preprocessor.defaultMinZoneWidthMultiplier,
+            defaultMaxZoneWidthMultiplier:
+                SYMBOL_CFG.preprocessor.defaultMaxZoneWidthMultiplier,
+            defaultMaxZoneHistory:
+                SYMBOL_CFG.preprocessor.defaultMaxZoneHistory,
+            defaultMaxMemoryMB: SYMBOL_CFG.preprocessor.defaultMaxMemoryMB,
+            defaultAggressiveVolumeAbsolute:
+                SYMBOL_CFG.preprocessor.defaultAggressiveVolumeAbsolute,
+            defaultPassiveVolumeAbsolute:
+                SYMBOL_CFG.preprocessor.defaultPassiveVolumeAbsolute,
+            defaultInstitutionalVolumeAbsolute:
+                SYMBOL_CFG.preprocessor.defaultInstitutionalVolumeAbsolute,
+            maxTradesPerZone: SYMBOL_CFG.preprocessor.maxTradesPerZone,
         };
     }
 

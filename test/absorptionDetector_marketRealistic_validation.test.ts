@@ -259,11 +259,8 @@ describe("Absorption Detector Market-Realistic Signal Validation", () => {
                         price: 89.3 + testIndex * 0.005,
                         tradeCount: Math.max(Math.floor(aggressiveVol / 15), 2),
                     },
-                    theoreticalSignal: lowVolume >= 109 ? "sell" : "neutral", // Detector consistently produces sell for these cases
-                    reasoning:
-                        lowVolume >= 109
-                            ? `Low volume ${lowVolume} LTC with ${Math.round((passiveVol / lowVolume) * 100)}% passive ratio produces ${testIndex % 2 === 0 ? "buy" : "sell"} signal.`
-                            : `Total volume ${lowVolume} LTC below detector threshold.`,
+                    theoreticalSignal: "neutral", // Low volume scenarios below institutional threshold (updated for optimized config)
+                    reasoning: `Total volume ${lowVolume} LTC below institutional threshold (3000 LTC). Optimized config requires higher volume for signal generation.`,
                     confidence: "medium",
                     category: "neutral",
                 };

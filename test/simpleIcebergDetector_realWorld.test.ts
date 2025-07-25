@@ -21,12 +21,19 @@ vi.mock("../src/core/config.js", () => ({
         SIMPLE_ICEBERG_DETECTOR: {
             enhancementMode: "production",
             minOrderCount: 3,
-            minTotalSize: 50, // Test configuration - much lower than production 500
+            minTotalSize: 500, // Updated to match current production threshold
             maxOrderGapMs: 30000,
+            timeWindowIndex: 1, // Use timeWindow 300000ms (5 minutes)
             trackingWindowMs: 300000,
             maxActivePatterns: 50,
             maxRecentTrades: 100,
         },
+        // Mock getTimeWindow method for time filtering
+        getTimeWindow: vi.fn(
+            (index: number) =>
+                [180000, 300000, 600000, 1200000, 2700000, 5400000][index] ||
+                300000
+        ),
     },
 }));
 
@@ -87,10 +94,10 @@ describe("SimpleIcebergDetector - Real-World Scenarios", () => {
     });
 
     describe("🎯 Passive Icebergs - Exact Size at Same Price", () => {
-        it("should detect institutional passive iceberg: 4 orders of exactly 25 LTC at $89.45", () => {
+        it("should detect institutional passive iceberg: 4 orders of exactly 150 LTC at $89.45", () => {
             const basePrice = 89.45;
             const baseTime = Date.now();
-            const exactSize = 25.0; // Exactly identical
+            const exactSize = 150.0; // Exactly identical - 4×150=600 LTC total (above 500 threshold)
             let signalEmitted = false;
             let emittedSignal: any = null;
 
@@ -123,15 +130,15 @@ describe("SimpleIcebergDetector - Real-World Scenarios", () => {
             expect(completed).toHaveLength(1);
             const iceberg = completed[0];
             expect(iceberg.orderCount).toBe(4); // Full pattern including 4th trade
-            expect(iceberg.totalSize).toBe(100); // 4 * 25
+            expect(iceberg.totalSize).toBe(600); // 4 * 150
             expect(iceberg.type).toBe("passive");
             expect(iceberg.side).toBe("buy");
         });
 
-        it("should detect large institutional sell iceberg: 5 orders of exactly 50 LTC", () => {
+        it("should detect large institutional sell iceberg: 5 orders of exactly 120 LTC", () => {
             const basePrice = 91.23;
             const baseTime = Date.now();
-            const exactSize = 50.0;
+            const exactSize = 120.0; // 5×120=600 LTC total (above 500 threshold)
             let signalEmitted = false;
 
             detector.on("signalCandidate", () => {
@@ -153,7 +160,7 @@ describe("SimpleIcebergDetector - Real-World Scenarios", () => {
             const iceberg = completed[0];
             expect(iceberg.type).toBe("passive");
             expect(iceberg.side).toBe("sell");
-            expect(iceberg.totalSize).toBe(250); // 5 * 50
+            expect(iceberg.totalSize).toBe(600); // 5 * 120
             expect(iceberg.orderSize).toBe(exactSize);
             expect(iceberg.orderCount).toBe(5);
         });
@@ -182,9 +189,9 @@ describe("SimpleIcebergDetector - Real-World Scenarios", () => {
     });
 
     describe("⚡ Aggressive LTC Icebergs - Same LTC Amount, Different Prices", () => {
-        it("should detect aggressive LTC iceberg: 3 orders of exactly 30 LTC at different prices", () => {
+        it("should detect aggressive LTC iceberg: 3 orders of exactly 200 LTC at different prices", () => {
             const baseTime = Date.now();
-            const exactLtcSize = 30.0;
+            const exactLtcSize = 200.0; // 3×200=600 LTC total (above 500 threshold)
             const prices = [89.5, 89.52, 89.48]; // Different market prices
             let signalEmitted = false;
             let emittedSignal: any = null;
@@ -209,7 +216,7 @@ describe("SimpleIcebergDetector - Real-World Scenarios", () => {
                 exactLtcSize
             );
             expect(emittedSignal.data.meta.icebergEvent.orderCount).toBe(3);
-            expect(emittedSignal.data.meta.icebergEvent.totalSize).toBe(90); // 3 * 30
+            expect(emittedSignal.data.meta.icebergEvent.totalSize).toBe(600); // 3 * 200
             expect(
                 emittedSignal.data.meta.icebergEvent.priceRange
             ).toBeDefined();
@@ -221,9 +228,9 @@ describe("SimpleIcebergDetector - Real-World Scenarios", () => {
             );
         });
 
-        it("should detect rapid aggressive LTC execution: 4 orders of 15 LTC within seconds", () => {
+        it("should detect rapid aggressive LTC execution: 4 orders of 150 LTC within seconds", () => {
             const baseTime = Date.now();
-            const exactLtcSize = 15.0;
+            const exactLtcSize = 150.0; // 4×150=600 LTC total (above 500 threshold)
             const prices = [88.95, 88.97, 88.93, 88.96];
             let signalEmitted = false;
 
@@ -247,7 +254,7 @@ describe("SimpleIcebergDetector - Real-World Scenarios", () => {
             expect(iceberg.type).toBe("aggressive_ltc");
             expect(iceberg.orderSize).toBe(exactLtcSize);
             expect(iceberg.orderCount).toBe(4);
-            expect(iceberg.totalSize).toBe(60); // 4 * 15
+            expect(iceberg.totalSize).toBe(600); // 4 * 150
         });
     });
 
@@ -264,12 +271,13 @@ describe("SimpleIcebergDetector - Real-World Scenarios", () => {
             });
 
             // Use exact quantities that produce the same USDT value
-            // IMPORTANT: Total LTC volume must be >= 50 (minTotalSize)
+            // IMPORTANT: Total LTC volume must be >= 500 (minTotalSize)
             const trades = [
-                { price: 100.0, qty: 10.0 }, // Exactly 10.0 * 100.0 = $1000
-                { price: 200.0, qty: 5.0 }, // Exactly 5.0 * 200.0 = $1000
-                { price: 50.0, qty: 20.0 }, // Exactly 20.0 * 50.0 = $1000
-                { price: 40.0, qty: 25.0 }, // Exactly 25.0 * 40.0 = $1000 (Total: 60 LTC >= 50)
+                { price: 10.0, qty: 100.0 }, // Exactly 100.0 * 10.0 = $1000
+                { price: 5.0, qty: 200.0 }, // Exactly 200.0 * 5.0 = $1000
+                { price: 20.0, qty: 50.0 }, // Exactly 50.0 * 20.0 = $1000
+                { price: 8.0, qty: 125.0 }, // Exactly 125.0 * 8.0 = $1000 (Total: 475 LTC)
+                { price: 40.0, qty: 25.0 }, // Exactly 25.0 * 40.0 = $1000 (Total: 500 LTC >= 500)
             ];
 
             trades.forEach((trade, i) => {
@@ -291,7 +299,7 @@ describe("SimpleIcebergDetector - Real-World Scenarios", () => {
                 targetUsdtValue,
                 2
             );
-            expect(emittedSignal.data.meta.icebergEvent.orderCount).toBe(4);
+            expect(emittedSignal.data.meta.icebergEvent.orderCount).toBe(5);
         });
 
         it("should detect institutional USDT iceberg: 5 orders of exactly $2500 each", () => {
@@ -304,12 +312,13 @@ describe("SimpleIcebergDetector - Real-World Scenarios", () => {
             });
 
             // Large institutional orders with exact USDT values
+            // IMPORTANT: Total LTC volume must be >= 500 (minTotalSize)
             const trades = [
-                { price: 100.0, qty: 25.0 }, // Exactly 25.0 * 100.0 = $2500
-                { price: 125.0, qty: 20.0 }, // Exactly 20.0 * 125.0 = $2500
-                { price: 250.0, qty: 10.0 }, // Exactly 10.0 * 250.0 = $2500
+                { price: 25.0, qty: 100.0 }, // Exactly 100.0 * 25.0 = $2500
+                { price: 12.5, qty: 200.0 }, // Exactly 200.0 * 12.5 = $2500
                 { price: 50.0, qty: 50.0 }, // Exactly 50.0 * 50.0 = $2500
-                { price: 500.0, qty: 5.0 }, // Exactly 5.0 * 500.0 = $2500
+                { price: 10.0, qty: 250.0 }, // Exactly 250.0 * 10.0 = $2500
+                { price: 100.0, qty: 25.0 }, // Exactly 25.0 * 100.0 = $2500 (Total: 625 LTC >= 500)
             ];
             trades.forEach((trade, i) => {
                 detector.onEnrichedTrade(
@@ -366,7 +375,7 @@ describe("SimpleIcebergDetector - Real-World Scenarios", () => {
                 signalEmitted = true;
             });
 
-            // 4 orders of 10 LTC each = 40 LTC total (< 50 LTC minTotalSize)
+            // 4 orders of 10 LTC each = 40 LTC total (< 500 LTC minTotalSize)
             for (let i = 0; i < 4; i++) {
                 detector.onEnrichedTrade(
                     createTrade(basePrice, 10.0, baseTime + i * 5000, false)
@@ -437,7 +446,7 @@ describe("SimpleIcebergDetector - Real-World Scenarios", () => {
         it("should handle rapid-fire identical orders correctly", () => {
             const basePrice = 89.5;
             const baseTime = Date.now();
-            const exactSize = 15.0; // 4 * 15 = 60 LTC total >= 50 minimum
+            const exactSize = 150.0; // 4 * 150 = 600 LTC total >= 500 minimum
             let signalEmitted = false;
 
             detector.on("signalCandidate", () => {
@@ -484,7 +493,7 @@ describe("SimpleIcebergDetector - Real-World Scenarios", () => {
             const baseTime = Date.now();
 
             // Create one completed iceberg
-            const exactSize = 25.0;
+            const exactSize = 200.0; // 3 * 200 = 600 LTC >= 500 minimum
             for (let i = 0; i < 3; i++) {
                 detector.onEnrichedTrade(
                     createTrade(90.5, exactSize, baseTime + i * 5000, false)
@@ -501,7 +510,7 @@ describe("SimpleIcebergDetector - Real-World Scenarios", () => {
 
             const stats = detector.getStatistics();
             expect(stats.completedIcebergs).toBe(1);
-            expect(stats.totalVolumeDetected).toBe(75); // 3 * 25
+            expect(stats.totalVolumeDetected).toBe(600); // 3 * 200
             expect(stats.activePatterns).toBeGreaterThan(0); // Has incomplete pattern
         });
     });
@@ -558,7 +567,7 @@ describe("SimpleIcebergDetector - Real-World Scenarios", () => {
             });
 
             // Interleave buy and sell icebergs with exact sizes
-            const exactSize = 18.0;
+            const exactSize = 180.0; // 3 * 180 = 540 LTC >= 500 minimum
             for (let i = 0; i < 3; i++) {
                 // Buy iceberg
                 detector.onEnrichedTrade(
@@ -594,11 +603,11 @@ describe("SimpleIcebergDetector - Real-World Scenarios", () => {
             });
 
             // Create multiple simultaneous icebergs at different prices
-            // All must meet minimum total size: 3 trades * size >= 50 LTC
+            // All must meet minimum total size: 3 trades * size >= 500 LTC
             const icebergConfigs = [
-                { price: 89.5, size: 20.0 }, // 3 * 20 = 60 LTC ✅
-                { price: 91.25, size: 17.0 }, // 3 * 17 = 51 LTC ✅
-                { price: 88.75, size: 25.0 }, // 3 * 25 = 75 LTC ✅
+                { price: 89.5, size: 200.0 }, // 3 * 200 = 600 LTC ✅
+                { price: 91.25, size: 170.0 }, // 3 * 170 = 510 LTC ✅
+                { price: 88.75, size: 250.0 }, // 3 * 250 = 750 LTC ✅
             ];
 
             icebergConfigs.forEach((config, configIndex) => {

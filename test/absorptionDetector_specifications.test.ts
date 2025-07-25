@@ -53,7 +53,7 @@ describe("AbsorptionDetector - Specification Compliance", () => {
     const defaultSettings: AbsorptionEnhancedSettings = {
         // Base detector settings (from config.json) - PRODUCTION-LIKE for testing
         minAggVolume: 100,
-        windowMs: 60000,
+        timeWindowIndex: 2, // Maps to 60000ms window via Config.getTimeWindow()
         pricePrecision: 2,
         zoneTicks: 5,
         eventCooldownMs: 15000,
@@ -308,7 +308,7 @@ describe("AbsorptionDetector - Specification Compliance", () => {
                                     min: params.price - 0.05, // 10-tick boundaries
                                     max: params.price + 0.05,
                                 },
-                                lastUpdate: timestamp,
+                                lastUpdate: timestamp - 30000, // Zone was active 30 seconds ago, within window
                                 volumeWeightedPrice: params.price,
                             },
                         ],
@@ -443,11 +443,10 @@ describe("AbsorptionDetector - Specification Compliance", () => {
             ) {
                 const testDetector = new AbsorptionDetectorEnhanced(
                     detectorName,
+                    "LTCUSDT",
                     defaultSettings,
                     mockPreprocessor,
-                    mockOrderBook,
                     mockLogger,
-                    mockSpoofingDetector,
                     mockMetrics
                 );
 
@@ -663,11 +662,10 @@ describe("AbsorptionDetector - Specification Compliance", () => {
 
             const customDetector = new AbsorptionDetectorEnhanced(
                 "CUSTOM",
+                "LTCUSDT", 
                 customSettings,
                 mockPreprocessor,
-                mockOrderBook,
                 mockLogger,
-                mockSpoofingDetector,
                 mockMetrics
             );
 
@@ -851,6 +849,37 @@ describe("AbsorptionDetector - Specification Compliance", () => {
             zonePassiveAskVolume: 500,
             bestBid: params.price - 0.01,
             bestAsk: params.price + 0.01,
+
+            // Add zone data to enable absorption detection
+            zoneData: {
+                zones: [
+                    {
+                        zoneId: `zone-${params.price}`,
+                        priceLevel: params.price,
+                        tickSize: 0.01,
+                        aggressiveVolume: params.volume,
+                        passiveVolume: 2000, // High passive volume for absorption
+                        aggressiveBuyVolume: params.side === "buy" ? params.volume : 0,
+                        aggressiveSellVolume: params.side === "sell" ? params.volume : 0,
+                        passiveBidVolume: 1000,
+                        passiveAskVolume: 1000,
+                        tradeCount: 1,
+                        timespan: 60000,
+                        boundaries: {
+                            min: params.price - 0.05,
+                            max: params.price + 0.05,
+                        },
+                        lastUpdate: timestamp - 30000, // Zone was active 30 seconds ago, within window
+                        volumeWeightedPrice: params.price,
+                        tradeHistory: [],
+                    },
+                ],
+                zoneConfig: {
+                    zoneTicks: 10,
+                    tickValue: 0.01,
+                    timeWindow: 60000,
+                },
+            },
         } as EnrichedTradeEvent;
     }
 

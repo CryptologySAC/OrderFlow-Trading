@@ -469,7 +469,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
 
         // ARCHITECTURAL FIX: Filter zones by time window using trade timestamp
         const windowStartTime =
-            event.timestamp - this.enhancementConfig.windowMs;
+            event.timestamp -
+            Config.getTimeWindow(this.enhancementConfig.timeWindowIndex);
         const recentZones = allZones.filter(
             (zone) => zone.lastUpdate >= windowStartTime
         );
@@ -477,7 +478,9 @@ export class ExhaustionDetectorEnhanced extends Detector {
         this.logger.debug("ExhaustionDetectorEnhanced: Time-window filtering", {
             totalZones: allZones.length,
             recentZones: recentZones.length,
-            windowMs: this.enhancementConfig.windowMs,
+            windowMs: Config.getTimeWindow(
+                this.enhancementConfig.timeWindowIndex
+            ),
             windowStartTime,
             tradeTimestamp: event.timestamp,
         });
@@ -486,7 +489,9 @@ export class ExhaustionDetectorEnhanced extends Detector {
             this.logger.debug(
                 "ExhaustionDetectorEnhanced: No recent zones within time window",
                 {
-                    windowMs: this.enhancementConfig.windowMs,
+                    windowMs: Config.getTimeWindow(
+                        this.enhancementConfig.timeWindowIndex
+                    ),
                     tradeTimestamp: event.timestamp,
                 }
             );
@@ -575,7 +580,9 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 totalPassiveVolume,
                 totalAccumulatedVolume,
                 exhaustionVolumeThreshold: this.exhaustionVolumeThreshold,
-                windowMs: this.enhancementConfig.windowMs,
+                windowMs: Config.getTimeWindow(
+                    this.enhancementConfig.timeWindowIndex
+                ),
                 zonesAnalyzed: relevantZones.length,
             }
         );
@@ -681,7 +688,9 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     timestamp: event.timestamp,
                     totalZones: relevantZones.length,
                     accumulatedVolume: totalAccumulatedVolume,
-                    timeWindowMs: this.enhancementConfig.windowMs,
+                    timeWindowMs: Config.getTimeWindow(
+                        this.enhancementConfig.timeWindowIndex
+                    ),
                     enhancementType: "time_window_exhaustion",
                     qualityMetrics: {
                         exhaustionStatisticalSignificance: confidence,
@@ -1094,7 +1103,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
 
         // Use time-window filtered zones for signal direction
         const windowStartTime =
-            event.timestamp - this.enhancementConfig.windowMs;
+            event.timestamp -
+            Config.getTimeWindow(this.enhancementConfig.timeWindowIndex);
         const recentZones = event.zoneData.zones.filter(
             (zone) => zone.lastUpdate >= windowStartTime
         );

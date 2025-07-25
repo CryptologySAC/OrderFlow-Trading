@@ -35,7 +35,7 @@ import type {
     SignalType,
 } from "../types/signalTypes.js";
 import { z } from "zod";
-import { AbsorptionDetectorSchema } from "../core/config.js";
+import { AbsorptionDetectorSchema, Config } from "../core/config.js";
 
 /**
  * Enhanced configuration interface for absorption detection - ONLY absorption-specific parameters
@@ -118,7 +118,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
         this.useStandardizedZones = settings.useStandardizedZones;
         this.enhancementConfig = settings;
         this.preprocessor = preprocessor;
-        this.windowMs = settings.windowMs;
+        this.windowMs = Config.getTimeWindow(settings.timeWindowIndex);
 
         // Initialize signal validation logger
         this.validationLogger = new SignalValidationLogger(
@@ -174,7 +174,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
             callCount: this.enhancementStats.callCount,
         };
 
-        this.logger.debug(
+        this.logger.info(
             "AbsorptionDetectorEnhanced: Processing trade",
             debugInfo
         );
@@ -185,7 +185,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
             this.enhancementConfig.enhancementMode === "disabled" ||
             !event.zoneData
         ) {
-            this.logger.warn(
+            this.logger.info(
                 "AbsorptionDetectorEnhanced: Skipping trade processing",
                 {
                     reason: !this.useStandardizedZones
@@ -757,12 +757,17 @@ export class AbsorptionDetectorEnhanced extends Detector {
         );
 
         // DEBUG: Log temporal filtering for core absorption detection
-        this.logger.debug("Absorption temporal filtering", {
+        this.logger.info("Absorption temporal filtering", {
             totalZones: allZones.length,
             recentZones: recentZones.length,
             windowMs: this.windowMs,
             windowStartTime,
             tradeTimestamp: event.timestamp,
+            zoneLastUpdates: allZones.map(z => ({ 
+                zoneId: z.zoneId, 
+                lastUpdate: z.lastUpdate,
+                withinWindow: z.lastUpdate >= windowStartTime 
+            }))
         });
 
         return this.preprocessor.findZonesNearPrice(

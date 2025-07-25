@@ -28,7 +28,7 @@ export interface SimpleIcebergConfig {
     minOrderCount: number;
     minTotalSize: number;
     maxOrderGapMs: number;
-    trackingWindowMs: number;
+    timeWindowIndex: number;
     maxActivePatterns: number;
     maxRecentTrades: number;
 }
@@ -404,7 +404,8 @@ export class SimpleIcebergDetector extends Detector {
      */
     private filterValidTrades(trades: TradeInfo[]): TradeInfo[] {
         const now = Date.now();
-        const windowStart = now - this.config.trackingWindowMs;
+        const windowStart =
+            now - Config.getTimeWindow(this.config.timeWindowIndex);
 
         // Filter by time window
         let validTrades = trades.filter(
@@ -587,7 +588,8 @@ export class SimpleIcebergDetector extends Detector {
      */
     private cleanupExpiredPatterns(): void {
         const now = Date.now();
-        const expiredThreshold = now - this.config.trackingWindowMs;
+        const expiredThreshold =
+            now - Config.getTimeWindow(this.config.timeWindowIndex);
 
         // Clean up expired patterns
         for (const [key, pattern] of this.activePatterns) {

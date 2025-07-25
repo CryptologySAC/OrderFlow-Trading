@@ -136,7 +136,7 @@ const mockUniversalZoneConfig = {
 // Mock Absorption detector configuration (very permissive for testing)
 const mockAbsorptionConfig = {
     minAggVolume: 10, // Very low threshold for testing
-    windowMs: 10000,
+    timeWindowIndex: 0, // Use first time window (matches current schema)
     eventCooldownMs: 0, // Disable cooldown for testing
     priceEfficiencyThreshold: 0.001, // Very permissive for testing
     maxAbsorptionRatio: 0.95,
@@ -162,7 +162,8 @@ const mockAbsorptionConfig = {
 const mockExhaustionConfig = {
     minAggVolume: 10, // Very low threshold for testing
     exhaustionThreshold: 0.05, // Very low threshold for testing (5% aggressive volume indicates exhaustion)
-    windowMs: 60000, // Longer window to capture more trades
+    timeWindowIndex: 0, // Use first time window (matches current schema)
+    eventCooldownMs: 0, // Disable cooldown for testing
     useStandardizedZones: true,
     enhancementMode: "production" as const,
     minEnhancedConfidenceThreshold: 0.01, // Very low threshold for testing
@@ -177,12 +178,27 @@ const mockExhaustionConfig = {
     aggressiveVolumeReductionFactor: 0.5,
 };
 
+// Mock preprocessor configuration (test-friendly values)
+const mockPreprocessorConfig = {
+    defaultZoneMultipliers: [1, 2, 4],
+    defaultTimeWindows: [300000, 900000, 1800000, 3600000, 5400000],
+    defaultMinZoneWidthMultiplier: 2,
+    defaultMaxZoneWidthMultiplier: 10,
+    defaultMaxZoneHistory: 2000,
+    defaultMaxMemoryMB: 50,
+    defaultAggressiveVolumeAbsolute: 10.0,
+    defaultPassiveVolumeAbsolute: 5.0,
+    defaultInstitutionalVolumeAbsolute: 50.0,
+    maxTradesPerZone: 1500,
+};
+
 export const Config = {
     SIGNAL_MANAGER: mockSignalManagerConfig,
     DELTACVD_DETECTOR: mockDeltaCVDConfig,
     ABSORPTION_DETECTOR: mockAbsorptionConfig, // Add missing absorption config
     EXHAUSTION_DETECTOR: mockExhaustionConfig, // Add missing exhaustion config
     UNIVERSAL_ZONE_CONFIG: mockUniversalZoneConfig, // CRITICAL: Missing config added
+    PREPROCESSOR: mockPreprocessorConfig, // Add preprocessor configuration for tests
     DETECTOR_CONFIDENCE_THRESHOLDS: {
         absorption: 0.3,
         deltacvd: 0.3,

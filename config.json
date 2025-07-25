@@ -120,6 +120,20 @@
                 "saveQueueSize": 1000,
                 "healthCheckInterval": 45000
             },
+            "preprocessor": {
+                "defaultZoneMultipliers": [1, 2, 4],
+                "defaultTimeWindows": [
+                    300000, 900000, 1800000, 3600000, 5400000
+                ],
+                "defaultMinZoneWidthMultiplier": 2,
+                "defaultMaxZoneWidthMultiplier": 10,
+                "defaultMaxZoneHistory": 2000,
+                "defaultMaxMemoryMB": 50,
+                "defaultAggressiveVolumeAbsolute": 10.0,
+                "defaultPassiveVolumeAbsolute": 5.0,
+                "defaultInstitutionalVolumeAbsolute": 50.0,
+                "maxTradesPerZone": 1500
+            },
             "signalManager": {
                 "confidenceThreshold": 0.4,
                 "signalTimeout": 5400000,
@@ -213,47 +227,47 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-                "minAggVolume": 10000,
-                "exhaustionThreshold": 0.875,
-                "windowMs": 15000,
-                "eventCooldownMs": 30000,
+                "minAggVolume": 15000,
+                "exhaustionThreshold": 0.8,
+                "timeWindowIndex": 0,
+                "eventCooldownMs": 10000,
 
                 "useStandardizedZones": true,
                 "enhancementMode": "production",
-                "minEnhancedConfidenceThreshold": 0.25,
+                "minEnhancedConfidenceThreshold": 0.2,
 
                 "enableDepletionAnalysis": true,
-                "depletionVolumeThreshold": 1000,
-                "depletionRatioThreshold": 0.25,
-                "depletionConfidenceBoost": 0.15,
+                "depletionVolumeThreshold": 500,
+                "depletionRatioThreshold": 0.15,
+                "depletionConfidenceBoost": 0.2,
 
                 "passiveVolumeExhaustionRatio": 0.4,
 
                 "varianceReductionFactor": 1.0,
                 "alignmentNormalizationFactor": 0.4,
-                "aggressiveVolumeExhaustionThreshold": 0.65,
+                "aggressiveVolumeExhaustionThreshold": 0.5,
                 "aggressiveVolumeReductionFactor": 0.5
             },
             "absorption": {
-                "minAggVolume": 5000,
-                "windowMs": 10000,
-                "eventCooldownMs": 30000,
-                "priceEfficiencyThreshold": 0.0002,
+                "minAggVolume": 17225,
+                "timeWindowIndex": 0,
+                "eventCooldownMs": 15000,
+                "priceEfficiencyThreshold": 0.007,
                 "maxAbsorptionRatio": 0.65,
                 "minPassiveMultiplier": 1.2,
-                "passiveAbsorptionThreshold": 0.35,
+                "passiveAbsorptionThreshold": 0.997,
                 "expectedMovementScalingFactor": 10,
                 "contextConfidenceBoostMultiplier": 0.3,
                 "liquidityGradientRange": 5,
-                "institutionalVolumeThreshold": 10000,
-                "institutionalVolumeRatioThreshold": 0.75,
+                "institutionalVolumeThreshold": 3000,
+                "institutionalVolumeRatioThreshold": 0.82,
                 "enableInstitutionalVolumeFilter": true,
                 "institutionalVolumeBoost": 0.1,
                 "minAbsorptionScore": 0.5,
-                "finalConfidenceRequired": 0.8,
-                "confidenceBoostReduction": 0.5,
-                "maxZoneCountForScoring": 3,
-                "minEnhancedConfidenceThreshold": 0.3,
+                "finalConfidenceRequired": 1.28,
+                "confidenceBoostReduction": 0.3,
+                "maxZoneCountForScoring": 5,
+                "minEnhancedConfidenceThreshold": 0.2,
                 "useStandardizedZones": true,
                 "enhancementMode": "production"
             },
@@ -322,6 +336,7 @@
                 "cvdImbalanceThreshold": 0.35
             },
             "accumulation": {
+                "timeWindowIndex": 1,
                 "eventCooldownMs": 30000,
                 "confidenceThreshold": 0.45,
                 "confluenceMinZones": 2,
@@ -342,6 +357,7 @@
                 "enhancementMode": "production"
             },
             "distribution": {
+                "timeWindowIndex": 1,
                 "eventCooldownMs": 30000,
                 "confidenceThreshold": 0.45,
                 "confluenceMinZones": 2,
@@ -360,11 +376,11 @@
                 "enhancementMode": "production"
             },
             "simpleIceberg": {
+                "timeWindowIndex": 1,
                 "enhancementMode": "production",
                 "minOrderCount": 3,
                 "minTotalSize": 500,
                 "maxOrderGapMs": 30000,
-                "trackingWindowMs": 300000,
                 "maxActivePatterns": 50,
                 "maxRecentTrades": 100
             }

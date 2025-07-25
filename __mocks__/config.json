@@ -118,6 +118,20 @@
                 "saveQueueSize": 1000,
                 "healthCheckInterval": 45000
             },
+            "preprocessor": {
+                "defaultZoneMultipliers": [1, 2, 4],
+                "defaultTimeWindows": [
+                    300000, 900000, 1800000, 3600000, 5400000
+                ],
+                "defaultMinZoneWidthMultiplier": 2,
+                "defaultMaxZoneWidthMultiplier": 10,
+                "defaultMaxZoneHistory": 2000,
+                "defaultMaxMemoryMB": 50,
+                "defaultAggressiveVolumeAbsolute": 10.0,
+                "defaultPassiveVolumeAbsolute": 5.0,
+                "defaultInstitutionalVolumeAbsolute": 50.0,
+                "maxTradesPerZone": 1500
+            },
             "signalManager": {
                 "confidenceThreshold": 0.3,
                 "signalTimeout": 120000,
@@ -212,7 +226,7 @@
             },
             "exhaustion": {
                 "minAggVolume": 10,
-                "windowMs": 60000,
+                "timeWindowIndex": 0,
                 "eventCooldownMs": 0,
                 "exhaustionThreshold": 0.05,
                 "useStandardizedZones": true,
@@ -230,7 +244,7 @@
             },
             "absorption": {
                 "minAggVolume": 80,
-                "windowMs": 60000,
+                "timeWindowIndex": 0,
                 "eventCooldownMs": 0,
                 "priceEfficiencyThreshold": 0.015,
                 "maxAbsorptionRatio": 0.65,
@@ -307,6 +321,7 @@
                 "marketHealthWindowMs": 600000
             },
             "accumulation": {
+                "timeWindowIndex": 0,
                 "eventCooldownMs": 15000,
                 "confidenceThreshold": 0.4,
                 "confluenceMinZones": 1,
@@ -327,6 +342,7 @@
                 "enhancementMode": "production"
             },
             "distribution": {
+                "timeWindowIndex": 0,
                 "eventCooldownMs": 15000,
                 "confidenceThreshold": 0.4,
                 "confluenceMinZones": 1,
@@ -357,7 +373,7 @@
                 "minOrderCount": 3,
                 "minTotalSize": 50,
                 "maxOrderGapMs": 30000,
-                "trackingWindowMs": 300000,
+                "timeWindowIndex": 0,
                 "maxActivePatterns": 50,
                 "maxRecentTrades": 100
             }
