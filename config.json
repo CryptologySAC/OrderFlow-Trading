@@ -227,7 +227,7 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-                "minAggVolume": 15000,
+                "minAggVolume": 5000,
                 "exhaustionThreshold": 0.8,
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 10000,
@@ -249,7 +249,7 @@
                 "aggressiveVolumeReductionFactor": 0.5
             },
             "absorption": {
-                "minAggVolume": 17225,
+                "minAggVolume": 5000,
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 15000,
                 "priceEfficiencyThreshold": 0.007,
