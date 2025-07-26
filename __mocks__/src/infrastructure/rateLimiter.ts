@@ -1,3 +1,5 @@
+import { vi } from "vitest";
+
 export class RateLimiter {
     isAllowed = vi.fn<(clientId: string) => boolean>().mockReturnValue(true);
     getRequestCount = vi.fn<(clientId: string) => number>().mockReturnValue(0);

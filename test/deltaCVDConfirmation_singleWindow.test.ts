@@ -101,65 +101,20 @@ describe("DeltaCVDDetectorEnhanced single window CVD analysis", () => {
             "cvd_single_window",
             "LTCUSDT",
             {
-                windowsSec: [60],
-                // Add all required properties to match DeltaCVDDetectorSchema
-                minZ: 0.4,
-                priceCorrelationWeight: 0.3,
-                volumeConcentrationWeight: 0.2,
-                adaptiveThresholdMultiplier: 0.7,
-                eventCooldownMs: 15000,
-                minTradesPerSec: 0.1,
-                minVolPerSec: 0.5,
-                minSamplesForStats: 15,
-                pricePrecision: 2,
-                volatilityLookbackSec: 3600,
-                maxDivergenceAllowed: 0.5,
-                stateCleanupIntervalSec: 300,
-                dynamicThresholds: true,
-                logDebug: true,
-                volumeSurgeMultiplier: 2.5,
-                imbalanceThreshold: 0.15,
-                institutionalThreshold: 17.8,
-                burstDetectionMs: 1000,
-                sustainedVolumeMs: 30000,
-                medianTradeSize: 0.6,
-                detectionMode: "momentum" as const,
-                divergenceThreshold: 0.3,
-                divergenceLookbackSec: 60,
-                enableDepthAnalysis: false,
-                usePassiveVolume: true,
-                maxOrderbookAge: 5000,
-                absorptionCVDThreshold: 75,
-                absorptionPriceThreshold: 0.1,
-                imbalanceWeight: 0.2,
-                icebergMinRefills: 3,
-                icebergMinSize: 20,
-                baseConfidenceRequired: 0.2,
-                finalConfidenceRequired: 0.35,
-                strongCorrelationThreshold: 0.7,
-                weakCorrelationThreshold: 0.3,
-                depthImbalanceThreshold: 0.2,
-                useStandardizedZones: true,
-                enhancementMode: "production" as const,
-                minEnhancedConfidenceThreshold: 0.3,
-                cvdDivergenceVolumeThreshold: 50,
-                cvdDivergenceStrengthThreshold: 0.7,
-                cvdSignificantImbalanceThreshold: 0.3,
-                cvdDivergenceScoreMultiplier: 1.5,
-                alignmentMinimumThreshold: 0.5,
-                momentumScoreMultiplier: 2,
-                enableCVDDivergenceAnalysis: true,
-                enableMomentumAlignment: false,
-                divergenceConfidenceBoost: 0.12,
-                momentumAlignmentBoost: 0.08,
-                minTradesForAnalysis: 20,
-                minVolumeRatio: 0.1,
-                maxVolumeRatio: 5.0,
-                priceChangeThreshold: 0.001,
-                minZScoreBound: -20,
-                maxZScoreBound: 20,
-                minCorrelationBound: -0.999,
-                maxCorrelationBound: 0.999,
+                // Core CVD analysis parameters (match DeltaCVDDetectorSchema exactly)
+                minTradesPerSec: 0.75,
+                minVolPerSec: 10,
+                signalThreshold: 0.4,
+                eventCooldownMs: 5000,
+
+                // Zone time window configuration
+                timeWindowIndex: 0,
+
+                // Zone enhancement control
+                enhancementMode: "production",
+
+                // CVD divergence analysis
+                cvdImbalanceThreshold: 0.3,
             },
             mockPreprocessor,
             mockLogger,
@@ -193,7 +148,7 @@ describe("DeltaCVDDetectorEnhanced single window CVD analysis", () => {
         expect(() => detector.onEnrichedTrade(tradeEvent)).not.toThrow();
 
         // The detector logs debug info during CVD analysis - this is expected
-        expect(mockLogger.error).toHaveBeenCalled(); // CVD analysis includes debug logging
+        expect(mockLogger.debug).toHaveBeenCalled(); // CVD analysis includes debug logging
     });
 
     it("should detect bearish CVD divergence patterns", () => {
@@ -219,7 +174,7 @@ describe("DeltaCVDDetectorEnhanced single window CVD analysis", () => {
         expect(() => detector.onEnrichedTrade(tradeEvent)).not.toThrow();
 
         // The detector logs debug info during CVD analysis - this is expected
-        expect(mockLogger.error).toHaveBeenCalled(); // CVD analysis includes debug logging
+        expect(mockLogger.debug).toHaveBeenCalled(); // CVD analysis includes debug logging
     });
 
     it("should process sequence of trades maintaining CVD state", () => {
@@ -256,7 +211,7 @@ describe("DeltaCVDDetectorEnhanced single window CVD analysis", () => {
         }
 
         // The detector logs debug info during CVD analysis - this is expected
-        expect(mockLogger.error).toHaveBeenCalled(); // CVD analysis includes debug logging
+        expect(mockLogger.debug).toHaveBeenCalled(); // CVD analysis includes debug logging
 
         // Verify detector maintained state through sequence
         const debugCalls = (mockLogger.debug as vi.Mock).mock.calls;

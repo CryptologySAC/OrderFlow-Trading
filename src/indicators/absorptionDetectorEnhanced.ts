@@ -863,11 +863,23 @@ export class AbsorptionDetectorEnhanced extends Detector {
         let totalVolume = 0;
 
         for (const zone of zones) {
-            if (zone.volumeWeightedPrice === null) continue;
+            // CRITICAL: Check for both null and undefined, and skip zones with invalid data
+            if (
+                zone.volumeWeightedPrice == null ||
+                isNaN(zone.volumeWeightedPrice)
+            )
+                continue;
+            if (zone.aggressiveVolume == null || isNaN(zone.aggressiveVolume))
+                continue;
+
             const zoneWeight = FinancialMath.multiplyQuantities(
                 zone.volumeWeightedPrice,
                 zone.aggressiveVolume
             );
+
+            // Skip zones where calculation fails
+            if (isNaN(zoneWeight)) continue;
+
             totalVolumeWeightedPrice = FinancialMath.safeAdd(
                 totalVolumeWeightedPrice,
                 zoneWeight

@@ -99,6 +99,9 @@ const mockDeltaCVDConfig = {
     signalThreshold: 0.4,
     eventCooldownMs: 5000,
 
+    // CRITICAL: Add missing timeWindowIndex for Config.getTimeWindow() calls
+    timeWindowIndex: 0,
+
     // Zone enhancement control
     enhancementMode: "production" as const,
 
@@ -192,12 +195,38 @@ const mockPreprocessorConfig = {
     maxTradesPerZone: 1500,
 };
 
+// CRITICAL: Mock StandardZone configuration matching production schema
+const mockStandardZoneConfig = {
+    zoneTicks: 10,
+    timeWindows: [180000, 300000, 600000, 1200000, 2700000, 5400000],
+    adaptiveMode: false,
+    volumeThresholds: {
+        aggressive: 8.0,
+        passive: 4.0,
+        institutional: 50.0,
+    },
+    priceThresholds: {
+        tickValue: 0.01,
+        minZoneWidth: 0.02,
+        maxZoneWidth: 0.1,
+    },
+    performanceConfig: {
+        maxZones: 500,
+        maxMemoryMB: 100,
+        cleanupInterval: 5400000,
+    },
+};
+
 export const Config = {
+    // CRITICAL: Add missing SYMBOL for IndividualTradesManager
+    SYMBOL: "LTCUSDT",
+
     SIGNAL_MANAGER: mockSignalManagerConfig,
     DELTACVD_DETECTOR: mockDeltaCVDConfig,
     ABSORPTION_DETECTOR: mockAbsorptionConfig, // Add missing absorption config
     EXHAUSTION_DETECTOR: mockExhaustionConfig, // Add missing exhaustion config
     UNIVERSAL_ZONE_CONFIG: mockUniversalZoneConfig, // CRITICAL: Missing config added
+    STANDARD_ZONE_CONFIG: mockStandardZoneConfig, // CRITICAL: Add missing StandardZone config
     PREPROCESSOR: mockPreprocessorConfig, // Add preprocessor configuration for tests
     DETECTOR_CONFIDENCE_THRESHOLDS: {
         absorption: 0.3,
@@ -212,6 +241,11 @@ export const Config = {
         exhaustion: 1.0,
         accumulation: 0.6,
         distribution: 0.7,
+    },
+
+    // CRITICAL: Add missing getTimeWindow method for DeltaCVD detector
+    getTimeWindow: (timeWindowIndex: number): number => {
+        return mockStandardZoneConfig.timeWindows[timeWindowIndex];
     },
 };
 

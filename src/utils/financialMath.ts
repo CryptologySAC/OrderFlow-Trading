@@ -76,6 +76,16 @@ export class FinancialMath {
      * Safe quantity multiplication avoiding floating point errors
      */
     static multiplyQuantities(qty1: number, qty2: number): number {
+        // CRITICAL: Return NaN for invalid inputs to maintain calculation integrity
+        if (
+            isNaN(qty1) ||
+            isNaN(qty2) ||
+            qty1 === undefined ||
+            qty2 === undefined
+        ) {
+            return NaN;
+        }
+
         const qty1Int = BigInt(Math.round(qty1 * this.QUANTITY_SCALE));
         const qty2Int = BigInt(Math.round(qty2 * this.QUANTITY_SCALE));
         const resultInt = (qty1Int * qty2Int) / BigInt(this.QUANTITY_SCALE);

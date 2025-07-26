@@ -17,7 +17,7 @@ describe("data/IndividualTradesManager", () => {
         connectToStreams: vi.fn(),
         tradesAggregate: vi.fn(),
         fetchAggTradesByTime: vi.fn(),
-        getTrades: vi.fn().mockResolvedValue([]),
+        getTrades: vi.fn(),
         getDepthSnapshot: vi.fn(),
         disconnect: vi.fn(),
     };
@@ -87,6 +87,14 @@ describe("data/IndividualTradesManager", () => {
             metricsCollector,
             binanceFeed
         );
+
+        // Mock the rate limiter after construction
+        (manager as any).rateLimiter = {
+            isAllowed: vi.fn().mockReturnValue(true),
+            getRequestCount: vi.fn().mockReturnValue(0),
+            clear: vi.fn(),
+            destroy: vi.fn(),
+        };
     });
 
     afterEach(() => {
@@ -184,27 +192,30 @@ describe("data/IndividualTradesManager", () => {
 
     describe("fetchIndividualTrades", () => {
         it("should return cached trades when available", async () => {
-            const mockTrades: IndividualTrade[] = [
+            // Reset and set up the mock fresh for this test
+            binanceFeed.getTrades = vi.fn().mockResolvedValue([
                 {
                     id: 1,
-                    price: 100,
-                    quantity: 10,
-                    timestamp: Date.now(),
+                    price: "100.00",
+                    qty: "10.00",
+                    quoteQty: "1000.00",
+                    time: Date.now(),
                     isBuyerMaker: false,
-                    quoteQuantity: 1000,
+                    isBestMatch: true,
                 },
                 {
                     id: 2,
-                    price: 100.01,
-                    quantity: 5,
-                    timestamp: Date.now() + 100,
+                    price: "100.01",
+                    qty: "5.00",
+                    quoteQty: "500.05",
+                    time: Date.now() + 100,
                     isBuyerMaker: true,
-                    quoteQuantity: 500,
+                    isBestMatch: true,
                 },
-            ];
+            ]);
 
             // Mock the cache by pre-fetching the trades
-            const trades = await manager.fetchIndividualTrades(1, 2);
+            await manager.fetchIndividualTrades(1, 2);
 
             // Verify metrics were called
             expect(metricsCollector.incrementMetric).toHaveBeenCalledWith(

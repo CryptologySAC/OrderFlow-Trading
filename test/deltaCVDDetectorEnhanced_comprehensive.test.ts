@@ -38,14 +38,22 @@ const mockPreprocessor = createMockOrderflowPreprocessor();
 const BASE_PRICE = 85.0;
 const TICK_SIZE = 0.01; // $10-$100 range tick size
 
-// Valid DeltaCVD settings for simplified detector (6 parameters only)
+// Valid DeltaCVD settings for simplified detector (7 parameters only)
 function createValidDeltaCVDSettings(overrides: any = {}) {
     return {
-        windowsSec: [60, 300],
+        // Core CVD analysis parameters (match DeltaCVDDetectorSchema exactly)
         minTradesPerSec: 0.75,
         minVolPerSec: 10,
         signalThreshold: 0.4,
+        eventCooldownMs: 5000,
+
+        // Zone time window configuration
+        timeWindowIndex: 0,
+
+        // Zone enhancement control
         enhancementMode: "production" as const,
+
+        // CVD divergence analysis
         cvdImbalanceThreshold: 0.3,
         ...overrides,
     };
