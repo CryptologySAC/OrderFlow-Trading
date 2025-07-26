@@ -494,6 +494,21 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     quantity: event.quantity,
                 }
             );
+            this.logSignalRejection(
+                event,
+                "no_zone_data",
+                {
+                    type: "zone_data_availability",
+                    threshold: 1,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: 0,
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: 0,
+                }
+            );
             return null;
         }
 
@@ -509,6 +524,21 @@ export class AbsorptionDetectorEnhanced extends Detector {
         });
 
         if (relevantZones.length === 0) {
+            this.logSignalRejection(
+                event,
+                "no_relevant_zones",
+                {
+                    type: "zone_count",
+                    threshold: 1,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: 0,
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: 0,
+                }
+            );
             return null;
         }
 
@@ -527,6 +557,21 @@ export class AbsorptionDetectorEnhanced extends Detector {
         );
 
         if (!volumePressure) {
+            this.logSignalRejection(
+                event,
+                "insufficient_volume_pressure",
+                {
+                    type: "volume_pressure",
+                    threshold: 1,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: 0,
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: 0,
+                }
+            );
             return null;
         }
 
@@ -558,6 +603,21 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     threshold: this.absorptionRatioThreshold,
                     passiveVolume: volumePressure.passivePressure,
                     totalVolume: volumePressure.totalPressure,
+                }
+            );
+            this.logSignalRejection(
+                event,
+                "passive_volume_ratio_too_low",
+                {
+                    type: "passive_volume_ratio",
+                    threshold: this.absorptionRatioThreshold,
+                    actual: passiveVolumeRatio,
+                },
+                {
+                    aggressiveVolume: volumePressure.aggressivePressure,
+                    passiveVolume: volumePressure.passivePressure,
+                    priceEfficiency: null,
+                    confidence: 0,
                 }
             );
             return null; // Not enough institutional absorption
@@ -597,6 +657,21 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     isNull: priceEfficiency === null,
                 }
             );
+            this.logSignalRejection(
+                event,
+                "price_efficiency_too_high",
+                {
+                    type: "price_efficiency",
+                    threshold: this.enhancementConfig.priceEfficiencyThreshold,
+                    actual: priceEfficiency ?? -1,
+                },
+                {
+                    aggressiveVolume: volumePressure.aggressivePressure,
+                    passiveVolume: volumePressure.passivePressure,
+                    priceEfficiency,
+                    confidence: 0,
+                }
+            );
             return null; // Not efficient enough for absorption
         }
 
@@ -612,6 +687,21 @@ export class AbsorptionDetectorEnhanced extends Detector {
             absorptionRatio === null ||
             absorptionRatio > this.enhancementConfig.maxAbsorptionRatio
         ) {
+            this.logSignalRejection(
+                event,
+                "absorption_ratio_too_high",
+                {
+                    type: "absorption_ratio",
+                    threshold: this.enhancementConfig.maxAbsorptionRatio,
+                    actual: absorptionRatio ?? -1,
+                },
+                {
+                    aggressiveVolume: volumePressure.aggressivePressure,
+                    passiveVolume: volumePressure.passivePressure,
+                    priceEfficiency,
+                    confidence: 0,
+                }
+            );
             return null; // Not strong enough absorption
         }
 
@@ -626,6 +716,21 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     price: event.price,
                     passiveRatio: passiveVolumeRatio,
                     balanceScore: isBalancedInstitutional,
+                }
+            );
+            this.logSignalRejection(
+                event,
+                "balanced_institutional_flow",
+                {
+                    type: "institutional_balance",
+                    threshold: 0.05,
+                    actual: isBalancedInstitutional,
+                },
+                {
+                    aggressiveVolume: volumePressure.aggressivePressure,
+                    passiveVolume: volumePressure.passivePressure,
+                    priceEfficiency,
+                    confidence: 0,
                 }
             );
             return null; // No directional signal for balanced institutional scenarios
@@ -645,6 +750,22 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     passiveRatio: passiveVolumeRatio,
                 }
             );
+            this.logSignalRejection(
+                event,
+                "insufficient_aggressive_volume",
+                {
+                    type: "aggressive_volume",
+                    threshold:
+                        this.enhancementConfig.institutionalVolumeThreshold,
+                    actual: volumePressure.aggressivePressure,
+                },
+                {
+                    aggressiveVolume: volumePressure.aggressivePressure,
+                    passiveVolume: volumePressure.passivePressure,
+                    priceEfficiency,
+                    confidence: 0,
+                }
+            );
             return null; // No institutional pattern without sufficient aggressive flow
         }
 
@@ -659,6 +780,21 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 {
                     relevantZoneCount: relevantZones.length,
                     dominantSide,
+                }
+            );
+            this.logSignalRejection(
+                event,
+                "no_dominant_side",
+                {
+                    type: "side_determination",
+                    threshold: 1,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: volumePressure.aggressivePressure,
+                    passiveVolume: volumePressure.passivePressure,
+                    priceEfficiency,
+                    confidence: 0,
                 }
             );
             return null;
@@ -683,12 +819,43 @@ export class AbsorptionDetectorEnhanced extends Detector {
         // Confidence calculation completed
 
         if (confidence === null) {
+            this.logSignalRejection(
+                event,
+                "confidence_calculation_failed",
+                {
+                    type: "confidence_calculation",
+                    threshold: 1,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: volumePressure.aggressivePressure,
+                    passiveVolume: volumePressure.passivePressure,
+                    priceEfficiency,
+                    confidence: 0,
+                }
+            );
             return null; // Cannot proceed without valid confidence calculation
         }
 
         if (
             confidence < this.enhancementConfig.minEnhancedConfidenceThreshold
         ) {
+            this.logSignalRejection(
+                event,
+                "confidence_below_threshold",
+                {
+                    type: "confidence_threshold",
+                    threshold:
+                        this.enhancementConfig.minEnhancedConfidenceThreshold,
+                    actual: confidence,
+                },
+                {
+                    aggressiveVolume: volumePressure.aggressivePressure,
+                    passiveVolume: volumePressure.passivePressure,
+                    priceEfficiency,
+                    confidence,
+                }
+            );
             return null;
         }
 

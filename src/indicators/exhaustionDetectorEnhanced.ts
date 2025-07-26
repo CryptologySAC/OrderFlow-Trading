@@ -434,12 +434,42 @@ export class ExhaustionDetectorEnhanced extends Detector {
             this.logger.debug(
                 "ExhaustionDetectorEnhanced: No zone data available"
             );
+            this.logSignalRejection(
+                event,
+                "no_zone_data",
+                {
+                    type: "zone_data_availability",
+                    threshold: 1,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: 0,
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: 0,
+                }
+            );
             return null;
         }
 
         // CRITICAL FIX: Restore individual trade filtering to prevent signal spam
         // Only significant trades should contribute to exhaustion detection
         if (event.quantity < this.enhancementConfig.minAggVolume) {
+            this.logSignalRejection(
+                event,
+                "trade_quantity_too_small",
+                {
+                    type: "trade_quantity",
+                    threshold: this.enhancementConfig.minAggVolume,
+                    actual: event.quantity,
+                },
+                {
+                    aggressiveVolume: event.quantity,
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: 0,
+                }
+            );
             return null;
         }
 
@@ -462,6 +492,21 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 "ExhaustionDetectorEnhanced: No zones available",
                 {
                     zonesCount: event.zoneData.zones.length,
+                }
+            );
+            this.logSignalRejection(
+                event,
+                "no_zones_available",
+                {
+                    type: "zone_count",
+                    threshold: 1,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: event.quantity,
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: 0,
                 }
             );
             return null;
@@ -493,6 +538,21 @@ export class ExhaustionDetectorEnhanced extends Detector {
                         this.enhancementConfig.timeWindowIndex
                     ),
                     tradeTimestamp: event.timestamp,
+                }
+            );
+            this.logSignalRejection(
+                event,
+                "no_recent_zones_in_time_window",
+                {
+                    type: "time_window_zones",
+                    threshold: 1,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: event.quantity,
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: 0,
                 }
             );
             return null;
@@ -553,6 +613,21 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     totalZones: allZones.length,
                 }
             );
+            this.logSignalRejection(
+                event,
+                "no_relevant_zones_near_price",
+                {
+                    type: "relevant_zones",
+                    threshold: 1,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: event.quantity,
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: 0,
+                }
+            );
             return null;
         }
 
@@ -592,6 +667,21 @@ export class ExhaustionDetectorEnhanced extends Detector {
             this.logger.debug(
                 "ExhaustionDetectorEnhanced: No accumulated volume in time window"
             );
+            this.logSignalRejection(
+                event,
+                "no_accumulated_volume",
+                {
+                    type: "accumulated_volume",
+                    threshold: 1,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: 0,
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: 0,
+                }
+            );
             return null;
         }
 
@@ -602,6 +692,21 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 {
                     totalAggressiveVolume,
                     exhaustionVolumeThreshold: this.exhaustionVolumeThreshold,
+                }
+            );
+            this.logSignalRejection(
+                event,
+                "accumulated_aggressive_volume_too_low",
+                {
+                    type: "accumulated_aggressive_volume",
+                    threshold: this.exhaustionVolumeThreshold,
+                    actual: totalAggressiveVolume,
+                },
+                {
+                    aggressiveVolume: totalAggressiveVolume,
+                    passiveVolume: totalPassiveVolume,
+                    priceEfficiency: null,
+                    confidence: 0,
                 }
             );
             return null;
@@ -639,6 +744,21 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     exhaustionRatioThreshold: this.exhaustionRatioThreshold,
                 }
             );
+            this.logSignalRejection(
+                event,
+                "exhaustion_conditions_not_met",
+                {
+                    type: "exhaustion_ratio",
+                    threshold: this.exhaustionRatioThreshold,
+                    actual: accumulatedAggressiveRatio,
+                },
+                {
+                    aggressiveVolume: totalAggressiveVolume,
+                    passiveVolume: totalPassiveVolume,
+                    priceEfficiency: null,
+                    confidence: accumulatedAggressiveRatio,
+                }
+            );
             return null;
         }
 
@@ -655,12 +775,42 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     exhaustionScoreThreshold: this.exhaustionScoreThreshold,
                 }
             );
+            this.logSignalRejection(
+                event,
+                "confidence_below_threshold",
+                {
+                    type: "confidence_threshold",
+                    threshold: this.exhaustionScoreThreshold,
+                    actual: confidence,
+                },
+                {
+                    aggressiveVolume: totalAggressiveVolume,
+                    passiveVolume: totalPassiveVolume,
+                    priceEfficiency: null,
+                    confidence,
+                }
+            );
             return null;
         }
 
         // Determine signal side based on exhaustion
         const signalSide = this.determineExhaustionSignalSide(event);
         if (signalSide === "neutral") {
+            this.logSignalRejection(
+                event,
+                "neutral_signal_side",
+                {
+                    type: "signal_side",
+                    threshold: 1,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: totalAggressiveVolume,
+                    passiveVolume: totalPassiveVolume,
+                    priceEfficiency: null,
+                    confidence,
+                }
+            );
             return null;
         }
 

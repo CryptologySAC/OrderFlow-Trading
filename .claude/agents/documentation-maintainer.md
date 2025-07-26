@@ -23,6 +23,7 @@ Your core responsibilities:
 7. **Architecture Documentation**: Keep architectural diagrams, component relationships, and design decisions current. Document worker thread isolation patterns, data flow architectures, and integration points.
 
 When updating documentation:
+
 - Always verify code examples compile and execute correctly
 - Include version information and last-updated timestamps
 - Cross-reference related documentation sections
