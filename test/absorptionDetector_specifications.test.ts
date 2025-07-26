@@ -1,6 +1,7 @@
 // test/absorptionDetector_specifications.test.ts
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import type { AbsorptionEnhancedSettings } from "../src/indicators/absorptionDetectorEnhanced.js";
 import type {
     EnrichedTradeEvent,
@@ -49,6 +50,9 @@ describe("AbsorptionDetector - Specification Compliance", () => {
         calculateZoneRelevanceScore: vi.fn(() => 0.5),
         findMostRelevantZone: vi.fn(() => null),
     };
+
+    // Mock signal validation logger
+    let mockSignalValidationLogger: SignalValidationLogger;
 
     const defaultSettings: AbsorptionEnhancedSettings = {
         // Base detector settings (from config.json) - PRODUCTION-LIKE for testing
@@ -181,13 +185,17 @@ describe("AbsorptionDetector - Specification Compliance", () => {
             isLikelySpoof: vi.fn().mockReturnValue(false),
         } as any;
 
+        // Initialize signal validation logger mock
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
+
         detector = new AbsorptionDetectorEnhanced(
             "TEST",
             "LTCUSDT",
             defaultSettings,
             mockPreprocessor,
             mockLogger,
-            mockMetrics
+            mockMetrics,
+            mockSignalValidationLogger
         );
     });
 
@@ -447,7 +455,8 @@ describe("AbsorptionDetector - Specification Compliance", () => {
                     defaultSettings,
                     mockPreprocessor,
                     mockLogger,
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalValidationLogger
                 );
 
                 const baseTime = Date.now();
@@ -666,7 +675,8 @@ describe("AbsorptionDetector - Specification Compliance", () => {
                 customSettings,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Test each configurable threshold

@@ -104,7 +104,8 @@ export class AbsorptionDetectorEnhanced extends Detector {
         settings: AbsorptionEnhancedSettings,
         preprocessor: IOrderflowPreprocessor,
         logger: ILogger,
-        metrics: IMetricsCollector
+        metrics: IMetricsCollector,
+        validationLogger: SignalValidationLogger
     ) {
         // Settings are pre-validated by Config.ABSORPTION_DETECTOR getter
         // No validation needed here - trust that settings are correct
@@ -120,11 +121,8 @@ export class AbsorptionDetectorEnhanced extends Detector {
         this.preprocessor = preprocessor;
         this.windowMs = Config.getTimeWindow(settings.timeWindowIndex);
 
-        // Initialize signal validation logger
-        this.validationLogger = new SignalValidationLogger(
-            logger,
-            "logs/signal_validation"
-        );
+        // ✅ SHARED SIGNAL VALIDATION LOGGER: Use dependency-injected shared instance
+        this.validationLogger = validationLogger;
 
         // CLAUDE.md Compliance: Extract all configurable parameters (NO MAGIC NUMBERS)
         this.confluenceMinZones = settings.liquidityGradientRange; // Use existing config parameter
@@ -1605,11 +1603,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
     /**
      * Log signal for validation tracking
      */
-    private async logSignalForValidation(
+    private logSignalForValidation(
         signal: SignalCandidate,
         event: EnrichedTradeEvent,
         relevantZones: ZoneSnapshot[]
-    ): Promise<void> {
+    ): void {
         try {
             // Calculate market context for validation logging
             const marketContext = this.calculateMarketContext(
@@ -1631,11 +1629,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 extendedContext.absorptionRatio = signal.data.absorptionScore;
             }
 
-            await this.validationLogger.logSignal(
-                signal,
-                event,
-                extendedContext
-            );
+            this.validationLogger.logSignal(signal, event, extendedContext);
         } catch (error) {
             this.logger.error(
                 "AbsorptionDetectorEnhanced: Failed to log signal for validation",

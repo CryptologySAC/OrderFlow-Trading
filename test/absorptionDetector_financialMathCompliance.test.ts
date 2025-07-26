@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
 import type { AbsorptionEnhancedSettings } from "../src/indicators/absorptionDetectorEnhanced.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { IOrderBookState } from "../src/market/orderBookState.js";
@@ -40,6 +41,9 @@ describe("AbsorptionDetector - FinancialMath Compliance", () => {
         calculateZoneRelevanceScore: vi.fn(() => 0.5),
         findMostRelevantZone: vi.fn(() => null),
     };
+
+    // Mock signal validation logger
+    let mockSignalValidationLogger: SignalValidationLogger;
 
     const defaultSettings: AbsorptionEnhancedSettings = {
         // Core detection settings matching AbsorptionDetectorSchema
@@ -108,13 +112,17 @@ describe("AbsorptionDetector - FinancialMath Compliance", () => {
             isLikelySpoof: vi.fn().mockReturnValue(false),
         } as any;
 
+        // Initialize signal validation logger mock
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
+
         detector = new AbsorptionDetectorEnhanced(
             "TEST",
             "TESTUSDT",
             defaultSettings,
             mockPreprocessor,
             mockLogger,
-            mockMetrics
+            mockMetrics,
+            mockSignalValidationLogger
         );
     });
 

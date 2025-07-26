@@ -112,6 +112,7 @@ import type { ISignalLogger } from "../src/infrastructure/signalLoggerInterface.
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 // Mock dependencies
 const mockLogger: ILogger = {
     debug: vi.fn(),
@@ -121,6 +122,7 @@ const mockLogger: ILogger = {
     trace: vi.fn(),
 };
 
+const mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 const mockMetricsCollector: IMetricsCollector = {
     recordGauge: vi.fn(),
     recordCounter: vi.fn(),

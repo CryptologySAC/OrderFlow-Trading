@@ -10,6 +10,7 @@ import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 // Import mock config for complete settings
 import mockConfig from "../__mocks__/config.json";
 
@@ -40,6 +41,9 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
         calculateZoneRelevanceScore: vi.fn(() => 0.5),
         findMostRelevantZone: vi.fn(() => null),
     };
+
+    // Mock signal validation logger
+    let mockSignalValidationLogger: SignalValidationLogger;
 
     // Helper to create standardized trade events
     const createTradeEvent = (
@@ -78,6 +82,9 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
             trace: vi.fn(),
         } as ILogger;
         mockMetrics = new MetricsCollector();
+
+        // Initialize signal validation logger mock
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
     });
 
     describe("Detection Mode Configuration", () => {
@@ -106,7 +113,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 mockConfig.symbols.LTCUSDT.deltaCVD,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // This tests that the default behavior is preserved
@@ -121,7 +129,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 mockConfig.symbols.LTCUSDT.deltaCVD,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             expect(detector.getId()).toBe("test_hybrid_mode");
@@ -408,7 +417,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 { ...sharedConfig, detectionMode: "momentum" as const },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             divergenceDetector = new DeltaCVDDetectorEnhanced(
@@ -417,7 +427,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 { ...sharedConfig, detectionMode: "divergence" as const },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
         });
 

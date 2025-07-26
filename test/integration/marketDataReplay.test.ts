@@ -15,6 +15,7 @@ import {
     type ReplayMetrics,
 } from "../framework/marketDataReplay.js";
 import { AbsorptionDetectorEnhanced } from "../../src/indicators/absorptionDetectorEnhanced.js";
+import { SignalValidationLogger } from "../../__mocks__/src/utils/signalValidationLogger.js";
 import { ExhaustionDetectorEnhanced } from "../../src/indicators/exhaustionDetectorEnhanced.js";
 import { AccumulationZoneDetectorEnhanced } from "../../src/indicators/accumulationZoneDetectorEnhanced.js";
 import { DistributionDetectorEnhanced } from "../../src/indicators/distributionDetectorEnhanced.js";
@@ -42,6 +43,8 @@ const mockPreprocessor: IOrderflowPreprocessor = {
     calculateZoneRelevanceScore: vi.fn(() => 0.5),
     findMostRelevantZone: vi.fn(() => null),
 };
+
+let mockSignalValidationLogger: SignalValidationLogger;
 
 const mockMetricsCollector = {
     updateMetric: vi.fn(),
@@ -95,6 +98,7 @@ describe("Market Data Replay Integration Tests", () => {
     let detectorSignals: Map<string, DetectorSignalCapture>;
 
     beforeEach(() => {
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
         replay = new MarketDataReplay(mockLogger);
         detectorSignals = new Map();
 
@@ -111,6 +115,7 @@ describe("Market Data Replay Integration Tests", () => {
             // Create absorption detector with lower thresholds for testing
             const absorptionDetector = new AbsorptionDetectorEnhanced(
                 "test-absorption-enhanced",
+                "LTCUSDT",
                 {
                     // Base detector settings (from config.json)
                     minAggVolume: 50,
@@ -191,11 +196,9 @@ describe("Market Data Replay Integration Tests", () => {
                     volumeBoostMultiplier: 0.25,
                 },
                 mockPreprocessor,
-                mockOrderBookState,
                 mockLogger,
-                mockSpoofingDetector,
                 mockMetricsCollector,
-                mockSignalLogger
+                mockSignalValidationLogger
             );
 
             // Set up signal capture

@@ -349,6 +349,7 @@ export class OrderFlowDashboard {
             metricsCollector: dependencies.metricsCollector,
             signalLogger: dependencies.signalLogger,
             preprocessor: this.preprocessor,
+            signalValidationLogger: dependencies.signalValidationLogger,
         };
 
         DetectorFactory.initialize(detectorDependencies);

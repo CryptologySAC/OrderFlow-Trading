@@ -14,6 +14,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { SignalCandidate } from "../src/types/signalTypes.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
 import { ExhaustionDetectorEnhanced } from "../src/indicators/exhaustionDetectorEnhanced.js";
 import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
@@ -36,6 +37,7 @@ describe("Signal Type Standardization Integration Tests", () => {
     // Create mock instances
     const mockLogger = createMockLogger();
     const mockMetrics = new MetricsCollector();
+    const mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
     // Simple mock preprocessor
     const mockPreprocessor = {
@@ -114,7 +116,8 @@ describe("Signal Type Standardization Integration Tests", () => {
                     settings,
                     mockPreprocessor,
                     mockLogger,
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalValidationLogger
                 );
             }).not.toThrow();
 
@@ -132,10 +135,12 @@ describe("Signal Type Standardization Integration Tests", () => {
             expect(() => {
                 const detector = new ExhaustionDetectorEnhanced(
                     "test-exhaustion",
+                    "LTCUSDT",
                     settings,
                     mockPreprocessor,
                     mockLogger,
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalValidationLogger
                 );
             }).not.toThrow();
 
@@ -157,7 +162,8 @@ describe("Signal Type Standardization Integration Tests", () => {
                     settings,
                     mockPreprocessor,
                     mockLogger,
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalValidationLogger
                 );
             }).not.toThrow();
 
@@ -229,15 +235,18 @@ describe("Signal Type Standardization Integration Tests", () => {
                 Config.ABSORPTION_DETECTOR,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             const exhaustionDetector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion-std",
+                "LTCUSDT",
                 Config.EXHAUSTION_DETECTOR,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             const deltacvdDetector = new DeltaCVDDetectorEnhanced(
@@ -246,7 +255,8 @@ describe("Signal Type Standardization Integration Tests", () => {
                 Config.DELTACVD_DETECTOR,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             const accumulationDetector = new AccumulationZoneDetectorEnhanced(

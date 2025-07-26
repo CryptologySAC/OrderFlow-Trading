@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import { Config } from "../src/core/config.js";
 import { createMockLogger } from "../__mocks__/src/infrastructure/loggerInterface.js";
 import mockMetricsCollector from "../__mocks__/src/infrastructure/metricsCollector.js";
@@ -20,6 +21,11 @@ describe("Debug Absorption Logger", () => {
             absorptionThreshold: 0.6,
         };
 
+        // Initialize signal validation logger mock
+        const mockSignalValidationLogger = new SignalValidationLogger(
+            mockLogger
+        );
+
         console.log("Creating detector...");
         const detector = new AbsorptionDetectorEnhanced(
             "test-absorption",
@@ -27,7 +33,8 @@ describe("Debug Absorption Logger", () => {
             testConfig,
             mockPreprocessor,
             mockLogger,
-            mockMetricsCollector
+            mockMetricsCollector,
+            mockSignalValidationLogger
         );
 
         console.log("Detector created successfully");

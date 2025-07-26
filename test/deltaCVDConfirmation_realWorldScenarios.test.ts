@@ -10,6 +10,7 @@ import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 /**
  * REAL-WORLD DELTACVD DETECTOR SCENARIOS
  *
@@ -26,6 +27,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
     let detector: DeltaCVDDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
+    let mockSignalValidationLogger: SignalValidationLogger;
 
     const mockPreprocessor: IOrderflowPreprocessor = {
         handleDepth: vi.fn(),
@@ -54,7 +56,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
         quantity,
         buyerIsMaker,
         timestamp,
-        tradeId: Math.floor(Math.random() * 1000000),
+        tradeId: Math.floor(Math.random() * 1000000).toString(),
         isBuyerMaker: buyerIsMaker,
         quoteQty: price * quantity,
         // Realistic passive volume data
@@ -76,8 +78,12 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
             error: vi.fn(),
             debug: vi.fn(),
             trace: vi.fn(),
+            isDebugEnabled: vi.fn(() => false),
+            setCorrelationId: vi.fn(),
+            removeCorrelationId: vi.fn(),
         } as ILogger;
         mockMetrics = new MetricsCollector();
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
     });
 
     describe("🚀 Institutional Volume Surge Scenarios", () => {
@@ -98,7 +104,8 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
         });
 
@@ -342,7 +349,8 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             const baseTime = Date.now();
@@ -461,7 +469,8 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             const baseTime = Date.now();
@@ -595,7 +604,8 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             const baseTime = Date.now();
@@ -739,7 +749,8 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
         });
 
@@ -971,7 +982,8 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
         });
 
@@ -1216,7 +1228,8 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
         });
 

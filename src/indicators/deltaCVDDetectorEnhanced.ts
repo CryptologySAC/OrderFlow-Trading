@@ -21,6 +21,7 @@
 import { Detector } from "./base/detectorEnrichedTrade.js";
 import { FinancialMath } from "../utils/financialMath.js";
 import { TimeAwareCache } from "../utils/timeAwareCache.js";
+import { SignalValidationLogger } from "../utils/signalValidationLogger.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
@@ -30,7 +31,10 @@ import type {
     StandardZoneData,
     ZoneSnapshot,
 } from "../types/marketEvents.js";
-import type { DeltaCVDConfirmationResult } from "../types/signalTypes.js";
+import type {
+    DeltaCVDConfirmationResult,
+    SignalCandidate,
+} from "../types/signalTypes.js";
 import { z } from "zod";
 import { DeltaCVDDetectorSchema } from "../core/config.js";
 import { Config } from "../core/config.js";
@@ -107,6 +111,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     private readonly enhancementConfig: DeltaCVDEnhancedSettings;
     private readonly enhancementStats: DeltaCVDEnhancementStats;
     private readonly preprocessor: IOrderflowPreprocessor;
+    private readonly validationLogger: SignalValidationLogger;
     private readonly lastSignal = new TimeAwareCache<string, number>(900000);
     constructor(
         id: string,
@@ -115,6 +120,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         preprocessor: IOrderflowPreprocessor,
         logger: ILogger,
         metrics: IMetricsCollector,
+        validationLogger: SignalValidationLogger,
         signalLogger?: ISignalLogger
     ) {
         // STANDALONE VERSION: Initialize Detector base class directly
@@ -139,6 +145,9 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             totalConfidenceBoost: 0,
             enhancementSuccessRate: 0,
         };
+
+        // ✅ SHARED SIGNAL VALIDATION LOGGER: Use dependency-injected shared instance
+        this.validationLogger = validationLogger;
 
         this.logger.info("DeltaCVDDetectorEnhanced initialized", {
             detectorId: id,
@@ -240,6 +249,41 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                     hasZoneData: !!event.zoneData,
                 }
             );
+
+            // Log the specific rejection reason
+            if (this.enhancementConfig.enhancementMode === "disabled") {
+                this.logSignalRejection(
+                    event,
+                    "enhancement_mode_disabled",
+                    {
+                        type: "enhancement_mode",
+                        threshold: 1,
+                        actual: 0,
+                    },
+                    {
+                        aggressiveVolume: 0,
+                        passiveVolume: 0,
+                        priceEfficiency: null,
+                        confidence: 0,
+                    }
+                );
+            } else if (!event.zoneData) {
+                this.logSignalRejection(
+                    event,
+                    "no_zone_data_in_analysis",
+                    {
+                        type: "zone_availability",
+                        threshold: 1,
+                        actual: 0,
+                    },
+                    {
+                        aggressiveVolume: 0,
+                        passiveVolume: 0,
+                        priceEfficiency: null,
+                        confidence: 0,
+                    }
+                );
+            }
             return;
         }
 
@@ -272,7 +316,24 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     private detectCoreCVD(
         event: EnrichedTradeEvent
     ): CVDDivergenceResult | null {
-        if (!event.zoneData) return null;
+        if (!event.zoneData) {
+            this.logSignalRejection(
+                event,
+                "no_zone_data",
+                {
+                    type: "zone_availability",
+                    threshold: 1,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: 0,
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: 0,
+                }
+            );
+            return null;
+        }
 
         // ✅ CRITICAL VALIDATION: Use config-driven validation without caching
         if (!this.meetsDetectionRequirements(event)) {
@@ -286,6 +347,21 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                     detectorId: this.getId(),
                     price: event.price,
                     reason: "detection_requirements_failed",
+                }
+            );
+            this.logSignalRejection(
+                event,
+                "detection_requirements_not_met",
+                {
+                    type: "activity_requirements",
+                    threshold: this.enhancementConfig.minVolPerSec,
+                    actual: 0, // Will be calculated in meetsDetectionRequirements
+                },
+                {
+                    aggressiveVolume: 0,
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: 0,
                 }
             );
             return null;
@@ -311,6 +387,21 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                     price: event.price,
                     totalVolume: cvdData.totalVolume,
                     volumeThreshold: this.enhancementConfig.minVolPerSec,
+                }
+            );
+            this.logSignalRejection(
+                event,
+                "insufficient_cvd_volume",
+                {
+                    type: "cvd_volume",
+                    threshold: this.enhancementConfig.minVolPerSec,
+                    actual: cvdData.totalVolume,
+                },
+                {
+                    aggressiveVolume: cvdData.totalVolume,
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: 0,
                 }
             );
             return null;
@@ -358,6 +449,21 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                         reason: "insufficient_confidence",
                     }
                 );
+                this.logSignalRejection(
+                    event,
+                    "confidence_below_threshold",
+                    {
+                        type: "confidence_level",
+                        threshold: this.enhancementConfig.signalThreshold,
+                        actual: realConfidence,
+                    },
+                    {
+                        aggressiveVolume: cvdData.totalVolume,
+                        passiveVolume: 0,
+                        priceEfficiency: null,
+                        confidence: realConfidence,
+                    }
+                );
                 return null;
             }
         } else {
@@ -373,6 +479,21 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                     detectorId: this.getId(),
                     price: event.price,
                     reason: "no_divergence",
+                }
+            );
+            this.logSignalRejection(
+                event,
+                "no_cvd_divergence",
+                {
+                    type: "divergence_detection",
+                    threshold: this.enhancementConfig.cvdImbalanceThreshold,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: cvdData.totalVolume,
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: 0,
                 }
             );
         }
@@ -466,6 +587,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         if (!divergenceResult.hasDivergence) return null; // No divergence = no signal
         if (signalSide === "buy") return "bullish_divergence";
         if (signalSide === "sell") return "bearish_divergence";
+        // Note: This return null case is intentionally not logged as it's a logic error, not a market condition rejection
         return null; // Should never reach here
     }
 
@@ -569,6 +691,26 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             this.enhancementConfig.signalThreshold
         ) {
             this.emitEnhancedCVDSignal(event, enhancedResult);
+        } else {
+            // Log rejection for enhanced confidence below threshold
+            this.logSignalRejection(
+                event,
+                "enhanced_confidence_below_threshold",
+                {
+                    type: "enhanced_confidence",
+                    threshold: this.enhancementConfig.signalThreshold,
+                    actual: enhancedResult.enhancedConfidence,
+                },
+                {
+                    aggressiveVolume: this.calculateZoneVolume(
+                        event.zoneData,
+                        event.timestamp
+                    ),
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: enhancedResult.enhancedConfidence,
+                }
+            );
         }
     }
 
@@ -1008,6 +1150,24 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                     reason: "enhanced_detection_requirements_failed",
                 }
             );
+            this.logSignalRejection(
+                event,
+                "enhanced_detection_requirements_failed",
+                {
+                    type: "enhanced_validation",
+                    threshold: this.enhancementConfig.minVolPerSec,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: this.calculateZoneVolume(
+                        event.zoneData,
+                        event.timestamp
+                    ),
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: enhancedResult.enhancedConfidence,
+                }
+            );
             return;
         }
 
@@ -1020,6 +1180,24 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 {
                     detectorId: this.getId(),
                     price: event.price,
+                }
+            );
+            this.logSignalRejection(
+                event,
+                "no_clear_signal_side",
+                {
+                    type: "signal_direction",
+                    threshold: 0.5,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: this.calculateZoneVolume(
+                        event.zoneData,
+                        event.timestamp
+                    ),
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: enhancedResult.enhancedConfidence,
                 }
             );
             return;
@@ -1035,6 +1213,24 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                     price: event.price,
                     eventKey,
                     cooldownMs: this.enhancementConfig.eventCooldownMs,
+                }
+            );
+            this.logSignalRejection(
+                event,
+                "signal_cooldown_active",
+                {
+                    type: "cooldown_period",
+                    threshold: this.enhancementConfig.eventCooldownMs,
+                    actual: Date.now() - (this.lastSignal.get(eventKey) || 0),
+                },
+                {
+                    aggressiveVolume: this.calculateZoneVolume(
+                        event.zoneData,
+                        event.timestamp
+                    ),
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: enhancedResult.enhancedConfidence,
                 }
             );
             return;
@@ -1054,6 +1250,24 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                     price: event.price,
                     signalSide,
                     hasDivergence: enhancedResult.coreResult.hasDivergence,
+                }
+            );
+            this.logSignalRejection(
+                event,
+                "invalid_signal_description",
+                {
+                    type: "signal_validity",
+                    threshold: 1,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: this.calculateZoneVolume(
+                        event.zoneData,
+                        event.timestamp
+                    ),
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: enhancedResult.enhancedConfidence,
                 }
             );
             return;
@@ -1109,12 +1323,27 @@ export class DeltaCVDDetectorEnhanced extends Detector {
 
         // ✅ EMIT ENHANCED CVD SIGNAL - Standalone detector signal emission
         this.emit("signalCandidate", {
+            id: `deltacvd-${event.timestamp}-${this.getId()}`,
             type: "deltacvd",
             side: signalSide,
             confidence: realConfidence,
             timestamp: event.timestamp,
             data: cvdResult,
         });
+
+        // ✅ RESTORED: Proper signal validation logging with real market context
+        this.logSignalForValidation(
+            {
+                id: `deltacvd-${event.timestamp}-${this.getId()}`,
+                type: "deltacvd",
+                side: signalSide,
+                confidence: realConfidence,
+                timestamp: event.timestamp,
+                data: cvdResult,
+            },
+            event,
+            event.zoneData ? event.zoneData.zones : []
+        );
 
         this.logger.info(
             "DeltaCVDDetectorEnhanced: ENHANCED CVD SIGNAL EMITTED",
@@ -1175,7 +1404,10 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         });
 
         const totalVolume = totalBuyVolume + totalSellVolume;
-        if (totalVolume === 0) return null;
+        if (totalVolume === 0) {
+            // Note: This return null case doesn't need logging as it's already checked in earlier validation
+            return null;
+        }
 
         const buyRatio = FinancialMath.divideQuantities(
             totalBuyVolume,
@@ -1185,6 +1417,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         // Simple CVD-based signal direction: more buying = buy signal, more selling = sell signal
         if (buyRatio > 0.5) return "buy";
         if (buyRatio < 0.5) return "sell";
+        // Note: This return null case (neutral 50/50 split) doesn't need separate logging as it's handled in the calling function
         return null; // No clear signal
     }
 
@@ -1331,11 +1564,235 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     }
 
     /**
+     * Signal rejection logging for comprehensive threshold optimization analysis
+     *
+     * DELTACVD PHASE 1: Complete signal validation logging system
+     */
+    private logSignalRejection(
+        event: EnrichedTradeEvent,
+        rejectionReason: string,
+        thresholdDetails: {
+            type: string;
+            threshold: number;
+            actual: number;
+        },
+        marketContext: {
+            aggressiveVolume: number;
+            passiveVolume: number;
+            priceEfficiency: number | null;
+            confidence: number;
+        }
+    ): void {
+        try {
+            this.validationLogger.logRejection(
+                "deltacvd",
+                rejectionReason,
+                event,
+                thresholdDetails,
+                marketContext
+            );
+        } catch (error) {
+            this.logger.error(
+                "DeltaCVDDetectorEnhanced: Error logging signal rejection",
+                {
+                    detectorId: this.getId(),
+                    rejectionReason,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
+        }
+    }
+
+    /**
+     * Calculate market context for validation logging - DeltaCVD specific implementation
+     *
+     * CLAUDE.md COMPLIANT: All values derived from real market data and configuration
+     */
+    private calculateMarketContext(
+        event: EnrichedTradeEvent,
+        relevantZones: ZoneSnapshot[]
+    ): {
+        totalAggressiveVolume: number;
+        totalPassiveVolume: number;
+        aggressiveBuyVolume: number;
+        aggressiveSellVolume: number;
+        passiveBidVolume: number;
+        passiveAskVolume: number;
+        institutionalVolumeRatio: number;
+        priceEfficiency: number | null;
+    } {
+        let totalAggressive = 0;
+        let totalPassive = 0;
+        let aggressiveBuy = 0;
+        let aggressiveSell = 0;
+        let passiveBid = 0;
+        let passiveAsk = 0;
+
+        // Apply temporal filtering for market context calculation
+        const windowStartTime =
+            event.timestamp -
+            Config.getTimeWindow(this.enhancementConfig.timeWindowIndex);
+        const recentZones = relevantZones.filter(
+            (zone) => zone.lastUpdate >= windowStartTime
+        );
+
+        // Aggregate volume data from recent zones only
+        for (const zone of recentZones) {
+            totalAggressive += zone.aggressiveVolume;
+            totalPassive += zone.passiveVolume;
+            aggressiveBuy += zone.aggressiveBuyVolume || 0;
+            aggressiveSell += zone.aggressiveSellVolume || 0;
+            passiveBid += zone.passiveBidVolume || 0;
+            passiveAsk += zone.passiveAskVolume || 0;
+        }
+
+        const totalVolume = totalAggressive + totalPassive;
+        const institutionalVolumeRatio =
+            totalVolume > 0
+                ? FinancialMath.divideQuantities(totalPassive, totalVolume)
+                : 0;
+
+        // Calculate CVD-specific price efficiency using volume delta
+        const priceEfficiency = this.calculateCVDPriceEfficiency(
+            event,
+            recentZones
+        );
+
+        return {
+            totalAggressiveVolume: totalAggressive,
+            totalPassiveVolume: totalPassive,
+            aggressiveBuyVolume: aggressiveBuy,
+            aggressiveSellVolume: aggressiveSell,
+            passiveBidVolume: passiveBid,
+            passiveAskVolume: passiveAsk,
+            institutionalVolumeRatio,
+            priceEfficiency,
+        };
+    }
+
+    /**
+     * Calculate CVD-specific price efficiency based on volume delta patterns
+     *
+     * CLAUDE.md COMPLIANT: Uses FinancialMath for precision, returns null when invalid
+     */
+    private calculateCVDPriceEfficiency(
+        event: EnrichedTradeEvent,
+        zones: ZoneSnapshot[]
+    ): number | null {
+        if (zones.length === 0) return null;
+
+        // Calculate volume-weighted CVD imbalance across zones
+        let totalVolumeWeightedCVD = 0;
+        let totalVolume = 0;
+
+        for (const zone of zones) {
+            // Skip zones with no volume or invalid data
+            if (zone.aggressiveVolume <= 0) continue;
+            if (
+                zone.aggressiveBuyVolume == null ||
+                zone.aggressiveSellVolume == null
+            )
+                continue;
+
+            // Calculate CVD delta for this zone
+            const cvdDelta = FinancialMath.safeSubtract(
+                zone.aggressiveBuyVolume,
+                zone.aggressiveSellVolume
+            );
+
+            // Weight CVD delta by zone volume
+            const volumeWeightedCVD = FinancialMath.multiplyQuantities(
+                Math.abs(cvdDelta),
+                zone.aggressiveVolume
+            );
+
+            // Skip zones where calculation fails
+            if (isNaN(volumeWeightedCVD)) continue;
+
+            totalVolumeWeightedCVD = FinancialMath.safeAdd(
+                totalVolumeWeightedCVD,
+                volumeWeightedCVD
+            );
+            totalVolume = FinancialMath.safeAdd(
+                totalVolume,
+                zone.aggressiveVolume
+            );
+        }
+
+        if (totalVolume === 0) return null;
+
+        // Calculate CVD efficiency as ratio of imbalance to total volume
+        return FinancialMath.divideQuantities(
+            totalVolumeWeightedCVD,
+            totalVolume
+        );
+    }
+
+    /**
+     * Log signal for validation tracking - DeltaCVD specific implementation
+     */
+    private logSignalForValidation(
+        signal: SignalCandidate,
+        event: EnrichedTradeEvent,
+        relevantZones: ZoneSnapshot[]
+    ): void {
+        try {
+            // Calculate market context for validation logging
+            const marketContext = this.calculateMarketContext(
+                event,
+                relevantZones
+            );
+
+            // Add DeltaCVD-specific metrics
+            const extendedContext = {
+                ...marketContext,
+                cvdDivergenceStrength: undefined as number | undefined,
+                cvdAffectedZones: undefined as number | undefined,
+            };
+
+            if (
+                signal.data &&
+                typeof signal.data === "object" &&
+                "rateOfChange" in signal.data
+            ) {
+                extendedContext.cvdDivergenceStrength =
+                    signal.data.rateOfChange;
+            }
+
+            if (
+                signal.data &&
+                typeof signal.data === "object" &&
+                "metadata" in signal.data &&
+                signal.data.metadata &&
+                typeof signal.data.metadata === "object" &&
+                "cvdAnalysis" in signal.data.metadata
+            ) {
+                // Extract affected zones from CVD analysis metadata if available
+                extendedContext.cvdAffectedZones = relevantZones.length;
+            }
+
+            this.validationLogger.logSignal(signal, event, extendedContext);
+        } catch (error) {
+            this.logger.error(
+                "DeltaCVDDetectorEnhanced: Failed to log signal for validation",
+                {
+                    signalId: signal.id,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
+        }
+    }
+
+    /**
      * Enhanced cleanup with zone-aware resource management
      *
      * STANDALONE VERSION: Resource management
      */
     public cleanup(): void {
+        // Clean up validation logger
+        this.validationLogger.cleanup();
         this.logger.info(
             "DeltaCVDDetectorEnhanced: Enhanced cleanup completed",
             {

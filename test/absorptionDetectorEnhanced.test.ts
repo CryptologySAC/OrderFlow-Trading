@@ -14,6 +14,7 @@ import type {
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 
 // Mock dependencies
 const mockLogger: ILogger = {
@@ -46,6 +47,8 @@ const mockPreprocessor: IOrderflowPreprocessor = {
     calculateZoneRelevanceScore: vi.fn(() => 0.5),
     findMostRelevantZone: vi.fn(() => null),
 };
+
+const mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
 // Helper function to create zone snapshots
 function createZoneSnapshot(
@@ -243,7 +246,8 @@ describe("AbsorptionDetectorEnhanced - Nuclear Cleanup Reality", () => {
             mockAbsorptionConfig,
             mockPreprocessor,
             mockLogger,
-            mockMetricsCollector
+            mockMetricsCollector,
+            mockSignalValidationLogger
         );
     });
 
@@ -283,7 +287,8 @@ describe("AbsorptionDetectorEnhanced - Nuclear Cleanup Reality", () => {
                     mockAbsorptionConfig, // Pre-validated settings should work
                     mockPreprocessor,
                     mockLogger,
-                    mockMetricsCollector
+                    mockMetricsCollector,
+                    mockSignalValidationLogger
                 );
             }).not.toThrow();
         });
@@ -313,7 +318,8 @@ describe("AbsorptionDetectorEnhanced - Nuclear Cleanup Reality", () => {
                     mockAbsorptionConfig, // Complete validated configuration
                     mockPreprocessor,
                     mockLogger,
-                    mockMetricsCollector
+                    mockMetricsCollector,
+                    mockSignalValidationLogger
                 );
             }).not.toThrow();
         });
@@ -345,7 +351,8 @@ describe("AbsorptionDetectorEnhanced - Nuclear Cleanup Reality", () => {
                     mockAbsorptionConfig, // Known valid configuration
                     mockPreprocessor,
                     mockLogger,
-                    mockMetricsCollector
+                    mockMetricsCollector,
+                    mockSignalValidationLogger
                 );
             }).not.toThrow();
         });

@@ -20,6 +20,7 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AccumulationZoneDetectorEnhanced } from "../src/indicators/accumulationZoneDetectorEnhanced.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import { FinancialMath } from "../src/utils/financialMath.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";

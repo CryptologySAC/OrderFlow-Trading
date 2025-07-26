@@ -20,6 +20,7 @@ import type {
 import type { SignalCandidate } from "../src/types/signalTypes.js";
 // Use proper mock from __mocks__/ directory as per CLAUDE.md
 import mockConfig from "../__mocks__/config.json";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 
 // Mock dependencies
 const mockLogger: ILogger = {
@@ -46,6 +47,8 @@ const mockSignalLogger: ISignalLogger = {
     logSignalCandidate: vi.fn(),
     logSignalValidation: vi.fn(),
 };
+
+const mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
 const mockPreprocessor: IOrderflowPreprocessor = {
     handleDepth: vi.fn(),
@@ -142,7 +145,8 @@ describe("ExhaustionDetectorEnhanced - Standalone Architecture", () => {
             mockPreprocessor,
             mockLogger,
             mockMetricsCollector,
-            mockSignalLogger
+            mockSignalLogger,
+            mockSignalValidationLogger
         );
     });
 
@@ -194,7 +198,8 @@ describe("ExhaustionDetectorEnhanced - Standalone Architecture", () => {
                     mockPreprocessor,
                     mockLogger,
                     mockMetricsCollector,
-                    mockSignalLogger
+                    mockSignalLogger,
+                    mockSignalValidationLogger
                 );
             }).not.toThrow();
         });

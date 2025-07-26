@@ -1,12 +1,14 @@
 // src/utils/signalValidationLogger.ts
 //
-// ✅ SIGNAL VALIDATION LOGGER: Comprehensive signal performance tracking for fine-tuning
+// ✅ SIGNAL VALIDATION LOGGER: NON-BLOCKING signal performance tracking for real-time trading
 //
 // This module provides structured logging capabilities for exhaustion and absorption signals,
 // capturing detailed performance metrics, market context, and validation data suitable for
 // machine learning fine-tuning and systematic analysis.
 //
 // FEATURES:
+// - NON-BLOCKING: Signal logging never blocks real-time trade processing
+// - Internal buffering with background flushing for optimal performance
 // - CSV output format for ML training data
 // - Real-time signal validation with market movement tracking
 // - Comprehensive market context capture (volume patterns, zone data, price efficiency)
@@ -89,7 +91,7 @@ export interface SignalValidationRecord {
  */
 export interface SignalRejectionRecord {
     timestamp: number;
-    detectorType: "exhaustion" | "absorption";
+    detectorType: "exhaustion" | "absorption" | "deltacvd";
     rejectionReason: string;
     price: number;
 
@@ -112,7 +114,9 @@ export interface SignalRejectionRecord {
 }
 
 /**
- * Signal Validation Logger - Comprehensive signal performance tracking
+ * Signal Validation Logger - NON-BLOCKING signal performance tracking for real-time trading
+ *
+ * ✅ INSTITUTIONAL ARCHITECTURE: Internal buffering ensures signal processing never blocks on disk I/O
  */
 export class SignalValidationLogger {
     private readonly signalsFilePath: string;
@@ -122,6 +126,13 @@ export class SignalValidationLogger {
         SignalValidationRecord
     >();
     private readonly validationTimers = new Map<string, NodeJS.Timeout[]>();
+
+    // ✅ NON-BLOCKING ARCHITECTURE: Internal buffering for high-performance logging
+    private readonly signalsBuffer: string[] = [];
+    private readonly rejectionsBuffer: string[] = [];
+    private readonly maxBufferSize = 100; // Flush after 100 entries
+    private readonly flushInterval = 5000; // Flush every 5 seconds
+    private flushTimer?: NodeJS.Timeout;
 
     constructor(
         private readonly logger: ILogger,
@@ -219,10 +230,18 @@ export class SignalValidationLogger {
             await fs.writeFile(this.signalsFilePath, signalHeader);
             await fs.writeFile(this.rejectionsFilePath, rejectionHeader);
 
-            this.logger.info("SignalValidationLogger: CSV files initialized", {
-                signalsFile: this.signalsFilePath,
-                rejectionsFile: this.rejectionsFilePath,
-            });
+            this.logger.info(
+                "SignalValidationLogger: NON-BLOCKING CSV files initialized",
+                {
+                    signalsFile: this.signalsFilePath,
+                    rejectionsFile: this.rejectionsFilePath,
+                    maxBufferSize: this.maxBufferSize,
+                    flushInterval: this.flushInterval,
+                }
+            );
+
+            // ✅ START BACKGROUND FLUSHING for non-blocking performance
+            this.startBackgroundFlushing();
         } catch (error) {
             this.logger.error(
                 "SignalValidationLogger: Failed to initialize log files",
@@ -236,9 +255,91 @@ export class SignalValidationLogger {
     }
 
     /**
-     * Log a generated signal for validation tracking
+     * ✅ START BACKGROUND FLUSHING: Non-blocking buffer management for real-time performance
      */
-    public async logSignal(
+    private startBackgroundFlushing(): void {
+        this.flushTimer = setInterval(() => {
+            this.flushBuffers();
+        }, this.flushInterval);
+    }
+
+    /**
+     * ✅ BACKGROUND BUFFER FLUSH: Asynchronous disk writes without blocking signal processing
+     */
+    private flushBuffers(): void {
+        if (this.signalsBuffer.length > 0) {
+            const signalsToFlush = this.signalsBuffer.splice(0);
+            void this.flushSignalsBuffer(signalsToFlush);
+        }
+
+        if (this.rejectionsBuffer.length > 0) {
+            const rejectionsToFlush = this.rejectionsBuffer.splice(0);
+            void this.flushRejectionsBuffer(rejectionsToFlush);
+        }
+    }
+
+    /**
+     * ✅ ASYNC SIGNAL BUFFER FLUSH: Background file writes
+     */
+    private async flushSignalsBuffer(records: string[]): Promise<void> {
+        try {
+            const content = records.join("");
+            await fs.appendFile(this.signalsFilePath, content);
+        } catch (error) {
+            this.logger.error(
+                "SignalValidationLogger: Failed to flush signals buffer",
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    recordCount: records.length,
+                }
+            );
+        }
+    }
+
+    /**
+     * ✅ ASYNC REJECTIONS BUFFER FLUSH: Background file writes
+     */
+    private async flushRejectionsBuffer(records: string[]): Promise<void> {
+        try {
+            const content = records.join("");
+            await fs.appendFile(this.rejectionsFilePath, content);
+        } catch (error) {
+            this.logger.error(
+                "SignalValidationLogger: Failed to flush rejections buffer",
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    recordCount: records.length,
+                }
+            );
+        }
+    }
+
+    /**
+     * ✅ CLEANUP: Flush remaining buffers and clear timers
+     */
+    public cleanup(): void {
+        if (this.flushTimer) {
+            clearInterval(this.flushTimer);
+            this.flushTimer = undefined;
+        }
+
+        // Final flush of any remaining buffered data
+        this.flushBuffers();
+
+        // Clear validation timers
+        for (const [, timers] of this.validationTimers) {
+            timers.forEach((timer) => clearTimeout(timer));
+        }
+        this.validationTimers.clear();
+        this.pendingValidations.clear();
+    }
+
+    /**
+     * ✅ NON-BLOCKING Log a generated signal for validation tracking
+     */
+    public logSignal(
         signal: SignalCandidate,
         event: EnrichedTradeEvent,
         marketContext: {
@@ -254,7 +355,7 @@ export class SignalValidationLogger {
             exhaustionRatio?: number;
             depletionRatio?: number;
         }
-    ): Promise<void> {
+    ): void {
         try {
             const record: SignalValidationRecord = {
                 // Signal Identification
@@ -316,7 +417,7 @@ export class SignalValidationLogger {
             this.setupValidationTimers(signal.id, event.price);
 
             // Log immediately (partial record)
-            await this.writeSignalRecord(record);
+            this.writeSignalRecord(record);
 
             this.logger.info(
                 "SignalValidationLogger: Signal logged for validation",
@@ -340,7 +441,7 @@ export class SignalValidationLogger {
      * Log a rejected signal for threshold optimization
      */
     public logRejection(
-        detectorType: "exhaustion" | "absorption",
+        detectorType: "exhaustion" | "absorption" | "deltacvd",
         rejectionReason: string,
         event: EnrichedTradeEvent,
         thresholdDetails: {
@@ -560,7 +661,7 @@ export class SignalValidationLogger {
                 record.signalAccuracy1hr = isAccurate;
 
                 // Write final record
-                await this.writeSignalRecord(record);
+                this.writeSignalRecord(record);
                 break;
         }
 
@@ -612,9 +713,7 @@ export class SignalValidationLogger {
     /**
      * Write signal record to CSV
      */
-    private async writeSignalRecord(
-        record: SignalValidationRecord
-    ): Promise<void> {
+    private writeSignalRecord(record: SignalValidationRecord): void {
         try {
             const csvLine =
                 [
@@ -660,7 +759,13 @@ export class SignalValidationLogger {
                     record.signalAccuracy1hr || "",
                 ].join(",") + "\n";
 
-            await fs.appendFile(this.signalsFilePath, csvLine);
+            // ✅ NON-BLOCKING: Add to buffer instead of direct file write
+            this.signalsBuffer.push(csvLine);
+
+            // ✅ AUTO-FLUSH: Trigger flush if buffer is full
+            if (this.signalsBuffer.length >= this.maxBufferSize) {
+                this.flushBuffers();
+            }
         } catch (error) {
             this.logger.error(
                 "SignalValidationLogger: Failed to write signal record",
@@ -676,9 +781,7 @@ export class SignalValidationLogger {
     /**
      * Write rejection record to CSV
      */
-    private async writeRejectionRecord(
-        record: SignalRejectionRecord
-    ): Promise<void> {
+    private writeRejectionRecord(record: SignalRejectionRecord): void {
         try {
             const csvLine =
                 [
@@ -699,7 +802,13 @@ export class SignalValidationLogger {
                     record.wasValidSignal || "",
                 ].join(",") + "\n";
 
-            await fs.appendFile(this.rejectionsFilePath, csvLine);
+            // ✅ NON-BLOCKING: Add to buffer instead of direct file write
+            this.rejectionsBuffer.push(csvLine);
+
+            // ✅ AUTO-FLUSH: Trigger flush if buffer is full
+            if (this.rejectionsBuffer.length >= this.maxBufferSize) {
+                this.flushBuffers();
+            }
         } catch (error) {
             this.logger.error(
                 "SignalValidationLogger: Failed to write rejection record",
@@ -820,23 +929,5 @@ export class SignalValidationLogger {
             pendingValidations: this.pendingValidations.size,
             totalLogged: this.pendingValidations.size, // Simplified for this implementation
         };
-    }
-
-    /**
-     * Cleanup all pending validations
-     */
-    public cleanup(): void {
-        // Clear all timers
-        for (const [, timers] of this.validationTimers) {
-            timers.forEach((timer) => clearTimeout(timer));
-        }
-
-        this.validationTimers.clear();
-        this.pendingValidations.clear();
-
-        this.logger.info("SignalValidationLogger: Cleanup completed", {
-            clearedTimers: this.validationTimers.size,
-            clearedPendingValidations: this.pendingValidations.size,
-        });
     }
 }

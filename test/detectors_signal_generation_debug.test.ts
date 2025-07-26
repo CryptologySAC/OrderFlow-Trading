@@ -17,6 +17,7 @@ import {
     type ExhaustionEnhancedSettings,
 } from "../src/indicators/exhaustionDetectorEnhanced.js";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import {
     AbsorptionDetectorEnhanced,
     type AbsorptionEnhancedSettings,
@@ -508,7 +509,8 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 settings,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Verify actual parameters match config (from settings)
@@ -540,7 +542,8 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 settings,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             let signalCount = 0;
@@ -664,6 +667,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
+                mockSignalValidationLogger,
                 mockSignalLogger
             );
 
@@ -773,6 +777,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
+                mockSignalValidationLogger,
                 mockSignalLogger
             );
 
@@ -1004,6 +1009,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
+                mockSignalValidationLogger,
                 mockSignalLogger
             );
 

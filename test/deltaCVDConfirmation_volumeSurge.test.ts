@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 // ✅ CLAUDE.md COMPLIANCE: Use ONLY __mocks__/ directory - NO inline mocks
 vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");

@@ -20,6 +20,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import type { ZoneSnapshot } from "../src/types/marketEvents.js";
 import { FinancialMath } from "../src/utils/financialMath.js";
 
@@ -33,6 +34,7 @@ import { Config } from "../__mocks__/src/core/config.js";
 const mockLogger = createMockLogger();
 const mockMetricsCollector = new MetricsCollector();
 const mockPreprocessor = createMockOrderflowPreprocessor();
+const mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
 // Base price for LTCUSDT testing (realistic $85 level)
 const BASE_PRICE = 85.0;
@@ -294,7 +296,8 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
             settings,
             mockPreprocessor,
             mockLogger,
-            mockMetricsCollector
+            mockMetricsCollector,
+            mockSignalValidationLogger
         );
 
         // Reset event collection

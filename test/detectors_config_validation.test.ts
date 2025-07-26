@@ -12,6 +12,7 @@ import {
     type MockedFunction,
 } from "vitest";
 import { Config } from "../src/core/config.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import {
     ExhaustionDetectorEnhanced,
     type ExhaustionEnhancedSettings,
@@ -151,6 +152,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
     let mockSpoofing: SpoofingDetector;
     let mockSignalLogger: ISignalLogger;
     let mockOrderBook: IOrderBookState;
+    let mockSignalValidationLogger: SignalValidationLogger;
 
     beforeEach(() => {
         mockLogger = createMockLogger();
@@ -158,6 +160,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
         mockSpoofing = createMockSpoofingDetector();
         mockSignalLogger = createMockSignalLogger();
         mockOrderBook = createMockOrderBookState();
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
     });
 
     describe("Exhaustion Detector Config Usage", () => {
@@ -261,7 +264,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
-                mockSignalLogger
+                mockSignalValidationLogger
             );
 
             // Access private property to verify actual threshold used
@@ -371,7 +374,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
-                mockSignalLogger
+                mockSignalValidationLogger
             );
 
             const actualMinAggVolume = (detector as any).enhancementConfig
@@ -477,7 +480,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
-                mockSignalLogger
+                mockSignalValidationLogger
             );
 
             const actualMaxPassiveRatio = (detector as any).enhancementConfig
@@ -583,7 +586,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
-                mockSignalLogger
+                mockSignalValidationLogger
             );
 
             const actualWeights = (detector as any).enhancementConfig
@@ -1065,7 +1068,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 createMockPreprocessor(),
                 mockLogger,
                 mockMetrics,
-                mockSignalLogger
+                mockSignalValidationLogger
             );
 
             const actualConfidence = (detector as any).enhancementConfig
@@ -1153,7 +1156,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 createMockPreprocessor(),
                 mockLogger,
                 mockMetrics,
-                mockSignalLogger
+                mockSignalValidationLogger
             );
 
             const actualConfidence = (detector as any).enhancementConfig
@@ -1241,7 +1244,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 createMockPreprocessor(),
                 mockLogger,
                 mockMetrics,
-                mockSignalLogger
+                mockSignalValidationLogger
             );
 
             const actualFlag = (detector as any).enhancementConfig
@@ -1329,7 +1332,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 createMockPreprocessor(),
                 mockLogger,
                 mockMetrics,
-                mockSignalLogger
+                mockSignalValidationLogger
             );
 
             const actualFlag = (detector as any).enhancementConfig
@@ -1436,7 +1439,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
-                mockSignalLogger
+                mockSignalValidationLogger
             );
 
             const actualThreshold = (detector as any).enhancementConfig
@@ -1554,7 +1557,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
-                mockSignalLogger
+                mockSignalValidationLogger
             );
 
             // Verify exact match for all parameters
@@ -1869,7 +1872,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockLogger,
                 mockSpoofing,
                 mockMetrics,
-                mockSignalLogger
+                mockSignalValidationLogger
             );
 
             const actualThreshold = (detector as any).enhancementConfig

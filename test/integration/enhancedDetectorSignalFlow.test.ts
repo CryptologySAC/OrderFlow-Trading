@@ -13,6 +13,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { AbsorptionDetectorEnhanced } from "../../src/indicators/absorptionDetectorEnhanced.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import { ExhaustionDetectorEnhanced } from "../../src/indicators/exhaustionDetectorEnhanced.js";
 import { AccumulationZoneDetectorEnhanced } from "../../src/indicators/accumulationZoneDetectorEnhanced.js";
 import { DistributionDetectorEnhanced } from "../../src/indicators/distributionDetectorEnhanced.js";
@@ -173,7 +174,8 @@ describe("Enhanced Detector Signal Flow Integration", () => {
                 mockConfig.symbols.LTCUSDT.absorption as any,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             const accumulationDetector = new AccumulationZoneDetectorEnhanced(

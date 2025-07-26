@@ -10,6 +10,7 @@ import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 // Import mock config for complete settings
 import mockConfig from "../__mocks__/config.json";
 
@@ -28,6 +29,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
     let detector: DeltaCVDDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
+    let mockSignalValidationLogger: SignalValidationLogger;
 
     const mockPreprocessor: IOrderflowPreprocessor = {
         handleDepth: vi.fn(),

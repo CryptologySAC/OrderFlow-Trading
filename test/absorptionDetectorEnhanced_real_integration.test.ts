@@ -26,6 +26,7 @@ import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { SpotWebsocketStreams } from "@binance/spot";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import "../test/vitest.setup.ts";
 
 // Real LTCUSDT market parameters
@@ -243,6 +244,11 @@ describe("AbsorptionDetectorEnhanced - REAL Integration Tests", () => {
             shutdown: vi.fn(),
         };
 
+        // Create SignalValidationLogger mock
+        const mockSignalValidationLogger = new SignalValidationLogger(
+            mockLogger
+        );
+
         // Create ThreadManager mock (required for OrderBookState)
         const mockThreadManager = {
             callStorage: vi.fn().mockResolvedValue(undefined),
@@ -282,7 +288,8 @@ describe("AbsorptionDetectorEnhanced - REAL Integration Tests", () => {
             ABSORPTION_CONFIG,
             preprocessor,
             mockLogger,
-            mockMetrics
+            mockMetrics,
+            mockSignalValidationLogger
         );
 
         // Capture signals

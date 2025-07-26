@@ -10,6 +10,7 @@ import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import { HiddenOrderDetector } from "../src/services/hiddenOrderDetector.js";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import type { SignalCandidate } from "../src/types/signalTypes.js";
 
 describe("Mathematical Property Testing for All Detectors", () => {
@@ -18,6 +19,7 @@ describe("Mathematical Property Testing for All Detectors", () => {
     let mockMetrics: any;
     let mockOrderBook: any;
     let mockSpoofingDetector: any;
+    let mockSignalValidationLogger: SignalValidationLogger;
 
     const mockPreprocessor: IOrderflowPreprocessor = {
         handleDepth: vi.fn(),
@@ -51,7 +53,13 @@ describe("Mathematical Property Testing for All Detectors", () => {
             warn: vi.fn(),
             error: vi.fn(),
             debug: vi.fn(),
+            trace: vi.fn(),
+            isDebugEnabled: vi.fn(() => false),
+            setCorrelationId: vi.fn(),
+            removeCorrelationId: vi.fn(),
         } as any;
+
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
         mockOrderBook = {
             getBestBid: vi.fn().mockReturnValue(100.5),
@@ -397,7 +405,8 @@ describe("Mathematical Property Testing for All Detectors", () => {
                     mockPreprocessor,
                     mockLogger,
                     mockSpoofingDetector,
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalValidationLogger
                 );
 
                 detector.on("signalCandidate", (signal: SignalCandidate) => {
@@ -531,7 +540,8 @@ describe("Mathematical Property Testing for All Detectors", () => {
                     completeDeltaCVDSettings,
                     mockPreprocessor,
                     mockLogger,
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalValidationLogger
                 );
 
                 detector.on("signal", (signal: SignalCandidate) => {

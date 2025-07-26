@@ -5,6 +5,7 @@ vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
 
 import { ExhaustionDetectorEnhanced } from "../src/indicators/exhaustionDetectorEnhanced.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";

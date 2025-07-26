@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import {
     EnrichedTradeEvent,
     StandardZoneData,
@@ -346,7 +347,9 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
 
         // Create realistic zone snapshot matching production format (copied from working test)
         const mockZone: ZoneSnapshot = {
-            zoneId: `zone-${scenario.id}`,
+            zoneId: `zone-${scenario.id}
+    const mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
+`,
             priceLevel: scenario.price,
             tickSize: 0.01,
             aggressiveVolume: scenario.aggressiveVolume,

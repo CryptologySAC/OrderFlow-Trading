@@ -20,6 +20,7 @@ import { AccumulationZoneDetectorEnhanced } from "../indicators/accumulationZone
 import { DistributionDetectorEnhanced } from "../indicators/distributionDetectorEnhanced.js";
 import { ZoneDetectorConfig } from "../types/zoneTypes.js";
 import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
+import { SignalValidationLogger } from "./signalValidationLogger.js";
 
 /**
  * Production detector factory with monitoring, validation, and lifecycle management
@@ -68,7 +69,8 @@ export class DetectorFactory {
             productionSettings,
             dependencies.preprocessor,
             dependencies.logger,
-            dependencies.metricsCollector
+            dependencies.metricsCollector,
+            dependencies.signalValidationLogger
         );
 
         dependencies.logger.info(
@@ -105,7 +107,8 @@ export class DetectorFactory {
             dependencies.preprocessor,
             dependencies.logger,
             dependencies.metricsCollector,
-            dependencies.signalLogger!
+            dependencies.signalLogger!,
+            dependencies.signalValidationLogger
         );
 
         dependencies.logger.info(
@@ -216,6 +219,7 @@ export class DetectorFactory {
             dependencies.preprocessor,
             dependencies.logger,
             dependencies.metricsCollector,
+            dependencies.signalValidationLogger,
             dependencies.signalLogger
         );
 
@@ -784,6 +788,7 @@ export interface DetectorDependencies {
     metricsCollector: IMetricsCollector;
     signalLogger?: ISignalLogger;
     preprocessor: IOrderflowPreprocessor;
+    signalValidationLogger: SignalValidationLogger;
 }
 
 export interface DetectorFactoryOptions {

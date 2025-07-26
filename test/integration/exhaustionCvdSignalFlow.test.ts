@@ -13,6 +13,7 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { ExhaustionDetectorEnhanced } from "../../src/indicators/exhaustionDetectorEnhanced.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import { DeltaCVDDetectorEnhanced } from "../../src/indicators/deltaCVDDetectorEnhanced.js";
 import { SignalManager } from "../../src/trading/signalManager.js";
 import type {
@@ -300,6 +301,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
+                mockSignalValidationLogger,
                 mockSignalLogger
             );
 

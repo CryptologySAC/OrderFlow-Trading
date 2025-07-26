@@ -5,6 +5,7 @@ vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
 
 import { ExhaustionDetectorEnhanced } from "../src/indicators/exhaustionDetectorEnhanced.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
@@ -221,6 +222,11 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
             getSignalHistory: vi.fn(() => []),
         };
 
+        // Create mockSignalValidationLogger
+        const mockSignalValidationLogger = new SignalValidationLogger(
+            mockLogger
+        );
+
         // Remove unused mockSpoofingDetector - not needed for ExhaustionDetectorEnhanced constructor
 
         // Use config values from actual config.json for realistic thresholds
@@ -233,7 +239,8 @@ describe("ExhaustionDetectorEnhanced - Comprehensive 100 Test Suite (FIXED)", ()
             mockPreprocessor,
             mockLogger,
             mockMetrics,
-            mockSignalLogger
+            mockSignalLogger,
+            mockSignalValidationLogger
         );
 
         // Set up signal spy

@@ -8,6 +8,7 @@ import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { SpotWebsocketStreams } from "@binance/spot";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import "../test/vitest.setup.ts";
 
 const TICK_SIZE = 0.01;

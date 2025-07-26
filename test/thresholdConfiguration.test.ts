@@ -10,6 +10,7 @@ import type { IOrderBookState } from "../src/market/redBlackTreeOrderBook.js";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 
 // Import mock config for complete settings
 import mockConfig from "../__mocks__/config.json";
@@ -33,6 +34,8 @@ describe("Threshold Configuration Chain", () => {
         findMostRelevantZone: vi.fn(() => null),
     };
 
+    let mockSignalValidationLogger: SignalValidationLogger;
+
     beforeEach(async () => {
         mockLogger = {
             info: vi.fn(),
@@ -49,6 +52,7 @@ describe("Threshold Configuration Chain", () => {
             "../__mocks__/src/infrastructure/metricsCollector.js"
         );
         mockMetrics = new MockMetricsCollector() as any;
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
         mockOrderBook = {
             getBestBid: vi.fn().mockReturnValue(100),
@@ -83,7 +87,8 @@ describe("Threshold Configuration Chain", () => {
                 completeConfig,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Enhanced detector uses configuration values directly, no internal defaults
@@ -106,7 +111,8 @@ describe("Threshold Configuration Chain", () => {
                 completeConfig,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Enhanced detector uses configuration values directly
@@ -131,7 +137,8 @@ describe("Threshold Configuration Chain", () => {
                 completeConfig,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Enhanced detector uses standalone configuration-driven analysis
@@ -175,7 +182,8 @@ describe("Threshold Configuration Chain", () => {
                 config1,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             const detector2 = new AbsorptionDetectorEnhanced(
@@ -184,7 +192,8 @@ describe("Threshold Configuration Chain", () => {
                 config2,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             expect(detector1).toBeDefined();
@@ -328,7 +337,8 @@ describe("Threshold Configuration Chain", () => {
                 absorptionSettings,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Verify detector was created successfully with complete configuration
@@ -375,7 +385,8 @@ describe("Threshold Configuration Chain", () => {
                     validConfig,
                     mockPreprocessor,
                     mockLogger,
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalValidationLogger
                 );
             }).not.toThrow(); // Should succeed with valid pre-validated configuration
         });
@@ -397,7 +408,8 @@ describe("Threshold Configuration Chain", () => {
                 configValues,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             const exhaustionDetector = new ExhaustionDetectorEnhanced(
@@ -436,7 +448,8 @@ describe("Threshold Configuration Chain", () => {
                     edgeCaseSettings,
                     mockPreprocessor,
                     mockLogger,
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalValidationLogger
                 );
             }).not.toThrow();
 

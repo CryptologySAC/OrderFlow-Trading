@@ -104,7 +104,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
         preprocessor: IOrderflowPreprocessor,
         logger: ILogger,
         metricsCollector: IMetricsCollector,
-        signalLogger: ISignalLogger
+        signalLogger: ISignalLogger,
+        validationLogger: SignalValidationLogger
     ) {
         // Initialize parent Detector (not ExhaustionDetector)
         super(id, logger, metricsCollector, signalLogger);
@@ -114,11 +115,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
         this.enhancementConfig = settings;
         this.preprocessor = preprocessor;
 
-        // Initialize signal validation logger
-        this.validationLogger = new SignalValidationLogger(
-            logger,
-            "logs/signal_validation"
-        );
+        // ✅ SHARED SIGNAL VALIDATION LOGGER: Use dependency-injected shared instance
+        this.validationLogger = validationLogger;
 
         // Initialize CLAUDE.md compliant configuration parameters - NO MAGIC NUMBERS
         this.confluenceMinZones =
@@ -1477,11 +1475,11 @@ export class ExhaustionDetectorEnhanced extends Detector {
     /**
      * Log signal for validation tracking
      */
-    private async logSignalForValidation(
+    private logSignalForValidation(
         signal: SignalCandidate,
         event: EnrichedTradeEvent,
         relevantZones: ZoneSnapshot[]
-    ): Promise<void> {
+    ): void {
         try {
             // Calculate market context for validation logging
             const marketContext = this.calculateMarketContext(
@@ -1489,7 +1487,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 relevantZones
             );
 
-            await this.validationLogger.logSignal(signal, event, marketContext);
+            this.validationLogger.logSignal(signal, event, marketContext);
         } catch (error) {
             this.logger.error(
                 "ExhaustionDetectorEnhanced: Failed to log signal for validation",
@@ -1505,11 +1503,11 @@ export class ExhaustionDetectorEnhanced extends Detector {
     /**
      * Log enhanced signal for validation tracking
      */
-    private async logEnhancedSignalForValidation(
+    private logEnhancedSignalForValidation(
         signal: SignalCandidate,
         event: EnrichedTradeEvent,
         relevantZones: ZoneSnapshot[]
-    ): Promise<void> {
+    ): void {
         try {
             // Calculate market context for validation logging
             const marketContext = this.calculateMarketContext(
@@ -1539,11 +1537,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 extendedContext.depletionRatio = signal.data.depletionRatio;
             }
 
-            await this.validationLogger.logSignal(
-                signal,
-                event,
-                extendedContext
-            );
+            this.validationLogger.logSignal(signal, event, extendedContext);
         } catch (error) {
             this.logger.error(
                 "ExhaustionDetectorEnhanced: Failed to log enhanced signal for validation",
