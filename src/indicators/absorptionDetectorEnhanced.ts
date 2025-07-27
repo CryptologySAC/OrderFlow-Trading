@@ -721,7 +721,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 "balanced_institutional_flow",
                 {
                     type: "institutional_balance",
-                    threshold: 0.05,
+                    threshold: this.enhancementConfig.balanceThreshold,
                     actual: isBalancedInstitutional,
                 },
                 {
@@ -877,7 +877,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 priceEfficiency,
                 spreadImpact:
                     event.bestAsk !== undefined && event.bestBid !== undefined
-                        ? Math.abs(event.bestAsk - event.bestBid)
+                        ? FinancialMath.calculateAbs(FinancialMath.safeSubtract(event.bestAsk, event.bestBid))
                         : 0,
                 volumeProfile: {
                     totalVolume: volumePressure.totalPressure,
@@ -913,7 +913,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
             event.zoneData.zoneConfig.tickValue
         );
 
-        const allZones = [...event.zoneData.zones];
+        const allZones = event.zoneData.zones;
 
         // CRITICAL FIX: Apply temporal filtering using trade timestamp for core absorption detection
         const windowStartTime = event.timestamp - this.windowMs;
@@ -1071,7 +1071,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
             totalVolumeWeightedPrice,
             totalVolume
         );
-        const priceDiff = Math.abs(event.price - vwap);
+        const priceDiff = FinancialMath.calculateAbs(FinancialMath.safeSubtract(event.price, vwap));
 
         // Calculate efficiency as percentage using FinancialMath
         return FinancialMath.divideQuantities(priceDiff, event.price);
@@ -1098,7 +1098,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
 
         // Calculate absorption using volume pressure and price impact
         if (event.bestBid === undefined) return null; // Cannot calculate without bid price
-        const actualImpact = Math.abs(event.price - event.bestBid);
+        const actualImpact = FinancialMath.calculateAbs(FinancialMath.safeSubtract(event.price, event.bestBid));
 
         // Factor in volume pressure for more accurate absorption calculation
         const pressureAdjustedImpact = FinancialMath.multiplyQuantities(
@@ -1307,7 +1307,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
         const minRatio = this.absorptionRatioThreshold;
 
         // Analyze all zones for institutional absorption patterns
-        const allZones = [...zoneData.zones];
+        const allZones = zoneData.zones;
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,
@@ -1323,8 +1323,8 @@ export class AbsorptionDetectorEnhanced extends Detector {
             const passiveVolume = zone.passiveVolume;
             const aggressiveVolume = zone.aggressiveVolume;
 
-            totalPassiveVolume += passiveVolume;
-            totalAggressiveVolume += aggressiveVolume;
+            totalPassiveVolume = FinancialMath.safeAdd(totalPassiveVolume, passiveVolume);
+            totalAggressiveVolume = FinancialMath.safeAdd(totalAggressiveVolume, aggressiveVolume);
 
             // Check if this zone shows absorption (high passive volume absorbing aggressive flow)
             if (
@@ -1339,7 +1339,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
             }
         });
 
-        const totalVolume = totalPassiveVolume + totalAggressiveVolume;
+        const totalVolume = FinancialMath.safeAdd(totalPassiveVolume, totalAggressiveVolume);
         const absorptionRatio =
             totalVolume > 0
                 ? FinancialMath.divideQuantities(
@@ -1459,7 +1459,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
         let totalAbsorptionScore = 0;
 
         for (const zone of relevantZones) {
-            const totalVolume = zone.aggressiveVolume + zone.passiveVolume;
+            const totalVolume = FinancialMath.safeAdd(zone.aggressiveVolume, zone.passiveVolume);
             if (totalVolume === 0) continue;
 
             // For absorption, we want high passive volume absorbing aggressive flow using FinancialMath
@@ -1475,7 +1475,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                           this.enhancementConfig.confidenceBoostReduction
                       );
 
-            totalAbsorptionScore += absorptionScore;
+            totalAbsorptionScore = FinancialMath.safeAdd(totalAbsorptionScore, absorptionScore);
         }
 
         return FinancialMath.divideQuantities(
@@ -1534,8 +1534,8 @@ export class AbsorptionDetectorEnhanced extends Detector {
             totalPassiveSell += zone.passiveAskVolume || 0;
         }
 
-        const totalAggressive = totalAggressiveBuy + totalAggressiveSell;
-        const totalPassive = totalPassiveBuy + totalPassiveSell;
+        const totalAggressive = FinancialMath.safeAdd(totalAggressiveBuy, totalAggressiveSell);
+        const totalPassive = FinancialMath.safeAdd(totalPassiveBuy, totalPassiveSell);
 
         if (totalAggressive === 0 || totalPassive === 0) return null;
 
@@ -1553,20 +1553,21 @@ export class AbsorptionDetectorEnhanced extends Detector {
             return null;
 
         // Check for balanced flow (both ratios close to 0.5)
-        const aggressiveBalance = Math.abs(aggressiveBuyRatio - 0.5);
-        const passiveBalance = Math.abs(passiveBuyRatio - 0.5);
+        const aggressiveBalance = FinancialMath.calculateAbs(FinancialMath.safeSubtract(aggressiveBuyRatio, 0.5));
+        const passiveBalance = FinancialMath.calculateAbs(FinancialMath.safeSubtract(passiveBuyRatio, 0.5));
 
-        // Balanced threshold: within 5% of perfect balance (0.45-0.55 range)
-        const balanceThreshold = 0.05;
+        // Balanced threshold: within configurable % of perfect balance using FinancialMath
+        const balanceThreshold = this.enhancementConfig.balanceThreshold;
 
         const isBalanced =
             aggressiveBalance <= balanceThreshold &&
             passiveBalance <= balanceThreshold;
 
         if (isBalanced) {
-            // Return balance score (higher = more balanced, 0.05 = perfectly balanced)
-            return (
-                balanceThreshold - Math.max(aggressiveBalance, passiveBalance)
+            // Return balance score (higher = more balanced) using FinancialMath
+            return FinancialMath.safeSubtract(
+                balanceThreshold,
+                FinancialMath.calculateMax([aggressiveBalance, passiveBalance])
             );
         }
 
@@ -1705,15 +1706,15 @@ export class AbsorptionDetectorEnhanced extends Detector {
 
         // Aggregate volume data from relevant zones
         for (const zone of relevantZones) {
-            totalAggressive += zone.aggressiveVolume;
-            totalPassive += zone.passiveVolume;
-            aggressiveBuy += zone.aggressiveBuyVolume || 0;
-            aggressiveSell += zone.aggressiveSellVolume || 0;
-            passiveBid += zone.passiveBidVolume || 0;
-            passiveAsk += zone.passiveAskVolume || 0;
+            totalAggressive = FinancialMath.safeAdd(totalAggressive, zone.aggressiveVolume);
+            totalPassive = FinancialMath.safeAdd(totalPassive, zone.passiveVolume);
+            aggressiveBuy = FinancialMath.safeAdd(aggressiveBuy, zone.aggressiveBuyVolume || 0);
+            aggressiveSell = FinancialMath.safeAdd(aggressiveSell, zone.aggressiveSellVolume || 0);
+            passiveBid = FinancialMath.safeAdd(passiveBid, zone.passiveBidVolume || 0);
+            passiveAsk = FinancialMath.safeAdd(passiveAsk, zone.passiveAskVolume || 0);
         }
 
-        const totalVolume = totalAggressive + totalPassive;
+        const totalVolume = FinancialMath.safeAdd(totalAggressive, totalPassive);
         const institutionalVolumeRatio =
             totalVolume > 0
                 ? FinancialMath.divideQuantities(totalPassive, totalVolume)

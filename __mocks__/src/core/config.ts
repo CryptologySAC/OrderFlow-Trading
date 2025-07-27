@@ -159,6 +159,7 @@ const mockAbsorptionConfig = {
     expectedMovementScalingFactor: 8,
     confidenceBoostReduction: 0.4,
     maxZoneCountForScoring: 3,
+    balanceThreshold: 0.05, // Add new balance threshold parameter
 };
 
 // Mock Exhaustion detector configuration (test-friendly thresholds)
@@ -177,6 +178,10 @@ const mockExhaustionConfig = {
     passiveVolumeExhaustionRatio: 0.4,
     varianceReductionFactor: 1.0,
     alignmentNormalizationFactor: 0.4,
+    passiveRatioBalanceThreshold: 0.5,
+    premiumConfidenceThreshold: 0.7,
+    variancePenaltyFactor: 1.0,
+    ratioBalanceCenterPoint: 0.5,
     aggressiveVolumeExhaustionThreshold: 0.05, // Very low threshold for testing
     aggressiveVolumeReductionFactor: 0.5,
 };

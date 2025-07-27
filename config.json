@@ -246,7 +246,12 @@
                 "varianceReductionFactor": 1.0,
                 "alignmentNormalizationFactor": 0.4,
                 "aggressiveVolumeExhaustionThreshold": 0.5,
-                "aggressiveVolumeReductionFactor": 0.5
+                "aggressiveVolumeReductionFactor": 0.5,
+                
+                "passiveRatioBalanceThreshold": 0.5,
+                "premiumConfidenceThreshold": 0.7,
+                "variancePenaltyFactor": 1.0,
+                "ratioBalanceCenterPoint": 0.5
             },
             "absorption": {
                 "minAggVolume": 2500,
@@ -269,7 +274,8 @@
                 "maxZoneCountForScoring": 5,
                 "minEnhancedConfidenceThreshold": 0.2,
                 "useStandardizedZones": true,
-                "enhancementMode": "production"
+                "enhancementMode": "production",
+                "balanceThreshold": 0.05
             },
 
             "spoofingDetector": {

@@ -137,6 +137,12 @@ export const ExhaustionDetectorSchema = z.object({
     passiveVolumeExhaustionRatio: z.number().min(0.3).max(0.8),
     aggressiveVolumeExhaustionThreshold: z.number().min(0.5).max(1.0),
     aggressiveVolumeReductionFactor: z.number().min(0.3).max(0.8),
+    
+    // Additional configurable thresholds to replace magic numbers
+    passiveRatioBalanceThreshold: z.number().min(0.3).max(0.7), // Replace hardcoded 0.5
+    premiumConfidenceThreshold: z.number().min(0.6).max(0.9), // Replace hardcoded 0.7
+    variancePenaltyFactor: z.number().min(0.5).max(1.5), // Replace hardcoded variance calculation
+    ratioBalanceCenterPoint: z.number().min(0.4).max(0.6), // Replace hardcoded 0.5 center points
 });
 
 // ABSORPTION detector - CLEANED UP - Only used settings remain
@@ -173,6 +179,9 @@ export const AbsorptionDetectorSchema = z.object({
     // Enhancement control
     useStandardizedZones: z.boolean(),
     enhancementMode: z.enum(["disabled", "testing", "production"]),
+    
+    // Balance detection threshold
+    balanceThreshold: z.number().min(0.01).max(0.2),
 });
 
 // DELTACVD detector - CLEANED UP - Only used settings remain
