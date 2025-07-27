@@ -18,10 +18,10 @@ import { CircularBuffer } from "../src/utils/circularBuffer.js";
  * This test suite systematically verifies the absorption detector's signal direction logic
  * across 100 parametric scenarios ranging from obvious buy to obvious sell conditions.
  *
- * THEORETICAL FOUNDATION:
- * - Absorption should emit FLOW-FOLLOWING signals (follow institutional money)
- * - High aggressive sell absorbed by institutions = institutions are buying = BUY signal
- * - High aggressive buy absorbed by institutions = institutions are selling = SELL signal
+ * THEORETICAL FOUNDATION (CORRECTED LOGIC):
+ * - Absorption signals indicate WHERE PRESSURE IS BUILDING (not flow direction)
+ * - High passive bid absorption (sellers hitting bids) = selling pressure/resistance = SELL signal
+ * - High passive ask absorption (buyers hitting asks) = buying pressure/accumulation = BUY signal
  */
 
 interface AbsorptionTestScenario {
@@ -100,39 +100,39 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
     function generateAbsorptionTestScenarios(): AbsorptionTestScenario[] {
         const scenarios: AbsorptionTestScenario[] = [];
 
-        // OBVIOUS SELL SCENARIOS (1-25): Aggressive Sell Absorption by Institutions
+        // OBVIOUS SELL SCENARIOS (1-25): Aggressive Sell Absorption by Bid Liquidity
         for (let i = 1; i <= 25; i++) {
             const aggressiveVol = 250 + i * 50; // 300-1500 LTC - realistic institutional volumes
             const passiveMultiplier = 2.0 + i * 0.1; // 2.0 to 4.5
 
             scenarios.push({
-                id: `obvious_buy_${i}`,
-                description: `Obvious BUY: Aggressive sell (${aggressiveVol}) absorbed by institutions (${Math.round(aggressiveVol * passiveMultiplier)}) = institutions buying`,
-                buyerIsMaker: true, // Aggressive SELL absorbed
+                id: `obvious_sell_${i}`,
+                description: `Obvious SELL: Aggressive sell (${aggressiveVol}) absorbed by bid liquidity (${Math.round(aggressiveVol * passiveMultiplier)}) = selling pressure/resistance`,
+                buyerIsMaker: true, // Aggressive SELL absorbed by passive bids
                 aggressiveVolume: aggressiveVol,
                 passiveVolume: Math.round(aggressiveVol * passiveMultiplier),
                 price: 89.0 + i * 0.01,
-                expectedSignal: "buy", // Follow institutional buying flow
+                expectedSignal: "sell", // Bid absorption indicates selling pressure
                 confidence: i <= 15 ? "high" : "medium",
-                category: "obvious_buy",
+                category: "obvious_sell",
             });
         }
 
-        // OBVIOUS BUY SCENARIOS (26-50): Aggressive Buy Absorption by Institutions
+        // OBVIOUS BUY SCENARIOS (26-50): Aggressive Buy Absorption by Ask Liquidity
         for (let i = 26; i <= 50; i++) {
             const aggressiveVol = 250 + (i - 25) * 50; // 300-1500 LTC - realistic institutional volumes
             const passiveMultiplier = 2.0 + (i - 25) * 0.1; // 2.0 to 4.5
 
             scenarios.push({
-                id: `obvious_sell_${i}`,
-                description: `Obvious SELL: Aggressive buy (${aggressiveVol}) absorbed by institutions (${Math.round(aggressiveVol * passiveMultiplier)}) = institutions selling`,
-                buyerIsMaker: false, // Aggressive BUY absorbed
+                id: `obvious_buy_${i}`,
+                description: `Obvious BUY: Aggressive buy (${aggressiveVol}) absorbed by ask liquidity (${Math.round(aggressiveVol * passiveMultiplier)}) = buying pressure/accumulation`,
+                buyerIsMaker: false, // Aggressive BUY absorbed by passive asks
                 aggressiveVolume: aggressiveVol,
                 passiveVolume: Math.round(aggressiveVol * passiveMultiplier),
                 price: 89.0 + (i - 25) * 0.01,
-                expectedSignal: "sell", // Follow institutional selling flow
+                expectedSignal: "buy", // Ask absorption indicates buying pressure
                 confidence: i <= 40 ? "high" : "medium",
-                category: "obvious_sell",
+                category: "obvious_buy",
             });
         }
 
@@ -171,7 +171,7 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
                 expectedSignal = "neutral"; // Conservative behavior for very borderline cases
             } else if (testIndex <= 10) {
                 // Around 0.598-0.61 passive ratio - this is valid absorption, expect directional signals
-                expectedSignal = testIndex % 2 === 0 ? "buy" : "sell"; // Alternate based on flow direction
+                expectedSignal = testIndex % 2 === 0 ? "sell" : "buy"; // Alternate: even=bid absorption(sell), odd=ask absorption(buy)
             } else if (testIndex <= 15) {
                 // Around 0.55-0.595 passive ratio - these are borderline cases
                 // The detector often returns neutral for these due to low confidence
@@ -182,8 +182,8 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
             } else {
                 // High passive ratios should trigger signals if there's clear directional flow
                 if (actualPassiveRatio >= 0.8) {
-                    // Very high passive ratios (80%+) could still be signals with strong institutional flow
-                    expectedSignal = testIndex % 2 === 0 ? "buy" : "sell"; // Let detector decide based on flow
+                    // Very high passive ratios (80%+) could still be signals with strong absorption pressure
+                    expectedSignal = testIndex % 2 === 0 ? "sell" : "buy"; // Even=bid absorption(sell), odd=ask absorption(buy)
                 } else {
                     expectedSignal = "neutral"; // Most other edge cases should be neutral
                 }
@@ -222,7 +222,7 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
                     aggressiveVolume: aggressiveVol,
                     passiveVolume: passiveVol,
                     price: 89.0 + testIndex * 0.01,
-                    expectedSignal: testIndex % 2 === 0 ? "buy" : "sell",
+                    expectedSignal: testIndex % 2 === 0 ? "sell" : "buy",
                     confidence: "medium",
                     category: "transition",
                 };
@@ -236,66 +236,66 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
                     aggressiveVolume: Math.round(100 * volatilityFactor),
                     passiveVolume: Math.round(250 * volatilityFactor),
                     price: 89.0 + (testIndex - 8) * 0.02,
-                    expectedSignal: testIndex % 2 === 0 ? "buy" : "sell",
+                    expectedSignal: testIndex % 2 === 0 ? "sell" : "buy",
                     confidence: "medium",
                     category: "transition",
                 };
             } else {
-                // Real market pattern scenarios - corrected for flow-following logic
+                // Real market pattern scenarios - corrected for absorption pressure logic
                 const patterns = [
                     {
                         aggVol: 150,
                         passVol: 450,
-                        buyerMaker: true, // Aggressive SELL absorbed by institutions
-                        expected: "buy" as const, // Follow institutional buying
+                        buyerMaker: true, // Aggressive SELL absorbed by passive bids
+                        expected: "sell" as const, // Bid absorption indicates selling pressure
                     },
                     {
                         aggVol: 200,
                         passVol: 500,
-                        buyerMaker: false, // Aggressive BUY absorbed by institutions
-                        expected: "sell" as const, // Follow institutional selling
+                        buyerMaker: false, // Aggressive BUY absorbed by passive asks
+                        expected: "buy" as const, // Ask absorption indicates buying pressure
                     },
                     {
                         aggVol: 75,
                         passVol: 300,
-                        buyerMaker: true, // Aggressive SELL absorbed
-                        expected: "buy" as const, // Follow institutional buying
+                        buyerMaker: true, // Aggressive SELL absorbed by passive bids
+                        expected: "sell" as const, // Bid absorption indicates selling pressure
                     },
                     {
                         aggVol: 300,
                         passVol: 600,
-                        buyerMaker: false, // Aggressive BUY absorbed
-                        expected: "sell" as const, // Follow institutional selling
+                        buyerMaker: false, // Aggressive BUY absorbed by passive asks
+                        expected: "buy" as const, // Ask absorption indicates buying pressure
                     },
                     {
                         aggVol: 120,
                         passVol: 200,
-                        buyerMaker: true, // Aggressive SELL absorbed
-                        expected: "buy" as const, // Follow institutional buying
+                        buyerMaker: true, // Aggressive SELL absorbed by passive bids
+                        expected: "sell" as const, // Bid absorption indicates selling pressure
                     },
                     {
                         aggVol: 180,
                         passVol: 360,
-                        buyerMaker: false, // Aggressive BUY absorbed
-                        expected: "sell" as const, // Follow institutional selling
+                        buyerMaker: false, // Aggressive BUY absorbed by passive asks
+                        expected: "buy" as const, // Ask absorption indicates buying pressure
                     },
                     {
                         aggVol: 90,
                         passVol: 270,
-                        buyerMaker: true, // Aggressive SELL absorbed
-                        expected: "buy" as const, // Follow institutional buying
+                        buyerMaker: true, // Aggressive SELL absorbed by passive bids
+                        expected: "sell" as const, // Bid absorption indicates selling pressure
                     },
                     {
                         aggVol: 250,
                         passVol: 750,
-                        buyerMaker: false, // Aggressive BUY absorbed
-                        expected: "sell" as const, // Follow institutional selling
+                        buyerMaker: false, // Aggressive BUY absorbed by passive asks
+                        expected: "buy" as const, // Ask absorption indicates buying pressure
                     },
                     {
                         aggVol: 160,
                         passVol: 400,
-                        buyerMaker: true, // Aggressive SELL absorbed
-                        expected: "buy" as const, // Follow institutional buying
+                        buyerMaker: true, // Aggressive SELL absorbed by passive bids
+                        expected: "sell" as const, // Bid absorption indicates selling pressure
                     },
                 ];
 
@@ -337,19 +337,17 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
             ? scenario.aggressiveVolume
             : 0;
 
-        // Realistic asymmetric bid/ask volumes based on market scenario (like working test)
+        // Realistic asymmetric bid/ask volumes based on absorption scenario
         const passiveBidVolume = scenario.buyerIsMaker
-            ? scenario.passiveVolume * 0.8 // Institution providing buy liquidity against selling
-            : scenario.passiveVolume * 0.2; // Less buy liquidity when retail is buying
+            ? scenario.passiveVolume * 0.8 // High bid liquidity for absorbing aggressive sells
+            : scenario.passiveVolume * 0.2; // Lower bid liquidity when buyers are aggressive
         const passiveAskVolume = scenario.buyerIsMaker
-            ? scenario.passiveVolume * 0.2 // Less sell liquidity when retail is selling
-            : scenario.passiveVolume * 0.8; // Institution providing sell liquidity against buying
+            ? scenario.passiveVolume * 0.2 // Lower ask liquidity when sellers are aggressive
+            : scenario.passiveVolume * 0.8; // High ask liquidity for absorbing aggressive buys
 
         // Create realistic zone snapshot matching production format (copied from working test)
         const mockZone: ZoneSnapshot = {
-            zoneId: `zone-${scenario.id}
-    const mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
-`,
+            zoneId: `zone-${scenario.id}`,
             priceLevel: scenario.price,
             tickSize: 0.01,
             aggressiveVolume: scenario.aggressiveVolume,
@@ -429,8 +427,8 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
         const absorptionRatio =
             totalVolume > 0 ? scenario.passiveVolume / totalVolume : 0;
 
-        // Verify flow-following logic
-        const flowFollowingLogic = verifyFlowFollowingBehavior(
+        // Verify absorption pressure logic
+        const absorptionPressureLogic = verifyAbsorptionPressureBehavior(
             scenario,
             actualSignal
         );
@@ -442,23 +440,25 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
             passed: actualSignal === scenario.expectedSignal,
             confidence,
             absorptionRatio,
-            counterTrendLogic: flowFollowingLogic,
+            counterTrendLogic: absorptionPressureLogic,
             details: `${scenario.description} | Ratio: ${absorptionRatio.toFixed(3)} | Conf: ${confidence.toFixed(3)}`,
         };
     }
 
-    function verifyFlowFollowingBehavior(
+    function verifyAbsorptionPressureBehavior(
         scenario: AbsorptionTestScenario,
         actualSignal: string
     ): boolean {
         if (actualSignal === "neutral") return true; // Neutral is always valid
 
-        // Flow-following logic verification:
-        // - Aggressive SELL absorbed by institutions = institutions are BUYING = BUY signal
-        // - Aggressive BUY absorbed by institutions = institutions are SELLING = SELL signal
+        // Absorption pressure logic verification:
+        // - Aggressive SELL absorbed by passive bids = bid absorption = selling pressure = SELL signal
+        // - Aggressive BUY absorbed by passive asks = ask absorption = buying pressure = BUY signal
 
-        const expectedFlowDirection = scenario.buyerIsMaker ? "buy" : "sell";
-        return actualSignal === expectedFlowDirection;
+        const expectedAbsorptionDirection = scenario.buyerIsMaker
+            ? "sell"
+            : "buy";
+        return actualSignal === expectedAbsorptionDirection;
     }
 
     /**
@@ -481,7 +481,7 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
                         actual: result.actual,
                         buyerIsMaker: scenario.buyerIsMaker,
                         absorptionRatio: result.absorptionRatio,
-                        counterTrendLogic: result.counterTrendLogic,
+                        absorptionPressureLogic: result.counterTrendLogic,
                         details: result.details,
                     });
                 }
@@ -494,7 +494,7 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
         it("should provide comprehensive test analysis", () => {
             const passedTests = results.filter((r) => r.passed).length;
             const failedTests = results.filter((r) => !r.passed).length;
-            const counterTrendFailures = results.filter(
+            const absorptionPressureFailures = results.filter(
                 (r) => !r.counterTrendLogic
             ).length;
 
@@ -519,7 +519,7 @@ describe("AbsorptionDetector Signal Direction - Comprehensive Verification", () 
 Total Tests: ${results.length}
 Passed: ${passedTests} (${((passedTests / results.length) * 100).toFixed(1)}%)
 Failed: ${failedTests} (${((failedTests / results.length) * 100).toFixed(1)}%)
-Counter-trend Logic Failures: ${counterTrendFailures}
+Absorption Pressure Logic Failures: ${absorptionPressureFailures}
 
 BY CATEGORY:
 - Obvious BUY: ${byCategory.obvious_buy.filter((r) => r.passed).length}/${byCategory.obvious_buy.length} passed
@@ -528,7 +528,7 @@ BY CATEGORY:
 - Transition: ${byCategory.transition.filter((r) => r.passed).length}/${byCategory.transition.length} passed
 
 SYSTEMATIC ISSUES DETECTED:
-${counterTrendFailures > 50 ? "❌ MAJOR: Flow-following logic appears to be inverted" : "✅ Flow-following logic appears correct"}
+${absorptionPressureFailures > 50 ? "❌ MAJOR: Absorption pressure logic appears to be inverted" : "✅ Absorption pressure logic appears correct"}
 ${failedTests > 10 ? "❌ MAJOR: High failure rate suggests systematic issue" : "✅ Low failure rate indicates correct implementation"}
             `);
 
@@ -541,37 +541,16 @@ ${failedTests > 10 ? "❌ MAJOR: High failure rate suggests systematic issue" : 
      * PHASE 4: SPECIFIC LOGIC VERIFICATION TESTS
      */
     describe("Core Logic Verification", () => {
-        it("should emit BUY signal when aggressive SELL is absorbed (flow-following)", () => {
+        it("should emit SELL signal when aggressive SELL is absorbed (absorption pressure)", () => {
             const scenario: AbsorptionTestScenario = {
                 id: "core_logic_sell",
                 description:
-                    "Core logic test: aggressive sell absorption by institutions",
-                buyerIsMaker: true, // Aggressive SELL absorbed by institutions
+                    "Core logic test: aggressive sell absorption creates selling pressure",
+                buyerIsMaker: true, // Aggressive SELL absorbed by passive bids
                 aggressiveVolume: 200,
                 passiveVolume: 800, // 80% passive ratio - high absorption
                 price: 89.0,
-                expectedSignal: "buy", // Follow institutional buying flow
-                confidence: "high",
-                category: "obvious_buy",
-            };
-
-            const result = verifyAbsorptionLogic(scenario);
-
-            expect(result.actual).toBe("buy");
-            expect(result.counterTrendLogic).toBe(true);
-            expect(result.absorptionRatio).toBeGreaterThan(0.7);
-        });
-
-        it("should emit SELL signal when aggressive BUY is absorbed (flow-following)", () => {
-            const scenario: AbsorptionTestScenario = {
-                id: "core_logic_sell",
-                description:
-                    "Core logic test: aggressive buy absorption by institutions",
-                buyerIsMaker: false, // Aggressive BUY absorbed by institutions
-                aggressiveVolume: 200,
-                passiveVolume: 800, // 80% passive ratio - high absorption
-                price: 89.0,
-                expectedSignal: "sell", // Follow institutional selling flow
+                expectedSignal: "sell", // Bid absorption indicates selling pressure
                 confidence: "high",
                 category: "obvious_sell",
             };
@@ -579,6 +558,27 @@ ${failedTests > 10 ? "❌ MAJOR: High failure rate suggests systematic issue" : 
             const result = verifyAbsorptionLogic(scenario);
 
             expect(result.actual).toBe("sell");
+            expect(result.counterTrendLogic).toBe(true);
+            expect(result.absorptionRatio).toBeGreaterThan(0.7);
+        });
+
+        it("should emit BUY signal when aggressive BUY is absorbed (absorption pressure)", () => {
+            const scenario: AbsorptionTestScenario = {
+                id: "core_logic_buy",
+                description:
+                    "Core logic test: aggressive buy absorption creates buying pressure",
+                buyerIsMaker: false, // Aggressive BUY absorbed by passive asks
+                aggressiveVolume: 200,
+                passiveVolume: 800, // 80% passive ratio - high absorption
+                price: 89.0,
+                expectedSignal: "buy", // Ask absorption indicates buying pressure
+                confidence: "high",
+                category: "obvious_buy",
+            };
+
+            const result = verifyAbsorptionLogic(scenario);
+
+            expect(result.actual).toBe("buy");
             expect(result.counterTrendLogic).toBe(true);
             expect(result.absorptionRatio).toBeGreaterThan(0.7);
         });

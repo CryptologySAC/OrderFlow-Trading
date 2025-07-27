@@ -137,7 +137,7 @@ export const ExhaustionDetectorSchema = z.object({
     passiveVolumeExhaustionRatio: z.number().min(0.3).max(0.8),
     aggressiveVolumeExhaustionThreshold: z.number().min(0.5).max(1.0),
     aggressiveVolumeReductionFactor: z.number().min(0.3).max(0.8),
-    
+
     // Additional configurable thresholds to replace magic numbers
     passiveRatioBalanceThreshold: z.number().min(0.3).max(0.7), // Replace hardcoded 0.5
     premiumConfidenceThreshold: z.number().min(0.6).max(0.9), // Replace hardcoded 0.7
@@ -179,9 +179,13 @@ export const AbsorptionDetectorSchema = z.object({
     // Enhancement control
     useStandardizedZones: z.boolean(),
     enhancementMode: z.enum(["disabled", "testing", "production"]),
-    
+
     // Balance detection threshold
     balanceThreshold: z.number().min(0.01).max(0.2),
+
+    // Zone confluence parameters (CLAUDE.md compliance - no magic numbers)
+    confluenceMinZones: z.number().int().min(1).max(10),
+    confluenceMaxDistance: z.number().int().min(1).max(20),
 });
 
 // DELTACVD detector - CLEANED UP - Only used settings remain
@@ -200,7 +204,7 @@ export const DeltaCVDDetectorSchema = z.object({
 
     // CVD divergence analysis parameters
     cvdImbalanceThreshold: z.number().min(0.05).max(0.4), // CVD imbalance ratio for detection (lower than signalThreshold)
-    
+
     // Institutional trade threshold (replace hardcoded 17.8 LTC)
     institutionalThreshold: z.number().min(1.0).max(100.0), // LTC threshold for institutional trade detection
 });

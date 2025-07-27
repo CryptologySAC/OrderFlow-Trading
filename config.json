@@ -247,7 +247,7 @@
                 "alignmentNormalizationFactor": 0.4,
                 "aggressiveVolumeExhaustionThreshold": 0.5,
                 "aggressiveVolumeReductionFactor": 0.5,
-                
+
                 "passiveRatioBalanceThreshold": 0.5,
                 "premiumConfidenceThreshold": 0.7,
                 "variancePenaltyFactor": 1.0,
@@ -275,7 +275,9 @@
                 "minEnhancedConfidenceThreshold": 0.2,
                 "useStandardizedZones": true,
                 "enhancementMode": "production",
-                "balanceThreshold": 0.05
+                "balanceThreshold": 0.05,
+                "confluenceMinZones": 2,
+                "confluenceMaxDistance": 5
             },
 
             "spoofingDetector": {

@@ -268,7 +268,9 @@
                 "minEnhancedConfidenceThreshold": 0.3,
                 "useStandardizedZones": true,
                 "enhancementMode": "production",
-                "balanceThreshold": 0.05
+                "balanceThreshold": 0.05,
+                "confluenceMinZones": 2,
+                "confluenceMaxDistance": 5
             },
             "spoofingDetector": {
                 "wallTicks": 10,

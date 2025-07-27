@@ -199,8 +199,8 @@ describe("Absorption Detector Real Market Flow Validation", () => {
                     dominantSide: "sell" as const, // Retail selling pressure
                     institutionalRatio: 0.7 + i * 0.008, // 70-89% institutional absorption
                 },
-                expectedSignal: "buy" as const, // Follow institutional buying flow
-                reasoning: `Institution absorbing retail selling wave with ${(0.7 + i * 0.008) * 100}% passive ratio`,
+                expectedSignal: "sell" as const, // Bid absorption indicates selling pressure
+                reasoning: `Passive bids absorbing retail selling creates selling pressure with ${(0.7 + i * 0.008) * 100}% absorption ratio`,
                 confidence: i < 15 ? ("high" as const) : ("medium" as const),
             })),
 
@@ -216,8 +216,8 @@ describe("Absorption Detector Real Market Flow Validation", () => {
                     dominantSide: "buy" as const, // Retail buying pressure
                     institutionalRatio: 0.68 + i * 0.009, // 68-90% institutional absorption
                 },
-                expectedSignal: "sell" as const, // Follow institutional selling flow
-                reasoning: `Institution absorbing retail buying wave with ${(0.68 + i * 0.009) * 100}% passive ratio`,
+                expectedSignal: "buy" as const, // Ask absorption indicates buying pressure
+                reasoning: `Passive asks absorbing retail buying creates buying pressure with ${(0.68 + i * 0.009) * 100}% absorption ratio`,
                 confidence: i < 15 ? ("high" as const) : ("medium" as const),
             })),
 

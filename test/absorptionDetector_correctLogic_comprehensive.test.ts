@@ -15,14 +15,14 @@ import { MetricsCollector } from "../__mocks__/src/infrastructure/metricsCollect
  * ABSORPTION DETECTOR CORRECT LOGIC VERIFICATION
  *
  * This test suite verifies the correct absorption logic with 100 clear scenarios:
- * - Tests 1-30: Clear BID absorption (passive bids absorb aggressive sells → BUY signal)
- * - Tests 31-60: Clear ASK absorption (passive asks absorb aggressive buys → SELL signal)
+ * - Tests 1-30: Clear BID absorption (passive bids absorb aggressive sells → SELL signal)
+ * - Tests 31-60: Clear ASK absorption (passive asks absorb aggressive buys → BUY signal)
  * - Tests 61-80: Edge cases (lower volumes, less clear absorption)
  * - Tests 81-100: No absorption (balanced, insufficient, or no passive dominance)
  *
- * CORRECT ABSORPTION LOGIC:
- * - Passive bids absorbing aggressive sells = Support holds = BUY signal
- * - Passive asks absorbing aggressive buys = Resistance holds = SELL signal
+ * CORRECTED ABSORPTION LOGIC (Fixed Implementation):
+ * - Passive bids absorbing aggressive sells = Bid absorption = Selling pressure = SELL signal
+ * - Passive asks absorbing aggressive buys = Ask absorption = Buying pressure = BUY signal
  * - No clear passive dominance = No absorption = NEUTRAL
  */
 
@@ -152,7 +152,7 @@ describe("AbsorptionDetector Correct Logic - 100 Comprehensive Tests", () => {
                 passiveBidVolume: passiveBidVol,
                 passiveAskVolume: passiveAskVol,
                 aggressiveVolume: aggressiveVol,
-                expectedSignal: "buy", // Support holds
+                expectedSignal: "sell", // Bid absorption indicates selling pressure
                 confidence: i <= 20 ? "high" : "medium",
                 category: "clear_bid_absorption",
             });
@@ -171,7 +171,7 @@ describe("AbsorptionDetector Correct Logic - 100 Comprehensive Tests", () => {
                 passiveBidVolume: passiveBidVol,
                 passiveAskVolume: passiveAskVol,
                 aggressiveVolume: aggressiveVol,
-                expectedSignal: "sell", // Resistance holds
+                expectedSignal: "buy", // Ask absorption indicates buying pressure
                 confidence: testIndex <= 20 ? "high" : "medium",
                 category: "clear_ask_absorption",
             });
@@ -193,7 +193,7 @@ describe("AbsorptionDetector Correct Logic - 100 Comprehensive Tests", () => {
                     passiveBidVolume: passiveBidVol,
                     passiveAskVolume: passiveAskVol,
                     aggressiveVolume: aggressiveVol,
-                    expectedSignal: "buy", // Still bid dominance
+                    expectedSignal: "sell", // Bid absorption indicates selling pressure
                     confidence: "low",
                     category: "edge_case",
                 });
@@ -209,7 +209,7 @@ describe("AbsorptionDetector Correct Logic - 100 Comprehensive Tests", () => {
                     passiveBidVolume: passiveBidVol,
                     passiveAskVolume: passiveAskVol,
                     aggressiveVolume: aggressiveVol,
-                    expectedSignal: "sell", // Still ask dominance
+                    expectedSignal: "buy", // Ask absorption indicates buying pressure
                     confidence: "low",
                     category: "edge_case",
                 });
@@ -438,37 +438,37 @@ ${
     /**
      * SPECIFIC VALIDATION TESTS
      */
-    it("should emit BUY signal for clear bid absorption", () => {
+    it("should emit SELL signal for clear bid absorption", () => {
         const scenario: AbsorptionTestScenario = {
             id: "test_clear_bid",
             description: "Clear bid absorption test",
             passiveBidVolume: 2000, // High institutional bid liquidity
             passiveAskVolume: 100, // Low ask liquidity
             aggressiveVolume: 600, // Large aggressive order
-            expectedSignal: "buy",
+            expectedSignal: "sell", // Bid absorption indicates selling pressure
             confidence: "high",
             category: "clear_bid_absorption",
         };
 
         const result = verifyAbsorptionLogic(scenario);
-        expect(result.actual).toBe("buy");
+        expect(result.actual).toBe("sell");
         expect(result.passed).toBe(true);
     });
 
-    it("should emit BUY signal for clear bid absorption scenario 2", () => {
+    it("should emit SELL signal for clear bid absorption scenario 2", () => {
         const scenario: AbsorptionTestScenario = {
             id: "test_clear_bid_2",
             description: "Clear bid absorption test - scenario 2",
             passiveBidVolume: 1200, // Institutional bid volume
             passiveAskVolume: 60, // Low ask volume
             aggressiveVolume: 360, // Large aggressive sell order
-            expectedSignal: "buy",
+            expectedSignal: "sell", // Bid absorption indicates selling pressure
             confidence: "high",
             category: "clear_bid_absorption",
         };
 
         const result = verifyAbsorptionLogic(scenario);
-        expect(result.actual).toBe("buy");
+        expect(result.actual).toBe("sell");
         expect(result.passed).toBe(true);
     });
 
@@ -479,7 +479,7 @@ ${
             passiveBidVolume: 1300, // Large institutional bid volume
             passiveAskVolume: 65, // Small ask volume
             aggressiveVolume: 390, // Large aggressive sell order
-            expectedSignal: "buy",
+            expectedSignal: "sell", // Bid absorption indicates selling pressure
             confidence: "high",
             category: "clear_bid_absorption",
         };
@@ -517,20 +517,20 @@ ${
         // expect(result.passed).toBe(true);
     });
 
-    it("should emit SELL signal for clear ask absorption", () => {
+    it("should emit BUY signal for clear ask absorption", () => {
         const scenario: AbsorptionTestScenario = {
             id: "test_clear_ask",
             description: "Clear ask absorption test",
             passiveBidVolume: 100, // Low bid liquidity
             passiveAskVolume: 2000, // High institutional ask liquidity
             aggressiveVolume: 600, // Large aggressive buy order
-            expectedSignal: "sell",
+            expectedSignal: "buy", // Ask absorption indicates buying pressure
             confidence: "high",
             category: "clear_ask_absorption",
         };
 
         const result = verifyAbsorptionLogic(scenario);
-        expect(result.actual).toBe("sell");
+        expect(result.actual).toBe("buy");
         expect(result.passed).toBe(true);
     });
 
