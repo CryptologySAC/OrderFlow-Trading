@@ -194,8 +194,8 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             1
         );
 
-        // Check for institutional size trades (>= 17.8 LTC threshold from tests)
-        if (event.quantity >= 17.8) {
+        // Check for institutional size trades using configurable threshold (CLAUDE.md compliance)
+        if (event.quantity >= this.enhancementConfig.institutionalThreshold) {
             this.metricsCollector.incrementCounter(
                 "cvd_institutional_activity_detected",
                 1
@@ -211,7 +211,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         }
 
         // Check order flow imbalance (simplified - based on buyerIsMaker)
-        if (event.buyerIsMaker !== undefined) {
+        if (event.buyerIsMaker != null) {
             this.metricsCollector.incrementCounter(
                 "cvd_order_flow_analyzed",
                 1
@@ -607,7 +607,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         let allZones = [...zoneData.zones];
 
         // Apply temporal filtering if timestamp provided
-        if (tradeTimestamp !== undefined) {
+        if (tradeTimestamp != null) {
             const windowStartTime =
                 tradeTimestamp -
                 Config.getTimeWindow(this.enhancementConfig.timeWindowIndex);
@@ -891,8 +891,8 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         divergenceStrength: number;
         affectedZones: number;
     } {
-        this.logger.error(
-            "[DeltaCVDDetectorEnhanced DEBUG] CRITICAL ISSUE - ALL ZONES HAVE ZERO VOLUME",
+        this.logger.debug(
+            "DeltaCVDDetectorEnhanced: All zones have zero volume - no divergence possible",
             {
                 detectorId: this.getId(),
                 price: event.price,
@@ -1433,7 +1433,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         let allZones = [...zoneData.zones];
 
         // Apply temporal filtering if timestamp provided
-        if (tradeTimestamp !== undefined) {
+        if (tradeTimestamp != null) {
             const windowStartTime =
                 tradeTimestamp -
                 Config.getTimeWindow(this.enhancementConfig.timeWindowIndex);
@@ -1460,7 +1460,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         let allZones = [...zoneData.zones];
 
         // Apply temporal filtering if timestamp provided
-        if (tradeTimestamp !== undefined) {
+        if (tradeTimestamp != null) {
             const windowStartTime =
                 tradeTimestamp -
                 Config.getTimeWindow(this.enhancementConfig.timeWindowIndex);

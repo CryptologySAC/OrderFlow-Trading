@@ -340,7 +340,8 @@
                 "eventCooldownMs": 90000,
                 "enhancementMode": "production",
                 "cvdImbalanceThreshold": 0.35,
-                "timeWindowIndex": 0
+                "timeWindowIndex": 0,
+                "institutionalThreshold": 17.8
             },
             "accumulation": {
                 "timeWindowIndex": 1,

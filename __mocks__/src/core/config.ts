@@ -107,6 +107,7 @@ const mockDeltaCVDConfig = {
 
     // CVD divergence analysis (pure divergence mode only)
     cvdImbalanceThreshold: 0.3,
+    institutionalThreshold: 17.8, // Add institutional threshold parameter
 };
 
 // Mock Universal Zone Configuration (CRITICAL for DeltaCVD tests)
