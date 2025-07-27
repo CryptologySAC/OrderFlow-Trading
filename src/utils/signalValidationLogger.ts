@@ -227,8 +227,20 @@ export class SignalValidationLogger {
                     "wasValidSignal",
                 ].join(",") + "\n";
 
-            await fs.writeFile(this.signalsFilePath, signalHeader);
-            await fs.writeFile(this.rejectionsFilePath, rejectionHeader);
+            // ✅ RACE CONDITION FIX: Only write headers if files don't exist
+            try {
+                await fs.access(this.signalsFilePath);
+            } catch {
+                // File doesn't exist, create with header
+                await fs.writeFile(this.signalsFilePath, signalHeader);
+            }
+
+            try {
+                await fs.access(this.rejectionsFilePath);
+            } catch {
+                // File doesn't exist, create with header
+                await fs.writeFile(this.rejectionsFilePath, rejectionHeader);
+            }
 
             this.logger.info(
                 "SignalValidationLogger: NON-BLOCKING CSV files initialized",

@@ -126,7 +126,7 @@ describe("data/MicrostructureAnalyzer", () => {
                 "burst",
                 "coordinated",
             ]);
-            expect(result.avgTimeBetweenTrades).toBeCloseTo(1000, 0);
+            expect(result.avgTimeBetweenTrades).toBeCloseTo(1000, 1);
             expect(result.suspectedAlgoType).toBeOneOf([
                 "market_making",
                 "iceberg",

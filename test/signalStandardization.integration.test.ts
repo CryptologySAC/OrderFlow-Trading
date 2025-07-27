@@ -14,7 +14,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { SignalCandidate } from "../src/types/signalTypes.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
-import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
+import { SignalValidationLogger } from "../src/utils/signalValidationLogger.js";
 import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
 import { ExhaustionDetectorEnhanced } from "../src/indicators/exhaustionDetectorEnhanced.js";
 import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
@@ -135,11 +135,11 @@ describe("Signal Type Standardization Integration Tests", () => {
             expect(() => {
                 const detector = new ExhaustionDetectorEnhanced(
                     "test-exhaustion",
-                    "LTCUSDT",
                     settings,
                     mockPreprocessor,
                     mockLogger,
                     mockMetrics,
+                    mockSignalValidationLogger,
                     mockSignalValidationLogger
                 );
             }).not.toThrow();
@@ -241,11 +241,11 @@ describe("Signal Type Standardization Integration Tests", () => {
 
             const exhaustionDetector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion-std",
-                "LTCUSDT",
                 Config.EXHAUSTION_DETECTOR,
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
+                mockSignalValidationLogger,
                 mockSignalValidationLogger
             );
 

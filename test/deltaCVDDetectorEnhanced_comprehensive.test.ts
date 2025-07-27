@@ -20,9 +20,13 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
-import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
-import type { ZoneSnapshot } from "../src/types/marketEvents.js";
+import { SignalValidationLogger } from "../src/utils/signalValidationLogger.js";
+import type {
+    ZoneSnapshot,
+    ZoneTradeRecord,
+} from "../src/types/marketEvents.js";
 import { FinancialMath } from "../src/utils/financialMath.js";
+import { CircularBuffer } from "../src/utils/circularBuffer.js";
 
 // Use centralized mocks from __mocks__
 import { createMockLogger } from "../__mocks__/src/infrastructure/loggerInterface.js";
@@ -47,7 +51,7 @@ function createValidDeltaCVDSettings(overrides: any = {}) {
         minTradesPerSec: 0.75,
         minVolPerSec: 10,
         signalThreshold: 0.4,
-        eventCooldownMs: 5000,
+        eventCooldownMs: 500, // Reduced from 5000ms to 500ms for testing
 
         // Zone time window configuration
         timeWindowIndex: 0,
@@ -99,10 +103,19 @@ function generateStrongCVDPattern(
             timeStart + timeOffset
         );
 
-        // Create extremely strong zone data
+        // Create extremely strong zone data with high volume to meet minVolPerSec: 10 requirement
         const zonePrice = Math.round(tradePrice / TICK_SIZE) * TICK_SIZE;
-        const zoneVolume =
-            quantity * (30 + Math.random() * 20) * Math.max(2, tradeCount / 10);
+
+        // Calculate volume to ensure minVolPerSec requirement is met
+        // For timespan of 50000ms (50 seconds), need 10 * 50 = 500 volume per zone minimum
+        const timespanSeconds = (tradeCount * 800) / 1000; // Convert to seconds
+        const minVolumeRequired = 10 * timespanSeconds; // minVolPerSec * timespan
+        const baseZoneVolume =
+            quantity *
+            (100 + Math.random() * 100) *
+            Math.max(5, tradeCount / 5);
+        const zoneVolume = Math.max(minVolumeRequired * 1.5, baseZoneVolume); // 1.5x buffer above minimum
+
         const buyRatio = pattern === "bullish_divergence" ? 0.9 : 0.1; // Extreme ratios
 
         trade.zoneData = {
@@ -124,7 +137,6 @@ function generateStrongCVDPattern(
                 tickValue: TICK_SIZE,
                 timeWindow: 60000,
             },
-            timestamp: timeStart + timeOffset,
         };
 
         trades.push(trade);
@@ -159,7 +171,6 @@ function createRealisticTrade(
                 tickValue: 0.01,
                 timeWindow: 60000,
             },
-            timestamp: Date.now(),
         },
     };
 }
@@ -176,21 +187,44 @@ function createZoneSnapshot(
 ): ZoneSnapshot {
     const aggressiveSellVolume = aggressiveVolume - aggressiveBuyVolume;
     const passiveSellVolume = passiveVolume - passiveBuyVolume;
+    const tickCompliantPrice = Math.round(priceLevel / TICK_SIZE) * TICK_SIZE;
+    const currentTime = Date.now();
+
+    // Create some realistic trade records for the zone
+    const tradeHistory = new CircularBuffer<ZoneTradeRecord>(100);
+    const tradeCount =
+        Math.floor(aggressiveVolume / 3) + Math.floor(passiveVolume / 5);
+
+    // Add some sample trades to the history
+    for (let i = 0; i < Math.min(tradeCount, 10); i++) {
+        tradeHistory.add({
+            price: tickCompliantPrice + (Math.random() - 0.5) * TICK_SIZE * 2,
+            quantity: aggressiveVolume / tradeCount,
+            timestamp: currentTime - i * 1000,
+            tradeId: `test_trade_${currentTime}_${i}`,
+            buyerIsMaker: Math.random() < 0.5,
+        });
+    }
 
     return {
-        priceLevel: Math.round(priceLevel / TICK_SIZE) * TICK_SIZE,
+        zoneId: `zone_${tickCompliantPrice}_${currentTime}`,
+        priceLevel: tickCompliantPrice,
+        tickSize: TICK_SIZE,
         aggressiveVolume,
+        passiveVolume,
         aggressiveBuyVolume,
         aggressiveSellVolume,
-        passiveVolume,
-        passiveBuyVolume,
-        passiveSellVolume,
-        tradeCount:
-            Math.floor(aggressiveVolume / 3) + Math.floor(passiveVolume / 5),
-        timespan: timespan, // Use provided timespan
-        type: type,
-        netOrderFlow: aggressiveBuyVolume - aggressiveSellVolume,
-        lastUpdateTime: Date.now(),
+        passiveBidVolume: passiveBuyVolume, // Map to correct field name
+        passiveAskVolume: passiveSellVolume, // Map to correct field name
+        tradeCount,
+        timespan: timespan,
+        boundaries: {
+            min: tickCompliantPrice,
+            max: tickCompliantPrice + 10 * TICK_SIZE, // 10-tick zone
+        },
+        lastUpdate: currentTime,
+        volumeWeightedPrice: tickCompliantPrice, // Simplified for tests
+        tradeHistory: tradeHistory,
     };
 }
 
@@ -333,13 +367,12 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
         setupDetector();
         const trade = createRealisticTrade(BASE_PRICE, 1.0, "buy");
         trade.zoneData = {
-            zones: [createZoneSnapshot(BASE_PRICE, 25, 18, 8, 5)],
+            zones: [createZoneSnapshot(BASE_PRICE, 60, 45, 20, 15)], // Increased volume to meet 10 vol/sec requirement
             zoneConfig: {
                 zoneTicks: 10,
                 tickValue: 0.01,
                 timeWindow: 60000,
             },
-            timestamp: Date.now(),
         };
 
         detector.onEnrichedTrade(trade);
@@ -1457,13 +1490,13 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
             });
 
             it("Test 46: Signal Consistency", () => {
-                setupDetector({
-                    cvdDivergenceVolumeThreshold: 25,
-                    divergenceConfidenceBoost: 0.15,
-                });
-
                 // Run same pattern multiple times
                 for (let i = 0; i < 3; i++) {
+                    // Create fresh detector for each iteration to reset cooldown state
+                    setupDetector({
+                        cvdDivergenceVolumeThreshold: 25,
+                        divergenceConfidenceBoost: 0.15,
+                    });
                     emittedEvents = []; // Reset events
                     const trades = generateRealisticCVDPattern(
                         BASE_PRICE,
@@ -1610,7 +1643,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
                             tickValue: 0.01,
                             timeWindow: 60000,
                         },
-                        timestamp: Date.now(),
                     };
                     trades.push(trade);
                 }

@@ -17,7 +17,7 @@ import {
     type ExhaustionEnhancedSettings,
 } from "../src/indicators/exhaustionDetectorEnhanced.js";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
-import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
+import { SignalValidationLogger } from "../src/utils/signalValidationLogger.js";
 import {
     AbsorptionDetectorEnhanced,
     type AbsorptionEnhancedSettings,
@@ -372,6 +372,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
     let mockSignalLogger: ISignalLogger;
     let mockOrderBook: IOrderBookState;
     let mockPreprocessor: IOrderflowPreprocessor;
+    let mockSignalValidationLogger: SignalValidationLogger;
     let realConfig: any;
     let realMarketData: AggressiveTrade[];
 
@@ -382,6 +383,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
         mockSignalLogger = createMockSignalLogger();
         mockOrderBook = createMockOrderBookState();
         mockPreprocessor = createMockPreprocessor();
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
         realConfig = loadRealConfig();
         realMarketData = createRealMarketData();
 

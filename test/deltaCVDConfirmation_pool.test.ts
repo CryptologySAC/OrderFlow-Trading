@@ -77,6 +77,7 @@ describe("DeltaCVD Standalone Detector - Core Functionality", () => {
     let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
     let mockPreprocessor: IOrderflowPreprocessor;
+    let mockSignalValidationLogger: SignalValidationLogger;
     let signalSpy: vi.Mock;
 
     beforeEach(() => {
@@ -89,6 +90,7 @@ describe("DeltaCVD Standalone Detector - Core Functionality", () => {
         } as ILogger;
         mockMetrics = new MetricsCollector();
         mockPreprocessor = createMockPreprocessor();
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
         // 🚫 NUCLEAR CLEANUP: Use complete mock config settings instead of empty object
         detector = new DeltaCVDDetectorEnhanced(

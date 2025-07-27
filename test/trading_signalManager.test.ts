@@ -21,11 +21,11 @@ describe("trading/SignalManager", () => {
         // Manually spy on the getMarketHealth method to ensure it returns the expected value
         vi.spyOn(ad, "getMarketHealth").mockReturnValue({
             isHealthy: true,
+            recentAnomalies: 0,
+            highestSeverity: "low",
             recommendation: "continue",
             criticalIssues: [],
             recentAnomalyTypes: [],
-            volatilityRatio: 1.0,
-            highestSeverity: "low",
             metrics: {
                 volatility: 0.5,
                 spreadBps: 1.0,
@@ -111,11 +111,11 @@ describe("trading/SignalManager", () => {
         // Manually spy on the getMarketHealth method to ensure it returns the expected value
         vi.spyOn(ad, "getMarketHealth").mockReturnValue({
             isHealthy: true,
+            recentAnomalies: 0,
+            highestSeverity: "low",
             recommendation: "continue",
             criticalIssues: [],
             recentAnomalyTypes: [],
-            volatilityRatio: 1.0,
-            highestSeverity: "low",
             metrics: {
                 volatility: 0.5,
                 spreadBps: 1.0,

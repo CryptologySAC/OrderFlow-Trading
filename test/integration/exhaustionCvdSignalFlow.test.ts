@@ -13,7 +13,7 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { ExhaustionDetectorEnhanced } from "../../src/indicators/exhaustionDetectorEnhanced.js";
-import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
+import { SignalValidationLogger } from "../../__mocks__/src/utils/signalValidationLogger.js";
 import { DeltaCVDDetectorEnhanced } from "../../src/indicators/deltaCVDDetectorEnhanced.js";
 import { SignalManager } from "../../src/trading/signalManager.js";
 import type {
@@ -41,6 +41,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
     let mockPreprocessor: IOrderflowPreprocessor;
     let mockSpoofingDetector: any;
     let mockSignalLogger: any;
+    let mockSignalValidationLogger: SignalValidationLogger;
 
     // Expected signal type contracts
     const EXHAUSTION_SIGNAL_TYPE: SignalType = "exhaustion";
@@ -91,6 +92,7 @@ describe("Exhaustion & CVD Signal Flow Integration", () => {
 
         // Use proper mock from __mocks__/ directory as per CLAUDE.md
         mockMetrics = new MetricsCollector();
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
         mockPreprocessor = {
             handleDepth: vi.fn(),

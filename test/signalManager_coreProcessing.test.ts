@@ -152,11 +152,17 @@ const createMockAnomalyDetector = (
     ({
         getMarketHealth: vi.fn().mockReturnValue({
             isHealthy,
+            recentAnomalies: 0,
+            highestSeverity: isHealthy ? "low" : "critical",
             recommendation,
             criticalIssues: isHealthy ? [] : ["severe_anomaly"],
             recentAnomalyTypes: [],
-            highestSeverity: isHealthy ? "low" : "critical",
-            metrics: { volatility: 0.02 },
+            metrics: {
+                volatility: 0.02,
+                spreadBps: 1.0,
+                flowImbalance: 0.0,
+                lastUpdateAge: 0,
+            },
         }),
     }) as unknown as AnomalyDetector;
 

@@ -13,7 +13,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { AbsorptionDetectorEnhanced } from "../../src/indicators/absorptionDetectorEnhanced.js";
-import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
+import { SignalValidationLogger } from "../../src/utils/signalValidationLogger.js";
 import { ExhaustionDetectorEnhanced } from "../../src/indicators/exhaustionDetectorEnhanced.js";
 import { AccumulationZoneDetectorEnhanced } from "../../src/indicators/accumulationZoneDetectorEnhanced.js";
 import { DistributionDetectorEnhanced } from "../../src/indicators/distributionDetectorEnhanced.js";
@@ -46,6 +46,7 @@ describe("Enhanced Detector Signal Flow Integration", () => {
     let mockSpoofingDetector: any;
     let mockSignalLogger: any;
     let mockOrderBookState: any;
+    let mockSignalValidationLogger: SignalValidationLogger;
 
     // Expected signal type contracts for each detector
     const DETECTOR_SIGNAL_CONTRACTS = {
@@ -106,6 +107,7 @@ describe("Enhanced Detector Signal Flow Integration", () => {
 
         // Use proper mock from __mocks__/ directory as per CLAUDE.md
         mockMetrics = new MetricsCollector();
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
         mockPreprocessor = {
             handleDepth: vi.fn(),

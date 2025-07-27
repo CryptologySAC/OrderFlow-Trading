@@ -172,6 +172,7 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
     let mockMetrics: IMetricsCollector;
     let mockSpoofingDetector: any;
     let mockSignalLogger: any;
+    let mockSignalValidationLogger: SignalValidationLogger;
     let detectedSignals: any[];
 
     beforeEach(async () => {
@@ -223,6 +224,8 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
             getHistory: vi.fn(() => []),
         };
 
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
+
         // Create ThreadManager mock (required for OrderBookState)
         const mockThreadManager = {
             callStorage: vi.fn().mockResolvedValue(undefined),
@@ -257,9 +260,9 @@ describe("ExhaustionDetectorEnhanced - REAL Integration Tests", () => {
             EXHAUSTION_CONFIG,
             preprocessor,
             mockLogger,
-            mockSpoofingDetector,
             mockMetrics,
-            mockSignalLogger
+            mockSignalLogger,
+            mockSignalValidationLogger
         );
 
         // Initialize OrderBookState (required after constructor changes)
