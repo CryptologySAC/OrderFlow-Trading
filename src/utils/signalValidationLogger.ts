@@ -133,6 +133,7 @@ export class SignalValidationLogger {
     private readonly maxBufferSize = 100; // Flush after 100 entries
     private readonly flushInterval = 5000; // Flush every 5 seconds
     private flushTimer?: NodeJS.Timeout;
+    private isInitialized = false;
 
     constructor(
         private readonly logger: ILogger,
@@ -254,6 +255,9 @@ export class SignalValidationLogger {
 
             // ✅ START BACKGROUND FLUSHING for non-blocking performance
             this.startBackgroundFlushing();
+
+            // Mark as initialized
+            this.isInitialized = true;
         } catch (error) {
             this.logger.error(
                 "SignalValidationLogger: Failed to initialize log files",
@@ -486,6 +490,9 @@ export class SignalValidationLogger {
                 priceEfficiency: marketContext.priceEfficiency,
                 confidence: marketContext.confidence,
             };
+
+            // ✅ WRITE REJECTION TO CSV IMMEDIATELY
+            this.writeRejectionRecord(record);
 
             // Set up post-rejection analysis timers
             this.setupRejectionValidationTimers(
