@@ -103,6 +103,11 @@ const EXHAUSTION_CONFIG = {
     depletionConfidenceBoost: 0.1,
     enhancementMode: "production" as const,
     minEnhancedConfidenceThreshold: 0.05,
+    // Add missing CLAUDE.md compliance parameters
+    passiveRatioBalanceThreshold: 0.5,
+    premiumConfidenceThreshold: 0.7,
+    variancePenaltyFactor: 1.0,
+    ratioBalanceCenterPoint: 0.5,
 };
 
 const ORDERBOOK_CONFIG = {

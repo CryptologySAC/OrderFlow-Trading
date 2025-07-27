@@ -134,7 +134,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
         this.crossTimeframeConfidenceBoost =
             Config.UNIVERSAL_ZONE_CONFIG.crossTimeframeBoost;
         this.exhaustionVolumeThreshold = settings.minAggVolume;
-        this.exhaustionRatioThreshold = settings.depletionRatioThreshold;
+        this.exhaustionRatioThreshold = settings.exhaustionThreshold;
         this.exhaustionScoreThreshold = settings.minEnhancedConfidenceThreshold;
         
         // Initialize additional configurable thresholds (CLAUDE.md compliance)
@@ -335,22 +335,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     }
                 );
 
-                // Check signal cooldown before emitting enhanced signal
-                const eventKey = `exhaustion`; // Same cooldown as core signal
-                if (!this.canEmitSignal(eventKey)) {
-                    this.logger.debug(
-                        "ExhaustionDetectorEnhanced: Enhanced signal blocked by cooldown",
-                        {
-                            detectorId: this.getId(),
-                            price: event.price,
-                            eventKey,
-                            cooldownMs: this.enhancementConfig.eventCooldownMs,
-                        }
-                    );
-                    return;
-                }
-
-                // Signal will be emitted through unified emission logic with enhanced validation
+                // Enhanced signal will be processed through unified emission logic
             }
         }
 
@@ -396,58 +381,26 @@ export class ExhaustionDetectorEnhanced extends Detector {
             this.storeEnhancedExhaustionMetrics(event, totalConfidenceBoost);
         }
 
-        // CRITICAL FIX: Final signal emission with enhanced validation
-        // All signals now pass through quality gates before emission
-        if (finalSignal) {
-            const eventKey = `exhaustion`;
-
-            // Check signal cooldown before emitting
-            if (!this.canEmitSignal(eventKey)) {
-                this.logger.debug(
-                    "ExhaustionDetectorEnhanced: Signal blocked by cooldown",
-                    {
-                        detectorId: this.getId(),
-                        price: event.price,
-                        eventKey,
-                        cooldownMs: this.enhancementConfig.eventCooldownMs,
-                    }
-                );
-                return;
-            }
-
-            // Apply confidence boost if enhancements were applied
+        // SIMPLIFIED: Unified signal emission path
+        if (finalSignal && this.canEmitSignal(`exhaustion`)) {
+            // Apply enhancement confidence boost if applicable
             if (enhancementApplied && totalConfidenceBoost > 0) {
-                finalSignal = {
-                    ...finalSignal,
-                    confidence: Math.min(
-                        1.0,
-                        finalSignal.confidence + totalConfidenceBoost
-                    ),
-                };
+                finalSignal.confidence = Math.min(1.0, finalSignal.confidence + totalConfidenceBoost);
             }
 
-            // Update cooldown tracking
-            this.canEmitSignal(eventKey, true);
-
-            // Log signal for validation tracking (using zones from signal context)
-            const signalZones = event.zoneData ? event.zoneData.zones : [];
-            void this.logSignalForValidation(finalSignal, event, signalZones);
-
-            // Emit the validated signal
+            // Update cooldown and emit signal
+            this.canEmitSignal(`exhaustion`, true);
+            void this.logSignalForValidation(finalSignal, event, event.zoneData?.zones || []);
             this.emit("signalCandidate", finalSignal);
 
-            this.logger.info(
-                "ExhaustionDetectorEnhanced: Enhanced exhaustion signal emitted",
-                {
-                    detectorId: this.getId(),
-                    price: event.price,
-                    side: finalSignal.side,
-                    confidence: finalSignal.confidence,
-                    signalId: finalSignal.id,
-                    enhancementApplied,
-                    confidenceBoost: totalConfidenceBoost,
-                }
-            );
+            this.logger.info("ExhaustionDetectorEnhanced: Signal emitted", {
+                detectorId: this.getId(),
+                price: event.price,
+                side: finalSignal.side,
+                confidence: finalSignal.confidence,
+                enhancementApplied,
+                confidenceBoost: totalConfidenceBoost,
+            });
         }
     }
 
@@ -771,6 +724,9 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     accumulatedAggressiveRatio,
                     accumulatedPassiveRatio,
                     exhaustionRatioThreshold: this.exhaustionRatioThreshold,
+                    passiveRatioBalanceThreshold: this.passiveRatioBalanceThreshold,
+                    firstCondition: accumulatedAggressiveRatio >= this.exhaustionRatioThreshold,
+                    secondCondition: accumulatedPassiveRatio < this.passiveRatioBalanceThreshold,
                 }
             );
             this.logSignalRejection(
