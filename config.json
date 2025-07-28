@@ -135,7 +135,7 @@
                 "maxTradesPerZone": 1500
             },
             "signalManager": {
-                "confidenceThreshold": 0.4,
+                "confidenceThreshold": 0.35,
                 "signalTimeout": 5400000,
                 "enableMarketHealthCheck": true,
                 "enableAlerts": true,
@@ -227,8 +227,8 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-                "minAggVolume": 2500,
-                "exhaustionThreshold": 0.8,
+                "minAggVolume": 1500,
+                "exhaustionThreshold": 0.7,
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 10000,
 
@@ -254,22 +254,22 @@
                 "ratioBalanceCenterPoint": 0.5
             },
             "absorption": {
-                "minAggVolume": 2500,
+                "minAggVolume": 1800,
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 15000,
                 "priceEfficiencyThreshold": 0.025,
                 "maxAbsorptionRatio": 0.65,
                 "minPassiveMultiplier": 1.2,
-                "passiveAbsorptionThreshold": 0.75,
+                "passiveAbsorptionThreshold": 0.68,
                 "expectedMovementScalingFactor": 10,
                 "contextConfidenceBoostMultiplier": 0.3,
                 "liquidityGradientRange": 5,
-                "institutionalVolumeThreshold": 1500,
+                "institutionalVolumeThreshold": 1088,
                 "institutionalVolumeRatioThreshold": 0.82,
                 "enableInstitutionalVolumeFilter": true,
                 "institutionalVolumeBoost": 0.1,
                 "minAbsorptionScore": 0.5,
-                "finalConfidenceRequired": 0.9,
+                "finalConfidenceRequired": 0.8,
                 "confidenceBoostReduction": 0.3,
                 "maxZoneCountForScoring": 5,
                 "minEnhancedConfidenceThreshold": 0.2,
@@ -337,11 +337,11 @@
             },
             "deltaCVD": {
                 "minTradesPerSec": 0.5,
-                "minVolPerSec": 6,
-                "signalThreshold": 0.85,
-                "eventCooldownMs": 90000,
+                "minVolPerSec": 1,
+                "signalThreshold": 0.75,
+                "eventCooldownMs": 63000,
                 "enhancementMode": "production",
-                "cvdImbalanceThreshold": 0.35,
+                "cvdImbalanceThreshold": 0.15,
                 "timeWindowIndex": 0,
                 "institutionalThreshold": 17.8
             },

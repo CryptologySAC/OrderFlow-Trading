@@ -1,0 +1,80 @@
+{
+  "symbols": {
+    "LTCUSDT": {
+      "signalManager": {
+        "confidenceThreshold": 0.32,
+        "detectorThresholds": {
+          "absorption": 0.35,
+          "exhaustion": 0.22,
+          "accumulation": 0.22,
+          "distribution": 0.22,
+          "deltacvd": 0.35
+        },
+        "adaptiveBackpressure": true,
+        "signalThrottleMs": 25000,
+        "correlationBoostFactor": 0.85
+      },
+      "absorption": {
+        "minAggVolume": 1200,
+        "windowMs": 45000,
+        "absorptionThreshold": 0.48,
+        "zoneTicks": 3,
+        "minPassiveMultiplier": 1.08,
+        "priceEfficiencyThreshold": 0.015,
+        "finalConfidenceRequired": 0.7,
+        "eventCooldownMs": 12000,
+        "velocityIncreaseThreshold": 1.5,
+        "spreadImpactThreshold": 0.003,
+        "contextConfidenceBoostMultiplier": 0.35,
+        "liquidityGradientRange": 6
+      },
+      "exhaustion": {
+        "minAggVolume": 1000,
+        "exhaustionThreshold": 0.65,
+        "windowMs": 45000,
+        "minEnhancedConfidenceThreshold": 0.12,
+        "depletionVolumeThreshold": 300,
+        "depletionRatioThreshold": 0.12,
+        "aggressiveVolumeExhaustionThreshold": 0.4,
+        "passiveVolumeExhaustionRatio": 0.38,
+        "varianceReductionFactor": 0.9,
+        "premiumConfidenceThreshold": 0.65
+      },
+      "deltaCVD": {
+        "minTradesPerSec": 0.35,
+        "minVolPerSec": 3.8,
+        "signalThreshold": 0.7,
+        "cvdImbalanceThreshold": 0.28,
+        "institutionalThreshold": 13.5,
+        "eventCooldownMs": 70000,
+        "usePassiveVolume": true,
+        "enableDepthAnalysis": true,
+        "detectionMode": "hybrid",
+        "baseConfidenceRequired": 0.25,
+        "finalConfidenceRequired": 0.45
+      },
+      "universalZoneConfig": {
+        "minZoneStrength": 0.55,
+        "completionThreshold": 0.6,
+        "minZoneVolume": 150,
+        "maxZoneWidth": 0.06,
+        "strengthChangeThreshold": 0.18,
+        "minCandidateDuration": 250000
+      },
+      "accumulation": {
+        "confidenceThreshold": 0.35,
+        "accumulationVolumeThreshold": 10,
+        "accumulationRatioThreshold": 0.48,
+        "alignmentScoreThreshold": 0.55,
+        "minPassiveVolumeForEfficiency": 5
+      },
+      "distribution": {
+        "confidenceThreshold": 0.35,
+        "distributionVolumeThreshold": 10,
+        "distributionRatioThreshold": 0.48,
+        "alignmentScoreThreshold": 0.55,
+        "minPassiveVolumeForEfficiency": 5
+      }
+    }
+  }
+}

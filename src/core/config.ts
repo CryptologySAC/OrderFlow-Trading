@@ -275,7 +275,7 @@ export const DistributionDetectorSchema = z.object({
     defaultBaselineVolatility: z.number().min(0.01).max(0.3),
 });
 
-// SIMPLE ICEBERG detector - Minimal, correct iceberg pattern detection
+// SIMPLE ICEBERG detector - CLAUDE.md COMPLIANT - Zero tolerance for magic numbers
 export const SimpleIcebergDetectorSchema = z.object({
     // Core parameters
     enhancementMode: z.enum(["disabled", "testing", "production"]),
@@ -291,6 +291,14 @@ export const SimpleIcebergDetectorSchema = z.object({
     // Performance parameters
     maxActivePatterns: z.number().int().min(5).max(10000), // Memory management
     maxRecentTrades: z.number().int().min(10).max(10000), // Recent trades buffer for order book analysis
+
+    // CLAUDE.md COMPLIANCE: Configurable thresholds to replace ALL magic numbers
+    signalConfidence: z.number().min(0.1).max(1.0), // Replace hardcoded 0.8 confidence values
+    marketImpactThreshold: z.number().min(0.1).max(1.0), // Replace hardcoded 0.7 market impact
+    zoneExpansionMultiplier: z.number().min(1.0).max(3.0), // Replace hardcoded 1.5 zone expansion
+    cleanupIntervalMs: z.number().int().min(30000).max(300000), // Replace hardcoded 60000ms cleanup
+    usdtRoundingPrecision: z.number().int().min(0).max(8), // Replace hardcoded 2 decimal precision
+    visualizationPriceBuffer: z.number().min(0.001).max(0.1), // Replace hardcoded 0.01 price buffer
 });
 
 // Old schemas removed - using simplified AccumulationDetectorSchema and DistributionDetectorSchema above
@@ -323,6 +331,31 @@ const MQTTConfigSchema = z.object({
     keepalive: z.number().optional(),
     connectTimeout: z.number().optional(),
     reconnectPeriod: z.number().optional(),
+});
+
+// WebSocket Security Configuration Schema - CLAUDE.md COMPLIANCE
+export const WebSocketSecurityConfigSchema = z.object({
+    // Message size security limits
+    maxJsonSizeBytes: z.number().int().min(1024).max(10485760), // 1KB - 10MB
+    maxBufferSizeBytes: z.number().int().min(1024).max(10485760), // 1KB - 10MB 
+    maxStringSizeBytes: z.number().int().min(1024).max(10485760), // 1KB - 10MB
+    
+    // JSON parsing security limits
+    maxObjectDepth: z.number().int().min(1).max(50), // 1-50 nesting levels
+    
+    // Connection limits
+    maxConnectionsPerIP: z.number().int().min(1).max(1000), // Per-IP connection limit
+    connectionTimeoutMs: z.number().int().min(1000).max(300000), // 1s-5m timeout
+    
+    // Rate limiting
+    messagesPerSecondLimit: z.number().int().min(1).max(1000), // Messages per second per client
+    burstMessagesLimit: z.number().int().min(1).max(100), // Burst message allowance
+    
+    // Security features
+    enableObjectDepthValidation: z.boolean(),
+    enableDangerousPropertyCheck: z.boolean(),
+    enableMaliciousPatternDetection: z.boolean(),
+    logSecurityViolations: z.boolean(),
 });
 
 // Zod validation schemas for config.json
@@ -482,6 +515,7 @@ const ConfigSchema = z.object({
     maxStorageTime: z.number().int().positive(),
     mqtt: MQTTConfigSchema.optional(),
     marketDataStorage: MarketDataStorageConfigSchema.optional(),
+    websocketSecurity: WebSocketSecurityConfigSchema,
     dataStream: z.object({
         reconnectDelay: z.number().int().positive(),
         maxReconnectAttempts: z.number().int().positive(),

@@ -1,0 +1,520 @@
+{
+  "metadata": {
+    "timestamp": "2025-07-28T11:37:10.814971",
+    "target_movement": 0.007,
+    "total_rejections": 130528,
+    "total_signals": 16866,
+    "analysis_type": "enhanced_statistical"
+  },
+  "advanced_patterns": {
+    "temporal_patterns": {
+      "hourly_patterns": {
+        "rejectionReason": {
+          "14": 80871,
+          "15": 37276,
+          "16": 12381
+        },
+        "rejection_impact": {
+          "14": 0.504,
+          "15": 0.484,
+          "16": 0.458
+        },
+        "recovery_potential": {
+          "14": 0.208,
+          "15": 0.18,
+          "16": 0.159
+        },
+        "threshold_ratio": {
+          "14": 0.147,
+          "15": 0.123,
+          "16": 0.125
+        }
+      },
+      "daily_patterns": {
+        "rejectionReason": {
+          "0": 130528
+        },
+        "rejection_impact": {
+          "0": 0.494
+        }
+      },
+      "peak_hour": 14,
+      "peak_count": 80871
+    },
+    "detector_performance": {
+      "absorption": {
+        "total_rejections": 29669,
+        "average_impact": 0.976,
+        "high_potential_signals": "0",
+        "recovery_rate": 0.0,
+        "top_rejection_reasons": {
+          "insufficient_aggressive_volume": 17329,
+          "passive_volume_ratio_too_low": 11828,
+          "balanced_institutional_flow": 512
+        }
+      },
+      "exhaustion": {
+        "total_rejections": 33969,
+        "average_impact": 0.171,
+        "high_potential_signals": "0",
+        "recovery_rate": 0.0,
+        "top_rejection_reasons": {
+          "trade_quantity_too_small": 33969
+        }
+      },
+      "deltacvd": {
+        "total_rejections": 66890,
+        "average_impact": 0.444,
+        "high_potential_signals": "473",
+        "recovery_rate": 0.7,
+        "top_rejection_reasons": {
+          "detection_requirements_not_met": 36292,
+          "no_cvd_divergence": 26063,
+          "signal_cooldown_active": 3635
+        }
+      }
+    },
+    "threshold_sensitivity": {
+      "absorption": {
+        "10%_reduction": {
+          "recovered_signals": "7172",
+          "recovery_rate": 24.2,
+          "weighted_recovery": 24.8
+        },
+        "20%_reduction": {
+          "recovered_signals": "10740",
+          "recovery_rate": 36.2,
+          "weighted_recovery": 37.1
+        },
+        "30%_reduction": {
+          "recovered_signals": "14005",
+          "recovery_rate": 47.2,
+          "weighted_recovery": 48.4
+        },
+        "40%_reduction": {
+          "recovered_signals": "16152",
+          "recovery_rate": 54.4,
+          "weighted_recovery": 55.8
+        },
+        "50%_reduction": {
+          "recovered_signals": "17908",
+          "recovery_rate": 60.4,
+          "weighted_recovery": 61.9
+        }
+      },
+      "exhaustion": {
+        "10%_reduction": {
+          "recovered_signals": "0",
+          "recovery_rate": 0.0,
+          "weighted_recovery": 0.0
+        },
+        "20%_reduction": {
+          "recovered_signals": "0",
+          "recovery_rate": 0.0,
+          "weighted_recovery": 0.0
+        },
+        "30%_reduction": {
+          "recovered_signals": "0",
+          "recovery_rate": 0.0,
+          "weighted_recovery": 0.0
+        },
+        "40%_reduction": {
+          "recovered_signals": "0",
+          "recovery_rate": 0.0,
+          "weighted_recovery": 0.0
+        },
+        "50%_reduction": {
+          "recovered_signals": "0",
+          "recovery_rate": 0.0,
+          "weighted_recovery": 0.0
+        }
+      },
+      "deltacvd": {
+        "10%_reduction": {
+          "recovered_signals": "271",
+          "recovery_rate": 0.4,
+          "weighted_recovery": 0.9
+        },
+        "20%_reduction": {
+          "recovered_signals": "336",
+          "recovery_rate": 0.5,
+          "weighted_recovery": 1.1
+        },
+        "30%_reduction": {
+          "recovered_signals": "341",
+          "recovery_rate": 0.5,
+          "weighted_recovery": 1.1
+        },
+        "40%_reduction": {
+          "recovered_signals": "405",
+          "recovery_rate": 0.6,
+          "weighted_recovery": 1.4
+        },
+        "50%_reduction": {
+          "recovered_signals": "473",
+          "recovery_rate": 0.7,
+          "weighted_recovery": 1.6
+        }
+      }
+    },
+    "volume_relationships": {
+      "volume_stats": {
+        "count": 130528.0,
+        "mean": 6025.094504826173,
+        "std": 77579.93063909313,
+        "min": 0.0,
+        "25%": 0.0,
+        "50%": 4.906499999999999,
+        "75%": 2011.0285000000001,
+        "max": 2199933.3008450554
+      },
+      "price_stats": {
+        "count": 130528.0,
+        "mean": 103.98222488661438,
+        "std": 11.00209719190283,
+        "min": 75.0,
+        "25%": 85.89,
+        "50%": 110.23,
+        "75%": 110.49,
+        "max": 111.13
+      },
+      "correlations": {
+        "price": {
+          "price": 1.0,
+          "aggressiveVolume": -0.09093854858832098,
+          "passiveVolume": 0.24574158884648778,
+          "threshold_ratio": 0.26824276358713706,
+          "rejection_impact": 0.4994511021740523
+        },
+        "aggressiveVolume": {
+          "price": -0.09093854858832098,
+          "aggressiveVolume": 1.0,
+          "passiveVolume": -0.01948283664760904,
+          "threshold_ratio": -0.019157344209246904,
+          "rejection_impact": 0.08365538459046298
+        },
+        "passiveVolume": {
+          "price": 0.24574158884648778,
+          "aggressiveVolume": -0.01948283664760904,
+          "passiveVolume": 1.0,
+          "threshold_ratio": 0.7301955854001543,
+          "rejection_impact": 0.4404561074707002
+        },
+        "threshold_ratio": {
+          "price": 0.26824276358713706,
+          "aggressiveVolume": -0.019157344209246904,
+          "passiveVolume": 0.7301955854001543,
+          "threshold_ratio": 1.0,
+          "rejection_impact": 0.5062082710010534
+        },
+        "rejection_impact": {
+          "price": 0.4994511021740523,
+          "aggressiveVolume": 0.08365538459046298,
+          "passiveVolume": 0.4404561074707002,
+          "threshold_ratio": 0.5062082710010534,
+          "rejection_impact": 1.0
+        }
+      }
+    }
+  },
+  "statistical_optimizations": {
+    "absorption": {
+      "insufficient_aggressive_volume": {
+        "current_threshold": 1500.0,
+        "recommended_threshold": 214.927,
+        "current_rejections": 17329,
+        "potential_recovery": 12997,
+        "recovery_rate": 75.0,
+        "value_statistics": {
+          "q25": 214.927,
+          "q50": 529.574,
+          "q75": 889.789,
+          "mean": 581.6249851116626,
+          "std": 399.29906305448765
+        },
+        "confidence_interval": [
+          575.6794634206458,
+          587.5705068026793
+        ],
+        "statistical_significance": "high"
+      },
+      "balanced_institutional_flow": {
+        "current_threshold": 0.05,
+        "recommended_threshold": 0.01687091,
+        "current_rejections": 512,
+        "potential_recovery": 385,
+        "recovery_rate": 75.2,
+        "value_statistics": {
+          "q25": 0.01687091,
+          "q50": 0.02789688,
+          "q75": 0.0372179,
+          "mean": 0.02607076033203125,
+          "std": 0.013477709671509892
+        },
+        "confidence_interval": [
+          0.02490056310887524,
+          0.027240957555187264
+        ],
+        "statistical_significance": "high"
+      },
+      "passive_volume_ratio_too_low": {
+        "current_threshold": 0.75,
+        "recommended_threshold": 0.6213597774999999,
+        "current_rejections": 11828,
+        "potential_recovery": 8871,
+        "recovery_rate": 75.0,
+        "value_statistics": {
+          "q25": 0.6213597774999999,
+          "q50": 0.68415893,
+          "q75": 0.7133548350000001,
+          "mean": 0.6587201803804532,
+          "std": 0.07191158055486457
+        },
+        "confidence_interval": [
+          0.6574240887239705,
+          0.6600162720369359
+        ],
+        "statistical_significance": "high"
+      }
+    },
+    "exhaustion": {
+      "trade_quantity_too_small": {
+        "current_threshold": 2500.0,
+        "recommended_threshold": 0.149,
+        "current_rejections": 33969,
+        "potential_recovery": 25478,
+        "recovery_rate": 75.0,
+        "value_statistics": {
+          "q25": 0.149,
+          "q50": 0.42,
+          "q75": 2.635,
+          "mean": 4.344538461538462,
+          "std": 15.061887068878834
+        },
+        "confidence_interval": [
+          4.184360938951851,
+          4.504715984125072
+        ],
+        "statistical_significance": "high"
+      }
+    },
+    "deltacvd": {
+      "detection_requirements_not_met": {
+        "current_threshold": 10.0,
+        "recommended_threshold": 0.0,
+        "current_rejections": 36292,
+        "potential_recovery": 36292,
+        "recovery_rate": 100.0,
+        "value_statistics": {
+          "q25": 0.0,
+          "q50": 0.0,
+          "q75": 0.0,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "confidence_interval": [
+          NaN,
+          NaN
+        ],
+        "statistical_significance": "high"
+      },
+      "signal_cooldown_active": {
+        "current_threshold": 5000.0,
+        "recommended_threshold": -4000.0,
+        "current_rejections": 3635,
+        "potential_recovery": 2736,
+        "recovery_rate": 75.3,
+        "value_statistics": {
+          "q25": -4000.0,
+          "q50": 26.0,
+          "q75": 5510.0,
+          "mean": 8540.916918844567,
+          "std": 26253.246337989025
+        },
+        "confidence_interval": [
+          7687.180969120399,
+          9394.652868568734
+        ],
+        "statistical_significance": "high"
+      },
+      "no_cvd_divergence": {
+        "current_threshold": 0.35,
+        "recommended_threshold": 0.0,
+        "current_rejections": 26063,
+        "potential_recovery": 26063,
+        "recovery_rate": 100.0,
+        "value_statistics": {
+          "q25": 0.0,
+          "q50": 0.0,
+          "q75": 0.0,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "confidence_interval": [
+          NaN,
+          NaN
+        ],
+        "statistical_significance": "high"
+      },
+      "enhancement_mode_disabled": {
+        "current_threshold": 1.0,
+        "recommended_threshold": 0.0,
+        "current_rejections": 900,
+        "potential_recovery": 900,
+        "recovery_rate": 100.0,
+        "value_statistics": {
+          "q25": 0.0,
+          "q50": 0.0,
+          "q75": 0.0,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "confidence_interval": [
+          NaN,
+          NaN
+        ],
+        "statistical_significance": "high"
+      }
+    }
+  },
+  "implementation_roadmap": {
+    "implementation_plan": [
+      {
+        "detector": "deltacvd",
+        "parameter": "minVolPerSec",
+        "rejection_reason": "detection_requirements_not_met",
+        "current_value": 10.0,
+        "recommended_value": 0.0,
+        "expected_recovery": 36292,
+        "recovery_rate": 100.0,
+        "impact_score": 36292.0,
+        "statistical_confidence": "high",
+        "risk_level": "HIGH"
+      },
+      {
+        "detector": "deltacvd",
+        "parameter": "cvdImbalanceThreshold",
+        "rejection_reason": "no_cvd_divergence",
+        "current_value": 0.35,
+        "recommended_value": 0.0,
+        "expected_recovery": 26063,
+        "recovery_rate": 100.0,
+        "impact_score": 26063.0,
+        "statistical_confidence": "high",
+        "risk_level": "HIGH"
+      },
+      {
+        "detector": "exhaustion",
+        "parameter": "minAggVolume",
+        "rejection_reason": "trade_quantity_too_small",
+        "current_value": 2500.0,
+        "recommended_value": 0.149,
+        "expected_recovery": 25478,
+        "recovery_rate": 75.0,
+        "impact_score": 19108.5,
+        "statistical_confidence": "high",
+        "risk_level": "HIGH"
+      },
+      {
+        "detector": "absorption",
+        "parameter": "minAggVolume",
+        "rejection_reason": "insufficient_aggressive_volume",
+        "current_value": 1500.0,
+        "recommended_value": 214.927,
+        "expected_recovery": 12997,
+        "recovery_rate": 75.0,
+        "impact_score": 9747.75,
+        "statistical_confidence": "high",
+        "risk_level": "HIGH"
+      },
+      {
+        "detector": "absorption",
+        "parameter": "passiveVolumeThreshold",
+        "rejection_reason": "passive_volume_ratio_too_low",
+        "current_value": 0.75,
+        "recommended_value": 0.6213597774999999,
+        "expected_recovery": 8871,
+        "recovery_rate": 75.0,
+        "impact_score": 6653.25,
+        "statistical_confidence": "high",
+        "risk_level": "LOW"
+      },
+      {
+        "detector": "deltacvd",
+        "parameter": "unknown_parameter",
+        "rejection_reason": "signal_cooldown_active",
+        "current_value": 5000.0,
+        "recommended_value": -4000.0,
+        "expected_recovery": 2736,
+        "recovery_rate": 75.3,
+        "impact_score": 2060.208,
+        "statistical_confidence": "high",
+        "risk_level": "HIGH"
+      },
+      {
+        "detector": "deltacvd",
+        "parameter": "unknown_parameter",
+        "rejection_reason": "enhancement_mode_disabled",
+        "current_value": 1.0,
+        "recommended_value": 0.0,
+        "expected_recovery": 900,
+        "recovery_rate": 100.0,
+        "impact_score": 900.0,
+        "statistical_confidence": "high",
+        "risk_level": "HIGH"
+      },
+      {
+        "detector": "absorption",
+        "parameter": "unknown_parameter",
+        "rejection_reason": "balanced_institutional_flow",
+        "current_value": 0.05,
+        "recommended_value": 0.01687091,
+        "expected_recovery": 385,
+        "recovery_rate": 75.2,
+        "impact_score": 289.52,
+        "statistical_confidence": "high",
+        "risk_level": "HIGH"
+      }
+    ],
+    "config_changes": {
+      "deltacvd": {
+        "minVolPerSec": {
+          "current": 10.0,
+          "recommended": 0.0,
+          "justification": "Statistical analysis of 36292 rejections"
+        },
+        "cvdImbalanceThreshold": {
+          "current": 0.35,
+          "recommended": 0.0,
+          "justification": "Statistical analysis of 26063 rejections"
+        }
+      },
+      "exhaustion": {
+        "minAggVolume": {
+          "current": 2500.0,
+          "recommended": 0.149,
+          "justification": "Statistical analysis of 25478 rejections"
+        }
+      },
+      "absorption": {
+        "minAggVolume": {
+          "current": 1500.0,
+          "recommended": 214.927,
+          "justification": "Statistical analysis of 12997 rejections"
+        },
+        "passiveVolumeThreshold": {
+          "current": 0.75,
+          "recommended": 0.6213597774999999,
+          "justification": "Statistical analysis of 8871 rejections"
+        }
+      }
+    },
+    "monitoring_metrics": [
+      "signal_volume_increase",
+      "false_positive_rate_change",
+      "successful_0.7%_movement_detection",
+      "detector_response_time",
+      "memory_usage_impact"
+    ]
+  }
+}
