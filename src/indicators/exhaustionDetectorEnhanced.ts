@@ -97,7 +97,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
     private readonly exhaustionVolumeThreshold: number;
     private readonly exhaustionRatioThreshold: number;
     private readonly exhaustionScoreThreshold: number;
-    
+
     // Additional configurable thresholds to replace magic numbers
     private readonly passiveRatioBalanceThreshold: number;
     private readonly premiumConfidenceThreshold: number;
@@ -136,9 +136,10 @@ export class ExhaustionDetectorEnhanced extends Detector {
         this.exhaustionVolumeThreshold = settings.minAggVolume;
         this.exhaustionRatioThreshold = settings.exhaustionThreshold;
         this.exhaustionScoreThreshold = settings.minEnhancedConfidenceThreshold;
-        
+
         // Initialize additional configurable thresholds (CLAUDE.md compliance)
-        this.passiveRatioBalanceThreshold = settings.passiveRatioBalanceThreshold;
+        this.passiveRatioBalanceThreshold =
+            settings.passiveRatioBalanceThreshold;
         this.premiumConfidenceThreshold = settings.premiumConfidenceThreshold;
         this.variancePenaltyFactor = settings.variancePenaltyFactor;
         this.ratioBalanceCenterPoint = settings.ratioBalanceCenterPoint;
@@ -171,10 +172,10 @@ export class ExhaustionDetectorEnhanced extends Detector {
         // Note: For signal cooldown, we still use Date.now() since it's system time management
         // not market data timing. This is acceptable as per architectural guidelines.
         const now = Date.now();
-        
+
         // MEMORY LEAK FIX: Clean up expired cooldown entries to prevent memory growth
         this.cleanupExpiredCooldowns(now);
-        
+
         const lastSignalTime = this.lastSignal.get(eventKey) || 0;
 
         if (now - lastSignalTime <= this.enhancementConfig.eventCooldownMs) {
@@ -193,8 +194,9 @@ export class ExhaustionDetectorEnhanced extends Detector {
      * CLAUDE.md COMPLIANCE: Memory management without magic numbers
      */
     private cleanupExpiredCooldowns(currentTime: number): void {
-        const expirationTime = currentTime - (this.enhancementConfig.eventCooldownMs * 2); // Keep entries for 2x cooldown period
-        
+        const expirationTime =
+            currentTime - this.enhancementConfig.eventCooldownMs * 2; // Keep entries for 2x cooldown period
+
         for (const [key, timestamp] of this.lastSignal.entries()) {
             if (timestamp < expirationTime) {
                 this.lastSignal.delete(key);
@@ -385,12 +387,19 @@ export class ExhaustionDetectorEnhanced extends Detector {
         if (finalSignal && this.canEmitSignal(`exhaustion`)) {
             // Apply enhancement confidence boost if applicable
             if (enhancementApplied && totalConfidenceBoost > 0) {
-                finalSignal.confidence = Math.min(1.0, finalSignal.confidence + totalConfidenceBoost);
+                finalSignal.confidence = Math.min(
+                    1.0,
+                    finalSignal.confidence + totalConfidenceBoost
+                );
             }
 
             // Update cooldown and emit signal
             this.canEmitSignal(`exhaustion`, true);
-            void this.logSignalForValidation(finalSignal, event, event.zoneData?.zones || []);
+            void this.logSignalForValidation(
+                finalSignal,
+                event,
+                event.zoneData?.zones || []
+            );
             this.emit("signalCandidate", finalSignal);
 
             this.logger.info("ExhaustionDetectorEnhanced: Signal emitted", {
@@ -724,9 +733,14 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     accumulatedAggressiveRatio,
                     accumulatedPassiveRatio,
                     exhaustionRatioThreshold: this.exhaustionRatioThreshold,
-                    passiveRatioBalanceThreshold: this.passiveRatioBalanceThreshold,
-                    firstCondition: accumulatedAggressiveRatio >= this.exhaustionRatioThreshold,
-                    secondCondition: accumulatedPassiveRatio < this.passiveRatioBalanceThreshold,
+                    passiveRatioBalanceThreshold:
+                        this.passiveRatioBalanceThreshold,
+                    firstCondition:
+                        accumulatedAggressiveRatio >=
+                        this.exhaustionRatioThreshold,
+                    secondCondition:
+                        accumulatedPassiveRatio <
+                        this.passiveRatioBalanceThreshold,
                 }
             );
             this.logSignalRejection(
@@ -817,7 +831,12 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 confidence: Math.min(1.0, confidence),
                 depletionRatio: accumulatedAggressiveRatio,
                 passiveVolumeRatio: accumulatedPassiveRatio,
-                volumeImbalance: FinancialMath.calculateAbs(FinancialMath.safeSubtract(accumulatedAggressiveRatio, this.ratioBalanceCenterPoint)),
+                volumeImbalance: FinancialMath.calculateAbs(
+                    FinancialMath.safeSubtract(
+                        accumulatedAggressiveRatio,
+                        this.ratioBalanceCenterPoint
+                    )
+                ),
                 metadata: {
                     signalType: "exhaustion",
                     timestamp: event.timestamp,
@@ -832,7 +851,10 @@ export class ExhaustionDetectorEnhanced extends Detector {
                         depletionConfirmation:
                             accumulatedAggressiveRatio >=
                             this.exhaustionRatioThreshold,
-                        signalPurity: confidence > this.premiumConfidenceThreshold ? "premium" : "standard",
+                        signalPurity:
+                            confidence > this.premiumConfidenceThreshold
+                                ? "premium"
+                                : "standard",
                         accumulatedVolumeRatio: accumulatedAggressiveRatio,
                     },
                 },
@@ -1001,7 +1023,13 @@ export class ExhaustionDetectorEnhanced extends Detector {
         );
         const alignmentScore = FinancialMath.multiplyQuantities(
             avgExhaustion,
-            FinancialMath.calculateMax([0, FinancialMath.safeSubtract(this.variancePenaltyFactor, normalizedVariance)])
+            FinancialMath.calculateMax([
+                0,
+                FinancialMath.safeSubtract(
+                    this.variancePenaltyFactor,
+                    normalizedVariance
+                ),
+            ])
         ); // Penalize high variance
         const alignmentNormalizationFactor =
             this.enhancementConfig.alignmentNormalizationFactor;
@@ -1191,7 +1219,9 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     exhaustionStatisticalSignificance: enhancedConfidence,
                     depletionConfirmation: depletionResult.affectedZones >= 2,
                     signalPurity:
-                        enhancedConfidence > this.premiumConfidenceThreshold ? "premium" : "standard",
+                        enhancedConfidence > this.premiumConfidenceThreshold
+                            ? "premium"
+                            : "standard",
                 },
             },
         };
@@ -1244,12 +1274,12 @@ export class ExhaustionDetectorEnhanced extends Detector {
             (zone) => zone.lastUpdate >= windowStartTime
         );
 
-        let totalPassiveBidExhaustion = 0;
-        let totalPassiveAskExhaustion = 0;
+        let totalPassiveBidAvailable = 0;
+        let totalPassiveAskAvailable = 0;
 
         recentZones.forEach((zone) => {
-            totalPassiveBidExhaustion += zone.passiveBidVolume || 0;
-            totalPassiveAskExhaustion += zone.passiveAskVolume || 0;
+            totalPassiveBidAvailable += zone.passiveBidVolume || 0;
+            totalPassiveAskAvailable += zone.passiveAskVolume || 0;
         });
 
         // Debug logging to verify the data
@@ -1258,8 +1288,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
             {
                 detectorId: this.getId(),
                 price: event.price,
-                totalPassiveBidExhaustion,
-                totalPassiveAskExhaustion,
+                totalPassiveBidAvailable,
+                totalPassiveAskAvailable,
                 recentZones: recentZones.map((z) => ({
                     zoneId: z.zoneId,
                     passiveBidVolume: z.passiveBidVolume,
@@ -1268,11 +1298,11 @@ export class ExhaustionDetectorEnhanced extends Detector {
             }
         );
 
-        // CORRECTED exhaustion logic - Variables contain AVAILABLE volumes, not consumed
-        if (totalPassiveBidExhaustion > totalPassiveAskExhaustion) {
+        // Exhaustion logic: More available liquidity on one side means the opposite side is more exhausted
+        if (totalPassiveBidAvailable > totalPassiveAskAvailable) {
             // More bid liquidity AVAILABLE → ask side MORE exhausted → price resistance weakened → BUY signal
             return "buy";
-        } else if (totalPassiveAskExhaustion > totalPassiveBidExhaustion) {
+        } else if (totalPassiveAskAvailable > totalPassiveBidAvailable) {
             // More ask liquidity AVAILABLE → bid side MORE exhausted → price support weakened → SELL signal
             return "sell";
         }
@@ -1377,7 +1407,9 @@ export class ExhaustionDetectorEnhanced extends Detector {
             totalBuyVolume,
             totalVolume
         );
-        return FinancialMath.calculateAbs(FinancialMath.safeSubtract(buyRatio, this.ratioBalanceCenterPoint));
+        return FinancialMath.calculateAbs(
+            FinancialMath.safeSubtract(buyRatio, this.ratioBalanceCenterPoint)
+        );
     }
 
     /**

@@ -1,7 +1,7 @@
 // test/absorptionDetector_specifications.test.ts
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
-import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
+import { SignalValidationLogger } from "../src/utils/signalValidationLogger.js";
 import type { AbsorptionEnhancedSettings } from "../src/indicators/absorptionDetectorEnhanced.js";
 import type {
     EnrichedTradeEvent,
@@ -14,6 +14,7 @@ import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import { FinancialMath } from "../src/utils/financialMath.js";
 import { createMockLogger } from "../__mocks__/src/infrastructure/loggerInterface.js";
+import { CircularBuffer } from "../src/utils/circularBuffer.js";
 
 /**
  * CRITICAL REQUIREMENT: These tests validate EXPECTED CORRECT BEHAVIOR
@@ -55,111 +56,45 @@ describe("AbsorptionDetector - Specification Compliance", () => {
     let mockSignalValidationLogger: SignalValidationLogger;
 
     const defaultSettings: AbsorptionEnhancedSettings = {
-        // Base detector settings (from config.json) - PRODUCTION-LIKE for testing
-        minAggVolume: 100,
-        timeWindowIndex: 2, // Maps to 60000ms window via Config.getTimeWindow()
-        pricePrecision: 2,
-        zoneTicks: 5,
-        eventCooldownMs: 15000,
-        minInitialMoveTicks: 4,
-        confirmationTimeoutMs: 60000,
-        maxRevisitTicks: 5,
+        // Base detector settings - PRODUCTION VALUES from config.json
+        minAggVolume: 2500, // PRODUCTION: Institutional minimum
+        timeWindowIndex: 0, // PRODUCTION: Index into preprocessor timeWindows array
+        eventCooldownMs: 15000, // PRODUCTION: Cooldown period
 
-        // Absorption-specific thresholds - PRODUCTION-LIKE for testing
-        absorptionThreshold: 0.6,
-        minPassiveMultiplier: 1.2,
-        maxAbsorptionRatio: 0.4,
-        strongAbsorptionRatio: 0.6,
-        moderateAbsorptionRatio: 0.8,
-        weakAbsorptionRatio: 1.0,
-        priceEfficiencyThreshold: 0.02,
-        spreadImpactThreshold: 0.003,
-        velocityIncreaseThreshold: 1.5,
-        significantChangeThreshold: 0.1,
+        // Absorption-specific thresholds - PRODUCTION VALUES from config.json
+        priceEfficiencyThreshold: 0.025, // PRODUCTION: Price efficiency threshold
+        maxAbsorptionRatio: 0.65, // PRODUCTION: Maximum absorption ratio
+        minPassiveMultiplier: 1.2, // PRODUCTION: Passive multiplier
+        passiveAbsorptionThreshold: 0.75, // PRODUCTION: Passive absorption threshold
 
         // Dominant side analysis
-        dominantSideAnalysisWindowMs: 45000,
-        dominantSideFallbackTradeCount: 10,
-        dominantSideMinTradesRequired: 3,
-        dominantSideTemporalWeighting: true,
-        dominantSideWeightDecayFactor: 0.3,
 
-        // Features configuration
-        features: {
-            adaptiveZone: true,
-            passiveHistory: true,
-            multiZone: false,
-            liquidityGradient: true,
-            absorptionVelocity: true,
-            layeredAbsorption: true,
-            spreadImpact: true,
-        },
-
-        // Enhancement control - PRODUCTION-LIKE for testing
+        // Enhancement control - PRODUCTION from config.json
         useStandardizedZones: true,
         enhancementMode: "production" as const,
-        minEnhancedConfidenceThreshold: 0.3,
+        minEnhancedConfidenceThreshold: 0.2, // PRODUCTION: 20% minimum
 
-        // Institutional volume detection (enhanced)
-        institutionalVolumeThreshold: 50,
-        institutionalVolumeRatioThreshold: 0.3,
+        // Institutional volume detection - PRODUCTION VALUES from config.json
+        institutionalVolumeThreshold: 1500, // PRODUCTION: 1500 LTC threshold
+        institutionalVolumeRatioThreshold: 0.82, // PRODUCTION: 82% threshold
         enableInstitutionalVolumeFilter: true,
-        institutionalVolumeBoost: 0.1,
+        institutionalVolumeBoost: 0.1, // PRODUCTION: Volume boost
 
-        // Enhanced calculation parameters
-        volumeNormalizationThreshold: 200,
-        absorptionRatioNormalization: 3,
-        minAbsorptionScore: 0.8,
-        patternVarianceReduction: 2,
-        whaleActivityMultiplier: 2,
-        maxZoneCountForScoring: 3,
+        // Enhanced calculation parameters - PRODUCTION VALUES from config.json
+        expectedMovementScalingFactor: 10, // PRODUCTION
+        contextConfidenceBoostMultiplier: 0.3, // PRODUCTION
+        liquidityGradientRange: 5, // PRODUCTION
+        minAbsorptionScore: 0.5, // PRODUCTION: 50% minimum
+        maxZoneCountForScoring: 5, // PRODUCTION
 
-        // Enhanced thresholds
-        highConfidenceThreshold: 0.7,
-        lowConfidenceReduction: 0.7,
-        confidenceBoostReduction: 0.5,
-        passiveAbsorptionThreshold: 0.6,
-        aggressiveDistributionThreshold: 0.6,
-        patternDifferenceThreshold: 0.1,
-        minVolumeForRatio: 1,
+        // Final confidence threshold - PRODUCTION from config.json
+        finalConfidenceRequired: 0.9, // PRODUCTION: 0.9 confidence required
+        confidenceBoostReduction: 0.3, // PRODUCTION
 
-        // Enhanced scoring weights
-        distanceWeight: 0.4,
-        volumeWeight: 0.35,
-        absorptionWeight: 0.25,
-        minConfluenceScore: 0.6,
-        volumeConcentrationWeight: 0.15,
-        patternConsistencyWeight: 0.1,
-        volumeBoostCap: 0.25,
-        volumeBoostMultiplier: 0.25,
-
-        // Missing parameters that constructor expects - COMPLETE PRODUCTION CONFIG
-        liquidityGradientRange: 5,
-        contextConfidenceBoostMultiplier: 0.3,
-        recentEventsNormalizer: 10,
-        contextTimeWindowMs: 300000,
-        historyMultiplier: 2,
-        refillThreshold: 1.1,
-        consistencyThreshold: 0.7,
-        passiveStrengthPeriods: 3,
-        expectedMovementScalingFactor: 10,
-        highUrgencyThreshold: 1.3,
-        lowUrgencyThreshold: 0.8,
-        reversalStrengthThreshold: 0.7,
-        pricePercentileHighThreshold: 0.8,
-        microstructureSustainabilityThreshold: 0.7,
-        microstructureEfficiencyThreshold: 0.8,
-        microstructureFragmentationThreshold: 0.7,
-        microstructureSustainabilityBonus: 0.3,
-        microstructureToxicityMultiplier: 0.3,
-        microstructureHighToxicityThreshold: 0.8,
-        microstructureLowToxicityThreshold: 0.3,
-        microstructureRiskCapMin: -0.3,
-        microstructureRiskCapMax: 0.3,
-        microstructureCoordinationBonus: 0.3,
-        microstructureConfidenceBoostMin: 0.8,
-        microstructureConfidenceBoostMax: 1.5,
-        finalConfidenceRequired: 0.85,
+        // Additional production settings from config.json
+        balanceThreshold: 0.05, // PRODUCTION
+        confluenceMinZones: 2, // PRODUCTION
+        confluenceMaxDistance: 5, // PRODUCTION
     };
 
     beforeEach(async () => {
@@ -213,19 +148,21 @@ describe("AbsorptionDetector - Specification Compliance", () => {
             console.log("🎯 Creating TRUE absorption scenario...");
             const baseTime = Date.now() - 10000; // 10 seconds ago
             const basePrice = 84.94; // Real LTCUSDT price from backtest data
+            
+            // Update mock order book to match test data price
+            mockOrderBook.getBestBid = vi.fn().mockReturnValue(basePrice - 0.01);
+            mockOrderBook.getBestAsk = vi.fn().mockReturnValue(basePrice + 0.01);
 
-            // REALISTIC ABSORPTION: Production-scale institutional volume (100+ LTC minimum)
-            // Based on actual LTCUSDT institutional absorption patterns
+            // INSTITUTIONAL-GRADE ABSORPTION: Meet production config requirements
+            // Production requires institutionalVolumeThreshold: 1500+ and institutionalVolumeRatioThreshold: 0.82
             const absorptionTrades = [
-                // 8 trades with realistic institutional volumes (100-300 LTC)
-                { price: basePrice, volume: 150, timestamp: baseTime + 0 },
-                { price: basePrice, volume: 125, timestamp: baseTime + 3000 },
-                { price: basePrice, volume: 110, timestamp: baseTime + 6000 },
-                { price: basePrice, volume: 180, timestamp: baseTime + 9000 },
-                { price: basePrice, volume: 200, timestamp: baseTime + 12000 },
-                { price: basePrice, volume: 135, timestamp: baseTime + 15000 },
-                { price: basePrice, volume: 175, timestamp: baseTime + 18000 },
-                { price: basePrice, volume: 165, timestamp: baseTime + 21000 },
+                // 6 trades with true institutional-grade volumes (750+ LTC each) totaling 5000+ LTC
+                { price: basePrice, volume: 850, timestamp: baseTime + 0 },
+                { price: basePrice, volume: 920, timestamp: baseTime + 3000 },
+                { price: basePrice, volume: 780, timestamp: baseTime + 6000 },
+                { price: basePrice, volume: 1100, timestamp: baseTime + 9000 },
+                { price: basePrice, volume: 850, timestamp: baseTime + 12000 },
+                { price: basePrice, volume: 900, timestamp: baseTime + 15000 },
             ];
 
             // Calculate expected scenario
@@ -285,13 +222,13 @@ describe("AbsorptionDetector - Specification Compliance", () => {
                         T: timestamp,
                         m: params.side === "sell",
                     } as any,
-                    // STRONG absorption scenario: High passive volume that can absorb the aggressive flow
-                    passiveBidVolume: 1500, // High liquidity pool for absorption
-                    passiveAskVolume: params.passiveAskVolume ?? 1800, // High ask side liquidity
+                    // INSTITUTIONAL-GRADE absorption scenario: Meet production config requirements (82%+ passive ratio)
+                    passiveBidVolume: 20000, // Massive institutional liquidity pool
+                    passiveAskVolume: params.passiveAskVolume ?? 25000, // Massive institutional ask liquidity 
                     // CRITICAL: Zone passive volumes are what get tracked in zone history snapshots
                     // These must vary between trades to create distinct snapshots
-                    zonePassiveBidVolume: 800, // Substantial zone bid liquidity
-                    zonePassiveAskVolume: params.passiveAskVolume ?? 1800, // Use variable ask volume for snapshots
+                    zonePassiveBidVolume: 18000, // Institutional zone bid liquidity
+                    zonePassiveAskVolume: params.passiveAskVolume ?? 25000, // Use variable ask volume for snapshots
                     bestBid: params.price - 0.01,
                     bestAsk: params.price + 0.01,
 
@@ -302,14 +239,14 @@ describe("AbsorptionDetector - Specification Compliance", () => {
                                 zoneId: `zone-${params.price}`,
                                 priceLevel: params.price,
                                 tickSize: 0.01,
-                                aggressiveVolume: params.volume * 2, // Use 10-tick equivalent values
+                                aggressiveVolume: Math.max(params.volume * 2, 1800), // Meet institutional minimum (1500+)
                                 passiveVolume:
-                                    (params.passiveAskVolume ?? 15000) * 1.5,
-                                aggressiveBuyVolume: params.volume * 2,
+                                    Math.max((params.passiveAskVolume ?? 25000) * 1.2, 30000), // Massive institutional passive volume for 82%+ ratio
+                                aggressiveBuyVolume: Math.max(params.volume * 2, 1800),
                                 aggressiveSellVolume: 0,
-                                passiveBidVolume: 12000,
+                                passiveBidVolume: Math.max(params.passiveAskVolume ?? 25000, 25000), // Massive institutional bid absorption
                                 passiveAskVolume:
-                                    params.passiveAskVolume ?? 15000,
+                                    Math.max(5000, 5000), // Strong ask liquidity but less than bid for clear absorption
                                 tradeCount: 20,
                                 timespan: 60000,
                                 boundaries: {
@@ -332,7 +269,7 @@ describe("AbsorptionDetector - Specification Compliance", () => {
             // Process all trades to build up the zone with strong absorption capacity
             for (let i = 0; i < absorptionTrades.length; i++) {
                 // Ensure each trade has distinctly different passive volume to guarantee snapshots
-                const passiveVolume = 2500 - i * 100; // Decreases: 2500, 2400, 2300, 2200, 2100, 2000, 1900, 1800, 1700, 1600
+                const passiveVolume = 25000 - i * 1000; // Decreases: 25000, 24000, 23000, 22000, 21000, 20000 (institutional scale)
 
                 const trade = createAbsorptionTradeEvent({
                     price: absorptionTrades[i].price,
@@ -399,8 +336,8 @@ describe("AbsorptionDetector - Specification Compliance", () => {
 
             console.log("📊 Result:", { signalDetected, signalCount });
 
-            // Wait a short time for async signal emission
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            // Wait for signal emission and ensure test isolation
+            await new Promise((resolve) => setTimeout(resolve, 50));
 
             console.log("📊 Final Result after wait:", {
                 signalDetected,
@@ -438,8 +375,8 @@ describe("AbsorptionDetector - Specification Compliance", () => {
     describe("SPECIFICATION: Volume Surge Detection", () => {
         it("MUST enhance confidence when volume surge (4x) is detected", async () => {
             // REQUIREMENT: 4x volume surge validates institutional activity
-            const normalVolume = 25; // Base volume
-            const surgeVolume = 100; // 4x surge
+            const normalVolume = 400; // Institutional base volume
+            const surgeVolume = 1600; // 4x surge (institutional scale)
 
             let baseSignalStrength = 0;
             let surgeSignalStrength = 0;
@@ -464,7 +401,7 @@ describe("AbsorptionDetector - Specification Compliance", () => {
 
                 // Create 10 trades with decreasing passive volume (like successful test)
                 for (let i = 0; i < 10; i++) {
-                    const passiveVolume = 2500 - i * 100; // Decreasing liquidity
+                    const passiveVolume = 25000 - i * 1000; // Decreasing institutional liquidity
 
                     const trade = {
                         price: basePrice,
@@ -479,9 +416,9 @@ describe("AbsorptionDetector - Specification Compliance", () => {
                             T: baseTime + i * 3000,
                             m: false,
                         } as any,
-                        passiveBidVolume: 1500,
+                        passiveBidVolume: 20000,
                         passiveAskVolume: passiveVolume,
-                        zonePassiveBidVolume: 800,
+                        zonePassiveBidVolume: 18000,
                         zonePassiveAskVolume: passiveVolume,
                         bestBid: basePrice - 0.01,
                         bestAsk: basePrice + 0.01,
@@ -566,28 +503,28 @@ describe("AbsorptionDetector - Specification Compliance", () => {
             const basePrice = 84.94; // Same as working test
 
             // Create 7 buy trades + 3 sell trades with decreasing passive liquidity
-            // Buy volume: 7 * 35 = 245, Sell volume: 3 * 15 = 45
-            // Imbalance = |245-45|/(245+45) = 200/290 = 69% > 35%
+            // Buy volume: 7 * 250 = 1750, Sell volume: 3 * 100 = 300
+            // Imbalance = |1750-300|/(1750+300) = 1450/2050 = 70% > 35% AND meets institutional minimum
 
             // Process dominant buy flow (aggressive)
             for (let i = 0; i < 7; i++) {
-                const passiveVolume = 2500 - i * 100;
+                const passiveVolume = 25000 - i * 1000;
                 const trade = {
                     price: basePrice,
-                    quantity: 35, // Significant volume per trade
+                    quantity: 250, // Institutional volume per trade
                     timestamp: baseTime + i * 3000,
                     buyerIsMaker: false, // Aggressive buy
                     pair: "TESTUSDT",
                     tradeId: `imbalance_buy_${i}`,
                     originalTrade: {
                         p: basePrice.toString(),
-                        q: "35",
+                        q: "250",
                         T: baseTime + i * 3000,
                         m: false,
                     } as any,
-                    passiveBidVolume: 1500,
+                    passiveBidVolume: 20000,
                     passiveAskVolume: passiveVolume,
-                    zonePassiveBidVolume: 800,
+                    zonePassiveBidVolume: 18000,
                     zonePassiveAskVolume: passiveVolume,
                     bestBid: basePrice - 0.01,
                     bestAsk: basePrice + 0.01,
@@ -598,24 +535,24 @@ describe("AbsorptionDetector - Specification Compliance", () => {
 
             // Process minority sell flow (aggressive)
             for (let i = 0; i < 3; i++) {
-                const passiveVolume = 1800 - i * 50;
+                const passiveVolume = 18000 - i * 500;
                 const trade = {
                     price: basePrice,
-                    quantity: 15, // Smaller volume per trade
+                    quantity: 100, // Institutional volume per trade
                     timestamp: baseTime + (7 + i) * 3000,
                     buyerIsMaker: true, // Aggressive sell
                     pair: "TESTUSDT",
                     tradeId: `imbalance_sell_${i}`,
                     originalTrade: {
                         p: basePrice.toString(),
-                        q: "15",
+                        q: "100",
                         T: baseTime + (7 + i) * 3000,
                         m: true,
                     } as any,
                     passiveBidVolume: passiveVolume,
-                    passiveAskVolume: 1200,
+                    passiveAskVolume: 15000,
                     zonePassiveBidVolume: passiveVolume,
-                    zonePassiveAskVolume: 600,
+                    zonePassiveAskVolume: 12000,
                     bestBid: basePrice - 0.01,
                     bestAsk: basePrice + 0.01,
                 } as EnrichedTradeEvent;
@@ -639,9 +576,9 @@ describe("AbsorptionDetector - Specification Compliance", () => {
         it("MUST NOT trigger on balanced order flow", () => {
             // REQUIREMENT: Balanced flow should not indicate directional bias
             const balancedTrades = createImbalancedTradeSequence({
-                buyVolume: 500, // 50% buy volume
-                sellVolume: 500, // 50% sell volume
-                // Imbalance = |500-500|/(500+500) = 0/1000 = 0% < 35%
+                buyVolume: 1000, // 50% buy volume (institutional scale)
+                sellVolume: 1000, // 50% sell volume (institutional scale)
+                // Imbalance = |1000-1000|/(1000+1000) = 0/2000 = 0% < 35%
                 priceLevel: 100.5,
             });
 
@@ -665,8 +602,6 @@ describe("AbsorptionDetector - Specification Compliance", () => {
             const customSettings: AbsorptionEnhancedSettings = {
                 ...defaultSettings,
                 priceEfficiencyThreshold: 0.05, // Within valid range (0.02-0.1)
-                spreadImpactThreshold: 0.005,
-                velocityIncreaseThreshold: 2.0,
             };
 
             const customDetector = new AbsorptionDetectorEnhanced(
@@ -730,7 +665,7 @@ describe("AbsorptionDetector - Specification Compliance", () => {
             // REQUIREMENT: Signals must include all required institutional-grade metadata
             const qualifyingTrade = createTradeEvent({
                 price: 100.5,
-                volume: 1000, // Large volume
+                volume: 1800, // Institutional volume (above 1500 threshold)
                 side: "buy",
             });
 
@@ -763,8 +698,8 @@ describe("AbsorptionDetector - Specification Compliance", () => {
         it("MUST respect cooldown periods to prevent signal spam", () => {
             // REQUIREMENT: Cooldown prevents excessive signals from same zone
             const sameZoneTrades = [
-                createTradeEvent({ price: 100.5, volume: 1000, side: "buy" }),
-                createTradeEvent({ price: 100.5, volume: 1000, side: "buy" }), // Same zone, immediate
+                createTradeEvent({ price: 100.5, volume: 1800, side: "buy" }),
+                createTradeEvent({ price: 100.5, volume: 1800, side: "buy" }), // Same zone, immediate
             ];
 
             let signalCount = 0;
@@ -794,8 +729,8 @@ describe("AbsorptionDetector - Specification Compliance", () => {
         // Create trade sequence that produces the specified price movement
         const startPrice = basePrice;
         const endPrice = basePrice + params.actualPriceMovement;
-        // Use realistic institutional volumes (minimum 100 LTC for production)
-        const baseInstitutionalVolume = 150; // Realistic base institutional size
+        // Use realistic institutional volumes (minimum 1500 LTC for production)
+        const baseInstitutionalVolume = 1800; // Realistic base institutional size (above threshold)
         const volumeMultiplier = params.volumePressure; // Apply pressure multiplier
         const tradeCount = 5; // Create enough trades for analysis (minimum 3 required)
 
@@ -806,9 +741,9 @@ describe("AbsorptionDetector - Specification Compliance", () => {
             const currentPrice =
                 startPrice + params.actualPriceMovement * progress;
 
-            // Ensure each trade meets minimum production volume (100+ LTC)
+            // Ensure each trade meets minimum production volume (1500+ LTC)
             const tradeVolume = Math.max(
-                100,
+                1600,
                 baseInstitutionalVolume * volumeMultiplier
             );
 
@@ -868,13 +803,13 @@ describe("AbsorptionDetector - Specification Compliance", () => {
                         priceLevel: params.price,
                         tickSize: 0.01,
                         aggressiveVolume: params.volume,
-                        passiveVolume: 2000, // High passive volume for absorption
+                        passiveVolume: Math.max(params.volume * 15, 25000), // Massive passive volume for 82%+ ratio
                         aggressiveBuyVolume:
                             params.side === "buy" ? params.volume : 0,
                         aggressiveSellVolume:
                             params.side === "sell" ? params.volume : 0,
-                        passiveBidVolume: 1000,
-                        passiveAskVolume: 1000,
+                        passiveBidVolume: Math.max(params.volume * 12, 20000),
+                        passiveAskVolume: Math.max(params.volume * 12, 20000),
                         tradeCount: 1,
                         timespan: 60000,
                         boundaries: {
@@ -883,7 +818,7 @@ describe("AbsorptionDetector - Specification Compliance", () => {
                         },
                         lastUpdate: timestamp - 30000, // Zone was active 30 seconds ago, within window
                         volumeWeightedPrice: params.price,
-                        tradeHistory: [],
+                        tradeHistory: new CircularBuffer(100),
                     },
                 ],
                 zoneConfig: {
@@ -903,23 +838,23 @@ describe("AbsorptionDetector - Specification Compliance", () => {
     }): EnrichedTradeEvent[] {
         const trades: EnrichedTradeEvent[] = [];
 
-        // Add buy trades
+        // Add buy trades (ensure institutional volume per trade)
         for (let i = 0; i < 5; i++) {
             trades.push(
                 createTradeEvent({
                     price: params.priceLevel,
-                    volume: params.buyVolume / 5,
+                    volume: Math.max(params.buyVolume / 5, 320), // Minimum 320 LTC per trade
                     side: "buy",
                 })
             );
         }
 
-        // Add sell trades
+        // Add sell trades (ensure institutional volume per trade)
         for (let i = 0; i < 5; i++) {
             trades.push(
                 createTradeEvent({
                     price: params.priceLevel,
-                    volume: params.sellVolume / 5,
+                    volume: Math.max(params.sellVolume / 5, 320), // Minimum 320 LTC per trade
                     side: "sell",
                 })
             );

@@ -112,7 +112,7 @@ describe("Absorption Detector Market-Realistic Signal Validation", () => {
             const passiveSell = passiveVol - passiveBuy;
 
             testCases.push({
-                id: `clear_buy_${i}`,
+                id: `clear_sell_${i}`,
                 description: `Retail panic selling (${aggressiveSell} LTC) absorbed by institution (${passiveBuy} LTC buy liquidity)`,
                 marketScenario: "retail_panic_selling",
                 rawData: {
@@ -126,10 +126,10 @@ describe("Absorption Detector Market-Realistic Signal Validation", () => {
                     price: 89.5 + i * 0.01, // Realistic LTC pricing
                     tradeCount: Math.max(Math.floor(baseAggressive / 25), 8),
                 },
-                theoreticalSignal: "buy", // Flow-following: follow institutional buying direction
-                reasoning: `Institution absorbing ${Math.round((passiveVol / (baseAggressive + passiveVol)) * 100)}% of flow against retail selling. Institutional BUY signal expected.`,
+                theoreticalSignal: "sell", // Absorption pressure: aggressive selling absorbed by bid liquidity = selling pressure
+                reasoning: `Aggressive selling (${aggressiveSell} LTC) absorbed by bid liquidity (${passiveBuy} LTC). Indicates selling pressure/resistance at this level.`,
                 confidence: i <= 15 ? "high" : "medium",
-                category: "clear_buy",
+                category: "clear_sell",
             });
         }
 
@@ -153,7 +153,7 @@ describe("Absorption Detector Market-Realistic Signal Validation", () => {
             const passiveBuy = passiveVol - passiveSell;
 
             testCases.push({
-                id: `clear_sell_${i}`,
+                id: `clear_buy_${i}`,
                 description: `Retail FOMO buying (${aggressiveBuy} LTC) absorbed by institution (${passiveSell} LTC sell liquidity)`,
                 marketScenario: "retail_fomo_buying",
                 rawData: {
@@ -167,10 +167,10 @@ describe("Absorption Detector Market-Realistic Signal Validation", () => {
                     price: 89.75 + testIndex * 0.015,
                     tradeCount: Math.max(Math.floor(baseAggressive / 23), 9),
                 },
-                theoreticalSignal: "sell", // Flow-following: follow institutional selling direction
-                reasoning: `Institution absorbing ${Math.round((passiveVol / (baseAggressive + passiveVol)) * 100)}% of flow against retail buying. Institutional SELL signal expected.`,
+                theoreticalSignal: "buy", // Absorption pressure: aggressive buying absorbed by ask liquidity = buying pressure
+                reasoning: `Aggressive buying (${aggressiveBuy} LTC) absorbed by ask liquidity (${passiveSell} LTC). Indicates buying pressure/accumulation at this level.`,
                 confidence: testIndex <= 15 ? "high" : "medium",
-                category: "clear_sell",
+                category: "clear_buy",
             });
         }
 
@@ -307,8 +307,8 @@ describe("Absorption Detector Market-Realistic Signal Validation", () => {
                         price: 89.8 + testIndex * 0.02,
                         tradeCount: Math.floor(baseAggressive / 20),
                     },
-                    theoreticalSignal: testIndex % 2 === 0 ? "buy" : "sell", // Flow-following: follow institutional direction
-                    reasoning: `At 60% threshold with clear directional absorption pattern. Flow-following: ${testIndex % 2 === 0 ? "buy" : "sell"} signal.`,
+                    theoreticalSignal: testIndex % 2 === 0 ? "sell" : "buy", // Absorption pressure: even=bid absorption(sell), odd=ask absorption(buy)
+                    reasoning: `At 60% threshold with ${testIndex % 2 === 0 ? "bid absorption" : "ask absorption"} pattern. ${testIndex % 2 === 0 ? "Selling pressure" : "Buying pressure"} expected.`,
                     confidence: "low",
                     category: "edge_case",
                 };
@@ -344,8 +344,8 @@ describe("Absorption Detector Market-Realistic Signal Validation", () => {
                         price: 90.0 + testIndex * 0.03,
                         tradeCount: Math.floor(baseAggressive / 12),
                     },
-                    theoreticalSignal: testIndex % 2 === 0 ? "buy" : "sell", // Flow-following: follow institutional direction
-                    reasoning: `Extreme 90% absorption with clear institutional dominance. Flow-following: ${testIndex % 2 === 0 ? "buy" : "sell"} signal.`,
+                    theoreticalSignal: testIndex % 2 === 0 ? "sell" : "buy", // Absorption pressure: even=bid absorption(sell), odd=ask absorption(buy)
+                    reasoning: `Extreme 90% absorption with ${testIndex % 2 === 0 ? "bid absorption" : "ask absorption"} dominance. ${testIndex % 2 === 0 ? "Selling pressure" : "Buying pressure"} expected.`,
                     confidence: "high",
                     category: "edge_case",
                 };
