@@ -161,6 +161,8 @@ export class DeltaCVDDetectorEnhanced extends Detector {
      * STANDALONE VERSION: Processes trades directly without legacy detector dependency
      */
     public onEnrichedTrade(event: EnrichedTradeEvent): void {
+        // Update current price for signal validation
+        this.validationLogger.updateCurrentPrice(event.price);
         // 🔍 DEBUG: Log every trade event received by Enhanced CVD detector
         this.logger.debug(
             "[DeltaCVDDetectorEnhanced DEBUG] Trade event received",

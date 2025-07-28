@@ -1,587 +1,587 @@
 {
-  "analysis_metadata": {
-    "generated_at": "2025-07-28T10:42:09.200439",
-    "total_rejection_records": 860822,
-    "total_validation_records": 54402,
-    "analysis_period": {
-      "start": "2025-07-27",
-      "end": "2025-07-28"
-    }
-  },
-  "rejection_analysis": {
-    "total_rejections": 860822,
-    "rejections_by_detector": {
-      "deltacvd": 363027,
-      "exhaustion": 257844,
-      "absorption": 239951
+    "analysis_metadata": {
+        "generated_at": "2025-07-28T10:42:09.200439",
+        "total_rejection_records": 860822,
+        "total_validation_records": 54402,
+        "analysis_period": {
+            "start": "2025-07-27",
+            "end": "2025-07-28"
+        }
     },
-    "rejections_by_reason": {
-      "trade_quantity_too_small": 257844,
-      "detection_requirements_not_met": 206427,
-      "insufficient_aggressive_volume": 165449,
-      "no_cvd_divergence": 134721,
-      "passive_volume_ratio_too_low": 56883,
-      "signal_cooldown_active": 18979,
-      "balanced_institutional_flow": 17615,
-      "enhancement_mode_disabled": 2900,
-      "absorption_ratio_too_high": 4
+    "rejection_analysis": {
+        "total_rejections": 860822,
+        "rejections_by_detector": {
+            "deltacvd": 363027,
+            "exhaustion": 257844,
+            "absorption": 239951
+        },
+        "rejections_by_reason": {
+            "trade_quantity_too_small": 257844,
+            "detection_requirements_not_met": 206427,
+            "insufficient_aggressive_volume": 165449,
+            "no_cvd_divergence": 134721,
+            "passive_volume_ratio_too_low": 56883,
+            "signal_cooldown_active": 18979,
+            "balanced_institutional_flow": 17615,
+            "enhancement_mode_disabled": 2900,
+            "absorption_ratio_too_high": 4
+        },
+        "detector_reason_breakdown": {
+            "deltacvd": {
+                "detection_requirements_not_met": 206427,
+                "no_cvd_divergence": 134721,
+                "signal_cooldown_active": 18979,
+                "enhancement_mode_disabled": 2900
+            },
+            "exhaustion": {
+                "trade_quantity_too_small": 257844
+            },
+            "absorption": {
+                "insufficient_aggressive_volume": 165449,
+                "passive_volume_ratio_too_low": 56883,
+                "balanced_institutional_flow": 17615,
+                "absorption_ratio_too_high": 4
+            }
+        }
     },
-    "detector_reason_breakdown": {
-      "deltacvd": {
-        "detection_requirements_not_met": 206427,
-        "no_cvd_divergence": 134721,
-        "signal_cooldown_active": 18979,
-        "enhancement_mode_disabled": 2900
-      },
-      "exhaustion": {
-        "trade_quantity_too_small": 257844
-      },
-      "absorption": {
-        "insufficient_aggressive_volume": 165449,
-        "passive_volume_ratio_too_low": 56883,
-        "balanced_institutional_flow": 17615,
-        "absorption_ratio_too_high": 4
-      }
-    }
-  },
-  "threshold_analysis": {
     "threshold_analysis": {
-      "absorption": {
-        "aggressive_volume": {
-          "count": 165449,
-          "threshold_value": 1500.0,
-          "actual_mean": 480.23806093116303,
-          "actual_median": 400.648,
-          "actual_std": 369.69680251969334,
-          "actual_min": 0.003,
-          "actual_max": 1499.882,
-          "actual_25th": 178.118,
-          "actual_75th": 706.019,
-          "actual_90th": 1039.475,
-          "actual_95th": 1228.8336000000002,
-          "actual_99th": 1445.608,
-          "pass_rate_90th": 0.10000664857448519,
-          "pass_rate_95th": 0.05000332428724259,
-          "pass_rate_99th": 0.010009126679520577
-        },
-        "institutional_balance": {
-          "count": 17615,
-          "threshold_value": 0.05,
-          "actual_mean": 0.015321785172863998,
-          "actual_median": 0.0131338099999999,
-          "actual_std": 0.011241837994543686,
-          "actual_min": 7.50000000007689e-07,
-          "actual_max": 0.04927831,
-          "actual_25th": 0.00560478,
-          "actual_75th": 0.0228811099999999,
-          "actual_90th": 0.0303713299999999,
-          "actual_95th": 0.035304588,
-          "actual_99th": 0.0448662345999999,
-          "pass_rate_90th": 0.10468350837354527,
-          "pass_rate_95th": 0.0500141924496168,
-          "pass_rate_99th": 0.010048254328697133
-        },
-        "passive_volume_ratio": {
-          "count": 56883,
-          "threshold_value": 0.75,
-          "actual_mean": 0.6533651672121724,
-          "actual_median": 0.67425545,
-          "actual_std": 0.07756489609055686,
-          "actual_min": 0.18299343,
-          "actual_max": 0.74999786,
-          "actual_25th": 0.61079206,
-          "actual_75th": 0.71439735,
-          "actual_90th": 0.73668551,
-          "actual_95th": 0.74344,
-          "actual_99th": 0.7485501431999999,
-          "pass_rate_90th": 0.10002988590615826,
-          "pass_rate_95th": 0.0500325228978781,
-          "pass_rate_99th": 0.010002988590615826
-        },
-        "absorption_ratio": {
-          "count": 4,
-          "threshold_value": 0.65,
-          "actual_mean": 1.494301,
-          "actual_median": 1.494301,
-          "actual_std": 0.8473596695815381,
-          "actual_min": 0.760466,
-          "actual_max": 2.228136,
-          "actual_25th": 0.760466,
-          "actual_75th": 2.228136,
-          "actual_90th": 2.228136,
-          "actual_95th": 2.228136,
-          "actual_99th": 2.228136,
-          "pass_rate_90th": 0.5,
-          "pass_rate_95th": 0.5,
-          "pass_rate_99th": 0.5
+        "threshold_analysis": {
+            "absorption": {
+                "aggressive_volume": {
+                    "count": 165449,
+                    "threshold_value": 1500.0,
+                    "actual_mean": 480.23806093116303,
+                    "actual_median": 400.648,
+                    "actual_std": 369.69680251969334,
+                    "actual_min": 0.003,
+                    "actual_max": 1499.882,
+                    "actual_25th": 178.118,
+                    "actual_75th": 706.019,
+                    "actual_90th": 1039.475,
+                    "actual_95th": 1228.8336000000002,
+                    "actual_99th": 1445.608,
+                    "pass_rate_90th": 0.10000664857448519,
+                    "pass_rate_95th": 0.05000332428724259,
+                    "pass_rate_99th": 0.010009126679520577
+                },
+                "institutional_balance": {
+                    "count": 17615,
+                    "threshold_value": 0.05,
+                    "actual_mean": 0.015321785172863998,
+                    "actual_median": 0.0131338099999999,
+                    "actual_std": 0.011241837994543686,
+                    "actual_min": 7.50000000007689e-7,
+                    "actual_max": 0.04927831,
+                    "actual_25th": 0.00560478,
+                    "actual_75th": 0.0228811099999999,
+                    "actual_90th": 0.0303713299999999,
+                    "actual_95th": 0.035304588,
+                    "actual_99th": 0.0448662345999999,
+                    "pass_rate_90th": 0.10468350837354527,
+                    "pass_rate_95th": 0.0500141924496168,
+                    "pass_rate_99th": 0.010048254328697133
+                },
+                "passive_volume_ratio": {
+                    "count": 56883,
+                    "threshold_value": 0.75,
+                    "actual_mean": 0.6533651672121724,
+                    "actual_median": 0.67425545,
+                    "actual_std": 0.07756489609055686,
+                    "actual_min": 0.18299343,
+                    "actual_max": 0.74999786,
+                    "actual_25th": 0.61079206,
+                    "actual_75th": 0.71439735,
+                    "actual_90th": 0.73668551,
+                    "actual_95th": 0.74344,
+                    "actual_99th": 0.7485501431999999,
+                    "pass_rate_90th": 0.10002988590615826,
+                    "pass_rate_95th": 0.0500325228978781,
+                    "pass_rate_99th": 0.010002988590615826
+                },
+                "absorption_ratio": {
+                    "count": 4,
+                    "threshold_value": 0.65,
+                    "actual_mean": 1.494301,
+                    "actual_median": 1.494301,
+                    "actual_std": 0.8473596695815381,
+                    "actual_min": 0.760466,
+                    "actual_max": 2.228136,
+                    "actual_25th": 0.760466,
+                    "actual_75th": 2.228136,
+                    "actual_90th": 2.228136,
+                    "actual_95th": 2.228136,
+                    "actual_99th": 2.228136,
+                    "pass_rate_90th": 0.5,
+                    "pass_rate_95th": 0.5,
+                    "pass_rate_99th": 0.5
+                }
+            },
+            "exhaustion": {
+                "trade_quantity": {
+                    "count": 257844,
+                    "threshold_value": 2500.0,
+                    "actual_mean": 3.7907085408231342,
+                    "actual_median": 0.412,
+                    "actual_std": 14.966874474974356,
+                    "actual_min": 0.001,
+                    "actual_max": 1447.626,
+                    "actual_25th": 0.144,
+                    "actual_75th": 2.308,
+                    "actual_90th": 9.0,
+                    "actual_95th": 16.728399999999905,
+                    "actual_99th": 51.708,
+                    "pass_rate_90th": 0.1000682583267402,
+                    "pass_rate_95th": 0.050003102651215464,
+                    "pass_rate_99th": 0.010006050169870153
+                }
+            },
+            "deltacvd": {
+                "activity_requirements": {
+                    "count": 206427,
+                    "threshold_value": 6.0,
+                    "actual_mean": 0.0,
+                    "actual_median": 0.0,
+                    "actual_std": 0.0,
+                    "actual_min": 0.0,
+                    "actual_max": 0.0,
+                    "actual_25th": 0.0,
+                    "actual_75th": 0.0,
+                    "actual_90th": 0.0,
+                    "actual_95th": 0.0,
+                    "actual_99th": 0.0,
+                    "pass_rate_90th": 1.0,
+                    "pass_rate_95th": 1.0,
+                    "pass_rate_99th": 1.0
+                },
+                "divergence_detection": {
+                    "count": 134721,
+                    "threshold_value": 0.35,
+                    "actual_mean": 0.0,
+                    "actual_median": 0.0,
+                    "actual_std": 0.0,
+                    "actual_min": 0.0,
+                    "actual_max": 0.0,
+                    "actual_25th": 0.0,
+                    "actual_75th": 0.0,
+                    "actual_90th": 0.0,
+                    "actual_95th": 0.0,
+                    "actual_99th": 0.0,
+                    "pass_rate_90th": 1.0,
+                    "pass_rate_95th": 1.0,
+                    "pass_rate_99th": 1.0
+                },
+                "cooldown_period": {
+                    "count": 18979,
+                    "threshold_value": 90000.0,
+                    "actual_mean": 18193.243163496496,
+                    "actual_median": 4329.0,
+                    "actual_std": 27926.549662024943,
+                    "actual_min": -27997.0,
+                    "actual_max": 89860.0,
+                    "actual_25th": 0.0,
+                    "actual_75th": 37503.5,
+                    "actual_90th": 62763.0,
+                    "actual_95th": 76139.0,
+                    "actual_99th": 86452.44,
+                    "pass_rate_90th": 0.10016333842668212,
+                    "pass_rate_95th": 0.05005532430581169,
+                    "pass_rate_99th": 0.010011064861162338
+                },
+                "enhancement_mode": {
+                    "count": 2900,
+                    "threshold_value": 1.0,
+                    "actual_mean": 0.0,
+                    "actual_median": 0.0,
+                    "actual_std": 0.0,
+                    "actual_min": 0.0,
+                    "actual_max": 0.0,
+                    "actual_25th": 0.0,
+                    "actual_75th": 0.0,
+                    "actual_90th": 0.0,
+                    "actual_95th": 0.0,
+                    "actual_99th": 0.0,
+                    "pass_rate_90th": 1.0,
+                    "pass_rate_95th": 1.0,
+                    "pass_rate_99th": 1.0
+                }
+            }
         }
-      },
-      "exhaustion": {
-        "trade_quantity": {
-          "count": 257844,
-          "threshold_value": 2500.0,
-          "actual_mean": 3.7907085408231342,
-          "actual_median": 0.412,
-          "actual_std": 14.966874474974356,
-          "actual_min": 0.001,
-          "actual_max": 1447.626,
-          "actual_25th": 0.144,
-          "actual_75th": 2.308,
-          "actual_90th": 9.0,
-          "actual_95th": 16.728399999999905,
-          "actual_99th": 51.708,
-          "pass_rate_90th": 0.1000682583267402,
-          "pass_rate_95th": 0.050003102651215464,
-          "pass_rate_99th": 0.010006050169870153
-        }
-      },
-      "deltacvd": {
-        "activity_requirements": {
-          "count": 206427,
-          "threshold_value": 6.0,
-          "actual_mean": 0.0,
-          "actual_median": 0.0,
-          "actual_std": 0.0,
-          "actual_min": 0.0,
-          "actual_max": 0.0,
-          "actual_25th": 0.0,
-          "actual_75th": 0.0,
-          "actual_90th": 0.0,
-          "actual_95th": 0.0,
-          "actual_99th": 0.0,
-          "pass_rate_90th": 1.0,
-          "pass_rate_95th": 1.0,
-          "pass_rate_99th": 1.0
-        },
-        "divergence_detection": {
-          "count": 134721,
-          "threshold_value": 0.35,
-          "actual_mean": 0.0,
-          "actual_median": 0.0,
-          "actual_std": 0.0,
-          "actual_min": 0.0,
-          "actual_max": 0.0,
-          "actual_25th": 0.0,
-          "actual_75th": 0.0,
-          "actual_90th": 0.0,
-          "actual_95th": 0.0,
-          "actual_99th": 0.0,
-          "pass_rate_90th": 1.0,
-          "pass_rate_95th": 1.0,
-          "pass_rate_99th": 1.0
-        },
-        "cooldown_period": {
-          "count": 18979,
-          "threshold_value": 90000.0,
-          "actual_mean": 18193.243163496496,
-          "actual_median": 4329.0,
-          "actual_std": 27926.549662024943,
-          "actual_min": -27997.0,
-          "actual_max": 89860.0,
-          "actual_25th": 0.0,
-          "actual_75th": 37503.5,
-          "actual_90th": 62763.0,
-          "actual_95th": 76139.0,
-          "actual_99th": 86452.44,
-          "pass_rate_90th": 0.10016333842668212,
-          "pass_rate_95th": 0.05005532430581169,
-          "pass_rate_99th": 0.010011064861162338
-        },
-        "enhancement_mode": {
-          "count": 2900,
-          "threshold_value": 1.0,
-          "actual_mean": 0.0,
-          "actual_median": 0.0,
-          "actual_std": 0.0,
-          "actual_min": 0.0,
-          "actual_max": 0.0,
-          "actual_25th": 0.0,
-          "actual_75th": 0.0,
-          "actual_90th": 0.0,
-          "actual_95th": 0.0,
-          "actual_99th": 0.0,
-          "pass_rate_90th": 1.0,
-          "pass_rate_95th": 1.0,
-          "pass_rate_99th": 1.0
-        }
-      }
-    }
-  },
-  "volume_analysis": {
-    "aggressiveVolume": {
-      "count": 860822,
-      "mean": 3071.6895648244104,
-      "median": 5.2705,
-      "std": 54188.774593546135,
-      "min": 0.0,
-      "max": 2272106.335835342,
-      "percentiles": {
-        "25th": 0.047,
-        "50th": 5.2705,
-        "75th": 1035.536,
-        "90th": 2601.228,
-        "95th": 4136.168349999998,
-        "99th": 7222.605
-      }
     },
-    "passiveVolume": {
-      "count": 860822,
-      "mean": 1264.6596137807812,
-      "median": 0.0,
-      "std": 2602.9017841268255,
-      "min": 0.0,
-      "max": 25166.512,
-      "percentiles": {
-        "25th": 0.0,
-        "50th": 0.0,
-        "75th": 1606.176,
-        "90th": 4818.528,
-        "95th": 6523.482,
-        "99th": 11451.971
-      }
-    }
-  },
-  "temporal_analysis": {
-    "hourly_distribution": {
-      "0": 48530,
-      "1": 35606,
-      "2": 40742,
-      "3": 22856,
-      "4": 24330,
-      "5": 39430,
-      "6": 22678,
-      "7": 31570,
-      "8": 27354,
-      "9": 28558,
-      "10": 28426,
-      "11": 25652,
-      "12": 29442,
-      "13": 39030,
-      "14": 82302,
-      "15": 29988,
-      "16": 57616,
-      "17": 70311,
-      "18": 27322,
-      "19": 35053,
-      "20": 29020,
-      "21": 26590,
-      "22": 34204,
-      "23": 24212
+    "volume_analysis": {
+        "aggressiveVolume": {
+            "count": 860822,
+            "mean": 3071.6895648244104,
+            "median": 5.2705,
+            "std": 54188.774593546135,
+            "min": 0.0,
+            "max": 2272106.335835342,
+            "percentiles": {
+                "25th": 0.047,
+                "50th": 5.2705,
+                "75th": 1035.536,
+                "90th": 2601.228,
+                "95th": 4136.168349999998,
+                "99th": 7222.605
+            }
+        },
+        "passiveVolume": {
+            "count": 860822,
+            "mean": 1264.6596137807812,
+            "median": 0.0,
+            "std": 2602.9017841268255,
+            "min": 0.0,
+            "max": 25166.512,
+            "percentiles": {
+                "25th": 0.0,
+                "50th": 0.0,
+                "75th": 1606.176,
+                "90th": 4818.528,
+                "95th": 6523.482,
+                "99th": 11451.971
+            }
+        }
     },
-    "temporal_stats": {
-      "avg_rejections_per_hour": 34432.88,
-      "max_rejections_per_hour": 82302,
-      "min_rejections_per_hour": 9894
-    }
-  },
-  "success_metrics": {},
-  "detector_performance": {
-    "absorption": {
-      "total_signals": 16852,
-      "confidence_stats": {
-        "mean": 1.267436474967956,
-        "median": 1.2,
-        "std": 0.163182070786699,
-        "min": 1.0,
-        "max": 2.1
-      },
-      "success_by_timeframe": {}
-    }
-  },
-  "optimization_recommendations": {
-    "absorption": {
-      "aggressive_volume": {
-        "current_threshold": 1500.0,
-        "rejection_count": 165449,
-        "strategies": {
-          "aggressive": {
-            "threshold": 802.0847999999999,
-            "description": "80th percentile - captures more signals, higher false positives",
-            "expected_pass_rate": 0.2
-          },
-          "balanced": {
-            "threshold": 1039.475,
-            "description": "90th percentile - balanced approach",
-            "expected_pass_rate": 0.1
-          },
-          "conservative": {
-            "threshold": 1228.8336000000002,
-            "description": "95th percentile - fewer signals, higher quality",
-            "expected_pass_rate": 0.05
-          },
-          "very_conservative": {
-            "threshold": 1445.608,
-            "description": "99th percentile - minimal signals, highest quality",
-            "expected_pass_rate": 0.01
-          }
+    "temporal_analysis": {
+        "hourly_distribution": {
+            "0": 48530,
+            "1": 35606,
+            "2": 40742,
+            "3": 22856,
+            "4": 24330,
+            "5": 39430,
+            "6": 22678,
+            "7": 31570,
+            "8": 27354,
+            "9": 28558,
+            "10": 28426,
+            "11": 25652,
+            "12": 29442,
+            "13": 39030,
+            "14": 82302,
+            "15": 29988,
+            "16": 57616,
+            "17": 70311,
+            "18": 27322,
+            "19": 35053,
+            "20": 29020,
+            "21": 26590,
+            "22": 34204,
+            "23": 24212
         },
-        "statistical_insights": {
-          "mean": 480.23806093116303,
-          "median": 400.648,
-          "std": 369.69680251969334,
-          "coefficient_of_variation": 0.7698198718420308
+        "temporal_stats": {
+            "avg_rejections_per_hour": 34432.88,
+            "max_rejections_per_hour": 82302,
+            "min_rejections_per_hour": 9894
         }
-      },
-      "institutional_balance": {
-        "current_threshold": 0.05,
-        "rejection_count": 17615,
-        "strategies": {
-          "aggressive": {
-            "threshold": 0.0268211199999999,
-            "description": "80th percentile - captures more signals, higher false positives",
-            "expected_pass_rate": 0.2
-          },
-          "balanced": {
-            "threshold": 0.0303713299999999,
-            "description": "90th percentile - balanced approach",
-            "expected_pass_rate": 0.1
-          },
-          "conservative": {
-            "threshold": 0.035304588,
-            "description": "95th percentile - fewer signals, higher quality",
-            "expected_pass_rate": 0.05
-          },
-          "very_conservative": {
-            "threshold": 0.0448662345999999,
-            "description": "99th percentile - minimal signals, highest quality",
-            "expected_pass_rate": 0.01
-          }
-        },
-        "statistical_insights": {
-          "mean": 0.015321785172863998,
-          "median": 0.0131338099999999,
-          "std": 0.011241837994543686,
-          "coefficient_of_variation": 0.7337159389529755
-        }
-      },
-      "passive_volume_ratio": {
-        "current_threshold": 0.75,
-        "rejection_count": 56883,
-        "strategies": {
-          "aggressive": {
-            "threshold": 0.7210722860000001,
-            "description": "80th percentile - captures more signals, higher false positives",
-            "expected_pass_rate": 0.2
-          },
-          "balanced": {
-            "threshold": 0.73668551,
-            "description": "90th percentile - balanced approach",
-            "expected_pass_rate": 0.1
-          },
-          "conservative": {
-            "threshold": 0.74344,
-            "description": "95th percentile - fewer signals, higher quality",
-            "expected_pass_rate": 0.05
-          },
-          "very_conservative": {
-            "threshold": 0.7485501431999999,
-            "description": "99th percentile - minimal signals, highest quality",
-            "expected_pass_rate": 0.01
-          }
-        },
-        "statistical_insights": {
-          "mean": 0.6533651672121724,
-          "median": 0.67425545,
-          "std": 0.07756489609055686,
-          "coefficient_of_variation": 0.11871599525502191
-        }
-      },
-      "absorption_ratio": {
-        "current_threshold": 0.65,
-        "rejection_count": 4,
-        "strategies": {
-          "aggressive": {
-            "threshold": 2.228136,
-            "description": "80th percentile - captures more signals, higher false positives",
-            "expected_pass_rate": 0.2
-          },
-          "balanced": {
-            "threshold": 2.228136,
-            "description": "90th percentile - balanced approach",
-            "expected_pass_rate": 0.1
-          },
-          "conservative": {
-            "threshold": 2.228136,
-            "description": "95th percentile - fewer signals, higher quality",
-            "expected_pass_rate": 0.05
-          },
-          "very_conservative": {
-            "threshold": 2.228136,
-            "description": "99th percentile - minimal signals, highest quality",
-            "expected_pass_rate": 0.01
-          }
-        },
-        "statistical_insights": {
-          "mean": 1.494301,
-          "median": 1.494301,
-          "std": 0.8473596695815381,
-          "coefficient_of_variation": 0.5670608997662038
-        }
-      }
     },
-    "exhaustion": {
-      "trade_quantity": {
-        "current_threshold": 2500.0,
-        "rejection_count": 257844,
-        "strategies": {
-          "aggressive": {
-            "threshold": 3.817,
-            "description": "80th percentile - captures more signals, higher false positives",
-            "expected_pass_rate": 0.2
-          },
-          "balanced": {
-            "threshold": 9.0,
-            "description": "90th percentile - balanced approach",
-            "expected_pass_rate": 0.1
-          },
-          "conservative": {
-            "threshold": 16.728399999999905,
-            "description": "95th percentile - fewer signals, higher quality",
-            "expected_pass_rate": 0.05
-          },
-          "very_conservative": {
-            "threshold": 51.708,
-            "description": "99th percentile - minimal signals, highest quality",
-            "expected_pass_rate": 0.01
-          }
-        },
-        "statistical_insights": {
-          "mean": 3.7907085408231342,
-          "median": 0.412,
-          "std": 14.966874474974356,
-          "coefficient_of_variation": 3.9483052610856677
+    "success_metrics": {},
+    "detector_performance": {
+        "absorption": {
+            "total_signals": 16852,
+            "confidence_stats": {
+                "mean": 1.267436474967956,
+                "median": 1.2,
+                "std": 0.163182070786699,
+                "min": 1.0,
+                "max": 2.1
+            },
+            "success_by_timeframe": {}
         }
-      }
     },
-    "deltacvd": {
-      "activity_requirements": {
-        "current_threshold": 6.0,
-        "rejection_count": 206427,
-        "strategies": {
-          "aggressive": {
-            "threshold": 0.0,
-            "description": "80th percentile - captures more signals, higher false positives",
-            "expected_pass_rate": 0.2
-          },
-          "balanced": {
-            "threshold": 0.0,
-            "description": "90th percentile - balanced approach",
-            "expected_pass_rate": 0.1
-          },
-          "conservative": {
-            "threshold": 0.0,
-            "description": "95th percentile - fewer signals, higher quality",
-            "expected_pass_rate": 0.05
-          },
-          "very_conservative": {
-            "threshold": 0.0,
-            "description": "99th percentile - minimal signals, highest quality",
-            "expected_pass_rate": 0.01
-          }
+    "optimization_recommendations": {
+        "absorption": {
+            "aggressive_volume": {
+                "current_threshold": 1500.0,
+                "rejection_count": 165449,
+                "strategies": {
+                    "aggressive": {
+                        "threshold": 802.0847999999999,
+                        "description": "80th percentile - captures more signals, higher false positives",
+                        "expected_pass_rate": 0.2
+                    },
+                    "balanced": {
+                        "threshold": 1039.475,
+                        "description": "90th percentile - balanced approach",
+                        "expected_pass_rate": 0.1
+                    },
+                    "conservative": {
+                        "threshold": 1228.8336000000002,
+                        "description": "95th percentile - fewer signals, higher quality",
+                        "expected_pass_rate": 0.05
+                    },
+                    "very_conservative": {
+                        "threshold": 1445.608,
+                        "description": "99th percentile - minimal signals, highest quality",
+                        "expected_pass_rate": 0.01
+                    }
+                },
+                "statistical_insights": {
+                    "mean": 480.23806093116303,
+                    "median": 400.648,
+                    "std": 369.69680251969334,
+                    "coefficient_of_variation": 0.7698198718420308
+                }
+            },
+            "institutional_balance": {
+                "current_threshold": 0.05,
+                "rejection_count": 17615,
+                "strategies": {
+                    "aggressive": {
+                        "threshold": 0.0268211199999999,
+                        "description": "80th percentile - captures more signals, higher false positives",
+                        "expected_pass_rate": 0.2
+                    },
+                    "balanced": {
+                        "threshold": 0.0303713299999999,
+                        "description": "90th percentile - balanced approach",
+                        "expected_pass_rate": 0.1
+                    },
+                    "conservative": {
+                        "threshold": 0.035304588,
+                        "description": "95th percentile - fewer signals, higher quality",
+                        "expected_pass_rate": 0.05
+                    },
+                    "very_conservative": {
+                        "threshold": 0.0448662345999999,
+                        "description": "99th percentile - minimal signals, highest quality",
+                        "expected_pass_rate": 0.01
+                    }
+                },
+                "statistical_insights": {
+                    "mean": 0.015321785172863998,
+                    "median": 0.0131338099999999,
+                    "std": 0.011241837994543686,
+                    "coefficient_of_variation": 0.7337159389529755
+                }
+            },
+            "passive_volume_ratio": {
+                "current_threshold": 0.75,
+                "rejection_count": 56883,
+                "strategies": {
+                    "aggressive": {
+                        "threshold": 0.7210722860000001,
+                        "description": "80th percentile - captures more signals, higher false positives",
+                        "expected_pass_rate": 0.2
+                    },
+                    "balanced": {
+                        "threshold": 0.73668551,
+                        "description": "90th percentile - balanced approach",
+                        "expected_pass_rate": 0.1
+                    },
+                    "conservative": {
+                        "threshold": 0.74344,
+                        "description": "95th percentile - fewer signals, higher quality",
+                        "expected_pass_rate": 0.05
+                    },
+                    "very_conservative": {
+                        "threshold": 0.7485501431999999,
+                        "description": "99th percentile - minimal signals, highest quality",
+                        "expected_pass_rate": 0.01
+                    }
+                },
+                "statistical_insights": {
+                    "mean": 0.6533651672121724,
+                    "median": 0.67425545,
+                    "std": 0.07756489609055686,
+                    "coefficient_of_variation": 0.11871599525502191
+                }
+            },
+            "absorption_ratio": {
+                "current_threshold": 0.65,
+                "rejection_count": 4,
+                "strategies": {
+                    "aggressive": {
+                        "threshold": 2.228136,
+                        "description": "80th percentile - captures more signals, higher false positives",
+                        "expected_pass_rate": 0.2
+                    },
+                    "balanced": {
+                        "threshold": 2.228136,
+                        "description": "90th percentile - balanced approach",
+                        "expected_pass_rate": 0.1
+                    },
+                    "conservative": {
+                        "threshold": 2.228136,
+                        "description": "95th percentile - fewer signals, higher quality",
+                        "expected_pass_rate": 0.05
+                    },
+                    "very_conservative": {
+                        "threshold": 2.228136,
+                        "description": "99th percentile - minimal signals, highest quality",
+                        "expected_pass_rate": 0.01
+                    }
+                },
+                "statistical_insights": {
+                    "mean": 1.494301,
+                    "median": 1.494301,
+                    "std": 0.8473596695815381,
+                    "coefficient_of_variation": 0.5670608997662038
+                }
+            }
         },
-        "statistical_insights": {
-          "mean": 0.0,
-          "median": 0.0,
-          "std": 0.0,
-          "coefficient_of_variation": null
-        }
-      },
-      "divergence_detection": {
-        "current_threshold": 0.35,
-        "rejection_count": 134721,
-        "strategies": {
-          "aggressive": {
-            "threshold": 0.0,
-            "description": "80th percentile - captures more signals, higher false positives",
-            "expected_pass_rate": 0.2
-          },
-          "balanced": {
-            "threshold": 0.0,
-            "description": "90th percentile - balanced approach",
-            "expected_pass_rate": 0.1
-          },
-          "conservative": {
-            "threshold": 0.0,
-            "description": "95th percentile - fewer signals, higher quality",
-            "expected_pass_rate": 0.05
-          },
-          "very_conservative": {
-            "threshold": 0.0,
-            "description": "99th percentile - minimal signals, highest quality",
-            "expected_pass_rate": 0.01
-          }
+        "exhaustion": {
+            "trade_quantity": {
+                "current_threshold": 2500.0,
+                "rejection_count": 257844,
+                "strategies": {
+                    "aggressive": {
+                        "threshold": 3.817,
+                        "description": "80th percentile - captures more signals, higher false positives",
+                        "expected_pass_rate": 0.2
+                    },
+                    "balanced": {
+                        "threshold": 9.0,
+                        "description": "90th percentile - balanced approach",
+                        "expected_pass_rate": 0.1
+                    },
+                    "conservative": {
+                        "threshold": 16.728399999999905,
+                        "description": "95th percentile - fewer signals, higher quality",
+                        "expected_pass_rate": 0.05
+                    },
+                    "very_conservative": {
+                        "threshold": 51.708,
+                        "description": "99th percentile - minimal signals, highest quality",
+                        "expected_pass_rate": 0.01
+                    }
+                },
+                "statistical_insights": {
+                    "mean": 3.7907085408231342,
+                    "median": 0.412,
+                    "std": 14.966874474974356,
+                    "coefficient_of_variation": 3.9483052610856677
+                }
+            }
         },
-        "statistical_insights": {
-          "mean": 0.0,
-          "median": 0.0,
-          "std": 0.0,
-          "coefficient_of_variation": null
+        "deltacvd": {
+            "activity_requirements": {
+                "current_threshold": 6.0,
+                "rejection_count": 206427,
+                "strategies": {
+                    "aggressive": {
+                        "threshold": 0.0,
+                        "description": "80th percentile - captures more signals, higher false positives",
+                        "expected_pass_rate": 0.2
+                    },
+                    "balanced": {
+                        "threshold": 0.0,
+                        "description": "90th percentile - balanced approach",
+                        "expected_pass_rate": 0.1
+                    },
+                    "conservative": {
+                        "threshold": 0.0,
+                        "description": "95th percentile - fewer signals, higher quality",
+                        "expected_pass_rate": 0.05
+                    },
+                    "very_conservative": {
+                        "threshold": 0.0,
+                        "description": "99th percentile - minimal signals, highest quality",
+                        "expected_pass_rate": 0.01
+                    }
+                },
+                "statistical_insights": {
+                    "mean": 0.0,
+                    "median": 0.0,
+                    "std": 0.0,
+                    "coefficient_of_variation": null
+                }
+            },
+            "divergence_detection": {
+                "current_threshold": 0.35,
+                "rejection_count": 134721,
+                "strategies": {
+                    "aggressive": {
+                        "threshold": 0.0,
+                        "description": "80th percentile - captures more signals, higher false positives",
+                        "expected_pass_rate": 0.2
+                    },
+                    "balanced": {
+                        "threshold": 0.0,
+                        "description": "90th percentile - balanced approach",
+                        "expected_pass_rate": 0.1
+                    },
+                    "conservative": {
+                        "threshold": 0.0,
+                        "description": "95th percentile - fewer signals, higher quality",
+                        "expected_pass_rate": 0.05
+                    },
+                    "very_conservative": {
+                        "threshold": 0.0,
+                        "description": "99th percentile - minimal signals, highest quality",
+                        "expected_pass_rate": 0.01
+                    }
+                },
+                "statistical_insights": {
+                    "mean": 0.0,
+                    "median": 0.0,
+                    "std": 0.0,
+                    "coefficient_of_variation": null
+                }
+            },
+            "cooldown_period": {
+                "current_threshold": 90000.0,
+                "rejection_count": 18979,
+                "strategies": {
+                    "aggressive": {
+                        "threshold": 47710.200000000004,
+                        "description": "80th percentile - captures more signals, higher false positives",
+                        "expected_pass_rate": 0.2
+                    },
+                    "balanced": {
+                        "threshold": 62763.0,
+                        "description": "90th percentile - balanced approach",
+                        "expected_pass_rate": 0.1
+                    },
+                    "conservative": {
+                        "threshold": 76139.0,
+                        "description": "95th percentile - fewer signals, higher quality",
+                        "expected_pass_rate": 0.05
+                    },
+                    "very_conservative": {
+                        "threshold": 86452.44,
+                        "description": "99th percentile - minimal signals, highest quality",
+                        "expected_pass_rate": 0.01
+                    }
+                },
+                "statistical_insights": {
+                    "mean": 18193.243163496496,
+                    "median": 4329.0,
+                    "std": 27926.549662024943,
+                    "coefficient_of_variation": 1.5349956800477258
+                }
+            },
+            "enhancement_mode": {
+                "current_threshold": 1.0,
+                "rejection_count": 2900,
+                "strategies": {
+                    "aggressive": {
+                        "threshold": 0.0,
+                        "description": "80th percentile - captures more signals, higher false positives",
+                        "expected_pass_rate": 0.2
+                    },
+                    "balanced": {
+                        "threshold": 0.0,
+                        "description": "90th percentile - balanced approach",
+                        "expected_pass_rate": 0.1
+                    },
+                    "conservative": {
+                        "threshold": 0.0,
+                        "description": "95th percentile - fewer signals, higher quality",
+                        "expected_pass_rate": 0.05
+                    },
+                    "very_conservative": {
+                        "threshold": 0.0,
+                        "description": "99th percentile - minimal signals, highest quality",
+                        "expected_pass_rate": 0.01
+                    }
+                },
+                "statistical_insights": {
+                    "mean": 0.0,
+                    "median": 0.0,
+                    "std": 0.0,
+                    "coefficient_of_variation": null
+                }
+            }
         }
-      },
-      "cooldown_period": {
-        "current_threshold": 90000.0,
-        "rejection_count": 18979,
-        "strategies": {
-          "aggressive": {
-            "threshold": 47710.200000000004,
-            "description": "80th percentile - captures more signals, higher false positives",
-            "expected_pass_rate": 0.2
-          },
-          "balanced": {
-            "threshold": 62763.0,
-            "description": "90th percentile - balanced approach",
-            "expected_pass_rate": 0.1
-          },
-          "conservative": {
-            "threshold": 76139.0,
-            "description": "95th percentile - fewer signals, higher quality",
-            "expected_pass_rate": 0.05
-          },
-          "very_conservative": {
-            "threshold": 86452.44,
-            "description": "99th percentile - minimal signals, highest quality",
-            "expected_pass_rate": 0.01
-          }
-        },
-        "statistical_insights": {
-          "mean": 18193.243163496496,
-          "median": 4329.0,
-          "std": 27926.549662024943,
-          "coefficient_of_variation": 1.5349956800477258
-        }
-      },
-      "enhancement_mode": {
-        "current_threshold": 1.0,
-        "rejection_count": 2900,
-        "strategies": {
-          "aggressive": {
-            "threshold": 0.0,
-            "description": "80th percentile - captures more signals, higher false positives",
-            "expected_pass_rate": 0.2
-          },
-          "balanced": {
-            "threshold": 0.0,
-            "description": "90th percentile - balanced approach",
-            "expected_pass_rate": 0.1
-          },
-          "conservative": {
-            "threshold": 0.0,
-            "description": "95th percentile - fewer signals, higher quality",
-            "expected_pass_rate": 0.05
-          },
-          "very_conservative": {
-            "threshold": 0.0,
-            "description": "99th percentile - minimal signals, highest quality",
-            "expected_pass_rate": 0.01
-          }
-        },
-        "statistical_insights": {
-          "mean": 0.0,
-          "median": 0.0,
-          "std": 0.0,
-          "coefficient_of_variation": null
-        }
-      }
     }
-  }
 }

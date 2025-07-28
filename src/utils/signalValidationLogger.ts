@@ -126,6 +126,10 @@ export class SignalValidationLogger {
         SignalValidationRecord
     >();
     private readonly validationTimers = new Map<string, NodeJS.Timeout[]>();
+    private readonly pendingRejections = new Map<
+        string,
+        SignalRejectionRecord
+    >();
 
     // ✅ NON-BLOCKING ARCHITECTURE: Internal buffering for high-performance logging
     private readonly signalsBuffer: string[] = [];
@@ -134,6 +138,9 @@ export class SignalValidationLogger {
     private readonly flushInterval = 5000; // Flush every 5 seconds
     private flushTimer?: NodeJS.Timeout;
     private isInitialized = false;
+
+    // Price tracking for validation
+    private currentPrice: number | null = null;
 
     constructor(
         private readonly logger: ILogger,
@@ -350,6 +357,14 @@ export class SignalValidationLogger {
         }
         this.validationTimers.clear();
         this.pendingValidations.clear();
+        this.pendingRejections.clear();
+    }
+
+    /**
+     * Update current price for validation calculations
+     */
+    public updateCurrentPrice(price: number): void {
+        this.currentPrice = price;
     }
 
     /**
@@ -491,12 +506,13 @@ export class SignalValidationLogger {
                 confidence: marketContext.confidence,
             };
 
-            // ✅ WRITE REJECTION TO CSV IMMEDIATELY
-            this.writeRejectionRecord(record);
+            // Store rejection for later validation
+            const rejectionId = `rejection-${event.timestamp}-${Math.random()}`;
+            this.pendingRejections.set(rejectionId, record);
 
             // Set up post-rejection analysis timers
             this.setupRejectionValidationTimers(
-                `rejection-${event.timestamp}`,
+                rejectionId,
                 event.price,
                 record
             );
@@ -535,7 +551,7 @@ export class SignalValidationLogger {
         timers.push(
             setTimeout(
                 () => {
-                    void this.validateSignal(signalId, signalPrice, "5min");
+                    this.validateSignal(signalId, signalPrice, "5min");
                 },
                 5 * 60 * 1000
             )
@@ -545,7 +561,7 @@ export class SignalValidationLogger {
         timers.push(
             setTimeout(
                 () => {
-                    void this.validateSignal(signalId, signalPrice, "15min");
+                    this.validateSignal(signalId, signalPrice, "15min");
                 },
                 15 * 60 * 1000
             )
@@ -555,7 +571,7 @@ export class SignalValidationLogger {
         timers.push(
             setTimeout(
                 () => {
-                    void this.validateSignal(signalId, signalPrice, "1hr");
+                    this.validateSignal(signalId, signalPrice, "1hr");
                     // Clean up after final validation
                     this.cleanupValidation(signalId);
                 },
@@ -577,7 +593,7 @@ export class SignalValidationLogger {
         // 5-minute validation
         setTimeout(
             () => {
-                void this.validateRejection(
+                this.validateRejection(
                     rejectionId,
                     rejectionPrice,
                     record,
@@ -590,7 +606,7 @@ export class SignalValidationLogger {
         // 15-minute validation
         setTimeout(
             () => {
-                void this.validateRejection(
+                this.validateRejection(
                     rejectionId,
                     rejectionPrice,
                     record,
@@ -603,13 +619,12 @@ export class SignalValidationLogger {
         // 1-hour validation and final write
         setTimeout(
             () => {
-                void this.validateRejection(
+                this.validateRejection(
                     rejectionId,
                     rejectionPrice,
                     record,
                     "1hr"
                 );
-                void this.writeRejectionRecord(record);
             },
             60 * 60 * 1000
         );
@@ -618,21 +633,19 @@ export class SignalValidationLogger {
     /**
      * Validate signal performance at specific time intervals
      */
-    private async validateSignal(
+    private validateSignal(
         signalId: string,
         originalPrice: number,
         timeframe: "5min" | "15min" | "1hr"
-    ): Promise<void> {
+    ): void {
         const record = this.pendingValidations.get(signalId);
         if (!record) return;
 
-        // In a real implementation, you would fetch the current market price
-        // For this example, we'll simulate price data
-        const currentPrice = await this.getCurrentPrice();
+        const currentPrice = this.currentPrice;
 
         if (currentPrice === null) {
             this.logger.warn(
-                "SignalValidationLogger: Could not get current price for validation",
+                "SignalValidationLogger: No current price available for validation",
                 {
                     signalId,
                     timeframe,
@@ -698,13 +711,13 @@ export class SignalValidationLogger {
     /**
      * Validate rejection to see if it was a missed opportunity
      */
-    private async validateRejection(
+    private validateRejection(
         rejectionId: string,
         originalPrice: number,
         record: SignalRejectionRecord,
         timeframe: "5min" | "15min" | "1hr"
-    ): Promise<void> {
-        const currentPrice = await this.getCurrentPrice();
+    ): void {
+        const currentPrice = this.currentPrice;
         if (currentPrice === null) return;
 
         const movement = FinancialMath.divideQuantities(
@@ -725,6 +738,10 @@ export class SignalValidationLogger {
             case "1hr":
                 record.subsequentMovement1hr = movement;
                 record.wasValidSignal = significantMovement;
+
+                // Write final rejection record and clean up
+                this.writeRejectionRecord(record);
+                this.pendingRejections.delete(rejectionId);
                 break;
         }
     }
@@ -911,15 +928,6 @@ export class SignalValidationLogger {
             (signalSide === "buy" && actualDirection === "up") ||
             (signalSide === "sell" && actualDirection === "down")
         );
-    }
-
-    /**
-     * Get current market price (placeholder - implement with real data source)
-     */
-    private getCurrentPrice(): Promise<number | null> {
-        // In real implementation, this would fetch from the order book or price feed
-        // For now, return null to indicate unavailable price data
-        return Promise.resolve(null);
     }
 
     /**

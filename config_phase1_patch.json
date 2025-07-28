@@ -1,58 +1,58 @@
 {
-  "symbols": {
-    "LTCUSDT": {
-      "signalManager": {
-        "confidenceThreshold": 0.35,
-        "detectorThresholds": {
-          "absorption": 0.4,
-          "exhaustion": 0.25,
-          "accumulation": 0.25,
-          "distribution": 0.25,
-          "deltacvd": 0.4
+    "symbols": {
+        "LTCUSDT": {
+            "signalManager": {
+                "confidenceThreshold": 0.35,
+                "detectorThresholds": {
+                    "absorption": 0.4,
+                    "exhaustion": 0.25,
+                    "accumulation": 0.25,
+                    "distribution": 0.25,
+                    "deltacvd": 0.4
+                }
+            },
+            "absorption": {
+                "minAggVolume": 1800,
+                "windowMs": 60000,
+                "absorptionThreshold": 0.55,
+                "minPassiveMultiplier": 1.1,
+                "priceEfficiencyThreshold": 0.018,
+                "finalConfidenceRequired": 0.75,
+                "eventCooldownMs": 15000,
+                "velocityIncreaseThreshold": 1.8,
+                "spreadImpactThreshold": 0.004
+            },
+            "exhaustion": {
+                "minAggVolume": 1500,
+                "exhaustionThreshold": 0.7,
+                "windowMs": 60000,
+                "minEnhancedConfidenceThreshold": 0.15,
+                "depletionVolumeThreshold": 400,
+                "depletionRatioThreshold": 0.13,
+                "aggressiveVolumeExhaustionThreshold": 0.45
+            },
+            "deltaCVD": {
+                "minTradesPerSec": 0.4,
+                "minVolPerSec": 4.5,
+                "signalThreshold": 0.75,
+                "cvdImbalanceThreshold": 0.3,
+                "institutionalThreshold": 15.0,
+                "eventCooldownMs": 75000
+            },
+            "accumulation": {
+                "confidenceThreshold": 0.4,
+                "accumulationVolumeThreshold": 12,
+                "accumulationRatioThreshold": 0.5,
+                "alignmentScoreThreshold": 0.6,
+                "minPassiveVolumeForEfficiency": 6
+            },
+            "distribution": {
+                "confidenceThreshold": 0.4,
+                "distributionVolumeThreshold": 12,
+                "distributionRatioThreshold": 0.5,
+                "alignmentScoreThreshold": 0.6,
+                "minPassiveVolumeForEfficiency": 6
+            }
         }
-      },
-      "absorption": {
-        "minAggVolume": 1800,
-        "windowMs": 60000,
-        "absorptionThreshold": 0.55,
-        "minPassiveMultiplier": 1.1,
-        "priceEfficiencyThreshold": 0.018,
-        "finalConfidenceRequired": 0.75,
-        "eventCooldownMs": 15000,
-        "velocityIncreaseThreshold": 1.8,
-        "spreadImpactThreshold": 0.004
-      },
-      "exhaustion": {
-        "minAggVolume": 1500,
-        "exhaustionThreshold": 0.7,
-        "windowMs": 60000,
-        "minEnhancedConfidenceThreshold": 0.15,
-        "depletionVolumeThreshold": 400,
-        "depletionRatioThreshold": 0.13,
-        "aggressiveVolumeExhaustionThreshold": 0.45
-      },
-      "deltaCVD": {
-        "minTradesPerSec": 0.4,
-        "minVolPerSec": 4.5,
-        "signalThreshold": 0.75,
-        "cvdImbalanceThreshold": 0.3,
-        "institutionalThreshold": 15.0,
-        "eventCooldownMs": 75000
-      },
-      "accumulation": {
-        "confidenceThreshold": 0.4,
-        "accumulationVolumeThreshold": 12,
-        "accumulationRatioThreshold": 0.5,
-        "alignmentScoreThreshold": 0.6,
-        "minPassiveVolumeForEfficiency": 6
-      },
-      "distribution": {
-        "confidenceThreshold": 0.4,
-        "distributionVolumeThreshold": 12,
-        "distributionRatioThreshold": 0.5,
-        "alignmentScoreThreshold": 0.6,
-        "minPassiveVolumeForEfficiency": 6
-      }
     }
-  }
 }

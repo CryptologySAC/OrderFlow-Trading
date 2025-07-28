@@ -17,7 +17,7 @@ import { MetricsCollector } from "../__mocks__/src/infrastructure/metricsCollect
 
 /**
  * 🏛️ INSTITUTIONAL-GRADE ABSORPTION DETECTOR VALIDATION
- * 
+ *
  * ✅ CLAUDE.md COMPLIANT - ZERO TOLERANCE REQUIREMENTS:
  * - NO magic numbers (Config-driven parameters only)
  * - Institutional volume thresholds (2500+ LTC minimum)
@@ -33,19 +33,23 @@ interface InstitutionalTestCase {
     institutionalData: {
         buyerIsMaker: boolean;
         aggressiveVolume: number; // ✅ Must be ≥ Config.ABSORPTION_DETECTOR.minAggVolume
-        passiveVolume: number;    // ✅ Must be ≥ Config.ABSORPTION_DETECTOR.institutionalVolumeThreshold
+        passiveVolume: number; // ✅ Must be ≥ Config.ABSORPTION_DETECTOR.institutionalVolumeThreshold
         aggressiveBuyVolume: number;
         aggressiveSellVolume: number;
         passiveBuyVolume: number;
         passiveSellVolume: number;
-        price: number;            // ✅ Must comply with LTCUSDT tick size (0.01)
-        tradeCount: number;       // ✅ Realistic for institutional volumes
-        correlationId: string;    // ✅ Audit trail compliance
+        price: number; // ✅ Must comply with LTCUSDT tick size (0.01)
+        tradeCount: number; // ✅ Realistic for institutional volumes
+        correlationId: string; // ✅ Audit trail compliance
     };
     expectedSignal: "buy" | "sell" | "neutral";
     reasoning: string;
     confidence: "high" | "medium" | "low";
-    category: "institutional_buy" | "institutional_sell" | "neutral" | "edge_case";
+    category:
+        | "institutional_buy"
+        | "institutional_sell"
+        | "neutral"
+        | "edge_case";
 }
 
 interface InstitutionalValidationResult {
@@ -70,12 +74,18 @@ describe("🏛️ ABSORPTION DETECTOR - INSTITUTIONAL COMPLIANCE", () => {
     beforeEach(() => {
         // ✅ CLAUDE.md REQUIREMENT: Use production configuration
         institutionalConfig = Config.ABSORPTION_DETECTOR;
-        
+
         // ✅ INSTITUTIONAL VALIDATION: Verify minimum thresholds
         expect(institutionalConfig.minAggVolume).toBeGreaterThanOrEqual(2500);
-        expect(institutionalConfig.institutionalVolumeThreshold).toBeGreaterThanOrEqual(1500);
-        expect(institutionalConfig.passiveAbsorptionThreshold).toBeGreaterThanOrEqual(0.75);
-        expect(institutionalConfig.finalConfidenceRequired).toBeGreaterThanOrEqual(0.9);
+        expect(
+            institutionalConfig.institutionalVolumeThreshold
+        ).toBeGreaterThanOrEqual(1500);
+        expect(
+            institutionalConfig.passiveAbsorptionThreshold
+        ).toBeGreaterThanOrEqual(0.75);
+        expect(
+            institutionalConfig.finalConfidenceRequired
+        ).toBeGreaterThanOrEqual(0.9);
 
         mockPreprocessor = {
             findZonesNearPrice: vi.fn().mockReturnValue([]),
@@ -117,19 +127,43 @@ describe("🏛️ ABSORPTION DETECTOR - INSTITUTIONAL COMPLIANCE", () => {
         // INSTITUTIONAL SELL SCENARIOS (1-15): Large passive bid absorption
         for (let i = 1; i <= 15; i++) {
             // ✅ INSTITUTIONAL VOLUMES: Start from minimum and scale up
-            const baseAggressive = config.minAggVolume + (i * 200); // 2500-5500 LTC
-            const passiveMultiplier = FinancialMath.safeAdd(2.5, FinancialMath.multiplyQuantities(i, 0.1)); // 2.6x to 4x
-            const passiveVol = Math.round(FinancialMath.multiplyQuantities(baseAggressive, passiveMultiplier));
+            const baseAggressive = config.minAggVolume + i * 200; // 2500-5500 LTC
+            const passiveMultiplier = FinancialMath.safeAdd(
+                2.5,
+                FinancialMath.multiplyQuantities(i, 0.1)
+            ); // 2.6x to 4x
+            const passiveVol = Math.round(
+                FinancialMath.multiplyQuantities(
+                    baseAggressive,
+                    passiveMultiplier
+                )
+            );
 
             // Realistic institutional selling patterns (80-90% sell pressure)
-            const sellRatio = FinancialMath.safeAdd(0.8, FinancialMath.multiplyQuantities(i, 0.006)); // 80-89%
-            const aggressiveSell = Math.round(FinancialMath.multiplyQuantities(baseAggressive, sellRatio));
-            const aggressiveBuy = FinancialMath.safeSubtract(baseAggressive, aggressiveSell);
+            const sellRatio = FinancialMath.safeAdd(
+                0.8,
+                FinancialMath.multiplyQuantities(i, 0.006)
+            ); // 80-89%
+            const aggressiveSell = Math.round(
+                FinancialMath.multiplyQuantities(baseAggressive, sellRatio)
+            );
+            const aggressiveBuy = FinancialMath.safeSubtract(
+                baseAggressive,
+                aggressiveSell
+            );
 
             // Strong institutional bid absorption (75-85% of passive)
-            const bidAbsorptionRatio = FinancialMath.safeAdd(0.75, FinancialMath.multiplyQuantities(i, 0.007)); // 75-85%
-            const passiveBuy = Math.round(FinancialMath.multiplyQuantities(passiveVol, bidAbsorptionRatio));
-            const passiveSell = FinancialMath.safeSubtract(passiveVol, passiveBuy);
+            const bidAbsorptionRatio = FinancialMath.safeAdd(
+                0.75,
+                FinancialMath.multiplyQuantities(i, 0.007)
+            ); // 75-85%
+            const passiveBuy = Math.round(
+                FinancialMath.multiplyQuantities(passiveVol, bidAbsorptionRatio)
+            );
+            const passiveSell = FinancialMath.safeSubtract(
+                passiveVol,
+                passiveBuy
+            );
 
             testCases.push({
                 id: `institutional_sell_${i}`,
@@ -143,8 +177,16 @@ describe("🏛️ ABSORPTION DETECTOR - INSTITUTIONAL COMPLIANCE", () => {
                     aggressiveSellVolume: aggressiveSell,
                     passiveBuyVolume: passiveBuy,
                     passiveSellVolume: passiveSell,
-                    price: FinancialMath.safeAdd(89.5, FinancialMath.multiplyQuantities(i, 0.01)), // Tick-compliant pricing
-                    tradeCount: Math.max(Math.floor(FinancialMath.divideQuantities(baseAggressive, 100)), 25), // Realistic trade count
+                    price: FinancialMath.safeAdd(
+                        89.5,
+                        FinancialMath.multiplyQuantities(i, 0.01)
+                    ), // Tick-compliant pricing
+                    tradeCount: Math.max(
+                        Math.floor(
+                            FinancialMath.divideQuantities(baseAggressive, 100)
+                        ),
+                        25
+                    ), // Realistic trade count
                     correlationId: `sell-test-${i}-${Date.now()}`,
                 },
                 expectedSignal: "sell", // Bid absorption indicates selling pressure/resistance
@@ -157,19 +199,46 @@ describe("🏛️ ABSORPTION DETECTOR - INSTITUTIONAL COMPLIANCE", () => {
         // INSTITUTIONAL BUY SCENARIOS (16-30): Large passive ask absorption
         for (let i = 16; i <= 30; i++) {
             const testIndex = i - 15;
-            const baseAggressive = FinancialMath.safeAdd(config.minAggVolume, FinancialMath.multiplyQuantities(testIndex, 250)); // 2750-6250 LTC
-            const passiveMultiplier = FinancialMath.safeAdd(2.3, FinancialMath.multiplyQuantities(testIndex, 0.12)); // 2.42x to 4.1x
-            const passiveVol = Math.round(FinancialMath.multiplyQuantities(baseAggressive, passiveMultiplier));
+            const baseAggressive = FinancialMath.safeAdd(
+                config.minAggVolume,
+                FinancialMath.multiplyQuantities(testIndex, 250)
+            ); // 2750-6250 LTC
+            const passiveMultiplier = FinancialMath.safeAdd(
+                2.3,
+                FinancialMath.multiplyQuantities(testIndex, 0.12)
+            ); // 2.42x to 4.1x
+            const passiveVol = Math.round(
+                FinancialMath.multiplyQuantities(
+                    baseAggressive,
+                    passiveMultiplier
+                )
+            );
 
             // Realistic institutional buying patterns (82-92% buy pressure)
-            const buyRatio = FinancialMath.safeAdd(0.82, FinancialMath.multiplyQuantities(testIndex, 0.007)); // 82-92%
-            const aggressiveBuy = Math.round(FinancialMath.multiplyQuantities(baseAggressive, buyRatio));
-            const aggressiveSell = FinancialMath.safeSubtract(baseAggressive, aggressiveBuy);
+            const buyRatio = FinancialMath.safeAdd(
+                0.82,
+                FinancialMath.multiplyQuantities(testIndex, 0.007)
+            ); // 82-92%
+            const aggressiveBuy = Math.round(
+                FinancialMath.multiplyQuantities(baseAggressive, buyRatio)
+            );
+            const aggressiveSell = FinancialMath.safeSubtract(
+                baseAggressive,
+                aggressiveBuy
+            );
 
             // Strong institutional ask absorption (76-86% of passive)
-            const askAbsorptionRatio = FinancialMath.safeAdd(0.76, FinancialMath.multiplyQuantities(testIndex, 0.007)); // 76-86%
-            const passiveSell = Math.round(FinancialMath.multiplyQuantities(passiveVol, askAbsorptionRatio));
-            const passiveBuy = FinancialMath.safeSubtract(passiveVol, passiveSell);
+            const askAbsorptionRatio = FinancialMath.safeAdd(
+                0.76,
+                FinancialMath.multiplyQuantities(testIndex, 0.007)
+            ); // 76-86%
+            const passiveSell = Math.round(
+                FinancialMath.multiplyQuantities(passiveVol, askAbsorptionRatio)
+            );
+            const passiveBuy = FinancialMath.safeSubtract(
+                passiveVol,
+                passiveSell
+            );
 
             testCases.push({
                 id: `institutional_buy_${i}`,
@@ -183,8 +252,16 @@ describe("🏛️ ABSORPTION DETECTOR - INSTITUTIONAL COMPLIANCE", () => {
                     aggressiveSellVolume: aggressiveSell,
                     passiveBuyVolume: passiveBuy,
                     passiveSellVolume: passiveSell,
-                    price: FinancialMath.safeAdd(89.75, FinancialMath.multiplyQuantities(testIndex, 0.015)), // Tick-compliant
-                    tradeCount: Math.max(Math.floor(FinancialMath.divideQuantities(baseAggressive, 90)), 28),
+                    price: FinancialMath.safeAdd(
+                        89.75,
+                        FinancialMath.multiplyQuantities(testIndex, 0.015)
+                    ), // Tick-compliant
+                    tradeCount: Math.max(
+                        Math.floor(
+                            FinancialMath.divideQuantities(baseAggressive, 90)
+                        ),
+                        28
+                    ),
                     correlationId: `buy-test-${i}-${Date.now()}`,
                 },
                 expectedSignal: "buy", // Ask absorption indicates buying pressure/accumulation
@@ -197,14 +274,25 @@ describe("🏛️ ABSORPTION DETECTOR - INSTITUTIONAL COMPLIANCE", () => {
         // NEUTRAL SCENARIOS (31-45): Insufficient absorption or balanced flow
         for (let i = 31; i <= 45; i++) {
             const testIndex = i - 30;
-            
+
             let scenario: InstitutionalTestCase;
 
             if (testIndex <= 7) {
                 // Below institutional threshold scenarios
-                const baseAggressive = FinancialMath.multiplyQuantities(config.minAggVolume, 0.8); // 80% of minimum
-                const lowPassiveMultiplier = FinancialMath.safeAdd(0.6, FinancialMath.multiplyQuantities(testIndex, 0.03)); // 0.6x to 0.8x
-                const passiveVol = Math.round(FinancialMath.multiplyQuantities(baseAggressive, lowPassiveMultiplier));
+                const baseAggressive = FinancialMath.multiplyQuantities(
+                    config.minAggVolume,
+                    0.8
+                ); // 80% of minimum
+                const lowPassiveMultiplier = FinancialMath.safeAdd(
+                    0.6,
+                    FinancialMath.multiplyQuantities(testIndex, 0.03)
+                ); // 0.6x to 0.8x
+                const passiveVol = Math.round(
+                    FinancialMath.multiplyQuantities(
+                        baseAggressive,
+                        lowPassiveMultiplier
+                    )
+                );
 
                 scenario = {
                     id: `institutional_neutral_low_${i}`,
@@ -214,12 +302,29 @@ describe("🏛️ ABSORPTION DETECTOR - INSTITUTIONAL COMPLIANCE", () => {
                         buyerIsMaker: testIndex % 2 === 0,
                         aggressiveVolume: baseAggressive,
                         passiveVolume: passiveVol,
-                        aggressiveBuyVolume: FinancialMath.multiplyQuantities(baseAggressive, testIndex % 2 === 0 ? 0.3 : 0.7),
-                        aggressiveSellVolume: FinancialMath.multiplyQuantities(baseAggressive, testIndex % 2 === 0 ? 0.7 : 0.3),
-                        passiveBuyVolume: FinancialMath.multiplyQuantities(passiveVol, 0.5),
-                        passiveSellVolume: FinancialMath.multiplyQuantities(passiveVol, 0.5),
-                        price: FinancialMath.safeAdd(89.25, FinancialMath.multiplyQuantities(testIndex, 0.02)), // Tick-compliant
-                        tradeCount: Math.floor(FinancialMath.divideQuantities(baseAggressive, 120)),
+                        aggressiveBuyVolume: FinancialMath.multiplyQuantities(
+                            baseAggressive,
+                            testIndex % 2 === 0 ? 0.3 : 0.7
+                        ),
+                        aggressiveSellVolume: FinancialMath.multiplyQuantities(
+                            baseAggressive,
+                            testIndex % 2 === 0 ? 0.7 : 0.3
+                        ),
+                        passiveBuyVolume: FinancialMath.multiplyQuantities(
+                            passiveVol,
+                            0.5
+                        ),
+                        passiveSellVolume: FinancialMath.multiplyQuantities(
+                            passiveVol,
+                            0.5
+                        ),
+                        price: FinancialMath.safeAdd(
+                            89.25,
+                            FinancialMath.multiplyQuantities(testIndex, 0.02)
+                        ), // Tick-compliant
+                        tradeCount: Math.floor(
+                            FinancialMath.divideQuantities(baseAggressive, 120)
+                        ),
                         correlationId: `neutral-low-${i}-${Date.now()}`,
                     },
                     expectedSignal: "neutral",
@@ -229,9 +334,17 @@ describe("🏛️ ABSORPTION DETECTOR - INSTITUTIONAL COMPLIANCE", () => {
                 };
             } else {
                 // Balanced institutional flow
-                const baseVolume = FinancialMath.safeAdd(config.minAggVolume, FinancialMath.multiplyQuantities(testIndex, 150));
-                const aggressiveVol = Math.round(FinancialMath.multiplyQuantities(baseVolume, 0.45)); // 45% aggressive
-                const passiveVol = FinancialMath.safeSubtract(baseVolume, aggressiveVol); // 55% passive
+                const baseVolume = FinancialMath.safeAdd(
+                    config.minAggVolume,
+                    FinancialMath.multiplyQuantities(testIndex, 150)
+                );
+                const aggressiveVol = Math.round(
+                    FinancialMath.multiplyQuantities(baseVolume, 0.45)
+                ); // 45% aggressive
+                const passiveVol = FinancialMath.safeSubtract(
+                    baseVolume,
+                    aggressiveVol
+                ); // 55% passive
 
                 scenario = {
                     id: `institutional_neutral_balanced_${i}`,
@@ -241,12 +354,29 @@ describe("🏛️ ABSORPTION DETECTOR - INSTITUTIONAL COMPLIANCE", () => {
                         buyerIsMaker: testIndex % 2 === 0,
                         aggressiveVolume: aggressiveVol,
                         passiveVolume: passiveVol,
-                        aggressiveBuyVolume: FinancialMath.multiplyQuantities(aggressiveVol, 0.5),
-                        aggressiveSellVolume: FinancialMath.multiplyQuantities(aggressiveVol, 0.5),
-                        passiveBuyVolume: FinancialMath.multiplyQuantities(passiveVol, 0.5),
-                        passiveSellVolume: FinancialMath.multiplyQuantities(passiveVol, 0.5),
-                        price: FinancialMath.safeAdd(89.6, FinancialMath.multiplyQuantities(testIndex, 0.01)),
-                        tradeCount: Math.floor(FinancialMath.divideQuantities(aggressiveVol, 80)),
+                        aggressiveBuyVolume: FinancialMath.multiplyQuantities(
+                            aggressiveVol,
+                            0.5
+                        ),
+                        aggressiveSellVolume: FinancialMath.multiplyQuantities(
+                            aggressiveVol,
+                            0.5
+                        ),
+                        passiveBuyVolume: FinancialMath.multiplyQuantities(
+                            passiveVol,
+                            0.5
+                        ),
+                        passiveSellVolume: FinancialMath.multiplyQuantities(
+                            passiveVol,
+                            0.5
+                        ),
+                        price: FinancialMath.safeAdd(
+                            89.6,
+                            FinancialMath.multiplyQuantities(testIndex, 0.01)
+                        ),
+                        tradeCount: Math.floor(
+                            FinancialMath.divideQuantities(aggressiveVol, 80)
+                        ),
                         correlationId: `neutral-balanced-${i}-${Date.now()}`,
                     },
                     expectedSignal: "neutral",
@@ -262,26 +392,54 @@ describe("🏛️ ABSORPTION DETECTOR - INSTITUTIONAL COMPLIANCE", () => {
         // EDGE CASE SCENARIOS (46-50): Boundary conditions
         for (let i = 46; i <= 50; i++) {
             const testIndex = i - 45;
-            
+
             // Exactly at absorption threshold scenarios
-            const baseAggressive = FinancialMath.safeAdd(config.minAggVolume, FinancialMath.multiplyQuantities(testIndex, 100));
-            const exactThresholdMultiplier = FinancialMath.divideQuantities(config.passiveAbsorptionThreshold, FinancialMath.safeSubtract(1, config.passiveAbsorptionThreshold)); // Calculate exact ratio for threshold
-            const passiveVol = Math.round(FinancialMath.multiplyQuantities(baseAggressive, exactThresholdMultiplier));
+            const baseAggressive = FinancialMath.safeAdd(
+                config.minAggVolume,
+                FinancialMath.multiplyQuantities(testIndex, 100)
+            );
+            const exactThresholdMultiplier = FinancialMath.divideQuantities(
+                config.passiveAbsorptionThreshold,
+                FinancialMath.safeSubtract(1, config.passiveAbsorptionThreshold)
+            ); // Calculate exact ratio for threshold
+            const passiveVol = Math.round(
+                FinancialMath.multiplyQuantities(
+                    baseAggressive,
+                    exactThresholdMultiplier
+                )
+            );
 
             const scenario: InstitutionalTestCase = {
                 id: `institutional_edge_threshold_${i}`,
                 description: `Exactly at ${Math.round(FinancialMath.multiplyQuantities(config.passiveAbsorptionThreshold, 100))}% absorption threshold`,
-                marketScenario: "absorption_threshold_boundary", 
+                marketScenario: "absorption_threshold_boundary",
                 institutionalData: {
                     buyerIsMaker: testIndex % 2 === 0,
                     aggressiveVolume: baseAggressive,
                     passiveVolume: passiveVol,
-                    aggressiveBuyVolume: FinancialMath.multiplyQuantities(baseAggressive, testIndex % 2 === 0 ? 0.2 : 0.8),
-                    aggressiveSellVolume: FinancialMath.multiplyQuantities(baseAggressive, testIndex % 2 === 0 ? 0.8 : 0.2),
-                    passiveBuyVolume: FinancialMath.multiplyQuantities(passiveVol, testIndex % 2 === 0 ? 0.85 : 0.15),
-                    passiveSellVolume: FinancialMath.multiplyQuantities(passiveVol, testIndex % 2 === 0 ? 0.15 : 0.85),
-                    price: FinancialMath.safeAdd(89.8, FinancialMath.multiplyQuantities(testIndex, 0.02)),
-                    tradeCount: Math.floor(FinancialMath.divideQuantities(baseAggressive, 75)),
+                    aggressiveBuyVolume: FinancialMath.multiplyQuantities(
+                        baseAggressive,
+                        testIndex % 2 === 0 ? 0.2 : 0.8
+                    ),
+                    aggressiveSellVolume: FinancialMath.multiplyQuantities(
+                        baseAggressive,
+                        testIndex % 2 === 0 ? 0.8 : 0.2
+                    ),
+                    passiveBuyVolume: FinancialMath.multiplyQuantities(
+                        passiveVol,
+                        testIndex % 2 === 0 ? 0.85 : 0.15
+                    ),
+                    passiveSellVolume: FinancialMath.multiplyQuantities(
+                        passiveVol,
+                        testIndex % 2 === 0 ? 0.15 : 0.85
+                    ),
+                    price: FinancialMath.safeAdd(
+                        89.8,
+                        FinancialMath.multiplyQuantities(testIndex, 0.02)
+                    ),
+                    tradeCount: Math.floor(
+                        FinancialMath.divideQuantities(baseAggressive, 75)
+                    ),
                     correlationId: `edge-threshold-${i}-${Date.now()}`,
                 },
                 expectedSignal: testIndex % 2 === 0 ? "sell" : "buy", // Based on dominant passive side
@@ -300,7 +458,9 @@ describe("🏛️ ABSORPTION DETECTOR - INSTITUTIONAL COMPLIANCE", () => {
      * ✅ INSTITUTIONAL TRADE EVENT CREATION
      * Creates realistic institutional-grade trade events with proper validation
      */
-    function createInstitutionalTradeEvent(testCase: InstitutionalTestCase): EnrichedTradeEvent {
+    function createInstitutionalTradeEvent(
+        testCase: InstitutionalTestCase
+    ): EnrichedTradeEvent {
         const data = testCase.institutionalData;
         const currentTime = Date.now();
 
@@ -309,12 +469,20 @@ describe("🏛️ ABSORPTION DETECTOR - INSTITUTIONAL COMPLIANCE", () => {
         expect(data.price % tickSize).toBeCloseTo(0, 8);
 
         // ✅ INSTITUTIONAL VOLUME VALIDATION
-        expect(data.aggressiveVolume).toBeGreaterThanOrEqual(institutionalConfig.minAggVolume);
-        
+        expect(data.aggressiveVolume).toBeGreaterThanOrEqual(
+            institutionalConfig.minAggVolume
+        );
+
         // Calculate passive ratio using FinancialMath
-        const totalVolume = FinancialMath.safeAdd(data.aggressiveVolume, data.passiveVolume);
-        const passiveRatio = FinancialMath.divideQuantities(data.passiveVolume, totalVolume);
-        
+        const totalVolume = FinancialMath.safeAdd(
+            data.aggressiveVolume,
+            data.passiveVolume
+        );
+        const passiveRatio = FinancialMath.divideQuantities(
+            data.passiveVolume,
+            totalVolume
+        );
+
         // Create institutional-grade zone
         const zone: ZoneSnapshot = {
             zoneId: `institutional-${data.correlationId}`,
@@ -329,8 +497,14 @@ describe("🏛️ ABSORPTION DETECTOR - INSTITUTIONAL COMPLIANCE", () => {
             tradeCount: data.tradeCount,
             timespan: 60000,
             boundaries: {
-                min: FinancialMath.safeSubtract(data.price, FinancialMath.multiplyQuantities(tickSize, 5)), // 5-tick zone
-                max: FinancialMath.safeAdd(data.price, FinancialMath.multiplyQuantities(tickSize, 5)),
+                min: FinancialMath.safeSubtract(
+                    data.price,
+                    FinancialMath.multiplyQuantities(tickSize, 5)
+                ), // 5-tick zone
+                max: FinancialMath.safeAdd(
+                    data.price,
+                    FinancialMath.multiplyQuantities(tickSize, 5)
+                ),
             },
             lastUpdate: currentTime,
             volumeWeightedPrice: data.price,
@@ -342,14 +516,23 @@ describe("🏛️ ABSORPTION DETECTOR - INSTITUTIONAL COMPLIANCE", () => {
 
         return {
             price: data.price,
-            quantity: Math.max(FinancialMath.divideQuantities(data.aggressiveVolume, data.tradeCount), 50), // Realistic trade size
+            quantity: Math.max(
+                FinancialMath.divideQuantities(
+                    data.aggressiveVolume,
+                    data.tradeCount
+                ),
+                50
+            ), // Realistic trade size
             timestamp: currentTime,
             buyerIsMaker: data.buyerIsMaker,
             pair: "LTCUSDT",
             tradeId: data.correlationId,
             originalTrade: {
                 p: data.price.toString(),
-                q: FinancialMath.divideQuantities(data.aggressiveVolume, data.tradeCount).toString(),
+                q: FinancialMath.divideQuantities(
+                    data.aggressiveVolume,
+                    data.tradeCount
+                ).toString(),
                 T: currentTime,
                 m: data.buyerIsMaker,
             } as any,
@@ -374,7 +557,9 @@ describe("🏛️ ABSORPTION DETECTOR - INSTITUTIONAL COMPLIANCE", () => {
      * ✅ INSTITUTIONAL SIGNAL VALIDATION
      * Validates signal with performance monitoring and compliance checks
      */
-    function validateInstitutionalSignal(testCase: InstitutionalTestCase): InstitutionalValidationResult {
+    function validateInstitutionalSignal(
+        testCase: InstitutionalTestCase
+    ): InstitutionalValidationResult {
         const startTime = performance.now();
         const event = createInstitutionalTradeEvent(testCase);
 
@@ -386,7 +571,7 @@ describe("🏛️ ABSORPTION DETECTOR - INSTITUTIONAL COMPLIANCE", () => {
 
         // Execute detector
         detector.onEnrichedTrade(event);
-        
+
         const processingLatency = performance.now() - startTime;
         const result = signals.length > 0 ? signals[0] : null;
         const actualSignal = result?.side || "neutral";
@@ -434,25 +619,34 @@ describe("🏛️ ABSORPTION DETECTOR - INSTITUTIONAL COMPLIANCE", () => {
 
                 // ✅ INSTITUTIONAL VALIDATION: Signal meets quality standards
                 if (result.actual !== "neutral") {
-                    expect(result.actualConfidence).toBeGreaterThanOrEqual(institutionalConfig.finalConfidenceRequired);
+                    expect(result.actualConfidence).toBeGreaterThanOrEqual(
+                        institutionalConfig.finalConfidenceRequired
+                    );
                 }
 
                 // Log detailed results for institutional analysis
                 if (!result.correct) {
-                    console.log(`❌ INSTITUTIONAL SIGNAL MISMATCH - Test ${index + 1}:`, {
-                        testId: testCase.id,
-                        category: testCase.category,
-                        expected: result.expected,
-                        actual: result.actual,
-                        absorptionRatio: result.absorptionRatio.toFixed(4),
-                        actualConfidence: result.actualConfidence.toFixed(4),
-                        processingLatency: result.processingLatency.toFixed(3),
-                        correlationId: result.correlationId,
-                        marketScenario: result.marketContext,
-                        reasoning: result.reasoning,
-                    });
+                    console.log(
+                        `❌ INSTITUTIONAL SIGNAL MISMATCH - Test ${index + 1}:`,
+                        {
+                            testId: testCase.id,
+                            category: testCase.category,
+                            expected: result.expected,
+                            actual: result.actual,
+                            absorptionRatio: result.absorptionRatio.toFixed(4),
+                            actualConfidence:
+                                result.actualConfidence.toFixed(4),
+                            processingLatency:
+                                result.processingLatency.toFixed(3),
+                            correlationId: result.correlationId,
+                            marketScenario: result.marketContext,
+                            reasoning: result.reasoning,
+                        }
+                    );
                 } else {
-                    console.log(`✅ INSTITUTIONAL SIGNAL CORRECT - Test ${index + 1}: Expected ${result.expected}, Got ${result.actual} (${result.processingLatency.toFixed(3)}ms)`);
+                    console.log(
+                        `✅ INSTITUTIONAL SIGNAL CORRECT - Test ${index + 1}: Expected ${result.expected}, Got ${result.actual} (${result.processingLatency.toFixed(3)}ms)`
+                    );
                 }
 
                 // ✅ TEST ASSERTION: Signal correctness
@@ -464,25 +658,72 @@ describe("🏛️ ABSORPTION DETECTOR - INSTITUTIONAL COMPLIANCE", () => {
         it("INSTITUTIONAL PERFORMANCE ANALYSIS", () => {
             const totalTests = results.length;
             const correctSignals = results.filter((r) => r.correct).length;
-            const overallAccuracy = totalTests > 0 ? FinancialMath.multiplyQuantities(FinancialMath.divideQuantities(correctSignals, totalTests), 100) : 0;
+            const overallAccuracy =
+                totalTests > 0
+                    ? FinancialMath.multiplyQuantities(
+                          FinancialMath.divideQuantities(
+                              correctSignals,
+                              totalTests
+                          ),
+                          100
+                      )
+                    : 0;
 
             // Average processing latency
-            const avgLatency = results.length > 0 ? FinancialMath.calculateMean(results.map(r => r.processingLatency)) : 0;
-            const maxLatency = results.length > 0 ? Math.max(...results.map(r => r.processingLatency)) : 0;
+            const avgLatency =
+                results.length > 0
+                    ? FinancialMath.calculateMean(
+                          results.map((r) => r.processingLatency)
+                      )
+                    : 0;
+            const maxLatency =
+                results.length > 0
+                    ? Math.max(...results.map((r) => r.processingLatency))
+                    : 0;
 
             // Category-specific accuracy
             const byCategory = {
-                institutional_buy: results.filter((r) => r.testId.includes("institutional_buy")),
-                institutional_sell: results.filter((r) => r.testId.includes("institutional_sell")),
+                institutional_buy: results.filter((r) =>
+                    r.testId.includes("institutional_buy")
+                ),
+                institutional_sell: results.filter((r) =>
+                    r.testId.includes("institutional_sell")
+                ),
                 neutral: results.filter((r) => r.testId.includes("neutral")),
                 edge_case: results.filter((r) => r.testId.includes("edge")),
             };
 
             const categoryAccuracy = {
-                institutional_buy: FinancialMath.multiplyQuantities(FinancialMath.divideQuantities(byCategory.institutional_buy.filter((r) => r.correct).length, byCategory.institutional_buy.length), 100),
-                institutional_sell: FinancialMath.multiplyQuantities(FinancialMath.divideQuantities(byCategory.institutional_sell.filter((r) => r.correct).length, byCategory.institutional_sell.length), 100),
-                neutral: FinancialMath.multiplyQuantities(FinancialMath.divideQuantities(byCategory.neutral.filter((r) => r.correct).length, byCategory.neutral.length), 100),
-                edge_case: FinancialMath.multiplyQuantities(FinancialMath.divideQuantities(byCategory.edge_case.filter((r) => r.correct).length, byCategory.edge_case.length), 100),
+                institutional_buy: FinancialMath.multiplyQuantities(
+                    FinancialMath.divideQuantities(
+                        byCategory.institutional_buy.filter((r) => r.correct)
+                            .length,
+                        byCategory.institutional_buy.length
+                    ),
+                    100
+                ),
+                institutional_sell: FinancialMath.multiplyQuantities(
+                    FinancialMath.divideQuantities(
+                        byCategory.institutional_sell.filter((r) => r.correct)
+                            .length,
+                        byCategory.institutional_sell.length
+                    ),
+                    100
+                ),
+                neutral: FinancialMath.multiplyQuantities(
+                    FinancialMath.divideQuantities(
+                        byCategory.neutral.filter((r) => r.correct).length,
+                        byCategory.neutral.length
+                    ),
+                    100
+                ),
+                edge_case: FinancialMath.multiplyQuantities(
+                    FinancialMath.divideQuantities(
+                        byCategory.edge_case.filter((r) => r.correct).length,
+                        byCategory.edge_case.length
+                    ),
+                    100
+                ),
             };
 
             console.log(`

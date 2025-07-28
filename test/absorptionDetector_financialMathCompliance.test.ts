@@ -369,23 +369,31 @@ describe("AbsorptionDetector - FinancialMath Compliance", () => {
             if (divideQuantitiesSpy.mock.calls.length > 0) {
                 divideQuantitiesSpy.mock.calls.forEach((call, index) => {
                     const [arg1, arg2] = call;
-                    
+
                     // For debugging: log what's being passed to divideQuantities
                     if (!Number.isFinite(arg1) || !Number.isFinite(arg2)) {
-                        console.log(`Call ${index}: divideQuantities(${arg1}, ${arg2})`);
-                        console.log(`arg1 finite: ${Number.isFinite(arg1)}, arg2 finite: ${Number.isFinite(arg2)}`);
+                        console.log(
+                            `Call ${index}: divideQuantities(${arg1}, ${arg2})`
+                        );
+                        console.log(
+                            `arg1 finite: ${Number.isFinite(arg1)}, arg2 finite: ${Number.isFinite(arg2)}`
+                        );
                     }
-                    
+
                     // The test should validate that the detector calls FinancialMath correctly
                     // But FinancialMath itself handles invalid inputs by returning 0
                     // So we should test the result, not reject invalid inputs
                     const result = FinancialMath.divideQuantities(arg1, arg2);
-                    
+
                     // Validate the result is always finite (FinancialMath protects against NaN/Infinity)
                     expect(Number.isFinite(result)).toBe(true);
-                    
+
                     // Validate precision when both inputs are valid
-                    if (Number.isFinite(arg1) && Number.isFinite(arg2) && arg2 !== 0) {
+                    if (
+                        Number.isFinite(arg1) &&
+                        Number.isFinite(arg2) &&
+                        arg2 !== 0
+                    ) {
                         expect(result).toBeCloseTo(result, 8); // 8 decimal places precision
                     }
                 });

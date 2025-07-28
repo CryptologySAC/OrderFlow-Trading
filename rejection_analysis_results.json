@@ -1,391 +1,391 @@
 {
-  "analysis_metadata": {
-    "timestamp": "2025-07-28T11:34:04.708235",
-    "target_movement": 0.007,
-    "rejection_records": 128138,
-    "accepted_records": 16866
-  },
-  "rejection_patterns": {
-    "total_rejections": 128138,
-    "rejection_by_type": {
-      "detection_requirements_not_met": 36093,
-      "trade_quantity_too_small": 33160,
-      "no_cvd_divergence": 25454,
-      "insufficient_aggressive_volume": 16661,
-      "passive_volume_ratio_too_low": 11723,
-      "signal_cooldown_active": 3635,
-      "enhancement_mode_disabled": 900,
-      "balanced_institutional_flow": 512
+    "analysis_metadata": {
+        "timestamp": "2025-07-28T11:34:04.708235",
+        "target_movement": 0.007,
+        "rejection_records": 128138,
+        "accepted_records": 16866
     },
-    "rejection_by_detector": {
-      "deltacvd": 66082,
-      "exhaustion": 33160,
-      "absorption": 28896
-    },
-    "hourly_distribution": {
-      "14": 80871,
-      "15": 36083,
-      "16": 11184
-    },
-    "severity_stats": {
-      "count": 128138.0,
-      "mean": 0.13732162049491778,
-      "std": 0.29247007107861794,
-      "min": 0.0,
-      "25%": 0.0,
-      "50%": 9.6e-06,
-      "75%": 0.0066,
-      "max": 1.0
-    },
-    "high_severity_count": 10931
-  },
-  "counterfactual_analysis": {
-    "threshold_scenarios": {
-      "absorption": {
-        "insufficient_aggressive_volume": {
-          "total_count": 16661,
-          "high_potential_count": 2666,
-          "medium_potential_count": 4441,
-          "high_potential_rate": 0.16001440489766522,
-          "medium_potential_rate": 0.2665506272132525
+    "rejection_patterns": {
+        "total_rejections": 128138,
+        "rejection_by_type": {
+            "detection_requirements_not_met": 36093,
+            "trade_quantity_too_small": 33160,
+            "no_cvd_divergence": 25454,
+            "insufficient_aggressive_volume": 16661,
+            "passive_volume_ratio_too_low": 11723,
+            "signal_cooldown_active": 3635,
+            "enhancement_mode_disabled": 900,
+            "balanced_institutional_flow": 512
         },
-        "balanced_institutional_flow": {
-          "total_count": 512,
-          "high_potential_count": 172,
-          "medium_potential_count": 165,
-          "high_potential_rate": 0.3359375,
-          "medium_potential_rate": 0.322265625
+        "rejection_by_detector": {
+            "deltacvd": 66082,
+            "exhaustion": 33160,
+            "absorption": 28896
         },
-        "passive_volume_ratio_too_low": {
-          "total_count": 11723,
-          "high_potential_count": 10957,
-          "medium_potential_count": 766,
-          "high_potential_rate": 0.9346583639000255,
-          "medium_potential_rate": 0.06534163609997441
+        "hourly_distribution": {
+            "14": 80871,
+            "15": 36083,
+            "16": 11184
+        },
+        "severity_stats": {
+            "count": 128138.0,
+            "mean": 0.13732162049491778,
+            "std": 0.29247007107861794,
+            "min": 0.0,
+            "25%": 0.0,
+            "50%": 9.6e-6,
+            "75%": 0.0066,
+            "max": 1.0
+        },
+        "high_severity_count": 10931
+    },
+    "counterfactual_analysis": {
+        "threshold_scenarios": {
+            "absorption": {
+                "insufficient_aggressive_volume": {
+                    "total_count": 16661,
+                    "high_potential_count": 2666,
+                    "medium_potential_count": 4441,
+                    "high_potential_rate": 0.16001440489766522,
+                    "medium_potential_rate": 0.2665506272132525
+                },
+                "balanced_institutional_flow": {
+                    "total_count": 512,
+                    "high_potential_count": 172,
+                    "medium_potential_count": 165,
+                    "high_potential_rate": 0.3359375,
+                    "medium_potential_rate": 0.322265625
+                },
+                "passive_volume_ratio_too_low": {
+                    "total_count": 11723,
+                    "high_potential_count": 10957,
+                    "medium_potential_count": 766,
+                    "high_potential_rate": 0.9346583639000255,
+                    "medium_potential_rate": 0.06534163609997441
+                }
+            },
+            "exhaustion": {
+                "trade_quantity_too_small": {
+                    "total_count": 33160,
+                    "high_potential_count": 0,
+                    "medium_potential_count": 0,
+                    "high_potential_rate": 0.0,
+                    "medium_potential_rate": 0.0
+                }
+            },
+            "deltacvd": {
+                "detection_requirements_not_met": {
+                    "total_count": 36093,
+                    "high_potential_count": 0,
+                    "medium_potential_count": 0,
+                    "high_potential_rate": 0.0,
+                    "medium_potential_rate": 0.0
+                },
+                "signal_cooldown_active": {
+                    "total_count": 3635,
+                    "high_potential_count": 341,
+                    "medium_potential_count": 214,
+                    "high_potential_rate": 0.0938101788170564,
+                    "medium_potential_rate": 0.05887207702888583
+                },
+                "no_cvd_divergence": {
+                    "total_count": 25454,
+                    "high_potential_count": 0,
+                    "medium_potential_count": 0,
+                    "high_potential_rate": 0.0,
+                    "medium_potential_rate": 0.0
+                },
+                "enhancement_mode_disabled": {
+                    "total_count": 900,
+                    "high_potential_count": 0,
+                    "medium_potential_count": 0,
+                    "high_potential_rate": 0.0,
+                    "medium_potential_rate": 0.0
+                }
+            }
         }
-      },
-      "exhaustion": {
-        "trade_quantity_too_small": {
-          "total_count": 33160,
-          "high_potential_count": 0,
-          "medium_potential_count": 0,
-          "high_potential_rate": 0.0,
-          "medium_potential_rate": 0.0
+    },
+    "false_positive_analysis": {
+        "false_positive_rates": {
+            "5min": 100.0,
+            "15min": 100.0,
+            "1hr": 100.0
+        },
+        "detector_false_positives": {
+            "absorption": {
+                "total_signals": 16866,
+                "false_positives": "16866",
+                "false_positive_rate": 100.0
+            }
+        },
+        "confidence_analysis": {
+            "Total": {
+                "0-0.5": 0,
+                "0.5-1.0": 9,
+                "1.0-1.5": 14299,
+                "1.5-2.0": 2547,
+                "2.0-2.5": 11,
+                "2.5-3.0": 0,
+                "3.0+": 0
+            },
+            "Successful": {
+                "0-0.5": 0,
+                "0.5-1.0": 0,
+                "1.0-1.5": 0,
+                "1.5-2.0": 0,
+                "2.0-2.5": 0,
+                "2.5-3.0": 0,
+                "3.0+": 0
+            },
+            "Success_Rate": {
+                "0-0.5": NaN,
+                "0.5-1.0": 0.0,
+                "1.0-1.5": 0.0,
+                "1.5-2.0": 0.0,
+                "2.0-2.5": 0.0,
+                "2.5-3.0": NaN,
+                "3.0+": NaN
+            }
         }
-      },
-      "deltacvd": {
-        "detection_requirements_not_met": {
-          "total_count": 36093,
-          "high_potential_count": 0,
-          "medium_potential_count": 0,
-          "high_potential_rate": 0.0,
-          "medium_potential_rate": 0.0
+    },
+    "threshold_optimization": {
+        "optimal_threshold": {
+            "threshold": 0.1,
+            "accepted_signals": 16866.0,
+            "true_positives": 0.0,
+            "false_positives": 16866.0,
+            "precision": 0.0,
+            "total_possible": 16866.0,
+            "weighted_score": 0.3
         },
-        "signal_cooldown_active": {
-          "total_count": 3635,
-          "high_potential_count": 341,
-          "medium_potential_count": 214,
-          "high_potential_rate": 0.0938101788170564,
-          "medium_potential_rate": 0.05887207702888583
-        },
-        "no_cvd_divergence": {
-          "total_count": 25454,
-          "high_potential_count": 0,
-          "medium_potential_count": 0,
-          "high_potential_rate": 0.0,
-          "medium_potential_rate": 0.0
-        },
-        "enhancement_mode_disabled": {
-          "total_count": 900,
-          "high_potential_count": 0,
-          "medium_potential_count": 0,
-          "high_potential_rate": 0.0,
-          "medium_potential_rate": 0.0
+        "threshold_analysis": [
+            {
+                "threshold": 0.1,
+                "accepted_signals": 16866,
+                "true_positives": 0,
+                "false_positives": 16866,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.3
+            },
+            {
+                "threshold": 0.2,
+                "accepted_signals": 16866,
+                "true_positives": 0,
+                "false_positives": 16866,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.3
+            },
+            {
+                "threshold": 0.30000000000000004,
+                "accepted_signals": 16866,
+                "true_positives": 0,
+                "false_positives": 16866,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.3
+            },
+            {
+                "threshold": 0.4,
+                "accepted_signals": 16866,
+                "true_positives": 0,
+                "false_positives": 16866,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.3
+            },
+            {
+                "threshold": 0.5,
+                "accepted_signals": 16866,
+                "true_positives": 0,
+                "false_positives": 16866,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.3
+            },
+            {
+                "threshold": 0.6000000000000001,
+                "accepted_signals": 16866,
+                "true_positives": 0,
+                "false_positives": 16866,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.3
+            },
+            {
+                "threshold": 0.7000000000000001,
+                "accepted_signals": 16866,
+                "true_positives": 0,
+                "false_positives": 16866,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.3
+            },
+            {
+                "threshold": 0.8,
+                "accepted_signals": 16866,
+                "true_positives": 0,
+                "false_positives": 16866,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.3
+            },
+            {
+                "threshold": 0.9,
+                "accepted_signals": 16866,
+                "true_positives": 0,
+                "false_positives": 16866,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.3
+            },
+            {
+                "threshold": 1.0,
+                "accepted_signals": 16866,
+                "true_positives": 0,
+                "false_positives": 16866,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.3
+            },
+            {
+                "threshold": 1.1,
+                "accepted_signals": 16857,
+                "true_positives": 0,
+                "false_positives": 16857,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.29983991462113124
+            },
+            {
+                "threshold": 1.2000000000000002,
+                "accepted_signals": 2601,
+                "true_positives": 0,
+                "false_positives": 2601,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.046264674493062964
+            },
+            {
+                "threshold": 1.3,
+                "accepted_signals": 2573,
+                "true_positives": 0,
+                "false_positives": 2573,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.04576663109213803
+            },
+            {
+                "threshold": 1.4000000000000001,
+                "accepted_signals": 2560,
+                "true_positives": 0,
+                "false_positives": 2560,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.045535396655994306
+            },
+            {
+                "threshold": 1.5,
+                "accepted_signals": 2558,
+                "true_positives": 0,
+                "false_positives": 2558,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.04549982212735681
+            },
+            {
+                "threshold": 1.6,
+                "accepted_signals": 2558,
+                "true_positives": 0,
+                "false_positives": 2558,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.04549982212735681
+            },
+            {
+                "threshold": 1.7000000000000002,
+                "accepted_signals": 567,
+                "true_positives": 0,
+                "false_positives": 567,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.01008537886872999
+            },
+            {
+                "threshold": 1.8,
+                "accepted_signals": 560,
+                "true_positives": 0,
+                "false_positives": 560,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.009960868018498756
+            },
+            {
+                "threshold": 1.9000000000000001,
+                "accepted_signals": 14,
+                "true_positives": 0,
+                "false_positives": 14,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.00024902170046246883
+            },
+            {
+                "threshold": 2.0,
+                "accepted_signals": 12,
+                "true_positives": 0,
+                "false_positives": 12,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.0002134471718249733
+            },
+            {
+                "threshold": 2.1,
+                "accepted_signals": 10,
+                "true_positives": 0,
+                "false_positives": 10,
+                "precision": 0.0,
+                "total_possible": 16866,
+                "weighted_score": 0.00017787264318747776
+            }
+        ]
+    },
+    "recommendations": {
+        "recommendations": [
+            {
+                "detector": "absorption",
+                "parameter": "minAggVolume",
+                "current_value": 1500,
+                "recommended_value": 420,
+                "expected_recovery": 10407,
+                "justification": "Median rejected volume is 525.3, suggesting threshold is too high"
+            },
+            {
+                "detector": "exhaustion",
+                "parameter": "minAggVolume",
+                "current_value": 2500,
+                "recommended_value": 0,
+                "expected_recovery": 33160,
+                "justification": "Median rejected trade size is 0.4"
+            },
+            {
+                "detector": "deltacvd",
+                "parameter": "minVolPerSec",
+                "current_value": 6,
+                "recommended_value": 4,
+                "expected_recovery": 10827,
+                "justification": "High rejection rate suggests requirements are too strict"
+            }
+        ],
+        "implementation_notes": {
+            "testing_strategy": "A/B test with 20% allocation",
+            "rollout_timeline": "1 week gradual rollout",
+            "monitoring_metrics": [
+                "0.7%+ success rate",
+                "signal volume",
+                "false positive rate"
+            ],
+            "rollback_criteria": "False positive rate >15% increase"
         }
-      }
     }
-  },
-  "false_positive_analysis": {
-    "false_positive_rates": {
-      "5min": 100.0,
-      "15min": 100.0,
-      "1hr": 100.0
-    },
-    "detector_false_positives": {
-      "absorption": {
-        "total_signals": 16866,
-        "false_positives": "16866",
-        "false_positive_rate": 100.0
-      }
-    },
-    "confidence_analysis": {
-      "Total": {
-        "0-0.5": 0,
-        "0.5-1.0": 9,
-        "1.0-1.5": 14299,
-        "1.5-2.0": 2547,
-        "2.0-2.5": 11,
-        "2.5-3.0": 0,
-        "3.0+": 0
-      },
-      "Successful": {
-        "0-0.5": 0,
-        "0.5-1.0": 0,
-        "1.0-1.5": 0,
-        "1.5-2.0": 0,
-        "2.0-2.5": 0,
-        "2.5-3.0": 0,
-        "3.0+": 0
-      },
-      "Success_Rate": {
-        "0-0.5": NaN,
-        "0.5-1.0": 0.0,
-        "1.0-1.5": 0.0,
-        "1.5-2.0": 0.0,
-        "2.0-2.5": 0.0,
-        "2.5-3.0": NaN,
-        "3.0+": NaN
-      }
-    }
-  },
-  "threshold_optimization": {
-    "optimal_threshold": {
-      "threshold": 0.1,
-      "accepted_signals": 16866.0,
-      "true_positives": 0.0,
-      "false_positives": 16866.0,
-      "precision": 0.0,
-      "total_possible": 16866.0,
-      "weighted_score": 0.3
-    },
-    "threshold_analysis": [
-      {
-        "threshold": 0.1,
-        "accepted_signals": 16866,
-        "true_positives": 0,
-        "false_positives": 16866,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.3
-      },
-      {
-        "threshold": 0.2,
-        "accepted_signals": 16866,
-        "true_positives": 0,
-        "false_positives": 16866,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.3
-      },
-      {
-        "threshold": 0.30000000000000004,
-        "accepted_signals": 16866,
-        "true_positives": 0,
-        "false_positives": 16866,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.3
-      },
-      {
-        "threshold": 0.4,
-        "accepted_signals": 16866,
-        "true_positives": 0,
-        "false_positives": 16866,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.3
-      },
-      {
-        "threshold": 0.5,
-        "accepted_signals": 16866,
-        "true_positives": 0,
-        "false_positives": 16866,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.3
-      },
-      {
-        "threshold": 0.6000000000000001,
-        "accepted_signals": 16866,
-        "true_positives": 0,
-        "false_positives": 16866,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.3
-      },
-      {
-        "threshold": 0.7000000000000001,
-        "accepted_signals": 16866,
-        "true_positives": 0,
-        "false_positives": 16866,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.3
-      },
-      {
-        "threshold": 0.8,
-        "accepted_signals": 16866,
-        "true_positives": 0,
-        "false_positives": 16866,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.3
-      },
-      {
-        "threshold": 0.9,
-        "accepted_signals": 16866,
-        "true_positives": 0,
-        "false_positives": 16866,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.3
-      },
-      {
-        "threshold": 1.0,
-        "accepted_signals": 16866,
-        "true_positives": 0,
-        "false_positives": 16866,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.3
-      },
-      {
-        "threshold": 1.1,
-        "accepted_signals": 16857,
-        "true_positives": 0,
-        "false_positives": 16857,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.29983991462113124
-      },
-      {
-        "threshold": 1.2000000000000002,
-        "accepted_signals": 2601,
-        "true_positives": 0,
-        "false_positives": 2601,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.046264674493062964
-      },
-      {
-        "threshold": 1.3,
-        "accepted_signals": 2573,
-        "true_positives": 0,
-        "false_positives": 2573,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.04576663109213803
-      },
-      {
-        "threshold": 1.4000000000000001,
-        "accepted_signals": 2560,
-        "true_positives": 0,
-        "false_positives": 2560,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.045535396655994306
-      },
-      {
-        "threshold": 1.5,
-        "accepted_signals": 2558,
-        "true_positives": 0,
-        "false_positives": 2558,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.04549982212735681
-      },
-      {
-        "threshold": 1.6,
-        "accepted_signals": 2558,
-        "true_positives": 0,
-        "false_positives": 2558,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.04549982212735681
-      },
-      {
-        "threshold": 1.7000000000000002,
-        "accepted_signals": 567,
-        "true_positives": 0,
-        "false_positives": 567,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.01008537886872999
-      },
-      {
-        "threshold": 1.8,
-        "accepted_signals": 560,
-        "true_positives": 0,
-        "false_positives": 560,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.009960868018498756
-      },
-      {
-        "threshold": 1.9000000000000001,
-        "accepted_signals": 14,
-        "true_positives": 0,
-        "false_positives": 14,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.00024902170046246883
-      },
-      {
-        "threshold": 2.0,
-        "accepted_signals": 12,
-        "true_positives": 0,
-        "false_positives": 12,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.0002134471718249733
-      },
-      {
-        "threshold": 2.1,
-        "accepted_signals": 10,
-        "true_positives": 0,
-        "false_positives": 10,
-        "precision": 0.0,
-        "total_possible": 16866,
-        "weighted_score": 0.00017787264318747776
-      }
-    ]
-  },
-  "recommendations": {
-    "recommendations": [
-      {
-        "detector": "absorption",
-        "parameter": "minAggVolume",
-        "current_value": 1500,
-        "recommended_value": 420,
-        "expected_recovery": 10407,
-        "justification": "Median rejected volume is 525.3, suggesting threshold is too high"
-      },
-      {
-        "detector": "exhaustion",
-        "parameter": "minAggVolume",
-        "current_value": 2500,
-        "recommended_value": 0,
-        "expected_recovery": 33160,
-        "justification": "Median rejected trade size is 0.4"
-      },
-      {
-        "detector": "deltacvd",
-        "parameter": "minVolPerSec",
-        "current_value": 6,
-        "recommended_value": 4,
-        "expected_recovery": 10827,
-        "justification": "High rejection rate suggests requirements are too strict"
-      }
-    ],
-    "implementation_notes": {
-      "testing_strategy": "A/B test with 20% allocation",
-      "rollout_timeline": "1 week gradual rollout",
-      "monitoring_metrics": [
-        "0.7%+ success rate",
-        "signal volume",
-        "false positive rate"
-      ],
-      "rollback_criteria": "False positive rate >15% increase"
-    }
-  }
 }

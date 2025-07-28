@@ -254,7 +254,7 @@
                 "ratioBalanceCenterPoint": 0.5
             },
             "absorption": {
-                "minAggVolume": 1800,
+                "minAggVolume": 750,
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 15000,
                 "priceEfficiencyThreshold": 0.025,
@@ -264,7 +264,7 @@
                 "expectedMovementScalingFactor": 10,
                 "contextConfidenceBoostMultiplier": 0.3,
                 "liquidityGradientRange": 5,
-                "institutionalVolumeThreshold": 1088,
+                "institutionalVolumeThreshold": 750,
                 "institutionalVolumeRatioThreshold": 0.82,
                 "enableInstitutionalVolumeFilter": true,
                 "institutionalVolumeBoost": 0.1,

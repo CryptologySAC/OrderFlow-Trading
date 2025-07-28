@@ -210,6 +210,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
      * STANDALONE VERSION: Processes trades directly without legacy detector dependency
      */
     public onEnrichedTrade(event: EnrichedTradeEvent): void {
+        // Update current price for signal validation
+        this.validationLogger.updateCurrentPrice(event.price);
         // 🔍 DEBUG: Add comprehensive logging to diagnose signal issues
         const debugInfo = {
             useStandardizedZones: this.useStandardizedZones,

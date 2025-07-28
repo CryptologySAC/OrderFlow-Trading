@@ -389,18 +389,20 @@ describe("Absorption Detector Real Market Flow Validation", () => {
         // Ensure volumes meet institutional thresholds from config
         const minInstitutionalVolume = 3000; // Above config institutionalVolumeThreshold (100)
         const minPassiveVolume = 8000; // Strong passive volume for absorption detection
-        
+
         if (cumulativeAggressiveVolume < minInstitutionalVolume) {
-            const volumeBoost = minInstitutionalVolume / cumulativeAggressiveVolume;
+            const volumeBoost =
+                minInstitutionalVolume / cumulativeAggressiveVolume;
             cumulativeAggressiveVolume *= volumeBoost;
             cumulativePassiveVolume *= volumeBoost;
             cumulativeVolume *= volumeBoost;
         }
-        
+
         if (cumulativePassiveVolume < minPassiveVolume) {
             const passiveBoost = minPassiveVolume / cumulativePassiveVolume;
             cumulativePassiveVolume *= passiveBoost;
-            cumulativeVolume = cumulativeAggressiveVolume + cumulativePassiveVolume;
+            cumulativeVolume =
+                cumulativeAggressiveVolume + cumulativePassiveVolume;
         }
 
         // Create realistic zone with accumulated data

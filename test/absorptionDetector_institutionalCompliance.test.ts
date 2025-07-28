@@ -16,7 +16,7 @@ import { CircularBuffer } from "../src/utils/circularBuffer.js";
 
 /**
  * 🏛️ INSTITUTIONAL COMPLIANCE TEST SUITE
- * 
+ *
  * ZERO TOLERANCE requirements for institutional trading systems:
  * ✅ NO magic numbers - all values from Config
  * ✅ Institutional volume thresholds (2500+ LTC minimum)
@@ -33,11 +33,15 @@ describe("AbsorptionDetector - INSTITUTIONAL COMPLIANCE", () => {
     beforeEach(async () => {
         // ✅ CLAUDE.md COMPLIANCE: Use production configuration
         institutionalConfig = Config.ABSORPTION_DETECTOR;
-        
+
         // Validate institutional thresholds are met
         expect(institutionalConfig.minAggVolume).toBeGreaterThanOrEqual(2500);
-        expect(institutionalConfig.institutionalVolumeThreshold).toBeGreaterThanOrEqual(1500);
-        expect(institutionalConfig.passiveAbsorptionThreshold).toBeGreaterThanOrEqual(0.75);
+        expect(
+            institutionalConfig.institutionalVolumeThreshold
+        ).toBeGreaterThanOrEqual(1500);
+        expect(
+            institutionalConfig.passiveAbsorptionThreshold
+        ).toBeGreaterThanOrEqual(0.75);
 
         mockPreprocessor = {
             findZonesNearPrice: vi.fn().mockReturnValue([]),
@@ -69,17 +73,21 @@ describe("AbsorptionDetector - INSTITUTIONAL COMPLIANCE", () => {
         it("MUST use Config.ABSORPTION_DETECTOR values, not hardcoded numbers", () => {
             // ✅ INSTITUTIONAL REQUIREMENT: All thresholds from configuration
             const config = Config.ABSORPTION_DETECTOR;
-            
+
             // Validate configuration accessibility
             expect(config.minAggVolume).toBeDefined();
             expect(config.institutionalVolumeThreshold).toBeDefined();
             expect(config.passiveAbsorptionThreshold).toBeDefined();
             expect(config.priceEfficiencyThreshold).toBeDefined();
-            
+
             // Validate institutional minimums
             expect(config.minAggVolume).toBeGreaterThanOrEqual(2500);
-            expect(config.institutionalVolumeThreshold).toBeGreaterThanOrEqual(1500);
-            expect(config.passiveAbsorptionThreshold).toBeGreaterThanOrEqual(0.75);
+            expect(config.institutionalVolumeThreshold).toBeGreaterThanOrEqual(
+                1500
+            );
+            expect(config.passiveAbsorptionThreshold).toBeGreaterThanOrEqual(
+                0.75
+            );
         });
 
         it("MUST validate all calculations use FinancialMath, not direct arithmetic", () => {
@@ -112,7 +120,7 @@ describe("AbsorptionDetector - INSTITUTIONAL COMPLIANCE", () => {
     describe("📊 INSTITUTIONAL VOLUME STANDARDS", () => {
         it("MUST use institutional-grade volume thresholds (2500+ LTC)", () => {
             const config = Config.ABSORPTION_DETECTOR;
-            
+
             // Create institutional-grade test scenario
             const institutionalTrade = createInstitutionalTradeEvent({
                 price: 89.42, // Realistic LTCUSDT price
@@ -123,9 +131,13 @@ describe("AbsorptionDetector - INSTITUTIONAL COMPLIANCE", () => {
 
             // Validate volumes meet institutional standards
             const zoneData = institutionalTrade.zoneData?.zones[0];
-            expect(zoneData?.aggressiveVolume).toBeGreaterThanOrEqual(config.minAggVolume);
-            expect(zoneData?.passiveVolume).toBeGreaterThanOrEqual(config.institutionalVolumeThreshold);
-            
+            expect(zoneData?.aggressiveVolume).toBeGreaterThanOrEqual(
+                config.minAggVolume
+            );
+            expect(zoneData?.passiveVolume).toBeGreaterThanOrEqual(
+                config.institutionalVolumeThreshold
+            );
+
             // Calculate actual passive ratio using FinancialMath
             const totalVolume = FinancialMath.safeAdd(
                 zoneData?.aggressiveVolume || 0,
@@ -135,8 +147,10 @@ describe("AbsorptionDetector - INSTITUTIONAL COMPLIANCE", () => {
                 zoneData?.passiveVolume || 0,
                 totalVolume
             );
-            
-            expect(passiveRatio).toBeGreaterThanOrEqual(config.passiveAbsorptionThreshold);
+
+            expect(passiveRatio).toBeGreaterThanOrEqual(
+                config.passiveAbsorptionThreshold
+            );
         });
 
         it("MUST reject sub-institutional volumes appropriately", () => {
@@ -151,7 +165,7 @@ describe("AbsorptionDetector - INSTITUTIONAL COMPLIANCE", () => {
             const retailTrade = createInstitutionalTradeEvent({
                 price: 89.42,
                 aggressiveVolume: 100, // Below institutional threshold
-                passiveVolume: 200,    // Below institutional threshold
+                passiveVolume: 200, // Below institutional threshold
                 side: "buy",
             });
 
@@ -196,8 +210,11 @@ describe("AbsorptionDetector - INSTITUTIONAL COMPLIANCE", () => {
 
                 // Validate tick-size compliance
                 const tickSize = 0.01; // LTCUSDT tick size
-                expect(Math.abs(scenario.price % tickSize) < 0.001 || Math.abs((scenario.price % tickSize) - tickSize) < 0.001).toBe(true);
-                
+                expect(
+                    Math.abs(scenario.price % tickSize) < 0.001 ||
+                        Math.abs((scenario.price % tickSize) - tickSize) < 0.001
+                ).toBe(true);
+
                 // Validate spread realism
                 expect(scenario.spread).toBeGreaterThanOrEqual(tickSize);
                 expect(scenario.spread).toBeLessThanOrEqual(tickSize * 5); // Max 5 tick spread
@@ -216,7 +233,7 @@ describe("AbsorptionDetector - INSTITUTIONAL COMPLIANCE", () => {
             const highQualityTrade = createInstitutionalTradeEvent({
                 price: 89.42,
                 aggressiveVolume: 4000, // Above institutional minimum
-                passiveVolume: 12000,   // 75% passive ratio (meets threshold)
+                passiveVolume: 12000, // 75% passive ratio (meets threshold)
                 side: "buy",
                 confidence: "high",
             });
@@ -225,9 +242,11 @@ describe("AbsorptionDetector - INSTITUTIONAL COMPLIANCE", () => {
 
             if (signals.length > 0) {
                 const signal = signals[0];
-                
+
                 // ✅ INSTITUTIONAL REQUIREMENT: Signal quality validation
-                expect(signal.confidence).toBeGreaterThanOrEqual(config.finalConfidenceRequired);
+                expect(signal.confidence).toBeGreaterThanOrEqual(
+                    config.finalConfidenceRequired
+                );
                 expect(signal.type).toBe("absorption");
                 expect(signal.side).toMatch(/^(buy|sell)$/);
                 expect(signal.timestamp).toBeDefined();
@@ -264,20 +283,20 @@ describe("AbsorptionDetector - INSTITUTIONAL COMPLIANCE", () => {
 
         it("MUST complete processing within institutional latency requirements", () => {
             const startTime = performance.now();
-            
+
             // Process multiple institutional trades
             for (let i = 0; i < 10; i++) {
                 const trade = createInstitutionalTradeEvent({
-                    price: 89.42 + (i * 0.01),
-                    aggressiveVolume: 3000 + (i * 100),
-                    passiveVolume: 7500 + (i * 250),
+                    price: 89.42 + i * 0.01,
+                    aggressiveVolume: 3000 + i * 100,
+                    passiveVolume: 7500 + i * 250,
                     side: i % 2 === 0 ? "buy" : "sell",
                 });
                 detector.onEnrichedTrade(trade);
             }
-            
+
             const processingTime = performance.now() - startTime;
-            
+
             // ✅ INSTITUTIONAL REQUIREMENT: Sub-millisecond latency per trade
             expect(processingTime / 10).toBeLessThan(1); // Less than 1ms per trade
         });
@@ -322,7 +341,7 @@ describe("AbsorptionDetector - INSTITUTIONAL COMPLIANCE", () => {
     }): EnrichedTradeEvent {
         const timestamp = Date.now();
         const spread = params.spread || 0.01;
-        
+
         // ✅ INSTITUTIONAL REQUIREMENT: Validate tick-size compliance
         const tickSize = 0.01;
         const roundedPrice = Math.round(params.price / tickSize) * tickSize;
@@ -336,23 +355,27 @@ describe("AbsorptionDetector - INSTITUTIONAL COMPLIANCE", () => {
             aggressiveVolume: params.aggressiveVolume,
             passiveVolume: params.passiveVolume,
             // Realistic distribution based on side
-            aggressiveBuyVolume: params.side === "buy" 
-                ? Math.round(params.aggressiveVolume * 0.8)
-                : Math.round(params.aggressiveVolume * 0.2),
-            aggressiveSellVolume: params.side === "sell"
-                ? Math.round(params.aggressiveVolume * 0.8)
-                : Math.round(params.aggressiveVolume * 0.2),
-            passiveBidVolume: params.side === "sell"
-                ? Math.round(params.passiveVolume * 0.85) // Strong bid absorption for selling
-                : Math.round(params.passiveVolume * 0.15),
-            passiveAskVolume: params.side === "buy"
-                ? Math.round(params.passiveVolume * 0.85) // Strong ask absorption for buying
-                : Math.round(params.passiveVolume * 0.15),
+            aggressiveBuyVolume:
+                params.side === "buy"
+                    ? Math.round(params.aggressiveVolume * 0.8)
+                    : Math.round(params.aggressiveVolume * 0.2),
+            aggressiveSellVolume:
+                params.side === "sell"
+                    ? Math.round(params.aggressiveVolume * 0.8)
+                    : Math.round(params.aggressiveVolume * 0.2),
+            passiveBidVolume:
+                params.side === "sell"
+                    ? Math.round(params.passiveVolume * 0.85) // Strong bid absorption for selling
+                    : Math.round(params.passiveVolume * 0.15),
+            passiveAskVolume:
+                params.side === "buy"
+                    ? Math.round(params.passiveVolume * 0.85) // Strong ask absorption for buying
+                    : Math.round(params.passiveVolume * 0.15),
             tradeCount: Math.max(Math.floor(params.aggressiveVolume / 100), 25), // Realistic trade count
             timespan: 60000,
             boundaries: {
-                min: params.price - (tickSize * 5), // 5-tick zone
-                max: params.price + (tickSize * 5),
+                min: params.price - tickSize * 5, // 5-tick zone
+                max: params.price + tickSize * 5,
             },
             lastUpdate: timestamp,
             volumeWeightedPrice: params.price,

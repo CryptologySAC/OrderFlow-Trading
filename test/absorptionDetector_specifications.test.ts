@@ -148,10 +148,14 @@ describe("AbsorptionDetector - Specification Compliance", () => {
             console.log("🎯 Creating TRUE absorption scenario...");
             const baseTime = Date.now() - 10000; // 10 seconds ago
             const basePrice = 84.94; // Real LTCUSDT price from backtest data
-            
+
             // Update mock order book to match test data price
-            mockOrderBook.getBestBid = vi.fn().mockReturnValue(basePrice - 0.01);
-            mockOrderBook.getBestAsk = vi.fn().mockReturnValue(basePrice + 0.01);
+            mockOrderBook.getBestBid = vi
+                .fn()
+                .mockReturnValue(basePrice - 0.01);
+            mockOrderBook.getBestAsk = vi
+                .fn()
+                .mockReturnValue(basePrice + 0.01);
 
             // INSTITUTIONAL-GRADE ABSORPTION: Meet production config requirements
             // Production requires institutionalVolumeThreshold: 1500+ and institutionalVolumeRatioThreshold: 0.82
@@ -224,7 +228,7 @@ describe("AbsorptionDetector - Specification Compliance", () => {
                     } as any,
                     // INSTITUTIONAL-GRADE absorption scenario: Meet production config requirements (82%+ passive ratio)
                     passiveBidVolume: 20000, // Massive institutional liquidity pool
-                    passiveAskVolume: params.passiveAskVolume ?? 25000, // Massive institutional ask liquidity 
+                    passiveAskVolume: params.passiveAskVolume ?? 25000, // Massive institutional ask liquidity
                     // CRITICAL: Zone passive volumes are what get tracked in zone history snapshots
                     // These must vary between trades to create distinct snapshots
                     zonePassiveBidVolume: 18000, // Institutional zone bid liquidity
@@ -239,14 +243,24 @@ describe("AbsorptionDetector - Specification Compliance", () => {
                                 zoneId: `zone-${params.price}`,
                                 priceLevel: params.price,
                                 tickSize: 0.01,
-                                aggressiveVolume: Math.max(params.volume * 2, 1800), // Meet institutional minimum (1500+)
-                                passiveVolume:
-                                    Math.max((params.passiveAskVolume ?? 25000) * 1.2, 30000), // Massive institutional passive volume for 82%+ ratio
-                                aggressiveBuyVolume: Math.max(params.volume * 2, 1800),
+                                aggressiveVolume: Math.max(
+                                    params.volume * 2,
+                                    1800
+                                ), // Meet institutional minimum (1500+)
+                                passiveVolume: Math.max(
+                                    (params.passiveAskVolume ?? 25000) * 1.2,
+                                    30000
+                                ), // Massive institutional passive volume for 82%+ ratio
+                                aggressiveBuyVolume: Math.max(
+                                    params.volume * 2,
+                                    1800
+                                ),
                                 aggressiveSellVolume: 0,
-                                passiveBidVolume: Math.max(params.passiveAskVolume ?? 25000, 25000), // Massive institutional bid absorption
-                                passiveAskVolume:
-                                    Math.max(5000, 5000), // Strong ask liquidity but less than bid for clear absorption
+                                passiveBidVolume: Math.max(
+                                    params.passiveAskVolume ?? 25000,
+                                    25000
+                                ), // Massive institutional bid absorption
+                                passiveAskVolume: Math.max(5000, 5000), // Strong ask liquidity but less than bid for clear absorption
                                 tradeCount: 20,
                                 timespan: 60000,
                                 boundaries: {
