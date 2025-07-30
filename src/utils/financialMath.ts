@@ -101,8 +101,8 @@ export class FinancialMath {
         }
         const qty1Int = BigInt(Math.round(qty1 * this.QUANTITY_SCALE));
         const qty2Int = BigInt(Math.round(qty2 * this.QUANTITY_SCALE));
-        const resultInt = (qty1Int * BigInt(this.QUANTITY_SCALE)) / qty2Int;
-        return Number(resultInt) / this.QUANTITY_SCALE;
+        const resultInt = qty1Int / qty2Int;
+        return Number(resultInt);
     }
 
     /**

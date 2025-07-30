@@ -114,6 +114,81 @@ export interface SignalRejectionRecord {
 }
 
 /**
+ * Successful signal parameter values for 90-minute optimization
+ */
+export interface SuccessfulSignalRecord {
+    timestamp: number;
+    detectorType: "exhaustion" | "absorption";
+    price: number;
+
+    // ALL 40+ parameter values from config that allowed this signal to pass
+    parameterValues: {
+        // EXHAUSTION DETECTOR - ALL PARAMETERS FROM CONFIG
+        minAggVolume?: number;
+        exhaustionThreshold?: number;
+        timeWindowIndex?: number;
+        eventCooldownMs?: number;
+        useStandardizedZones?: boolean;
+        enhancementMode?: string;
+        minEnhancedConfidenceThreshold?: number;
+        enableDepletionAnalysis?: boolean;
+        depletionVolumeThreshold?: number;
+        depletionRatioThreshold?: number;
+        depletionConfidenceBoost?: number;
+        passiveVolumeExhaustionRatio?: number;
+        varianceReductionFactor?: number;
+        alignmentNormalizationFactor?: number;
+        aggressiveVolumeExhaustionThreshold?: number;
+        aggressiveVolumeReductionFactor?: number;
+        passiveRatioBalanceThreshold?: number;
+        premiumConfidenceThreshold?: number;
+        variancePenaltyFactor?: number;
+        ratioBalanceCenterPoint?: number;
+
+        // ABSORPTION DETECTOR - ALL PARAMETERS FROM CONFIG
+        absorptionThreshold?: number;
+        priceEfficiencyThreshold?: number;
+        maxAbsorptionRatio?: number;
+        minPassiveMultiplier?: number;
+        passiveAbsorptionThreshold?: number;
+        expectedMovementScalingFactor?: number;
+        contextConfidenceBoostMultiplier?: number;
+        liquidityGradientRange?: number;
+        institutionalVolumeThreshold?: number;
+        institutionalVolumeRatioThreshold?: number;
+        enableInstitutionalVolumeFilter?: boolean;
+        institutionalVolumeBoost?: number;
+        minAbsorptionScore?: number;
+        finalConfidenceRequired?: number;
+        confidenceBoostReduction?: number;
+        maxZoneCountForScoring?: number;
+        balanceThreshold?: number;
+        confluenceMinZones?: number;
+        confluenceMaxDistance?: number;
+
+        // RUNTIME VALUES (calculated during signal)
+        priceEfficiency?: number;
+        confidence?: number;
+        aggressiveVolume?: number;
+        passiveVolume?: number;
+        volumeRatio?: number;
+        institutionalVolumeRatio?: number;
+    };
+
+    // Market context
+    marketVolume: number;
+    marketSpread: number;
+    marketVolatility: number;
+
+    // Post-signal analysis (filled later)
+    subsequentMovement5min?: number;
+    subsequentMovement15min?: number;
+    subsequentMovement90min?: number;
+    wasTopOrBottomSignal?: boolean;
+    signalQuality?: "top" | "bottom" | "noise";
+}
+
+/**
  * Signal Validation Logger - NON-BLOCKING signal performance tracking for real-time trading
  *
  * ✅ INSTITUTIONAL ARCHITECTURE: Internal buffering ensures signal processing never blocks on disk I/O
@@ -121,6 +196,7 @@ export interface SignalRejectionRecord {
 export class SignalValidationLogger {
     private readonly signalsFilePath: string;
     private readonly rejectionsFilePath: string;
+    private readonly successfulSignalsFilePath: string;
     private readonly pendingValidations = new Map<
         string,
         SignalValidationRecord
@@ -130,13 +206,19 @@ export class SignalValidationLogger {
         string,
         SignalRejectionRecord
     >();
+    private readonly successfulSignals = new Map<
+        string,
+        SuccessfulSignalRecord
+    >();
 
     // ✅ NON-BLOCKING ARCHITECTURE: Internal buffering for high-performance logging
     private readonly signalsBuffer: string[] = [];
     private readonly rejectionsBuffer: string[] = [];
+    private readonly successfulSignalsBuffer: string[] = [];
     private readonly maxBufferSize = 100; // Flush after 100 entries
     private readonly flushInterval = 5000; // Flush every 5 seconds
     private flushTimer?: NodeJS.Timeout;
+    private optimizationTimer?: NodeJS.Timeout;
     private isInitialized = false;
 
     // Price tracking for validation
@@ -158,8 +240,15 @@ export class SignalValidationLogger {
             outputDir,
             `signal_rejections_${timestamp}.csv`
         );
+        this.successfulSignalsFilePath = path.join(
+            outputDir,
+            `successful_signals_${timestamp}.csv`
+        );
 
         void this.initializeLogFiles();
+
+        // Start 90-minute optimization cycle
+        this.start90MinuteOptimization();
     }
 
     /**
@@ -235,6 +324,71 @@ export class SignalValidationLogger {
                     "wasValidSignal",
                 ].join(",") + "\n";
 
+            // Successful signals CSV header - ALL 40+ PARAMETERS
+            const successfulHeader =
+                [
+                    "timestamp",
+                    "detectorType",
+                    "price",
+                    // EXHAUSTION PARAMETERS
+                    "minAggVolume",
+                    "exhaustionThreshold",
+                    "timeWindowIndex",
+                    "eventCooldownMs",
+                    "useStandardizedZones",
+                    "enhancementMode",
+                    "minEnhancedConfidenceThreshold",
+                    "enableDepletionAnalysis",
+                    "depletionVolumeThreshold",
+                    "depletionRatioThreshold",
+                    "depletionConfidenceBoost",
+                    "passiveVolumeExhaustionRatio",
+                    "varianceReductionFactor",
+                    "alignmentNormalizationFactor",
+                    "aggressiveVolumeExhaustionThreshold",
+                    "aggressiveVolumeReductionFactor",
+                    "passiveRatioBalanceThreshold",
+                    "premiumConfidenceThreshold",
+                    "variancePenaltyFactor",
+                    "ratioBalanceCenterPoint",
+                    // ABSORPTION PARAMETERS
+                    "absorptionThreshold",
+                    "priceEfficiencyThreshold",
+                    "maxAbsorptionRatio",
+                    "minPassiveMultiplier",
+                    "passiveAbsorptionThreshold",
+                    "expectedMovementScalingFactor",
+                    "contextConfidenceBoostMultiplier",
+                    "liquidityGradientRange",
+                    "institutionalVolumeThreshold",
+                    "institutionalVolumeRatioThreshold",
+                    "enableInstitutionalVolumeFilter",
+                    "institutionalVolumeBoost",
+                    "minAbsorptionScore",
+                    "finalConfidenceRequired",
+                    "confidenceBoostReduction",
+                    "maxZoneCountForScoring",
+                    "balanceThreshold",
+                    "confluenceMinZones",
+                    "confluenceMaxDistance",
+                    // RUNTIME VALUES
+                    "priceEfficiency",
+                    "confidence",
+                    "aggressiveVolume",
+                    "passiveVolume",
+                    "volumeRatio",
+                    "institutionalVolumeRatio",
+                    // MARKET CONTEXT
+                    "marketVolume",
+                    "marketSpread",
+                    "marketVolatility",
+                    "subsequentMovement5min",
+                    "subsequentMovement15min",
+                    "subsequentMovement90min",
+                    "wasTopOrBottomSignal",
+                    "signalQuality",
+                ].join(",") + "\n";
+
             // ✅ RACE CONDITION FIX: Only write headers if files don't exist
             try {
                 await fs.access(this.signalsFilePath);
@@ -250,13 +404,25 @@ export class SignalValidationLogger {
                 await fs.writeFile(this.rejectionsFilePath, rejectionHeader);
             }
 
+            try {
+                await fs.access(this.successfulSignalsFilePath);
+            } catch {
+                // File doesn't exist, create with header
+                await fs.writeFile(
+                    this.successfulSignalsFilePath,
+                    successfulHeader
+                );
+            }
+
             this.logger.info(
                 "SignalValidationLogger: NON-BLOCKING CSV files initialized",
                 {
                     signalsFile: this.signalsFilePath,
                     rejectionsFile: this.rejectionsFilePath,
+                    successfulSignalsFile: this.successfulSignalsFilePath,
                     maxBufferSize: this.maxBufferSize,
                     flushInterval: this.flushInterval,
+                    optimizationInterval: "90 minutes",
                 }
             );
 
@@ -299,6 +465,11 @@ export class SignalValidationLogger {
             const rejectionsToFlush = this.rejectionsBuffer.splice(0);
             void this.flushRejectionsBuffer(rejectionsToFlush);
         }
+
+        if (this.successfulSignalsBuffer.length > 0) {
+            const successfulToFlush = this.successfulSignalsBuffer.splice(0);
+            void this.flushSuccessfulSignalsBuffer(successfulToFlush);
+        }
     }
 
     /**
@@ -340,12 +511,93 @@ export class SignalValidationLogger {
     }
 
     /**
+     * ✅ ASYNC SUCCESSFUL SIGNALS BUFFER FLUSH: Background file writes
+     */
+    private async flushSuccessfulSignalsBuffer(
+        records: string[]
+    ): Promise<void> {
+        try {
+            const content = records.join("");
+            await fs.appendFile(this.successfulSignalsFilePath, content);
+        } catch (error) {
+            this.logger.error(
+                "SignalValidationLogger: Failed to flush successful signals buffer",
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    recordCount: records.length,
+                }
+            );
+        }
+    }
+
+    /**
+     * Start 90-minute automatic optimization cycle
+     */
+    private start90MinuteOptimization(): void {
+        const optimizationInterval = 90 * 60 * 1000; // 90 minutes in milliseconds
+
+        this.optimizationTimer = setInterval(() => {
+            void this.run90MinuteOptimization();
+        }, optimizationInterval);
+
+        this.logger.info(
+            "SignalValidationLogger: 90-minute optimization started",
+            {
+                intervalMinutes: 90,
+                nextOptimization: new Date(
+                    Date.now() + optimizationInterval
+                ).toISOString(),
+            }
+        );
+    }
+
+    /**
+     * Run 90-minute optimization analysis
+     */
+    private async run90MinuteOptimization(): Promise<void> {
+        try {
+            this.logger.info(
+                "SignalValidationLogger: Starting 90-minute optimization analysis"
+            );
+
+            // Import and run the optimizer
+            const { AutomaticParameterOptimizer } = await import(
+                "./automaticParameterOptimizer.js"
+            );
+            const optimizer = new AutomaticParameterOptimizer(
+                this.logger,
+                this.outputDir
+            );
+
+            await optimizer.runOptimization();
+
+            this.logger.info(
+                "SignalValidationLogger: 90-minute optimization completed"
+            );
+        } catch (error) {
+            this.logger.error(
+                "SignalValidationLogger: Failed to run 90-minute optimization",
+                {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
+        }
+    }
+
+    /**
      * ✅ CLEANUP: Flush remaining buffers and clear timers
      */
     public cleanup(): void {
         if (this.flushTimer) {
             clearInterval(this.flushTimer);
             this.flushTimer = undefined;
+        }
+
+        if (this.optimizationTimer) {
+            clearInterval(this.optimizationTimer);
+            this.optimizationTimer = undefined;
         }
 
         // Final flush of any remaining buffered data
@@ -358,6 +610,7 @@ export class SignalValidationLogger {
         this.validationTimers.clear();
         this.pendingValidations.clear();
         this.pendingRejections.clear();
+        this.successfulSignals.clear();
     }
 
     /**
@@ -465,6 +718,62 @@ export class SignalValidationLogger {
                 signalId: signal.id,
                 error: error instanceof Error ? error.message : String(error),
             });
+        }
+    }
+
+    /**
+     * Log successful signal parameters for 90-minute optimization
+     */
+    public logSuccessfulSignal(
+        detectorType: "exhaustion" | "absorption",
+        event: EnrichedTradeEvent,
+        parameterValues: SuccessfulSignalRecord["parameterValues"],
+        marketContext: {
+            marketVolume: number;
+            marketSpread: number;
+            marketVolatility: number;
+        }
+    ): void {
+        try {
+            const record: SuccessfulSignalRecord = {
+                timestamp: event.timestamp,
+                detectorType,
+                price: event.price,
+                parameterValues,
+                marketVolume: marketContext.marketVolume,
+                marketSpread: marketContext.marketSpread,
+                marketVolatility: marketContext.marketVolatility,
+            };
+
+            // Store for validation tracking
+            const recordId = `successful-${event.timestamp}-${Math.random()}`;
+            this.successfulSignals.set(recordId, record);
+
+            // Set up validation timers for 5min, 15min, and 90min
+            this.setupSuccessfulSignalValidationTimers(
+                recordId,
+                event.price,
+                record
+            );
+
+            this.logger.debug(
+                "SignalValidationLogger: Successful signal parameters logged",
+                {
+                    detectorType,
+                    price: event.price,
+                    timestamp: event.timestamp,
+                    parameterCount: Object.keys(parameterValues).length,
+                }
+            );
+        } catch (error) {
+            this.logger.error(
+                "SignalValidationLogger: Failed to log successful signal",
+                {
+                    detectorType,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
         }
     }
 
@@ -580,6 +889,56 @@ export class SignalValidationLogger {
         );
 
         this.validationTimers.set(signalId, timers);
+    }
+
+    /**
+     * Set up successful signal validation timers
+     */
+    private setupSuccessfulSignalValidationTimers(
+        recordId: string,
+        signalPrice: number,
+        record: SuccessfulSignalRecord
+    ): void {
+        // 5-minute validation
+        setTimeout(
+            () => {
+                this.validateSuccessfulSignal(
+                    recordId,
+                    signalPrice,
+                    record,
+                    "5min"
+                );
+            },
+            5 * 60 * 1000
+        );
+
+        // 15-minute validation
+        setTimeout(
+            () => {
+                this.validateSuccessfulSignal(
+                    recordId,
+                    signalPrice,
+                    record,
+                    "15min"
+                );
+            },
+            15 * 60 * 1000
+        );
+
+        // 90-minute validation and final write (for optimization analysis)
+        setTimeout(
+            () => {
+                this.validateSuccessfulSignal(
+                    recordId,
+                    signalPrice,
+                    record,
+                    "90min"
+                );
+                this.writeSuccessfulSignalRecord(record);
+                this.successfulSignals.delete(recordId);
+            },
+            90 * 60 * 1000
+        );
     }
 
     /**
@@ -709,6 +1068,51 @@ export class SignalValidationLogger {
     }
 
     /**
+     * Validate successful signal to classify as top/bottom or noise
+     */
+    private validateSuccessfulSignal(
+        recordId: string,
+        originalPrice: number,
+        record: SuccessfulSignalRecord,
+        timeframe: "5min" | "15min" | "90min"
+    ): void {
+        const currentPrice = this.currentPrice;
+        if (currentPrice === null) return;
+
+        const movement = FinancialMath.divideQuantities(
+            currentPrice - originalPrice,
+            originalPrice
+        );
+
+        switch (timeframe) {
+            case "5min":
+                record.subsequentMovement5min = movement;
+                break;
+            case "15min":
+                record.subsequentMovement15min = movement;
+                break;
+            case "90min":
+                record.subsequentMovement90min = movement;
+
+                // Classify signal quality based on 90-minute movement
+                const absMovement = Math.abs(movement);
+                record.wasTopOrBottomSignal = absMovement >= 0.007; // 0.7% threshold
+
+                if (absMovement >= 0.007) {
+                    // Determine if top or bottom signal
+                    if (movement >= 0.007) {
+                        record.signalQuality = "bottom"; // Price went up = bottom signal
+                    } else if (movement <= -0.007) {
+                        record.signalQuality = "top"; // Price went down = top signal
+                    }
+                } else {
+                    record.signalQuality = "noise";
+                }
+                break;
+        }
+    }
+
+    /**
      * Validate rejection to see if it was a missed opportunity
      */
     private validateRejection(
@@ -807,6 +1211,100 @@ export class SignalValidationLogger {
                 "SignalValidationLogger: Failed to write signal record",
                 {
                     signalId: record.signalId,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
+        }
+    }
+
+    /**
+     * Write successful signal record to CSV
+     */
+    private writeSuccessfulSignalRecord(record: SuccessfulSignalRecord): void {
+        try {
+            const csvLine =
+                [
+                    record.timestamp,
+                    record.detectorType,
+                    record.price,
+                    // EXHAUSTION PARAMETERS - ALL 40+ VALUES
+                    record.parameterValues.minAggVolume || "",
+                    record.parameterValues.exhaustionThreshold || "",
+                    record.parameterValues.timeWindowIndex || "",
+                    record.parameterValues.eventCooldownMs || "",
+                    record.parameterValues.useStandardizedZones || "",
+                    record.parameterValues.enhancementMode || "",
+                    record.parameterValues.minEnhancedConfidenceThreshold || "",
+                    record.parameterValues.enableDepletionAnalysis || "",
+                    record.parameterValues.depletionVolumeThreshold || "",
+                    record.parameterValues.depletionRatioThreshold || "",
+                    record.parameterValues.depletionConfidenceBoost || "",
+                    record.parameterValues.passiveVolumeExhaustionRatio || "",
+                    record.parameterValues.varianceReductionFactor || "",
+                    record.parameterValues.alignmentNormalizationFactor || "",
+                    record.parameterValues
+                        .aggressiveVolumeExhaustionThreshold || "",
+                    record.parameterValues.aggressiveVolumeReductionFactor ||
+                        "",
+                    record.parameterValues.passiveRatioBalanceThreshold || "",
+                    record.parameterValues.premiumConfidenceThreshold || "",
+                    record.parameterValues.variancePenaltyFactor || "",
+                    record.parameterValues.ratioBalanceCenterPoint || "",
+                    // ABSORPTION PARAMETERS - ALL VALUES
+                    record.parameterValues.absorptionThreshold || "",
+                    record.parameterValues.priceEfficiencyThreshold || "",
+                    record.parameterValues.maxAbsorptionRatio || "",
+                    record.parameterValues.minPassiveMultiplier || "",
+                    record.parameterValues.passiveAbsorptionThreshold || "",
+                    record.parameterValues.expectedMovementScalingFactor || "",
+                    record.parameterValues.contextConfidenceBoostMultiplier ||
+                        "",
+                    record.parameterValues.liquidityGradientRange || "",
+                    record.parameterValues.institutionalVolumeThreshold || "",
+                    record.parameterValues.institutionalVolumeRatioThreshold ||
+                        "",
+                    record.parameterValues.enableInstitutionalVolumeFilter ||
+                        "",
+                    record.parameterValues.institutionalVolumeBoost || "",
+                    record.parameterValues.minAbsorptionScore || "",
+                    record.parameterValues.finalConfidenceRequired || "",
+                    record.parameterValues.confidenceBoostReduction || "",
+                    record.parameterValues.maxZoneCountForScoring || "",
+                    record.parameterValues.balanceThreshold || "",
+                    record.parameterValues.confluenceMinZones || "",
+                    record.parameterValues.confluenceMaxDistance || "",
+                    // RUNTIME VALUES
+                    record.parameterValues.priceEfficiency || "",
+                    record.parameterValues.confidence || "",
+                    record.parameterValues.aggressiveVolume || "",
+                    record.parameterValues.passiveVolume || "",
+                    record.parameterValues.volumeRatio || "",
+                    record.parameterValues.institutionalVolumeRatio || "",
+                    // MARKET CONTEXT
+                    record.marketVolume,
+                    record.marketSpread,
+                    record.marketVolatility,
+                    record.subsequentMovement5min || "",
+                    record.subsequentMovement15min || "",
+                    record.subsequentMovement90min || "",
+                    record.wasTopOrBottomSignal || "",
+                    record.signalQuality || "",
+                ].join(",") + "\n";
+
+            // ✅ NON-BLOCKING: Add to buffer instead of direct file write
+            this.successfulSignalsBuffer.push(csvLine);
+
+            // ✅ AUTO-FLUSH: Trigger flush if buffer is full
+            if (this.successfulSignalsBuffer.length >= this.maxBufferSize) {
+                this.flushBuffers();
+            }
+        } catch (error) {
+            this.logger.error(
+                "SignalValidationLogger: Failed to write successful signal record",
+                {
+                    timestamp: record.timestamp,
+                    detectorType: record.detectorType,
                     error:
                         error instanceof Error ? error.message : String(error),
                 }

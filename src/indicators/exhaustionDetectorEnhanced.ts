@@ -402,6 +402,10 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 event,
                 event.zoneData?.zones || []
             );
+
+            // Log successful signal parameters for 90-minute optimization
+            void this.logSuccessfulSignalParameters(finalSignal, event);
+
             this.emit("signalCandidate", finalSignal);
 
             this.logger.info("ExhaustionDetectorEnhanced: Signal emitted", {
@@ -1242,6 +1246,9 @@ export class ExhaustionDetectorEnhanced extends Detector {
         const eventKey = `exhaustion`;
         this.canEmitSignal(eventKey, true);
 
+        // Log successful signal parameters for 90-minute optimization
+        void this.logSuccessfulSignalParameters(signalCandidate, event);
+
         // ✅ EMIT ENHANCED EXHAUSTION SIGNAL - Independent of base detector
         this.emit("signalCandidate", signalCandidate);
 
@@ -1569,6 +1576,143 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 }
             );
         }
+    }
+
+    /**
+     * Log successful signal parameters for 90-minute optimization
+     */
+    private logSuccessfulSignalParameters(
+        signal: SignalCandidate,
+        event: EnrichedTradeEvent
+    ): void {
+        try {
+            // Collect ACTUAL VALUES that each parameter was checked against when signal passed
+            const totalAggVol =
+                event.zoneData?.zones.reduce(
+                    (sum, zone) => sum + zone.aggressiveVolume,
+                    0
+                ) || 0;
+            const totalPassVol =
+                event.zoneData?.zones.reduce(
+                    (sum, zone) => sum + zone.passiveVolume,
+                    0
+                ) || 0;
+            const actualExhaustionRatio =
+                totalAggVol > 0
+                    ? totalAggVol / (totalAggVol + totalPassVol)
+                    : 0;
+            const actualDepletionRatio =
+                totalPassVol > 0
+                    ? (totalAggVol - totalPassVol) / totalPassVol
+                    : 0;
+            const actualPassiveExhaustionRatio =
+                totalPassVol > 0 ? totalAggVol / totalPassVol : 0;
+
+            const parameterValues = {
+                // EXHAUSTION ACTUAL VALUES - what was actually measured vs thresholds
+                minAggVolume: totalAggVol, // What aggressive volume actually was
+                exhaustionThreshold: actualExhaustionRatio, // What exhaustion ratio actually was
+                timeWindowIndex: this.enhancementConfig.timeWindowIndex, // Static config
+                eventCooldownMs: this.enhancementConfig.eventCooldownMs, // Static config
+                useStandardizedZones:
+                    this.enhancementConfig.useStandardizedZones, // Static config
+                enhancementMode: this.enhancementConfig.enhancementMode, // Static config
+                minEnhancedConfidenceThreshold: signal.confidence, // What confidence actually was
+                enableDepletionAnalysis:
+                    this.enhancementConfig.enableDepletionAnalysis, // Static config
+                depletionVolumeThreshold: totalAggVol, // What depletion volume actually was
+                depletionRatioThreshold: actualDepletionRatio, // What depletion ratio actually was
+                depletionConfidenceBoost:
+                    this.enhancementConfig.depletionConfidenceBoost, // Static config
+                passiveVolumeExhaustionRatio: actualPassiveExhaustionRatio, // What passive exhaustion ratio actually was
+                varianceReductionFactor:
+                    this.enhancementConfig.varianceReductionFactor, // Static config
+                alignmentNormalizationFactor:
+                    this.enhancementConfig.alignmentNormalizationFactor, // Static config
+                aggressiveVolumeExhaustionThreshold: actualExhaustionRatio, // What aggressive exhaustion actually was
+                aggressiveVolumeReductionFactor:
+                    this.enhancementConfig.aggressiveVolumeReductionFactor, // Static config
+                passiveRatioBalanceThreshold:
+                    Math.abs(totalAggVol - totalPassVol) /
+                    Math.max(totalAggVol + totalPassVol, 1), // What balance actually was
+                premiumConfidenceThreshold: signal.confidence, // What confidence actually was
+                variancePenaltyFactor:
+                    this.enhancementConfig.variancePenaltyFactor, // Static config
+                ratioBalanceCenterPoint:
+                    this.enhancementConfig.ratioBalanceCenterPoint, // Static config
+
+                // ABSORPTION PARAMETERS (N/A for exhaustion but included for consistency)
+                absorptionThreshold: undefined, // N/A for exhaustion
+                priceEfficiencyThreshold: undefined, // N/A for exhaustion
+                maxAbsorptionRatio: undefined, // N/A for exhaustion
+                minPassiveMultiplier: undefined, // N/A for exhaustion
+                passiveAbsorptionThreshold: undefined, // N/A for exhaustion
+                expectedMovementScalingFactor: undefined, // N/A for exhaustion
+                contextConfidenceBoostMultiplier: undefined, // N/A for exhaustion
+                liquidityGradientRange: undefined, // N/A for exhaustion
+                institutionalVolumeThreshold: undefined, // N/A for exhaustion
+                institutionalVolumeRatioThreshold: undefined, // N/A for exhaustion
+                enableInstitutionalVolumeFilter: undefined, // N/A for exhaustion
+                institutionalVolumeBoost: undefined, // N/A for exhaustion
+                minAbsorptionScore: undefined, // N/A for exhaustion
+                finalConfidenceRequired: undefined, // N/A for exhaustion
+                confidenceBoostReduction: undefined, // N/A for exhaustion
+                maxZoneCountForScoring: undefined, // N/A for exhaustion
+                balanceThreshold: undefined, // N/A for exhaustion
+                confluenceMinZones: undefined, // N/A for exhaustion
+                confluenceMaxDistance: undefined, // N/A for exhaustion
+
+                // RUNTIME VALUES (exactly what was calculated)
+                priceEfficiency: undefined, // N/A for exhaustion
+                confidence: signal.confidence,
+                aggressiveVolume: totalAggVol,
+                passiveVolume: totalPassVol,
+                volumeRatio: totalAggVol > 0 ? totalPassVol / totalAggVol : 0,
+                institutionalVolumeRatio: undefined, // N/A for exhaustion
+            };
+
+            // Market context at time of successful signal
+            const marketContext = {
+                marketVolume:
+                    parameterValues.aggressiveVolume +
+                    parameterValues.passiveVolume,
+                marketSpread:
+                    event.bestAsk && event.bestBid
+                        ? event.bestAsk - event.bestBid
+                        : 0,
+                marketVolatility: this.calculateMarketVolatility(event),
+            };
+
+            this.validationLogger.logSuccessfulSignal(
+                "exhaustion",
+                event,
+                parameterValues,
+                marketContext
+            );
+        } catch (error) {
+            this.logger.error(
+                "ExhaustionDetectorEnhanced: Failed to log successful signal parameters",
+                {
+                    signalId: signal.id,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
+        }
+    }
+
+    /**
+     * Calculate market volatility estimate
+     */
+    private calculateMarketVolatility(event: EnrichedTradeEvent): number {
+        // Simple volatility estimate based on spread and recent price action
+        if (!event.bestAsk || !event.bestBid) return 0;
+
+        const spread = event.bestAsk - event.bestBid;
+        const midPrice = (event.bestAsk + event.bestBid) / 2;
+
+        // Return spread as percentage of mid price
+        return FinancialMath.divideQuantities(spread, midPrice);
     }
 
     /**

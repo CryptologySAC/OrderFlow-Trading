@@ -412,6 +412,9 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 signalZones
             );
 
+            // Log successful signal parameters for 90-minute optimization
+            void this.logSuccessfulSignalParameters(enhancedSignal, event);
+
             this.emit("signalCandidate", enhancedSignal);
 
             this.logger.info(
@@ -446,6 +449,12 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 coreAbsorptionResult,
                 event,
                 signalZones
+            );
+
+            // Log successful signal parameters for 90-minute optimization
+            void this.logSuccessfulSignalParameters(
+                coreAbsorptionResult,
+                event
             );
 
             this.emit("signalCandidate", coreAbsorptionResult);
@@ -1735,6 +1744,147 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 }
             );
         }
+    }
+
+    /**
+     * Log successful signal parameters for 90-minute optimization
+     */
+    private logSuccessfulSignalParameters(
+        signal: SignalCandidate,
+        event: EnrichedTradeEvent
+    ): void {
+        try {
+            // Collect ACTUAL VALUES that each parameter was checked against when signal passed
+            const totalAggVol =
+                event.zoneData?.zones.reduce(
+                    (sum, zone) => sum + zone.aggressiveVolume,
+                    0
+                ) || 0;
+            const totalPassVol =
+                event.zoneData?.zones.reduce(
+                    (sum, zone) => sum + zone.passiveVolume,
+                    0
+                ) || 0;
+            const actualPriceEfficiency = this.calculatePriceEfficiency(
+                event,
+                event.zoneData?.zones || []
+            );
+            const actualAbsorptionRatio =
+                totalPassVol > 0
+                    ? totalPassVol / (totalAggVol + totalPassVol)
+                    : 0;
+            const actualInstVolumeRatio =
+                totalAggVol > 0 ? totalPassVol / totalAggVol : 0;
+
+            const parameterValues = {
+                // ACTUAL VALUES each threshold was checked against (not config values!)
+                minAggVolume: totalAggVol, // What aggressive volume actually was
+                exhaustionThreshold: undefined, // N/A for absorption
+                timeWindowIndex: this.enhancementConfig.timeWindowIndex, // Static config
+                eventCooldownMs: this.enhancementConfig.eventCooldownMs, // Static config
+                useStandardizedZones:
+                    this.enhancementConfig.useStandardizedZones, // Static config
+                enhancementMode: this.enhancementConfig.enhancementMode, // Static config
+                minEnhancedConfidenceThreshold: signal.confidence, // What confidence actually was
+                enableDepletionAnalysis: undefined, // N/A for absorption
+                depletionVolumeThreshold: undefined, // N/A for absorption
+                depletionRatioThreshold: undefined, // N/A for absorption
+                depletionConfidenceBoost: undefined, // N/A for absorption
+                passiveVolumeExhaustionRatio: undefined, // N/A for absorption
+                varianceReductionFactor: undefined, // N/A for absorption
+                alignmentNormalizationFactor: undefined, // N/A for absorption
+                aggressiveVolumeExhaustionThreshold: undefined, // N/A for absorption
+                aggressiveVolumeReductionFactor: undefined, // N/A for absorption
+                passiveRatioBalanceThreshold: undefined, // N/A for absorption
+                premiumConfidenceThreshold: undefined, // N/A for absorption
+                variancePenaltyFactor: undefined, // N/A for absorption
+                ratioBalanceCenterPoint: undefined, // N/A for absorption
+
+                // ABSORPTION ACTUAL VALUES - what was actually measured vs thresholds
+                absorptionThreshold: actualAbsorptionRatio, // What absorption ratio actually was
+                priceEfficiencyThreshold: actualPriceEfficiency || 0, // What price efficiency actually was
+                maxAbsorptionRatio: actualAbsorptionRatio, // What absorption ratio actually was
+                minPassiveMultiplier:
+                    totalAggVol > 0 ? totalPassVol / totalAggVol : 0, // What multiplier actually was
+                passiveAbsorptionThreshold: actualAbsorptionRatio, // What absorption ratio actually was
+                expectedMovementScalingFactor:
+                    this.enhancementConfig.expectedMovementScalingFactor, // Static config
+                contextConfidenceBoostMultiplier:
+                    this.enhancementConfig.contextConfidenceBoostMultiplier, // Static config
+                liquidityGradientRange:
+                    this.enhancementConfig.liquidityGradientRange, // Static config
+                institutionalVolumeThreshold: totalAggVol, // What institutional volume actually was
+                institutionalVolumeRatioThreshold: actualInstVolumeRatio, // What ratio actually was
+                enableInstitutionalVolumeFilter:
+                    this.enhancementConfig.enableInstitutionalVolumeFilter, // Static config
+                institutionalVolumeBoost:
+                    this.enhancementConfig.institutionalVolumeBoost, // Static config
+                minAbsorptionScore: actualAbsorptionRatio, // What absorption score actually was
+                finalConfidenceRequired: signal.confidence, // What final confidence actually was
+                confidenceBoostReduction:
+                    this.enhancementConfig.confidenceBoostReduction, // Static config
+                maxZoneCountForScoring: event.zoneData?.zones.length || 0, // How many zones actually present
+                balanceThreshold:
+                    Math.abs(totalAggVol - totalPassVol) /
+                    Math.max(totalAggVol + totalPassVol, 1), // What balance actually was
+                confluenceMinZones: event.zoneData?.zones.length || 0, // How many zones actually present
+                confluenceMaxDistance:
+                    this.enhancementConfig.confluenceMaxDistance, // Static config
+
+                // RUNTIME VALUES (exactly what was calculated)
+                priceEfficiency: actualPriceEfficiency || 0,
+                confidence: signal.confidence,
+                aggressiveVolume: totalAggVol,
+                passiveVolume: totalPassVol,
+                volumeRatio: totalAggVol > 0 ? totalPassVol / totalAggVol : 0,
+                institutionalVolumeRatio: actualInstVolumeRatio,
+            };
+
+            // Market context at time of successful signal
+            const marketContext = {
+                marketVolume:
+                    event.zoneData?.zones.reduce(
+                        (sum, zone) =>
+                            sum + zone.aggressiveVolume + zone.passiveVolume,
+                        0
+                    ) || 0,
+                marketSpread:
+                    event.bestAsk && event.bestBid
+                        ? event.bestAsk - event.bestBid
+                        : 0,
+                marketVolatility: this.calculateMarketVolatility(event),
+            };
+
+            this.validationLogger.logSuccessfulSignal(
+                "absorption",
+                event,
+                parameterValues,
+                marketContext
+            );
+        } catch (error) {
+            this.logger.error(
+                "AbsorptionDetectorEnhanced: Failed to log successful signal parameters",
+                {
+                    signalId: signal.id,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
+        }
+    }
+
+    /**
+     * Calculate market volatility estimate
+     */
+    private calculateMarketVolatility(event: EnrichedTradeEvent): number {
+        // Simple volatility estimate based on spread and recent price action
+        if (!event.bestAsk || !event.bestBid) return 0;
+
+        const spread = event.bestAsk - event.bestBid;
+        const midPrice = (event.bestAsk + event.bestBid) / 2;
+
+        // Return spread as percentage of mid price
+        return FinancialMath.divideQuantities(spread, midPrice);
     }
 
     /**

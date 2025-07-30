@@ -135,7 +135,7 @@
                 "maxTradesPerZone": 1500
             },
             "signalManager": {
-                "confidenceThreshold": 0.35,
+                "confidenceThreshold": 0.5,
                 "signalTimeout": 5400000,
                 "enableMarketHealthCheck": true,
                 "enableAlerts": true,
@@ -158,11 +158,11 @@
                     "distribution": 7
                 },
                 "detectorThresholds": {
-                    "absorption": 0.5,
-                    "exhaustion": 0.3,
+                    "absorption": 0.7,
+                    "exhaustion": 0.5,
                     "accumulation": 0.25,
                     "distribution": 0.25,
-                    "deltacvd": 0.5
+                    "deltacvd": 0.7
                 },
                 "positionSizing": {
                     "absorption": 0.4,
@@ -227,18 +227,18 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-                "minAggVolume": 1500,
-                "exhaustionThreshold": 0.7,
+                "minAggVolume": 80,
+                "exhaustionThreshold": 0.75,
                 "timeWindowIndex": 0,
-                "eventCooldownMs": 10000,
+                "eventCooldownMs": 30000,
 
                 "useStandardizedZones": true,
                 "enhancementMode": "production",
-                "minEnhancedConfidenceThreshold": 0.2,
+                "minEnhancedConfidenceThreshold": 0.4,
 
                 "enableDepletionAnalysis": true,
-                "depletionVolumeThreshold": 500,
-                "depletionRatioThreshold": 0.15,
+                "depletionVolumeThreshold": 750,
+                "depletionRatioThreshold": 0.2,
                 "depletionConfidenceBoost": 0.2,
 
                 "passiveVolumeExhaustionRatio": 0.4,
@@ -249,33 +249,33 @@
                 "aggressiveVolumeReductionFactor": 0.5,
 
                 "passiveRatioBalanceThreshold": 0.5,
-                "premiumConfidenceThreshold": 0.7,
+                "premiumConfidenceThreshold": 0.8,
                 "variancePenaltyFactor": 1.0,
                 "ratioBalanceCenterPoint": 0.5
             },
             "absorption": {
-                "minAggVolume": 750,
+                "minAggVolume": 2000,
                 "timeWindowIndex": 0,
-                "eventCooldownMs": 15000,
-                "priceEfficiencyThreshold": 0.025,
-                "maxAbsorptionRatio": 0.65,
-                "minPassiveMultiplier": 1.2,
-                "passiveAbsorptionThreshold": 0.68,
+                "eventCooldownMs": 30000,
+                "priceEfficiencyThreshold": 0.001,
+                "maxAbsorptionRatio": 0.9,
+                "minPassiveMultiplier": 1.8,
+                "passiveAbsorptionThreshold": 0.65,
                 "expectedMovementScalingFactor": 10,
                 "contextConfidenceBoostMultiplier": 0.3,
                 "liquidityGradientRange": 5,
-                "institutionalVolumeThreshold": 750,
-                "institutionalVolumeRatioThreshold": 0.82,
+                "institutionalVolumeThreshold": 1500,
+                "institutionalVolumeRatioThreshold": 0.65,
                 "enableInstitutionalVolumeFilter": true,
                 "institutionalVolumeBoost": 0.1,
-                "minAbsorptionScore": 0.5,
-                "finalConfidenceRequired": 0.8,
+                "minAbsorptionScore": 0.8,
+                "finalConfidenceRequired": 2.0,
                 "confidenceBoostReduction": 0.3,
                 "maxZoneCountForScoring": 5,
-                "minEnhancedConfidenceThreshold": 0.2,
+                "minEnhancedConfidenceThreshold": 0.5,
                 "useStandardizedZones": true,
                 "enhancementMode": "production",
-                "balanceThreshold": 0.05,
+                "balanceThreshold": 0.017,
                 "confluenceMinZones": 2,
                 "confluenceMaxDistance": 5
             },
@@ -336,14 +336,14 @@
                 "marketHealthWindowMs": 600000
             },
             "deltaCVD": {
-                "minTradesPerSec": 0.5,
-                "minVolPerSec": 1,
-                "signalThreshold": 0.75,
-                "eventCooldownMs": 63000,
+                "minTradesPerSec": 4.0,
+                "minVolPerSec": 25.0,
+                "signalThreshold": 0.85,
+                "eventCooldownMs": 90000,
                 "enhancementMode": "production",
-                "cvdImbalanceThreshold": 0.15,
+                "cvdImbalanceThreshold": 0.25,
                 "timeWindowIndex": 0,
-                "institutionalThreshold": 17.8
+                "institutionalThreshold": 25.0
             },
             "accumulation": {
                 "timeWindowIndex": 1,
