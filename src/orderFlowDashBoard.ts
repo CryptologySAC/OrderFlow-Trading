@@ -1788,8 +1788,8 @@ export class OrderFlowDashboard {
             const correlationId = randomUUID();
             this.logger.info("Starting scheduled purge", {}, correlationId);
 
-            // 🔧 FIX: Use 1.5 hours (90 minutes) retention instead of default 24 hours
-            const retentionHours = 1.5; // Match Config.maxStorageTime (5400000ms = 90 minutes)
+            // 🔧 ANALYSIS: Use 24 hours retention for signal analysis, startup still loads 90 minutes
+            const retentionHours = 24; // Full day retention for retrospective signal analysis
 
             this.threadManager
                 .callStorage("purgeOldEntries", correlationId, retentionHours)

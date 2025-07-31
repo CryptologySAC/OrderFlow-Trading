@@ -464,6 +464,14 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                         passiveVolume: 0,
                         priceEfficiency: null,
                         confidence: realConfidence,
+                    },
+                    {
+                        realConfidence,
+                        divergenceStrength: divergenceResult.divergenceStrength,
+                        cvdTotalVolume: cvdData.totalVolume,
+                        cvdBuyVolume: cvdData.buyVolume,
+                        cvdSellVolume: cvdData.sellVolume,
+                        cvdDelta: cvdData.cvdDelta,
                     }
                 );
                 return null;
@@ -496,6 +504,15 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                     passiveVolume: 0,
                     priceEfficiency: null,
                     confidence: 0,
+                },
+                {
+                    cvdTotalVolume: cvdData.totalVolume,
+                    cvdBuyVolume: cvdData.buyVolume,
+                    cvdSellVolume: cvdData.sellVolume,
+                    cvdDelta: cvdData.cvdDelta,
+                    actualDivergenceStrength: 0, // No divergence detected
+                    minThresholdRequired:
+                        this.enhancementConfig.cvdImbalanceThreshold,
                 }
             );
         }
@@ -1333,8 +1350,8 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             data: cvdResult,
         });
 
-        // ✅ RESTORED: Proper signal validation logging with real market context
-        this.logSignalForValidation(
+        // ✅ LOG SUCCESSFUL SIGNAL: Complete parameter logging for threshold optimization
+        this.logSuccessfulSignalParameters(
             {
                 id: `deltacvd-${event.timestamp}-${this.getId()}`,
                 type: "deltacvd",
@@ -1343,8 +1360,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 timestamp: event.timestamp,
                 data: cvdResult,
             },
-            event,
-            event.zoneData ? event.zoneData.zones : []
+            event
         );
 
         this.logger.info(
@@ -1583,6 +1599,9 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             passiveVolume: number;
             priceEfficiency: number | null;
             confidence: number;
+        },
+        runtimeCalculations?: {
+            [key: string]: number | string | boolean;
         }
     ): void {
         try {
@@ -1591,7 +1610,10 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 rejectionReason,
                 event,
                 thresholdDetails,
-                marketContext
+                {
+                    ...marketContext,
+                    calculatedValues: runtimeCalculations || {},
+                }
             );
         } catch (error) {
             this.logger.error(
@@ -1732,52 +1754,104 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     }
 
     /**
-     * Log signal for validation tracking - DeltaCVD specific implementation
+     * Log successful signal parameters for 90-minute optimization analysis
+     *
+     * DELTACVD PHASE 1: Complete parameter logging for threshold optimization
      */
-    private logSignalForValidation(
+    private logSuccessfulSignalParameters(
         signal: SignalCandidate,
-        event: EnrichedTradeEvent,
-        relevantZones: ZoneSnapshot[]
+        event: EnrichedTradeEvent
     ): void {
         try {
-            // Calculate market context for validation logging
-            const marketContext = this.calculateMarketContext(
-                event,
-                relevantZones
+            // Calculate zone volume data for logging
+            const cvdData = this.extractCVDFromZones(
+                event.zoneData,
+                event.timestamp
             );
 
-            // Add DeltaCVD-specific metrics
-            const extendedContext = {
-                ...marketContext,
-                cvdDivergenceStrength: undefined as number | undefined,
-                cvdAffectedZones: undefined as number | undefined,
+            // Calculate market context
+            const marketContext = this.calculateMarketContext(
+                event,
+                event.zoneData?.zones || []
+            );
+
+            // Collect ACTUAL VALUES that each parameter was checked against when signal passed
+            const parameterValues = {
+                // DELTACVD CONFIG PARAMETERS - Static values from configuration
+                minTradesPerSec: this.enhancementConfig.minTradesPerSec,
+                minVolPerSec: this.enhancementConfig.minVolPerSec,
+                signalThreshold: this.enhancementConfig.signalThreshold,
+                eventCooldownMs: this.enhancementConfig.eventCooldownMs,
+                timeWindowIndex: this.enhancementConfig.timeWindowIndex,
+                enhancementMode: this.enhancementConfig.enhancementMode,
+                cvdImbalanceThreshold:
+                    this.enhancementConfig.cvdImbalanceThreshold,
+                institutionalThreshold:
+                    this.enhancementConfig.institutionalThreshold,
+
+                // DELTACVD ACTUAL VALUES - What was actually measured vs thresholds
+                buyVolume: cvdData.buyVolume,
+                sellVolume: cvdData.sellVolume,
+                cvdDelta: cvdData.cvdDelta,
+                buyRatio:
+                    cvdData.totalVolume > 0
+                        ? cvdData.buyVolume / cvdData.totalVolume
+                        : 0,
+                enhancedConfidence: signal.confidence,
+
+                // Extract divergence data from signal if available
+                cvdDivergenceStrength:
+                    signal.data &&
+                    typeof signal.data === "object" &&
+                    "rateOfChange" in signal.data
+                        ? signal.data.rateOfChange
+                        : 0,
+                cvdAffectedZones: event.zoneData?.zones.length || 0,
+
+                // SHARED RUNTIME VALUES (consistent with other detectors)
+                confidence: signal.confidence,
+                aggressiveVolume: cvdData.totalVolume,
+                passiveVolume: 0, // CVD doesn't track passive volume separately
+                priceEfficiency:
+                    this.calculateCVDPriceEfficiency(
+                        event,
+                        event.zoneData?.zones || []
+                    ) || 0,
+
+                // Zone and volume analysis
+                totalVolume: cvdData.totalVolume,
+                volumeImbalance:
+                    cvdData.totalVolume > 0
+                        ? Math.abs(cvdData.cvdDelta) / cvdData.totalVolume
+                        : 0,
+                institutionalVolumeRatio:
+                    event.quantity >=
+                    this.enhancementConfig.institutionalThreshold
+                        ? 1
+                        : 0,
             };
 
-            if (
-                signal.data &&
-                typeof signal.data === "object" &&
-                "rateOfChange" in signal.data
-            ) {
-                extendedContext.cvdDivergenceStrength =
-                    signal.data.rateOfChange;
-            }
+            // Market context at time of successful signal
+            const validationMarketContext = {
+                marketVolume:
+                    marketContext.totalAggressiveVolume +
+                    marketContext.totalPassiveVolume,
+                marketSpread:
+                    event.bestAsk && event.bestBid
+                        ? event.bestAsk - event.bestBid
+                        : 0,
+                marketVolatility: this.calculateMarketVolatility(event),
+            };
 
-            if (
-                signal.data &&
-                typeof signal.data === "object" &&
-                "metadata" in signal.data &&
-                signal.data.metadata &&
-                typeof signal.data.metadata === "object" &&
-                "cvdAnalysis" in signal.data.metadata
-            ) {
-                // Extract affected zones from CVD analysis metadata if available
-                extendedContext.cvdAffectedZones = relevantZones.length;
-            }
-
-            this.validationLogger.logSignal(signal, event, extendedContext);
+            this.validationLogger.logSuccessfulSignal(
+                "deltacvd",
+                event,
+                parameterValues,
+                validationMarketContext
+            );
         } catch (error) {
             this.logger.error(
-                "DeltaCVDDetectorEnhanced: Failed to log signal for validation",
+                "DeltaCVDDetectorEnhanced: Failed to log successful signal parameters",
                 {
                     signalId: signal.id,
                     error:
@@ -1785,6 +1859,19 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 }
             );
         }
+    }
+
+    /**
+     * Calculate market volatility for logging context
+     */
+    private calculateMarketVolatility(event: EnrichedTradeEvent): number {
+        // Simple volatility approximation based on spread
+        if (event.bestAsk && event.bestBid) {
+            const spread = event.bestAsk - event.bestBid;
+            const midPrice = (event.bestAsk + event.bestBid) / 2;
+            return midPrice > 0 ? spread / midPrice : 0;
+        }
+        return 0;
     }
 
     /**

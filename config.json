@@ -228,7 +228,7 @@
             },
             "exhaustion": {
                 "minAggVolume": 80,
-                "exhaustionThreshold": 0.75,
+                "exhaustionThreshold": 0.5,
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 30000,
 
@@ -254,17 +254,17 @@
                 "ratioBalanceCenterPoint": 0.5
             },
             "absorption": {
-                "minAggVolume": 2000,
+                "minAggVolume": 200,
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 30000,
-                "priceEfficiencyThreshold": 0.001,
+                "priceEfficiencyThreshold": 0.0008,
                 "maxAbsorptionRatio": 0.9,
-                "minPassiveMultiplier": 1.8,
+                "minPassiveMultiplier": 2.2,
                 "passiveAbsorptionThreshold": 0.65,
                 "expectedMovementScalingFactor": 10,
                 "contextConfidenceBoostMultiplier": 0.3,
                 "liquidityGradientRange": 5,
-                "institutionalVolumeThreshold": 1500,
+                "institutionalVolumeThreshold": 800,
                 "institutionalVolumeRatioThreshold": 0.65,
                 "enableInstitutionalVolumeFilter": true,
                 "institutionalVolumeBoost": 0.1,
@@ -336,9 +336,9 @@
                 "marketHealthWindowMs": 600000
             },
             "deltaCVD": {
-                "minTradesPerSec": 4.0,
-                "minVolPerSec": 25.0,
-                "signalThreshold": 0.85,
+                "minTradesPerSec": 1.0,
+                "minVolPerSec": 5.0,
+                "signalThreshold": 2.0,
                 "eventCooldownMs": 90000,
                 "enhancementMode": "production",
                 "cvdImbalanceThreshold": 0.25,

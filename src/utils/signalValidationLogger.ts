@@ -30,7 +30,7 @@ export interface SignalValidationRecord {
     // Signal Identification
     timestamp: number;
     signalId: string;
-    detectorType: "exhaustion" | "absorption";
+    detectorType: "exhaustion" | "absorption" | "deltacvd";
     signalSide: "buy" | "sell";
     confidence: number;
 
@@ -87,7 +87,7 @@ export interface SignalValidationRecord {
 }
 
 /**
- * Signal rejection tracking for threshold optimization
+ * Signal rejection tracking for threshold optimization - ALL PARAMETERS INCLUDED
  */
 export interface SignalRejectionRecord {
     timestamp: number;
@@ -95,16 +95,77 @@ export interface SignalRejectionRecord {
     rejectionReason: string;
     price: number;
 
-    // What caused rejection
+    // What caused rejection (primary failure)
     thresholdType: string;
     thresholdValue: number;
     actualValue: number;
 
-    // Market context when rejected
+    // Basic market context
     aggressiveVolume: number;
     passiveVolume: number;
     priceEfficiency: number | null;
     confidence: number;
+
+    // EXHAUSTION: All 20 parameters
+    exhaustion_minAggVolume?: number;
+    exhaustion_timeWindowIndex?: number;
+    exhaustion_exhaustionThreshold?: number;
+    exhaustion_eventCooldownMs?: number;
+    exhaustion_useStandardizedZones?: boolean;
+    exhaustion_enhancementMode?: string;
+    exhaustion_minEnhancedConfidenceThreshold?: number;
+    exhaustion_depletionVolumeThreshold?: number;
+    exhaustion_depletionRatioThreshold?: number;
+    exhaustion_enableDepletionAnalysis?: boolean;
+    exhaustion_depletionConfidenceBoost?: number;
+    exhaustion_varianceReductionFactor?: number;
+    exhaustion_alignmentNormalizationFactor?: number;
+    exhaustion_passiveVolumeExhaustionRatio?: number;
+    exhaustion_aggressiveVolumeExhaustionThreshold?: number;
+    exhaustion_aggressiveVolumeReductionFactor?: number;
+    exhaustion_passiveRatioBalanceThreshold?: number;
+    exhaustion_premiumConfidenceThreshold?: number;
+    exhaustion_variancePenaltyFactor?: number;
+    exhaustion_ratioBalanceCenterPoint?: number;
+
+    // ABSORPTION: All 23 parameters
+    absorption_minAggVolume?: number;
+    absorption_timeWindowIndex?: number;
+    absorption_eventCooldownMs?: number;
+    absorption_priceEfficiencyThreshold?: number;
+    absorption_maxAbsorptionRatio?: number;
+    absorption_minPassiveMultiplier?: number;
+    absorption_passiveAbsorptionThreshold?: number;
+    absorption_expectedMovementScalingFactor?: number;
+    absorption_contextConfidenceBoostMultiplier?: number;
+    absorption_liquidityGradientRange?: number;
+    absorption_institutionalVolumeThreshold?: number;
+    absorption_institutionalVolumeRatioThreshold?: number;
+    absorption_enableInstitutionalVolumeFilter?: boolean;
+    absorption_institutionalVolumeBoost?: number;
+    absorption_minAbsorptionScore?: number;
+    absorption_finalConfidenceRequired?: number;
+    absorption_confidenceBoostReduction?: number;
+    absorption_maxZoneCountForScoring?: number;
+    absorption_minEnhancedConfidenceThreshold?: number;
+    absorption_useStandardizedZones?: boolean;
+    absorption_enhancementMode?: string;
+    absorption_balanceThreshold?: number;
+    absorption_confluenceMinZones?: number;
+    absorption_confluenceMaxDistance?: number;
+
+    // DELTACVD: All 8 parameters
+    deltacvd_minTradesPerSec?: number;
+    deltacvd_minVolPerSec?: number;
+    deltacvd_signalThreshold?: number;
+    deltacvd_eventCooldownMs?: number;
+    deltacvd_timeWindowIndex?: number;
+    deltacvd_enhancementMode?: string;
+    deltacvd_cvdImbalanceThreshold?: number;
+    deltacvd_institutionalThreshold?: number;
+
+    // DYNAMIC CALCULATED VALUES - All actual computed values during detection
+    calculatedValues?: { [key: string]: number | boolean | string };
 
     // Post-rejection analysis (filled later)
     subsequentMovement5min?: number;
@@ -118,7 +179,7 @@ export interface SignalRejectionRecord {
  */
 export interface SuccessfulSignalRecord {
     timestamp: number;
-    detectorType: "exhaustion" | "absorption";
+    detectorType: "exhaustion" | "absorption" | "deltacvd";
     price: number;
 
     // ALL 40+ parameter values from config that allowed this signal to pass
@@ -173,6 +234,22 @@ export interface SuccessfulSignalRecord {
         passiveVolume?: number;
         volumeRatio?: number;
         institutionalVolumeRatio?: number;
+
+        // DELTACVD DETECTOR - ALL PARAMETERS FROM CONFIG
+        minTradesPerSec?: number;
+        minVolPerSec?: number;
+        signalThreshold?: number;
+        cvdImbalanceThreshold?: number;
+        institutionalThreshold?: number;
+
+        // DeltaCVD-specific runtime values
+        cvdDivergenceStrength?: number;
+        cvdAffectedZones?: number;
+        buyVolume?: number;
+        sellVolume?: number;
+        cvdDelta?: number;
+        buyRatio?: number;
+        enhancedConfidence?: number;
     };
 
     // Market context
@@ -645,8 +722,10 @@ export class SignalValidationLogger {
                 // Signal Identification
                 timestamp: signal.timestamp,
                 signalId: signal.id,
-                detectorType:
-                    signal.type === "exhaustion" ? "exhaustion" : "absorption",
+                detectorType: signal.type as
+                    | "exhaustion"
+                    | "absorption"
+                    | "deltacvd",
                 signalSide: signal.side as "buy" | "sell",
                 confidence: signal.confidence,
 
@@ -725,7 +804,7 @@ export class SignalValidationLogger {
      * Log successful signal parameters for 90-minute optimization
      */
     public logSuccessfulSignal(
-        detectorType: "exhaustion" | "absorption",
+        detectorType: "exhaustion" | "absorption" | "deltacvd",
         event: EnrichedTradeEvent,
         parameterValues: SuccessfulSignalRecord["parameterValues"],
         marketContext: {
@@ -794,6 +873,8 @@ export class SignalValidationLogger {
             passiveVolume: number;
             priceEfficiency: number | null;
             confidence: number;
+            // ALL CALCULATED VALUES - not config values
+            calculatedValues?: { [key: string]: number | boolean | string };
         }
     ): void {
         try {
@@ -813,18 +894,17 @@ export class SignalValidationLogger {
                 passiveVolume: marketContext.passiveVolume,
                 priceEfficiency: marketContext.priceEfficiency,
                 confidence: marketContext.confidence,
+
+                // ALL calculated values from detector
+                calculatedValues: marketContext.calculatedValues,
             };
 
             // Store rejection for later validation
             const rejectionId = `rejection-${event.timestamp}-${Math.random()}`;
             this.pendingRejections.set(rejectionId, record);
 
-            // Set up post-rejection analysis timers
-            this.setupRejectionValidationTimers(
-                rejectionId,
-                event.price,
-                record
-            );
+            // Schedule retrospective analysis (will query database later)
+            // No need for complex timers - we have 24h of data in database
 
             this.logger.debug(
                 "SignalValidationLogger: Signal rejection logged",

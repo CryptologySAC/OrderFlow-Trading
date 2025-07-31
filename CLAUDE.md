@@ -2,6 +2,10 @@
 
 Production trading system guidance for Claude Code with **ZERO TOLERANCE** for trading operation errors.
 
+## 🚨 CRITICAL
+
+Do not guess, NEVER guess; all your answers are based and calculated; if you need more data to calculate you ask for it; no guessing, no estimations, no general answers, no bullshit. Math and logic above everything, request clarification when you are unsure.
+
 ## 🏛️ INSTITUTIONAL STANDARDS
 
 ### 🚨 CRITICAL PROTECTION PROTOCOLS

@@ -193,7 +193,7 @@ export const DeltaCVDDetectorSchema = z.object({
     // Core CVD analysis parameters (actually used by detector)
     minTradesPerSec: z.number().min(0.001).max(5.0),
     minVolPerSec: z.number().min(0.01).max(2000.0),
-    signalThreshold: z.number().min(0.01).max(1.8),
+    signalThreshold: z.number().min(0.01).max(8.0),
     eventCooldownMs: z.number().int().min(1000).max(90000),
 
     // Zone time window configuration
