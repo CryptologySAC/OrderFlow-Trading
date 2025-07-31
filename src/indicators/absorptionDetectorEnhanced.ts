@@ -745,17 +745,16 @@ export class AbsorptionDetectorEnhanced extends Detector {
             return null; // No directional signal for balanced institutional scenarios
         }
 
-        // Check for edge case: very low aggressive volume (less than institutional threshold)
+        // Check minimum aggressive volume threshold first (basic requirement)
         if (
             volumePressure.aggressivePressure <
-            this.enhancementConfig.institutionalVolumeThreshold
+            this.enhancementConfig.minAggVolume
         ) {
             this.logger.debug(
-                "AbsorptionDetectorEnhanced: Insufficient aggressive volume for institutional signal",
+                "AbsorptionDetectorEnhanced: Insufficient aggressive volume below minimum threshold",
                 {
                     aggressiveVolume: volumePressure.aggressivePressure,
-                    threshold:
-                        this.enhancementConfig.institutionalVolumeThreshold,
+                    threshold: this.enhancementConfig.minAggVolume,
                     passiveRatio: passiveVolumeRatio,
                 }
             );
@@ -764,8 +763,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 "insufficient_aggressive_volume",
                 {
                     type: "aggressive_volume",
-                    threshold:
-                        this.enhancementConfig.institutionalVolumeThreshold,
+                    threshold: this.enhancementConfig.minAggVolume,
                     actual: volumePressure.aggressivePressure,
                 },
                 {
@@ -959,6 +957,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
 
     /**
      * Calculate volume pressure using FinancialMath for institutional precision
+     * DIRECTIONAL FIX: Only count passive volume relevant to trade direction
      */
     private calculateVolumePressure(
         event: EnrichedTradeEvent,
@@ -975,9 +974,18 @@ export class AbsorptionDetectorEnhanced extends Detector {
         let totalAggressive = 0;
         let totalPassive = 0;
 
+        // CRITICAL FIX: Determine which passive volume is relevant based on trade direction
+        // - Buy trades (buyerIsMaker = false): Only count passiveAskVolume (hitting asks)
+        // - Sell trades (buyerIsMaker = true): Only count passiveBidVolume (hitting bids)
+        const isBuyTrade = !event.buyerIsMaker;
+
         for (const zone of zones) {
             // Validate inputs before FinancialMath calls to prevent NaN BigInt errors
-            if (isNaN(zone.aggressiveVolume) || isNaN(zone.passiveVolume)) {
+            if (
+                isNaN(zone.aggressiveVolume) ||
+                isNaN(zone.passiveBidVolume) ||
+                isNaN(zone.passiveAskVolume)
+            ) {
                 return null; // Skip this calculation if any zone has NaN values
             }
 
@@ -985,9 +993,15 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 totalAggressive,
                 zone.aggressiveVolume
             );
+
+            // DIRECTIONAL PASSIVE VOLUME: Only count relevant side
+            const relevantPassiveVolume = isBuyTrade
+                ? zone.passiveAskVolume // Buy trades absorb ask liquidity
+                : zone.passiveBidVolume; // Sell trades absorb bid liquidity
+
             totalPassive = FinancialMath.safeAdd(
                 totalPassive,
-                zone.passiveVolume
+                relevantPassiveVolume
             );
         }
 

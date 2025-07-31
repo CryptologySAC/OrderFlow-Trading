@@ -1331,6 +1331,8 @@ export class OrderFlowDashboard {
                 const stats = {
                     metrics: this.metricsCollector.getMetrics(),
                     health: this.metricsCollector.getHealthSummary(),
+                    signalTypeBreakdown:
+                        this.dependencies.signalManager.getSignalTypeBreakdown(),
                     dataStream: null, // DataStreamManager handled by BinanceWorker
                     marketDataStorage:
                         this.marketDataStorage?.getStorageStats() || {

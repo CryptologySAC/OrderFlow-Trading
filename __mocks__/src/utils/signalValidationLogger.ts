@@ -26,6 +26,8 @@ export class SignalValidationLogger {
             // Mock implementation that matches the real interface
         }
     );
+    public logSuccessfulSignal = vi.fn();
+    public updateCurrentPrice = vi.fn();
     public cleanup = vi.fn();
     public getValidationStats = vi.fn().mockReturnValue({
         pendingValidations: 0,

@@ -1225,15 +1225,29 @@ export class SignalManager extends EventEmitter {
                 1
             );
 
+            // Track signal type for breakdown display
+            if (this.signalTypeStats[signal.type]) {
+                this.signalTypeStats[signal.type].candidates++;
+            }
+
             // Process signal through simplified pipeline
             confirmedSignal = this.processSignal(signal);
 
             // Store signal for correlation analysis only if it succeeds
             if (confirmedSignal) {
                 this.storeSignal(signal);
+                // Track confirmed signals by type
+                if (this.signalTypeStats[signal.type]) {
+                    this.signalTypeStats[signal.type].confirmed++;
+                }
             }
 
             if (!confirmedSignal) {
+                // Track rejected signals by type
+                if (this.signalTypeStats[signal.type]) {
+                    this.signalTypeStats[signal.type].rejected++;
+                }
+
                 this.emit("signalRejected", {
                     signal,
                     reason: this.lastRejectReason
@@ -3049,6 +3063,63 @@ export class SignalManager extends EventEmitter {
                 { detector_id: detectorId }
             );
         }
+    }
+
+    // Internal signal type tracking
+    private signalTypeStats: Record<
+        string,
+        {
+            candidates: number;
+            confirmed: number;
+            rejected: number;
+        }
+    > = {
+        absorption: { candidates: 0, confirmed: 0, rejected: 0 },
+        exhaustion: { candidates: 0, confirmed: 0, rejected: 0 },
+        accumulation: { candidates: 0, confirmed: 0, rejected: 0 },
+        distribution: { candidates: 0, confirmed: 0, rejected: 0 },
+        cvd_confirmation: { candidates: 0, confirmed: 0, rejected: 0 },
+    };
+
+    /**
+     * Get signal type breakdown metrics for dashboard display
+     */
+    public getSignalTypeBreakdown(): Record<
+        string,
+        {
+            candidates: number;
+            confirmed: number;
+            rejected: number;
+            successRate: string;
+        }
+    > {
+        const breakdown: Record<
+            string,
+            {
+                candidates: number;
+                confirmed: number;
+                rejected: number;
+                successRate: string;
+            }
+        > = {};
+
+        for (const [signalType, stats] of Object.entries(
+            this.signalTypeStats
+        )) {
+            const successRate =
+                stats.candidates > 0
+                    ? ((stats.confirmed / stats.candidates) * 100).toFixed(1)
+                    : "--";
+
+            breakdown[signalType] = {
+                candidates: stats.candidates,
+                confirmed: stats.confirmed,
+                rejected: stats.rejected,
+                successRate: successRate === "--" ? "--" : successRate + "%",
+            };
+        }
+
+        return breakdown;
     }
 }
 

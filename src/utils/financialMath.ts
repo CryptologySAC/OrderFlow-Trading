@@ -99,10 +99,8 @@ export class FinancialMath {
         if (qty2 === 0 || isNaN(qty1) || isNaN(qty2)) {
             return 0;
         }
-        const qty1Int = BigInt(Math.round(qty1 * this.QUANTITY_SCALE));
-        const qty2Int = BigInt(Math.round(qty2 * this.QUANTITY_SCALE));
-        const resultInt = qty1Int / qty2Int;
-        return Number(resultInt);
+        // Use direct floating-point division for ratios - BigInt division truncates to integer
+        return qty1 / qty2;
     }
 
     /**

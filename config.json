@@ -158,11 +158,11 @@
                     "distribution": 7
                 },
                 "detectorThresholds": {
-                    "absorption": 0.7,
+                    "absorption": 0.5,
                     "exhaustion": 0.5,
                     "accumulation": 0.25,
                     "distribution": 0.25,
-                    "deltacvd": 0.7
+                    "deltacvd": 0.5
                 },
                 "positionSizing": {
                     "absorption": 0.4,
@@ -264,7 +264,7 @@
                 "expectedMovementScalingFactor": 10,
                 "contextConfidenceBoostMultiplier": 0.3,
                 "liquidityGradientRange": 5,
-                "institutionalVolumeThreshold": 800,
+                "institutionalVolumeThreshold": 400,
                 "institutionalVolumeRatioThreshold": 0.65,
                 "enableInstitutionalVolumeFilter": true,
                 "institutionalVolumeBoost": 0.1,

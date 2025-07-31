@@ -418,6 +418,33 @@ function updateSignalMetrics(metrics) {
     updateElement("queueDepth", formatNumber(queueDepth));
 }
 
+function updateSignalTypeBreakdown(breakdown) {
+    console.log("Updating signal type breakdown:", breakdown);
+
+    // Update each signal type
+    const signalTypes = {
+        absorption: "absorption",
+        exhaustion: "exhaustion",
+        accumulation: "accumulation",
+        distribution: "distribution",
+        cvd_confirmation: "deltacvd", // Map to frontend ID
+    };
+
+    for (const [backendType, frontendId] of Object.entries(signalTypes)) {
+        const stats = breakdown[backendType] || {
+            candidates: 0,
+            confirmed: 0,
+            rejected: 0,
+            successRate: "--",
+        };
+
+        updateElement(`${frontendId}Candidates`, stats.candidates);
+        updateElement(`${frontendId}Confirmed`, stats.confirmed);
+        updateElement(`${frontendId}Rejected`, stats.rejected);
+        updateElement(`${frontendId}SuccessRate`, stats.successRate);
+    }
+}
+
 function updateElement(id, value) {
     const element = document.getElementById(id);
     if (element) {
@@ -462,6 +489,9 @@ function updateVisuals(data) {
 
     // Update signal metrics sections
     updateSignalMetrics(metrics);
+
+    // Update signal type breakdown
+    updateSignalTypeBreakdown(data.signalTypeBreakdown || {});
 
     // Update worker information
     updateWorkerInfo(data);
