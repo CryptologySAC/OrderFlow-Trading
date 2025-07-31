@@ -1605,6 +1605,9 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         }
     ): void {
         try {
+            console.log(
+                `[DEBUG] DeltaCVD logSignalRejection called: ${rejectionReason} at price ${event.price}`
+            );
             this.validationLogger.logRejection(
                 "deltacvd",
                 rejectionReason,
@@ -1615,6 +1618,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                     calculatedValues: runtimeCalculations || {},
                 }
             );
+            console.log(`[DEBUG] DeltaCVD logRejection completed successfully`);
         } catch (error) {
             this.logger.error(
                 "DeltaCVDDetectorEnhanced: Error logging signal rejection",

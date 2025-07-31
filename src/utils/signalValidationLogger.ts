@@ -903,8 +903,15 @@ export class SignalValidationLogger {
             const rejectionId = `rejection-${event.timestamp}-${Math.random()}`;
             this.pendingRejections.set(rejectionId, record);
 
-            // Schedule retrospective analysis (will query database later)
-            // No need for complex timers - we have 24h of data in database
+            // Write rejection immediately to CSV (with empty movement fields)
+            this.writeRejectionRecord(record);
+
+            // Schedule retrospective analysis with validation timers for movement tracking
+            this.setupRejectionValidationTimers(
+                rejectionId,
+                event.price,
+                record
+            );
 
             this.logger.debug(
                 "SignalValidationLogger: Signal rejection logged",

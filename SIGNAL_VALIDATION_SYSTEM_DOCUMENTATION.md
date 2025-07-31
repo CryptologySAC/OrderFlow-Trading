@@ -17,6 +17,7 @@ SignalValidationLogger ← Enhanced Detectors ← Market Data
 ```
 
 ### Key Files
+
 - **Core Logger**: `/Users/marcschot/Projects/OrderFlow Trading/src/utils/signalValidationLogger.ts`
 - **Log Directory**: `logs/signal_validation/`
 - **Configuration**: `config.json` symbols section
@@ -24,9 +25,11 @@ SignalValidationLogger ← Enhanced Detectors ← Market Data
 ## SignalValidationLogger System
 
 ### Purpose
+
 Track both successful and rejected signals to enable systematic detector optimization through comprehensive data collection and retrospective analysis.
 
 ### Key Features
+
 - **Non-blocking Architecture**: Internal buffering ensures signal processing never blocks on disk I/O
 - **Complete Parameter Capture**: Logs all detector parameters and runtime calculated values
 - **Time-based Validation**: Tracks signal performance at 5min, 15min, 1hr, and 90min intervals
@@ -36,43 +39,44 @@ Track both successful and rejected signals to enable systematic detector optimiz
 ### Core Interfaces
 
 #### SignalRejectionRecord
+
 ```typescript
 export interface SignalRejectionRecord {
     timestamp: number;
     detectorType: "exhaustion" | "absorption" | "deltacvd";
     rejectionReason: string;
     price: number;
-    
+
     // Primary failure details
     thresholdType: string;
     thresholdValue: number;
     actualValue: number;
-    
+
     // Basic market context
     aggressiveVolume: number;
     passiveVolume: number;
     priceEfficiency: number | null;
     confidence: number;
-    
+
     // ALL DETECTOR PARAMETERS (40+ values)
     // EXHAUSTION: 20 parameters
     exhaustion_minAggVolume?: number;
     exhaustion_exhaustionThreshold?: number;
     // ... (full parameter set)
-    
-    // ABSORPTION: 23 parameters  
+
+    // ABSORPTION: 23 parameters
     absorption_minAggVolume?: number;
     absorption_absorptionThreshold?: number;
     // ... (full parameter set)
-    
+
     // DELTACVD: 8 parameters
     deltacvd_minTradesPerSec?: number;
     deltacvd_signalThreshold?: number;
     // ... (full parameter set)
-    
+
     // RUNTIME CALCULATED VALUES
     calculatedValues?: { [key: string]: number | boolean | string };
-    
+
     // Post-rejection movement analysis
     subsequentMovement5min?: number;
     subsequentMovement15min?: number;
@@ -82,12 +86,13 @@ export interface SignalRejectionRecord {
 ```
 
 #### SuccessfulSignalRecord
+
 ```typescript
 export interface SuccessfulSignalRecord {
     timestamp: number;
     detectorType: "exhaustion" | "absorption" | "deltacvd";
     price: number;
-    
+
     // ALL CONFIGURATION PARAMETERS (40+ values)
     parameterValues: {
         // All detector config parameters that allowed signal to pass
@@ -95,19 +100,19 @@ export interface SuccessfulSignalRecord {
         exhaustionThreshold?: number;
         absorptionThreshold?: number;
         // ... (complete parameter set)
-        
+
         // Runtime calculated values
         priceEfficiency?: number;
         confidence?: number;
         cvdDivergenceStrength?: number;
         // ... (calculated values during detection)
     };
-    
+
     // Market context
     marketVolume: number;
     marketSpread: number;
     marketVolatility: number;
-    
+
     // Performance validation
     subsequentMovement5min?: number;
     subsequentMovement15min?: number;
@@ -120,6 +125,7 @@ export interface SuccessfulSignalRecord {
 ## Data Retention Strategy
 
 ### Database Storage Configuration
+
 ```typescript
 // 24-hour trade data retention for retrospective analysis
 const retentionHours = 24;
@@ -127,61 +133,70 @@ const retentionHours = 24;
 // Fast startup backfill (90 minutes)
 const storageTime = 5400000; // 90 minutes in milliseconds
 
-// Client dashboard backlog (90 minutes)  
+// Client dashboard backlog (90 minutes)
 const maxStorageTime = 5400000;
 ```
 
 ### Benefits
+
 - **24-hour Analysis Window**: Sufficient data for comprehensive signal analysis
-- **Fast System Startup**: 90-minute backfill enables quick system initialization  
+- **Fast System Startup**: 90-minute backfill enables quick system initialization
 - **Dashboard Performance**: Optimized client data loading with 90-minute history
 - **Memory Efficiency**: Balanced retention vs. resource usage
 
 ## Enhanced Rejection Logging Implementation
 
 ### Complete Parameter Capture
+
 The system now captures ALL detector parameters and runtime calculations, not just the failing parameter:
 
 ```typescript
 // ❌ OLD: Only failing parameter
 logRejection("absorption", "price_efficiency_low", event, {
-    type: "priceEfficiency", 
+    type: "priceEfficiency",
     threshold: 0.65,
-    actual: 0.45
+    actual: 0.45,
 });
 
 // ✅ NEW: Complete parameter set + calculated values
-logRejection("absorption", "price_efficiency_low", event, {
-    type: "priceEfficiency",
-    threshold: 0.65, 
-    actual: 0.45
-}, {
-    aggressiveVolume: 150,
-    passiveVolume: 89,
-    priceEfficiency: 0.45,
-    confidence: 0.62,
-    calculatedValues: {
-        absorptionRatio: 0.58,
-        institutionalVolumeRatio: 0.72,
-        zoneStrength: 0.84,
-        volumeImbalance: 0.41
-        // ... all runtime calculations
+logRejection(
+    "absorption",
+    "price_efficiency_low",
+    event,
+    {
+        type: "priceEfficiency",
+        threshold: 0.65,
+        actual: 0.45,
+    },
+    {
+        aggressiveVolume: 150,
+        passiveVolume: 89,
+        priceEfficiency: 0.45,
+        confidence: 0.62,
+        calculatedValues: {
+            absorptionRatio: 0.58,
+            institutionalVolumeRatio: 0.72,
+            zoneStrength: 0.84,
+            volumeImbalance: 0.41,
+            // ... all runtime calculations
+        },
     }
-});
+);
 ```
 
 ### DeltaCVD Enhanced Logging
+
 ```typescript
 // Complete DeltaCVD parameter and runtime value capture
 const calculatedValues = {
     // Runtime CVD calculations
     cvdTotalVolume: this.cvdTotalVolume,
-    cvdBuyVolume: this.cvdBuyVolume, 
+    cvdBuyVolume: this.cvdBuyVolume,
     cvdSellVolume: this.cvdSellVolume,
     cvdDelta: this.cvdDelta,
     realConfidence: this.calculateConfidence(),
     divergenceStrength: result.divergenceStrength,
-    
+
     // All 8 config parameters
     minTradesPerSec: this.enhancementConfig.minTradesPerSec,
     minVolPerSec: this.enhancementConfig.minVolPerSec,
@@ -191,15 +206,15 @@ const calculatedValues = {
 
 this.validationLogger.logRejection(
     "deltacvd",
-    "no_cvd_divergence", 
+    "no_cvd_divergence",
     event,
     { type: "divergence", threshold: 0.3, actual: 0.15 },
-    { 
-        aggressiveVolume, 
-        passiveVolume, 
+    {
+        aggressiveVolume,
+        passiveVolume,
         priceEfficiency,
         confidence,
-        calculatedValues 
+        calculatedValues,
     }
 );
 ```
@@ -207,19 +222,20 @@ this.validationLogger.logRejection(
 ### Movement Tracking System
 
 #### Timer-based Validation
+
 ```typescript
 // Automatic retrospective analysis
 private setupRejectionValidationTimers(
     rejectionId: string,
-    rejectionPrice: number, 
+    rejectionPrice: number,
     record: SignalRejectionRecord
 ): void {
     // 5-minute validation
     setTimeout(() => this.validateRejection(rejectionId, rejectionPrice, record, "5min"), 5 * 60 * 1000);
-    
-    // 15-minute validation  
+
+    // 15-minute validation
     setTimeout(() => this.validateRejection(rejectionId, rejectionPrice, record, "15min"), 15 * 60 * 1000);
-    
+
     // 1-hour validation and final analysis
     setTimeout(() => {
         this.validateRejection(rejectionId, rejectionPrice, record, "1hr");
@@ -229,19 +245,20 @@ private setupRejectionValidationTimers(
 ```
 
 #### Missed Opportunity Detection
+
 ```typescript
 private validateRejection(rejectionId: string, originalPrice: number, record: SignalRejectionRecord, timeframe: string): void {
     const currentPrice = this.currentPrice;
     if (currentPrice === null) return;
-    
+
     const movement = FinancialMath.divideQuantities(
         currentPrice - originalPrice,
-        originalPrice  
+        originalPrice
     );
-    
+
     // 0.7% movement threshold for significant moves
     const significantMovement = Math.abs(movement) > 0.007;
-    
+
     if (timeframe === "1hr") {
         record.subsequentMovement1hr = movement;
         record.wasValidSignal = significantMovement; // Mark as missed opportunity
@@ -252,13 +269,15 @@ private validateRejection(rejectionId: string, originalPrice: number, record: Si
 ## CSV Output Format
 
 ### Rejection Logs: `signal_rejections_YYYY-MM-DD.csv`
+
 ```csv
 timestamp,detectorType,rejectionReason,price,thresholdType,thresholdValue,actualValue,aggressiveVolume,passiveVolume,priceEfficiency,confidence,subsequentMovement5min,subsequentMovement15min,subsequentMovement1hr,wasValidSignal
 1640995200000,absorption,price_efficiency_low,89.45,priceEfficiency,0.65,0.45,150,89,0.45,0.62,0.003,-0.008,0.012,true
 ```
 
 ### Successful Signals: `successful_signals_YYYY-MM-DD.csv`
-```csv  
+
+```csv
 timestamp,detectorType,price,minAggVolume,exhaustionThreshold,absorptionThreshold,priceEfficiencyThreshold,confidence,aggressiveVolume,passiveVolume,marketVolume,marketSpread,marketVolatility,subsequentMovement5min,subsequentMovement15min,subsequentMovement90min,wasTopOrBottomSignal,signalQuality
 1640995200000,absorption,89.67,30,0.7,0.6,0.65,0.82,245,156,401,0.02,0.045,0.008,0.015,0.023,true,bottom
 ```
@@ -266,6 +285,7 @@ timestamp,detectorType,price,minAggVolume,exhaustionThreshold,absorptionThreshol
 ## Non-blocking Architecture
 
 ### Internal Buffering
+
 ```typescript
 export class SignalValidationLogger {
     // ✅ NON-BLOCKING: Internal buffers prevent I/O blocking
@@ -274,7 +294,7 @@ export class SignalValidationLogger {
     private readonly successfulSignalsBuffer: string[] = [];
     private readonly maxBufferSize = 100; // Auto-flush threshold
     private readonly flushInterval = 5000; // 5-second background flush
-    
+
     // Background flushing prevents real-time processing delays
     private startBackgroundFlushing(): void {
         this.flushTimer = setInterval(() => {
@@ -285,6 +305,7 @@ export class SignalValidationLogger {
 ```
 
 ### Performance Benefits
+
 - **Sub-millisecond Logging**: Signal logging never blocks trade processing
 - **Batch Writes**: Efficient disk I/O with buffered writes
 - **Memory Management**: Automatic buffer size management prevents memory leaks
@@ -295,6 +316,7 @@ export class SignalValidationLogger {
 ### 1. Threshold Optimization Analysis
 
 #### Identify Optimal Parameters
+
 ```bash
 # Analyze rejection patterns to find optimal thresholds
 node analyze_rejections.js --detector=absorption --timeframe=1hr
@@ -308,6 +330,7 @@ node analyze_rejections.js --detector=absorption --timeframe=1hr
 ```
 
 #### Parameter Correlation Analysis
+
 ```bash
 # Find which calculated values best predict signal success
 node correlation_analysis.js --detector=deltacvd
@@ -316,7 +339,7 @@ node correlation_analysis.js --detector=deltacvd
 {
     "mostPredictive": [
         {"parameter": "cvdDivergenceStrength", "correlation": 0.84},
-        {"parameter": "institutionalVolumeRatio", "correlation": 0.78}, 
+        {"parameter": "institutionalVolumeRatio", "correlation": 0.78},
         {"parameter": "confidence", "correlation": 0.71}
     ],
     "leastPredictive": [
@@ -326,11 +349,12 @@ node correlation_analysis.js --detector=deltacvd
 ```
 
 ### 2. False Positive Analysis
+
 ```bash
 # Identify successful signals that didn't perform well
 node false_positive_analysis.js --period=24h
 
-# Output: Signal quality breakdown  
+# Output: Signal quality breakdown
 {
     "totalSuccessfulSignals": 156,
     "topBottomSignals": 89,      // 57% were actual turning points
@@ -343,7 +367,8 @@ node false_positive_analysis.js --period=24h
 }
 ```
 
-### 3. Missed Opportunity Analysis  
+### 3. Missed Opportunity Analysis
+
 ```bash
 # Find rejected signals that moved 0.7%+ in predicted direction
 node missed_opportunities.js --detector=exhaustion --threshold=0.007
@@ -368,10 +393,11 @@ node missed_opportunities.js --detector=exhaustion --threshold=0.007
 ## 90-Minute Automatic Optimization
 
 ### Optimization Cycle
+
 ```typescript
 private start90MinuteOptimization(): void {
     const optimizationInterval = 90 * 60 * 1000; // 90 minutes
-    
+
     this.optimizationTimer = setInterval(() => {
         void this.run90MinuteOptimization();
     }, optimizationInterval);
@@ -381,12 +407,13 @@ private async run90MinuteOptimization(): Promise<void> {
     // Import and run automatic parameter optimizer
     const { AutomaticParameterOptimizer } = await import("./automaticParameterOptimizer.js");
     const optimizer = new AutomaticParameterOptimizer(this.logger, this.outputDir);
-    
+
     await optimizer.runOptimization();
 }
 ```
 
 ### Optimization Process
+
 1. **Data Collection**: Analyze last 90 minutes of signals and rejections
 2. **Pattern Recognition**: Identify parameter optimization opportunities
 3. **Statistical Validation**: Validate proposed changes against historical performance
@@ -394,10 +421,11 @@ private async run90MinuteOptimization(): Promise<void> {
 5. **Performance Projection**: Estimate improvement from parameter changes
 
 ### Optimization Output
+
 ```json
 {
     "optimizationTimestamp": 1640995200000,
-    "analyzedPeriod": "90 minutes", 
+    "analyzedPeriod": "90 minutes",
     "totalSignals": 45,
     "totalRejections": 178,
     "recommendations": {
@@ -409,9 +437,9 @@ private async run90MinuteOptimization(): Promise<void> {
                 "falsePositives": 3
             },
             "proposedChanges": {
-                "absorptionThreshold": {"from": 0.6, "to": 0.55},
-                "minAggVolume": {"from": 30, "to": 25},
-                "priceEfficiencyThreshold": {"from": 0.65, "to": 0.62}
+                "absorptionThreshold": { "from": 0.6, "to": 0.55 },
+                "minAggVolume": { "from": 30, "to": 25 },
+                "priceEfficiencyThreshold": { "from": 0.65, "to": 0.62 }
             },
             "projectedImprovement": {
                 "additionalSignals": 8,
@@ -426,12 +454,13 @@ private async run90MinuteOptimization(): Promise<void> {
 ## Integration with Detectors
 
 ### Enhanced Detector Integration
+
 ```typescript
 // In AbsorptionDetectorEnhanced.detect()
 public detect(event: EnrichedTradeEvent): SignalCandidate | null {
     try {
         // ... detection logic ...
-        
+
         if (someThresholdFailed) {
             // ✅ COMPLETE PARAMETER LOGGING
             this.validationLogger.logRejection(
@@ -455,10 +484,10 @@ public detect(event: EnrichedTradeEvent): SignalCandidate | null {
             );
             return null;
         }
-        
+
         // Signal generated successfully
         const signal = this.createSignal(event);
-        
+
         // ✅ LOG SUCCESSFUL SIGNAL PARAMETERS
         this.validationLogger.logSuccessfulSignal(
             "absorption",
@@ -468,7 +497,7 @@ public detect(event: EnrichedTradeEvent): SignalCandidate | null {
                 minAggVolume: this.config.minAggVolume,
                 absorptionThreshold: this.config.absorptionThreshold,
                 // ... complete parameter set
-                
+
                 // Runtime calculated values
                 priceEfficiency: this.currentPriceEfficiency,
                 confidence: signal.confidence,
@@ -480,9 +509,9 @@ public detect(event: EnrichedTradeEvent): SignalCandidate | null {
                 marketVolatility: this.getCurrentVolatility()
             }
         );
-        
+
         return signal;
-        
+
     } catch (error) {
         this.logger.error("Detection error", { error: error.message });
         return null;
@@ -493,6 +522,7 @@ public detect(event: EnrichedTradeEvent): SignalCandidate | null {
 ## Configuration Requirements
 
 ### SignalValidation Configuration
+
 ```json
 {
     "signalValidation": {
@@ -508,16 +538,17 @@ public detect(event: EnrichedTradeEvent): SignalCandidate | null {
             "minimal": 0.003
         },
         "validationTimeframes": [
-            {"name": "5min", "ms": 300000},
-            {"name": "15min", "ms": 900000}, 
-            {"name": "1hr", "ms": 3600000},
-            {"name": "90min", "ms": 5400000}
+            { "name": "5min", "ms": 300000 },
+            { "name": "15min", "ms": 900000 },
+            { "name": "1hr", "ms": 3600000 },
+            { "name": "90min", "ms": 5400000 }
         ]
     }
 }
 ```
 
 ### Database Configuration
+
 ```json
 {
     "database": {
@@ -532,17 +563,19 @@ public detect(event: EnrichedTradeEvent): SignalCandidate | null {
 ## Usage Examples
 
 ### 1. Start System with Enhanced Logging
+
 ```bash
 # Start with signal validation enabled
 npm start
 
 # Logs will appear in logs/signal_validation/
 # - signal_validation_2024-01-31.csv
-# - signal_rejections_2024-01-31.csv  
+# - signal_rejections_2024-01-31.csv
 # - successful_signals_2024-01-31.csv
 ```
 
 ### 2. Analyze Rejection Patterns
+
 ```bash
 # Run rejection analysis after data collection period
 node analysis_scripts/analyze_rejections.js \
@@ -553,7 +586,8 @@ node analysis_scripts/analyze_rejections.js \
 # Generates parameter optimization recommendations
 ```
 
-### 3. Monitor Missed Opportunities  
+### 3. Monitor Missed Opportunities
+
 ```bash
 # Track rejected signals that moved significantly
 node analysis_scripts/missed_opportunities.js \
@@ -565,6 +599,7 @@ node analysis_scripts/missed_opportunities.js \
 ```
 
 ### 4. Generate Optimization Report
+
 ```bash
 # Create comprehensive optimization report
 node analysis_scripts/optimization_report.js \
@@ -578,12 +613,14 @@ node analysis_scripts/optimization_report.js \
 ## Performance Characteristics
 
 ### System Impact
+
 - **CPU Overhead**: < 0.1% additional CPU usage during normal operation
 - **Memory Usage**: ~10MB for buffers and tracking structures
 - **Disk I/O**: Batched writes minimize filesystem impact
 - **Network Impact**: None (local logging only)
 
 ### Scalability
+
 - **High-Frequency Trading**: Non-blocking design supports microsecond latencies
 - **Large Datasets**: Efficient buffering handles thousands of signals per minute
 - **Long-Running**: Automatic cleanup prevents memory leaks during extended operation
@@ -592,12 +629,14 @@ node analysis_scripts/optimization_report.js \
 ## Security and Compliance
 
 ### Data Protection
+
 - **Local Storage**: All logs stored locally, no external transmission
 - **Structured Format**: CSV format prevents injection attacks
 - **Access Control**: File system permissions control access
 - **Audit Trail**: Complete parameter logging provides full audit capability
 
 ### Regulatory Compliance
+
 - **Complete Records**: All signal decisions fully documented
 - **Timestamp Precision**: Microsecond-accurate timestamps for regulatory requirements
 - **Parameter Traceability**: All configuration values logged for compliance review
@@ -608,6 +647,7 @@ node analysis_scripts/optimization_report.js \
 ### Common Issues
 
 #### Missing Log Files
+
 ```bash
 # Check permissions
 ls -la logs/signal_validation/
@@ -620,7 +660,8 @@ tail -f logs/system.log | grep SignalValidationLogger
 ```
 
 #### Buffer Overflow
-```bash  
+
+```bash
 # Increase buffer size in configuration
 "signalValidation": {
     "bufferSize": 200,
@@ -629,9 +670,10 @@ tail -f logs/system.log | grep SignalValidationLogger
 
 # Monitor buffer usage
 grep "buffer overflow" logs/system.log
-``` 
+```
 
 #### Validation Timer Issues
+
 ```bash
 # Check timer cleanup in logs
 grep "validation timer" logs/system.log
@@ -643,6 +685,7 @@ grep "updateCurrentPrice" logs/system.log
 ### Performance Issues
 
 #### High Memory Usage
+
 ```bash
 # Monitor validation cache size
 grep "pending validations" logs/system.log
@@ -655,6 +698,7 @@ grep "pending validations" logs/system.log
 ```
 
 #### Disk I/O Problems
+
 ```bash
 # Check disk space
 df -h logs/
@@ -669,18 +713,21 @@ df -h logs/
 ## Key Improvements and Benefits
 
 ### Enhanced Analysis Capabilities
+
 - **Complete Parameter Logging**: No longer limited to just failing parameter
 - **Runtime Value Capture**: All calculated values during detection logged
 - **24-Hour Data Retention**: Extended analysis window for comprehensive optimization
 - **Automatic Optimization**: 90-minute cycles continuously improve performance
 
-### Operational Improvements  
+### Operational Improvements
+
 - **Fast Startup**: 90-minute backfill enables rapid system initialization
 - **Non-blocking Operation**: Real-time trading unaffected by logging operations
 - **Memory Efficiency**: Optimized data structures prevent resource leaks
 - **Reliable Analytics**: Robust timer management ensures consistent data collection
 
 ### Signal Quality Enhancements
+
 - **Missed Opportunity Detection**: Identifies incorrectly rejected profitable signals
 - **False Positive Analysis**: Tracks successful signals that underperform
 - **Parameter Correlation**: Identifies most predictive calculated values
