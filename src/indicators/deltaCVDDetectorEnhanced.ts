@@ -31,10 +31,7 @@ import type {
     StandardZoneData,
     ZoneSnapshot,
 } from "../types/marketEvents.js";
-import type {
-    DeltaCVDConfirmationResult,
-    SignalCandidate,
-} from "../types/signalTypes.js";
+import type { SignalCandidate } from "../types/signalTypes.js";
 import { z } from "zod";
 import { DeltaCVDDetectorSchema } from "../core/config.js";
 import { Config } from "../core/config.js";
@@ -156,13 +153,156 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     }
 
     /**
-     * Enhanced trade event processing with standardized zone analysis
+     * Main detection method following institutional detector pattern
      *
-     * STANDALONE VERSION: Processes trades directly without legacy detector dependency
+     * ARCHITECTURAL RESTRUCTURE: Standardized entry point for CVD signal detection
+     * - Follows same pattern as absorption and exhaustion detectors
+     * - Returns SignalCandidate for successful detections
+     * - Comprehensive signal validation logging for all attempts
      */
-    public onEnrichedTrade(event: EnrichedTradeEvent): void {
+    public detect(event: EnrichedTradeEvent): SignalCandidate | null {
         // Update current price for signal validation
         this.validationLogger.updateCurrentPrice(event.price);
+
+        // Check enhancement mode early
+        if (this.enhancementConfig.enhancementMode === "disabled") {
+            this.metricsCollector.incrementCounter(
+                "cvd_signal_processing_insufficient_samples_total",
+                1
+            );
+            this.logSignalRejection(
+                event,
+                "enhancement_mode_disabled",
+                {
+                    type: "enhancement_mode",
+                    threshold: 1,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: 0,
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: 0,
+                }
+            );
+            return null;
+        }
+
+        // Core CVD detection using restructured architecture
+        const coreResult = this.detectCoreCVD(event);
+
+        if (coreResult === null) {
+            // All rejections are already logged in detectCoreCVD with complete threshold data
+            return null;
+        }
+
+        // Core result passed all thresholds - create signal candidate
+        const signalSide = this.determineCVDSignalSide(event);
+        if (signalSide === null) {
+            // This should not happen as it's already checked in detectCoreCVD, but safety check
+            this.logger.warn(
+                "DeltaCVDDetectorEnhanced: Unexpected null signal side after core detection passed",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                }
+            );
+            return null;
+        }
+
+        // Check signal cooldown
+        const eventKey = `deltacvd`;
+        if (!this.canEmitSignal(eventKey)) {
+            // Cooldown rejection - this is a timing constraint, not a threshold failure
+            // Don't log as signal rejection since the signal itself was valid
+            this.logger.debug(
+                "[DeltaCVDDetectorEnhanced DEBUG] Signal blocked by cooldown",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                    eventKey,
+                    cooldownMs: this.enhancementConfig.eventCooldownMs,
+                }
+            );
+            return null;
+        }
+
+        // Create CVD signal candidate with institutional-grade precision
+        const realConfidence = coreResult.divergenceStrength;
+        const cvdData = this.extractCVDFromZones(
+            event.zoneData,
+            event.timestamp
+        );
+
+        const signalCandidate: SignalCandidate = {
+            id: `deltacvd-${event.timestamp}-${this.getId()}`,
+            type: "deltacvd",
+            side: signalSide,
+            confidence: realConfidence,
+            timestamp: event.timestamp,
+            data: {
+                price: event.price,
+                side: signalSide,
+                rateOfChange: coreResult.divergenceStrength,
+                windowVolume: cvdData.totalVolume,
+                tradesInWindow: this.calculateZoneTrades(
+                    event.zoneData,
+                    event.timestamp
+                ),
+                confidence: realConfidence,
+                slopes: { 300: coreResult.divergenceStrength },
+                zScores: { 300: coreResult.divergenceStrength },
+                metadata: {
+                    signalType: "deltacvd",
+                    signalDescription: this.getCVDSignalType(
+                        signalSide,
+                        coreResult
+                    ),
+                    timestamp: event.timestamp,
+                    cvdMovement: {
+                        totalCVD: cvdData.totalVolume,
+                        normalizedCVD: coreResult.divergenceStrength,
+                        direction: signalSide === "buy" ? "bullish" : "bearish",
+                    },
+                    cvdAnalysis: {
+                        shortestWindowSlope: coreResult.divergenceStrength,
+                        shortestWindowZScore: coreResult.divergenceStrength,
+                        requiredMinZ: this.enhancementConfig.signalThreshold,
+                        detectionMode: "enhanced_zone_analysis",
+                        passedStatisticalTest: true,
+                    },
+                    qualityMetrics: {
+                        cvdStatisticalSignificance: realConfidence,
+                        absorptionConfirmation: coreResult.affectedZones >= 2,
+                    },
+                },
+            },
+        };
+
+        // Log successful signal with complete parameter data
+        this.logSuccessfulSignalParameters(signalCandidate, event);
+
+        // Update signal cooldown
+        this.canEmitSignal(eventKey, true);
+
+        this.logger.info("DeltaCVDDetectorEnhanced: SIGNAL DETECTED", {
+            detectorId: this.getId(),
+            price: event.price,
+            side: signalSide,
+            confidence: realConfidence,
+            divergenceStrength: coreResult.divergenceStrength,
+            affectedZones: coreResult.affectedZones,
+        });
+
+        return signalCandidate;
+    }
+
+    /**
+     * Enhanced trade event processing with standardized zone analysis
+     *
+     * ARCHITECTURAL RESTRUCTURE: Uses new detect method for consistent signal processing
+     */
+    public onEnrichedTrade(event: EnrichedTradeEvent): void {
         // 🔍 DEBUG: Log every trade event received by Enhanced CVD detector
         this.logger.debug(
             "[DeltaCVDDetectorEnhanced DEBUG] Trade event received",
@@ -176,14 +316,27 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             }
         );
 
-        // STANDALONE VERSION: Always increment call count for metrics
+        // Always increment call count for metrics
         this.enhancementStats.callCount++;
 
         // Basic volume surge and institutional activity detection for test compatibility
         this.checkBasicVolumeMetrics(event);
 
-        // STANDALONE VERSION: Direct CVD analysis without base detector dependency
-        this.analyzeCVDPattern(event);
+        // Use restructured detect method for consistent signal processing
+        const signalCandidate = this.detect(event);
+
+        if (signalCandidate) {
+            // Emit signal candidate event for signal coordinator
+            this.emit("signalCandidate", signalCandidate);
+
+            this.logger.info("DeltaCVDDetectorEnhanced: SIGNAL EMITTED", {
+                detectorId: this.getId(),
+                signalId: signalCandidate.id,
+                price: event.price,
+                side: signalCandidate.side,
+                confidence: signalCandidate.confidence,
+            });
+        }
     }
 
     /**
@@ -222,152 +375,26 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     }
 
     /**
-     * Core CVD analysis using standardized zones
-     *
-     * STANDALONE VERSION: Multi-timeframe CVD analysis
-     */
-    private analyzeCVDPattern(event: EnrichedTradeEvent): void {
-        if (
-            this.enhancementConfig.enhancementMode === "disabled" ||
-            !event.zoneData
-        ) {
-            // Still emit metrics for insufficient samples when conditions aren't met
-            this.metricsCollector.incrementCounter(
-                "cvd_signal_processing_insufficient_samples_total",
-                1
-            );
-
-            this.logger.debug(
-                "[DeltaCVDDetectorEnhanced DEBUG] Skipping CVD analysis",
-                {
-                    detectorId: this.getId(),
-                    reason:
-                        this.enhancementConfig.enhancementMode === "disabled"
-                            ? "enhancement_disabled"
-                            : !event.zoneData
-                              ? "no_zone_data"
-                              : "unknown",
-                    enhancementMode: this.enhancementConfig.enhancementMode,
-                    hasZoneData: !!event.zoneData,
-                }
-            );
-
-            // Log the specific rejection reason
-            if (this.enhancementConfig.enhancementMode === "disabled") {
-                this.logSignalRejection(
-                    event,
-                    "enhancement_mode_disabled",
-                    {
-                        type: "enhancement_mode",
-                        threshold: 1,
-                        actual: 0,
-                    },
-                    {
-                        aggressiveVolume: 0,
-                        passiveVolume: 0,
-                        priceEfficiency: null,
-                        confidence: 0,
-                    }
-                );
-            } else if (!event.zoneData) {
-                this.logSignalRejection(
-                    event,
-                    "no_zone_data_in_analysis",
-                    {
-                        type: "zone_availability",
-                        threshold: 1,
-                        actual: 0,
-                    },
-                    {
-                        aggressiveVolume: 0,
-                        passiveVolume: 0,
-                        priceEfficiency: null,
-                        confidence: 0,
-                    }
-                );
-            }
-            return;
-        }
-
-        this.enhancementStats.callCount++;
-
-        try {
-            // Core CVD detection using zones - returns result instead of emitting
-            const coreResult = this.detectCoreCVD(event);
-
-            // Apply additional enhancements if configured, only if core result exists
-            if (coreResult) {
-                this.applyEnhancedAnalysis(event, coreResult);
-            }
-        } catch (error) {
-            this.enhancementStats.errorCount++;
-            this.logger.error("DeltaCVDDetectorEnhanced: CVD analysis error", {
-                detectorId: this.getId(),
-                error: error instanceof Error ? error.message : String(error),
-                price: event.price,
-                quantity: event.quantity,
-            });
-        }
-    }
-
-    /**
      * Detect core CVD patterns using zone data
      *
-     * STANDALONE VERSION: Core CVD detection logic
+     * ARCHITECTURAL RESTRUCTURE: Following successful absorption/exhaustion pattern
+     * 1. Early validation: Only check malformed data (no signal validation logging)
+     * 2. Full calculation: Calculate ALL thresholds regardless of outcome
+     * 3. Single evaluation: One decision point with complete threshold data
      */
     private detectCoreCVD(
         event: EnrichedTradeEvent
     ): CVDDivergenceResult | null {
+        // ===== EARLY VALIDATION: Only malformed data checks =====
         if (!event.zoneData) {
-            this.logSignalRejection(
-                event,
-                "no_zone_data",
-                {
-                    type: "zone_availability",
-                    threshold: 1,
-                    actual: 0,
-                },
-                {
-                    aggressiveVolume: 0,
-                    passiveVolume: 0,
-                    priceEfficiency: null,
-                    confidence: 0,
-                }
-            );
-            return null;
+            return null; // No logging for malformed data
         }
 
-        // ✅ CRITICAL VALIDATION: Use config-driven validation without caching
-        if (!this.meetsDetectionRequirements(event)) {
-            this.metricsCollector.incrementCounter(
-                "cvd_signals_rejected_total",
-                1
-            );
-            this.logger.debug(
-                "[DeltaCVDDetectorEnhanced DEBUG] Signal rejected - detection requirements not met",
-                {
-                    detectorId: this.getId(),
-                    price: event.price,
-                    reason: "detection_requirements_failed",
-                }
-            );
-            this.logSignalRejection(
-                event,
-                "detection_requirements_not_met",
-                {
-                    type: "activity_requirements",
-                    threshold: this.enhancementConfig.minVolPerSec,
-                    actual: 0, // Will be calculated in meetsDetectionRequirements
-                },
-                {
-                    aggressiveVolume: 0,
-                    passiveVolume: 0,
-                    priceEfficiency: null,
-                    confidence: 0,
-                }
-            );
-            return null;
-        }
+        // ===== FULL CALCULATION: Calculate ALL thresholds =====
+
+        // Calculate detection requirements (volume rate, trade rate)
+        const detectionRequirements =
+            this.calculateDetectionRequirements(event);
 
         // Extract CVD data from zones for analysis
         const cvdData = this.extractCVDFromZones(
@@ -375,160 +402,173 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             event.timestamp
         );
 
-        if (!cvdData.hasSignificantVolume) {
-            // Emit metrics for insufficient samples
-            this.metricsCollector.incrementCounter(
-                "cvd_signal_processing_insufficient_samples_total",
-                1
-            );
-
-            this.logger.debug(
-                "[DeltaCVDDetectorEnhanced DEBUG] Insufficient volume for CVD analysis",
-                {
-                    detectorId: this.getId(),
-                    price: event.price,
-                    totalVolume: cvdData.totalVolume,
-                    volumeThreshold: this.enhancementConfig.minVolPerSec,
-                }
-            );
-            this.logSignalRejection(
-                event,
-                "insufficient_cvd_volume",
-                {
-                    type: "cvd_volume",
-                    threshold: this.enhancementConfig.minVolPerSec,
-                    actual: cvdData.totalVolume,
-                },
-                {
-                    aggressiveVolume: cvdData.totalVolume,
-                    passiveVolume: 0,
-                    priceEfficiency: null,
-                    confidence: 0,
-                }
-            );
-            return null;
-        }
-
-        // CVD DIVERGENCE ANALYSIS: Core DeltaCVD functionality
-        // Analyze price vs volume flow divergence patterns
+        // Calculate CVD divergence analysis
         const divergenceResult = this.analyzeCVDDivergence(
             event.zoneData,
             event
         );
 
-        if (divergenceResult.hasDivergence) {
-            // Use the real calculated confidence value
-            const realConfidence = divergenceResult.divergenceStrength;
+        // Calculate market context and price efficiency
+        const relevantZones = event.zoneData.zones || [];
+        const marketContext = this.calculateMarketContext(event, relevantZones);
 
-            // Only proceed if real confidence meets threshold
-            if (realConfidence >= this.enhancementConfig.signalThreshold) {
-                this.logger.debug(
-                    "[DeltaCVDDetectorEnhanced DEBUG] CVD divergence detected, emitting signal",
-                    {
-                        detectorId: this.getId(),
-                        price: event.price,
-                        realConfidence,
-                        divergenceStrength: divergenceResult.divergenceStrength,
-                    }
-                );
+        // Calculate confidence and signal side
+        const realConfidence = divergenceResult.divergenceStrength;
+        const signalSide = this.determineCVDSignalSide(event);
 
-                // Return divergence result for enhanced analysis to decide on emission
-                return divergenceResult;
-            } else {
-                // Emit metrics for rejected signals due to insufficient confidence
-                this.metricsCollector.incrementCounter(
-                    "cvd_signals_rejected_total",
-                    1
-                );
+        // Calculate zone confluence if enabled
+        let confluenceResult = {
+            hasConfluence: false,
+            confluenceStrength: 0,
+            confluenceZones: 0,
+        };
+        if (Config.UNIVERSAL_ZONE_CONFIG.enableZoneConfluenceFilter) {
+            confluenceResult = this.analyzeZoneConfluence(
+                event.zoneData,
+                event.price
+            );
+        }
 
-                this.logger.debug(
-                    "[DeltaCVDDetectorEnhanced DEBUG] Signal rejected - insufficient confidence",
-                    {
-                        detectorId: this.getId(),
-                        price: event.price,
-                        realConfidence,
-                        required: this.enhancementConfig.signalThreshold,
-                        reason: "insufficient_confidence",
-                    }
-                );
-                this.logSignalRejection(
-                    event,
-                    "confidence_below_threshold",
-                    {
-                        type: "confidence_level",
-                        threshold: this.enhancementConfig.signalThreshold,
-                        actual: realConfidence,
-                    },
-                    {
-                        aggressiveVolume: cvdData.totalVolume,
-                        passiveVolume: 0,
-                        priceEfficiency: null,
-                        confidence: realConfidence,
-                    },
-                    {
-                        realConfidence,
-                        divergenceStrength: divergenceResult.divergenceStrength,
-                        cvdTotalVolume: cvdData.totalVolume,
-                        cvdBuyVolume: cvdData.buyVolume,
-                        cvdSellVolume: cvdData.sellVolume,
-                        cvdDelta: cvdData.cvdDelta,
-                    }
-                );
-                return null;
-            }
-        } else {
-            // Emit metrics for rejected signals due to no divergence
+        // ===== SINGLE EVALUATION: One decision point =====
+
+        // Check all thresholds
+        const passesDetectionRequirements =
+            detectionRequirements.meetsVolumeRate &&
+            detectionRequirements.meetsTradeRate;
+        const hasSignificantVolume = cvdData.hasSignificantVolume;
+        const hasDivergence = divergenceResult.hasDivergence;
+        const passesConfidenceThreshold =
+            realConfidence >= this.enhancementConfig.signalThreshold;
+        const hasValidSignalSide = signalSide !== null;
+
+        // If any threshold fails, log comprehensive rejection with ALL calculated data
+        if (
+            !passesDetectionRequirements ||
+            !hasSignificantVolume ||
+            !hasDivergence ||
+            !passesConfidenceThreshold ||
+            !hasValidSignalSide
+        ) {
             this.metricsCollector.incrementCounter(
                 "cvd_signals_rejected_total",
                 1
             );
 
-            this.logger.debug(
-                "[DeltaCVDDetectorEnhanced DEBUG] Signal rejected - no divergence detected",
-                {
-                    detectorId: this.getId(),
-                    price: event.price,
-                    reason: "no_divergence",
-                }
-            );
+            // Determine primary rejection reason
+            let rejectionReason = "comprehensive_cvd_rejection";
+            if (!passesDetectionRequirements)
+                rejectionReason = "detection_requirements_not_met";
+            else if (!hasSignificantVolume)
+                rejectionReason = "insufficient_cvd_volume";
+            else if (!hasDivergence) rejectionReason = "no_cvd_divergence";
+            else if (!passesConfidenceThreshold)
+                rejectionReason = "confidence_below_threshold";
+            else if (!hasValidSignalSide)
+                rejectionReason = "no_clear_signal_side";
+
             this.logSignalRejection(
                 event,
-                "no_cvd_divergence",
+                rejectionReason,
                 {
-                    type: "divergence_detection",
-                    threshold: this.enhancementConfig.cvdImbalanceThreshold,
-                    actual: 0,
+                    type: "comprehensive_cvd_analysis",
+                    threshold: this.enhancementConfig.signalThreshold,
+                    actual: realConfidence,
                 },
                 {
                     aggressiveVolume: cvdData.totalVolume,
-                    passiveVolume: 0,
-                    priceEfficiency: null,
-                    confidence: 0,
+                    passiveVolume: marketContext.totalPassiveVolume,
+                    priceEfficiency: marketContext.priceEfficiency,
+                    confidence: realConfidence,
                 },
                 {
+                    // Detection requirements
+                    volumePerSec: detectionRequirements.volumePerSec,
+                    tradesPerSec: detectionRequirements.tradesPerSec,
+                    minVolPerSecThreshold: this.enhancementConfig.minVolPerSec,
+                    minTradesPerSecThreshold:
+                        this.enhancementConfig.minTradesPerSec,
+                    passesDetectionRequirements,
+
+                    // CVD volume analysis
                     cvdTotalVolume: cvdData.totalVolume,
                     cvdBuyVolume: cvdData.buyVolume,
                     cvdSellVolume: cvdData.sellVolume,
                     cvdDelta: cvdData.cvdDelta,
-                    actualDivergenceStrength: 0, // No divergence detected
-                    minThresholdRequired:
+                    hasSignificantVolume,
+
+                    // Divergence analysis
+                    divergenceStrength: divergenceResult.divergenceStrength,
+                    affectedZones: divergenceResult.affectedZones,
+                    hasDivergence,
+                    cvdImbalanceThreshold:
                         this.enhancementConfig.cvdImbalanceThreshold,
+
+                    // Confidence and thresholds
+                    realConfidence,
+                    signalThreshold: this.enhancementConfig.signalThreshold,
+                    passesConfidenceThreshold,
+
+                    // Signal direction
+                    signalSide: signalSide || "unknown",
+                    hasValidSignalSide,
+
+                    // Zone confluence
+                    confluenceStrength: confluenceResult.confluenceStrength,
+                    confluenceZones: confluenceResult.confluenceZones,
+                    hasConfluence: confluenceResult.hasConfluence,
+
+                    // Market context
+                    institutionalVolumeRatio:
+                        marketContext.institutionalVolumeRatio,
+                    totalAggressiveVolume: marketContext.totalAggressiveVolume,
+                    aggressiveBuyVolume: marketContext.aggressiveBuyVolume,
+                    aggressiveSellVolume: marketContext.aggressiveSellVolume,
                 }
             );
+            return null;
         }
 
-        // No divergence detected or insufficient confidence
-        return null;
+        // All thresholds passed - return successful result
+        this.logger.debug(
+            "[DeltaCVDDetectorEnhanced DEBUG] CVD divergence detected, all thresholds passed",
+            {
+                detectorId: this.getId(),
+                price: event.price,
+                realConfidence,
+                divergenceStrength: divergenceResult.divergenceStrength,
+                signalSide,
+            }
+        );
+
+        return divergenceResult;
     }
 
     /**
-     * Check if event meets detection requirements (config-driven, no caching)
+     * Calculate detection requirements with detailed metrics (config-driven, no caching)
      *
-     * CLAUDE.md COMPLIANT: No caching, no defaults, config-driven validation
+     * ARCHITECTURAL RESTRUCTURE: Returns calculated values instead of boolean for comprehensive logging
      */
-    private meetsDetectionRequirements(event: EnrichedTradeEvent): boolean {
-        // Simple zone-based validation without caching live data
-        if (!event.zoneData) return false;
+    private calculateDetectionRequirements(event: EnrichedTradeEvent): {
+        volumePerSec: number;
+        tradesPerSec: number;
+        meetsVolumeRate: boolean;
+        meetsTradeRate: boolean;
+        totalVolume: number;
+        totalTrades: number;
+        timespan: number;
+    } {
+        // Default values for invalid data
+        if (!event.zoneData) {
+            return {
+                volumePerSec: 0,
+                tradesPerSec: 0,
+                meetsVolumeRate: false,
+                meetsTradeRate: false,
+                totalVolume: 0,
+                totalTrades: 0,
+                timespan: 1000,
+            };
+        }
 
         // CRITICAL FIX: Filter zones by time window using trade timestamp
         const windowStartTime =
@@ -539,7 +579,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         );
 
         this.logger.debug(
-            "[DeltaCVDDetectorEnhanced DEBUG] Time-window filtering",
+            "[DeltaCVDDetectorEnhanced DEBUG] calculateDetectionRequirements time-window filtering",
             {
                 totalZones: event.zoneData.zones.length,
                 recentZones: recentZones.length,
@@ -577,7 +617,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             tradesPerSec >= this.enhancementConfig.minTradesPerSec;
 
         this.logger.debug(
-            "[DeltaCVDDetectorEnhanced DEBUG] Detection requirements check",
+            "[DeltaCVDDetectorEnhanced DEBUG] calculateDetectionRequirements check",
             {
                 detectorId: this.getId(),
                 totalVolume,
@@ -592,8 +632,26 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             }
         );
 
-        // Config-driven validation: must meet BOTH volume AND trade rate requirements
-        return meetsVolumeRate && meetsTradeRate;
+        return {
+            volumePerSec,
+            tradesPerSec,
+            meetsVolumeRate,
+            meetsTradeRate,
+            totalVolume,
+            totalTrades,
+            timespan,
+        };
+    }
+
+    /**
+     * Check if event meets detection requirements (config-driven, no caching)
+     *
+     * CLAUDE.md COMPLIANT: No caching, no defaults, config-driven validation
+     * LEGACY METHOD: Kept for backward compatibility with existing code
+     */
+    private meetsDetectionRequirements(event: EnrichedTradeEvent): boolean {
+        const requirements = this.calculateDetectionRequirements(event);
+        return requirements.meetsVolumeRate && requirements.meetsTradeRate;
     }
 
     /**
@@ -683,138 +741,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             buyVolume: totalBuyVolume,
             sellVolume: totalSellVolume,
             cvdDelta,
-        };
-    }
-
-    /**
-     * Apply enhanced analysis if enabled
-     */
-    private applyEnhancedAnalysis(
-        event: EnrichedTradeEvent,
-        coreResult: CVDDivergenceResult
-    ): void {
-        // Only apply enhancements if enabled and standardized zones are available
-        if (
-            this.enhancementConfig.enhancementMode === "disabled" ||
-            !event.zoneData
-        ) {
-            return;
-        }
-
-        // Apply the enhanced CVD analysis with guaranteed core result
-        const enhancedResult = this.enhanceCVDAnalysis(event, coreResult);
-
-        // Emit signal with enhanced confidence if it meets threshold
-        if (
-            enhancedResult.enhancedConfidence >=
-            this.enhancementConfig.signalThreshold
-        ) {
-            this.emitEnhancedCVDSignal(event, enhancedResult);
-        } else {
-            // Log rejection for enhanced confidence below threshold
-            this.logSignalRejection(
-                event,
-                "enhanced_confidence_below_threshold",
-                {
-                    type: "enhanced_confidence",
-                    threshold: this.enhancementConfig.signalThreshold,
-                    actual: enhancedResult.enhancedConfidence,
-                },
-                {
-                    aggressiveVolume: this.calculateZoneVolume(
-                        event.zoneData,
-                        event.timestamp
-                    ),
-                    passiveVolume: 0,
-                    priceEfficiency: null,
-                    confidence: enhancedResult.enhancedConfidence,
-                }
-            );
-        }
-    }
-
-    /**
-     * Core enhancement analysis using standardized zones
-     *
-     * DELTACVD PHASE 1: Multi-timeframe CVD analysis
-     */
-    private enhanceCVDAnalysis(
-        event: EnrichedTradeEvent,
-        coreResult: CVDDivergenceResult
-    ): EnhancedCVDResult {
-        // Zone data is guaranteed to exist since we passed core detection
-        let totalConfidenceBoost = 0;
-        let enhancementApplied = false;
-
-        // Zone confluence analysis for CVD validation
-        if (Config.UNIVERSAL_ZONE_CONFIG.enableZoneConfluenceFilter) {
-            const confluenceResult = this.analyzeZoneConfluence(
-                event.zoneData,
-                event.price
-            );
-            if (confluenceResult.hasConfluence) {
-                this.enhancementStats.confluenceDetectionCount++;
-                totalConfidenceBoost +=
-                    Config.UNIVERSAL_ZONE_CONFIG.confluenceConfidenceBoost;
-                enhancementApplied = true;
-
-                this.logger.debug(
-                    "DeltaCVDDetectorEnhanced: Zone confluence detected for CVD validation",
-                    {
-                        detectorId: this.getId(),
-                        price: event.price,
-                        confluenceZones: confluenceResult.confluenceZones,
-                        confluenceStrength: confluenceResult.confluenceStrength,
-                        confidenceBoost:
-                            Config.UNIVERSAL_ZONE_CONFIG
-                                .confluenceConfidenceBoost,
-                    }
-                );
-            }
-        }
-
-        // Use core CVD divergence result (already analyzed and validated)
-        this.enhancementStats.cvdDivergenceDetectionCount++;
-        // Use the actual divergence strength as enhancement (no artificial boosting)
-        totalConfidenceBoost += coreResult.divergenceStrength;
-        enhancementApplied = true;
-
-        this.logger.debug("DeltaCVDDetectorEnhanced: CVD divergence detected", {
-            detectorId: this.getId(),
-            price: event.price,
-            divergenceStrength: coreResult.divergenceStrength,
-            affectedZones: coreResult.affectedZones,
-            confidenceBoost: coreResult.divergenceStrength,
-        });
-
-        // Calculate enhanced confidence: core + enhancements
-        const enhancedConfidence =
-            coreResult.divergenceStrength + totalConfidenceBoost;
-
-        // Update enhancement statistics
-        if (enhancementApplied) {
-            this.enhancementStats.enhancementCount++;
-            this.enhancementStats.totalConfidenceBoost += totalConfidenceBoost;
-            this.enhancementStats.averageConfidenceBoost =
-                this.enhancementStats.totalConfidenceBoost /
-                this.enhancementStats.enhancementCount;
-            this.enhancementStats.enhancementSuccessRate =
-                this.enhancementStats.enhancementCount /
-                this.enhancementStats.callCount;
-
-            // Store enhanced CVD metrics for monitoring
-            this.storeEnhancedCVDMetrics(event, totalConfidenceBoost);
-        }
-
-        // Return enhanced result
-        return {
-            coreResult,
-            enhancedConfidence,
-            enhancements: {
-                confluenceBoost: totalConfidenceBoost, // For now, all boost is confluence
-                totalBoost: totalConfidenceBoost,
-                enhancementApplied,
-            },
         };
     }
 
@@ -1144,242 +1070,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             confidenceBoost,
             enhancementStats: this.enhancementStats,
         });
-    }
-
-    /**
-     * Emit enhanced CVD signal based on zone divergence analysis
-     *
-     * CRITICAL FIX: Independent signal emission for enhanced CVD detection
-     */
-    private emitEnhancedCVDSignal(
-        event: EnrichedTradeEvent,
-        enhancedResult: EnhancedCVDResult
-    ): void {
-        // ✅ CRITICAL VALIDATION: Enhanced signals must also meet detection requirements
-        if (!this.meetsDetectionRequirements(event)) {
-            this.metricsCollector.incrementCounter(
-                "cvd_signals_rejected_total",
-                1
-            );
-            this.logger.debug(
-                "[DeltaCVDDetectorEnhanced DEBUG] Enhanced signal rejected - detection requirements not met",
-                {
-                    detectorId: this.getId(),
-                    price: event.price,
-                    reason: "enhanced_detection_requirements_failed",
-                }
-            );
-            this.logSignalRejection(
-                event,
-                "enhanced_detection_requirements_failed",
-                {
-                    type: "enhanced_validation",
-                    threshold: this.enhancementConfig.minVolPerSec,
-                    actual: 0,
-                },
-                {
-                    aggressiveVolume: this.calculateZoneVolume(
-                        event.zoneData,
-                        event.timestamp
-                    ),
-                    passiveVolume: 0,
-                    priceEfficiency: null,
-                    confidence: enhancedResult.enhancedConfidence,
-                }
-            );
-            return;
-        }
-
-        // Determine signal side based on zone CVD analysis
-        const signalSide = this.determineCVDSignalSide(event);
-
-        if (signalSide === null) {
-            this.logger.debug(
-                "[DeltaCVDDetectorEnhanced DEBUG] Enhanced signal - no clear signal side detected, not emitting",
-                {
-                    detectorId: this.getId(),
-                    price: event.price,
-                }
-            );
-            this.logSignalRejection(
-                event,
-                "no_clear_signal_side",
-                {
-                    type: "signal_direction",
-                    threshold: 0.5,
-                    actual: 0,
-                },
-                {
-                    aggressiveVolume: this.calculateZoneVolume(
-                        event.zoneData,
-                        event.timestamp
-                    ),
-                    passiveVolume: 0,
-                    priceEfficiency: null,
-                    confidence: enhancedResult.enhancedConfidence,
-                }
-            );
-            return;
-        }
-
-        // Check signal cooldown to prevent too many signals
-        const eventKey = `deltacvd`; // Single cooldown for all CVD signals regardless of side
-        if (!this.canEmitSignal(eventKey)) {
-            this.logger.debug(
-                "[DeltaCVDDetectorEnhanced DEBUG] Enhanced signal blocked by cooldown",
-                {
-                    detectorId: this.getId(),
-                    price: event.price,
-                    eventKey,
-                    cooldownMs: this.enhancementConfig.eventCooldownMs,
-                }
-            );
-            this.logSignalRejection(
-                event,
-                "signal_cooldown_active",
-                {
-                    type: "cooldown_period",
-                    threshold: this.enhancementConfig.eventCooldownMs,
-                    actual: Date.now() - (this.lastSignal.get(eventKey) || 0),
-                },
-                {
-                    aggressiveVolume: this.calculateZoneVolume(
-                        event.zoneData,
-                        event.timestamp
-                    ),
-                    passiveVolume: 0,
-                    priceEfficiency: null,
-                    confidence: enhancedResult.enhancedConfidence,
-                }
-            );
-            return;
-        }
-
-        // Get CVD signal description (NO DEFAULTS, NO FALLBACKS)
-        const signalDescription = this.getCVDSignalType(
-            signalSide,
-            enhancedResult.coreResult
-        );
-
-        if (signalDescription === null) {
-            this.logger.debug(
-                "[DeltaCVDDetectorEnhanced DEBUG] Enhanced signal invalid, not emitting",
-                {
-                    detectorId: this.getId(),
-                    price: event.price,
-                    signalSide,
-                    hasDivergence: enhancedResult.coreResult.hasDivergence,
-                }
-            );
-            this.logSignalRejection(
-                event,
-                "invalid_signal_description",
-                {
-                    type: "signal_validity",
-                    threshold: 1,
-                    actual: 0,
-                },
-                {
-                    aggressiveVolume: this.calculateZoneVolume(
-                        event.zoneData,
-                        event.timestamp
-                    ),
-                    passiveVolume: 0,
-                    priceEfficiency: null,
-                    confidence: enhancedResult.enhancedConfidence,
-                }
-            );
-            return;
-        }
-
-        // Use enhanced confidence (core + enhancements)
-        const realConfidence = enhancedResult.enhancedConfidence;
-
-        // Create enhanced CVD result
-        const cvdResult: DeltaCVDConfirmationResult = {
-            price: event.price,
-            side: signalSide,
-            rateOfChange: enhancedResult.coreResult.divergenceStrength,
-            windowVolume: this.calculateZoneVolume(
-                event.zoneData,
-                event.timestamp
-            ),
-            tradesInWindow: this.calculateZoneTrades(
-                event.zoneData,
-                event.timestamp
-            ),
-            confidence: realConfidence,
-            slopes: { 300: enhancedResult.coreResult.divergenceStrength }, // Enhanced zone-based slope
-            zScores: { 300: enhancedResult.coreResult.divergenceStrength }, // Real divergence strength, no artificial multiplication
-            metadata: {
-                signalType: "deltacvd",
-                signalDescription: signalDescription,
-                timestamp: event.timestamp,
-                cvdMovement: {
-                    totalCVD: this.calculateZoneVolume(
-                        event.zoneData,
-                        event.timestamp
-                    ),
-                    normalizedCVD: enhancedResult.coreResult.divergenceStrength,
-                    direction: signalSide === "buy" ? "bullish" : "bearish",
-                },
-                cvdAnalysis: {
-                    shortestWindowSlope:
-                        enhancedResult.coreResult.divergenceStrength,
-                    shortestWindowZScore:
-                        enhancedResult.coreResult.divergenceStrength,
-                    requiredMinZ: this.enhancementConfig.signalThreshold,
-                    detectionMode: "enhanced_zone_analysis",
-                    passedStatisticalTest: true,
-                },
-                qualityMetrics: {
-                    cvdStatisticalSignificance: realConfidence,
-                    absorptionConfirmation:
-                        enhancedResult.coreResult.affectedZones >= 2,
-                },
-            },
-        };
-
-        // ✅ EMIT ENHANCED CVD SIGNAL - Standalone detector signal emission
-        this.emit("signalCandidate", {
-            id: `deltacvd-${event.timestamp}-${this.getId()}`,
-            type: "deltacvd",
-            side: signalSide,
-            confidence: realConfidence,
-            timestamp: event.timestamp,
-            data: cvdResult,
-        });
-
-        // ✅ LOG SUCCESSFUL SIGNAL: Complete parameter logging for threshold optimization
-        this.logSuccessfulSignalParameters(
-            {
-                id: `deltacvd-${event.timestamp}-${this.getId()}`,
-                type: "deltacvd",
-                side: signalSide,
-                confidence: realConfidence,
-                timestamp: event.timestamp,
-                data: cvdResult,
-            },
-            event
-        );
-
-        this.logger.info(
-            "DeltaCVDDetectorEnhanced: ENHANCED CVD SIGNAL EMITTED",
-            {
-                detectorId: this.getId(),
-                price: event.price,
-                side: signalSide,
-                confidence: realConfidence,
-                divergenceStrength:
-                    enhancedResult.coreResult.divergenceStrength,
-                affectedZones: enhancedResult.coreResult.affectedZones,
-                signalType: "deltacvd",
-                signalDescription: signalDescription,
-            }
-        );
-
-        // Update last signal time after successful emission
-        this.canEmitSignal(eventKey, true);
     }
 
     /**
