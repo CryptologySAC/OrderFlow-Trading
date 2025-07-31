@@ -1226,8 +1226,27 @@ export class SignalManager extends EventEmitter {
             );
 
             // Track signal type for breakdown display
+            this.logger.debug("[SignalManager] Tracking signal type", {
+                signalType: signal.type,
+                hasStats: !!this.signalTypeStats[signal.type],
+                currentStats: this.signalTypeStats[signal.type],
+                allStatsKeys: Object.keys(this.signalTypeStats),
+            });
+
             if (this.signalTypeStats[signal.type]) {
                 this.signalTypeStats[signal.type].candidates++;
+                this.logger.debug("[SignalManager] Updated candidates", {
+                    signalType: signal.type,
+                    newCandidates: this.signalTypeStats[signal.type].candidates,
+                });
+            } else {
+                this.logger.warn(
+                    "[SignalManager] Unknown signal type for tracking",
+                    {
+                        signalType: signal.type,
+                        expectedTypes: Object.keys(this.signalTypeStats),
+                    }
+                );
             }
 
             // Process signal through simplified pipeline
@@ -3102,6 +3121,10 @@ export class SignalManager extends EventEmitter {
                 successRate: string;
             }
         > = {};
+
+        this.logger.debug("[SignalManager] Getting signal type breakdown", {
+            currentStats: this.signalTypeStats,
+        });
 
         for (const [signalType, stats] of Object.entries(
             this.signalTypeStats

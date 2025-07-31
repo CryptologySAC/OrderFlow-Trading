@@ -259,7 +259,24 @@ export class AbsorptionDetectorEnhanced extends Detector {
      * STANDALONE VERSION: Complete absorption detection with enhancement analysis
      */
     private analyzeAbsorptionPattern(event: EnrichedTradeEvent): void {
-        if (!event.zoneData) return;
+        if (!event.zoneData) {
+            this.logSignalRejection(
+                event,
+                "no_zone_data",
+                {
+                    type: "zone_data_availability",
+                    threshold: 1,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: 0,
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: 0,
+                }
+            );
+            return;
+        }
 
         // STEP 1: CORE ABSORPTION DETECTION (Required for any signals)
         const coreAbsorptionResult = this.detectCoreAbsorption(event);
@@ -496,24 +513,29 @@ export class AbsorptionDetectorEnhanced extends Detector {
             }
         );
 
-        // EARLY VALIDATION SECTION: Only check for malformed/missing data (no signal validation logging)
+        // EARLY VALIDATION: Only check for missing/malformed data - no signal validation logging
         if (!event.zoneData) {
-            this.logger.info(
-                "AbsorptionDetectorEnhanced: No zone data available",
-                {
-                    hasZoneData: !!event.zoneData,
-                    quantity: event.quantity,
-                }
+            this.logger.debug(
+                "AbsorptionDetectorEnhanced: No zone data available"
             );
             return null;
         }
 
         const allZones = [...event.zoneData.zones];
         if (allZones.length === 0) {
-            this.logger.debug(
-                "AbsorptionDetectorEnhanced: No zones available",
+            this.logSignalRejection(
+                event,
+                "no_zones_available",
                 {
-                    zonesCount: event.zoneData.zones.length,
+                    type: "zones_count",
+                    threshold: 1,
+                    actual: 0,
+                },
+                {
+                    aggressiveVolume: 0,
+                    passiveVolume: 0,
+                    priceEfficiency: null,
+                    confidence: 0,
                 }
             );
             return null;
