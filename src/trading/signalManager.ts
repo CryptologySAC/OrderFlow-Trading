@@ -3097,7 +3097,7 @@ export class SignalManager extends EventEmitter {
         exhaustion: { candidates: 0, confirmed: 0, rejected: 0 },
         accumulation: { candidates: 0, confirmed: 0, rejected: 0 },
         distribution: { candidates: 0, confirmed: 0, rejected: 0 },
-        cvd_confirmation: { candidates: 0, confirmed: 0, rejected: 0 },
+        deltacvd: { candidates: 0, confirmed: 0, rejected: 0 },
     };
 
     /**
@@ -3143,6 +3143,32 @@ export class SignalManager extends EventEmitter {
         }
 
         return breakdown;
+    }
+
+    /**
+     * Get aggregated signal totals for dashboard overview
+     * Uses accurate signalTypeStats to avoid double-counting from detailed metrics
+     */
+    public getSignalTotals(): {
+        candidates: number;
+        confirmed: number;
+        rejected: number;
+    } {
+        let totalCandidates = 0;
+        let totalConfirmed = 0;
+        let totalRejected = 0;
+
+        for (const stats of Object.values(this.signalTypeStats)) {
+            totalCandidates += stats.candidates;
+            totalConfirmed += stats.confirmed;
+            totalRejected += stats.rejected;
+        }
+
+        return {
+            candidates: totalCandidates,
+            confirmed: totalConfirmed,
+            rejected: totalRejected,
+        };
     }
 }
 

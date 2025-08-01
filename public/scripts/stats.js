@@ -289,19 +289,18 @@ function updateSignalMetrics(metrics) {
         return (count / 60).toFixed(1); // per minute estimate
     };
 
-    // Signal Processing Overview
-    const signalCandidates = getCounterValue(
-        "signal_coordinator_signals_received_total"
-    );
+    // Signal Processing Overview - Use accurate signalTotals to avoid double-counting
+    const signalTotals = metrics.signalTotals || {
+        candidates: 0,
+        confirmed: 0,
+        rejected: 0,
+    };
+    const signalCandidates = signalTotals.candidates;
     const signalsProcessed = getCounterValue(
         "signal_manager_signals_processed_total"
     );
-    const signalsConfirmed = getCounterValue(
-        "signal_manager_signals_confirmed_total"
-    );
-    const signalsRejected = getCounterValue(
-        "signal_manager_rejections_detailed_total"
-    );
+    const signalsConfirmed = signalTotals.confirmed;
+    const signalsRejected = signalTotals.rejected;
 
     updateElement("signalCandidates", formatNumber(signalCandidates));
     updateElement("signalCandidatesRate", getRate(signalCandidates));
@@ -427,7 +426,7 @@ function updateSignalTypeBreakdown(breakdown) {
         exhaustion: "exhaustion",
         accumulation: "accumulation",
         distribution: "distribution",
-        cvd_confirmation: "deltacvd", // Map to frontend ID
+        deltacvd: "deltacvd", // Backend and frontend now use same ID
     };
 
     for (const [backendType, frontendId] of Object.entries(signalTypes)) {
