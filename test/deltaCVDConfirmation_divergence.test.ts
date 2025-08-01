@@ -98,7 +98,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Test that detector was created successfully
@@ -150,7 +151,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
         });
 
@@ -212,7 +214,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             const baseTime = Date.now();
@@ -288,7 +291,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
         });
 
@@ -501,7 +505,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
         });
 
@@ -564,7 +569,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
         });
 
@@ -673,7 +679,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
         });
 

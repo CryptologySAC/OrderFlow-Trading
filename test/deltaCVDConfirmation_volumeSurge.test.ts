@@ -33,12 +33,14 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
     let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
     let mockPreprocessor: IOrderflowPreprocessor;
+    let mockSignalValidationLogger: SignalValidationLogger;
 
     beforeEach(() => {
         // ✅ CLAUDE.md COMPLIANCE: Use mocks from __mocks__/ directory only
         mockLogger = new WorkerLogger({} as any); // ThreadManager mock
         mockMetrics = new MetricsCollector();
         mockPreprocessor = createMockPreprocessor();
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
         detector = new DeltaCVDDetectorEnhanced(
             "test_cvd_surge",
@@ -50,7 +52,8 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
             },
             mockPreprocessor,
             mockLogger,
-            mockMetrics
+            mockMetrics,
+            mockSignalValidationLogger
         );
     });
 

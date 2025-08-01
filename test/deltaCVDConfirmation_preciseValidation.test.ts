@@ -94,6 +94,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
             trace: vi.fn(),
         } as ILogger;
         mockMetrics = new MetricsCollector();
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
         // Clear signal tracking
         emittedSignals.length = 0;
@@ -112,7 +113,8 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Set up signal capture
@@ -167,7 +169,8 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Set up signal capture for this detector instance
@@ -365,7 +368,8 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Set up signal capture for this detector instance
@@ -513,7 +517,8 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Set up signal capture for this detector instance
@@ -669,7 +674,8 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             const momentumDetector = new DeltaCVDDetectorEnhanced(
@@ -688,7 +694,8 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Both detectors should be properly initialized
@@ -717,7 +724,8 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Set up signal capture for this detector instance
@@ -862,7 +870,8 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             detector.on("signalCandidate", (signal) => {
@@ -919,7 +928,8 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Set up signal capture for this detector instance
@@ -1070,7 +1080,8 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Set up signal capture for this detector instance
@@ -1202,7 +1213,8 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Set up signal capture for this detector instance
@@ -1355,7 +1367,8 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Set up signal capture
@@ -1415,7 +1428,8 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Should be properly initialized
@@ -1438,7 +1452,8 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Both should be properly initialized with different thresholds
@@ -1466,7 +1481,8 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger
             );
 
             // Validate detector was created successfully

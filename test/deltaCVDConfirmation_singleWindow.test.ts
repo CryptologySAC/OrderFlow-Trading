@@ -85,6 +85,7 @@ describe("DeltaCVDDetectorEnhanced single window CVD analysis", () => {
     let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
     let mockPreprocessor: IOrderflowPreprocessor;
+    let mockSignalValidationLogger: SignalValidationLogger;
     let signalSpy: vi.Mock;
 
     beforeEach(() => {
@@ -97,6 +98,7 @@ describe("DeltaCVDDetectorEnhanced single window CVD analysis", () => {
         } as ILogger;
         mockMetrics = new MetricsCollector();
         mockPreprocessor = createMockPreprocessor();
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
         detector = new DeltaCVDDetectorEnhanced(
             "cvd_single_window",
@@ -119,7 +121,8 @@ describe("DeltaCVDDetectorEnhanced single window CVD analysis", () => {
             },
             mockPreprocessor,
             mockLogger,
-            mockMetrics
+            mockMetrics,
+            mockSignalValidationLogger
         );
 
         signalSpy = vi.fn();

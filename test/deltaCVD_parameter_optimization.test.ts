@@ -9,11 +9,13 @@ import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 
 describe("DeltaCVD Parameter Optimization", () => {
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
     let mockPreprocessor: IOrderflowPreprocessor;
+    let mockSignalValidationLogger: SignalValidationLogger;
 
     // Test scenarios based on actual successful vs failed signals
     const successfulSignalScenarios = [
@@ -79,6 +81,8 @@ describe("DeltaCVD Parameter Optimization", () => {
                 timestamp: Date.now(),
             })),
         } as any;
+
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
     });
 
     const createMockEvent = (scenario: any): EnrichedTradeEvent => ({
@@ -117,11 +121,13 @@ describe("DeltaCVD Parameter Optimization", () => {
                 };
 
                 const detector = new DeltaCVDDetectorEnhanced(
+                    "test-optimization",
                     "LTCUSDT",
+                    config,
+                    mockPreprocessor,
                     mockLogger,
                     mockMetrics,
-                    mockPreprocessor,
-                    config
+                    mockSignalValidationLogger
                 );
 
                 let signals = 0;

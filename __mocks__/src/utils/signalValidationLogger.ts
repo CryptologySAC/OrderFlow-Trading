@@ -33,16 +33,27 @@ export class SignalValidationLogger {
         pendingValidations: 0,
         totalLogged: 0,
     });
+    public run90MinuteOptimization = vi.fn();
+    public setupSuccessfulSignalValidationTimers = vi.fn();
+    public validateSuccessfulSignal = vi.fn();
 
     // Add all required properties to match the real interface
     public readonly signalsFilePath = "mock-signals.csv";
     public readonly rejectionsFilePath = "mock-rejections.csv";
+    public readonly successfulSignalsFilePath = "mock-successful-signals.csv";
     public readonly pendingValidations = new Map();
     public readonly validationTimers = new Map();
+    public readonly pendingRejections = new Map();
+    public readonly successfulSignals = new Map();
     public readonly signalsBuffer: string[] = [];
     public readonly rejectionsBuffer: string[] = [];
+    public readonly successfulSignalsBuffer: string[] = [];
     public readonly maxBufferSize = 100;
     public readonly flushInterval = 5000;
+    private flushTimer?: NodeJS.Timeout;
+    private optimizationTimer?: NodeJS.Timeout;
+    private isInitialized = false;
+    private currentPrice: number | null = null;
     public readonly logger: any;
     public readonly outputDir: string;
 
@@ -52,12 +63,14 @@ export class SignalValidationLogger {
     private flushBuffers = vi.fn();
     private flushSignalsBuffer = vi.fn();
     private flushRejectionsBuffer = vi.fn();
+    private flushSuccessfulSignalsBuffer = vi.fn();
     private setupValidationTimers = vi.fn();
     private setupRejectionValidationTimers = vi.fn();
     private validateSignal = vi.fn();
     private validateRejection = vi.fn();
     private writeSignalRecord = vi.fn();
     private writeRejectionRecord = vi.fn();
+    private writeSuccessfulSignalRecord = vi.fn();
     private calculateVolumeImbalance = vi.fn();
     private calculateZoneTotalVolume = vi.fn();
     private calculateConfluenceScore = vi.fn();
@@ -65,6 +78,15 @@ export class SignalValidationLogger {
     private evaluateSignalAccuracy = vi.fn();
     private getCurrentPrice = vi.fn();
     private cleanupValidation = vi.fn();
+    private start90MinuteOptimization = vi.fn();
+    private processOptimizationCycle = vi.fn();
+    private findOptimalParameters = vi.fn();
+    private analyzeSuccessfulSignals = vi.fn();
+    private groupSignalsByDetector = vi.fn();
+    private extractParameterValues = vi.fn();
+    private calculateParameterStats = vi.fn();
+    private generateOptimizedConfig = vi.fn();
+    private saveOptimizedConfig = vi.fn();
 
     constructor(logger: any, outputDir: string = "logs/signal_validation") {
         this.logger = logger;
