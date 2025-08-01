@@ -271,9 +271,9 @@ export interface SuccessfulSignalRecord {
  * ✅ INSTITUTIONAL ARCHITECTURE: Internal buffering ensures signal processing never blocks on disk I/O
  */
 export class SignalValidationLogger {
-    private readonly signalsFilePath: string;
-    private readonly rejectionsFilePath: string;
-    private readonly successfulSignalsFilePath: string;
+    private signalsFilePath: string;
+    private rejectionsFilePath: string;
+    private successfulSignalsFilePath: string;
     private readonly pendingValidations = new Map<
         string,
         SignalValidationRecord
@@ -301,31 +301,77 @@ export class SignalValidationLogger {
     // Price tracking for validation
     private currentPrice: number | null = null;
 
+    // Daily rotation tracking
+    private currentDateString: string;
+
     constructor(
         private readonly logger: ILogger,
         private readonly outputDir: string = "logs/signal_validation"
     ) {
-        const timestamp = new Date()
-            .toISOString()
-            .replace(/[:.]/g, "-")
-            .split("T")[0];
-        this.signalsFilePath = path.join(
-            outputDir,
-            `signal_validation_${timestamp}.csv`
-        );
-        this.rejectionsFilePath = path.join(
-            outputDir,
-            `signal_rejections_${timestamp}.csv`
-        );
-        this.successfulSignalsFilePath = path.join(
-            outputDir,
-            `successful_signals_${timestamp}.csv`
-        );
+        this.currentDateString = this.getCurrentDateString();
+
+        // Initialize file paths
+        this.signalsFilePath = "";
+        this.rejectionsFilePath = "";
+        this.successfulSignalsFilePath = "";
+
+        this.updateFilePaths();
 
         void this.initializeLogFiles();
 
         // Start 90-minute optimization cycle
         this.start90MinuteOptimization();
+    }
+
+    /**
+     * Get current date string for file naming (YYYY-MM-DD format)
+     */
+    private getCurrentDateString(): string {
+        return new Date().toISOString().replace(/[:.]/g, "-").split("T")[0];
+    }
+
+    /**
+     * Update file paths with current date
+     */
+    private updateFilePaths(): void {
+        this.signalsFilePath = path.join(
+            this.outputDir,
+            `signal_validation_${this.currentDateString}.csv`
+        );
+        this.rejectionsFilePath = path.join(
+            this.outputDir,
+            `signal_rejections_${this.currentDateString}.csv`
+        );
+        this.successfulSignalsFilePath = path.join(
+            this.outputDir,
+            `successful_signals_${this.currentDateString}.csv`
+        );
+    }
+
+    /**
+     * Check if date has changed and rotate files if necessary
+     */
+    private checkAndRotateFiles(): boolean {
+        const newDateString = this.getCurrentDateString();
+        if (newDateString !== this.currentDateString) {
+            this.logger.info(
+                "SignalValidationLogger: Daily rotation detected",
+                {
+                    oldDate: this.currentDateString,
+                    newDate: newDateString,
+                    operation: "file_rotation",
+                }
+            );
+
+            this.currentDateString = newDateString;
+            this.updateFilePaths();
+
+            // Initialize new files with headers
+            void this.initializeLogFiles();
+
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -525,6 +571,8 @@ export class SignalValidationLogger {
      */
     private startBackgroundFlushing(): void {
         this.flushTimer = setInterval(() => {
+            // Check for daily rotation before flushing
+            this.checkAndRotateFiles();
             this.flushBuffers();
         }, this.flushInterval);
     }
@@ -718,6 +766,9 @@ export class SignalValidationLogger {
         }
     ): void {
         try {
+            // Check for daily rotation before logging
+            this.checkAndRotateFiles();
+
             const record: SignalValidationRecord = {
                 // Signal Identification
                 timestamp: signal.timestamp,
@@ -814,6 +865,8 @@ export class SignalValidationLogger {
         }
     ): void {
         try {
+            // Check for daily rotation before logging
+            this.checkAndRotateFiles();
             const record: SuccessfulSignalRecord = {
                 timestamp: event.timestamp,
                 detectorType,
@@ -878,6 +931,9 @@ export class SignalValidationLogger {
         }
     ): void {
         try {
+            // Check for daily rotation before logging
+            this.checkAndRotateFiles();
+
             const record: SignalRejectionRecord = {
                 timestamp: event.timestamp,
                 detectorType,

@@ -260,7 +260,7 @@
                 "priceEfficiencyThreshold": 0.0047,
                 "maxAbsorptionRatio": 0.9,
                 "minPassiveMultiplier": 2.2,
-                "passiveAbsorptionThreshold": 0.65,
+                "passiveAbsorptionThreshold": 0.62,
                 "expectedMovementScalingFactor": 10,
                 "contextConfidenceBoostMultiplier": 0.3,
                 "liquidityGradientRange": 5,
