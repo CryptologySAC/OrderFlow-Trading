@@ -675,7 +675,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
         const isBalancedInstitutional = balanceScore !== null;
 
         // Determine dominant side and signal direction
-        const dominantSide = this.calculateDominantSide(relevantZones);
+        const dominantSide = this.calculateDominantSide(relevantZones, event);
 
         // Calculate final confidence using statistical analysis
         const confidence =
@@ -1096,77 +1096,71 @@ export class AbsorptionDetectorEnhanced extends Detector {
     }
 
     /**
-     * Calculate dominant side based on which passive side is absorbing
+     * Calculate dominant side based on directional passive volume absorption
+     * CRITICAL: Determines signal direction based on institutional flow
+     * FIXED: Now uses same directional logic as calculateVolumePressure
      */
     private calculateDominantSide(
-        zones: ZoneSnapshot[]
+        zones: ZoneSnapshot[],
+        event: EnrichedTradeEvent
     ): "buy" | "sell" | null {
         if (zones.length === 0) return null;
 
-        let totalPassiveBidAbsorption = 0;
-        let totalPassiveAskAbsorption = 0;
+        // CRITICAL FIX: Use same directional logic as calculateVolumePressure
+        // - Buy trades (buyerIsMaker = false): Only count passiveAskVolume (hitting asks)
+        // - Sell trades (buyerIsMaker = true): Only count passiveBidVolume (hitting bids)
+        const isBuyTrade = !event.buyerIsMaker;
+
+        let relevantPassiveVolume = 0;
 
         for (const zone of zones) {
-            totalPassiveBidAbsorption = FinancialMath.safeAdd(
-                totalPassiveBidAbsorption,
-                zone.passiveBidVolume || 0
-            );
-            totalPassiveAskAbsorption = FinancialMath.safeAdd(
-                totalPassiveAskAbsorption,
-                zone.passiveAskVolume || 0
+            // DIRECTIONAL PASSIVE VOLUME: Only count relevant side matching the trade
+            const zoneRelevantVolume = isBuyTrade
+                ? zone.passiveAskVolume || 0 // Buy trades absorb ask liquidity
+                : zone.passiveBidVolume || 0; // Sell trades absorb bid liquidity
+
+            relevantPassiveVolume = FinancialMath.safeAdd(
+                relevantPassiveVolume,
+                zoneRelevantVolume
             );
         }
 
-        // DEBUG: Log passive side calculations
+        // DEBUG: Log directional passive volume calculations
         this.logger.info(
-            "AbsorptionDetectorEnhanced: calculateDominantSide DEBUG",
+            "AbsorptionDetectorEnhanced: calculateDominantSide DIRECTIONAL DEBUG",
             {
-                totalPassiveBidAbsorption,
-                totalPassiveAskAbsorption,
+                isBuyTrade,
+                buyerIsMaker: event.buyerIsMaker,
+                relevantPassiveVolume,
                 zoneCount: zones.length,
-                zones: zones.map((z) => ({
-                    zoneId: z.zoneId,
-                    passiveBidVolume: z.passiveBidVolume,
-                    passiveAskVolume: z.passiveAskVolume,
-                })),
+                tradeDirection: isBuyTrade ? "BUY" : "SELL",
+                passiveSideUsed: isBuyTrade ? "ask" : "bid",
             }
         );
 
-        // CORRECTED SIGNAL DIRECTION LOGIC: As specified in compliance task
-        // - High bid absorption indicates selling pressure/resistance → SELL signal
-        // - High ask absorption indicates buying pressure/accumulation → BUY signal
-
-        // Signal based on which passive side is absorbing more
-        if (totalPassiveBidAbsorption > totalPassiveAskAbsorption) {
-            // More bid absorption → selling pressure/resistance → SELL signal
+        // DIRECTIONAL SIGNAL LOGIC: Signal follows the trade direction that shows absorption
+        // This aligns with calculateVolumePressure which also uses directional passive volume
+        if (relevantPassiveVolume > 0) {
+            const signalSide = isBuyTrade ? "buy" : "sell";
             this.logger.info(
-                "AbsorptionDetectorEnhanced: Returning SELL signal (bid absorption indicates selling pressure/resistance)",
+                `AbsorptionDetectorEnhanced: Returning ${signalSide.toUpperCase()} signal (directional absorption detected)`,
                 {
-                    totalPassiveBidAbsorption,
-                    totalPassiveAskAbsorption,
+                    relevantPassiveVolume,
+                    tradeDirection: isBuyTrade ? "BUY" : "SELL",
+                    signalSide,
                 }
             );
-            return "sell";
-        } else if (totalPassiveAskAbsorption > totalPassiveBidAbsorption) {
-            // More ask absorption → buying pressure/accumulation → BUY signal
-            this.logger.info(
-                "AbsorptionDetectorEnhanced: Returning BUY signal (ask absorption indicates buying pressure/accumulation)",
-                {
-                    totalPassiveBidAbsorption,
-                    totalPassiveAskAbsorption,
-                }
-            );
-            return "buy";
+            return signalSide;
         }
 
         this.logger.info(
-            "AbsorptionDetectorEnhanced: Returning NULL (equal absorption)",
+            "AbsorptionDetectorEnhanced: Returning NULL (no directional absorption)",
             {
-                totalPassiveBidAbsorption,
-                totalPassiveAskAbsorption,
+                relevantPassiveVolume,
+                tradeDirection: isBuyTrade ? "BUY" : "SELL",
             }
         );
-        return null; // Equal absorption = no clear direction
+        return null; // No directional absorption
     }
 
     /**

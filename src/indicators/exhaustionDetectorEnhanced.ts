@@ -1213,7 +1213,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
     }
 
     /**
-     * Determine exhaustion signal side based on which passive liquidity is exhausted
+     * Determine exhaustion signal side based on directional passive liquidity exhaustion
+     * FIXED: Now uses same directional logic as calculateZonePassiveRatio
      */
     private determineExhaustionSignalSide(
         event: EnrichedTradeEvent
@@ -1228,40 +1229,68 @@ export class ExhaustionDetectorEnhanced extends Detector {
             (zone) => zone.lastUpdate >= windowStartTime
         );
 
-        let totalPassiveBidAvailable = 0;
-        let totalPassiveAskAvailable = 0;
+        // CRITICAL FIX: Use same directional logic as calculateZonePassiveRatio
+        // - Buy trades (buyerIsMaker = false): Check passiveAskVolume exhaustion
+        // - Sell trades (buyerIsMaker = true): Check passiveBidVolume exhaustion
+        const isBuyTrade = !event.buyerIsMaker;
+
+        let relevantPassiveVolume = 0;
+        let oppositePassiveVolume = 0;
 
         recentZones.forEach((zone) => {
-            totalPassiveBidAvailable += zone.passiveBidVolume || 0;
-            totalPassiveAskAvailable += zone.passiveAskVolume || 0;
+            if (isBuyTrade) {
+                // Buy trade: Check ask exhaustion vs available bid liquidity
+                relevantPassiveVolume += zone.passiveAskVolume || 0;
+                oppositePassiveVolume += zone.passiveBidVolume || 0;
+            } else {
+                // Sell trade: Check bid exhaustion vs available ask liquidity
+                relevantPassiveVolume += zone.passiveBidVolume || 0;
+                oppositePassiveVolume += zone.passiveAskVolume || 0;
+            }
         });
 
-        // Debug logging to verify the data
+        // Debug logging to verify directional data
         this.logger.info(
-            "ExhaustionDetectorEnhanced: Signal side calculation DEBUG",
+            "ExhaustionDetectorEnhanced: DIRECTIONAL Signal side calculation DEBUG",
             {
                 detectorId: this.getId(),
                 price: event.price,
-                totalPassiveBidAvailable,
-                totalPassiveAskAvailable,
-                recentZones: recentZones.map((z) => ({
-                    zoneId: z.zoneId,
-                    passiveBidVolume: z.passiveBidVolume,
-                    passiveAskVolume: z.passiveAskVolume,
-                })),
+                isBuyTrade,
+                buyerIsMaker: event.buyerIsMaker,
+                relevantPassiveVolume,
+                oppositePassiveVolume,
+                tradeDirection: isBuyTrade ? "BUY" : "SELL",
+                relevantSide: isBuyTrade ? "ask" : "bid",
+                oppositeSide: isBuyTrade ? "bid" : "ask",
             }
         );
 
-        // Exhaustion logic: More available liquidity on one side means the opposite side is more exhausted
-        if (totalPassiveBidAvailable > totalPassiveAskAvailable) {
-            // More bid liquidity AVAILABLE → ask side MORE exhausted → price resistance weakened → BUY signal
-            return "buy";
-        } else if (totalPassiveAskAvailable > totalPassiveBidAvailable) {
-            // More ask liquidity AVAILABLE → bid side MORE exhausted → price support weakened → SELL signal
-            return "sell";
+        // DIRECTIONAL EXHAUSTION LOGIC:
+        // - If opposite side has more liquidity, relevant side is exhausted → signal in trade direction
+        // - If relevant side has more liquidity, no exhaustion → neutral
+        if (oppositePassiveVolume > relevantPassiveVolume) {
+            const signalSide = isBuyTrade ? "buy" : "sell";
+            this.logger.info(
+                `ExhaustionDetectorEnhanced: Returning ${signalSide.toUpperCase()} signal (directional exhaustion detected)`,
+                {
+                    relevantPassiveVolume,
+                    oppositePassiveVolume,
+                    tradeDirection: isBuyTrade ? "BUY" : "SELL",
+                    signalSide,
+                }
+            );
+            return signalSide;
         }
 
-        return "neutral"; // Equal exhaustion = no clear direction
+        this.logger.info(
+            "ExhaustionDetectorEnhanced: Returning NEUTRAL (no directional exhaustion)",
+            {
+                relevantPassiveVolume,
+                oppositePassiveVolume,
+                tradeDirection: isBuyTrade ? "BUY" : "SELL",
+            }
+        );
+        return "neutral"; // No directional exhaustion
     }
 
     /**
