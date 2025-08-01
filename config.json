@@ -257,7 +257,7 @@
                 "minAggVolume": 200,
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 30000,
-                "priceEfficiencyThreshold": 0.0008,
+                "priceEfficiencyThreshold": 0.0047,
                 "maxAbsorptionRatio": 0.9,
                 "minPassiveMultiplier": 2.2,
                 "passiveAbsorptionThreshold": 0.65,
@@ -338,10 +338,10 @@
             "deltaCVD": {
                 "minTradesPerSec": 1.0,
                 "minVolPerSec": 5.0,
-                "signalThreshold": 2.0,
+                "signalThreshold": 0.7,
                 "eventCooldownMs": 90000,
                 "enhancementMode": "production",
-                "cvdImbalanceThreshold": 0.25,
+                "cvdImbalanceThreshold": 0.18,
                 "timeWindowIndex": 0,
                 "institutionalThreshold": 25.0
             },

@@ -1009,8 +1009,36 @@ export class SignalManager extends EventEmitter {
     public handleProcessedSignal(
         signal: ProcessedSignal
     ): ConfirmedSignal | null {
+        // ✅ Track signal type IMMEDIATELY for dashboard metrics (before any rejections)
+        this.logger.debug("[SignalManager] Tracking signal type", {
+            signalType: signal.type,
+            hasStats: !!this.signalTypeStats[signal.type],
+            currentStats: this.signalTypeStats[signal.type],
+            allStatsKeys: Object.keys(this.signalTypeStats),
+        });
+
+        if (this.signalTypeStats[signal.type]) {
+            this.signalTypeStats[signal.type].candidates++;
+            this.logger.debug("[SignalManager] Updated candidates", {
+                signalType: signal.type,
+                newCandidates: this.signalTypeStats[signal.type].candidates,
+            });
+        } else {
+            this.logger.warn(
+                "[SignalManager] Unknown signal type for tracking",
+                {
+                    signalType: signal.type,
+                    expectedTypes: Object.keys(this.signalTypeStats),
+                }
+            );
+        }
+
         // 🔧 Enhanced circuit breaker check for detector
         if (this.isCircuitBreakerOpen(signal.detectorId)) {
+            // Track rejected signals by type
+            if (this.signalTypeStats[signal.type]) {
+                this.signalTypeStats[signal.type].rejected++;
+            }
             this.recordDroppedSignal(signal, "circuit_breaker");
             return null;
         }
@@ -1020,6 +1048,10 @@ export class SignalManager extends EventEmitter {
         const shouldDrop = this.shouldDropSignal(signal, priority);
 
         if (shouldDrop) {
+            // Track rejected signals by type
+            if (this.signalTypeStats[signal.type]) {
+                this.signalTypeStats[signal.type].rejected++;
+            }
             this.recordDroppedSignal(signal, "backpressure");
             return null;
         }
@@ -1076,8 +1108,16 @@ export class SignalManager extends EventEmitter {
             this.updateProcessingMetrics(processingTime, result !== null);
 
             if (result !== null) {
+                // Track confirmed signals by type
+                if (this.signalTypeStats[signal.type]) {
+                    this.signalTypeStats[signal.type].confirmed++;
+                }
                 this.resetCircuitBreaker(signal.detectorId);
             } else {
+                // Track rejected signals by type
+                if (this.signalTypeStats[signal.type]) {
+                    this.signalTypeStats[signal.type].rejected++;
+                }
                 this.recordCircuitBreakerFailure(signal.detectorId);
             }
         } catch (error) {
@@ -1133,10 +1173,24 @@ export class SignalManager extends EventEmitter {
 
                     if (success) {
                         successCount++;
+                        // Track confirmed signals by type
+                        if (
+                            this.signalTypeStats[prioritizedSignal.signal.type]
+                        ) {
+                            this.signalTypeStats[prioritizedSignal.signal.type]
+                                .confirmed++;
+                        }
                         this.resetCircuitBreaker(
                             prioritizedSignal.signal.detectorId
                         );
                     } else {
+                        // Track rejected signals by type
+                        if (
+                            this.signalTypeStats[prioritizedSignal.signal.type]
+                        ) {
+                            this.signalTypeStats[prioritizedSignal.signal.type]
+                                .rejected++;
+                        }
                         this.recordCircuitBreakerFailure(
                             prioritizedSignal.signal.detectorId
                         );
@@ -1225,48 +1279,15 @@ export class SignalManager extends EventEmitter {
                 1
             );
 
-            // Track signal type for breakdown display
-            this.logger.debug("[SignalManager] Tracking signal type", {
-                signalType: signal.type,
-                hasStats: !!this.signalTypeStats[signal.type],
-                currentStats: this.signalTypeStats[signal.type],
-                allStatsKeys: Object.keys(this.signalTypeStats),
-            });
-
-            if (this.signalTypeStats[signal.type]) {
-                this.signalTypeStats[signal.type].candidates++;
-                this.logger.debug("[SignalManager] Updated candidates", {
-                    signalType: signal.type,
-                    newCandidates: this.signalTypeStats[signal.type].candidates,
-                });
-            } else {
-                this.logger.warn(
-                    "[SignalManager] Unknown signal type for tracking",
-                    {
-                        signalType: signal.type,
-                        expectedTypes: Object.keys(this.signalTypeStats),
-                    }
-                );
-            }
-
             // Process signal through simplified pipeline
             confirmedSignal = this.processSignal(signal);
 
             // Store signal for correlation analysis only if it succeeds
             if (confirmedSignal) {
                 this.storeSignal(signal);
-                // Track confirmed signals by type
-                if (this.signalTypeStats[signal.type]) {
-                    this.signalTypeStats[signal.type].confirmed++;
-                }
             }
 
             if (!confirmedSignal) {
-                // Track rejected signals by type
-                if (this.signalTypeStats[signal.type]) {
-                    this.signalTypeStats[signal.type].rejected++;
-                }
-
                 this.emit("signalRejected", {
                     signal,
                     reason: this.lastRejectReason
