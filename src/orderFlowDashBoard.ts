@@ -1787,6 +1787,11 @@ export class OrderFlowDashboard {
                     signalTypeBreakdown
                 );
 
+                // Send signal totals for dashboard overview section
+                const signalTotals =
+                    this.dependencies.signalManager.getSignalTotals();
+                this.threadManager.updateSignalTotals(signalTotals);
+
                 // Send zone analytics for dashboard analytics (derived from current Enhanced detector architecture)
                 const zoneAnalytics =
                     this.generateZoneAnalyticsFromEnhancedDetectors();

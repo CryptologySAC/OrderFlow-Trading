@@ -1128,10 +1128,6 @@ export class SignalManager extends EventEmitter {
             this.updateProcessingMetrics(processingTime, result !== null);
 
             if (result !== null) {
-                // Track confirmed signals by type
-                if (this.signalTypeStats[signal.type]) {
-                    this.signalTypeStats[signal.type].confirmed++;
-                }
                 this.resetCircuitBreaker(signal.detectorId);
             } else {
                 // Track rejected signals by type

@@ -347,6 +347,7 @@ class EnhancedStatsBroadcaster {
     private signalTracker?: SignalTracker;
     private mainThreadMetrics: EnhancedMetrics | null = null;
     private signalTypeBreakdown: SignalBreakdownMessage["data"] | null = null;
+    private signalTotals: SignalTotalsMessage["data"] | null = null;
     private zoneAnalytics: ZoneAnalyticsMessage["data"] | null = null;
 
     constructor(
@@ -369,6 +370,10 @@ class EnhancedStatsBroadcaster {
         breakdown: SignalBreakdownMessage["data"]
     ): void {
         this.signalTypeBreakdown = breakdown;
+    }
+
+    public setSignalTotals(totals: SignalTotalsMessage["data"]): void {
+        this.signalTotals = totals;
     }
 
     public setZoneAnalytics(analytics: ZoneAnalyticsMessage["data"]): void {
@@ -422,6 +427,11 @@ class EnhancedStatsBroadcaster {
                         this.signalTracker?.getPerformanceMetrics(86400000), // 24h window
                     signalTrackerStatus: this.signalTracker?.getStatus(),
                     signalTypeBreakdown: this.signalTypeBreakdown || {},
+                    signalTotals: this.signalTotals || {
+                        candidates: 0,
+                        confirmed: 0,
+                        rejected: 0,
+                    },
                     zoneAnalytics: this.zoneAnalytics || {
                         activeZones: 0,
                         completedZones: 0,
@@ -621,6 +631,15 @@ interface SignalBreakdownMessage {
     };
 }
 
+interface SignalTotalsMessage {
+    type: "signal_totals";
+    data: {
+        candidates: number;
+        confirmed: number;
+        rejected: number;
+    };
+}
+
 interface ZoneAnalyticsMessage {
     type: "zone_analytics";
     data: {
@@ -741,6 +760,7 @@ parentPort?.on(
             | SignalTrackerMessage
             | MainMetricsMessage
             | SignalBreakdownMessage
+            | SignalTotalsMessage
             | ZoneAnalyticsMessage
             | { type: "shutdown" }
     ) => {
@@ -1020,6 +1040,19 @@ parentPort?.on(
                     // Signal breakdown updated successfully - no logging needed to avoid spam
                 } catch (error) {
                     logger.error("Error setting signal type breakdown", {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
+                }
+            } else if (msg.type === "signal_totals") {
+                try {
+                    // Set signal totals for stats broadcasting
+                    statsBroadcaster.setSignalTotals(msg.data);
+                    // Signal totals updated successfully - no logging needed to avoid spam
+                } catch (error) {
+                    logger.error("Error setting signal totals", {
                         error:
                             error instanceof Error
                                 ? error.message

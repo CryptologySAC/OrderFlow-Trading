@@ -272,7 +272,7 @@ function formatUptime(uptimeMs) {
     }
 }
 
-function updateSignalMetrics(metrics) {
+function updateSignalMetrics(metrics, webSocketSignalTotals) {
     const counters = metrics.counters || {};
     const histograms = metrics.histograms || {};
 
@@ -289,12 +289,13 @@ function updateSignalMetrics(metrics) {
         return (count / 60).toFixed(1); // per minute estimate
     };
 
-    // Signal Processing Overview - Use accurate signalTotals to avoid double-counting
-    const signalTotals = metrics.signalTotals || {
-        candidates: 0,
-        confirmed: 0,
-        rejected: 0,
-    };
+    // Signal Processing Overview - Use WebSocket signalTotals for real-time updates
+    const signalTotals = webSocketSignalTotals ||
+        metrics.signalTotals || {
+            candidates: 0,
+            confirmed: 0,
+            rejected: 0,
+        };
     const signalCandidates = signalTotals.candidates;
     const signalsProcessed = getCounterValue(
         "signal_manager_signals_processed_total"
@@ -459,7 +460,7 @@ function updateVisuals(data) {
     updateTables(metrics);
 
     // Update signal metrics sections
-    updateSignalMetrics(metrics);
+    updateSignalMetrics(metrics, data.signalTotals);
 
     // Update signal type breakdown
     updateSignalTypeBreakdown(data.signalTypeBreakdown || {});

@@ -731,6 +731,17 @@ export class ThreadManager {
         });
     }
 
+    public updateSignalTotals(totals: {
+        candidates: number;
+        confirmed: number;
+        rejected: number;
+    }): void {
+        this.commWorker.postMessage({
+            type: "signal_totals",
+            data: totals,
+        });
+    }
+
     public updateZoneAnalytics(analytics: {
         activeZones: number;
         completedZones: number;
