@@ -432,10 +432,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             event
         );
 
-        // Calculate market context and price efficiency
-        const relevantZones = event.zoneData.zones || [];
-        const marketContext = this.calculateMarketContext(event, relevantZones);
-
         // Calculate confidence and signal side
         const realConfidence = divergenceResult.divergenceStrength;
         const signalSide = this.determineCVDSignalSide(event);
@@ -461,10 +457,10 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             calculatedEventCooldownMs:
                 event.timestamp - (this.lastSignal.get("last") || 0), // vs config eventCooldownMs (1000)
             calculatedEnhancementMode: this.enhancementConfig.enhancementMode, // vs config enhancementMode ("production")
-            calculatedCvdImbalanceThreshold: Math.abs(cvdData.cvdDelta), // vs config cvdImbalanceThreshold (0.18)
+            calculatedCvdImbalanceThreshold:
+                divergenceResult.divergenceStrength, // vs config cvdImbalanceThreshold (0.18) - actual volumeRatio checked
             calculatedTimeWindowIndex: this.enhancementConfig.timeWindowIndex, // vs config timeWindowIndex (0)
-            calculatedInstitutionalThreshold:
-                marketContext.institutionalVolumeRatio, // vs config institutionalThreshold (25.0)
+            calculatedInstitutionalThreshold: event.quantity, // vs config institutionalThreshold (25.0) - actual trade quantity checked
         };
 
         // If any threshold fails, log comprehensive rejection with ALL calculated data
@@ -1420,10 +1416,10 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     ): void {
         try {
             // Calculate zone volume data for logging
-            const cvdData = this.extractCVDFromZones(
-                event.zoneData,
-                event.timestamp
-            );
+            // const cvdData = this.extractCVDFromZones(
+            //     event.zoneData,
+            //     event.timestamp
+            // ); // No longer used after field swap
 
             // Calculate market context
             const marketContext = this.calculateMarketContext(
@@ -1445,11 +1441,10 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 calculatedEventCooldownMs: 0,
                 calculatedEnhancementMode:
                     this.enhancementConfig.enhancementMode,
-                calculatedCvdImbalanceThreshold: Math.abs(cvdData.cvdDelta),
+                calculatedCvdImbalanceThreshold: 0, // No divergence result available for rejection
                 calculatedTimeWindowIndex:
                     this.enhancementConfig.timeWindowIndex,
-                calculatedInstitutionalThreshold:
-                    marketContext.institutionalVolumeRatio,
+                calculatedInstitutionalThreshold: event.quantity,
             };
 
             // Market context at time of successful signal
@@ -1506,10 +1501,10 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             };
 
             // Get calculated values for signal logging
-            const cvdData = this.extractCVDFromZones(
-                event.zoneData,
-                event.timestamp
-            );
+            // const cvdData = this.extractCVDFromZones(
+            //     event.zoneData,
+            //     event.timestamp
+            // ); // No longer used after field swap
             const detectionRequirements =
                 this.calculateDetectionRequirements(event);
             // Use the signal confidence that was already calculated and passed validation
@@ -1521,11 +1516,10 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 calculatedEventCooldownMs: 0,
                 calculatedEnhancementMode:
                     this.enhancementConfig.enhancementMode,
-                calculatedCvdImbalanceThreshold: Math.abs(cvdData.cvdDelta),
+                calculatedCvdImbalanceThreshold: 0, // No divergence result available for rejection
                 calculatedTimeWindowIndex:
                     this.enhancementConfig.timeWindowIndex,
-                calculatedInstitutionalThreshold:
-                    marketContext.institutionalVolumeRatio,
+                calculatedInstitutionalThreshold: event.quantity,
             };
 
             this.validationLogger.logSignal(
