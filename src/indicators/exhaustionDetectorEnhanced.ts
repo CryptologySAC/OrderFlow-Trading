@@ -31,6 +31,7 @@ import type {
     StandardZoneData,
     ZoneSnapshot,
 } from "../types/marketEvents.js";
+import type { ExhaustionCalculatedValues } from "../types/calculatedValuesTypes.js";
 import type {
     SignalCandidate,
     EnhancedExhaustionSignalData,
@@ -576,13 +577,56 @@ export class ExhaustionDetectorEnhanced extends Detector {
         const signalSide = this.determineExhaustionSignalSide(event);
 
         // Calculate additional metrics for complete threshold data
-        const priceEfficiency = this.calculateZoneSpread(event.zoneData);
+        // const priceEfficiency = this.calculateZoneSpread(event.zoneData); // Not used in current interface
         const volumeImbalance = FinancialMath.calculateAbs(
             FinancialMath.safeSubtract(
                 accumulatedAggressiveRatio,
                 this.ratioBalanceCenterPoint
             )
         );
+
+        // ✅ CAPTURE ALL CALCULATED VALUES: Every computed value that gets checked against config
+        const allCalculatedValues: ExhaustionCalculatedValues = {
+            // Volume calculations (what gets checked against minAggVolume, depletionVolumeThreshold, etc.)
+            calculatedMinAggVolume: totalAggressiveVolume,
+
+            // Ratio calculations (what gets checked against thresholds)
+            calculatedExhaustionThreshold: accumulatedAggressiveRatio,
+
+            calculatedTimeWindowIndex: this.enhancementConfig.timeWindowIndex,
+            calculatedEventCooldownMs:
+                Date.now() - (this.lastSignal.get("exhaustion") || 0),
+            calculatedUseStandardizedZones:
+                this.enhancementConfig.useStandardizedZones,
+            calculatedEnhancementMode: this.enhancementConfig.enhancementMode,
+            calculatedMinEnhancedConfidenceThreshold: confidence,
+            calculatedEnableDepletionAnalysis:
+                this.enhancementConfig.enableDepletionAnalysis,
+            calculatedDepletionVolumeThreshold: totalAggressiveVolume,
+            calculatedDepletionRatioThreshold:
+                totalPassiveVolume > 0
+                    ? (totalAggressiveVolume - totalPassiveVolume) /
+                      totalPassiveVolume
+                    : 0,
+            calculatedDepletionConfidenceBoost:
+                this.enhancementConfig.depletionConfidenceBoost,
+            calculatedPassiveVolumeExhaustionRatio: accumulatedPassiveRatio,
+            calculatedVarianceReductionFactor:
+                this.enhancementConfig.varianceReductionFactor,
+            calculatedAlignmentNormalizationFactor:
+                this.enhancementConfig.alignmentNormalizationFactor,
+            calculatedAggressiveVolumeExhaustionThreshold:
+                accumulatedAggressiveRatio,
+            calculatedAggressiveVolumeReductionFactor:
+                this.enhancementConfig.aggressiveVolumeReductionFactor,
+            calculatedPassiveRatioBalanceThreshold:
+                this.enhancementConfig.passiveRatioBalanceThreshold,
+            calculatedPremiumConfidenceThreshold: confidence,
+            calculatedVariancePenaltyFactor:
+                this.enhancementConfig.variancePenaltyFactor,
+            calculatedRatioBalanceCenterPoint:
+                this.enhancementConfig.ratioBalanceCenterPoint,
+        };
 
         // SINGLE EVALUATION SECTION: One decision point with complete threshold data
         const hasRecentZones = recentZones.length > 0;
@@ -607,12 +651,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     threshold: 1,
                     actual: recentZones.length,
                 },
-                {
-                    aggressiveVolume: totalAggressiveVolume,
-                    passiveVolume: totalPassiveVolume,
-                    priceEfficiency,
-                    confidence,
-                }
+                allCalculatedValues
             );
             return null;
         }
@@ -626,12 +665,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     threshold: 1,
                     actual: relevantZones.length,
                 },
-                {
-                    aggressiveVolume: totalAggressiveVolume,
-                    passiveVolume: totalPassiveVolume,
-                    priceEfficiency,
-                    confidence,
-                }
+                allCalculatedValues
             );
             return null;
         }
@@ -645,12 +679,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     threshold: 1,
                     actual: totalAccumulatedVolume,
                 },
-                {
-                    aggressiveVolume: totalAggressiveVolume,
-                    passiveVolume: totalPassiveVolume,
-                    priceEfficiency,
-                    confidence,
-                }
+                allCalculatedValues
             );
             return null;
         }
@@ -664,12 +693,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     threshold: this.exhaustionVolumeThreshold,
                     actual: totalAggressiveVolume,
                 },
-                {
-                    aggressiveVolume: totalAggressiveVolume,
-                    passiveVolume: totalPassiveVolume,
-                    priceEfficiency,
-                    confidence,
-                }
+                allCalculatedValues
             );
             return null;
         }
@@ -699,12 +723,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     threshold: this.exhaustionRatioThreshold,
                     actual: accumulatedAggressiveRatio,
                 },
-                {
-                    aggressiveVolume: totalAggressiveVolume,
-                    passiveVolume: totalPassiveVolume,
-                    priceEfficiency,
-                    confidence,
-                }
+                allCalculatedValues
             );
             return null;
         }
@@ -718,12 +737,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     threshold: this.exhaustionScoreThreshold,
                     actual: confidence,
                 },
-                {
-                    aggressiveVolume: totalAggressiveVolume,
-                    passiveVolume: totalPassiveVolume,
-                    priceEfficiency,
-                    confidence,
-                }
+                allCalculatedValues
             );
             return null;
         }
@@ -737,12 +751,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     threshold: 1,
                     actual: 0,
                 },
-                {
-                    aggressiveVolume: totalAggressiveVolume,
-                    passiveVolume: totalPassiveVolume,
-                    priceEfficiency,
-                    confidence,
-                }
+                allCalculatedValues
             );
             return null;
         }
@@ -1516,60 +1525,99 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 relevantZones
             );
 
-            this.validationLogger.logSignal(signal, event, marketContext);
+            // Calculate actual values for signal logging (same as successful/rejection logging)
+            const totalAggVol = relevantZones.reduce(
+                (sum, zone) => sum + zone.aggressiveVolume,
+                0
+            );
+            const totalPassiveVolume = relevantZones.reduce(
+                (sum, zone) => sum + zone.passiveVolume,
+                0
+            );
+            const isBuyTrade = !event.buyerIsMaker;
+            const totalDirectionalPassiveVolume = relevantZones.reduce(
+                (sum, zone) => {
+                    return (
+                        sum +
+                        (isBuyTrade
+                            ? zone.passiveAskVolume
+                            : zone.passiveBidVolume)
+                    );
+                },
+                0
+            );
+            const accumulatedAggressiveRatio =
+                totalAggVol > 0
+                    ? totalAggVol / (totalAggVol + totalPassiveVolume)
+                    : 0;
+            const accumulatedPassiveRatio =
+                totalAggVol > 0
+                    ? totalDirectionalPassiveVolume / totalAggVol
+                    : 0;
+            const depletionRatio =
+                totalPassiveVolume > 0
+                    ? (totalAggVol - totalPassiveVolume) / totalPassiveVolume
+                    : 0;
+            const actualVarianceReduction =
+                signal.confidence * accumulatedAggressiveRatio;
+            const actualAlignmentNormalization =
+                (accumulatedAggressiveRatio * totalDirectionalPassiveVolume) /
+                Math.max(totalAggVol, 1);
+            const actualAggressiveVolumeReduction =
+                totalAggVol * accumulatedAggressiveRatio;
+            const actualVariancePenalty = Math.abs(
+                totalAggVol / Math.max(totalAggVol + totalPassiveVolume, 1) -
+                    0.5
+            );
+            const actualRatioBalanceCenter = Math.abs(
+                totalDirectionalPassiveVolume /
+                    Math.max(totalAggVol + totalDirectionalPassiveVolume, 1) -
+                    0.5
+            );
+
+            const calculatedValues: ExhaustionCalculatedValues = {
+                calculatedMinAggVolume: totalAggVol,
+                calculatedExhaustionThreshold: accumulatedAggressiveRatio,
+                calculatedTimeWindowIndex:
+                    this.enhancementConfig.timeWindowIndex,
+                calculatedEventCooldownMs:
+                    Date.now() - (this.lastSignal.get("exhaustion") || 0),
+                calculatedUseStandardizedZones: relevantZones.length > 0,
+                calculatedEnhancementMode:
+                    this.enhancementConfig.enhancementMode,
+                calculatedMinEnhancedConfidenceThreshold: signal.confidence,
+                calculatedEnableDepletionAnalysis:
+                    totalAggVol >=
+                    this.enhancementConfig.depletionVolumeThreshold,
+                calculatedDepletionVolumeThreshold:
+                    totalDirectionalPassiveVolume,
+                calculatedDepletionRatioThreshold: depletionRatio,
+                calculatedDepletionConfidenceBoost:
+                    signal.confidence *
+                    this.enhancementConfig.depletionConfidenceBoost,
+                calculatedPassiveVolumeExhaustionRatio: accumulatedPassiveRatio,
+                calculatedVarianceReductionFactor: actualVarianceReduction,
+                calculatedAlignmentNormalizationFactor:
+                    actualAlignmentNormalization,
+                calculatedAggressiveVolumeExhaustionThreshold:
+                    accumulatedAggressiveRatio,
+                calculatedAggressiveVolumeReductionFactor:
+                    actualAggressiveVolumeReduction,
+                calculatedPassiveRatioBalanceThreshold: accumulatedPassiveRatio,
+                calculatedPremiumConfidenceThreshold: signal.confidence,
+                calculatedVariancePenaltyFactor: actualVariancePenalty,
+                calculatedRatioBalanceCenterPoint: actualRatioBalanceCenter,
+            };
+
+            this.validationLogger.logSignal(
+                signal,
+                event,
+                calculatedValues,
+                marketContext
+            );
         } catch (error) {
             this.logger.error(
                 "ExhaustionDetectorEnhanced: Failed to log signal for validation",
-                {
-                    signalId: signal.id,
-                    error:
-                        error instanceof Error ? error.message : String(error),
-                }
-            );
-        }
-    }
-
-    /**
-     * Log enhanced signal for validation tracking
-     */
-    private logEnhancedSignalForValidation(
-        signal: SignalCandidate,
-        event: EnrichedTradeEvent,
-        relevantZones: ZoneSnapshot[]
-    ): void {
-        try {
-            // Calculate market context for validation logging
-            const marketContext = this.calculateMarketContext(
-                event,
-                relevantZones
-            );
-
-            // Add exhaustion-specific metrics
-            const extendedContext = {
-                ...marketContext,
-                exhaustionRatio: undefined as number | undefined,
-                depletionRatio: undefined as number | undefined,
-            };
-
-            if (
-                signal.data &&
-                typeof signal.data === "object" &&
-                "exhaustionScore" in signal.data
-            ) {
-                extendedContext.exhaustionRatio = signal.data.exhaustionScore;
-            }
-            if (
-                signal.data &&
-                typeof signal.data === "object" &&
-                "depletionRatio" in signal.data
-            ) {
-                extendedContext.depletionRatio = signal.data.depletionRatio;
-            }
-
-            this.validationLogger.logSignal(signal, event, extendedContext);
-        } catch (error) {
-            this.logger.error(
-                "ExhaustionDetectorEnhanced: Failed to log enhanced signal for validation",
                 {
                     signalId: signal.id,
                     error:
@@ -1588,7 +1636,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
     ): void {
         try {
             // Collect ACTUAL VALUES that each parameter was checked against when signal passed
-            const totalAggVol =
+            const totalAggVolSuccessful =
                 event.zoneData?.zones.reduce(
                     (sum, zone) => sum + zone.aggressiveVolume,
                     0
@@ -1599,19 +1647,20 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     0
                 ) || 0;
             const actualExhaustionRatio =
-                totalAggVol > 0
-                    ? totalAggVol / (totalAggVol + totalPassVol)
+                totalAggVolSuccessful > 0
+                    ? totalAggVolSuccessful /
+                      (totalAggVolSuccessful + totalPassVol)
                     : 0;
             const actualDepletionRatio =
                 totalPassVol > 0
-                    ? (totalAggVol - totalPassVol) / totalPassVol
+                    ? (totalAggVolSuccessful - totalPassVol) / totalPassVol
                     : 0;
             const actualPassiveExhaustionRatio =
-                totalPassVol > 0 ? totalAggVol / totalPassVol : 0;
+                totalPassVol > 0 ? totalAggVolSuccessful / totalPassVol : 0;
 
             const parameterValues = {
                 // EXHAUSTION ACTUAL VALUES - what was actually measured vs thresholds
-                minAggVolume: totalAggVol, // What aggressive volume actually was
+                minAggVolume: totalAggVolSuccessful, // What aggressive volume actually was
                 exhaustionThreshold: actualExhaustionRatio, // What exhaustion ratio actually was
                 timeWindowIndex: this.enhancementConfig.timeWindowIndex, // Static config
                 eventCooldownMs: this.enhancementConfig.eventCooldownMs, // Static config
@@ -1621,7 +1670,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 minEnhancedConfidenceThreshold: signal.confidence, // What confidence actually was
                 enableDepletionAnalysis:
                     this.enhancementConfig.enableDepletionAnalysis, // Static config
-                depletionVolumeThreshold: totalAggVol, // What depletion volume actually was
+                depletionVolumeThreshold: totalPassVol, // What depletion volume actually was
                 depletionRatioThreshold: actualDepletionRatio, // What depletion ratio actually was
                 depletionConfidenceBoost:
                     this.enhancementConfig.depletionConfidenceBoost, // Static config
@@ -1634,8 +1683,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 aggressiveVolumeReductionFactor:
                     this.enhancementConfig.aggressiveVolumeReductionFactor, // Static config
                 passiveRatioBalanceThreshold:
-                    Math.abs(totalAggVol - totalPassVol) /
-                    Math.max(totalAggVol + totalPassVol, 1), // What balance actually was
+                    Math.abs(totalAggVolSuccessful - totalPassVol) /
+                    Math.max(totalAggVolSuccessful + totalPassVol, 1), // What balance actually was
                 premiumConfidenceThreshold: signal.confidence, // What confidence actually was
                 variancePenaltyFactor:
                     this.enhancementConfig.variancePenaltyFactor, // Static config
@@ -1666,9 +1715,12 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 // RUNTIME VALUES (exactly what was calculated)
                 priceEfficiency: undefined, // N/A for exhaustion
                 confidence: signal.confidence,
-                aggressiveVolume: totalAggVol,
+                aggressiveVolume: totalAggVolSuccessful,
                 passiveVolume: totalPassVol,
-                volumeRatio: totalAggVol > 0 ? totalPassVol / totalAggVol : 0,
+                volumeRatio:
+                    totalAggVolSuccessful > 0
+                        ? totalPassVol / totalAggVolSuccessful
+                        : 0,
                 institutionalVolumeRatio: undefined, // N/A for exhaustion
             };
 
@@ -1684,10 +1736,104 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 marketVolatility: this.calculateMarketVolatility(event),
             };
 
+            // Calculate actual values used in exhaustion analysis (no config values)
+            const totalAggVolForValidation =
+                event.zoneData?.zones.reduce(
+                    (sum, zone) => sum + zone.aggressiveVolume,
+                    0
+                ) || 0;
+            const totalPassiveVolume =
+                event.zoneData?.zones.reduce(
+                    (sum, zone) => sum + zone.passiveVolume,
+                    0
+                ) || 0;
+            const isBuyTrade = !event.buyerIsMaker;
+            const totalDirectionalPassiveVolume =
+                event.zoneData?.zones.reduce((sum, zone) => {
+                    return (
+                        sum +
+                        (isBuyTrade
+                            ? zone.passiveAskVolume
+                            : zone.passiveBidVolume)
+                    );
+                }, 0) || 0;
+            const accumulatedAggressiveRatio =
+                totalAggVolForValidation > 0
+                    ? totalAggVolForValidation /
+                      (totalAggVolForValidation + totalPassiveVolume)
+                    : 0;
+            const accumulatedPassiveRatio =
+                totalAggVolForValidation > 0
+                    ? totalDirectionalPassiveVolume / totalAggVolForValidation
+                    : 0;
+            const depletionRatio =
+                totalPassiveVolume > 0
+                    ? (totalAggVolForValidation - totalPassiveVolume) /
+                      totalPassiveVolume
+                    : 0;
+            const exhaustionThreshold =
+                totalAggVolForValidation > 0 ? accumulatedAggressiveRatio : 0;
+            const actualVarianceReduction =
+                signal.confidence * accumulatedAggressiveRatio;
+            const actualAlignmentNormalization =
+                (accumulatedAggressiveRatio * totalDirectionalPassiveVolume) /
+                Math.max(totalAggVolForValidation, 1);
+            const actualAggressiveVolumeReduction =
+                totalAggVolForValidation * accumulatedAggressiveRatio;
+            const actualVariancePenalty = Math.abs(
+                totalAggVolForValidation /
+                    Math.max(totalAggVolForValidation + totalPassiveVolume, 1) -
+                    0.5
+            );
+            const actualRatioBalanceCenter = Math.abs(
+                totalDirectionalPassiveVolume /
+                    Math.max(
+                        totalAggVolForValidation +
+                            totalDirectionalPassiveVolume,
+                        1
+                    ) -
+                    0.5
+            );
+
+            const calculatedValues: ExhaustionCalculatedValues = {
+                calculatedMinAggVolume: totalAggVolForValidation,
+                calculatedExhaustionThreshold: accumulatedAggressiveRatio,
+                calculatedTimeWindowIndex:
+                    this.enhancementConfig.timeWindowIndex,
+                calculatedEventCooldownMs:
+                    Date.now() - (this.lastSignal.get("exhaustion") || 0),
+                calculatedUseStandardizedZones:
+                    event.zoneData?.zones.length > 0,
+                calculatedEnhancementMode:
+                    this.enhancementConfig.enhancementMode,
+                calculatedMinEnhancedConfidenceThreshold: signal.confidence,
+                calculatedEnableDepletionAnalysis:
+                    totalAggVolForValidation >=
+                    this.enhancementConfig.depletionVolumeThreshold,
+                calculatedDepletionVolumeThreshold:
+                    totalDirectionalPassiveVolume,
+                calculatedDepletionRatioThreshold: depletionRatio,
+                calculatedDepletionConfidenceBoost:
+                    signal.confidence *
+                    this.enhancementConfig.depletionConfidenceBoost,
+                calculatedPassiveVolumeExhaustionRatio: accumulatedPassiveRatio,
+                calculatedVarianceReductionFactor: actualVarianceReduction,
+                calculatedAlignmentNormalizationFactor:
+                    actualAlignmentNormalization,
+                calculatedAggressiveVolumeExhaustionThreshold:
+                    exhaustionThreshold,
+                calculatedAggressiveVolumeReductionFactor:
+                    actualAggressiveVolumeReduction,
+                calculatedPassiveRatioBalanceThreshold: accumulatedPassiveRatio,
+                calculatedPremiumConfidenceThreshold: signal.confidence,
+                calculatedVariancePenaltyFactor: actualVariancePenalty,
+                calculatedRatioBalanceCenterPoint: actualRatioBalanceCenter,
+            };
+
             this.validationLogger.logSuccessfulSignal(
                 "exhaustion",
                 event,
-                parameterValues,
+                calculatedValues,
                 marketContext
             );
         } catch (error) {
@@ -1727,12 +1873,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
             threshold: number;
             actual: number;
         },
-        marketContext: {
-            aggressiveVolume: number;
-            passiveVolume: number;
-            priceEfficiency: number | null;
-            confidence: number;
-        }
+        calculatedValues: ExhaustionCalculatedValues
     ): void {
         try {
             this.validationLogger.logRejection(
@@ -1740,7 +1881,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 rejectionReason,
                 event,
                 thresholdDetails,
-                marketContext
+                calculatedValues
             );
         } catch (error) {
             this.logger.error(

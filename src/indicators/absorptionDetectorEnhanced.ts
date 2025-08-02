@@ -29,6 +29,7 @@ import type {
     StandardZoneData,
     ZoneSnapshot,
 } from "../types/marketEvents.js";
+import type { AbsorptionCalculatedValues } from "../types/calculatedValuesTypes.js";
 import type {
     SignalCandidate,
     EnhancedAbsorptionSignalData,
@@ -269,11 +270,36 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     actual: 0,
                 },
                 {
-                    aggressiveVolume: 0,
-                    passiveVolume: 0,
-                    priceEfficiency: null,
-                    confidence: 0,
-                }
+                    calculatedMinAggVolume: 0,
+                    calculatedTimeWindowIndex:
+                        this.enhancementConfig.timeWindowIndex,
+                    calculatedEventCooldownMs:
+                        Date.now() - (this.lastSignal.get("last") || 0),
+                    calculatedPriceEfficiencyThreshold: 0,
+                    calculatedMaxAbsorptionRatio: 0,
+                    calculatedMinPassiveMultiplier: 0,
+                    calculatedPassiveAbsorptionThreshold: 0,
+                    calculatedExpectedMovementScalingFactor: 0,
+                    calculatedContextConfidenceBoostMultiplier: 0,
+                    calculatedLiquidityGradientRange: 0,
+                    calculatedInstitutionalVolumeThreshold: 0,
+                    calculatedInstitutionalVolumeRatioThreshold: 0,
+                    calculatedEnableInstitutionalVolumeFilter:
+                        this.enhancementConfig.enableInstitutionalVolumeFilter,
+                    calculatedInstitutionalVolumeBoost: 0,
+                    calculatedMinAbsorptionScore: 0,
+                    calculatedFinalConfidenceRequired: 0,
+                    calculatedConfidenceBoostReduction: 0,
+                    calculatedMaxZoneCountForScoring: 0,
+                    calculatedMinEnhancedConfidenceThreshold: 0,
+                    calculatedUseStandardizedZones:
+                        this.enhancementConfig.useStandardizedZones,
+                    calculatedEnhancementMode:
+                        this.enhancementConfig.enhancementMode,
+                    calculatedBalanceThreshold: 0,
+                    calculatedConfluenceMinZones: 0,
+                    calculatedConfluenceMaxDistance: 0,
+                } as AbsorptionCalculatedValues
             );
             return;
         }
@@ -363,10 +389,15 @@ export class AbsorptionDetectorEnhanced extends Detector {
         }
 
         // Cross-timeframe absorption analysis (CLAUDE.md compliant)
-        const crossTimeframeResult = this.analyzeCrossTimeframeAbsorption(
-            event.zoneData,
-            event
-        );
+        const crossTimeframeResult: {
+            hasAlignment: boolean;
+            alignmentScore: number;
+            timeframeBreakdown: {
+                tick5: number;
+                tick10: number;
+                tick20: number;
+            };
+        } = this.analyzeCrossTimeframeAbsorption(event.zoneData, event);
         if (crossTimeframeResult.hasAlignment) {
             this.enhancementStats.crossTimeframeAnalysisCount++;
             totalConfidenceBoost += this.crossTimeframeConfidenceBoost;
@@ -532,11 +563,36 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     actual: 0,
                 },
                 {
-                    aggressiveVolume: 0,
-                    passiveVolume: 0,
-                    priceEfficiency: null,
-                    confidence: 0,
-                }
+                    calculatedMinAggVolume: 0,
+                    calculatedTimeWindowIndex:
+                        this.enhancementConfig.timeWindowIndex,
+                    calculatedEventCooldownMs:
+                        Date.now() - (this.lastSignal.get("last") || 0),
+                    calculatedPriceEfficiencyThreshold: 0,
+                    calculatedMaxAbsorptionRatio: 0,
+                    calculatedMinPassiveMultiplier: 0,
+                    calculatedPassiveAbsorptionThreshold: 0,
+                    calculatedExpectedMovementScalingFactor: 0,
+                    calculatedContextConfidenceBoostMultiplier: 0,
+                    calculatedLiquidityGradientRange: 0,
+                    calculatedInstitutionalVolumeThreshold: 0,
+                    calculatedInstitutionalVolumeRatioThreshold: 0,
+                    calculatedEnableInstitutionalVolumeFilter:
+                        this.enhancementConfig.enableInstitutionalVolumeFilter,
+                    calculatedInstitutionalVolumeBoost: 0,
+                    calculatedMinAbsorptionScore: 0,
+                    calculatedFinalConfidenceRequired: 0,
+                    calculatedConfidenceBoostReduction: 0,
+                    calculatedMaxZoneCountForScoring: 0,
+                    calculatedMinEnhancedConfidenceThreshold: 0,
+                    calculatedUseStandardizedZones:
+                        this.enhancementConfig.useStandardizedZones,
+                    calculatedEnhancementMode:
+                        this.enhancementConfig.enhancementMode,
+                    calculatedBalanceThreshold: 0,
+                    calculatedConfluenceMinZones: 0,
+                    calculatedConfluenceMaxDistance: 0,
+                } as AbsorptionCalculatedValues
             );
             return null;
         }
@@ -725,6 +781,74 @@ export class AbsorptionDetectorEnhanced extends Detector {
         const hasValidSignalSide = dominantSide !== null;
         const isNotBalanced = !isBalancedInstitutional;
 
+        // ✅ CAPTURE ALL CALCULATED VALUES: Using TypeScript interface for type safety
+        const allCalculatedValues: AbsorptionCalculatedValues = {
+            calculatedMinAggVolume: totalAggressiveVolume,
+            calculatedTimeWindowIndex: this.enhancementConfig.timeWindowIndex,
+            calculatedEventCooldownMs:
+                Date.now() - (this.lastSignal.get("last") || 0),
+            calculatedPriceEfficiencyThreshold: priceEfficiency ?? 0,
+            calculatedMaxAbsorptionRatio: absorptionRatio ?? 0,
+            calculatedMinPassiveMultiplier:
+                totalPassiveVolume / Math.max(totalAggressiveVolume, 1),
+            calculatedPassiveAbsorptionThreshold: passiveVolumeRatio,
+            calculatedExpectedMovementScalingFactor:
+                FinancialMath.divideQuantities(
+                    FinancialMath.multiplyQuantities(
+                        event.quantity,
+                        this.enhancementConfig.expectedMovementScalingFactor
+                    ),
+                    event.quantity
+                ),
+            calculatedContextConfidenceBoostMultiplier:
+                this.crossTimeframeConfidenceBoost,
+            calculatedLiquidityGradientRange: FinancialMath.multiplyQuantities(
+                this.enhancementConfig.liquidityGradientRange,
+                event.zoneData?.zoneConfig.tickValue ?? 0
+            ),
+            calculatedInstitutionalVolumeThreshold:
+                volumePressure?.totalPressure ?? 0,
+            calculatedInstitutionalVolumeRatioThreshold:
+                totalPassiveVolume / Math.max(totalAggressiveVolume, 1),
+            calculatedEnableInstitutionalVolumeFilter:
+                this.enhancementConfig.enableInstitutionalVolumeFilter,
+            calculatedInstitutionalVolumeBoost:
+                this.enhancementConfig.institutionalVolumeBoost,
+            calculatedMinAbsorptionScore:
+                totalPassiveVolume > 0
+                    ? totalPassiveVolume /
+                      (totalAggressiveVolume + totalPassiveVolume)
+                    : 0,
+            calculatedFinalConfidenceRequired: confidence ?? 0,
+            calculatedConfidenceBoostReduction:
+                this.enhancementConfig.confidenceBoostReduction,
+            calculatedMaxZoneCountForScoring: relevantZones.length,
+            calculatedMinEnhancedConfidenceThreshold: confidence ?? 0,
+            calculatedUseStandardizedZones:
+                this.enhancementConfig.useStandardizedZones,
+            calculatedEnhancementMode: this.enhancementConfig.enhancementMode,
+            calculatedBalanceThreshold: Math.max(
+                Math.abs(
+                    totalAggressiveVolume /
+                        Math.max(
+                            totalAggressiveVolume + totalPassiveVolume,
+                            1
+                        ) -
+                        0.5
+                ),
+                Math.abs(
+                    totalPassiveVolume /
+                        Math.max(
+                            totalAggressiveVolume + totalPassiveVolume,
+                            1
+                        ) -
+                        0.5
+                )
+            ),
+            calculatedConfluenceMinZones: relevantZones.length,
+            calculatedConfluenceMaxDistance: this.confluenceMaxDistance,
+        };
+
         // Comprehensive rejection with complete threshold data
         if (
             !hasRecentZones ||
@@ -806,12 +930,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     threshold: thresholdValue,
                     actual: actualValue,
                 },
-                {
-                    aggressiveVolume: totalAggressiveVolume,
-                    passiveVolume: totalPassiveVolume,
-                    priceEfficiency,
-                    confidence: confidence ?? 0,
-                }
+                allCalculatedValues
             );
             return null;
         }
@@ -1653,7 +1772,101 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 extendedContext.absorptionRatio = signal.data.absorptionScore;
             }
 
-            this.validationLogger.logSignal(signal, event, extendedContext);
+            // Get calculated values for signal logging (same as successful/rejection logging)
+            const totalAggVol: number = relevantZones.reduce(
+                (sum: number, zone) => sum + zone.aggressiveVolume,
+                0
+            );
+            const totalPassiveVolume: number = relevantZones.reduce(
+                (sum: number, zone) => sum + zone.passiveVolume,
+                0
+            );
+            const priceEfficiency = this.calculatePriceEfficiency(
+                event,
+                relevantZones
+            );
+            const absorptionRatio =
+                totalPassiveVolume > 0
+                    ? totalPassiveVolume / (totalAggVol + totalPassiveVolume)
+                    : 0;
+            const passiveVolumeRatio =
+                totalAggVol > 0 ? totalPassiveVolume / totalAggVol : 0;
+            const confluenceCount = relevantZones.length;
+            const volumePressure = this.calculateVolumePressure(
+                event,
+                relevantZones
+            );
+
+            const calculatedValues: AbsorptionCalculatedValues = {
+                calculatedMinAggVolume: totalAggVol,
+                calculatedTimeWindowIndex:
+                    this.enhancementConfig.timeWindowIndex,
+                calculatedEventCooldownMs:
+                    Date.now() - (this.lastSignal.get("last") || 0),
+                calculatedPriceEfficiencyThreshold: priceEfficiency ?? 0,
+                calculatedMaxAbsorptionRatio: absorptionRatio,
+                calculatedMinPassiveMultiplier:
+                    totalPassiveVolume / Math.max(totalAggVol, 1),
+                calculatedPassiveAbsorptionThreshold: passiveVolumeRatio,
+                calculatedExpectedMovementScalingFactor:
+                    FinancialMath.divideQuantities(
+                        FinancialMath.multiplyQuantities(
+                            event.quantity,
+                            this.enhancementConfig.expectedMovementScalingFactor
+                        ),
+                        event.quantity
+                    ),
+                calculatedContextConfidenceBoostMultiplier:
+                    this.crossTimeframeConfidenceBoost,
+                calculatedLiquidityGradientRange:
+                    FinancialMath.multiplyQuantities(
+                        this.enhancementConfig.liquidityGradientRange,
+                        event.zoneData?.zoneConfig.tickValue ?? 0
+                    ),
+                calculatedInstitutionalVolumeThreshold:
+                    volumePressure?.totalPressure ?? 0,
+                calculatedInstitutionalVolumeRatioThreshold:
+                    totalPassiveVolume / Math.max(totalAggVol, 1),
+                calculatedEnableInstitutionalVolumeFilter:
+                    this.enhancementConfig.enableInstitutionalVolumeFilter,
+                calculatedInstitutionalVolumeBoost:
+                    this.enhancementConfig.institutionalVolumeBoost,
+                calculatedMinAbsorptionScore:
+                    totalPassiveVolume > 0
+                        ? totalPassiveVolume /
+                          (totalAggVol + totalPassiveVolume)
+                        : 0,
+                calculatedFinalConfidenceRequired: signal.confidence,
+                calculatedConfidenceBoostReduction:
+                    this.enhancementConfig.confidenceBoostReduction,
+                calculatedMaxZoneCountForScoring: confluenceCount,
+                calculatedMinEnhancedConfidenceThreshold: signal.confidence,
+                calculatedUseStandardizedZones:
+                    this.enhancementConfig.useStandardizedZones,
+                calculatedEnhancementMode:
+                    this.enhancementConfig.enhancementMode,
+                calculatedBalanceThreshold: Math.max(
+                    Math.abs(
+                        totalAggVol /
+                            Math.max(totalAggVol + totalPassiveVolume, 1) -
+                            0.5
+                    ),
+                    Math.abs(
+                        totalPassiveVolume /
+                            Math.max(totalAggVol + totalPassiveVolume, 1) -
+                            0.5
+                    )
+                ),
+                calculatedConfluenceMinZones: confluenceCount,
+                calculatedConfluenceMaxDistance: this.confluenceMaxDistance,
+            };
+
+            this.validationLogger.logSignal(
+                signal,
+                event,
+                calculatedValues,
+                marketContext
+            );
         } catch (error) {
             this.logger.error(
                 "AbsorptionDetectorEnhanced: Failed to log signal for validation",
@@ -1677,12 +1890,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
             threshold: number;
             actual: number;
         },
-        marketContext: {
-            aggressiveVolume: number;
-            passiveVolume: number;
-            priceEfficiency: number | null;
-            confidence: number;
-        }
+        allCalculatedValues: AbsorptionCalculatedValues
     ): void {
         try {
             this.validationLogger.logRejection(
@@ -1690,7 +1898,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 rejectionReason,
                 event,
                 thresholdDetails,
-                marketContext
+                allCalculatedValues
             );
         } catch (error) {
             this.logger.error(
@@ -1713,90 +1921,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
     ): void {
         try {
             // Collect ACTUAL VALUES that each parameter was checked against when signal passed
-            const totalAggVol =
+            const totalAggVol: number =
                 event.zoneData?.zones.reduce(
-                    (sum, zone) => sum + zone.aggressiveVolume,
+                    (sum: number, zone) => sum + zone.aggressiveVolume,
                     0
                 ) || 0;
-            const totalPassVol =
-                event.zoneData?.zones.reduce(
-                    (sum, zone) => sum + zone.passiveVolume,
-                    0
-                ) || 0;
-            const actualPriceEfficiency = this.calculatePriceEfficiency(
-                event,
-                event.zoneData?.zones || []
-            );
-            const actualAbsorptionRatio =
-                totalPassVol > 0
-                    ? totalPassVol / (totalAggVol + totalPassVol)
-                    : 0;
-            const actualInstVolumeRatio =
-                totalAggVol > 0 ? totalPassVol / totalAggVol : 0;
-
-            const parameterValues = {
-                // ACTUAL VALUES each threshold was checked against (not config values!)
-                minAggVolume: totalAggVol, // What aggressive volume actually was
-                exhaustionThreshold: undefined, // N/A for absorption
-                timeWindowIndex: this.enhancementConfig.timeWindowIndex, // Static config
-                eventCooldownMs: this.enhancementConfig.eventCooldownMs, // Static config
-                useStandardizedZones:
-                    this.enhancementConfig.useStandardizedZones, // Static config
-                enhancementMode: this.enhancementConfig.enhancementMode, // Static config
-                minEnhancedConfidenceThreshold: signal.confidence, // What confidence actually was
-                enableDepletionAnalysis: undefined, // N/A for absorption
-                depletionVolumeThreshold: undefined, // N/A for absorption
-                depletionRatioThreshold: undefined, // N/A for absorption
-                depletionConfidenceBoost: undefined, // N/A for absorption
-                passiveVolumeExhaustionRatio: undefined, // N/A for absorption
-                varianceReductionFactor: undefined, // N/A for absorption
-                alignmentNormalizationFactor: undefined, // N/A for absorption
-                aggressiveVolumeExhaustionThreshold: undefined, // N/A for absorption
-                aggressiveVolumeReductionFactor: undefined, // N/A for absorption
-                passiveRatioBalanceThreshold: undefined, // N/A for absorption
-                premiumConfidenceThreshold: undefined, // N/A for absorption
-                variancePenaltyFactor: undefined, // N/A for absorption
-                ratioBalanceCenterPoint: undefined, // N/A for absorption
-
-                // ABSORPTION ACTUAL VALUES - what was actually measured vs thresholds
-                absorptionThreshold: actualAbsorptionRatio, // What absorption ratio actually was
-                priceEfficiencyThreshold: actualPriceEfficiency || 0, // What price efficiency actually was
-                maxAbsorptionRatio: actualAbsorptionRatio, // What absorption ratio actually was
-                minPassiveMultiplier:
-                    totalAggVol > 0 ? totalPassVol / totalAggVol : 0, // What multiplier actually was
-                passiveAbsorptionThreshold: actualAbsorptionRatio, // What absorption ratio actually was
-                expectedMovementScalingFactor:
-                    this.enhancementConfig.expectedMovementScalingFactor, // Static config
-                contextConfidenceBoostMultiplier:
-                    this.enhancementConfig.contextConfidenceBoostMultiplier, // Static config
-                liquidityGradientRange:
-                    this.enhancementConfig.liquidityGradientRange, // Static config
-                institutionalVolumeThreshold: totalAggVol, // What institutional volume actually was
-                institutionalVolumeRatioThreshold: actualInstVolumeRatio, // What ratio actually was
-                enableInstitutionalVolumeFilter:
-                    this.enhancementConfig.enableInstitutionalVolumeFilter, // Static config
-                institutionalVolumeBoost:
-                    this.enhancementConfig.institutionalVolumeBoost, // Static config
-                minAbsorptionScore: actualAbsorptionRatio, // What absorption score actually was
-                finalConfidenceRequired: signal.confidence, // What final confidence actually was
-                confidenceBoostReduction:
-                    this.enhancementConfig.confidenceBoostReduction, // Static config
-                maxZoneCountForScoring: event.zoneData?.zones.length || 0, // How many zones actually present
-                balanceThreshold:
-                    Math.abs(totalAggVol - totalPassVol) /
-                    Math.max(totalAggVol + totalPassVol, 1), // What balance actually was
-                confluenceMinZones: event.zoneData?.zones.length || 0, // How many zones actually present
-                confluenceMaxDistance:
-                    this.enhancementConfig.confluenceMaxDistance, // Static config
-
-                // RUNTIME VALUES (exactly what was calculated)
-                priceEfficiency: actualPriceEfficiency || 0,
-                confidence: signal.confidence,
-                aggressiveVolume: totalAggVol,
-                passiveVolume: totalPassVol,
-                volumeRatio: totalAggVol > 0 ? totalPassVol / totalAggVol : 0,
-                institutionalVolumeRatio: actualInstVolumeRatio,
-            };
 
             // Market context at time of successful signal
             const marketContext = {
@@ -1813,10 +1942,96 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 marketVolatility: this.calculateMarketVolatility(event),
             };
 
+            // Use exact same calculated values as rejection logging
+            const volumePressure = this.calculateVolumePressure(
+                event,
+                event.zoneData?.zones || []
+            );
+
+            // Calculate the same values used in rejection logging
+            const relevantZones = event.zoneData?.zones || [];
+            const confluenceCount = relevantZones.length;
+            const totalPassiveVolume: number = relevantZones.reduce(
+                (sum: number, zone) => sum + zone.passiveVolume,
+                0
+            );
+            const priceEfficiency =
+                this.calculatePriceEfficiency(event, relevantZones) ?? 0;
+            const absorptionRatio =
+                totalPassiveVolume > 0
+                    ? totalPassiveVolume / (totalAggVol + totalPassiveVolume)
+                    : 0;
+            const passiveVolumeRatio =
+                totalAggVol > 0 ? totalPassiveVolume / totalAggVol : 0;
+
+            const calculatedValues: AbsorptionCalculatedValues = {
+                calculatedMinAggVolume: totalAggVol,
+                calculatedTimeWindowIndex:
+                    this.enhancementConfig.timeWindowIndex,
+                calculatedEventCooldownMs:
+                    Date.now() - (this.lastSignal.get("last") || 0),
+                calculatedPriceEfficiencyThreshold: priceEfficiency ?? 0,
+                calculatedMaxAbsorptionRatio: absorptionRatio ?? 0,
+                calculatedMinPassiveMultiplier:
+                    totalPassiveVolume / Math.max(totalAggVol, 1),
+                calculatedPassiveAbsorptionThreshold: passiveVolumeRatio,
+                calculatedExpectedMovementScalingFactor:
+                    FinancialMath.divideQuantities(
+                        FinancialMath.multiplyQuantities(
+                            event.quantity,
+                            this.enhancementConfig.expectedMovementScalingFactor
+                        ),
+                        event.quantity
+                    ),
+                calculatedContextConfidenceBoostMultiplier:
+                    this.crossTimeframeConfidenceBoost,
+                calculatedLiquidityGradientRange:
+                    FinancialMath.multiplyQuantities(
+                        this.enhancementConfig.liquidityGradientRange,
+                        event.zoneData?.zoneConfig.tickValue ?? 0
+                    ),
+                calculatedInstitutionalVolumeThreshold:
+                    volumePressure?.totalPressure ?? 0,
+                calculatedInstitutionalVolumeRatioThreshold:
+                    totalPassiveVolume / Math.max(totalAggVol, 1),
+                calculatedEnableInstitutionalVolumeFilter:
+                    this.enhancementConfig.enableInstitutionalVolumeFilter,
+                calculatedInstitutionalVolumeBoost:
+                    this.enhancementConfig.institutionalVolumeBoost,
+                calculatedMinAbsorptionScore:
+                    totalPassiveVolume > 0
+                        ? totalPassiveVolume /
+                          (totalAggVol + totalPassiveVolume)
+                        : 0,
+                calculatedFinalConfidenceRequired: signal.confidence,
+                calculatedConfidenceBoostReduction:
+                    this.enhancementConfig.confidenceBoostReduction,
+                calculatedMaxZoneCountForScoring: confluenceCount,
+                calculatedMinEnhancedConfidenceThreshold: signal.confidence,
+                calculatedUseStandardizedZones:
+                    this.enhancementConfig.useStandardizedZones,
+                calculatedEnhancementMode:
+                    this.enhancementConfig.enhancementMode,
+                calculatedBalanceThreshold: Math.max(
+                    Math.abs(
+                        totalAggVol /
+                            Math.max(totalAggVol + totalPassiveVolume, 1) -
+                            0.5
+                    ),
+                    Math.abs(
+                        totalPassiveVolume /
+                            Math.max(totalAggVol + totalPassiveVolume, 1) -
+                            0.5
+                    )
+                ),
+                calculatedConfluenceMinZones: confluenceCount,
+                calculatedConfluenceMaxDistance: this.confluenceMaxDistance,
+            };
+
             this.validationLogger.logSuccessfulSignal(
                 "absorption",
                 event,
-                parameterValues,
+                calculatedValues,
                 marketContext
             );
         } catch (error) {

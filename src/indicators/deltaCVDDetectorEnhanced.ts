@@ -31,6 +31,7 @@ import type {
     StandardZoneData,
     ZoneSnapshot,
 } from "../types/marketEvents.js";
+import type { DeltaCVDCalculatedValues } from "../types/calculatedValuesTypes.js";
 import type { SignalCandidate } from "../types/signalTypes.js";
 import { z } from "zod";
 import { DeltaCVDDetectorSchema } from "../core/config.js";
@@ -179,11 +180,18 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                     actual: 0,
                 },
                 {
-                    aggressiveVolume: 0,
-                    passiveVolume: 0,
-                    priceEfficiency: null,
-                    confidence: 0,
-                }
+                    calculatedMinTradesPerSec: 0,
+                    calculatedMinVolPerSec: 0,
+                    calculatedSignalThreshold: 0,
+                    calculatedEventCooldownMs:
+                        Date.now() - (this.lastSignal.get("last") || 0),
+                    calculatedEnhancementMode:
+                        this.enhancementConfig.enhancementMode,
+                    calculatedCvdImbalanceThreshold: 0,
+                    calculatedTimeWindowIndex:
+                        this.enhancementConfig.timeWindowIndex,
+                    calculatedInstitutionalThreshold: 0,
+                } as DeltaCVDCalculatedValues
             );
             return null;
         }
@@ -279,6 +287,13 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             },
         };
 
+        // Log signal for validation tracking
+        void this.logSignalForValidation(
+            signalCandidate,
+            event,
+            event.zoneData?.zones || []
+        );
+
         // Log successful signal with complete parameter data
         this.logSuccessfulSignalParameters(signalCandidate, event);
 
@@ -326,6 +341,15 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         const signalCandidate = this.detect(event);
 
         if (signalCandidate) {
+            // 🚨 CRITICAL DEBUG: Log DeltaCVD signal emission
+            this.logger.error("🚨 DELTACVD SIGNAL EMISSION TRACE", {
+                signal: signalCandidate,
+                detectorId: this.getId(),
+                type: signalCandidate.type,
+                confidence: signalCandidate.confidence,
+                timestamp: Date.now(),
+            });
+
             // Emit signal candidate event for signal coordinator
             this.emit("signalCandidate", signalCandidate);
 
@@ -416,19 +440,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         const realConfidence = divergenceResult.divergenceStrength;
         const signalSide = this.determineCVDSignalSide(event);
 
-        // Calculate zone confluence if enabled
-        let confluenceResult = {
-            hasConfluence: false,
-            confluenceStrength: 0,
-            confluenceZones: 0,
-        };
-        if (Config.UNIVERSAL_ZONE_CONFIG.enableZoneConfluenceFilter) {
-            confluenceResult = this.analyzeZoneConfluence(
-                event.zoneData,
-                event.price
-            );
-        }
-
         // ===== SINGLE EVALUATION: One decision point =====
 
         // Check all thresholds
@@ -440,6 +451,21 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         const passesConfidenceThreshold =
             realConfidence >= this.enhancementConfig.signalThreshold;
         const hasValidSignalSide = signalSide !== null;
+
+        // ✅ CAPTURE ALL CALCULATED VALUES: Every computed value that gets checked against config
+        const allCalculatedValues: DeltaCVDCalculatedValues = {
+            // Values that get compared against config thresholds
+            calculatedMinTradesPerSec: detectionRequirements.tradesPerSec, // vs config minTradesPerSec (1.0)
+            calculatedMinVolPerSec: detectionRequirements.volumePerSec, // vs config minVolPerSec (5.0)
+            calculatedSignalThreshold: realConfidence, // vs config signalThreshold (0.7)
+            calculatedEventCooldownMs:
+                event.timestamp - (this.lastSignal.get("last") || 0), // vs config eventCooldownMs (1000)
+            calculatedEnhancementMode: this.enhancementConfig.enhancementMode, // vs config enhancementMode ("production")
+            calculatedCvdImbalanceThreshold: Math.abs(cvdData.cvdDelta), // vs config cvdImbalanceThreshold (0.18)
+            calculatedTimeWindowIndex: this.enhancementConfig.timeWindowIndex, // vs config timeWindowIndex (0)
+            calculatedInstitutionalThreshold:
+                marketContext.institutionalVolumeRatio, // vs config institutionalThreshold (25.0)
+        };
 
         // If any threshold fails, log comprehensive rejection with ALL calculated data
         if (
@@ -474,56 +500,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                     threshold: this.enhancementConfig.signalThreshold,
                     actual: realConfidence,
                 },
-                {
-                    aggressiveVolume: cvdData.totalVolume,
-                    passiveVolume: marketContext.totalPassiveVolume,
-                    priceEfficiency: marketContext.priceEfficiency,
-                    confidence: realConfidence,
-                },
-                {
-                    // Detection requirements
-                    volumePerSec: detectionRequirements.volumePerSec,
-                    tradesPerSec: detectionRequirements.tradesPerSec,
-                    minVolPerSecThreshold: this.enhancementConfig.minVolPerSec,
-                    minTradesPerSecThreshold:
-                        this.enhancementConfig.minTradesPerSec,
-                    passesDetectionRequirements,
-
-                    // CVD volume analysis
-                    cvdTotalVolume: cvdData.totalVolume,
-                    cvdBuyVolume: cvdData.buyVolume,
-                    cvdSellVolume: cvdData.sellVolume,
-                    cvdDelta: cvdData.cvdDelta,
-                    hasSignificantVolume,
-
-                    // Divergence analysis
-                    divergenceStrength: divergenceResult.divergenceStrength,
-                    affectedZones: divergenceResult.affectedZones,
-                    hasDivergence,
-                    cvdImbalanceThreshold:
-                        this.enhancementConfig.cvdImbalanceThreshold,
-
-                    // Confidence and thresholds
-                    realConfidence,
-                    signalThreshold: this.enhancementConfig.signalThreshold,
-                    passesConfidenceThreshold,
-
-                    // Signal direction
-                    signalSide: signalSide || "unknown",
-                    hasValidSignalSide,
-
-                    // Zone confluence
-                    confluenceStrength: confluenceResult.confluenceStrength,
-                    confluenceZones: confluenceResult.confluenceZones,
-                    hasConfluence: confluenceResult.hasConfluence,
-
-                    // Market context
-                    institutionalVolumeRatio:
-                        marketContext.institutionalVolumeRatio,
-                    totalAggressiveVolume: marketContext.totalAggressiveVolume,
-                    aggressiveBuyVolume: marketContext.aggressiveBuyVolume,
-                    aggressiveSellVolume: marketContext.aggressiveSellVolume,
-                }
+                allCalculatedValues
             );
             return null;
         }
@@ -1284,31 +1261,16 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             threshold: number;
             actual: number;
         },
-        marketContext: {
-            aggressiveVolume: number;
-            passiveVolume: number;
-            priceEfficiency: number | null;
-            confidence: number;
-        },
-        runtimeCalculations?: {
-            [key: string]: number | string | boolean;
-        }
+        calculatedValues: DeltaCVDCalculatedValues
     ): void {
         try {
-            console.log(
-                `[DEBUG] DeltaCVD logSignalRejection called: ${rejectionReason} at price ${event.price}`
-            );
             this.validationLogger.logRejection(
                 "deltacvd",
                 rejectionReason,
                 event,
                 thresholdDetails,
-                {
-                    ...marketContext,
-                    calculatedValues: runtimeCalculations || {},
-                }
+                calculatedValues
             );
-            console.log(`[DEBUG] DeltaCVD logRejection completed successfully`);
         } catch (error) {
             this.logger.error(
                 "DeltaCVDDetectorEnhanced: Error logging signal rejection",
@@ -1469,60 +1431,25 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 event.zoneData?.zones || []
             );
 
-            // Collect ACTUAL VALUES that each parameter was checked against when signal passed
-            const parameterValues = {
-                // DELTACVD CONFIG PARAMETERS - Static values from configuration
-                minTradesPerSec: this.enhancementConfig.minTradesPerSec,
-                minVolPerSec: this.enhancementConfig.minVolPerSec,
-                signalThreshold: this.enhancementConfig.signalThreshold,
-                eventCooldownMs: this.enhancementConfig.eventCooldownMs,
-                timeWindowIndex: this.enhancementConfig.timeWindowIndex,
-                enhancementMode: this.enhancementConfig.enhancementMode,
-                cvdImbalanceThreshold:
-                    this.enhancementConfig.cvdImbalanceThreshold,
-                institutionalThreshold:
-                    this.enhancementConfig.institutionalThreshold,
+            // Get detection requirements that were calculated and passed validation
+            const detectionRequirements =
+                this.calculateDetectionRequirements(event);
 
-                // DELTACVD ACTUAL VALUES - What was actually measured vs thresholds
-                buyVolume: cvdData.buyVolume,
-                sellVolume: cvdData.sellVolume,
-                cvdDelta: cvdData.cvdDelta,
-                buyRatio:
-                    cvdData.totalVolume > 0
-                        ? cvdData.buyVolume / cvdData.totalVolume
-                        : 0,
-                enhancedConfidence: signal.confidence,
+            // Use the signal confidence that was already calculated and passed validation
 
-                // Extract divergence data from signal if available
-                cvdDivergenceStrength:
-                    signal.data &&
-                    typeof signal.data === "object" &&
-                    "rateOfChange" in signal.data
-                        ? signal.data.rateOfChange
-                        : 0,
-                cvdAffectedZones: event.zoneData?.zones.length || 0,
-
-                // SHARED RUNTIME VALUES (consistent with other detectors)
-                confidence: signal.confidence,
-                aggressiveVolume: cvdData.totalVolume,
-                passiveVolume: 0, // CVD doesn't track passive volume separately
-                priceEfficiency:
-                    this.calculateCVDPriceEfficiency(
-                        event,
-                        event.zoneData?.zones || []
-                    ) || 0,
-
-                // Zone and volume analysis
-                totalVolume: cvdData.totalVolume,
-                volumeImbalance:
-                    cvdData.totalVolume > 0
-                        ? Math.abs(cvdData.cvdDelta) / cvdData.totalVolume
-                        : 0,
-                institutionalVolumeRatio:
-                    event.quantity >=
-                    this.enhancementConfig.institutionalThreshold
-                        ? 1
-                        : 0,
+            // Collect ACTUAL CALCULATED VALUES that were validated against thresholds
+            const calculatedValues: DeltaCVDCalculatedValues = {
+                calculatedMinTradesPerSec: detectionRequirements.tradesPerSec,
+                calculatedMinVolPerSec: detectionRequirements.volumePerSec,
+                calculatedSignalThreshold: signal.confidence,
+                calculatedEventCooldownMs: 0,
+                calculatedEnhancementMode:
+                    this.enhancementConfig.enhancementMode,
+                calculatedCvdImbalanceThreshold: Math.abs(cvdData.cvdDelta),
+                calculatedTimeWindowIndex:
+                    this.enhancementConfig.timeWindowIndex,
+                calculatedInstitutionalThreshold:
+                    marketContext.institutionalVolumeRatio,
             };
 
             // Market context at time of successful signal
@@ -1540,12 +1467,76 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             this.validationLogger.logSuccessfulSignal(
                 "deltacvd",
                 event,
-                parameterValues,
+                calculatedValues,
                 validationMarketContext
             );
         } catch (error) {
             this.logger.error(
                 "DeltaCVDDetectorEnhanced: Failed to log successful signal parameters",
+                {
+                    signalId: signal.id,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
+        }
+    }
+
+    /**
+     * Log signal for validation tracking (missing method implementation)
+     *
+     * INSTITUTIONAL COMPLIANCE: Matches pattern from Absorption/Exhaustion detectors
+     */
+    private logSignalForValidation(
+        signal: SignalCandidate,
+        event: EnrichedTradeEvent,
+        relevantZones: ZoneSnapshot[]
+    ): void {
+        try {
+            // Calculate market context for validation logging
+            const marketContext = this.calculateMarketContext(
+                event,
+                relevantZones
+            );
+
+            // Add DeltaCVD-specific metrics
+            const extendedContext = {
+                ...marketContext,
+                // No detector-specific ratios for DeltaCVD
+            };
+
+            // Get calculated values for signal logging
+            const cvdData = this.extractCVDFromZones(
+                event.zoneData,
+                event.timestamp
+            );
+            const detectionRequirements =
+                this.calculateDetectionRequirements(event);
+            // Use the signal confidence that was already calculated and passed validation
+
+            const calculatedValues: DeltaCVDCalculatedValues = {
+                calculatedMinTradesPerSec: detectionRequirements.tradesPerSec,
+                calculatedMinVolPerSec: detectionRequirements.volumePerSec,
+                calculatedSignalThreshold: signal.confidence,
+                calculatedEventCooldownMs: 0,
+                calculatedEnhancementMode:
+                    this.enhancementConfig.enhancementMode,
+                calculatedCvdImbalanceThreshold: Math.abs(cvdData.cvdDelta),
+                calculatedTimeWindowIndex:
+                    this.enhancementConfig.timeWindowIndex,
+                calculatedInstitutionalThreshold:
+                    marketContext.institutionalVolumeRatio,
+            };
+
+            this.validationLogger.logSignal(
+                signal,
+                event,
+                calculatedValues,
+                extendedContext
+            );
+        } catch (error) {
+            this.logger.error(
+                "DeltaCVDDetectorEnhanced: Failed to log signal for validation",
                 {
                     signalId: signal.id,
                     error:

@@ -311,39 +311,11 @@ function updateSignalMetrics(metrics) {
     updateElement("signalsRejected", formatNumber(signalsRejected));
     updateElement("signalsRejectedRate", getRate(signalsRejected));
 
-    // Signal Types Breakdown
-    const signalTypes = [
-        "absorption",
-        "exhaustion",
-        "accumulation",
-        "distribution",
-        "deltacvd",
-    ];
-
-    signalTypes.forEach((type) => {
-        const candidates =
-            getCounterValue(
-                `signal_coordinator_signals_received_total_${type}`
-            ) || 0;
-        const confirmed =
-            getCounterValue(`signal_manager_signals_confirmed_total_${type}`) ||
-            0;
-        const rejected =
-            getCounterValue(
-                `signal_manager_rejections_detailed_total_${type}`
-            ) || 0;
-        const total = confirmed + rejected;
-        const successRate =
-            total > 0 ? ((confirmed / total) * 100).toFixed(1) + "%" : "--";
-
-        // Use standardized signal types as prefixes
-        let typePrefix = type;
-
-        updateElement(`${typePrefix}Candidates`, formatNumber(candidates));
-        updateElement(`${typePrefix}Confirmed`, formatNumber(confirmed));
-        updateElement(`${typePrefix}Rejected`, formatNumber(rejected));
-        updateElement(`${typePrefix}SuccessRate`, successRate);
-    });
+    // NOTE: Signal Types Breakdown is now handled by updateSignalTypeBreakdown()
+    // using the signalTypeBreakdown data from the WebSocket message.
+    // This section was causing the "all zeros" issue because it was trying to
+    // reconstruct data from individual metrics counters instead of using the
+    // aggregated data from SignalManager.getSignalTypeBreakdown().
 
     // Rejection Reasons
     const rejectionReasons = [

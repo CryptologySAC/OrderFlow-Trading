@@ -275,7 +275,7 @@
                 "minEnhancedConfidenceThreshold": 0.5,
                 "useStandardizedZones": true,
                 "enhancementMode": "production",
-                "balanceThreshold": 0.017,
+                "balanceThreshold": 0.01,
                 "confluenceMinZones": 2,
                 "confluenceMaxDistance": 5
             },
@@ -339,7 +339,7 @@
                 "minTradesPerSec": 1.0,
                 "minVolPerSec": 5.0,
                 "signalThreshold": 0.7,
-                "eventCooldownMs": 90000,
+                "eventCooldownMs": 1000,
                 "enhancementMode": "production",
                 "cvdImbalanceThreshold": 0.18,
                 "timeWindowIndex": 0,

@@ -346,6 +346,8 @@ class EnhancedStatsBroadcaster {
     private mqttClient?: MqttClient;
     private signalTracker?: SignalTracker;
     private mainThreadMetrics: EnhancedMetrics | null = null;
+    private signalTypeBreakdown: SignalBreakdownMessage["data"] | null = null;
+    private zoneAnalytics: ZoneAnalyticsMessage["data"] | null = null;
 
     constructor(
         private readonly metrics: IWorkerMetricsCollector,
@@ -361,6 +363,16 @@ class EnhancedStatsBroadcaster {
 
     public setSignalTracker(signalTracker: SignalTracker): void {
         this.signalTracker = signalTracker;
+    }
+
+    public setSignalTypeBreakdown(
+        breakdown: SignalBreakdownMessage["data"]
+    ): void {
+        this.signalTypeBreakdown = breakdown;
+    }
+
+    public setZoneAnalytics(analytics: ZoneAnalyticsMessage["data"]): void {
+        this.zoneAnalytics = analytics;
     }
 
     public start(): void {
@@ -409,6 +421,15 @@ class EnhancedStatsBroadcaster {
                     signalPerformance:
                         this.signalTracker?.getPerformanceMetrics(86400000), // 24h window
                     signalTrackerStatus: this.signalTracker?.getStatus(),
+                    signalTypeBreakdown: this.signalTypeBreakdown || {},
+                    zoneAnalytics: this.zoneAnalytics || {
+                        activeZones: 0,
+                        completedZones: 0,
+                        avgZoneStrength: 0,
+                        avgZoneDuration: 0,
+                        zonesByType: {},
+                        zonesBySignificance: {},
+                    },
                     workers: {
                         loggerWorker: "Running",
                         binanceWorker: "Running",
@@ -564,6 +585,54 @@ interface MainMetricsMessage {
     data: EnhancedMetrics;
 }
 
+interface SignalBreakdownMessage {
+    type: "signal_breakdown";
+    data: {
+        absorption: {
+            candidates: number;
+            confirmed: number;
+            rejected: number;
+            successRate: string;
+        };
+        exhaustion: {
+            candidates: number;
+            confirmed: number;
+            rejected: number;
+            successRate: string;
+        };
+        accumulation: {
+            candidates: number;
+            confirmed: number;
+            rejected: number;
+            successRate: string;
+        };
+        distribution: {
+            candidates: number;
+            confirmed: number;
+            rejected: number;
+            successRate: string;
+        };
+        deltacvd: {
+            candidates: number;
+            confirmed: number;
+            rejected: number;
+            successRate: string;
+        };
+    };
+}
+
+interface ZoneAnalyticsMessage {
+    type: "zone_analytics";
+    data: {
+        activeZones: number;
+        completedZones: number;
+        avgZoneStrength: number;
+        avgZoneDuration: number;
+        zonesByType: Record<string, number>;
+        zonesBySignificance: Record<string, number>;
+    };
+}
+
 // Add global error handlers
 process.on("uncaughtException", (error: Error) => {
     logger.error("Uncaught exception in communication worker", {
@@ -671,6 +740,8 @@ parentPort?.on(
             | BacklogMessage
             | SignalTrackerMessage
             | MainMetricsMessage
+            | SignalBreakdownMessage
+            | ZoneAnalyticsMessage
             | { type: "shutdown" }
     ) => {
         try {
@@ -936,6 +1007,32 @@ parentPort?.on(
                     // Main thread metrics updated successfully - no logging needed to avoid spam
                 } catch (error) {
                     logger.error("Error setting main thread metrics", {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
+                }
+            } else if (msg.type === "signal_breakdown") {
+                try {
+                    // Set signal type breakdown for stats broadcasting
+                    statsBroadcaster.setSignalTypeBreakdown(msg.data);
+                    // Signal breakdown updated successfully - no logging needed to avoid spam
+                } catch (error) {
+                    logger.error("Error setting signal type breakdown", {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
+                }
+            } else if (msg.type === "zone_analytics") {
+                try {
+                    // Set zone analytics for stats broadcasting
+                    statsBroadcaster.setZoneAnalytics(msg.data);
+                    // Zone analytics updated successfully - no logging needed to avoid spam
+                } catch (error) {
+                    logger.error("Error setting zone analytics", {
                         error:
                             error instanceof Error
                                 ? error.message

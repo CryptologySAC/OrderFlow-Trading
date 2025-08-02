@@ -367,8 +367,22 @@ export class SignalCoordinator extends EventEmitter {
         candidate: SignalCandidate,
         detector: Detector
     ): void {
+        // 🚨 CRITICAL DEBUG: Log every signal received by coordinator
+        this.logger.error("🚨 SIGNALCOORDINATOR RECEIVED SIGNAL", {
+            candidateType: candidate.type,
+            detectorId: detector.getId(),
+            candidateId: candidate.id,
+            timestamp: Date.now(),
+        });
+
         const reg = this.detectors.get(detector.getId());
-        if (!reg?.enabled) return;
+        if (!reg?.enabled) {
+            this.logger.error("🚨 SIGNAL DROPPED - DETECTOR DISABLED", {
+                detectorId: detector.getId(),
+                candidateType: candidate.type,
+            });
+            return;
+        }
 
         // Track signal candidates received by type
         this.metrics.incrementCounter(
