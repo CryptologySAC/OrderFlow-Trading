@@ -269,7 +269,7 @@
                 "enableInstitutionalVolumeFilter": true,
                 "institutionalVolumeBoost": 0.1,
                 "minAbsorptionScore": 0.8,
-                "finalConfidenceRequired": 2.0,
+                "finalConfidenceRequired": 0.5,
                 "confidenceBoostReduction": 0.3,
                 "maxZoneCountForScoring": 5,
                 "minEnhancedConfidenceThreshold": 0.5,
