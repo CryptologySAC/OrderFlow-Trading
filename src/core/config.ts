@@ -126,16 +126,16 @@ export const ExhaustionDetectorSchema = z.object({
     minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
 
     // Enhanced depletion analysis
-    depletionVolumeThreshold: z.number().min(10).max(1000),
-    depletionRatioThreshold: z.number().min(0.1).max(0.9),
+    depletionVolumeThreshold: z.number().min(10).max(100000),
+    depletionRatioThreshold: z.number().min(-1.0).max(0),
     enableDepletionAnalysis: z.boolean(),
     depletionConfidenceBoost: z.number().min(0.05).max(0.3),
 
     // Cross-timeframe calculations
     varianceReductionFactor: z.number().min(0.5).max(3.0),
     alignmentNormalizationFactor: z.number().min(0.2).max(3.0),
-    passiveVolumeExhaustionRatio: z.number().min(0.3).max(0.8),
-    aggressiveVolumeExhaustionThreshold: z.number().min(0.5).max(1.0),
+    passiveVolumeExhaustionRatio: z.number().min(0.3).max(2.0),
+    aggressiveVolumeExhaustionThreshold: z.number().min(0.001).max(0.5),
     aggressiveVolumeReductionFactor: z.number().min(0.3).max(0.8),
 
     // Additional configurable thresholds to replace magic numbers
@@ -194,7 +194,7 @@ export const DeltaCVDDetectorSchema = z.object({
     minTradesPerSec: z.number().min(0.001).max(5.0),
     minVolPerSec: z.number().min(0.01).max(2000.0),
     signalThreshold: z.number().min(0.01).max(8.0),
-    eventCooldownMs: z.number().int().min(1000).max(90000),
+    eventCooldownMs: z.number().int().min(1000).max(1800000),
 
     // Zone time window configuration
     timeWindowIndex: z.number().int().min(0).max(5),
@@ -206,7 +206,7 @@ export const DeltaCVDDetectorSchema = z.object({
     cvdImbalanceThreshold: z.number().min(0.05).max(0.4), // CVD imbalance ratio for detection (lower than signalThreshold)
 
     // Institutional trade threshold (replace hardcoded 17.8 LTC)
-    institutionalThreshold: z.number().min(1.0).max(100.0), // LTC threshold for institutional trade detection
+    institutionalThreshold: z.number().min(0.001).max(5.0), // LTC threshold for institutional trade detection
 });
 
 // ACCUMULATION detector - CLEANED UP - Only used settings remain

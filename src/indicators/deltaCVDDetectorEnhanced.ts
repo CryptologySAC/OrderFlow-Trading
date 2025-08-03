@@ -447,6 +447,8 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         const passesConfidenceThreshold =
             realConfidence >= this.enhancementConfig.signalThreshold;
         const hasValidSignalSide = signalSide !== null;
+        const hasInstitutionalThreshold =
+            detectionRequirements.meetsInstitutionalThreshold;
 
         // ✅ CAPTURE ALL CALCULATED VALUES: Every computed value that gets checked against config
         const allCalculatedValues: DeltaCVDCalculatedValues = {
@@ -469,7 +471,8 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             !hasSignificantVolume ||
             !hasDivergence ||
             !passesConfidenceThreshold ||
-            !hasValidSignalSide
+            !hasValidSignalSide ||
+            !hasInstitutionalThreshold
         ) {
             this.metricsCollector.incrementCounter(
                 "cvd_signals_rejected_total",
@@ -487,6 +490,8 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 rejectionReason = "confidence_below_threshold";
             else if (!hasValidSignalSide)
                 rejectionReason = "no_clear_signal_side";
+            else if (!hasInstitutionalThreshold)
+                rejectionReason = "institutional_threshold_not_met";
 
             this.logSignalRejection(
                 event,
@@ -529,6 +534,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         totalVolume: number;
         totalTrades: number;
         timespan: number;
+        meetsInstitutionalThreshold: boolean;
     } {
         // Default values for invalid data
         if (!event.zoneData) {
@@ -540,6 +546,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 totalVolume: 0,
                 totalTrades: 0,
                 timespan: 1000,
+                meetsInstitutionalThreshold: false,
             };
         }
 
@@ -589,6 +596,9 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         const meetsTradeRate =
             tradesPerSec >= this.enhancementConfig.minTradesPerSec;
 
+        const meetsInstitutionalThreshold =
+            event.quantity <= this.enhancementConfig.institutionalThreshold;
+
         this.logger.debug(
             "[DeltaCVDDetectorEnhanced DEBUG] calculateDetectionRequirements check",
             {
@@ -602,6 +612,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 requiredTPS: this.enhancementConfig.minTradesPerSec,
                 meetsVolumeRate,
                 meetsTradeRate,
+                meetsInstitutionalThreshold,
             }
         );
 
@@ -613,18 +624,8 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             totalVolume,
             totalTrades,
             timespan,
+            meetsInstitutionalThreshold,
         };
-    }
-
-    /**
-     * Check if event meets detection requirements (config-driven, no caching)
-     *
-     * CLAUDE.md COMPLIANT: No caching, no defaults, config-driven validation
-     * LEGACY METHOD: Kept for backward compatibility with existing code
-     */
-    private meetsDetectionRequirements(event: EnrichedTradeEvent): boolean {
-        const requirements = this.calculateDetectionRequirements(event);
-        return requirements.meetsVolumeRate && requirements.meetsTradeRate;
     }
 
     /**

@@ -227,25 +227,25 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-                "minAggVolume": 80,
-                "exhaustionThreshold": 0.5,
+                "minAggVolume": 11000,
+                "exhaustionThreshold": 0.2,
                 "timeWindowIndex": 0,
-                "eventCooldownMs": 30000,
+                "eventCooldownMs": 1000,
 
                 "useStandardizedZones": true,
                 "enhancementMode": "production",
-                "minEnhancedConfidenceThreshold": 0.4,
+                "minEnhancedConfidenceThreshold": 0.8,
 
                 "enableDepletionAnalysis": true,
-                "depletionVolumeThreshold": 750,
-                "depletionRatioThreshold": 0.2,
+                "depletionVolumeThreshold": 15500,
+                "depletionRatioThreshold": -0.6,
                 "depletionConfidenceBoost": 0.2,
 
-                "passiveVolumeExhaustionRatio": 0.4,
+                "passiveVolumeExhaustionRatio": 1.0,
 
                 "varianceReductionFactor": 1.0,
                 "alignmentNormalizationFactor": 0.4,
-                "aggressiveVolumeExhaustionThreshold": 0.5,
+                "aggressiveVolumeExhaustionThreshold": 0.24,
                 "aggressiveVolumeReductionFactor": 0.5,
 
                 "passiveRatioBalanceThreshold": 0.5,
@@ -337,13 +337,13 @@
             },
             "deltaCVD": {
                 "minTradesPerSec": 4.75,
-                "minVolPerSec": 14.0,
+                "minVolPerSec": 24.0,
                 "signalThreshold": 0.9,
-                "eventCooldownMs": 1000,
+                "eventCooldownMs": 1200000,
                 "enhancementMode": "production",
                 "cvdImbalanceThreshold": 0.18,
                 "timeWindowIndex": 0,
-                "institutionalThreshold": 25.0
+                "institutionalThreshold": 0.1
             },
             "accumulation": {
                 "timeWindowIndex": 1,
