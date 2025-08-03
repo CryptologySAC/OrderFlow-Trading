@@ -933,7 +933,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                       totalVolume
                   )
                 : 0;
-        const hasDepletion = depletionRatio >= minRatio && affectedZones > 0;
+        const hasDepletion = depletionRatio <= minRatio && affectedZones > 0;
 
         return {
             hasDepletion,
@@ -1034,7 +1034,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
             const aggressiveVolumeReductionFactor =
                 this.enhancementConfig.aggressiveVolumeReductionFactor;
             const exhaustionScore =
-                aggressiveRatio > aggressiveVolumeExhaustionThreshold
+                aggressiveRatio <= aggressiveVolumeExhaustionThreshold
                     ? aggressiveRatio
                     : FinancialMath.multiplyQuantities(
                           aggressiveRatio,
