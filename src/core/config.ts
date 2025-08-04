@@ -156,7 +156,7 @@ export const AbsorptionDetectorSchema = z.object({
     priceEfficiencyThreshold: z.number().min(0.0001).max(0.1),
     maxAbsorptionRatio: z.number().min(0.1).max(1.0),
     minPassiveMultiplier: z.number().min(0.5).max(5.0),
-    passiveAbsorptionThreshold: z.number().min(0.3).max(1),
+    passiveAbsorptionThreshold: z.number().min(10).max(50),
 
     // Calculation parameters
     expectedMovementScalingFactor: z.number().int().min(1).max(100),
@@ -164,13 +164,13 @@ export const AbsorptionDetectorSchema = z.object({
     liquidityGradientRange: z.number().int().min(1).max(20),
 
     // Institutional analysis
-    institutionalVolumeThreshold: z.number().min(1).max(20000),
-    institutionalVolumeRatioThreshold: z.number().min(0.3).max(1),
+    institutionalVolumeThreshold: z.number().min(10000).max(100000),
+    institutionalVolumeRatioThreshold: z.number().min(1).max(50),
     enableInstitutionalVolumeFilter: z.boolean(),
     institutionalVolumeBoost: z.number().min(0.05).max(0.3),
 
     // Confidence and scoring
-    minAbsorptionScore: z.number().min(0.3).max(0.9),
+    minAbsorptionScore: z.number().min(0.3).max(0.99),
     finalConfidenceRequired: z.number().min(0.1).max(3.0),
     confidenceBoostReduction: z.number().min(0.3).max(0.8),
     maxZoneCountForScoring: z.number().int().min(1).max(10),
@@ -181,7 +181,7 @@ export const AbsorptionDetectorSchema = z.object({
     enhancementMode: z.enum(["disabled", "testing", "production"]),
 
     // Balance detection threshold
-    balanceThreshold: z.number().min(0.01).max(0.2),
+    balanceThreshold: z.number().min(0.01).max(0.75),
 
     // Zone confluence parameters (CLAUDE.md compliance - no magic numbers)
     confluenceMinZones: z.number().int().min(1).max(10),
