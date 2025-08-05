@@ -118,7 +118,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         logger: ILogger,
         metrics: IMetricsCollector,
         validationLogger: SignalValidationLogger,
-        signalLogger?: ISignalLogger
+        signalLogger: ISignalLogger
     ) {
         // STANDALONE VERSION: Initialize Detector base class directly
         super(id, logger, metrics, signalLogger);

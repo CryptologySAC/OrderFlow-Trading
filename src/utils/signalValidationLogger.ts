@@ -332,8 +332,8 @@ export class SignalValidationLogger {
     private readonly deltacvdSuccessfulBuffer: string[] = [];
     private readonly maxBufferSize = 100; // Flush after 100 entries
     private readonly flushInterval = 5000; // Flush every 5 seconds
-    private flushTimer?: NodeJS.Timeout;
-    private optimizationTimer?: NodeJS.Timeout;
+    private flushTimer?: NodeJS.Timeout | undefined;
+    private optimizationTimer?: NodeJS.Timeout | undefined;
     //private isInitialized = false;
 
     // Price tracking for validation
@@ -1104,12 +1104,12 @@ export class SignalValidationLogger {
                 // Market Context
                 price: event.price,
                 tradeQuantity: event.quantity,
-                bestBid: event.bestBid,
-                bestAsk: event.bestAsk,
+                bestBid: event.bestBid ?? 0,
+                bestAsk: event.bestAsk ?? 0,
                 spread:
                     event.bestAsk && event.bestBid
                         ? event.bestAsk - event.bestBid
-                        : undefined,
+                        : -1,
 
                 // Volume Analysis
                 totalAggressiveVolume: marketContext.totalAggressiveVolume,
@@ -1131,9 +1131,9 @@ export class SignalValidationLogger {
                     ? this.calculateZoneTotalVolume(event.zoneData.zones)
                     : 0,
                 priceEfficiency: marketContext.priceEfficiency,
-                absorptionRatio: marketContext.absorptionRatio,
-                exhaustionRatio: marketContext.exhaustionRatio,
-                depletionRatio: marketContext.depletionRatio,
+                absorptionRatio: marketContext.absorptionRatio ?? 0,
+                exhaustionRatio: marketContext.exhaustionRatio ?? 0,
+                depletionRatio: marketContext.depletionRatio ?? 0,
 
                 // Signal Quality Metrics
                 signalStrength: signal.confidence,

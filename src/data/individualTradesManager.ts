@@ -290,7 +290,7 @@ export class IndividualTradesManager {
             individualTrades,
             hasIndividualData: true,
             tradeComplexity: this.classifyComplexity(individualTrades),
-            fetchReason: this.lastFetchReason,
+            fetchReason: this.lastFetchReason ?? "none",
         };
     }
 

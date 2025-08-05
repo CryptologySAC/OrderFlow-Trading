@@ -306,8 +306,13 @@ export class ApiConnectivityMonitor extends EventEmitter {
             depthStreamHealth: { ...this.depthStreamStatus },
             apiSyncHealth,
             connectivityScore,
-            lastIssueDetected: this.currentStatus.lastIssueDetected,
         };
+
+        if (this.currentStatus.lastIssueDetected) {
+            this.currentStatus.lastIssueDetected = {
+                ...this.currentStatus.lastIssueDetected,
+            };
+        }
 
         // Emit status change if health changed
         const wasHealthy = this.currentStatus.isHealthy;
@@ -414,6 +419,9 @@ export class ApiConnectivityMonitor extends EventEmitter {
         } else if (!tradeRecent && depthRecent) {
             asymmetricDetected = true;
             asymmetricType = "depth_only";
+        } else {
+            asymmetricDetected = false;
+            asymmetricType = "neither";
         }
 
         // Calculate sync score (0-1)

@@ -10,6 +10,7 @@ import type {
     ZoneSnapshot,
     StandardZoneData,
     ZoneTradeRecord,
+    PassiveLevel,
 } from "../types/marketEvents.js";
 import { IOrderBookState } from "./orderBookState.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
@@ -127,8 +128,8 @@ export class OrderflowPreprocessor
         orderBook: IOrderBookState,
         logger: ILogger,
         metricsCollector: IMetricsCollector,
-        individualTradesManager?: IndividualTradesManager,
-        microstructureAnalyzer?: MicrostructureAnalyzer
+        individualTradesManager: IndividualTradesManager,
+        microstructureAnalyzer: MicrostructureAnalyzer
     ) {
         super();
         this.logger = logger;
@@ -314,7 +315,7 @@ export class OrderflowPreprocessor
                 depthSnapshot:
                     aggressive.quantity > this.getLargeTradeThreshold()
                         ? this.bookState.snapshot()
-                        : undefined,
+                        : new Map<number, PassiveLevel>(),
                 // Zone data will be populated after trade aggregation
                 zoneData: zoneData,
             };
@@ -615,7 +616,7 @@ export class OrderflowPreprocessor
     public shutdown(): void {
         if (this.dashboardUpdateTimer) {
             clearInterval(this.dashboardUpdateTimer);
-            this.dashboardUpdateTimer = undefined;
+            delete this.dashboardUpdateTimer;
             this.logger.info("[OrderflowPreprocessor] Dashboard timer cleared");
         }
     }
@@ -714,8 +715,8 @@ export class OrderflowPreprocessor
         }
 
         const result = {
-            zones,
-            adaptiveZones,
+            zones: zones ?? [],
+            adaptiveZones: adaptiveZones ?? [],
             zoneConfig: {
                 zoneTicks: this.standardZoneConfig.zoneTicks,
                 tickValue: this.tickSize,
@@ -1625,9 +1626,8 @@ export class OrderflowPreprocessor
 
             // Return populated StandardZoneData with single zone array
             return {
-                zones,
-                adaptiveZones:
-                    adaptiveZones.length > 0 ? adaptiveZones : undefined,
+                zones: zones ?? [],
+                adaptiveZones: adaptiveZones.length > 0 ? adaptiveZones : [],
                 zoneConfig: {
                     zoneTicks: this.standardZoneConfig.zoneTicks,
                     tickValue: this.tickSize,

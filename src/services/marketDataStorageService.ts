@@ -310,7 +310,7 @@ export class MarketDataStorageService {
     private stopMonitoring(): void {
         if (this.monitoringTimer) {
             clearInterval(this.monitoringTimer);
-            this.monitoringTimer = undefined;
+            delete this.monitoringTimer;
         }
     }
 

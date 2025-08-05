@@ -103,7 +103,7 @@ export class SimpleIcebergDetector extends Detector {
         id: string,
         logger: ILogger,
         metricsCollector: IMetricsCollector,
-        signalLogger?: ISignalLogger
+        signalLogger: ISignalLogger
     ) {
         super(id, logger, metricsCollector, signalLogger);
         this.config = Config.SIMPLE_ICEBERG_DETECTOR;

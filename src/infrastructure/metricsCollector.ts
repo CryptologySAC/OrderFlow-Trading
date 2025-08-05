@@ -341,8 +341,8 @@ export class MetricsCollector implements IMetricsCollector {
         name: string,
         type: "counter" | "gauge" | "histogram",
         description: string,
-        unit?: string,
-        labels?: string[]
+        unit: string = "",
+        labels: string[] = []
     ): void {
         this.metadata.set(name, { name, type, description, unit, labels });
     }
@@ -406,7 +406,7 @@ export class MetricsCollector implements IMetricsCollector {
     public recordGauge(
         name: string,
         value: number,
-        labels?: Record<string, string>
+        labels: Record<string, string> = {}
     ): void {
         this.gauges.set(name, {
             value,
@@ -843,8 +843,8 @@ export class MetricsCollector implements IMetricsCollector {
     public createHistogram(
         name: string,
         description?: string,
-        labels?: string[],
-        buckets?: number[]
+        labels: string[] = [],
+        buckets: number[] = []
     ): void {
         this.registerMetric(
             name,
@@ -864,7 +864,7 @@ export class MetricsCollector implements IMetricsCollector {
                 bounds:
                     buckets && buckets.length > 0
                         ? [...buckets].sort((a, b) => a - b)
-                        : undefined,
+                        : [],
             });
         }
     }

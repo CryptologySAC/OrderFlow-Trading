@@ -230,7 +230,7 @@ export class OrderBookState implements IOrderBookState {
                 );
             }
         }
-        this.expectedUpdateId = update.u ? update.u + 1 : undefined;
+        this.expectedUpdateId = update.u ? update.u + 1 : 0;
 
         if (!this.isInitialized) {
             // Buffer updates until initialized
@@ -810,7 +810,7 @@ export class OrderBookState implements IOrderBookState {
         // Stop timers
         if (this.pruneTimer) {
             clearInterval(this.pruneTimer);
-            this.pruneTimer = undefined;
+            delete this.pruneTimer;
         }
 
         // Save state

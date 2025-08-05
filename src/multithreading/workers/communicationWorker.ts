@@ -136,7 +136,7 @@ function updateWorkerMetrics(): void {
 
 // WebSocket handlers for client connections with isolation
 const wsHandlers = {
-    ping: (ws: IsolatedWebSocket, _: unknown, correlationId?: string) => {
+    ping: (ws: IsolatedWebSocket, _: unknown, correlationId: string = "") => {
         // Update client activity tracking
         if (ws.clientState) {
             ws.clientState.lastActivity = Date.now();
@@ -159,7 +159,11 @@ const wsHandlers = {
             });
         }
     },
-    backlog: (ws: IsolatedWebSocket, data: unknown, correlationId?: string) => {
+    backlog: (
+        ws: IsolatedWebSocket,
+        data: unknown,
+        correlationId: string = ""
+    ) => {
         const startTime = Date.now();
         try {
             let amount = 1000;
@@ -543,11 +547,11 @@ class EnhancedStatsBroadcaster {
     public stop(): void {
         if (this.timer) {
             clearInterval(this.timer);
-            this.timer = undefined;
+            delete this.timer;
         }
         if (this.mqttClient) {
             this.mqttClient.end(true);
-            this.mqttClient = undefined;
+            delete this.mqttClient;
         }
     }
 }

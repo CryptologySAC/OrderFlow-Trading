@@ -37,6 +37,7 @@ import type {
 import { z } from "zod";
 import { DistributionDetectorSchema, Config } from "../core/config.js";
 import type { ZoneVisualizationData } from "../types/zoneTypes.js";
+import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 
 /**
  * Enhanced configuration interface for distribution detection - ONLY distribution-specific parameters
@@ -97,13 +98,14 @@ export class DistributionDetectorEnhanced extends Detector {
         settings: DistributionEnhancedSettings,
         preprocessor: IOrderflowPreprocessor,
         logger: ILogger,
-        metrics: IMetricsCollector
+        metrics: IMetricsCollector,
+        signalLogger: ISignalLogger
     ) {
         // Settings are pre-validated by Config.DISTRIBUTION_DETECTOR getter
         // No validation needed here - trust that settings are correct
 
         // Initialize base detector directly (no legacy inheritance)
-        super(id, logger, metrics);
+        super(id, logger, metrics, signalLogger);
 
         // Initialize enhancement configuration
         this.enhancementConfig = settings;

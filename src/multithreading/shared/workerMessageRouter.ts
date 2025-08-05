@@ -127,7 +127,7 @@ export class WorkerMessageRouter {
 
     private flushQueue(): void {
         if (this.messageQueue.length === 0) {
-            this.queueTimer = undefined;
+            delete this.queueTimer;
             return;
         }
 
@@ -149,7 +149,7 @@ export class WorkerMessageRouter {
             }
         }
 
-        this.queueTimer = undefined;
+        delete this.queueTimer;
     }
 
     private processMessage(msg: unknown, worker: Worker): void {

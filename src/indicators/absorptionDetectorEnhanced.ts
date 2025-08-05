@@ -37,6 +37,7 @@ import type {
 } from "../types/signalTypes.js";
 import { z } from "zod";
 import { AbsorptionDetectorSchema, Config } from "../core/config.js";
+import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 
 /**
  * Enhanced configuration interface for absorption detection - ONLY absorption-specific parameters
@@ -104,13 +105,14 @@ export class AbsorptionDetectorEnhanced extends Detector {
         preprocessor: IOrderflowPreprocessor,
         logger: ILogger,
         metrics: IMetricsCollector,
-        validationLogger: SignalValidationLogger
+        validationLogger: SignalValidationLogger,
+        signalLogger: ISignalLogger
     ) {
         // Settings are pre-validated by Config.ABSORPTION_DETECTOR getter
         // No validation needed here - trust that settings are correct
 
         // Initialize base detector directly (no legacy inheritance)
-        super(id, logger, metrics);
+        super(id, logger, metrics, signalLogger);
 
         // Initialize enhancement configuration
         this.useStandardizedZones = settings.useStandardizedZones;

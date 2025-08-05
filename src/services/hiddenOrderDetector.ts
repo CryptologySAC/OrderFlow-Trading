@@ -102,7 +102,7 @@ export class HiddenOrderDetector extends Detector {
         config: Partial<HiddenOrderDetectorConfig>,
         logger: ILogger,
         metricsCollector: IMetricsCollector,
-        signalLogger?: ISignalLogger
+        signalLogger: ISignalLogger
     ) {
         super(id, logger, metricsCollector, signalLogger);
         this.config = {

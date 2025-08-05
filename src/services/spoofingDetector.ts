@@ -123,10 +123,10 @@ export class SpoofingDetector extends EventEmitter {
     >;
 
     private config: SpoofingDetectorConfig;
-    private logger?: ILogger;
+    private logger: ILogger;
     private anomalyDetector?: AnomalyDetector;
 
-    constructor(config: SpoofingDetectorConfig, logger?: ILogger) {
+    constructor(config: SpoofingDetectorConfig, logger: ILogger) {
         super();
         this.config = config;
         this.logger = logger;

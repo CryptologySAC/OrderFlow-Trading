@@ -233,7 +233,7 @@ export class SignalManager extends EventEmitter {
      * No complex anomaly enhancement, just health-based allow/block decisions.
      */
     private processSignal(signal: ProcessedSignal): ConfirmedSignal | null {
-        this.lastRejectReason = undefined;
+        delete this.lastRejectReason;
         try {
             // 1. Market health check (infrastructure safety)
             if (!this.checkMarketHealth()) {
@@ -347,7 +347,7 @@ export class SignalManager extends EventEmitter {
                 undefined,
                 confirmedSignal
             );
-            this.lastRejectReason = undefined;
+            delete this.lastRejectReason;
             return confirmedSignal;
         } catch (error) {
             this.logger.error("[SignalManager] Failed to process signal", {

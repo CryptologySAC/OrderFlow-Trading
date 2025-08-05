@@ -34,10 +34,9 @@
         "preserveConstEnums": true,
         "removeComments": true,
         "allowJs": false,
-
         "noUncheckedIndexedAccess": true,
         "noPropertyAccessFromIndexSignature": true,
-        "exactOptionalPropertyTypes": false
+        "exactOptionalPropertyTypes": true
     },
     "include": ["src/**/*", "test/**/*", "scripts/**/*"],
     "ts-node": {

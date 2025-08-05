@@ -7,11 +7,11 @@ export class CircularBuffer<T> implements Iterable<T> {
     private tail = 0;
     private size = 0;
     private sequence = 0n;
-    private readonly cleanupCallback?: (item: T) => void;
+    private readonly cleanupCallback: (item: T) => void;
 
     constructor(
         private capacity: number,
-        cleanupCallback?: (item: T) => void
+        cleanupCallback: (item: T) => void = () => {} // Default no-op cleanup
     ) {
         this.buffer = new Array(capacity) as T[];
         this.capacity = capacity;

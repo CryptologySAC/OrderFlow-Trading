@@ -67,7 +67,8 @@ export class DetectorFactory {
             dependencies.preprocessor,
             dependencies.logger,
             dependencies.metricsCollector,
-            dependencies.signalValidationLogger
+            dependencies.signalValidationLogger,
+            dependencies.signalLogger
         );
 
         dependencies.logger.info(
@@ -104,7 +105,7 @@ export class DetectorFactory {
             dependencies.preprocessor,
             dependencies.logger,
             dependencies.metricsCollector,
-            dependencies.signalLogger!,
+            dependencies.signalLogger,
             dependencies.signalValidationLogger
         );
 
@@ -141,7 +142,8 @@ export class DetectorFactory {
             productionSettings,
             dependencies.preprocessor,
             dependencies.logger,
-            dependencies.metricsCollector
+            dependencies.metricsCollector,
+            dependencies.signalLogger
         );
 
         dependencies.logger.info(
@@ -176,7 +178,8 @@ export class DetectorFactory {
             productionSettings,
             dependencies.preprocessor,
             dependencies.logger,
-            dependencies.metricsCollector
+            dependencies.metricsCollector,
+            dependencies.signalLogger
         );
 
         dependencies.logger.info(
@@ -735,7 +738,7 @@ export interface DetectorDependencies {
     logger: ILogger;
     spoofingDetector: SpoofingDetector;
     metricsCollector: IMetricsCollector;
-    signalLogger?: ISignalLogger;
+    signalLogger: ISignalLogger;
     preprocessor: IOrderflowPreprocessor;
     signalValidationLogger: SignalValidationLogger;
 }

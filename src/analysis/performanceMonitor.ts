@@ -196,19 +196,19 @@ export class PerformanceMonitor extends EventEmitter {
 
         if (this.performanceAnalysisInterval) {
             clearInterval(this.performanceAnalysisInterval);
-            this.performanceAnalysisInterval = undefined;
+            delete this.performanceAnalysisInterval;
         }
         if (this.quickCheckInterval) {
             clearInterval(this.quickCheckInterval);
-            this.quickCheckInterval = undefined;
+            delete this.quickCheckInterval;
         }
         if (this.healthCheckInterval) {
             clearInterval(this.healthCheckInterval);
-            this.healthCheckInterval = undefined;
+            delete this.healthCheckInterval;
         }
         if (this.reportGenerationInterval) {
             clearInterval(this.reportGenerationInterval);
-            this.reportGenerationInterval = undefined;
+            delete this.reportGenerationInterval;
         }
 
         this.emit("monitoringStopped");
@@ -1029,7 +1029,7 @@ export class PerformanceMonitor extends EventEmitter {
             isMonitoring: !!this.performanceAnalysisInterval,
             activeAlerts: this.activeAlerts.size,
             systemHealth: this.systemHealth.overall,
-            lastAnalysis: this.lastPerformanceReport?.generatedAt,
+            lastAnalysis: this.lastPerformanceReport?.generatedAt ?? -1,
             recentTrends: this.recentTrends.length,
             config: this.config,
         };

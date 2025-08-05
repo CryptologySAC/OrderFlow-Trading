@@ -140,7 +140,7 @@ export class StorageHealthMonitor extends EventEmitter {
         this.isMonitoring = false;
         if (this.healthCheckTimer) {
             clearTimeout(this.healthCheckTimer);
-            this.healthCheckTimer = undefined;
+            delete this.healthCheckTimer;
         }
         this.emit("monitoring_stopped");
         this.log("info", "Storage health monitoring stopped");
@@ -159,7 +159,7 @@ export class StorageHealthMonitor extends EventEmitter {
     public recordOperation(
         duration: number,
         success: boolean,
-        error?: string
+        error: string = ""
     ): void {
         const now = Date.now();
 

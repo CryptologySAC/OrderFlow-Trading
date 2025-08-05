@@ -474,7 +474,7 @@ export class DataStreamManager extends EventEmitter {
         // Clear any existing reconnect timer
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
-            this.reconnectTimer = undefined;
+            delete this.reconnectTimer;
         }
 
         // Check if we've exceeded max attempts
@@ -627,7 +627,7 @@ export class DataStreamManager extends EventEmitter {
     private stopHeartbeat(): void {
         if (this.heartbeatTimer) {
             clearInterval(this.heartbeatTimer);
-            this.heartbeatTimer = undefined;
+            delete this.heartbeatTimer;
         }
     }
 
@@ -641,7 +641,7 @@ export class DataStreamManager extends EventEmitter {
     private stopStreamHealthCheck(): void {
         if (this.healthCheckTimer) {
             clearInterval(this.healthCheckTimer);
-            this.healthCheckTimer = undefined;
+            delete this.healthCheckTimer;
         }
     }
 
@@ -683,7 +683,7 @@ export class DataStreamManager extends EventEmitter {
 
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
-            this.reconnectTimer = undefined;
+            delete this.reconnectTimer;
         }
     }
 
@@ -712,12 +712,12 @@ export class DataStreamManager extends EventEmitter {
             // Clean up streams
             if (this.tradeStream) {
                 this.tradeStream.removeAllListeners?.();
-                this.tradeStream = undefined;
+                delete this.tradeStream;
             }
 
             if (this.depthStream) {
                 this.depthStream.removeAllListeners?.();
-                this.depthStream = undefined;
+                delete this.depthStream;
             }
 
             // Clean up connection
@@ -751,10 +751,10 @@ export class DataStreamManager extends EventEmitter {
                         correlationId
                     );
                 }
-                this.connection = undefined;
+                delete this.connection;
             }
 
-            this.connectedAt = undefined;
+            delete this.connectedAt;
         } catch (error) {
             this.logger.error(
                 "Error during connection cleanup",
@@ -830,7 +830,7 @@ export class DataStreamManager extends EventEmitter {
         isConnected: boolean;
         reconnectAttempts: number;
         symbol: string;
-        uptime?: number;
+        uptime: number;
         streamHealth: StreamHealth;
         lastReconnectAttempt: number;
     } {
@@ -839,7 +839,7 @@ export class DataStreamManager extends EventEmitter {
             isConnected: this.connectionState === ConnectionState.CONNECTED,
             reconnectAttempts: Number(this.reconnectAttempts),
             symbol: this.config.symbol,
-            uptime: this.getUptime(),
+            uptime: this.getUptime() ?? 0,
             streamHealth: { ...this.streamHealth },
             lastReconnectAttempt: this.lastReconnectAttempt,
         };

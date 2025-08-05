@@ -397,11 +397,9 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         try {
             if (this.apiConnection) {
                 await this.apiConnection.disconnect();
-                this.apiConnection = undefined;
             }
             if (this.streamConnection) {
                 await this.streamConnection.disconnect();
-                this.streamConnection = undefined;
             }
             this.logger.info("BinanceDataFeed disconnected and cleaned up");
         } catch (error) {

@@ -409,7 +409,7 @@ export class OrderBookProcessor implements IOrderBookProcessor {
             avgProcessingTimeMs: avgTime,
             p99ProcessingTimeMs: p99Time,
             errorCount: this.errorCount.toString(), // Convert BigInt to string for JSON serialization
-            lastError: this.lastError,
+            lastError: this.lastError ?? "",
         };
     }
 

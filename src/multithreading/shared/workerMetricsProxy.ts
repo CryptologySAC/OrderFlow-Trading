@@ -91,7 +91,7 @@ export class WorkerMetricsProxy implements IWorkerMetricsCollector {
     incrementCounter(
         name: string,
         increment: number = 1,
-        labels?: Record<string, string>
+        labels: Record<string, string> = {}
     ): void {
         try {
             const current = this.localMetrics.get(name) || 0;
@@ -119,7 +119,7 @@ export class WorkerMetricsProxy implements IWorkerMetricsCollector {
     recordGauge(
         name: string,
         value: number,
-        labels?: Record<string, string>
+        labels: Record<string, string> = {}
     ): void {
         try {
             this.localMetrics.set(name, value);
@@ -248,7 +248,7 @@ export class WorkerMetricsProxy implements IWorkerMetricsCollector {
             this.batchBuffer = [];
         }
 
-        this.batchTimer = undefined;
+        delete this.batchTimer;
         this.lastRateCalculation = Date.now();
     }
 
@@ -317,7 +317,7 @@ export class WorkerMetricsProxy implements IWorkerMetricsCollector {
     recordHistogram(
         name: string,
         value: number,
-        labels?: Record<string, string>
+        labels: Record<string, string> = {}
     ): void {
         try {
             this.localMetrics.set(`${name}_histogram`, value);

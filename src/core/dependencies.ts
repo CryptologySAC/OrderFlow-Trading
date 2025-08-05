@@ -55,8 +55,8 @@ export interface Dependencies {
     spoofingDetector: SpoofingDetector;
     icebergDetector: SimpleIcebergDetector;
     hiddenOrderDetector: HiddenOrderDetector;
-    individualTradesManager?: IndividualTradesManager;
-    microstructureAnalyzer?: MicrostructureAnalyzer;
+    individualTradesManager: IndividualTradesManager;
+    microstructureAnalyzer: MicrostructureAnalyzer;
 
     // Performance Analysis (optional)
     signalTracker?: SignalTracker;

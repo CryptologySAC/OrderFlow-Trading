@@ -272,7 +272,7 @@ export class AnomalyDetector extends EventEmitter {
             this.priceHistory.push(trade.price);
 
             // Compute spread if we have valid quotes
-            let spreadBps: number | undefined;
+            let spreadBps: number = -1;
             if (this.currentBestBid && this.currentBestAsk && trade.price > 0) {
                 const spread = this.currentBestAsk - this.currentBestBid;
                 spreadBps = (spread / trade.price) * 10000;

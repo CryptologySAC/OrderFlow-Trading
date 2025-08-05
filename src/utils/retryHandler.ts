@@ -227,13 +227,13 @@ export class RetryHandler {
     public static createComponentRetryHandler(
         component: string,
         logger: ILogger,
-        metricsCollector?: IMetricsCollector
+        metricsCollector: IMetricsCollector
     ) {
         return {
             fast: async <T>(
                 operation: string,
                 fn: () => Promise<T>,
-                correlationId?: string
+                correlationId: string = ""
             ): Promise<T> => {
                 return this.executeWithRetry(fn, this.PRESETS.FAST, {
                     operation,
@@ -247,7 +247,7 @@ export class RetryHandler {
             standard: async <T>(
                 operation: string,
                 fn: () => Promise<T>,
-                correlationId?: string
+                correlationId: string = ""
             ): Promise<T> => {
                 return this.executeWithRetry(fn, this.PRESETS.STANDARD, {
                     operation,
@@ -261,7 +261,7 @@ export class RetryHandler {
             persistent: async <T>(
                 operation: string,
                 fn: () => Promise<T>,
-                correlationId?: string
+                correlationId: string = ""
             ): Promise<T> => {
                 return this.executeWithRetry(fn, this.PRESETS.PERSISTENT, {
                     operation,
@@ -275,7 +275,7 @@ export class RetryHandler {
             network: async <T>(
                 operation: string,
                 fn: () => Promise<T>,
-                correlationId?: string
+                correlationId: string = ""
             ): Promise<T> => {
                 return this.executeWithRetry(fn, this.PRESETS.NETWORK, {
                     operation,
@@ -290,7 +290,7 @@ export class RetryHandler {
                 operation: string,
                 fn: () => Promise<T>,
                 config: RetryConfig,
-                correlationId?: string
+                correlationId: string = ""
             ): Promise<T> => {
                 return this.executeWithRetry(fn, config, {
                     operation,

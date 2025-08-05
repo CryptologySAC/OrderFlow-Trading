@@ -2,13 +2,13 @@ export type AllowedSymbols = "LTCUSDT";
 
 export interface MQTTConfig {
     url: string;
-    username?: string;
-    password?: string;
-    statsTopic?: string;
-    clientId?: string;
-    keepalive?: number;
-    connectTimeout?: number;
-    reconnectPeriod?: number;
+    username?: string | undefined;
+    password?: string | undefined;
+    statsTopic?: string | undefined;
+    clientId?: string | undefined;
+    keepalive?: number | undefined;
+    connectTimeout?: number | undefined;
+    reconnectPeriod?: number | undefined;
 }
 
 export interface MarketDataStorageConfig {

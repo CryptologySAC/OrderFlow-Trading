@@ -1179,30 +1179,30 @@ export class PipelineStorage implements IPipelineStorage {
         };
 
         return {
-            signalId: row["signalId"] as string,
-            signalType: row["signalType"] as string,
-            detectorId: row["detectorId"] as string,
-            entryPrice: row["entryPrice"] as number,
-            entryTime: row["entryTime"] as number,
-            originalConfidence: row["originalConfidence"] as number,
-            priceAfter1min: row["priceAfter1min"] as number | undefined,
-            priceAfter5min: row["priceAfter5min"] as number | undefined,
-            priceAfter15min: row["priceAfter15min"] as number | undefined,
-            priceAfter1hour: row["priceAfter1hour"] as number | undefined,
-            maxFavorableMove: row["maxFavorableMove"] as number,
-            maxAdverseMove: row["maxAdverseMove"] as number,
-            timeToMaxFavorable: row["timeToMaxFavorable"] as number | undefined,
-            timeToMaxAdverse: row["timeToMaxAdverse"] as number | undefined,
+            signalId: (row["signalId"] as string) ?? "",
+            signalType: (row["signalType"] as string) ?? "",
+            detectorId: (row["detectorId"] as string) ?? "",
+            entryPrice: (row["entryPrice"] as number) ?? 0,
+            entryTime: (row["entryTime"] as number) ?? 0,
+            originalConfidence: (row["originalConfidence"] as number) ?? 0,
+            priceAfter1min: (row["priceAfter1min"] as number) ?? 0,
+            priceAfter5min: (row["priceAfter5min"] as number) ?? 0,
+            priceAfter15min: (row["priceAfter15min"] as number) ?? 0,
+            priceAfter1hour: (row["priceAfter1hour"] as number) ?? 0,
+            maxFavorableMove: (row["maxFavorableMove"] as number) ?? 0,
+            maxAdverseMove: (row["maxAdverseMove"] as number) ?? 0,
+            timeToMaxFavorable: (row["timeToMaxFavorable"] as number) ?? 0,
+            timeToMaxAdverse: (row["timeToMaxAdverse"] as number) ?? 0,
             outcome: row["outcome"] as
                 | "success"
                 | "failure"
                 | "mixed"
                 | "timeout"
                 | "pending",
-            finalizedAt: row["finalizedAt"] as number | undefined,
+            finalizedAt: (row["finalizedAt"] as number) ?? 0,
             marketContext,
-            currentPrice: row["currentPrice"] as number | undefined,
-            lastUpdated: row["lastUpdateTime"] as number,
+            currentPrice: (row["currentPrice"] as number) ?? 0,
+            lastUpdated: (row["lastUpdateTime"] as number) ?? 0,
             isActive: row["isActive"] === 1,
         };
     }

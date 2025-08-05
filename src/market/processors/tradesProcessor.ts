@@ -1020,19 +1020,19 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         // ✅ RESOURCE CLEANUP FIX: Properly clear and nullify timers
         if (this.saveTimer) {
             clearInterval(this.saveTimer);
-            this.saveTimer = undefined;
+            delete this.saveTimer;
         }
         if (this.healthCheckTimer) {
             clearInterval(this.healthCheckTimer);
-            this.healthCheckTimer = undefined;
+            delete this.healthCheckTimer;
         }
         if (this.tradeIdCleanupTimer) {
             clearInterval(this.tradeIdCleanupTimer);
-            this.tradeIdCleanupTimer = undefined;
+            delete this.tradeIdCleanupTimer;
         }
         if (this.tradeBufferCleanupTimer) {
             clearInterval(this.tradeBufferCleanupTimer);
-            this.tradeBufferCleanupTimer = undefined;
+            delete this.tradeBufferCleanupTimer;
         }
 
         // ✅ RESOURCE CLEANUP FIX: Remove all EventEmitter listeners to prevent memory leaks

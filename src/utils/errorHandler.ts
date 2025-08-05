@@ -11,7 +11,7 @@ export interface ErrorContext {
 
 export interface ErrorHandlerConfig {
     logger: ILogger;
-    metricsCollector?: IMetricsCollector;
+    metricsCollector: IMetricsCollector;
     throwOnError?: boolean;
     logLevel?: "error" | "warn" | "info";
 }
@@ -129,14 +129,14 @@ export class ErrorHandler {
     public static createComponentHandler(
         component: string,
         logger: ILogger,
-        metricsCollector?: IMetricsCollector
+        metricsCollector: IMetricsCollector
     ) {
         return {
             handleSync: <T>(
                 operation: string,
                 fn: () => T,
-                metadata?: Record<string, unknown>,
-                correlationId?: string
+                metadata: Record<string, unknown> = {},
+                correlationId: string = ""
             ): T | null => {
                 return this.handleError(
                     fn,
@@ -148,8 +148,8 @@ export class ErrorHandler {
             handleAsync: async <T>(
                 operation: string,
                 fn: () => Promise<T>,
-                metadata?: Record<string, unknown>,
-                correlationId?: string
+                metadata: Record<string, unknown> = {},
+                correlationId: string = ""
             ): Promise<T | null> => {
                 return this.handleErrorAsync(
                     fn,
@@ -161,8 +161,8 @@ export class ErrorHandler {
             handleSyncThrow: <T>(
                 operation: string,
                 fn: () => T,
-                metadata?: Record<string, unknown>,
-                correlationId?: string
+                metadata: Record<string, unknown> = {},
+                correlationId: string = ""
             ): T => {
                 const result = this.handleError(
                     fn,
@@ -175,8 +175,8 @@ export class ErrorHandler {
             handleAsyncThrow: async <T>(
                 operation: string,
                 fn: () => Promise<T>,
-                metadata?: Record<string, unknown>,
-                correlationId?: string
+                metadata: Record<string, unknown> = {},
+                correlationId: string = ""
             ): Promise<T> => {
                 const result = await this.handleErrorAsync(
                     fn,
@@ -197,8 +197,8 @@ export class ErrorHandler {
         component: string,
         logger: ILogger,
         fn: () => T,
-        metricsCollector?: IMetricsCollector,
-        correlationId?: string
+        metricsCollector: IMetricsCollector,
+        correlationId: string = ""
     ): T | null {
         return this.handleError(
             fn,
@@ -215,8 +215,8 @@ export class ErrorHandler {
         component: string,
         logger: ILogger,
         fn: () => Promise<T>,
-        metricsCollector?: IMetricsCollector,
-        correlationId?: string
+        metricsCollector: IMetricsCollector,
+        correlationId: string = ""
     ): Promise<T | null> {
         return this.handleErrorAsync(
             fn,

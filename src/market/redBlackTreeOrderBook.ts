@@ -343,7 +343,7 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
     public shutdown(): void {
         if (this.pruneTimer) {
             clearInterval(this.pruneTimer);
-            this.pruneTimer = undefined;
+            delete this.pruneTimer;
         }
 
         this.tree.clear();
