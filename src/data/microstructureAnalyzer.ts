@@ -4,9 +4,9 @@ import type {
     IndividualTrade,
     MicrostructureMetrics,
     CoordinationSignal,
-} from "../types/marketEvents.ts";
-import type { ILogger } from "../infrastructure/loggerInterface.ts";
-import type { IWorkerMetricsCollector } from "../multithreading/shared/workerInterfaces.ts";
+} from "../types/marketEvents.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IWorkerMetricsCollector } from "../multithreading/shared/workerInterfaces.js";
 
 export interface MicrostructureAnalyzerConfig {
     // Timing analysis thresholds

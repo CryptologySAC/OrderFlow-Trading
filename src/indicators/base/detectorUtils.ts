@@ -1,8 +1,8 @@
 // src/indicators/base/detectorUtils.ts
 import { SpotWebsocketStreams } from "@binance/spot";
-import type { AggressiveTrade } from "../../types/marketEvents.ts";
+import type { AggressiveTrade } from "../../types/marketEvents.js";
 import { randomUUID } from "crypto";
-import { FinancialMath } from "../../utils/financialMath.ts";
+import { FinancialMath } from "../../utils/financialMath.js";
 
 /**
  * @deprecated This class is being migrated to use FinancialMath for all calculations.

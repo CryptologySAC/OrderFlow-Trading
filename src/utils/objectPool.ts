@@ -7,8 +7,8 @@ import type {
     AccumulationConditions,
     VolumeCalculationResult,
     ImbalanceResult,
-} from "../indicators/interfaces/detectorInterfaces.ts";
-import { AggressiveTrade } from "../types/marketEvents.ts";
+} from "../indicators/interfaces/detectorInterfaces.js";
+import { AggressiveTrade } from "../types/marketEvents.js";
 
 /**
  * Generic object pool for reducing garbage collection pressure

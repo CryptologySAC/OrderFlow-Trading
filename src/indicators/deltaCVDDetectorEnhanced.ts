@@ -18,24 +18,24 @@
 // - Cross-timeframe momentum alignment detection
 //
 
-import { Detector } from "./base/detectorEnrichedTrade.ts";
-import { FinancialMath } from "../utils/financialMath.ts";
-import { TimeAwareCache } from "../utils/timeAwareCache.ts";
-import { SignalValidationLogger } from "../utils/signalValidationLogger.ts";
-import type { ILogger } from "../infrastructure/loggerInterface.ts";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
-import { ISignalLogger } from "../infrastructure/signalLoggerInterface.ts";
-import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.ts";
+import { Detector } from "./base/detectorEnrichedTrade.js";
+import { FinancialMath } from "../utils/financialMath.js";
+import { TimeAwareCache } from "../utils/timeAwareCache.js";
+import { SignalValidationLogger } from "../utils/signalValidationLogger.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
+import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
 import type {
     EnrichedTradeEvent,
     StandardZoneData,
     ZoneSnapshot,
-} from "../types/marketEvents.ts";
-import type { DeltaCVDCalculatedValues } from "../types/calculatedValuesTypes.ts";
-import type { SignalCandidate } from "../types/signalTypes.ts";
+} from "../types/marketEvents.js";
+import type { DeltaCVDCalculatedValues } from "../types/calculatedValuesTypes.js";
+import type { SignalCandidate } from "../types/signalTypes.js";
 import { z } from "zod";
-import { DeltaCVDDetectorSchema } from "../core/config.ts";
-import { Config } from "../core/config.ts";
+import { DeltaCVDDetectorSchema } from "../core/config.js";
+import { Config } from "../core/config.js";
 
 /**
  * Enhanced configuration interface extending DeltaCVDConfirmationSettings with standardized zone capabilities

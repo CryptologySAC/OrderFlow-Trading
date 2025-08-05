@@ -13,7 +13,7 @@ import {
     Logger,
     LogLevel,
 } from "@binance/common";
-import { ProductionUtils } from "./productionUtils.ts";
+import { ProductionUtils } from "./productionUtils.js";
 
 // --- Error Types ---
 export class BinanceApiError extends Error {

@@ -1,8 +1,8 @@
 // src/utils/productionUtils.ts - NEW UTILITY CLASS
-import type { BaseDetectorSettings } from "../indicators/interfaces/detectorInterfaces.ts";
-import type { ILogger } from "../infrastructure/loggerInterface.ts";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
-import { CircuitBreaker } from "../infrastructure/circuitBreaker.ts";
+import type { BaseDetectorSettings } from "../indicators/interfaces/detectorInterfaces.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import { CircuitBreaker } from "../infrastructure/circuitBreaker.js";
 
 export class ProductionUtils {
     /**

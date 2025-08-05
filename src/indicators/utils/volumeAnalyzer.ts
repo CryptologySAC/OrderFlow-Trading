@@ -3,7 +3,7 @@
 import {
     EnrichedTradeEvent,
     AggressiveTrade,
-} from "../../types/marketEvents.ts";
+} from "../../types/marketEvents.js";
 import type {
     IVolumeAnalyzer,
     VolumeHistory,
@@ -14,8 +14,8 @@ import type {
     InstitutionalActivityResult,
     VolumeAnalysisState,
     VolumeValidationResult,
-} from "../interfaces/volumeAnalysisInterface.ts";
-import type { ILogger } from "../../infrastructure/loggerInterface.ts";
+} from "../interfaces/volumeAnalysisInterface.js";
+import type { ILogger } from "../../infrastructure/loggerInterface.js";
 
 /**
  * Shared volume analysis implementation for detector reuse

@@ -6,9 +6,9 @@ import {
     ProcessedSignal,
     SignalCandidate,
     SignalType,
-} from "../types/signalTypes.ts";
+} from "../types/signalTypes.js";
 
-import { Detector } from "../indicators/base/detectorEnrichedTrade.ts";
+import { Detector } from "../indicators/base/detectorEnrichedTrade.js";
 /* ===========================
    BINANCE SPECIFIC TYPES
    =========================== */

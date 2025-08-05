@@ -6,11 +6,11 @@ import {
     ZoneUpdate,
     ZoneDetectionData,
     ZoneQueryOptions,
-} from "../types/zoneTypes.ts";
-import { Config } from "../core/config.ts";
-import type { EnrichedTradeEvent } from "../types/marketEvents.ts";
-import type { ILogger } from "../infrastructure/loggerInterface.ts";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
+} from "../types/zoneTypes.js";
+import { Config } from "../core/config.js";
+import type { EnrichedTradeEvent } from "../types/marketEvents.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 
 export class ZoneManager extends EventEmitter {
     private activeZones = new Map<string, TradingZone>();

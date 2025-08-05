@@ -4,11 +4,11 @@ import type {
     EnhancedMetrics,
     HealthSummary,
     HistogramSummary,
-} from "../../infrastructure/metricsCollector.ts";
+} from "../../infrastructure/metricsCollector.js";
 import type {
     IWorkerMetricsCollector,
     MetricUpdate,
-} from "./workerInterfaces.ts";
+} from "./workerInterfaces.js";
 
 /**
  * Worker-side proxy for MetricsCollector with batching and complete compatibility

@@ -1,9 +1,9 @@
-import type { ProcessedSignal, SignalCandidate } from "../types/signalTypes.ts";
+import type { ProcessedSignal, SignalCandidate } from "../types/signalTypes.js";
 import type {
     ISignalLogger,
     SignalEvent,
-} from "../infrastructure/signalLoggerInterface.ts";
-import { ThreadManager } from "./threadManager.ts";
+} from "../infrastructure/signalLoggerInterface.js";
+import { ThreadManager } from "./threadManager.js";
 
 export class WorkerSignalLogger implements ISignalLogger {
     constructor(private readonly manager: ThreadManager) {}

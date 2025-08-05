@@ -1,6 +1,6 @@
 // src/infrastructure/metricsCollector.ts
 
-import type { IMetricsCollector } from "./metricsCollectorInterface.ts";
+import type { IMetricsCollector } from "./metricsCollectorInterface.js";
 
 /**
  * Enhanced metrics data structure with better organization

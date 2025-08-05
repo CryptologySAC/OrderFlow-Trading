@@ -14,44 +14,44 @@ import { randomUUID } from "crypto";
 import { SpotWebsocketStreams } from "@binance/spot";
 
 // Core imports
-import { Config } from "./core/config.ts";
-import { SignalProcessingError } from "./core/errors.ts";
+import { Config } from "./core/config.js";
+import { SignalProcessingError } from "./core/errors.js";
 
 // Infrastructure imports
-import type { IMetricsCollector } from "./infrastructure/metricsCollectorInterface.ts";
+import type { IMetricsCollector } from "./infrastructure/metricsCollectorInterface.js";
 
 import {
     RecoveryManager,
     type HardReloadEvent,
-} from "./infrastructure/recoveryManager.ts";
-import { ThreadManager } from "./multithreading/threadManager.ts";
+} from "./infrastructure/recoveryManager.js";
+import { ThreadManager } from "./multithreading/threadManager.js";
 
 // Service imports
 import {
     DetectorFactory,
     type DetectorDependencies,
-} from "./utils/detectorFactory.ts";
+} from "./utils/detectorFactory.js";
 import type {
     EnrichedTradeEvent,
     OrderBookSnapshot,
-} from "./types/marketEvents.ts";
-import { OrderflowPreprocessor } from "./market/orderFlowPreprocessor.ts";
-import { RedBlackTreeOrderBook } from "./market/redBlackTreeOrderBook.ts";
-import type { IOrderBookState } from "./market/orderBookState.ts";
-import { SignalManager } from "./trading/signalManager.ts";
-import { SignalCoordinator } from "./services/signalCoordinator.ts";
-import { AnomalyDetector, AnomalyEvent } from "./services/anomalyDetector.ts";
+} from "./types/marketEvents.js";
+import { OrderflowPreprocessor } from "./market/orderFlowPreprocessor.js";
+import { RedBlackTreeOrderBook } from "./market/redBlackTreeOrderBook.js";
+import type { IOrderBookState } from "./market/orderBookState.js";
+import { SignalManager } from "./trading/signalManager.js";
+import { SignalCoordinator } from "./services/signalCoordinator.js";
+import { AnomalyDetector, AnomalyEvent } from "./services/anomalyDetector.js";
 
 // Enhanced Indicator imports
-import { AbsorptionDetectorEnhanced } from "./indicators/absorptionDetectorEnhanced.ts";
-import { ExhaustionDetectorEnhanced } from "./indicators/exhaustionDetectorEnhanced.ts";
-import { DeltaCVDDetectorEnhanced } from "./indicators/deltaCVDDetectorEnhanced.ts";
+import { AbsorptionDetectorEnhanced } from "./indicators/absorptionDetectorEnhanced.js";
+import { ExhaustionDetectorEnhanced } from "./indicators/exhaustionDetectorEnhanced.js";
+import { DeltaCVDDetectorEnhanced } from "./indicators/deltaCVDDetectorEnhanced.js";
 // Support/Resistance detector import removed - detector disabled
-// import { SupportResistanceDetector } from "./indicators/supportResistanceDetector.ts";
+// import { SupportResistanceDetector } from "./indicators/supportResistanceDetector.js";
 
 // Enhanced Zone-based Detector imports
-import { AccumulationZoneDetectorEnhanced } from "./indicators/accumulationZoneDetectorEnhanced.ts";
-import { DistributionDetectorEnhanced } from "./indicators/distributionDetectorEnhanced.ts";
+import { AccumulationZoneDetectorEnhanced } from "./indicators/accumulationZoneDetectorEnhanced.js";
+import { DistributionDetectorEnhanced } from "./indicators/distributionDetectorEnhanced.js";
 import type {
     TradingZone,
     ZoneUpdate,
@@ -60,16 +60,16 @@ import type {
     IcebergZoneUpdate,
     HiddenOrderZoneUpdate,
     SpoofingZoneUpdate,
-} from "./types/zoneTypes.ts";
+} from "./types/zoneTypes.js";
 
 // Utils imports
-import { TradeData } from "./utils/interfaces.ts";
+import { TradeData } from "./utils/interfaces.js";
 
 // Types
-import type { Dependencies } from "./core/dependencies.ts";
-import type { Signal, ConfirmedSignal } from "./types/signalTypes.ts";
-import type { ZoneUpdateEvent, ZoneSignalEvent } from "./types/zoneTypes.ts";
-import type { ConnectivityIssue } from "./infrastructure/apiConnectivityMonitor.ts";
+import type { Dependencies } from "./core/dependencies.js";
+import type { Signal, ConfirmedSignal } from "./types/signalTypes.js";
+import type { ZoneUpdateEvent, ZoneSignalEvent } from "./types/zoneTypes.js";
+import type { ConnectivityIssue } from "./infrastructure/apiConnectivityMonitor.js";
 import type {
     TimeContext,
     DetectorRegisteredEvent,
@@ -77,18 +77,18 @@ import type {
     SignalProcessedEvent,
     SignalFailedEvent,
     DetectorErrorEvent,
-} from "./utils/types.ts";
+} from "./utils/types.js";
 
 // Storage and processors
 import {
     MarketDataStorageService,
     type DataStorageConfig,
-} from "./services/marketDataStorageService.ts";
+} from "./services/marketDataStorageService.js";
 
-import { ProductionUtils } from "./utils/productionUtils.ts";
+import { ProductionUtils } from "./utils/productionUtils.js";
 
-import type { WebSocketMessage } from "./utils/interfaces.ts";
-import { ILogger } from "./infrastructure/loggerInterface.ts";
+import type { WebSocketMessage } from "./utils/interfaces.js";
+import { ILogger } from "./infrastructure/loggerInterface.js";
 
 EventEmitter.defaultMaxListeners = 20;
 

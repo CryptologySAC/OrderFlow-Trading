@@ -5,7 +5,7 @@ import type {
     EnhancedMetrics,
     HealthSummary,
     HistogramSummary,
-} from "../../infrastructure/metricsCollector.ts";
+} from "../../infrastructure/metricsCollector.js";
 
 /**
  * Minimal interface for metrics collection that workers need

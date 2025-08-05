@@ -3,7 +3,7 @@
 import {
     EnrichedTradeEvent,
     AggressiveTrade,
-} from "../../types/marketEvents.ts";
+} from "../../types/marketEvents.js";
 
 /**
  * Shared volume surge analysis interface for detector reuse

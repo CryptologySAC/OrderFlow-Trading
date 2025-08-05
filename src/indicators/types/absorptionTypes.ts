@@ -4,7 +4,7 @@
 import type {
     BaseDetectorSettings,
     AbsorptionFeatures,
-} from "../interfaces/detectorInterfaces.ts";
+} from "../interfaces/detectorInterfaces.js";
 
 export interface AbsorptionSettings extends BaseDetectorSettings {
     features?: AbsorptionFeatures;

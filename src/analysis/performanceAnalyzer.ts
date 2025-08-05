@@ -1,14 +1,14 @@
 // src/analysis/performanceAnalyzer.ts
 
-import type { ILogger } from "../infrastructure/loggerInterface.ts";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
-import type { IPipelineStorage } from "../infrastructure/pipelineStorage.ts";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import type { IPipelineStorage } from "../infrastructure/pipelineStorage.js";
 import type {
     SignalOutcome,
     MarketContext,
     FailedSignalAnalysis,
-} from "./signalTracker.ts";
-import type { SignalType } from "../types/signalTypes.ts";
+} from "./signalTracker.js";
+import type { SignalType } from "../types/signalTypes.js";
 
 export interface PerformanceReport {
     // Summary metrics

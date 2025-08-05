@@ -1,5 +1,5 @@
 // src/multithreading/shared/workerRateLimiterProxy.ts
-import type { IWorkerRateLimiter } from "./workerInterfaces.ts";
+import type { IWorkerRateLimiter } from "./workerInterfaces.js";
 
 /**
  * Enhanced worker-side proxy for RateLimiter with client-specific tracking

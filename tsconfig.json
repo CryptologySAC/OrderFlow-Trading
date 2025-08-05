@@ -13,7 +13,6 @@
     },
     "include": ["src/**/*", "test/**/*", "scripts/**/*"],
     "ts-node": {
-        "esm": true,
-        "experimentalSpecifierResolution": "node"
+        "esm": true
     }
 }

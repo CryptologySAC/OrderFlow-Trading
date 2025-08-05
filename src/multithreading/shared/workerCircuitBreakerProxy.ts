@@ -1,8 +1,8 @@
 // src/multithreading/shared/workerCircuitBreakerProxy.ts
 import { parentPort } from "worker_threads";
-import type { IWorkerCircuitBreaker } from "./workerInterfaces.ts";
-import type { ICircuitBreaker } from "../../infrastructure/circuitBreakerInterface.ts";
-import type { ILogger } from "../../infrastructure/loggerInterface.ts";
+import type { IWorkerCircuitBreaker } from "./workerInterfaces.js";
+import type { ICircuitBreaker } from "../../infrastructure/circuitBreakerInterface.js";
+import type { ILogger } from "../../infrastructure/loggerInterface.js";
 
 enum CircuitState {
     CLOSED = "CLOSED",

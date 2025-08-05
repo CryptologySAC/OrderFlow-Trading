@@ -12,8 +12,8 @@
  * - 0.7% movements are measured from latest local extreme to current price
  */
 
-import { FinancialMath } from "./financialMath.ts";
-import type { ILogger } from "../infrastructure/loggerInterface.ts";
+import { FinancialMath } from "./financialMath.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 
 export interface SwingPoint {
     price: number;

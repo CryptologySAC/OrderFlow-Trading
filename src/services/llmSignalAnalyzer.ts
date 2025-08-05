@@ -1,8 +1,8 @@
 import OpenAI from "openai";
 import { z } from "zod";
-import { Config } from "../core/config.ts";
-import type { ILogger } from "../infrastructure/loggerInterface.ts";
-import type { ProcessedSignal } from "../types/signalTypes.ts";
+import { Config } from "../core/config.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { ProcessedSignal } from "../types/signalTypes.js";
 
 /**
  * Secure API key validation schema

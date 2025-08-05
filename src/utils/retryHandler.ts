@@ -1,7 +1,7 @@
 // src/utils/retryHandler.ts
-import { ProductionUtils } from "./productionUtils.ts";
-import type { ILogger } from "../infrastructure/loggerInterface.ts";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
+import { ProductionUtils } from "./productionUtils.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 
 export interface RetryConfig {
     maxAttempts: number;

@@ -30,7 +30,7 @@
 
 import type { Database } from "better-sqlite3";
 import { EventEmitter } from "events";
-import type { ILogger } from "./loggerInterface.ts";
+import type { ILogger } from "./loggerInterface.js";
 
 export interface HealthMetrics {
     isHealthy: boolean;

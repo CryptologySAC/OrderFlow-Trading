@@ -34,7 +34,7 @@
 // Centralized resource cleanup manager - Prevents duplicate close handlers and ensures proper resource cleanup
 
 import type { Database } from "better-sqlite3";
-import type { ILogger } from "./loggerInterface.ts";
+import type { ILogger } from "./loggerInterface.js";
 
 interface ResourceCleanupHandler {
     id: string;

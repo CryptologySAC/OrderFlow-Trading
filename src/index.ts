@@ -1,8 +1,8 @@
 // src/index.ts
-//import { App } from "./app.ts";
-import { OrderFlowDashboard } from "./orderFlowDashBoard.ts";
-import { createDependencies } from "./core/dependencies.ts";
-import { ThreadManager } from "./multithreading/threadManager.ts";
+//import { App } from "./app.js";
+import { OrderFlowDashboard } from "./orderFlowDashBoard.js";
+import { createDependencies } from "./core/dependencies.js";
+import { ThreadManager } from "./multithreading/threadManager.js";
 
 /**
  * Main entry point for the Order Flow Trading application

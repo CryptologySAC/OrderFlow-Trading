@@ -1,26 +1,26 @@
 // src/utils/detectorFactory.ts
 import { randomUUID } from "crypto";
-import type { ILogger } from "../infrastructure/loggerInterface.ts";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
-import { ISignalLogger } from "../infrastructure/signalLoggerInterface.ts";
-import { AbsorptionDetectorEnhanced } from "../indicators/absorptionDetectorEnhanced.ts";
-import { ExhaustionDetectorEnhanced } from "../indicators/exhaustionDetectorEnhanced.ts";
-import { DeltaCVDDetectorEnhanced } from "../indicators/deltaCVDDetectorEnhanced.ts";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
+import { AbsorptionDetectorEnhanced } from "../indicators/absorptionDetectorEnhanced.js";
+import { ExhaustionDetectorEnhanced } from "../indicators/exhaustionDetectorEnhanced.js";
+import { DeltaCVDDetectorEnhanced } from "../indicators/deltaCVDDetectorEnhanced.js";
 
 import type {
     BaseDetectorSettings,
     DetectorStats,
     IBaseDetector,
-} from "../indicators/interfaces/detectorInterfaces.ts";
-import { SignalType } from "../types/signalTypes.ts";
-import { SpoofingDetector } from "../services/spoofingDetector.ts";
-import { Config } from "../core/config.ts";
+} from "../indicators/interfaces/detectorInterfaces.js";
+import { SignalType } from "../types/signalTypes.js";
+import { SpoofingDetector } from "../services/spoofingDetector.js";
+import { Config } from "../core/config.js";
 
-import { AccumulationZoneDetectorEnhanced } from "../indicators/accumulationZoneDetectorEnhanced.ts";
-import { DistributionDetectorEnhanced } from "../indicators/distributionDetectorEnhanced.ts";
-import { ZoneDetectorConfig } from "../types/zoneTypes.ts";
-import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.ts";
-import { SignalValidationLogger } from "./signalValidationLogger.ts";
+import { AccumulationZoneDetectorEnhanced } from "../indicators/accumulationZoneDetectorEnhanced.js";
+import { DistributionDetectorEnhanced } from "../indicators/distributionDetectorEnhanced.js";
+import { ZoneDetectorConfig } from "../types/zoneTypes.js";
+import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
+import { SignalValidationLogger } from "./signalValidationLogger.js";
 
 /**
  * Production detector factory with monitoring, validation, and lifecycle management

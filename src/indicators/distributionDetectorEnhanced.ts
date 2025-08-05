@@ -18,25 +18,25 @@
 // - Zero dependency on legacy ZoneManager or universalZoneConfig
 //
 
-import { Detector } from "./base/detectorEnrichedTrade.ts";
-import { FinancialMath } from "../utils/financialMath.ts";
-import type { ILogger } from "../infrastructure/loggerInterface.ts";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
-import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.ts";
+import { Detector } from "./base/detectorEnrichedTrade.js";
+import { FinancialMath } from "../utils/financialMath.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
 import type {
     EnrichedTradeEvent,
     StandardZoneData,
     ZoneSnapshot,
-} from "../types/marketEvents.ts";
+} from "../types/marketEvents.js";
 import type {
     SignalCandidate,
     EnhancedDistributionSignalData,
     DistributionConditions,
     DistributionMarketRegime,
-} from "../types/signalTypes.ts";
+} from "../types/signalTypes.js";
 import { z } from "zod";
-import { DistributionDetectorSchema, Config } from "../core/config.ts";
-import type { ZoneVisualizationData } from "../types/zoneTypes.ts";
+import { DistributionDetectorSchema, Config } from "../core/config.js";
+import type { ZoneVisualizationData } from "../types/zoneTypes.js";
 
 /**
  * Enhanced configuration interface for distribution detection - ONLY distribution-specific parameters

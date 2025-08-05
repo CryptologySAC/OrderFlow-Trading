@@ -1,11 +1,11 @@
 // src/alerts/alertManager.ts
-import { Signal } from "../types/signalTypes.ts";
-import { AlertMessage } from "../utils/types.ts";
+import { Signal } from "../types/signalTypes.js";
+import { AlertMessage } from "../utils/types.js";
 import {
     calculateBreakeven,
     calculateProfitTarget,
-} from "../utils/calculations.ts";
-import type { ILogger } from "../infrastructure/loggerInterface.ts";
+} from "../utils/calculations.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 
 export class AlertManager {
     private lastAlertTime = 0;

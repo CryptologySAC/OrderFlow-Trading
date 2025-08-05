@@ -4,7 +4,7 @@
 import type {
     BaseDetectorSettings,
     ExhaustionFeatures,
-} from "../interfaces/detectorInterfaces.ts";
+} from "../interfaces/detectorInterfaces.js";
 
 export interface ExhaustionSettings extends BaseDetectorSettings {
     features?: ExhaustionFeatures;

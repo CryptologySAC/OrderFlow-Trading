@@ -3,16 +3,16 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { RawData } from "ws";
 import { randomUUID } from "crypto";
-import { RateLimiter } from "../infrastructure/rateLimiter.ts";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
-import { WebSocketError } from "../core/errors.ts";
-import type { WebSocketMessage } from "../utils/interfaces.ts";
-import { ILogger } from "../infrastructure/loggerInterface.ts";
+import { RateLimiter } from "../infrastructure/rateLimiter.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import { WebSocketError } from "../core/errors.js";
+import type { WebSocketMessage } from "../utils/interfaces.js";
+import { ILogger } from "../infrastructure/loggerInterface.js";
 import {
     ValidWebSocketRequestSchema,
     WebSocketRequestSchema,
     type ValidWebSocketRequest,
-} from "../multithreading/shared/messageSchemas.ts";
+} from "../multithreading/shared/messageSchemas.js";
 
 export interface ExtendedWebSocket extends WebSocket {
     clientId?: string;

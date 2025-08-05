@@ -7,18 +7,18 @@
  *********************************************************************/
 
 import { EventEmitter } from "events";
-import type { MarketAnomaly } from "../utils/types.ts";
-import type { ILogger } from "../infrastructure/loggerInterface.ts";
+import type { MarketAnomaly } from "../utils/types.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type {
     EnrichedTradeEvent,
     HybridTradeEvent,
-} from "../types/marketEvents.ts";
+} from "../types/marketEvents.js";
 import type {
     ConnectivityIssue,
     ConnectivityStatus,
-} from "../infrastructure/apiConnectivityMonitor.ts";
-import { RollingWindow } from "../utils/rollingWindow.ts";
-import { RollingStatsWindow } from "../utils/rollingStatsWindow.ts";
+} from "../infrastructure/apiConnectivityMonitor.js";
+import { RollingWindow } from "../utils/rollingWindow.js";
+import { RollingStatsWindow } from "../utils/rollingStatsWindow.js";
 
 export interface AnomalyDetectorOptions {
     /** Rolling trade window size for statistics (default: 9000 trades for 15min) */

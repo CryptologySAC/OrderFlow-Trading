@@ -3,18 +3,18 @@
 import type {
     AggTradeEvent,
     EnrichedTradeEvent,
-} from "../types/marketEvents.ts";
+} from "../types/marketEvents.js";
 import type {
     HybridTradeEvent,
     IndividualTrade,
     FetchReason,
-} from "../types/marketEvents.ts";
-import type { ILogger } from "../infrastructure/loggerInterface.ts";
-import type { IWorkerMetricsCollector } from "../multithreading/shared/workerInterfaces.ts";
-import { RateLimiter } from "../infrastructure/rateLimiter.ts";
-import { CircuitBreaker } from "../infrastructure/circuitBreaker.ts";
-import type { IBinanceDataFeed } from "../utils/binance.ts";
-import { Config } from "../core/config.ts";
+} from "../types/marketEvents.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IWorkerMetricsCollector } from "../multithreading/shared/workerInterfaces.js";
+import { RateLimiter } from "../infrastructure/rateLimiter.js";
+import { CircuitBreaker } from "../infrastructure/circuitBreaker.js";
+import type { IBinanceDataFeed } from "../utils/binance.js";
+import { Config } from "../core/config.js";
 
 export interface IndividualTradesManagerConfig {
     enabled: boolean;

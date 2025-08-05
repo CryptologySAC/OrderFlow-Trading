@@ -1,7 +1,7 @@
 // src/types/marketEvents.ts
 
 import type { SpotWebsocketStreams } from "@binance/spot";
-import type { CircularBuffer } from "../utils/circularBuffer.ts";
+import type { CircularBuffer } from "../utils/circularBuffer.js";
 
 export interface AggressiveTrade {
     price: number;

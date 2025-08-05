@@ -1,5 +1,5 @@
-import { ThreadManager } from "./threadManager.ts";
-import { ILogger } from "../infrastructure/loggerInterface.ts";
+import { ThreadManager } from "./threadManager.js";
+import { ILogger } from "../infrastructure/loggerInterface.js";
 
 /**
  * WorkerLogger that delegates logging to a worker thread

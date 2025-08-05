@@ -2,15 +2,15 @@ import * as fs from "fs";
 import * as path from "path";
 import { parentPort } from "worker_threads";
 import util from "node:util";
-import type { ILogger } from "../../infrastructure/loggerInterface.ts";
+import type { ILogger } from "../../infrastructure/loggerInterface.js";
 import {
     ISignalLogger,
     SignalEvent,
-} from "../../infrastructure/signalLoggerInterface.ts";
+} from "../../infrastructure/signalLoggerInterface.js";
 import type {
     ProcessedSignal,
     SignalCandidate,
-} from "../../types/signalTypes.ts";
+} from "../../types/signalTypes.js";
 
 // Validate worker thread context
 if (!parentPort) {

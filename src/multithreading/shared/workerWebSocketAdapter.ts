@@ -5,9 +5,9 @@
 import type {
     IWorkerRateLimiter,
     IWorkerMetricsCollector,
-} from "./workerInterfaces.ts";
-import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInterface.ts";
-import type { RateLimiter } from "../../infrastructure/rateLimiter.ts";
+} from "./workerInterfaces.js";
+import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInterface.js";
+import type { RateLimiter } from "../../infrastructure/rateLimiter.js";
 
 /**
  * Adapter that makes worker proxy classes compatible with WebSocketManager

@@ -1,16 +1,16 @@
 // src/market/redBlackTreeOrderBook.ts
 
 import type { SpotWebsocketStreams } from "@binance/spot";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
-import type { PassiveLevel, OrderBookHealth } from "../types/marketEvents.ts";
-import type { ILogger } from "../infrastructure/loggerInterface.ts";
-import type { ThreadManager } from "../multithreading/threadManager.ts";
-import { RedBlackTree } from "./helpers/redBlackTree.ts";
-import { FinancialMath } from "../utils/financialMath.ts";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import type { PassiveLevel, OrderBookHealth } from "../types/marketEvents.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { ThreadManager } from "../multithreading/threadManager.js";
+import { RedBlackTree } from "./helpers/redBlackTree.js";
+import { FinancialMath } from "../utils/financialMath.js";
 import {
     type IOrderBookState,
     type OrderBookStateOptions,
-} from "./orderBookState.ts";
+} from "./orderBookState.js";
 
 type SnapShot = Map<number, PassiveLevel>;
 

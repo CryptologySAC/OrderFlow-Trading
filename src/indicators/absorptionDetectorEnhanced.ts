@@ -18,25 +18,25 @@
 // - Zero dependency on legacy AbsorptionDetector or universalZoneConfig
 //
 
-import { Detector } from "./base/detectorEnrichedTrade.ts";
-import { FinancialMath } from "../utils/financialMath.ts";
-import { SignalValidationLogger } from "../utils/signalValidationLogger.ts";
-import type { ILogger } from "../infrastructure/loggerInterface.ts";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
-import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.ts";
+import { Detector } from "./base/detectorEnrichedTrade.js";
+import { FinancialMath } from "../utils/financialMath.js";
+import { SignalValidationLogger } from "../utils/signalValidationLogger.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
 import type {
     EnrichedTradeEvent,
     StandardZoneData,
     ZoneSnapshot,
-} from "../types/marketEvents.ts";
-import type { AbsorptionCalculatedValues } from "../types/calculatedValuesTypes.ts";
+} from "../types/marketEvents.js";
+import type { AbsorptionCalculatedValues } from "../types/calculatedValuesTypes.js";
 import type {
     SignalCandidate,
     EnhancedAbsorptionSignalData,
     SignalType,
-} from "../types/signalTypes.ts";
+} from "../types/signalTypes.js";
 import { z } from "zod";
-import { AbsorptionDetectorSchema, Config } from "../core/config.ts";
+import { AbsorptionDetectorSchema, Config } from "../core/config.js";
 
 /**
  * Enhanced configuration interface for absorption detection - ONLY absorption-specific parameters

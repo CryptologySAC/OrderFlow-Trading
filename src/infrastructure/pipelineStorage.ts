@@ -24,29 +24,29 @@
 
 import { Database, Statement } from "better-sqlite3";
 import { ulid } from "ulid";
-import { withBusyRetries } from "./sqliteUtils.ts";
+import { withBusyRetries } from "./sqliteUtils.js";
 // Type guards imported for future use - validation will be added incrementally
 import {
     StorageResourceManager,
     registerStatementCleanup,
-} from "./storageResourceManager.ts";
-import type { ILogger } from "./loggerInterface.ts";
-import { DetectorStub } from "../utils/detectorStub.ts";
+} from "./storageResourceManager.js";
+import type { ILogger } from "./loggerInterface.js";
+import { DetectorStub } from "../utils/detectorStub.js";
 
-import type { Detector } from "../indicators/base/detectorEnrichedTrade.ts";
+import type { Detector } from "../indicators/base/detectorEnrichedTrade.js";
 import type {
     SignalCandidate,
     ProcessedSignal,
     ConfirmedSignal,
     SignalType,
-} from "../types/signalTypes.ts";
-import type { ProcessingJob, SerializableJobData } from "../utils/types.ts";
-import type { AnomalyEvent } from "../services/anomalyDetector.ts";
+} from "../types/signalTypes.js";
+import type { ProcessingJob, SerializableJobData } from "../utils/types.js";
+import type { AnomalyEvent } from "../services/anomalyDetector.js";
 import type {
     SignalOutcome,
     MarketContext,
     FailedSignalAnalysis,
-} from "../analysis/signalTracker.ts";
+} from "../analysis/signalTracker.js";
 
 /* ------------------------------------------------------------------ */
 /*  DetectorStub imported from shared utilities                       */

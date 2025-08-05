@@ -1,5 +1,5 @@
 {
-    "nodeEnv": "production",
+    "nodeEnv": "development",
     "httpPort": 3000,
     "wsPort": 3001,
     "mqtt": {
@@ -337,7 +337,7 @@
             },
             "deltaCVD": {
                 "minTradesPerSec": 2.7,
-                "minVolPerSec": 11.0,
+                "minVolPerSec":11.0,
                 "signalThreshold": 0.9,
                 "eventCooldownMs": 1200000,
                 "enhancementMode": "production",

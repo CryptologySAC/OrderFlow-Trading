@@ -6,14 +6,14 @@ import {
     SignalCandidate,
     ProcessedSignal,
     SignalType,
-} from "../types/signalTypes.ts";
-import { Detector } from "../indicators/base/detectorEnrichedTrade.ts";
-import { ISignalLogger } from "../infrastructure/signalLoggerInterface.ts";
-import type { ILogger } from "../infrastructure/loggerInterface.ts";
-import { ProductionUtils } from "../utils/productionUtils.ts";
-import { SignalManager } from "../trading/signalManager.ts";
-import { ThreadManager } from "../multithreading/threadManager.ts";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
+} from "../types/signalTypes.js";
+import { Detector } from "../indicators/base/detectorEnrichedTrade.js";
+import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import { ProductionUtils } from "../utils/productionUtils.js";
+import { SignalManager } from "../trading/signalManager.js";
+import { ThreadManager } from "../multithreading/threadManager.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type {
     DetectorErrorEvent,
     DetectorRegisteredEvent,
@@ -22,8 +22,8 @@ import type {
     SignalFailedEvent,
     SignalProcessedEvent,
     SignalQueuedEvent,
-} from "../utils/types.ts";
-import { DetectorStub } from "../utils/detectorStub.ts";
+} from "../utils/types.js";
+import { DetectorStub } from "../utils/detectorStub.js";
 
 type DetectorLike = Detector | { id?: unknown; detectorId?: unknown };
 

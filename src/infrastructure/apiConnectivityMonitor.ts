@@ -1,8 +1,8 @@
 // src/infrastructure/apiConnectivityMonitor.ts
 
 import { EventEmitter } from "events";
-import { ILogger } from "./loggerInterface.ts";
-import type { IWorkerMetricsCollector } from "../multithreading/shared/workerInterfaces.ts";
+import { ILogger } from "./loggerInterface.js";
+import type { IWorkerMetricsCollector } from "../multithreading/shared/workerInterfaces.js";
 
 export interface ConnectivityStatus {
     isHealthy: boolean;

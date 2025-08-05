@@ -1,10 +1,10 @@
 // src/analysis/marketContextCollector.ts
 
 import { EventEmitter } from "events";
-import type { ILogger } from "../infrastructure/loggerInterface.ts";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
-import type { HybridTradeEvent } from "../types/marketEvents.ts";
-import type { MarketContext } from "./signalTracker.ts";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import type { HybridTradeEvent } from "../types/marketEvents.js";
+import type { MarketContext } from "./signalTracker.js";
 
 export interface MarketMetrics {
     // Price metrics
