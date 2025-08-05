@@ -60,8 +60,8 @@ export class WorkerLogger implements ILogger {
         // For worker logger, assume debug is enabled if NODE_ENV is development
         // or if explicitly configured to enable debug logging
         return (
-            process.env.NODE_ENV === "development" ||
-            process.env.LOG_LEVEL === "debug" ||
+            process.env["NODE_ENV"] === "development" ||
+            process.env["LOG_LEVEL"] === "debug" ||
             this.pretty
         ); // Use pretty flag as debug indicator
     }

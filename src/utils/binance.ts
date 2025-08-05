@@ -83,8 +83,8 @@ export class BinanceDataFeed implements IBinanceDataFeed {
         };
 
     private readonly configurationWebsocketAPI: ConfigurationWebsocketAPI = {
-        apiKey: process.env.API_KEY ?? "",
-        apiSecret: process.env.API_SECRET ?? "",
+        apiKey: process.env["API_KEY"] ?? "",
+        apiSecret: process.env["API_SECRET"] ?? "",
         wsURL: SPOT_WS_API_PROD_URL,
     };
 
@@ -108,13 +108,11 @@ export class BinanceDataFeed implements IBinanceDataFeed {
             throw new BinanceConfigurationError(
                 "Missing required API credentials: API_KEY and API_SECRET must be set"
             );
-            process.exit(1);
         }
         if (API_KEY.length < 10 || API_SECRET.length < 10) {
             throw new BinanceConfigurationError(
                 "API_KEY and API_SECRET must look valid"
             );
-            process.exit(1);
         }
     }
 

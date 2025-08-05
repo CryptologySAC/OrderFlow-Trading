@@ -77,7 +77,7 @@ export function createDependencies(threadManager: ThreadManager): Dependencies {
     try {
         const logger = new WorkerLogger(
             threadManager,
-            process.env.NODE_ENV === "development"
+            process.env["NODE_ENV"] === "development"
         );
         const metricsCollector = new MetricsCollector();
         const signalLogger = new WorkerSignalLogger(threadManager);

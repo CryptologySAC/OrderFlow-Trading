@@ -303,6 +303,26 @@ const AbsorptionEnhancedSettingsSchema = AbsorptionDetectorSchema;
 
 // Remove duplicate schema - use DeltaCVDDetectorSchema directly
 
+// ============================================================================
+// MICROSTRUCTURE ANALYZER CONFIG - Algorithmic trading pattern detection
+// ============================================================================
+export const MicrostructureAnalyzerSchema = z.object({
+    // Timing analysis thresholds
+    burstThresholdMs: z.number().int().min(10).max(1000), // 10ms-1s coordinated trades
+    uniformityThreshold: z.number().min(0.1).max(0.5), // CV threshold for uniform timing
+
+    // Fragmentation analysis
+    sizingConsistencyThreshold: z.number().min(0.05).max(0.3), // CV threshold for consistent sizing
+
+    // Toxicity analysis
+    persistenceWindowSize: z.number().int().min(3).max(20), // Number of trades for persistence
+
+    // Algorithmic pattern detection
+    marketMakingSpreadThreshold: z.number().min(0.001).max(0.1), // Price spread threshold
+    icebergSizeRatio: z.number().min(0.5).max(0.95), // Ratio threshold for iceberg detection
+    arbitrageTimeThreshold: z.number().int().min(10).max(500), // Max time for arbitrage detection
+});
+
 const MarketDataStorageConfigSchema = z.object({
     enabled: z.boolean(),
     dataDirectory: z.string(),
@@ -541,12 +561,12 @@ function validateMandatoryConfig(): void {
     }
 
     // Validate symbols configuration
-    if (!cfg.symbols || !cfg.symbols.LTCUSDT) {
+    if (!cfg.symbols || !cfg.symbols["LTCUSDT"]) {
         errors.push("MISSING: cfg.symbols.LTCUSDT configuration is required");
     }
 
-    if (cfg.symbols && cfg.symbols.LTCUSDT) {
-        const symbolCfg = cfg.symbols.LTCUSDT;
+    if (cfg.symbols && cfg.symbols["LTCUSDT"]) {
+        const symbolCfg = cfg.symbols["LTCUSDT"];
 
         // Mandatory enhanced detector configurations - simplified validation
         if (!symbolCfg.exhaustion) {
@@ -662,9 +682,23 @@ function validateMandatoryConfig(): void {
             process.exit(1);
         }
 
+        try {
+            MicrostructureAnalyzerSchema.parse(
+                SYMBOL_CFG["microstructureAnalyzer"]
+            );
+        } catch (error) {
+            console.error("🚨 CRITICAL CONFIG ERROR - MicrostructureAnalyzer");
+            console.error("Missing mandatory configuration properties:");
+            console.error(error);
+            console.error(
+                "Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT"
+            );
+            process.exit(1);
+        }
+
         // CRITICAL: StandardZoneConfig validation for CVD signal generation
         try {
-            StandardZoneConfigSchema.parse(SYMBOL_CFG.standardZoneConfig);
+            StandardZoneConfigSchema.parse(SYMBOL_CFG["standardZoneConfig"]);
         } catch (error) {
             console.error(
                 "🚨 CRITICAL CONFIG ERROR - StandardZoneConfig (CVD signals)"
@@ -697,7 +731,7 @@ function validateMandatoryConfig(): void {
     console.log("✅ CONFIG VALIDATION PASSED - All mandatory settings present");
 }
 
-let ENV_SYMBOL: string | undefined = process.env.SYMBOL?.toUpperCase();
+let ENV_SYMBOL: string | undefined = process.env["SYMBOL"]?.toUpperCase();
 let CONFIG_SYMBOL: AllowedSymbols = (ENV_SYMBOL ||
     cfg.symbol) as AllowedSymbols;
 let SYMBOL_CFG = cfg.symbols[CONFIG_SYMBOL as keyof typeof cfg.symbols];
@@ -755,16 +789,16 @@ export class Config {
         return cfg.mqtt;
     }
     static get API_KEY(): string | undefined {
-        return process.env.API_KEY;
+        return process.env["API_KEY"];
     }
     static get API_SECRET(): string | undefined {
-        return process.env.API_SECRET;
+        return process.env["API_SECRET"];
     }
     static get LLM_API_KEY(): string | undefined {
-        return process.env.LLM_API_KEY;
+        return process.env["LLM_API_KEY"];
     }
     static get LLM_MODEL(): string {
-        return process.env.LLM_MODEL!;
+        return process.env["LLM_MODEL"]!;
     }
     static get NODE_ENV(): string {
         return cfg.nodeEnv;
@@ -1068,72 +1102,53 @@ export class Config {
 
     // CRITICAL: Zone configuration with Zod validation for CVD signal generation
     static get STANDARD_ZONE_CONFIG() {
-        return StandardZoneConfigSchema.parse(SYMBOL_CFG.standardZoneConfig);
+        return StandardZoneConfigSchema.parse(SYMBOL_CFG["standardZoneConfig"]);
     }
 
     static get INDIVIDUAL_TRADES_MANAGER(): IndividualTradesManagerConfig {
         return {
-            enabled: process.env.INDIVIDUAL_TRADES_ENABLED === "true" || false,
+            enabled:
+                process.env["INDIVIDUAL_TRADES_ENABLED"] === "true" || false,
 
             criteria: {
                 minOrderSizePercentile: Number(
-                    process.env.INDIVIDUAL_TRADES_SIZE_PERCENTILE ?? 95
+                    process.env["INDIVIDUAL_TRADES_SIZE_PERCENTILE"] ?? 95
                 ),
                 keyLevelsEnabled:
-                    process.env.INDIVIDUAL_TRADES_KEY_LEVELS === "true" ||
+                    process.env["INDIVIDUAL_TRADES_KEY_LEVELS"] === "true" ||
                     false,
                 anomalyPeriodsEnabled:
-                    process.env.INDIVIDUAL_TRADES_ANOMALY_PERIODS === "true" ||
-                    true,
+                    process.env["INDIVIDUAL_TRADES_ANOMALY_PERIODS"] ===
+                        "true" || true,
                 highVolumePeriodsEnabled:
-                    process.env.INDIVIDUAL_TRADES_HIGH_VOLUME === "true" ||
+                    process.env["INDIVIDUAL_TRADES_HIGH_VOLUME"] === "true" ||
                     true,
             },
 
             cache: {
                 maxSize: Number(
-                    process.env.INDIVIDUAL_TRADES_CACHE_SIZE ?? 10000
+                    process.env["INDIVIDUAL_TRADES_CACHE_SIZE"] ?? 10000
                 ),
                 ttlMs: Number(
-                    process.env.INDIVIDUAL_TRADES_CACHE_TTL ?? 300000
+                    process.env["INDIVIDUAL_TRADES_CACHE_TTL"] ?? 300000
                 ), // 5 minutes
             },
 
             rateLimit: {
                 maxRequestsPerSecond: Number(
-                    process.env.INDIVIDUAL_TRADES_RATE_LIMIT ?? 5
+                    process.env["INDIVIDUAL_TRADES_RATE_LIMIT"] ?? 5
                 ),
                 batchSize: Number(
-                    process.env.INDIVIDUAL_TRADES_BATCH_SIZE ?? 100
+                    process.env["INDIVIDUAL_TRADES_BATCH_SIZE"] ?? 100
                 ),
             },
         };
     }
 
     static get MICROSTRUCTURE_ANALYZER(): MicrostructureAnalyzerConfig {
-        return {
-            burstThresholdMs: Number(
-                process.env.MICROSTRUCTURE_BURST_THRESHOLD ?? 100
-            ),
-            uniformityThreshold: Number(
-                process.env.MICROSTRUCTURE_UNIFORMITY_THRESHOLD ?? 0.2
-            ),
-            sizingConsistencyThreshold: Number(
-                process.env.MICROSTRUCTURE_SIZING_THRESHOLD ?? 0.15
-            ),
-            persistenceWindowSize: Number(
-                process.env.MICROSTRUCTURE_PERSISTENCE_WINDOW ?? 5
-            ),
-            marketMakingSpreadThreshold: Number(
-                process.env.MICROSTRUCTURE_MM_SPREAD_THRESHOLD ?? 0.01
-            ),
-            icebergSizeRatio: Number(
-                process.env.MICROSTRUCTURE_ICEBERG_RATIO ?? 0.8
-            ),
-            arbitrageTimeThreshold: Number(
-                process.env.MICROSTRUCTURE_ARBITRAGE_TIME ?? 50
-            ),
-        };
+        return MicrostructureAnalyzerSchema.parse(
+            SYMBOL_CFG["microstructureAnalyzer"]
+        );
     }
 
     static get SPOOFING_DETECTOR(): SpoofingDetectorConfig {

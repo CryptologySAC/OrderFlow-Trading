@@ -579,13 +579,13 @@ export class SignalCoordinator extends EventEmitter {
                 >;
                 let zone = 0;
                 if (typeof data === "object" && data !== null) {
-                    if ("zone" in data && typeof data.zone === "number") {
-                        zone = data.zone;
+                    if ("zone" in data && typeof data["zone"] === "number") {
+                        zone = data["zone"];
                     } else if (
                         "price" in data &&
-                        typeof data.price === "number"
+                        typeof data["price"] === "number"
                     ) {
-                        zone = data.price;
+                        zone = data["price"];
                     }
                 }
 
@@ -594,9 +594,9 @@ export class SignalCoordinator extends EventEmitter {
                     typeof data === "object" &&
                     data !== null &&
                     "side" in data &&
-                    (data.side === "buy" || data.side === "sell")
+                    (data["side"] === "buy" || data["side"] === "sell")
                 ) {
-                    side = data.side;
+                    side = data["side"];
                 }
 
                 actualDetector.markSignalConfirmed(zone, side);

@@ -67,7 +67,7 @@ class Logger implements ILogger {
     }
 
     public isDebugEnabled(): boolean {
-        return process.env.NODE_ENV === "development";
+        return process.env["NODE_ENV"] === "development";
     }
 
     public setCorrelationId(id: string, context: string): void {
@@ -195,7 +195,7 @@ class SignalLogger implements ISignalLogger {
     }
 }
 
-const logger = new Logger(process.env.NODE_ENV === "development");
+const logger = new Logger(process.env["NODE_ENV"] === "development");
 const signalLogger = new SignalLogger("./storage/signals.csv", logger);
 
 type LogLevel = "info" | "error" | "warn" | "debug";

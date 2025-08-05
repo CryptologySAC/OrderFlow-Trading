@@ -1221,7 +1221,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
     /**
      * Get detector ID - required by base class
      */
-    public getId(): string {
+    public override getId(): string {
         return this.id;
     }
 

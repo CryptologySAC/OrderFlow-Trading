@@ -1700,8 +1700,8 @@ export class SignalManager extends EventEmitter {
                 string,
                 unknown
             >;
-            if (metadata.side === "buy" || metadata.side === "sell") {
-                return metadata.side;
+            if (metadata["side"] === "buy" || metadata["side"] === "sell") {
+                return metadata["side"];
             }
         }
 

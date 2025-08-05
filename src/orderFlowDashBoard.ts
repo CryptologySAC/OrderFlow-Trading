@@ -1931,11 +1931,11 @@ export class OrderFlowDashboard {
         };
 
         return {
-            absorption: rawBreakdown.absorption || defaultStats,
-            exhaustion: rawBreakdown.exhaustion || defaultStats,
-            accumulation: rawBreakdown.accumulation || defaultStats,
-            distribution: rawBreakdown.distribution || defaultStats,
-            deltacvd: rawBreakdown.deltacvd || defaultStats,
+            absorption: rawBreakdown["absorption"] || defaultStats,
+            exhaustion: rawBreakdown["exhaustion"] || defaultStats,
+            accumulation: rawBreakdown["accumulation"] || defaultStats,
+            distribution: rawBreakdown["distribution"] || defaultStats,
+            deltacvd: rawBreakdown["deltacvd"] || defaultStats,
         };
     }
 
