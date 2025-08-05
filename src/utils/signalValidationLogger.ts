@@ -371,7 +371,11 @@ export class SignalValidationLogger {
      * Get current date string for file naming (YYYY-MM-DD format)
      */
     private getCurrentDateString(): string {
-        return new Date().toISOString().replace(/[:.]/g, "-").split("T")[0];
+        const [datePart] = new Date()
+            .toISOString()
+            .replace(/[:.]/g, "-")
+            .split("T");
+        return datePart!; // Ensure we have a valid date string
     }
 
     /**

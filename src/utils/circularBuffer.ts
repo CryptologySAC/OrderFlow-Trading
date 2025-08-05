@@ -40,7 +40,10 @@ export class CircularBuffer<T> implements Iterable<T> {
         const result: T[] = [];
         let start = this.size < this.capacity ? 0 : this.head;
         for (let i = 0; i < this.size; i++) {
-            result.push(this.buffer[(start + i) % this.capacity]);
+            const index = (start + i) % this.capacity;
+            if (index > 0 && index < this.capacity) {
+                result.push(this.buffer[index]!);
+            }
         }
         return result;
     }

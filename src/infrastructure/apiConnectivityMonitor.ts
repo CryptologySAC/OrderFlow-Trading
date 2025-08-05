@@ -206,7 +206,7 @@ export class ApiConnectivityMonitor extends EventEmitter {
 
             if (intervals.length > 1) {
                 const totalInterval =
-                    intervals[intervals.length - 1] - intervals[0];
+                    intervals[intervals.length - 1]! - intervals[0]!;
                 status.averageInterval = totalInterval / (intervals.length - 1);
             }
         }

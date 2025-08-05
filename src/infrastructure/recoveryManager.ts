@@ -181,7 +181,7 @@ export class RecoveryManager extends EventEmitter {
         });
 
         return new Promise((resolve, reject) => {
-            const child: ChildProcess = spawn(cmd, args, {
+            const child: ChildProcess = spawn(cmd!, args, {
                 stdio: "pipe",
                 detached: true,
             });

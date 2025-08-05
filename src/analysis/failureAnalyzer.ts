@@ -1197,8 +1197,8 @@ export class FailureAnalyzer {
         // Find 2-signal combinations
         for (let i = 0; i < indicators.length; i++) {
             for (let j = i + 1; j < indicators.length; j++) {
-                const signal1 = indicators[i].name;
-                const signal2 = indicators[j].name;
+                const signal1 = indicators[i]!.name;
+                const signal2 = indicators[j]!.name;
 
                 const failuresWithBoth = failures.filter(
                     (f) =>

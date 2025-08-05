@@ -328,7 +328,7 @@ export class SimpleIcebergDetector extends Detector {
 
             // Update the existing iceberg with current pattern state
             this.completedIcebergs[icebergIndex] = {
-                ...this.completedIcebergs[icebergIndex],
+                ...this.completedIcebergs[icebergIndex]!,
                 orderCount: trades.length,
                 totalSize: trades.reduce((sum, t) => sum + t.size, 0),
                 lastSeen: pattern.lastSeen,
@@ -419,16 +419,16 @@ export class SimpleIcebergDetector extends Detector {
         const filteredTrades: TradeInfo[] = [];
         for (let i = 0; i < validTrades.length; i++) {
             if (i === 0) {
-                filteredTrades.push(validTrades[i]);
+                filteredTrades.push(validTrades[i]!);
             } else {
                 const gap =
-                    validTrades[i].timestamp - validTrades[i - 1].timestamp;
+                    validTrades[i]!.timestamp - validTrades[i - 1]!.timestamp;
                 if (gap <= this.config.maxOrderGapMs) {
-                    filteredTrades.push(validTrades[i]);
+                    filteredTrades.push(validTrades[i]!);
                 } else {
                     // Gap too large, start new sequence
                     filteredTrades.length = 0;
-                    filteredTrades.push(validTrades[i]);
+                    filteredTrades.push(validTrades[i]!);
                 }
             }
         }
@@ -440,6 +440,10 @@ export class SimpleIcebergDetector extends Detector {
      * Emit iceberg signal from pattern
      */
     private emitIcebergSignal(pattern: IcebergPattern): void {
+        if (pattern.trades.length === 0) {
+            return;
+        }
+
         const trades = pattern.trades;
         const prices = trades.map((t) => t.price);
 
@@ -455,7 +459,7 @@ export class SimpleIcebergDetector extends Detector {
             side: pattern.side,
             orderSize:
                 pattern.type === "passive"
-                    ? trades[0].size
+                    ? trades[0]!.size
                     : pattern.exactValue,
             orderCount: trades.length,
             totalSize: trades.reduce((sum, t) => sum + t.size, 0),
@@ -712,7 +716,7 @@ export class SimpleIcebergDetector extends Detector {
             return {
                 id: pattern.id,
                 side: pattern.side,
-                price: prices.length > 0 ? prices[0] : 0, // Use first trade price for all pattern types
+                price: prices.length > 0 ? prices[0]! : 0, // Use first trade price for all pattern types
                 pieces: pattern.trades.map((t) => ({
                     size: t.size,
                     timestamp: t.timestamp,

@@ -1161,7 +1161,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
 
         for (let i = 0; i < zones.length - 1; i++) {
             const spread = Math.abs(
-                zones[i + 1].priceLevel - zones[i].priceLevel
+                zones[i + 1]!.priceLevel - zones[i]!.priceLevel
             );
             totalSpread += spread;
             spreadCount++;

@@ -936,7 +936,7 @@ export class AnomalyDetector extends EventEmitter {
         const prices = recentSnapshots.map((s) => s.price);
         const returns: number[] = [];
         for (let i = 1; i < prices.length; i++) {
-            returns.push((prices[i] - prices[i - 1]) / prices[i - 1]);
+            returns.push((prices[i]! - prices[i - 1]!) / prices[i - 1]!);
         }
         const volatility = this.calculateStdDev(
             returns,
@@ -946,7 +946,7 @@ export class AnomalyDetector extends EventEmitter {
         const flowMetrics = this.calculateFlowMetrics();
         const currentSpreadBps =
             ((this.currentBestAsk - this.currentBestBid) /
-                prices[prices.length - 1]) *
+                prices[prices.length - 1]!) *
             10000;
 
         // Analyze recent anomalies

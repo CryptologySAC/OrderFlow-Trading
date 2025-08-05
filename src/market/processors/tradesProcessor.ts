@@ -548,11 +548,11 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                         [];
 
                     for (let i = 1; i < allTradeIds.length; i++) {
-                        const gap = allTradeIds[i] - allTradeIds[i - 1] - 1;
+                        const gap = allTradeIds[i]! - allTradeIds[i - 1]! - 1;
                         if (gap > 0) {
                             gaps.push({
-                                start: allTradeIds[i - 1],
-                                end: allTradeIds[i],
+                                start: allTradeIds[i - 1]!,
+                                end: allTradeIds[i]!,
                                 size: gap,
                             });
                         }
@@ -989,7 +989,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
 
         const p99Time =
             times.length > 0
-                ? times.sort((a, b) => a - b)[Math.floor(times.length * 0.99)]
+                ? times.sort((a, b) => a - b)[Math.floor(times.length * 0.99)]!
                 : 0;
 
         const backlogProgress = this.backlogComplete

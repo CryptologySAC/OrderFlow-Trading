@@ -446,8 +446,8 @@ export class SpoofingDetector extends EventEmitter {
 
             // Scan history from newest back, looking for rapid drops
             for (let i = hist.length - 2; i >= 0; i--) {
-                const curr = hist[i + 1];
-                const prev = hist[i];
+                const curr = hist[i + 1]!;
+                const prev = hist[i]!;
                 if (curr.time > tradeTime) continue;
 
                 // PERFORMANCE OPTIMIZATION: Early exit when we've gone too far back in time
@@ -697,8 +697,8 @@ export class SpoofingDetector extends EventEmitter {
 
         // Look for recent large walls that disappeared rapidly
         for (let i = hist.length - 2; i >= 0; i--) {
-            const curr = hist[i + 1];
-            const prev = hist[i];
+            const curr = hist[i + 1]!;
+            const prev = hist[i]!;
             if (curr.time > tradeTime) continue;
 
             const prevQty = side === "buy" ? prev.bid : prev.ask;
@@ -818,9 +818,9 @@ export class SpoofingDetector extends EventEmitter {
 
         // Look for patterns where liquidity appears and disappears very quickly
         for (let i = hist.length - 3; i >= 0; i--) {
-            const latest = hist[i + 2];
-            const middle = hist[i + 1];
-            const earliest = hist[i];
+            const latest = hist[i + 2]!;
+            const middle = hist[i + 1]!;
+            const earliest = hist[i]!;
 
             if (latest.time > tradeTime) continue;
 

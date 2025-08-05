@@ -1653,7 +1653,7 @@ export class PerformanceAnalyzer {
         const optimalMarketConditions =
             bestRegimes.length > 0
                 ? bestRegimes.map(
-                      (r) => regimeGroups.get(r.regime)![0].marketContext
+                      (r) => regimeGroups.get(r.regime)![0]!.marketContext
                   )
                 : [];
 

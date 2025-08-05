@@ -792,7 +792,7 @@ export class SignalTracker extends EventEmitter {
 
         // Remove old completed signals
         for (let i = this.completedSignals.length - 1; i >= 0; i--) {
-            if (this.completedSignals[i].entryTime < cutoffTime) {
+            if (this.completedSignals[i]!.entryTime < cutoffTime) {
                 this.completedSignals.splice(i, 1);
                 removedCount++;
             }

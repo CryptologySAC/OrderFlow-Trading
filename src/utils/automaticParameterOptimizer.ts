@@ -225,7 +225,7 @@ export class AutomaticParameterOptimizer {
 
         const rejectionFiles = await this.findFilesWithPattern(
             "signal_rejections_",
-            today
+            today!
         );
         const recentRejections: RejectionData[] = [];
 
@@ -238,23 +238,23 @@ export class AutomaticParameterOptimizer {
                     if (line.trim() === "") continue;
 
                     const fields = line.split(",");
-                    const timestamp = parseInt(fields[0], 10);
+                    const timestamp = parseInt(fields[0]!, 10);
 
                     if (timestamp >= cutoffTime) {
                         recentRejections.push({
                             timestamp,
-                            detectorType: fields[1],
-                            rejectionReason: fields[2],
-                            price: parseFloat(fields[3]),
-                            thresholdType: fields[4],
-                            thresholdValue: parseFloat(fields[5]),
-                            actualValue: parseFloat(fields[6]),
-                            aggressiveVolume: parseFloat(fields[7]),
-                            passiveVolume: parseFloat(fields[8]),
+                            detectorType: fields[1]!,
+                            rejectionReason: fields[2]!,
+                            price: parseFloat(fields[3]!),
+                            thresholdType: fields[4]!,
+                            thresholdValue: parseFloat(fields[5]!),
+                            actualValue: parseFloat(fields[6]!),
+                            aggressiveVolume: parseFloat(fields[7]!),
+                            passiveVolume: parseFloat(fields[8]!),
                             priceEfficiency: fields[9]
                                 ? parseFloat(fields[9])
                                 : null,
-                            confidence: parseFloat(fields[10]),
+                            confidence: parseFloat(fields[10]!),
                         });
                     }
                 }
@@ -277,7 +277,7 @@ export class AutomaticParameterOptimizer {
 
         const successfulFiles = await this.findFilesWithPattern(
             "successful_signals_",
-            today
+            today!
         );
         const recentSuccessful: SuccessfulSignalData[] = [];
 
@@ -290,14 +290,14 @@ export class AutomaticParameterOptimizer {
                     if (line.trim() === "") continue;
 
                     const fields = line.split(",");
-                    const timestamp = parseInt(fields[0], 10);
+                    const timestamp = parseInt(fields[0]!, 10);
 
                     if (timestamp >= cutoffTime) {
                         // Parse based on ACTUAL CSV column positions (50+ columns)
                         recentSuccessful.push({
                             timestamp,
-                            detectorType: fields[1],
-                            price: parseFloat(fields[2]),
+                            detectorType: fields[1]!,
+                            price: parseFloat(fields[2]!),
                             minAggVolume: fields[3]
                                 ? parseFloat(fields[3])
                                 : null,
@@ -328,9 +328,9 @@ export class AutomaticParameterOptimizer {
                             institutionalVolumeRatio: fields[47]
                                 ? parseFloat(fields[47])
                                 : null, // Column 47!
-                            marketVolume: parseFloat(fields[48]), // Column 48!
-                            marketSpread: parseFloat(fields[49]), // Column 49!
-                            marketVolatility: parseFloat(fields[50]), // Column 50!
+                            marketVolume: parseFloat(fields[48] || "0"), // Column 48!
+                            marketSpread: parseFloat(fields[49] || "0"), // Column 49!
+                            marketVolatility: parseFloat(fields[50] || "0"), // Column 50!
                             subsequentMovement5min: fields[51]
                                 ? parseFloat(fields[51])
                                 : null,
@@ -802,10 +802,10 @@ export class AutomaticParameterOptimizer {
             if (!grouped[analysis.detectorType]) {
                 grouped[analysis.detectorType] = {};
             }
-            if (!grouped[analysis.detectorType][analysis.parameterName]) {
-                grouped[analysis.detectorType][analysis.parameterName] = [];
+            if (!grouped[analysis.detectorType]![analysis.parameterName]) {
+                grouped[analysis.detectorType]![analysis.parameterName] = [];
             }
-            grouped[analysis.detectorType][analysis.parameterName].push(
+            grouped[analysis.detectorType]![analysis.parameterName]!.push(
                 analysis
             );
         }

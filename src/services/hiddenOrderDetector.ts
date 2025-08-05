@@ -259,18 +259,19 @@ export class HiddenOrderDetector extends Detector {
     ): number {
         // Binary search for closest level
         let left = 0;
-        let right = depthLevels.length - 1;
+        let right = depthLevels.length > 0 ? depthLevels.length - 1 : 0;
         const tolerance = price * this.config.priceTolerance;
 
         while (left <= right) {
             const mid = Math.floor((left + right) / 2);
-            const level = depthLevels[mid];
+            const level =
+                depthLevels[mid] !== undefined ? depthLevels[mid] : null;
 
-            if (level.price === price) {
+            if (level && level.price === price) {
                 return side === "buy" ? level.ask : level.bid;
             }
 
-            if (level.price < price) {
+            if (level && level.price < price) {
                 left = mid + 1;
             } else {
                 right = mid - 1;
@@ -280,10 +281,10 @@ export class HiddenOrderDetector extends Detector {
         // Check nearest neighbors within tolerance
         const candidates: PassiveLevel[] = [];
         if (left < depthLevels.length) {
-            candidates.push(depthLevels[left]);
+            candidates.push(depthLevels[left]!);
         }
         if (right >= 0) {
-            candidates.push(depthLevels[right]);
+            candidates.push(depthLevels[right]!);
         }
 
         let bestVolume = 0;

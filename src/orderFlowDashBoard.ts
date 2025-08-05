@@ -561,7 +561,7 @@ export class OrderFlowDashboard {
             // Get signal backlog
             const maxSignalBacklogAge = 90 * 60 * 1000; // 90 minutes
             const since = Math.max(
-                backlog.length > 0 ? backlog[0].time : Date.now(),
+                backlog.length > 0 ? backlog[0]!.time : Date.now(),
                 Date.now() - maxSignalBacklogAge
             );
 

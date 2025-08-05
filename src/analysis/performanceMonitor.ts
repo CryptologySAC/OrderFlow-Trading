@@ -854,17 +854,28 @@ export class PerformanceMonitor extends EventEmitter {
     ): "healthy" | "warning" | "critical" | "unknown" {
         switch (componentName) {
             case "signalTracker":
-                if (metrics["activeSignals"] > 1000) return "warning"; // Too many active signals
+                if (
+                    metrics["activeSignals"] !== undefined &&
+                    metrics["activeSignals"] > 1000
+                )
+                    return "warning"; // Too many active signals
                 if (metrics["finalizedSignals"] === 0) return "critical"; // No finalized signals
                 return "healthy";
 
             case "signalGeneration":
                 if (metrics["recentSignals"] === 0) return "critical"; // No recent signals
-                if (metrics["successRate"] < 0.3) return "warning"; // Low success rate
+                if (
+                    metrics["successRate"] !== undefined &&
+                    metrics["successRate"] < 0.3
+                )
+                    return "warning"; // Low success rate
                 return "healthy";
 
             case "alertSystem":
-                if (metrics["activeAlerts"] > this.config.maxActiveAlerts * 0.8)
+                if (
+                    metrics["activeAlerts"] !== undefined &&
+                    metrics["activeAlerts"] > this.config.maxActiveAlerts * 0.8
+                )
                     return "warning";
                 return "healthy";
 

@@ -36,14 +36,14 @@ export class PassiveVolumeTracker {
         const history = this.passiveVolumeHistory.get(price);
         if (!history || history.length < 3) return false;
         let refills = 0;
-        let prev = side === "buy" ? history[0].ask : history[0].bid;
+        let prev = side === "buy" ? history[0]!.ask : history[0]!.bid;
         for (const snap of history) {
             const qty = side === "buy" ? snap.ask : snap.bid;
             if (qty > prev * 1.15) refills++;
             prev = qty;
         }
         const now = Date.now();
-        return refills >= 3 && now - history[0].time < windowMs;
+        return refills >= 3 && now - history[0]!.time < windowMs;
     }
 
     /**

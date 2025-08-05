@@ -491,7 +491,7 @@ const BasicSymbolConfigSchema = z
             anomalyCooldownMs: z.number().int().positive(),
             volumeImbalanceThreshold: z.number().positive(),
             normalSpreadBps: z.number().positive(),
-            minHistory: z.number().int().positive(),
+            minHistory: z.number().int().min(2).positive(),
             flowWindowMs: z.number().int().positive(),
             orderSizeWindowMs: z.number().int().positive(),
             volatilityThreshold: z.number().positive(),
@@ -808,7 +808,7 @@ export class Config {
         return CONFIG_SYMBOL;
     }
     static get PRICE_PRECISION(): number {
-        return Number(SYMBOL_CFG.pricePrecision);
+        return Number(SYMBOL_CFG!.pricePrecision);
     }
     static get TICK_SIZE(): number {
         return 1 / Math.pow(10, Config.PRICE_PRECISION);
@@ -817,7 +817,7 @@ export class Config {
         return Number(cfg.maxStorageTime);
     }
     static getTimeWindow(timeWindowIndex: number): number {
-        return Config.STANDARD_ZONE_CONFIG.timeWindows[timeWindowIndex];
+        return Config.STANDARD_ZONE_CONFIG.timeWindows[timeWindowIndex]!;
     }
 
     // Server configuration
@@ -856,14 +856,14 @@ export class Config {
         return {
             symbol: Config.SYMBOL,
             pricePrecision: Config.PRICE_PRECISION,
-            quantityPrecision: SYMBOL_CFG.quantityPrecision,
-            bandTicks: SYMBOL_CFG.bandTicks,
+            quantityPrecision: SYMBOL_CFG!.quantityPrecision,
+            bandTicks: SYMBOL_CFG!.bandTicks,
             tickSize: Config.TICK_SIZE,
-            largeTradeThreshold: SYMBOL_CFG.largeTradeThreshold,
-            maxEventListeners: SYMBOL_CFG.maxEventListeners,
-            dashboardUpdateInterval: SYMBOL_CFG.dashboardUpdateInterval,
-            maxDashboardInterval: SYMBOL_CFG.maxDashboardInterval,
-            significantChangeThreshold: SYMBOL_CFG.significantChangeThreshold,
+            largeTradeThreshold: SYMBOL_CFG!.largeTradeThreshold,
+            maxEventListeners: SYMBOL_CFG!.maxEventListeners,
+            dashboardUpdateInterval: SYMBOL_CFG!.dashboardUpdateInterval,
+            maxDashboardInterval: SYMBOL_CFG!.maxDashboardInterval,
+            significantChangeThreshold: SYMBOL_CFG!.significantChangeThreshold,
             standardZoneConfig: Config.STANDARD_ZONE_CONFIG,
 
             enableIndividualTrades: true,
@@ -872,22 +872,22 @@ export class Config {
             zoneCalculationRange: 12, // ±12 zones for broader price action coverage
             zoneCacheSize: 375, // Pre-allocated cache size for 90-minute analysis
             defaultZoneMultipliers:
-                SYMBOL_CFG.preprocessor.defaultZoneMultipliers,
-            defaultTimeWindows: SYMBOL_CFG.preprocessor.defaultTimeWindows,
+                SYMBOL_CFG!.preprocessor.defaultZoneMultipliers,
+            defaultTimeWindows: SYMBOL_CFG!.preprocessor.defaultTimeWindows,
             defaultMinZoneWidthMultiplier:
-                SYMBOL_CFG.preprocessor.defaultMinZoneWidthMultiplier,
+                SYMBOL_CFG!.preprocessor.defaultMinZoneWidthMultiplier,
             defaultMaxZoneWidthMultiplier:
-                SYMBOL_CFG.preprocessor.defaultMaxZoneWidthMultiplier,
+                SYMBOL_CFG!.preprocessor.defaultMaxZoneWidthMultiplier,
             defaultMaxZoneHistory:
-                SYMBOL_CFG.preprocessor.defaultMaxZoneHistory,
-            defaultMaxMemoryMB: SYMBOL_CFG.preprocessor.defaultMaxMemoryMB,
+                SYMBOL_CFG!.preprocessor.defaultMaxZoneHistory,
+            defaultMaxMemoryMB: SYMBOL_CFG!.preprocessor.defaultMaxMemoryMB,
             defaultAggressiveVolumeAbsolute:
-                SYMBOL_CFG.preprocessor.defaultAggressiveVolumeAbsolute,
+                SYMBOL_CFG!.preprocessor.defaultAggressiveVolumeAbsolute,
             defaultPassiveVolumeAbsolute:
-                SYMBOL_CFG.preprocessor.defaultPassiveVolumeAbsolute,
+                SYMBOL_CFG!.preprocessor.defaultPassiveVolumeAbsolute,
             defaultInstitutionalVolumeAbsolute:
-                SYMBOL_CFG.preprocessor.defaultInstitutionalVolumeAbsolute,
-            maxTradesPerZone: SYMBOL_CFG.preprocessor.maxTradesPerZone,
+                SYMBOL_CFG!.preprocessor.defaultInstitutionalVolumeAbsolute,
+            maxTradesPerZone: SYMBOL_CFG!.preprocessor.maxTradesPerZone,
         };
     }
 
@@ -915,18 +915,20 @@ export class Config {
         return {
             symbol: Config.SYMBOL,
             pricePrecision: Config.PRICE_PRECISION,
-            maxLevels: Number(cfg.symbols[cfg.symbol].orderBookState.maxLevels),
+            maxLevels: Number(
+                cfg.symbols[cfg.symbol]!.orderBookState.maxLevels
+            ),
             maxPriceDistance: Number(
-                cfg.symbols[cfg.symbol].orderBookState.maxPriceDistance
+                cfg.symbols[cfg.symbol]!.orderBookState.maxPriceDistance
             ),
             pruneIntervalMs: Number(
-                cfg.symbols[cfg.symbol].orderBookState.pruneIntervalMs
+                cfg.symbols[cfg.symbol]!.orderBookState.pruneIntervalMs
             ),
             maxErrorRate: Number(
-                cfg.symbols[cfg.symbol].orderBookState.maxErrorRate
+                cfg.symbols[cfg.symbol]!.orderBookState.maxErrorRate
             ),
             staleThresholdMs: Number(
-                cfg.symbols[cfg.symbol].orderBookState.staleThresholdMs
+                cfg.symbols[cfg.symbol]!.orderBookState.staleThresholdMs
             ),
         };
     }
@@ -935,28 +937,28 @@ export class Config {
         return {
             symbol: Config.SYMBOL,
             storageTime: Number(
-                cfg.symbols[cfg.symbol].tradesProcessor.storageTime
+                cfg.symbols[cfg.symbol]!.tradesProcessor.storageTime
             ),
             maxBacklogRetries: Number(
-                cfg.symbols[cfg.symbol].tradesProcessor.maxBacklogRetries
+                cfg.symbols[cfg.symbol]!.tradesProcessor.maxBacklogRetries
             ),
             backlogBatchSize: Number(
-                cfg.symbols[cfg.symbol].tradesProcessor.backlogBatchSize
+                cfg.symbols[cfg.symbol]!.tradesProcessor.backlogBatchSize
             ),
             maxMemoryTrades: Number(
-                cfg.symbols[cfg.symbol].tradesProcessor.maxMemoryTrades
+                cfg.symbols[cfg.symbol]!.tradesProcessor.maxMemoryTrades
             ),
             saveQueueSize: Number(
-                cfg.symbols[cfg.symbol].tradesProcessor.saveQueueSize
+                cfg.symbols[cfg.symbol]!.tradesProcessor.saveQueueSize
             ),
             healthCheckInterval: Number(
-                cfg.symbols[cfg.symbol].tradesProcessor.healthCheckInterval
+                cfg.symbols[cfg.symbol]!.tradesProcessor.healthCheckInterval
             ),
         };
     }
 
     static get SIGNAL_MANAGER(): SignalManagerConfig {
-        const smConfig = cfg.symbols[cfg.symbol].signalManager;
+        const smConfig = cfg.symbols[cfg.symbol]!.signalManager;
         return {
             confidenceThreshold: Number(smConfig.confidenceThreshold),
             signalTimeout: Number(smConfig.signalTimeout),
@@ -1002,31 +1004,31 @@ export class Config {
     }
 
     static get DETECTOR_CONFIDENCE_THRESHOLDS(): Record<string, number> {
-        return cfg.symbols[cfg.symbol].signalManager.detectorThresholds;
+        return cfg.symbols[cfg.symbol]!.signalManager.detectorThresholds;
     }
 
     static get DETECTOR_POSITION_SIZING(): Record<string, number> {
-        return cfg.symbols[cfg.symbol].signalManager.positionSizing;
+        return cfg.symbols[cfg.symbol]!.signalManager.positionSizing;
     }
 
     static get SIGNAL_COORDINATOR(): SignalCoordinatorConfig {
         return {
             maxConcurrentProcessing: Number(
-                cfg.symbols[cfg.symbol].signalCoordinator
+                cfg.symbols[cfg.symbol]!.signalCoordinator
                     .maxConcurrentProcessing
             ),
             processingTimeoutMs: Number(
-                cfg.symbols[cfg.symbol].signalCoordinator.processingTimeoutMs
+                cfg.symbols[cfg.symbol]!.signalCoordinator.processingTimeoutMs
             ),
             retryAttempts: Number(
-                cfg.symbols[cfg.symbol].signalCoordinator.retryAttempts
+                cfg.symbols[cfg.symbol]!.signalCoordinator.retryAttempts
             ),
             retryDelayMs: Number(
-                cfg.symbols[cfg.symbol].signalCoordinator.retryDelayMs
+                cfg.symbols[cfg.symbol]!.signalCoordinator.retryDelayMs
             ),
             enableMetrics:
-                cfg.symbols[cfg.symbol].signalCoordinator.enableMetrics,
-            logLevel: cfg.symbols[cfg.symbol].signalCoordinator.logLevel,
+                cfg.symbols[cfg.symbol]!.signalCoordinator.enableMetrics,
+            logLevel: cfg.symbols[cfg.symbol]!.signalCoordinator.logLevel,
         };
     }
 
@@ -1034,12 +1036,14 @@ export class Config {
         const precision = Config.PRICE_PRECISION;
         const tickSize = 1 / Math.pow(10, precision);
         return {
-            binSize: Number(cfg.symbols[cfg.symbol].orderBookProcessor.binSize),
+            binSize: Number(
+                cfg.symbols[cfg.symbol]!.orderBookProcessor.binSize
+            ),
             numLevels: Number(
-                cfg.symbols[cfg.symbol].orderBookProcessor.numLevels
+                cfg.symbols[cfg.symbol]!.orderBookProcessor.numLevels
             ),
             maxBufferSize: Number(
-                cfg.symbols[cfg.symbol].orderBookProcessor.maxBufferSize
+                cfg.symbols[cfg.symbol]!.orderBookProcessor.maxBufferSize
             ),
             tickSize: tickSize,
             precision: precision,
@@ -1053,26 +1057,26 @@ export class Config {
 
     // Individual detector configurations
     static get EXHAUSTION_CONFIG() {
-        return SYMBOL_CFG.exhaustion;
+        return SYMBOL_CFG!.exhaustion;
     }
     static get ABSORPTION_CONFIG() {
-        return SYMBOL_CFG.absorption;
+        return SYMBOL_CFG!.absorption;
     }
     static get DELTACVD_CONFIG() {
-        return SYMBOL_CFG.deltaCVD;
+        return SYMBOL_CFG!.deltaCVD;
     }
     static get ACCUMULATION_CONFIG() {
-        return SYMBOL_CFG.accumulation;
+        return SYMBOL_CFG!.accumulation;
     }
     static get DISTRIBUTION_CONFIG() {
-        return SYMBOL_CFG.distribution;
+        return SYMBOL_CFG!.distribution;
     }
 
     // Distribution detector with schema validation
     static get DISTRIBUTION_DETECTOR() {
         return this.validateDetectorConfig(
             DistributionDetectorSchema,
-            SYMBOL_CFG.distribution
+            SYMBOL_CFG!.distribution
         );
     }
 
@@ -1091,41 +1095,41 @@ export class Config {
     static get ABSORPTION_DETECTOR() {
         return this.validateDetectorConfig(
             AbsorptionDetectorSchema,
-            SYMBOL_CFG.absorption
+            SYMBOL_CFG!.absorption
         );
     }
 
     static get EXHAUSTION_DETECTOR() {
         return this.validateDetectorConfig(
             ExhaustionDetectorSchema,
-            SYMBOL_CFG.exhaustion
+            SYMBOL_CFG!.exhaustion
         );
     }
 
     static get DELTACVD_DETECTOR() {
         return this.validateDetectorConfig(
             DeltaCVDDetectorSchema,
-            SYMBOL_CFG.deltaCVD
+            SYMBOL_CFG!.deltaCVD
         );
     }
 
     static get ACCUMULATION_DETECTOR() {
         return this.validateDetectorConfig(
             AccumulationDetectorSchema,
-            SYMBOL_CFG.accumulation
+            SYMBOL_CFG!.accumulation
         );
     }
 
     static get DISTRIBUTION_ZONE_DETECTOR() {
         return this.validateDetectorConfig(
             DistributionDetectorSchema,
-            SYMBOL_CFG.distribution
+            SYMBOL_CFG!.distribution
         );
     }
 
     static get SIMPLE_ICEBERG_DETECTOR() {
         try {
-            return SimpleIcebergDetectorSchema.parse(SYMBOL_CFG.simpleIceberg);
+            return SimpleIcebergDetectorSchema.parse(SYMBOL_CFG!.simpleIceberg);
         } catch (error) {
             console.error("🚨 CRITICAL CONFIG ERROR - SimpleIcebergDetector");
             console.error("Missing mandatory configuration properties:");
@@ -1144,18 +1148,20 @@ export class Config {
 
     // CRITICAL: Zone configuration with Zod validation for CVD signal generation
     static get STANDARD_ZONE_CONFIG() {
-        return StandardZoneConfigSchema.parse(SYMBOL_CFG["standardZoneConfig"]);
+        return StandardZoneConfigSchema.parse(
+            SYMBOL_CFG!["standardZoneConfig"]
+        );
     }
 
     static get INDIVIDUAL_TRADES_MANAGER(): IndividualTradesManagerConfig {
         return IndividualTradesManagerSchema.parse(
-            SYMBOL_CFG["individualTradesManager"]
+            SYMBOL_CFG!["individualTradesManager"]
         );
     }
 
     static get MICROSTRUCTURE_ANALYZER(): MicrostructureAnalyzerConfig {
         return MicrostructureAnalyzerSchema.parse(
-            SYMBOL_CFG["microstructureAnalyzer"]
+            SYMBOL_CFG!["microstructureAnalyzer"]
         );
     }
 
@@ -1163,15 +1169,15 @@ export class Config {
         return {
             tickSize: this.TICK_SIZE,
             wallTicks: Number(
-                cfg.symbols[cfg.symbol].spoofingDetector.wallTicks
+                cfg.symbols[cfg.symbol]!.spoofingDetector.wallTicks
             ),
             minWallSize: Number(
-                cfg.symbols[cfg.symbol].spoofingDetector.minWallSize
+                cfg.symbols[cfg.symbol]!.spoofingDetector.minWallSize
             ),
             dynamicWallWidth:
-                cfg.symbols[cfg.symbol].spoofingDetector.dynamicWallWidth,
+                cfg.symbols[cfg.symbol]!.spoofingDetector.dynamicWallWidth,
             testLogMinSpoof: Number(
-                cfg.symbols[cfg.symbol].spoofingDetector.testLogMinSpoof
+                cfg.symbols[cfg.symbol]!.spoofingDetector.testLogMinSpoof
             ),
         };
     }
@@ -1179,51 +1185,52 @@ export class Config {
     static get ANOMALY_DETECTOR(): AnomalyDetectorOptions {
         return {
             windowSize: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.windowSize
+                cfg.symbols[cfg.symbol]!.anomalyDetector.windowSize
             ),
             anomalyCooldownMs: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.anomalyCooldownMs
+                cfg.symbols[cfg.symbol]!.anomalyDetector.anomalyCooldownMs
             ),
             volumeImbalanceThreshold: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.volumeImbalanceThreshold
+                cfg.symbols[cfg.symbol]!.anomalyDetector
+                    .volumeImbalanceThreshold
             ),
             normalSpreadBps: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.normalSpreadBps
+                cfg.symbols[cfg.symbol]!.anomalyDetector.normalSpreadBps
             ),
             minHistory: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.minHistory
+                cfg.symbols[cfg.symbol]!.anomalyDetector.minHistory
             ),
             tickSize: this.TICK_SIZE,
             flowWindowMs: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.flowWindowMs
+                cfg.symbols[cfg.symbol]!.anomalyDetector.flowWindowMs
             ),
             orderSizeWindowMs: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.orderSizeWindowMs
+                cfg.symbols[cfg.symbol]!.anomalyDetector.orderSizeWindowMs
             ),
             volatilityThreshold: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.volatilityThreshold
+                cfg.symbols[cfg.symbol]!.anomalyDetector.volatilityThreshold
             ),
             spreadThresholdBps: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.spreadThresholdBps
+                cfg.symbols[cfg.symbol]!.anomalyDetector.spreadThresholdBps
             ),
             extremeVolatilityWindowMs: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector
+                cfg.symbols[cfg.symbol]!.anomalyDetector
                     .extremeVolatilityWindowMs
             ),
             liquidityCheckWindowMs: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.liquidityCheckWindowMs
+                cfg.symbols[cfg.symbol]!.anomalyDetector.liquidityCheckWindowMs
             ),
             whaleCooldownMs: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.whaleCooldownMs
+                cfg.symbols[cfg.symbol]!.anomalyDetector.whaleCooldownMs
             ),
             marketHealthWindowMs: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.marketHealthWindowMs
+                cfg.symbols[cfg.symbol]!.anomalyDetector.marketHealthWindowMs
             ),
         };
     }
 
     static get HIDDEN_ORDER_DETECTOR(): Partial<HiddenOrderDetectorConfig> {
-        const hiddenOrderConfig = cfg.symbols[cfg.symbol].hiddenOrderDetector;
+        const hiddenOrderConfig = cfg.symbols[cfg.symbol]!.hiddenOrderDetector;
         return {
             minHiddenVolume: Number(hiddenOrderConfig.minHiddenVolume),
             minTradeSize: Number(hiddenOrderConfig.minTradeSize),

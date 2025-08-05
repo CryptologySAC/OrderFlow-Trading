@@ -193,7 +193,7 @@ export class MarketContextCollector extends EventEmitter {
                 const cutoff = trade.timestamp - 3600000; // 1 hour
                 while (
                     this.spreadHistory.length > 0 &&
-                    this.spreadHistory[0].timestamp < cutoff
+                    this.spreadHistory[0]!.timestamp < cutoff
                 ) {
                     this.spreadHistory.shift();
                 }
@@ -505,8 +505,8 @@ export class MarketContextCollector extends EventEmitter {
 
         if (relevantPrices.length < 2) return 0;
 
-        const firstPrice = relevantPrices[0].price;
-        const lastPrice = relevantPrices[relevantPrices.length - 1].price;
+        const firstPrice = relevantPrices[0]!.price;
+        const lastPrice = relevantPrices[relevantPrices.length - 1]!.price;
 
         return (lastPrice - firstPrice) / firstPrice;
     }
@@ -530,8 +530,8 @@ export class MarketContextCollector extends EventEmitter {
         const returns: number[] = [];
         for (let i = 1; i < relevantPrices.length; i++) {
             returns.push(
-                (relevantPrices[i] - relevantPrices[i - 1]) /
-                    relevantPrices[i - 1]
+                (relevantPrices[i]! - relevantPrices[i - 1]!) /
+                    relevantPrices[i - 1]!
             );
         }
 
@@ -856,7 +856,7 @@ export class MarketContextCollector extends EventEmitter {
             currentRegime: this.currentRegime,
             lastUpdate:
                 this.priceHistory.length > 0
-                    ? this.priceHistory[this.priceHistory.length - 1].timestamp
+                    ? this.priceHistory[this.priceHistory.length - 1]!.timestamp
                     : 0,
         };
     }

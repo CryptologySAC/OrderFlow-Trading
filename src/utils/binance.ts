@@ -195,19 +195,19 @@ export class BinanceDataFeed implements IBinanceDataFeed {
                 requestedLimit: limit,
                 firstTradeTime:
                     result.length > 0
-                        ? new Date(result[0].T || 0).toISOString()
+                        ? new Date(result[0]!.T || 0).toISOString()
                         : "N/A",
                 lastTradeTime:
                     result.length > 0
                         ? new Date(
-                              result[result.length - 1].T || 0
+                              result[result.length - 1]!.T || 0
                           ).toISOString()
                         : "N/A",
                 timeSpanMinutes:
                     result.length > 1
                         ? (
-                              ((result[result.length - 1].T || 0) -
-                                  (result[0].T || 0)) /
+                              ((result[result.length - 1]!.T || 0) -
+                                  (result[0]!.T || 0)) /
                               60000
                           ).toFixed(2)
                         : "N/A",

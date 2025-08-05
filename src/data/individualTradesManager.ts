@@ -376,7 +376,7 @@ export class IndividualTradesManager {
     }
 
     private isLargeOrder(trade: AggTradeEvent | EnrichedTradeEvent): boolean {
-        if (this.recentTradeSizes.length < 100) {
+        if (this.recentTradeSizes.length < 500) {
             return false; // Need sufficient history
         }
 
@@ -385,7 +385,7 @@ export class IndividualTradesManager {
         const percentileIndex = Math.floor(
             (this.config.criteria.minOrderSizePercentile / 100) * sorted.length
         );
-        const threshold = sorted[percentileIndex];
+        const threshold = sorted[percentileIndex]!;
 
         return trade.quantity >= threshold;
     }

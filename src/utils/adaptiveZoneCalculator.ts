@@ -23,7 +23,9 @@ export class AdaptiveZoneCalculator {
         if (this.priceWindow.length > 2) {
             let sum = 0;
             for (let i = 1; i < this.priceWindow.length; i++) {
-                sum += Math.abs(this.priceWindow[i] - this.priceWindow[i - 1]);
+                sum += Math.abs(
+                    this.priceWindow[i]! - this.priceWindow[i - 1]!
+                );
             }
             this.rollingATR = FinancialMath.safeDivide(
                 sum,

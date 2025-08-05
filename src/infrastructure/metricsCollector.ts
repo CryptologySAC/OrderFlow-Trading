@@ -479,7 +479,7 @@ export class MetricsCollector implements IMetricsCollector {
 
         for (const p of percentiles) {
             const index = Math.ceil((p / 100) * sorted.length) - 1;
-            result[`p${p}`] = sorted[Math.max(0, index)];
+            result[`p${p}`] = sorted[Math.max(0, index)]!;
         }
 
         return result;
@@ -743,9 +743,11 @@ export class MetricsCollector implements IMetricsCollector {
 
             if (validIndices.length < histogram.timestamps.length) {
                 histogram.timestamps = validIndices.map(
-                    (i) => histogram.timestamps[i]
+                    (i) => histogram.timestamps[i]!
                 );
-                histogram.values = validIndices.map((i) => histogram.values[i]);
+                histogram.values = validIndices.map(
+                    (i) => histogram.values[i]!
+                );
                 histogram.count = BigInt(histogram.values.length);
                 histogram.sum = histogram.values.reduce((a, b) => a + b, 0);
             }

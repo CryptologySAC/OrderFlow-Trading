@@ -401,7 +401,7 @@ export class OrderBookProcessor implements IOrderBookProcessor {
 
         const p99Time =
             times.length > 0
-                ? times.sort((a, b) => a - b)[Math.floor(times.length * 0.99)]
+                ? times.sort((a, b) => a - b)[Math.floor(times.length * 0.99)]!
                 : 0;
 
         return {

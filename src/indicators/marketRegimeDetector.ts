@@ -157,7 +157,7 @@ class MarketRegimeDetector {
         if (this.priceWindow.count() >= 2) {
             const prices = this.priceWindow.toArray();
             const atr = Math.abs(
-                prices[prices.length - 1] - prices[prices.length - 2]
+                prices[prices.length - 1]! - prices[prices.length - 2]!
             );
             this.atrWindow.push(atr);
         }

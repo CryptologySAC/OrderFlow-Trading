@@ -586,7 +586,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
 
         // Check both volume and trade rates meet minimum requirements
         // Use zone timespan for rate calculation (config-driven)
-        const timespan = allZones.length > 0 ? allZones[0].timespan : 1000;
+        const timespan = allZones.length > 0 ? allZones[0]!.timespan : 1000;
         const volumePerSec = (totalVolume * 1000) / timespan;
         const tradesPerSec = (totalTrades * 1000) / timespan;
 

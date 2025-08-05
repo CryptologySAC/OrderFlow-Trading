@@ -300,25 +300,35 @@ export class FinancialMath {
 
         const sorted = [...validValues].sort((a, b) => a - b);
 
-        if (percentile === 0) {
+        if (
+            (percentile === 0 || sorted.length === 1) &&
+            sorted[0] !== undefined
+        ) {
             return sorted[0];
         }
         if (percentile === 100) {
-            return sorted[sorted.length - 1];
+            return sorted[sorted.length - 1]!;
         }
 
         // Use precise percentile calculation with interpolation
         const index = (percentile / 100) * (sorted.length - 1);
-        const lower = Math.floor(index);
-        const upper = Math.ceil(index);
+        let lower = Math.floor(index);
+        let upper = Math.ceil(index);
 
-        if (lower === upper) {
-            return sorted[lower];
+        if (lower < 0) {
+            lower = 0;
+        }
+        if (upper >= sorted.length) {
+            upper = sorted.length - 1;
+        }
+
+        if (lower === upper || upper < lower) {
+            return sorted[lower]!;
         }
 
         // Linear interpolation between adjacent values
         const weight = index - lower;
-        const result = sorted[lower] * (1 - weight) + sorted[upper] * weight;
+        const result = sorted[lower]! * (1 - weight) + sorted[upper]! * weight;
 
         return result;
     }

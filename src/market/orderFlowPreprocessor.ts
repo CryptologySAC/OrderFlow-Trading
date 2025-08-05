@@ -719,7 +719,7 @@ export class OrderflowPreprocessor
             zoneConfig: {
                 zoneTicks: this.standardZoneConfig.zoneTicks,
                 tickValue: this.tickSize,
-                timeWindow: this.standardZoneConfig.timeWindows[0], // Use shortest time window
+                timeWindow: this.standardZoneConfig.timeWindows[0]!, // Use shortest time window
             },
         };
 
@@ -814,7 +814,7 @@ export class OrderflowPreprocessor
         }
 
         // Select the zone with the highest relevance score
-        let bestZone = relevantZones[0];
+        let bestZone = relevantZones[0]!;
         let bestScore = this.calculateZoneRelevanceScore(bestZone, price);
 
         for (const zone of relevantZones.slice(1)) {
@@ -955,7 +955,7 @@ export class OrderflowPreprocessor
                 passiveBidVolume: band.bid,
                 passiveAskVolume: band.ask,
                 tradeCount: 0, // Will be updated with trade aggregation
-                timespan: this.standardZoneConfig.timeWindows[0], // Default to shortest window
+                timespan: this.standardZoneConfig.timeWindows[0]!, // Default to shortest window
                 boundaries: { min: minPrice, max: maxPrice },
                 lastUpdate: timestamp,
                 volumeWeightedPrice,

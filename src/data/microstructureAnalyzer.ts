@@ -171,7 +171,7 @@ export class MicrostructureAnalyzer {
         // Calculate time gaps between trades
         const timeGaps = [];
         for (let i = 1; i < trades.length; i++) {
-            timeGaps.push(trades[i].timestamp - trades[i - 1].timestamp);
+            timeGaps.push(trades[i]!.timestamp - trades[i - 1]!.timestamp);
         }
 
         const avgTimeBetween =
@@ -308,7 +308,7 @@ export class MicrostructureAnalyzer {
         // Check for arithmetic progression
         const diffs = [];
         for (let i = 1; i < sizes.length; i++) {
-            diffs.push(sizes[i] - sizes[i - 1]);
+            diffs.push(sizes[i]! - sizes[i - 1]!);
         }
 
         const avgDiff =
@@ -391,7 +391,7 @@ export class MicrostructureAnalyzer {
         // Check for decreasing pattern
         let decreasingCount = 0;
         for (let i = 1; i < sizes.length; i++) {
-            if (sizes[i] <= sizes[i - 1]) {
+            if (sizes[i]! <= sizes[i - 1]!) {
                 decreasingCount++;
             }
         }
@@ -404,7 +404,7 @@ export class MicrostructureAnalyzer {
         if (trades.length < 2) return false;
 
         const timeRange =
-            trades[trades.length - 1].timestamp - trades[0].timestamp;
+            trades[trades.length - 1]!.timestamp - trades[0]!.timestamp;
         const priceRange =
             Math.max(...trades.map((t) => t.price)) -
             Math.min(...trades.map((t) => t.price));
@@ -498,8 +498,8 @@ export class MicrostructureAnalyzer {
     private calculatePriceImpact(trades: IndividualTrade[]): number {
         if (trades.length < 2) return 0;
 
-        const firstPrice = trades[0].price;
-        const lastPrice = trades[trades.length - 1].price;
+        const firstPrice = trades[0]!.price;
+        const lastPrice = trades[trades.length - 1]!.price;
         const priceChange = Math.abs(lastPrice - firstPrice) / firstPrice;
 
         // Normalize price impact (0-1 scale)
@@ -510,7 +510,7 @@ export class MicrostructureAnalyzer {
         if (trades.length < 2) return 0;
 
         const timeRange =
-            trades[trades.length - 1].timestamp - trades[0].timestamp;
+            trades[trades.length - 1]!.timestamp - trades[0]!.timestamp;
         const avgTradeSize =
             trades.reduce((sum, t) => sum + t.quantity, 0) / trades.length;
 
@@ -529,12 +529,12 @@ export class MicrostructureAnalyzer {
             Math.max(...trades.map((t) => t.price)) -
             Math.min(...trades.map((t) => t.price));
         const timeRange =
-            trades[trades.length - 1].timestamp - trades[0].timestamp;
+            trades[trades.length - 1]!.timestamp - trades[0]!.timestamp;
 
         // Lower fragmentation and shorter time = higher efficiency
         const fragmentationPenalty = trades.length / 10; // Penalty for too many pieces
         const timePenalty = timeRange / 10000; // Penalty for slow execution
-        const pricePenalty = priceRange / trades[0].price; // Penalty for wide price range
+        const pricePenalty = priceRange / trades[0]!.price; // Penalty for wide price range
 
         const efficiency =
             1 / (1 + fragmentationPenalty + timePenalty + pricePenalty);

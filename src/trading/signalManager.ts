@@ -255,7 +255,7 @@ export class SignalManager extends EventEmitter {
                 this.lastRejectReason = "unhealthy_market";
                 // Track rejected signals by type
                 if (this.signalTypeStats[signal.type]) {
-                    this.signalTypeStats[signal.type].rejected++;
+                    this.signalTypeStats[signal.type]!.rejected++;
                 }
                 return null;
             }
@@ -285,7 +285,7 @@ export class SignalManager extends EventEmitter {
                 this.lastRejectReason = "low_confidence";
                 // Track rejected signals by type
                 if (this.signalTypeStats[signal.type]) {
-                    this.signalTypeStats[signal.type].rejected++;
+                    this.signalTypeStats[signal.type]!.rejected++;
                 }
                 return null;
             }
@@ -321,7 +321,7 @@ export class SignalManager extends EventEmitter {
                         this.lastRejectReason = "conflict_resolution";
                         // Track rejected signals by type
                         if (this.signalTypeStats[signal.type]) {
-                            this.signalTypeStats[signal.type].rejected++;
+                            this.signalTypeStats[signal.type]!.rejected++;
                         }
                         return null;
                     }
@@ -819,11 +819,11 @@ export class SignalManager extends EventEmitter {
         let winningSignal: ProcessedSignal;
         let winningConfidence: number;
 
-        if (signal1Priority > signal2Priority) {
+        if (signal1Priority! > signal2Priority!) {
             // Signal1 wins - apply penalty to signal2
             winningSignal = conflict.signal1;
             winningConfidence = conflict.signal1.confidence;
-        } else if (signal2Priority > signal1Priority) {
+        } else if (signal2Priority! > signal1Priority!) {
             // Signal2 wins - apply penalty to signal1
             winningSignal = conflict.signal2;
             winningConfidence = conflict.signal2.confidence;
@@ -1027,10 +1027,10 @@ export class SignalManager extends EventEmitter {
 
         // ✅ Track signal type IMMEDIATELY for dashboard metrics (before any rejections)
         if (this.signalTypeStats[signal.type]) {
-            this.signalTypeStats[signal.type].candidates++;
+            this.signalTypeStats[signal.type]!.candidates++;
             this.logger.info("[SignalManager] TRACKED CANDIDATE", {
                 signalType: signal.type,
-                newCandidates: this.signalTypeStats[signal.type].candidates,
+                newCandidates: this.signalTypeStats[signal.type]!.candidates,
                 allCurrentStats: this.signalTypeStats,
             });
         } else {
@@ -1049,7 +1049,7 @@ export class SignalManager extends EventEmitter {
         if (this.isCircuitBreakerOpen(signal.detectorId)) {
             // Track rejected signals by type
             if (this.signalTypeStats[signal.type]) {
-                this.signalTypeStats[signal.type].rejected++;
+                this.signalTypeStats[signal.type]!.rejected++;
             }
             this.recordDroppedSignal(signal, "circuit_breaker");
             return null;
@@ -1062,7 +1062,7 @@ export class SignalManager extends EventEmitter {
         if (shouldDrop) {
             // Track rejected signals by type
             if (this.signalTypeStats[signal.type]) {
-                this.signalTypeStats[signal.type].rejected++;
+                this.signalTypeStats[signal.type]!.rejected++;
             }
             this.recordDroppedSignal(signal, "backpressure");
             return null;
@@ -1124,7 +1124,7 @@ export class SignalManager extends EventEmitter {
             } else {
                 // Track rejected signals by type
                 if (this.signalTypeStats[signal.type]) {
-                    this.signalTypeStats[signal.type].rejected++;
+                    this.signalTypeStats[signal.type]!.rejected++;
                 }
                 this.recordCircuitBreakerFailure(signal.detectorId);
             }
@@ -1135,7 +1135,7 @@ export class SignalManager extends EventEmitter {
 
             // Track rejected signals by type for exceptions
             if (this.signalTypeStats[signal.type]) {
-                this.signalTypeStats[signal.type].rejected++;
+                this.signalTypeStats[signal.type]!.rejected++;
             }
 
             this.logger.error(
@@ -1190,7 +1190,7 @@ export class SignalManager extends EventEmitter {
                         if (
                             this.signalTypeStats[prioritizedSignal.signal.type]
                         ) {
-                            this.signalTypeStats[prioritizedSignal.signal.type]
+                            this.signalTypeStats[prioritizedSignal.signal.type]!
                                 .confirmed++;
                         }
                         this.resetCircuitBreaker(
@@ -1201,7 +1201,7 @@ export class SignalManager extends EventEmitter {
                         if (
                             this.signalTypeStats[prioritizedSignal.signal.type]
                         ) {
-                            this.signalTypeStats[prioritizedSignal.signal.type]
+                            this.signalTypeStats[prioritizedSignal.signal.type]!
                                 .rejected++;
                         }
                         this.recordCircuitBreakerFailure(
@@ -1309,7 +1309,7 @@ export class SignalManager extends EventEmitter {
                 });
                 // Track rejected signals by type
                 if (this.signalTypeStats[signal.type]) {
-                    this.signalTypeStats[signal.type].rejected++;
+                    this.signalTypeStats[signal.type]!.rejected++;
                 }
                 return null;
             }
@@ -1336,7 +1336,7 @@ export class SignalManager extends EventEmitter {
                 this.lastRejectReason = "throttled_duplicate";
                 // Track rejected signals by type
                 if (this.signalTypeStats[signal.type]) {
-                    this.signalTypeStats[signal.type].rejected++;
+                    this.signalTypeStats[signal.type]!.rejected++;
                 }
                 return null;
             }
@@ -1393,7 +1393,7 @@ export class SignalManager extends EventEmitter {
 
             // Track confirmed signals by type
             if (this.signalTypeStats[signal.type]) {
-                this.signalTypeStats[signal.type].confirmed++;
+                this.signalTypeStats[signal.type]!.confirmed++;
             }
 
             // Emit the final trading signal

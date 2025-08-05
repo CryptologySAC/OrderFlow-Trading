@@ -19,8 +19,8 @@ export class RollingStatsWindow {
 
     private trim(now: number): void {
         while (
-            this.entries.length &&
-            now - this.entries[0].time > this.windowMs
+            this.entries.length > 0 &&
+            now - this.entries[0]!.time > this.windowMs
         ) {
             const old = this.entries.shift()!;
             this.sum -= old.value;
