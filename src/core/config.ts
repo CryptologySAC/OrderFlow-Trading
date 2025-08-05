@@ -323,6 +323,34 @@ export const MicrostructureAnalyzerSchema = z.object({
     arbitrageTimeThreshold: z.number().int().min(10).max(500), // Max time for arbitrage detection
 });
 
+// ============================================================================
+// INDIVIDUAL TRADES MANAGER CONFIG - High-value trade individual data fetching
+// ============================================================================
+export const IndividualTradesManagerSchema = z.object({
+    // Feature enablement
+    enabled: z.boolean(),
+
+    // Selective fetching criteria
+    criteria: z.object({
+        minOrderSizePercentile: z.number().int().min(50).max(99), // 50-99th percentile
+        keyLevelsEnabled: z.boolean(), // Fetch at support/resistance levels
+        anomalyPeriodsEnabled: z.boolean(), // Fetch during anomaly detection
+        highVolumePeriodsEnabled: z.boolean(), // Fetch during high activity periods
+    }),
+
+    // Performance tuning
+    cache: z.object({
+        maxSize: z.number().int().min(1000).max(100000), // 1K-100K cached trades
+        ttlMs: z.number().int().min(60000).max(3600000), // 1min-1hour TTL
+    }),
+
+    // API rate limiting
+    rateLimit: z.object({
+        maxRequestsPerSecond: z.number().int().min(1).max(10), // 1-10 req/sec (Binance limits)
+        batchSize: z.number().int().min(10).max(1000), // 10-1000 trades per API call
+    }),
+});
+
 const MarketDataStorageConfigSchema = z.object({
     enabled: z.boolean(),
     dataDirectory: z.string(),
@@ -688,6 +716,20 @@ function validateMandatoryConfig(): void {
             );
         } catch (error) {
             console.error("🚨 CRITICAL CONFIG ERROR - MicrostructureAnalyzer");
+            console.error("Missing mandatory configuration properties:");
+            console.error(error);
+            console.error(
+                "Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT"
+            );
+            process.exit(1);
+        }
+
+        try {
+            IndividualTradesManagerSchema.parse(
+                SYMBOL_CFG["individualTradesManager"]
+            );
+        } catch (error) {
+            console.error("🚨 CRITICAL CONFIG ERROR - IndividualTradesManager");
             console.error("Missing mandatory configuration properties:");
             console.error(error);
             console.error(
@@ -1106,43 +1148,9 @@ export class Config {
     }
 
     static get INDIVIDUAL_TRADES_MANAGER(): IndividualTradesManagerConfig {
-        return {
-            enabled:
-                process.env["INDIVIDUAL_TRADES_ENABLED"] === "true" || false,
-
-            criteria: {
-                minOrderSizePercentile: Number(
-                    process.env["INDIVIDUAL_TRADES_SIZE_PERCENTILE"] ?? 95
-                ),
-                keyLevelsEnabled:
-                    process.env["INDIVIDUAL_TRADES_KEY_LEVELS"] === "true" ||
-                    false,
-                anomalyPeriodsEnabled:
-                    process.env["INDIVIDUAL_TRADES_ANOMALY_PERIODS"] ===
-                        "true" || true,
-                highVolumePeriodsEnabled:
-                    process.env["INDIVIDUAL_TRADES_HIGH_VOLUME"] === "true" ||
-                    true,
-            },
-
-            cache: {
-                maxSize: Number(
-                    process.env["INDIVIDUAL_TRADES_CACHE_SIZE"] ?? 10000
-                ),
-                ttlMs: Number(
-                    process.env["INDIVIDUAL_TRADES_CACHE_TTL"] ?? 300000
-                ), // 5 minutes
-            },
-
-            rateLimit: {
-                maxRequestsPerSecond: Number(
-                    process.env["INDIVIDUAL_TRADES_RATE_LIMIT"] ?? 5
-                ),
-                batchSize: Number(
-                    process.env["INDIVIDUAL_TRADES_BATCH_SIZE"] ?? 100
-                ),
-            },
-        };
+        return IndividualTradesManagerSchema.parse(
+            SYMBOL_CFG["individualTradesManager"]
+        );
     }
 
     static get MICROSTRUCTURE_ANALYZER(): MicrostructureAnalyzerConfig {

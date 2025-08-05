@@ -385,6 +385,32 @@
                 "timeWindowIndex": 0,
                 "maxActivePatterns": 50,
                 "maxRecentTrades": 100
+            },
+            "microstructureAnalyzer": {
+                "burstThresholdMs": 100,
+                "uniformityThreshold": 0.2,
+                "sizingConsistencyThreshold": 0.15,
+                "persistenceWindowSize": 5,
+                "marketMakingSpreadThreshold": 0.01,
+                "icebergSizeRatio": 0.8,
+                "arbitrageTimeThreshold": 50
+            },
+            "individualTradesManager": {
+                "enabled": false,
+                "criteria": {
+                    "minOrderSizePercentile": 95,
+                    "keyLevelsEnabled": false,
+                    "anomalyPeriodsEnabled": true,
+                    "highVolumePeriodsEnabled": true
+                },
+                "cache": {
+                    "maxSize": 10000,
+                    "ttlMs": 300000
+                },
+                "rateLimit": {
+                    "maxRequestsPerSecond": 5,
+                    "batchSize": 100
+                }
             }
         }
     },

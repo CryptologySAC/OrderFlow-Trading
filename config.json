@@ -402,6 +402,23 @@
                 "marketMakingSpreadThreshold": 0.01,
                 "icebergSizeRatio": 0.8,
                 "arbitrageTimeThreshold": 50
+            },
+            "individualTradesManager": {
+                "enabled": false,
+                "criteria": {
+                    "minOrderSizePercentile": 95,
+                    "keyLevelsEnabled": false,
+                    "anomalyPeriodsEnabled": true,
+                    "highVolumePeriodsEnabled": true
+                },
+                "cache": {
+                    "maxSize": 10000,
+                    "ttlMs": 300000
+                },
+                "rateLimit": {
+                    "maxRequestsPerSecond": 5,
+                    "batchSize": 100
+                }
             }
         }
     },
