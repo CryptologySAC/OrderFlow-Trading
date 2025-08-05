@@ -17,8 +17,8 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import Database from "better-sqlite3";
-import type { ILogger } from "../infrastructure/loggerInterface.js";
-import { Config } from "../core/config.js";
+import type { ILogger } from "../infrastructure/loggerInterface.ts";
+import { Config } from "../core/config.ts";
 
 /**
  * Raw rejection data from CSV files

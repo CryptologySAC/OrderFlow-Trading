@@ -34,7 +34,7 @@
 //
 // Runtime type validation for storage system - Provides type-safe validation for database operations and worker communication
 
-import type { ILogger } from "./loggerInterface.js";
+import type { ILogger } from "./loggerInterface.ts";
 
 // Global logger instance for type guards - set via setTypeGuardLogger
 let globalLogger: ILogger | null = null;

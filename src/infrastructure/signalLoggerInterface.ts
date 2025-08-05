@@ -1,4 +1,4 @@
-import type { ProcessedSignal, SignalCandidate } from "../types/signalTypes.js";
+import type { ProcessedSignal, SignalCandidate } from "../types/signalTypes.ts";
 
 export interface ISignalLogger {
     logEvent(event: SignalEvent): void;

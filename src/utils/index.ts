@@ -5,15 +5,15 @@ export {
     calculatePositionSize,
     calculateStopLoss,
     type ProfitTarget,
-} from "./calculations.js";
+} from "./calculations.ts";
 
 // Export production utilities
-export { ProductionUtils } from "./productionUtils.js";
+export { ProductionUtils } from "./productionUtils.ts";
 
 // Export standardization utilities
-export { ConfigValidator, ConfigValidationError } from "./configValidator.js";
-export { ErrorHandler, StandardError } from "./errorHandler.js";
-export { RetryHandler, RetryError } from "./retryHandler.js";
+export { ConfigValidator, ConfigValidationError } from "./configValidator.ts";
+export { ErrorHandler, StandardError } from "./errorHandler.ts";
+export { RetryHandler, RetryError } from "./retryHandler.ts";
 
 // Export types
-export type { AlertMessage } from "./types.js";
+export type { AlertMessage } from "./types.ts";

@@ -1,4 +1,4 @@
-import { MarketAnomaly } from "../utils/types.js";
+import { MarketAnomaly } from "../utils/types.ts";
 
 export type DetectorResultType =
     | AbsorptionSignalData

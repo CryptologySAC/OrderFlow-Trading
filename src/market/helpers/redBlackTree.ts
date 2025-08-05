@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { PassiveLevel } from "../../types/marketEvents.js";
+import type { PassiveLevel } from "../../types/marketEvents.ts";
 
 // Zod schemas for input validation
 const PriceSchema = z

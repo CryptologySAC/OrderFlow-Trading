@@ -2,10 +2,10 @@
 // TODO If you want to score spoofing events, modify your SpoofingDetector to return the actual SpoofingEvent object (not just boolean).
 // TODO You could then emit a severity/confidence level proportional to the size and cancel/execution ratio.
 import { EventEmitter } from "events";
-import { TimeAwareCache } from "../utils/timeAwareCache.js";
-import { FinancialMath } from "../utils/financialMath.js";
-import type { ILogger } from "../infrastructure/loggerInterface.js";
-import type { AnomalyDetector } from "./anomalyDetector.js";
+import { TimeAwareCache } from "../utils/timeAwareCache.ts";
+import { FinancialMath } from "../utils/financialMath.ts";
+import type { ILogger } from "../infrastructure/loggerInterface.ts";
+import type { AnomalyDetector } from "./anomalyDetector.ts";
 
 export interface SpoofingDetectorConfig {
     tickSize: number; // 0.01 for LTCUSDT

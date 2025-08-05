@@ -1,14 +1,14 @@
 import { parentPort } from "worker_threads";
 import { randomUUID } from "crypto";
-import { WorkerProxyLogger } from "../shared/workerProxylogger.js";
-import { WorkerMetricsProxy } from "../shared/workerMetricsProxy.js";
-import { WorkerRateLimiterProxy } from "../shared/workerRateLimiterProxy.js";
-import type { EnhancedMetrics } from "../../infrastructure/metricsCollector.js";
-import type { IWorkerMetricsCollector } from "../shared/workerInterfaces.js";
+import { WorkerProxyLogger } from "../shared/workerProxylogger.ts";
+import { WorkerMetricsProxy } from "../shared/workerMetricsProxy.ts";
+import { WorkerRateLimiterProxy } from "../shared/workerRateLimiterProxy.ts";
+import type { EnhancedMetrics } from "../../infrastructure/metricsCollector.ts";
+import type { IWorkerMetricsCollector } from "../shared/workerInterfaces.ts";
 import {
     WorkerWebSocketManager,
     type ExtendedWebSocket,
-} from "../shared/workerWebSocketManager.js";
+} from "../shared/workerWebSocketManager.ts";
 
 // Extend the WebSocket interface with client-specific state
 interface IsolatedWebSocket extends ExtendedWebSocket {
@@ -19,10 +19,10 @@ interface IsolatedWebSocket extends ExtendedWebSocket {
         pendingRequests: Set<string>;
     };
 }
-import { Config } from "../../core/config.js";
-import type { WebSocketMessage } from "../../utils/interfaces.js";
+import { Config } from "../../core/config.ts";
+import type { WebSocketMessage } from "../../utils/interfaces.ts";
 import mqtt, { MqttClient, ErrorWithReasonCode } from "mqtt";
-import type { SignalTracker } from "../../analysis/signalTracker.js";
+import type { SignalTracker } from "../../analysis/signalTracker.ts";
 
 interface DataStreamMetrics {
     streamConnections: number;

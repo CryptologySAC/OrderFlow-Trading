@@ -1,18 +1,18 @@
 import { Worker } from "worker_threads";
 import { randomUUID } from "crypto";
-import { WorkerMessageRouter } from "./shared/workerMessageRouter.js";
+import { WorkerMessageRouter } from "./shared/workerMessageRouter.ts";
 import {
     MetricsBatchMessageSchema,
     type MetricsBatchMessage,
     DepthSnapshotResponseMessageSchema,
-} from "./shared/messageSchemas.js";
+} from "./shared/messageSchemas.ts";
 
-import type { SignalEvent } from "../infrastructure/signalLoggerInterface.js";
-import type { WebSocketMessage } from "../utils/interfaces.js";
-import type { SignalTracker } from "../analysis/signalTracker.js";
-import type { EnhancedMetrics } from "../infrastructure/metricsCollector.js";
-import type { ILogger } from "../infrastructure/loggerInterface.js";
-import { WorkerProxyLogger } from "./shared/workerProxylogger.js";
+import type { SignalEvent } from "../infrastructure/signalLoggerInterface.ts";
+import type { WebSocketMessage } from "../utils/interfaces.ts";
+import type { SignalTracker } from "../analysis/signalTracker.ts";
+import type { EnhancedMetrics } from "../infrastructure/metricsCollector.ts";
+import type { ILogger } from "../infrastructure/loggerInterface.ts";
+import { WorkerProxyLogger } from "./shared/workerProxylogger.ts";
 
 export interface BinanceWorkerMetrics {
     connection: {

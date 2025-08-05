@@ -2,9 +2,9 @@
 
 import { EventEmitter } from "events";
 import { spawn } from "child_process";
-import type { ILogger } from "./loggerInterface.js";
-import type { IMetricsCollector } from "./metricsCollectorInterface.js";
-import { ProductionUtils } from "../utils/productionUtils.js";
+import type { ILogger } from "./loggerInterface.ts";
+import type { IMetricsCollector } from "./metricsCollectorInterface.ts";
+import { ProductionUtils } from "../utils/productionUtils.ts";
 
 export interface HardReloadEvent {
     reason: string;

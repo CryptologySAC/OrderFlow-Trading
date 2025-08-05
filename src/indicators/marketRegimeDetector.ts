@@ -1,6 +1,6 @@
 // src/indicators/marketRegimeDetector.ts
 
-import { RollingWindow } from "../utils/rollingWindow.js";
+import { RollingWindow } from "../utils/rollingWindow.ts";
 
 export interface MarketRegime {
     volatility: "low" | "medium" | "high";

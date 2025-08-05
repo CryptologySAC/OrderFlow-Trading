@@ -30,16 +30,16 @@
 //   - Async/await pattern for non-blocking operations
 //   - Proper error isolation prevents thread crashes
 import { parentPort } from "worker_threads";
-import { getDB } from "../../infrastructure/db.js";
-import { Storage } from "../storage.js";
-import { WorkerProxyLogger } from "../shared/workerProxylogger.js";
-import { WorkerMetricsProxy } from "../shared/workerMetricsProxy.js";
+import { getDB } from "../../infrastructure/db.ts";
+import { Storage } from "../storage.ts";
+import { WorkerProxyLogger } from "../shared/workerProxylogger.ts";
+import { WorkerMetricsProxy } from "../shared/workerMetricsProxy.ts";
 import {
     isWorkerCallMessage,
     isWorkerShutdownMessage,
     serializeError,
-} from "../../infrastructure/typeGuards.js";
-import type { IWorkerMetricsCollector } from "../shared/workerInterfaces.js";
+} from "../../infrastructure/typeGuards.ts";
+import type { IWorkerMetricsCollector } from "../shared/workerInterfaces.ts";
 
 // Validate that we're running in a worker thread context
 if (!parentPort) {

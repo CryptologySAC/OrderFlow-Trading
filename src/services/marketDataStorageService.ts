@@ -1,15 +1,15 @@
 // src/services/marketDataStorageService.ts
 
-import type { ILogger } from "../infrastructure/loggerInterface.js";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import type { ILogger } from "../infrastructure/loggerInterface.ts";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
 import {
     MarketDataCollector,
     type MarketDataCollectorConfig,
     type TradeRecord,
     type DepthSnapshot,
-} from "../storage/marketDataCollector.js";
-import type { AggressiveTrade } from "../types/marketEvents.js";
-// import type { DepthLevel } from "../utils/interfaces.js"; // Not needed for market data storage
+} from "../storage/marketDataCollector.ts";
+import type { AggressiveTrade } from "../types/marketEvents.ts";
+// import type { DepthLevel } from "../utils/interfaces.ts"; // Not needed for market data storage
 
 /**
  * Service configuration for 7-day data collection

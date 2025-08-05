@@ -1,11 +1,11 @@
 // src/market/orderBookState.ts
 
 import type { SpotWebsocketStreams } from "@binance/spot";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
-import type { PassiveLevel, OrderBookHealth } from "../types/marketEvents.js";
-import type { ILogger } from "../infrastructure/loggerInterface.js";
-import type { ThreadManager } from "../multithreading/threadManager.js";
-import { FinancialMath } from "../utils/financialMath.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
+import type { PassiveLevel, OrderBookHealth } from "../types/marketEvents.ts";
+import type { ILogger } from "../infrastructure/loggerInterface.ts";
+import type { ThreadManager } from "../multithreading/threadManager.ts";
+import { FinancialMath } from "../utils/financialMath.ts";
 
 type SnapShot = Map<number, PassiveLevel>;
 

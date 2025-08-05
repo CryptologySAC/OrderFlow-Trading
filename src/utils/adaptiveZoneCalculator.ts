@@ -1,4 +1,4 @@
-import { FinancialMath } from "./financialMath.js";
+import { FinancialMath } from "./financialMath.ts";
 
 /**
  * Adaptive zone size calculation (ATR-based).

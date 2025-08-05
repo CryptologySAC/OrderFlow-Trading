@@ -44,11 +44,11 @@
 import { Database, Statement } from "better-sqlite3";
 import { statSync } from "fs";
 import { SpotWebsocketAPI } from "@binance/spot";
-import { ILogger } from "../infrastructure/loggerInterface.js";
+import { ILogger } from "../infrastructure/loggerInterface.ts";
 import {
     PipelineStorage,
     IPipelineStorage,
-} from "../infrastructure/pipelineStorage.js";
+} from "../infrastructure/pipelineStorage.ts";
 import {
     validateNumeric,
     validateInteger,
@@ -56,23 +56,23 @@ import {
     validateTimestamp,
     validateBoolean,
     validateDatabaseRow,
-} from "../infrastructure/typeGuards.js";
+} from "../infrastructure/typeGuards.ts";
 import {
     StorageResourceManager,
     registerDatabaseResource,
-} from "../infrastructure/storageResourceManager.js";
+} from "../infrastructure/storageResourceManager.ts";
 import {
     StorageHealthMonitor,
     createStorageHealthMonitor,
-} from "../infrastructure/storageHealthMonitor.js";
-import type { ProcessingJob, SerializableJobData } from "../utils/types.js";
-import type { AnomalyEvent } from "../services/anomalyDetector.js";
+} from "../infrastructure/storageHealthMonitor.ts";
+import type { ProcessingJob, SerializableJobData } from "../utils/types.ts";
+import type { AnomalyEvent } from "../services/anomalyDetector.ts";
 import type {
     SignalOutcome,
     MarketContext,
     FailedSignalAnalysis,
-} from "../analysis/signalTracker.js";
-import type { ProcessedSignal, ConfirmedSignal } from "../types/signalTypes.js";
+} from "../analysis/signalTracker.ts";
+import type { ProcessedSignal, ConfirmedSignal } from "../types/signalTypes.ts";
 
 // AggregatedTradeRow interface removed - using runtime validation instead
 

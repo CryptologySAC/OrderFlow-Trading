@@ -1,15 +1,15 @@
 // src/analysis/performanceMonitor.ts
 
 import { EventEmitter } from "events";
-import type { ILogger } from "../infrastructure/loggerInterface.js";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
-import { AlertManager } from "../alerts/alertManager.js";
-import type { SignalTracker } from "./signalTracker.js";
+import type { ILogger } from "../infrastructure/loggerInterface.ts";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
+import { AlertManager } from "../alerts/alertManager.ts";
+import type { SignalTracker } from "./signalTracker.ts";
 import type {
     PerformanceAnalyzer,
     PerformanceReport,
-} from "./performanceAnalyzer.js";
-import type { FailureAnalyzer, FailurePatterns } from "./failureAnalyzer.js";
+} from "./performanceAnalyzer.ts";
+import type { FailureAnalyzer, FailurePatterns } from "./failureAnalyzer.ts";
 
 export interface PerformanceAlert {
     id: string;

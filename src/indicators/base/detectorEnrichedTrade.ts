@@ -1,10 +1,10 @@
 // /src/indicators/base/detectorEnrichedTrade.ts
 import { EventEmitter } from "events";
-import type { ILogger } from "../../infrastructure/loggerInterface.js";
-import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInterface.js";
-import { ISignalLogger } from "../../infrastructure/signalLoggerInterface.js";
-import type { EnrichedTradeEvent } from "../../types/marketEvents.js";
-import type { SignalCandidate } from "../../types/signalTypes.js";
+import type { ILogger } from "../../infrastructure/loggerInterface.ts";
+import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInterface.ts";
+import { ISignalLogger } from "../../infrastructure/signalLoggerInterface.ts";
+import type { EnrichedTradeEvent } from "../../types/marketEvents.ts";
+import type { SignalCandidate } from "../../types/signalTypes.ts";
 
 /**
  * Abstract base for all detectors (handles logging/metrics/signalLogger).

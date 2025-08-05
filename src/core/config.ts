@@ -4,23 +4,23 @@ dotenv.config();
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { z } from "zod";
-import { AnomalyDetectorOptions } from "../services/anomalyDetector.js";
-import { SpoofingDetectorConfig } from "../services/spoofingDetector.js";
-import type { HiddenOrderDetectorConfig } from "../services/hiddenOrderDetector.js";
-import { OrderBookStateOptions } from "../market/orderBookState.js";
+import { AnomalyDetectorOptions } from "../services/anomalyDetector.ts";
+import { SpoofingDetectorConfig } from "../services/spoofingDetector.ts";
+import type { HiddenOrderDetectorConfig } from "../services/hiddenOrderDetector.ts";
+import { OrderBookStateOptions } from "../market/orderBookState.ts";
 import type {
     AllowedSymbols,
     MarketDataStorageConfig,
-} from "../types/configTypes.js";
-import type { OrderflowPreprocessorOptions } from "../market/orderFlowPreprocessor.js";
-import type { DataStreamConfig } from "../trading/dataStreamManager.js";
-import type { IndividualTradesManagerConfig } from "../data/individualTradesManager.js";
-import type { MicrostructureAnalyzerConfig } from "../data/microstructureAnalyzer.js";
-import type { TradesProcessorOptions } from "../market/processors/tradesProcessor.js";
-import type { SignalManagerConfig } from "../trading/signalManager.js";
-import type { SignalCoordinatorConfig } from "../services/signalCoordinator.js";
-import type { OrderBookProcessorOptions } from "../market/processors/orderBookProcessor.js";
-import type { MQTTConfig } from "../types/configTypes.js";
+} from "../types/configTypes.ts";
+import type { OrderflowPreprocessorOptions } from "../market/orderFlowPreprocessor.ts";
+import type { DataStreamConfig } from "../trading/dataStreamManager.ts";
+import type { IndividualTradesManagerConfig } from "../data/individualTradesManager.ts";
+import type { MicrostructureAnalyzerConfig } from "../data/microstructureAnalyzer.ts";
+import type { TradesProcessorOptions } from "../market/processors/tradesProcessor.ts";
+import type { SignalManagerConfig } from "../trading/signalManager.ts";
+import type { SignalCoordinatorConfig } from "../services/signalCoordinator.ts";
+import type { OrderBookProcessorOptions } from "../market/processors/orderBookProcessor.ts";
+import type { MQTTConfig } from "../types/configTypes.ts";
 
 // FUTURE-PROOF: Symbol-agnostic validation schemas with mathematical ranges
 

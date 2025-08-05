@@ -1,6 +1,6 @@
 // src/utils/errorHandler.ts
-import type { ILogger } from "../infrastructure/loggerInterface.js";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import type { ILogger } from "../infrastructure/loggerInterface.ts";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
 
 export interface ErrorContext {
     operation: string;

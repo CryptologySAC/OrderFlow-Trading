@@ -1,4 +1,4 @@
-import { FinancialMath } from "./financialMath.js";
+import { FinancialMath } from "./financialMath.ts";
 
 export class RollingStatsWindow {
     private entries: { value: number; time: number }[] = [];

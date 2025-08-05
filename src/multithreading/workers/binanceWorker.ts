@@ -1,14 +1,14 @@
 import { parentPort } from "worker_threads";
-import { WorkerProxyLogger } from "../shared/workerProxylogger.js";
-import { WorkerMetricsProxy } from "../shared/workerMetricsProxy.js";
-import { WorkerCircuitBreakerProxy } from "../shared/workerCircuitBreakerProxy.js";
-import { BinanceDataFeed } from "../../utils/binance.js";
-import { DataStreamManager } from "../../trading/dataStreamManager.js";
-import { Config } from "../../core/config.js";
+import { WorkerProxyLogger } from "../shared/workerProxylogger.ts";
+import { WorkerMetricsProxy } from "../shared/workerMetricsProxy.ts";
+import { WorkerCircuitBreakerProxy } from "../shared/workerCircuitBreakerProxy.ts";
+import { BinanceDataFeed } from "../../utils/binance.ts";
+import { DataStreamManager } from "../../trading/dataStreamManager.ts";
+import { Config } from "../../core/config.ts";
 import {
     DepthSnapshotRequestMessageSchema,
     BinanceDepthSnapshotSchema,
-} from "../shared/messageSchemas.js";
+} from "../shared/messageSchemas.ts";
 
 // Validate worker thread context
 if (!parentPort) {

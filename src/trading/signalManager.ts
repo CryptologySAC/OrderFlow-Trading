@@ -7,24 +7,24 @@ import type {
     ProcessedSignal,
     SignalType,
     ConfirmedSignal,
-} from "../types/signalTypes.js";
-import { AnomalyDetector } from "../services/anomalyDetector.js";
-import { AlertManager } from "../alerts/alertManager.js";
-import type { ILogger } from "../infrastructure/loggerInterface.js";
-import { ThreadManager } from "../multithreading/threadManager.js";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
-import type { EnhancedMetrics } from "../infrastructure/metricsCollector.js";
+} from "../types/signalTypes.ts";
+import { AnomalyDetector } from "../services/anomalyDetector.ts";
+import { AlertManager } from "../alerts/alertManager.ts";
+import type { ILogger } from "../infrastructure/loggerInterface.ts";
+import { ThreadManager } from "../multithreading/threadManager.ts";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
+import type { EnhancedMetrics } from "../infrastructure/metricsCollector.ts";
 import {
     calculateProfitTarget,
     calculateStopLoss,
-} from "../utils/calculations.js";
+} from "../utils/calculations.ts";
 import type {
     SignalTracker,
     PerformanceMetrics,
-} from "../analysis/signalTracker.js";
-import type { MarketContextCollector } from "../analysis/marketContextCollector.js";
-import { Config } from "../core/config.js";
-import { FinancialMath } from "../utils/financialMath.js";
+} from "../analysis/signalTracker.ts";
+import type { MarketContextCollector } from "../analysis/marketContextCollector.ts";
+import { Config } from "../core/config.ts";
+import { FinancialMath } from "../utils/financialMath.ts";
 
 export interface SignalManagerConfig {
     confidenceThreshold: number;

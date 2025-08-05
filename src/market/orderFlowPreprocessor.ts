@@ -10,17 +10,17 @@ import type {
     ZoneSnapshot,
     StandardZoneData,
     ZoneTradeRecord,
-} from "../types/marketEvents.js";
-import { IOrderBookState } from "./orderBookState.js";
-import type { ILogger } from "../infrastructure/loggerInterface.js";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+} from "../types/marketEvents.ts";
+import { IOrderBookState } from "./orderBookState.ts";
+import type { ILogger } from "../infrastructure/loggerInterface.ts";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
 import { randomUUID } from "crypto";
-import { IndividualTradesManager } from "../data/individualTradesManager.js";
-import { MicrostructureAnalyzer } from "../data/microstructureAnalyzer.js";
-import { FinancialMath } from "../utils/financialMath.js";
-import { AdaptiveZoneCalculator } from "../utils/adaptiveZoneCalculator.js";
-import type { StandardZoneConfig } from "../types/zoneTypes.js";
-import { CircularBuffer } from "../utils/circularBuffer.js";
+import { IndividualTradesManager } from "../data/individualTradesManager.ts";
+import { MicrostructureAnalyzer } from "../data/microstructureAnalyzer.ts";
+import { FinancialMath } from "../utils/financialMath.ts";
+import { AdaptiveZoneCalculator } from "../utils/adaptiveZoneCalculator.ts";
+import type { StandardZoneConfig } from "../types/zoneTypes.ts";
+import { CircularBuffer } from "../utils/circularBuffer.ts";
 
 export interface OrderflowPreprocessorOptions {
     pricePrecision: number;

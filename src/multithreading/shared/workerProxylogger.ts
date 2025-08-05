@@ -1,7 +1,7 @@
 // shared/workerProxyLogger.ts
 import { parentPort } from "worker_threads";
-import type { ILogger } from "../../infrastructure/loggerInterface.js";
-import { ProxyLogMessage, ProxyLogMessageSchema } from "./messageSchemas.js";
+import type { ILogger } from "../../infrastructure/loggerInterface.ts";
+import { ProxyLogMessage, ProxyLogMessageSchema } from "./messageSchemas.ts";
 
 /**
  * Proxy logger that forwards log messages to the logger worker via parent thread

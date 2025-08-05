@@ -1,7 +1,7 @@
 // src/indicators/types/deltaCVDTypes.ts
 // Extracted from deltaCVDConfirmation.ts before deletion
 
-import type { BaseDetectorSettings } from "../interfaces/detectorInterfaces.js";
+import type { BaseDetectorSettings } from "../interfaces/detectorInterfaces.ts";
 
 export interface DeltaCVDConfirmationSettings extends BaseDetectorSettings {
     windowsSec?: [60, 300, 900] | number[]; // analysed windows

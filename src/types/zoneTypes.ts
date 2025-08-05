@@ -55,7 +55,7 @@ export interface ZoneHistory {
 }
 
 // Import ZoneSnapshot from marketEvents to avoid circular dependency
-import type { ZoneSnapshot } from "./marketEvents.js";
+import type { ZoneSnapshot } from "./marketEvents.ts";
 
 // Zone event interfaces for enhanced detectors
 // Import the actual condition types from signalTypes
@@ -64,7 +64,7 @@ import type {
     DistributionConditions,
     AccumulationMarketRegime,
     DistributionMarketRegime,
-} from "./signalTypes.js";
+} from "./signalTypes.ts";
 
 export interface ZoneVisualizationData {
     id: string;

@@ -1,12 +1,12 @@
 // src/indicators/interfaces/detectorInterfaces.ts
 
 import { SpotWebsocketStreams } from "@binance/spot";
-import type { SpoofingDetectorConfig } from "../../services/spoofingDetector.js";
-import { CircularBuffer } from "../../utils/circularBuffer.js";
-import { EnrichedTradeEvent } from "../../types/marketEvents.js";
-import { AggressiveTrade } from "../../types/marketEvents.js";
-import { MarketRegime } from "../../types/signalTypes.js";
-import { RollingWindow } from "../../utils/rollingWindow.js";
+import type { SpoofingDetectorConfig } from "../../services/spoofingDetector.ts";
+import { CircularBuffer } from "../../utils/circularBuffer.ts";
+import { EnrichedTradeEvent } from "../../types/marketEvents.ts";
+import { AggressiveTrade } from "../../types/marketEvents.ts";
+import { MarketRegime } from "../../types/signalTypes.ts";
+import { RollingWindow } from "../../utils/rollingWindow.ts";
 
 /**
  * Base detector interface - minimal common interface

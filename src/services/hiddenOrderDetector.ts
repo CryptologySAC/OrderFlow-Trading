@@ -14,16 +14,16 @@
  */
 
 import { randomUUID } from "crypto";
-import { Detector } from "../indicators/base/detectorEnrichedTrade.js";
-import type { ILogger } from "../infrastructure/loggerInterface.js";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
-import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
-import type { AnomalyDetector } from "./anomalyDetector.js";
+import { Detector } from "../indicators/base/detectorEnrichedTrade.ts";
+import type { ILogger } from "../infrastructure/loggerInterface.ts";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
+import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.ts";
+import type { AnomalyDetector } from "./anomalyDetector.ts";
 import type {
     EnrichedTradeEvent,
     PassiveLevel,
-} from "../types/marketEvents.js";
-import type { SignalCandidate } from "../types/signalTypes.js";
+} from "../types/marketEvents.ts";
+import type { SignalCandidate } from "../types/signalTypes.ts";
 
 export interface HiddenOrderDetectorConfig {
     /** Minimum hidden volume to qualify as significant */

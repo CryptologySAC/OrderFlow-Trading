@@ -1,24 +1,24 @@
 // Re-export all enhanced indicators and their types
 
-export { AccumulationZoneDetectorEnhanced } from "./accumulationZoneDetectorEnhanced.js";
-export { AbsorptionDetectorEnhanced } from "./absorptionDetectorEnhanced.js";
+export { AccumulationZoneDetectorEnhanced } from "./accumulationZoneDetectorEnhanced.ts";
+export { AbsorptionDetectorEnhanced } from "./absorptionDetectorEnhanced.ts";
 export {
     ExhaustionDetectorEnhanced,
     type ExhaustionEnhancedSettings,
-} from "./exhaustionDetectorEnhanced.js";
-export { DistributionDetectorEnhanced } from "./distributionDetectorEnhanced.js";
+} from "./exhaustionDetectorEnhanced.ts";
+export { DistributionDetectorEnhanced } from "./distributionDetectorEnhanced.ts";
 export {
     DeltaCVDDetectorEnhanced,
     type DeltaCVDEnhancedSettings,
-} from "./deltaCVDDetectorEnhanced.js";
+} from "./deltaCVDDetectorEnhanced.ts";
 
 // Re-export settings types from extracted type files
-export type { AbsorptionSettings } from "./types/absorptionTypes.js";
-export type { ExhaustionSettings } from "./types/exhaustionTypes.js";
-export type { DeltaCVDConfirmationSettings } from "./types/deltaCVDTypes.js";
+export type { AbsorptionSettings } from "./types/absorptionTypes.ts";
+export type { ExhaustionSettings } from "./types/exhaustionTypes.ts";
+export type { DeltaCVDConfirmationSettings } from "./types/deltaCVDTypes.ts";
 
 // Re-export types from interfaces
 export type {
     AccumulationSettings,
     SuperiorFlowSettings,
-} from "./interfaces/detectorInterfaces.js";
+} from "./interfaces/detectorInterfaces.ts";

@@ -1,34 +1,34 @@
 // src/types/dependencies.ts
 
-import type { IBinanceDataFeed } from "../utils/binance.js";
-import type { ITradesProcessor } from "../market/processors/tradesProcessor.js";
-import { OrderBookProcessor } from "../market/processors/orderBookProcessor.js";
-import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
-import type { ILogger } from "../infrastructure/loggerInterface.js";
-import { WorkerLogger } from "../multithreading/workerLogger.js";
-import { MetricsCollector } from "../infrastructure/metricsCollector.js";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
-import { RateLimiter } from "../infrastructure/rateLimiter.js";
-import { CircuitBreaker } from "../infrastructure/circuitBreaker.js";
-import { AlertManager } from "../alerts/alertManager.js";
-import { SignalCoordinator } from "../services/signalCoordinator.js";
-import { AnomalyDetector } from "../services/anomalyDetector.js";
-import { SignalManager } from "../trading/signalManager.js";
-import { SpoofingDetector } from "../services/spoofingDetector.js";
-import { SimpleIcebergDetector } from "../services/icebergDetector.js";
-import { HiddenOrderDetector } from "../services/hiddenOrderDetector.js";
-import { IndividualTradesManager } from "../data/individualTradesManager.js";
-import { MicrostructureAnalyzer } from "../data/microstructureAnalyzer.js";
-import { SignalTracker } from "../analysis/signalTracker.js";
-import { MarketContextCollector } from "../analysis/marketContextCollector.js";
-import type { ThreadManager } from "../multithreading/threadManager.js";
-import { WorkerSignalLogger } from "../multithreading/workerSignalLogger.js";
-import { SignalValidationLogger } from "../utils/signalValidationLogger.js";
-import { getDB } from "../infrastructure/db.js";
-import { runMigrations } from "../infrastructure/migrate.js";
-import { BinanceDataFeed } from "../utils/binance.js";
-import { TradesProcessor } from "../market/processors/tradesProcessor.js";
-import { Config } from "./config.js";
+import type { IBinanceDataFeed } from "../utils/binance.ts";
+import type { ITradesProcessor } from "../market/processors/tradesProcessor.ts";
+import { OrderBookProcessor } from "../market/processors/orderBookProcessor.ts";
+import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.ts";
+import type { ILogger } from "../infrastructure/loggerInterface.ts";
+import { WorkerLogger } from "../multithreading/workerLogger.ts";
+import { MetricsCollector } from "../infrastructure/metricsCollector.ts";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
+import { RateLimiter } from "../infrastructure/rateLimiter.ts";
+import { CircuitBreaker } from "../infrastructure/circuitBreaker.ts";
+import { AlertManager } from "../alerts/alertManager.ts";
+import { SignalCoordinator } from "../services/signalCoordinator.ts";
+import { AnomalyDetector } from "../services/anomalyDetector.ts";
+import { SignalManager } from "../trading/signalManager.ts";
+import { SpoofingDetector } from "../services/spoofingDetector.ts";
+import { SimpleIcebergDetector } from "../services/icebergDetector.ts";
+import { HiddenOrderDetector } from "../services/hiddenOrderDetector.ts";
+import { IndividualTradesManager } from "../data/individualTradesManager.ts";
+import { MicrostructureAnalyzer } from "../data/microstructureAnalyzer.ts";
+import { SignalTracker } from "../analysis/signalTracker.ts";
+import { MarketContextCollector } from "../analysis/marketContextCollector.ts";
+import type { ThreadManager } from "../multithreading/threadManager.ts";
+import { WorkerSignalLogger } from "../multithreading/workerSignalLogger.ts";
+import { SignalValidationLogger } from "../utils/signalValidationLogger.ts";
+import { getDB } from "../infrastructure/db.ts";
+import { runMigrations } from "../infrastructure/migrate.ts";
+import { BinanceDataFeed } from "../utils/binance.ts";
+import { TradesProcessor } from "../market/processors/tradesProcessor.ts";
+import { Config } from "./config.ts";
 
 /**
  * Application dependencies interface

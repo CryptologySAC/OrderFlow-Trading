@@ -1,14 +1,14 @@
 // src/analysis/failureAnalyzer.ts
 
-import type { ILogger } from "../infrastructure/loggerInterface.js";
-import type { IWorkerMetricsCollector } from "../multithreading/shared/workerInterfaces.js";
-import type { IPipelineStorage } from "../infrastructure/pipelineStorage.js";
+import type { ILogger } from "../infrastructure/loggerInterface.ts";
+import type { IWorkerMetricsCollector } from "../multithreading/shared/workerInterfaces.ts";
+import type { IPipelineStorage } from "../infrastructure/pipelineStorage.ts";
 import type {
     SignalOutcome,
     MarketContext,
     FailedSignalAnalysis,
-} from "./signalTracker.js";
-import type { SignalType } from "../types/signalTypes.js";
+} from "./signalTracker.ts";
+import type { SignalType } from "../types/signalTypes.ts";
 
 export interface FailurePatterns {
     // Most common failure reasons

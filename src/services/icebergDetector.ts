@@ -12,15 +12,15 @@
  */
 
 import { randomUUID } from "crypto";
-import { Detector } from "../indicators/base/detectorEnrichedTrade.js";
-import { FinancialMath } from "../utils/financialMath.js";
-import { Config } from "../core/config.js";
-import type { ILogger } from "../infrastructure/loggerInterface.js";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
-import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
-import type { AnomalyDetector } from "./anomalyDetector.js";
-import type { EnrichedTradeEvent } from "../types/marketEvents.js";
-import type { SignalCandidate } from "../types/signalTypes.js";
+import { Detector } from "../indicators/base/detectorEnrichedTrade.ts";
+import { FinancialMath } from "../utils/financialMath.ts";
+import { Config } from "../core/config.ts";
+import type { ILogger } from "../infrastructure/loggerInterface.ts";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
+import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.ts";
+import type { AnomalyDetector } from "./anomalyDetector.ts";
+import type { EnrichedTradeEvent } from "../types/marketEvents.ts";
+import type { SignalCandidate } from "../types/signalTypes.ts";
 
 // Configuration type from simpleIceberg settings in config.json
 export interface SimpleIcebergConfig {

@@ -3,14 +3,14 @@
 export {
     HiddenOrderDetector,
     type HiddenOrderDetectorConfig,
-} from "./hiddenOrderDetector.js";
+} from "./hiddenOrderDetector.ts";
 export {
     IcebergDetector,
     type IcebergDetectorConfig,
-} from "./icebergDetector.js";
+} from "./icebergDetector.ts";
 export {
     SpoofingDetector,
     type SpoofingDetectorConfig,
-} from "./spoofingDetector.js";
-export { AnomalyDetector } from "./anomalyDetector.js";
-export { SignalCoordinator } from "./signalCoordinator.js";
+} from "./spoofingDetector.ts";
+export { AnomalyDetector } from "./anomalyDetector.ts";
+export { SignalCoordinator } from "./signalCoordinator.ts";

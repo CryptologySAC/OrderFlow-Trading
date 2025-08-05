@@ -1,9 +1,9 @@
 import express from "express";
 import * as path from "node:path";
-import { Config } from "./config.js";
+import { Config } from "./config.ts";
 import { ILogger } from "../infrastructure/loggerInterface";
 import { randomUUID } from "crypto";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
 
 export class HttpServer {
     private readonly port = Config.HTTP_PORT;

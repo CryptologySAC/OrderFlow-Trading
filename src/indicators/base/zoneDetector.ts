@@ -1,12 +1,12 @@
-import { EnrichedTradeEvent } from "../../types/marketEvents.js";
-import type { ILogger } from "../../infrastructure/loggerInterface.js";
-import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInterface.js";
-import { ISignalLogger } from "../../infrastructure/signalLoggerInterface.js";
-import { ZoneManager } from "../../trading/zoneManager.js";
-import { ZoneAnalysisResult } from "../../types/zoneTypes.js";
+import { EnrichedTradeEvent } from "../../types/marketEvents.ts";
+import type { ILogger } from "../../infrastructure/loggerInterface.ts";
+import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInterface.ts";
+import { ISignalLogger } from "../../infrastructure/signalLoggerInterface.ts";
+import { ZoneManager } from "../../trading/zoneManager.ts";
+import { ZoneAnalysisResult } from "../../types/zoneTypes.ts";
 // ZoneDetector now uses universal zone config from Config.UNIVERSAL_ZONE_CONFIG
-import { Config } from "../../core/config.js";
-import { Detector } from "./detectorEnrichedTrade.js";
+import { Config } from "../../core/config.ts";
+import { Detector } from "./detectorEnrichedTrade.ts";
 
 export abstract class ZoneDetector extends Detector {
     protected readonly config: typeof Config.UNIVERSAL_ZONE_CONFIG;

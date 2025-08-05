@@ -18,15 +18,15 @@
 
 import * as fs from "fs/promises";
 import * as path from "path";
-import { FinancialMath } from "./financialMath.js";
-import type { ILogger } from "../infrastructure/loggerInterface.js";
-import type { SignalCandidate } from "../types/signalTypes.js";
-import type { EnrichedTradeEvent } from "../types/marketEvents.js";
+import { FinancialMath } from "./financialMath.ts";
+import type { ILogger } from "../infrastructure/loggerInterface.ts";
+import type { SignalCandidate } from "../types/signalTypes.ts";
+import type { EnrichedTradeEvent } from "../types/marketEvents.ts";
 import type {
     AbsorptionCalculatedValues,
     ExhaustionCalculatedValues,
     DeltaCVDCalculatedValues,
-} from "../types/calculatedValuesTypes.js";
+} from "../types/calculatedValuesTypes.ts";
 
 /**
  * Signal validation data structure for ML training input

@@ -6,13 +6,13 @@ import { WebSocketServer, WebSocket } from "ws";
 import type { RawData } from "ws";
 import { randomUUID } from "crypto";
 import { z } from "zod";
-import { WebSocketError } from "../../core/errors.js";
-import type { WebSocketMessage } from "../../utils/interfaces.js";
-import type { ILogger } from "../../infrastructure/loggerInterface.js";
+import { WebSocketError } from "../../core/errors.ts";
+import type { WebSocketMessage } from "../../utils/interfaces.ts";
+import type { ILogger } from "../../infrastructure/loggerInterface.ts";
 import type {
     IWorkerRateLimiter,
     IWorkerMetricsCollector,
-} from "./workerInterfaces.js";
+} from "./workerInterfaces.ts";
 
 export interface ExtendedWebSocket extends WebSocket {
     clientId: string;

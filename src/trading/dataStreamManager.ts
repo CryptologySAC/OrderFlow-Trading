@@ -1,21 +1,21 @@
 import { SpotWebsocketStreams } from "@binance/spot";
 import { EventEmitter } from "events";
 import { randomUUID } from "crypto";
-import { ILogger } from "../infrastructure/loggerInterface.js";
-import { ICircuitBreaker } from "../infrastructure/circuitBreakerInterface.js";
-import type { IWorkerMetricsCollector } from "../multithreading/shared/workerInterfaces.js";
-import { ConnectionError } from "../core/errors.js";
-import type { IBinanceDataFeed } from "../utils/binance.js";
+import { ILogger } from "../infrastructure/loggerInterface.ts";
+import { ICircuitBreaker } from "../infrastructure/circuitBreakerInterface.ts";
+import type { IWorkerMetricsCollector } from "../multithreading/shared/workerInterfaces.ts";
+import { ConnectionError } from "../core/errors.ts";
+import type { IBinanceDataFeed } from "../utils/binance.ts";
 import {
     BinanceAggTradeStream,
     BinanceDiffBookDepthStream,
-} from "../types/binanceTypes.js";
+} from "../types/binanceTypes.ts";
 import {
     ApiConnectivityMonitor,
     type ApiConnectivityConfig,
     type ConnectivityStatus,
     type ConnectivityIssue,
-} from "../infrastructure/apiConnectivityMonitor.js";
+} from "../infrastructure/apiConnectivityMonitor.ts";
 
 /**
  * Enhanced connection states for better state management

@@ -2,11 +2,11 @@
 import type {
     OrderBookSnapshot,
     PassiveLevel,
-} from "../../types/marketEvents.js";
-import type { WebSocketMessage } from "../../utils/interfaces.js";
-import type { ILogger } from "../../infrastructure/loggerInterface.js";
-import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInterface.js";
-import { CircularBuffer } from "../../utils/circularBuffer.js";
+} from "../../types/marketEvents.ts";
+import type { WebSocketMessage } from "../../utils/interfaces.ts";
+import type { ILogger } from "../../infrastructure/loggerInterface.ts";
+import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInterface.ts";
+import { CircularBuffer } from "../../utils/circularBuffer.ts";
 
 export interface IOrderBookProcessor {
     onOrderBookUpdate(event: OrderBookSnapshot): WebSocketMessage;

@@ -1,6 +1,6 @@
 // src/multithreading/shared/workerMessageRouter.ts
 import type { Worker } from "worker_threads";
-import type { ILogger } from "../../infrastructure/loggerInterface.js";
+import type { ILogger } from "../../infrastructure/loggerInterface.ts";
 
 /**
  * Message handler function type

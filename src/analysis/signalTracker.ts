@@ -1,9 +1,9 @@
 // src/analysis/signalTracker.ts
 
 import { EventEmitter } from "events";
-import type { ILogger } from "../infrastructure/loggerInterface.js";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
-import type { ConfirmedSignal, SignalType } from "../types/signalTypes.js";
+import type { ILogger } from "../infrastructure/loggerInterface.ts";
+import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.ts";
+import type { ConfirmedSignal, SignalType } from "../types/signalTypes.ts";
 
 export interface MarketContext {
     timestamp: number;
