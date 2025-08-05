@@ -115,16 +115,7 @@ export class OrderflowPreprocessor
     private readonly adaptiveZoneLookbackTrades: number;
     private readonly zoneCalculationRange: number;
     // Zone configuration parameters (CLAUDE.md compliance - LTCUSDT data-driven)
-    private readonly defaultZoneMultipliers: number[];
-    private readonly defaultTimeWindows: number[];
-    private readonly defaultMinZoneWidthMultiplier: number;
-    private readonly defaultMaxZoneWidthMultiplier: number;
-    private readonly defaultMaxZoneHistory: number;
-    private readonly defaultMaxMemoryMB: number;
     // LTCUSDT volume analysis - absolute thresholds instead of ratios
-    private readonly defaultAggressiveVolumeAbsolute: number;
-    private readonly defaultPassiveVolumeAbsolute: number;
-    private readonly defaultInstitutionalVolumeAbsolute: number;
     private readonly maxTradesPerZone: number;
 
     // Track processing stats
@@ -156,20 +147,7 @@ export class OrderflowPreprocessor
         this.maxDashboardInterval = opts.maxDashboardInterval; // Max 1 second between updates
         this.significantChangeThreshold = opts.significantChangeThreshold; // 0.1% price change
 
-        // LTCUSDT trade distribution analysis defaults (NO arbitrary ratios) - INITIALIZE FIRST
-        this.defaultZoneMultipliers = opts.defaultZoneMultipliers; // Standard progressive sizing
-        this.defaultTimeWindows = opts.defaultTimeWindows; // 5min, 15min, 30min, 60min, 90min (cross-detector zone analysis)
-        this.defaultMinZoneWidthMultiplier = opts.defaultMinZoneWidthMultiplier; // 2 ticks minimum (LTCUSDT analysis)
-        this.defaultMaxZoneWidthMultiplier = opts.defaultMaxZoneWidthMultiplier; // 10 ticks maximum (LTCUSDT analysis)
-        this.defaultMaxZoneHistory = opts.defaultMaxZoneHistory; // 2000 zones ≈ 90+ minutes comprehensive coverage
-        this.defaultMaxMemoryMB = opts.defaultMaxMemoryMB; // 50MB for 90-minute zone structures and history
-
         // LTCUSDT volume thresholds - absolute values from trade distribution analysis
-        this.defaultAggressiveVolumeAbsolute =
-            opts.defaultAggressiveVolumeAbsolute; // Top 5% of trades
-        this.defaultPassiveVolumeAbsolute = opts.defaultPassiveVolumeAbsolute; // Top 15% of trades
-        this.defaultInstitutionalVolumeAbsolute =
-            opts.defaultInstitutionalVolumeAbsolute; // <1% whale trades
         this.maxTradesPerZone = opts.maxTradesPerZone; // Maximum individual trades stored per zone
 
         // NEW: Initialize standardized zone configuration (LTCUSDT data-driven defaults) - AFTER defaults set
@@ -1569,47 +1547,6 @@ export class OrderflowPreprocessor
         return totalVolume > 0
             ? FinancialMath.safeDivide(volumeWeightedSum, totalVolume)
             : null;
-    }
-
-    /**
-     * Extract individual trades from HybridTradeEvent for zone processing
-     * Uses individual trades for large agg trades, treats small agg trades as single trades
-     */
-    private extractIndividualTrades(
-        trade: EnrichedTradeEvent | HybridTradeEvent,
-        tradeId: string
-    ): ZoneTradeRecord[] {
-        const trades: ZoneTradeRecord[] = [];
-
-        // Check if this is a HybridTradeEvent with individual trades
-        if (
-            "hasIndividualData" in trade &&
-            trade.hasIndividualData &&
-            trade.individualTrades
-        ) {
-            // Use the actual individual trades for maximum precision
-            for (let i = 0; i < trade.individualTrades.length; i++) {
-                const individualTrade = trade.individualTrades[i];
-                trades.push({
-                    price: individualTrade.price,
-                    quantity: individualTrade.quantity,
-                    timestamp: individualTrade.timestamp,
-                    tradeId: `${tradeId}_${i}`, // Unique ID for each individual trade
-                    buyerIsMaker: individualTrade.isBuyerMaker,
-                });
-            }
-        } else {
-            // Treat aggregated trade as single individual trade
-            trades.push({
-                price: trade.price,
-                quantity: trade.quantity,
-                timestamp: trade.timestamp,
-                tradeId: tradeId,
-                buyerIsMaker: trade.buyerIsMaker,
-            });
-        }
-
-        return trades;
     }
 
     /**

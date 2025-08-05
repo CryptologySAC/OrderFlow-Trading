@@ -79,7 +79,6 @@ export class OrderBookState implements IOrderBookState {
 
     private pruneIntervalMs = 30000; // 30 seconds
     private pruneTimer?: NodeJS.Timeout;
-    private lastPruneTime = 0;
     private lastUpdateTime = Date.now();
 
     private maxLevels: number = 1000;
@@ -88,7 +87,6 @@ export class OrderBookState implements IOrderBookState {
 
     private book: SnapShot = new Map();
     private readonly pricePrecision: number;
-    private readonly tickSize: number;
     private readonly symbol: string;
 
     // Track best quotes for efficiency
@@ -97,7 +95,6 @@ export class OrderBookState implements IOrderBookState {
     private lastUpdateId: number = 0;
 
     // Circuitbreaker
-    private errorCount = 0;
     private errorWindow: number[] = [];
     private maxErrorRate: number = 10; // errors per minute
     private errorWindowMs: number = 60000;
@@ -115,7 +112,6 @@ export class OrderBookState implements IOrderBookState {
         threadManager: ThreadManager
     ) {
         this.pricePrecision = options.pricePrecision;
-        this.tickSize = Math.pow(10, -this.pricePrecision);
         this.symbol = options.symbol;
         this.logger = logger;
         this.metricsCollector = metricsCollector;
@@ -453,7 +449,6 @@ export class OrderBookState implements IOrderBookState {
             this.enforceMaxLevels();
 
             const duration = Date.now() - startTime;
-            this.lastPruneTime = Date.now();
 
             this.metricsCollector.updateMetric(
                 "orderbookPruneDuration",

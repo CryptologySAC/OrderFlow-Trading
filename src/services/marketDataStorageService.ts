@@ -1,7 +1,6 @@
 // src/services/marketDataStorageService.ts
 
 import type { ILogger } from "../infrastructure/loggerInterface.js";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import {
     MarketDataCollector,
     type MarketDataCollectorConfig,
@@ -34,17 +33,12 @@ export interface DataStorageConfig {
 export class MarketDataStorageService {
     private readonly config: DataStorageConfig;
     private readonly logger: ILogger;
-    private readonly metrics: IMetricsCollector;
     private readonly collector!: MarketDataCollector;
 
     private monitoringTimer?: NodeJS.Timeout;
     private isRunning = false;
 
-    constructor(
-        config: DataStorageConfig,
-        logger: ILogger,
-        metrics: IMetricsCollector
-    ) {
+    constructor(config: DataStorageConfig, logger: ILogger) {
         this.config = {
             enabled: config.enabled ?? true,
             dataDirectory: config.dataDirectory ?? "./market_data",
@@ -58,7 +52,6 @@ export class MarketDataStorageService {
         };
 
         this.logger = logger;
-        this.metrics = metrics;
 
         if (!this.config.enabled) {
             this.logger.info("Market data storage is disabled");

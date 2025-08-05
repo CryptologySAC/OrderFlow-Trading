@@ -148,13 +148,9 @@ export class SignalManager extends EventEmitter {
     private readonly defaultPriority: number;
     private readonly volatilityHighThreshold: number;
     private readonly volatilityLowThreshold: number;
-    private readonly defaultLowVolatility: number;
-    private readonly defaultVolatilityError: number;
     private readonly contextBoostHigh: number;
     private readonly contextBoostLow: number;
     private readonly priorityQueueHighThreshold: number;
-    private readonly backpressureYieldMs: number;
-    private readonly marketVolatilityWeight: number;
 
     // Enhanced backpressure management for high-frequency signal processing
     private readonly signalQueue: PrioritizedSignal[] = [];
@@ -197,14 +193,10 @@ export class SignalManager extends EventEmitter {
         this.defaultPriority = this.config.defaultPriority;
         this.volatilityHighThreshold = this.config.volatilityHighThreshold;
         this.volatilityLowThreshold = this.config.volatilityLowThreshold;
-        this.defaultLowVolatility = this.config.defaultLowVolatility;
-        this.defaultVolatilityError = this.config.defaultVolatilityError;
         this.contextBoostHigh = this.config.contextBoostHigh;
         this.contextBoostLow = this.config.contextBoostLow;
         this.priorityQueueHighThreshold =
             this.config.priorityQueueHighThreshold;
-        this.backpressureYieldMs = this.config.backpressureYieldMs;
-        this.marketVolatilityWeight = this.config.marketVolatilityWeight;
 
         this.logger.info(
             "[SignalManager] SignalManager initialized as market health gatekeeper",
@@ -2036,7 +2028,7 @@ export class SignalManager extends EventEmitter {
         );
 
         // Signal quality metrics
-        this.recordSignalQualityMetrics(signal, outcome, confirmedSignal);
+        this.recordSignalQualityMetrics(signal, confirmedSignal);
 
         // Rejection reason tracking
         if (outcome === "rejected" || outcome === "blocked") {
@@ -2060,7 +2052,6 @@ export class SignalManager extends EventEmitter {
      */
     private recordSignalQualityMetrics(
         signal: ProcessedSignal,
-        outcome: string,
         confirmedSignal?: ConfirmedSignal
     ): void {
         const qualityLabels = {

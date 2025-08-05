@@ -82,16 +82,11 @@ export class DistributionDetectorEnhanced extends Detector {
     private readonly enhancementConfig: DistributionEnhancedSettings;
     private readonly enhancementStats: DistributionEnhancementStats;
     private readonly preprocessor: IOrderflowPreprocessor;
-    private readonly symbol: string;
 
     // CLAUDE.md compliant configuration parameters - NO MAGIC NUMBERS
-    private readonly confluenceMinZones: number;
     private readonly confluenceMaxDistance: number;
-    private readonly confluenceConfidenceBoost: number;
-    private readonly crossTimeframeConfidenceBoost: number;
     private readonly distributionVolumeThreshold: number;
     private readonly distributionRatioThreshold: number;
-    private readonly alignmentScoreThreshold: number;
     private readonly eventCooldownMs: number;
 
     // Signal deduplication tracking
@@ -99,7 +94,6 @@ export class DistributionDetectorEnhanced extends Detector {
 
     constructor(
         id: string,
-        symbol: string,
         settings: DistributionEnhancedSettings,
         preprocessor: IOrderflowPreprocessor,
         logger: ILogger,
@@ -111,21 +105,14 @@ export class DistributionDetectorEnhanced extends Detector {
         // Initialize base detector directly (no legacy inheritance)
         super(id, logger, metrics);
 
-        this.symbol = symbol;
-
         // Initialize enhancement configuration
         this.enhancementConfig = settings;
         this.preprocessor = preprocessor;
 
         // CLAUDE.md Compliance: Extract all configurable parameters (NO MAGIC NUMBERS)
-        this.confluenceMinZones = settings.confluenceMinZones;
         this.confluenceMaxDistance = settings.confluenceMaxDistance;
-        this.confluenceConfidenceBoost = settings.confluenceConfidenceBoost;
-        this.crossTimeframeConfidenceBoost =
-            settings.crossTimeframeConfidenceBoost;
         this.distributionVolumeThreshold = settings.distributionVolumeThreshold;
         this.distributionRatioThreshold = settings.distributionRatioThreshold;
-        this.alignmentScoreThreshold = settings.alignmentScoreThreshold;
         this.eventCooldownMs = settings.eventCooldownMs;
 
         // Initialize enhancement statistics
@@ -637,7 +624,7 @@ export class DistributionDetectorEnhanced extends Detector {
         if (!event.zoneData) return;
 
         // Determine zone update type based on distribution strength
-        const updateType = this.determineZoneUpdateType(event, confidenceBoost);
+        const updateType = this.determineZoneUpdateType(confidenceBoost);
         if (!updateType) return;
 
         // Create zone data for visualization (using pre-found zones)
@@ -773,10 +760,7 @@ export class DistributionDetectorEnhanced extends Detector {
     /**
      * Determine zone update type for visualization
      */
-    private determineZoneUpdateType(
-        event: EnrichedTradeEvent,
-        confidenceBoost: number
-    ): string | null {
+    private determineZoneUpdateType(confidenceBoost: number): string | null {
         // Always create/update zones for visualization
         if (confidenceBoost >= this.enhancementConfig.confidenceThreshold) {
             if (confidenceBoost > 0.15) {

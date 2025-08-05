@@ -1,7 +1,6 @@
 // src/analysis/performanceAnalyzer.ts
 
 import type { ILogger } from "../infrastructure/loggerInterface.js";
-import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type { IPipelineStorage } from "../infrastructure/pipelineStorage.js";
 import type {
     SignalOutcome,
@@ -111,11 +110,11 @@ export interface FailurePatternAnalysis {
     failuresByConfidenceLevel: { [level: string]: number };
 
     // Temporal patterns
-    failuresByTimeOfDay: Map<number, number>;
-    failuresByDayOfWeek: Map<number, number>;
+    failuresByTimeOfDay?: Map<number, number>;
+    failuresByDayOfWeek?: Map<number, number>;
 
     // Predictive patterns
-    earlyWarningSignals: Array<{
+    earlyWarningSignals?: Array<{
         signal: string;
         predictionAccuracy: number;
         leadTime: number; // Average time before failure
@@ -129,7 +128,7 @@ export interface FailurePatternAnalysis {
     };
 
     // Prevention methods
-    suggestedFilters: Array<{
+    suggestedFilters?: Array<{
         filter: string;
         expectedReduction: number; // % of failures this would prevent
         sideEffects: string; // What good signals might be lost
@@ -202,7 +201,7 @@ export interface ImprovementRecommendations {
     detectorRecommendations: Map<string, string[]>;
 
     // Configuration adjustments
-    suggestedConfigChanges: Array<{
+    suggestedConfigChanges?: Array<{
         parameter: string;
         currentValue: number;
         suggestedValue: number;
@@ -210,7 +209,7 @@ export interface ImprovementRecommendations {
     }>;
 
     // Market condition adjustments
-    marketConditionAdjustments: Array<{
+    marketConditionAdjustments?: Array<{
         condition: string;
         adjustment: string;
         expectedBenefit: string;
@@ -259,7 +258,6 @@ export class PerformanceAnalyzer {
 
     constructor(
         private readonly logger: ILogger,
-        private readonly metricsCollector: IMetricsCollector,
         private readonly storage: IPipelineStorage,
         config: Partial<PerformanceAnalyzerConfig> = {}
     ) {
@@ -498,10 +496,7 @@ export class PerformanceAnalyzer {
                 recommendedConfidenceThreshold,
                 suggestedImprovements,
                 optimalMarketConditions,
-            } = this.generateDetectorRecommendations(
-                detectorId,
-                detectorSignals
-            );
+            } = this.generateDetectorRecommendations(detectorSignals);
 
             const analysis: DetectorAnalysis = {
                 detectorId,
@@ -572,33 +567,17 @@ export class PerformanceAnalyzer {
 
             // Analyze failures by confidence level
             const failuresByConfidenceLevel =
-                this.groupFailuresByConfidenceLevel(failedAnalyses);
-
-            // Analyze temporal patterns
-            const { failuresByTimeOfDay, failuresByDayOfWeek } =
-                this.analyzeFailureTemporalPatterns(failedAnalyses);
-
-            // Identify early warning signals
-            const earlyWarningSignals =
-                this.identifyEarlyWarningSignals(failedAnalyses);
+                this.groupFailuresByConfidenceLevel();
 
             // Calculate avoidability metrics
             const avoidableFailures =
                 this.calculateAvoidabilityMetrics(failedAnalyses);
 
-            // Generate suggested filters
-            const suggestedFilters =
-                this.generateSuggestedFilters(failedAnalyses);
-
             const analysis: FailurePatternAnalysis = {
                 commonFailureReasons,
                 failuresByMarketCondition,
                 failuresByConfidenceLevel,
-                failuresByTimeOfDay,
-                failuresByDayOfWeek,
-                earlyWarningSignals,
                 avoidableFailures,
-                suggestedFilters,
             };
 
             this.cacheResult(cacheKey, analysis);
@@ -733,10 +712,7 @@ export class PerformanceAnalyzer {
 
             // Generate recommendations
             const marketTimingRecommendations =
-                this.generateMarketTimingRecommendations(
-                    performanceByRegime,
-                    performanceByVolatility
-                );
+                this.generateMarketTimingRecommendations(performanceByRegime);
 
             const analysis: MarketConditionAnalysis = {
                 performanceByRegime,
@@ -779,14 +755,11 @@ export class PerformanceAnalyzer {
                 30 * 24 * 60 * 60 * 1000
             ); // 30 days
             const failurePatterns = await this.analyzeFailurePatterns();
-            const marketConditionAnalysis =
-                await this.analyzePerformanceByMarketConditions();
 
             // Generate high priority actions
             const highPriorityActions = this.generateHighPriorityActions(
                 overallPerformance,
-                failurePatterns,
-                marketConditionAnalysis
+                failurePatterns
             );
 
             // Generate detector-specific recommendations
@@ -802,21 +775,9 @@ export class PerformanceAnalyzer {
                 );
             }
 
-            // Suggest configuration changes
-            const suggestedConfigChanges =
-                this.generateConfigurationRecommendations(overallPerformance);
-
-            // Market condition adjustments
-            const marketConditionAdjustments =
-                this.generateMarketConditionAdjustments(
-                    marketConditionAnalysis
-                );
-
             const recommendations: ImprovementRecommendations = {
                 highPriorityActions,
                 detectorRecommendations,
-                suggestedConfigChanges,
-                marketConditionAdjustments,
             };
 
             this.cacheResult(cacheKey, recommendations);
@@ -1632,10 +1593,7 @@ export class PerformanceAnalyzer {
         };
     }
 
-    private generateDetectorRecommendations(
-        detectorId: string,
-        signals: SignalOutcome[]
-    ): {
+    private generateDetectorRecommendations(signals: SignalOutcome[]): {
         recommendedConfidenceThreshold: number;
         suggestedImprovements: string[];
         optimalMarketConditions: MarketContext[];
@@ -1707,12 +1665,11 @@ export class PerformanceAnalyzer {
     }
 
     // More placeholder implementations...
-    private groupFailuresByConfidenceLevel(_failures: FailedSignalAnalysis[]): {
+    private groupFailuresByConfidenceLevel(): {
         [level: string]: number;
     } {
         // Placeholder implementation - would analyze failures by confidence level
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const _ = _failures;
+
         const result: { [level: string]: number } = {};
         const bandSize = 0.2;
 
@@ -1725,29 +1682,6 @@ export class PerformanceAnalyzer {
         }
 
         return result;
-    }
-
-    private analyzeFailureTemporalPatterns(_failures: FailedSignalAnalysis[]): {
-        failuresByTimeOfDay: Map<number, number>;
-        failuresByDayOfWeek: Map<number, number>;
-    } {
-        // Placeholder implementation - would analyze failure temporal patterns
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const _ = _failures;
-        const failuresByTimeOfDay = new Map<number, number>();
-        const failuresByDayOfWeek = new Map<number, number>();
-
-        // Placeholder implementation
-        return { failuresByTimeOfDay, failuresByDayOfWeek };
-    }
-
-    private identifyEarlyWarningSignals(
-        _failures: FailedSignalAnalysis[]
-    ): FailurePatternAnalysis["earlyWarningSignals"] {
-        // Placeholder - would analyze patterns in warning signals
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const _ = _failures;
-        return [];
     }
 
     private calculateAvoidabilityMetrics(
@@ -1764,15 +1698,6 @@ export class PerformanceAnalyzer {
             percentage,
             potentialReturnImprovement: percentage * 0.1, // Simplified estimate
         };
-    }
-
-    private generateSuggestedFilters(
-        _failures: FailedSignalAnalysis[]
-    ): FailurePatternAnalysis["suggestedFilters"] {
-        // Placeholder - would analyze failure patterns to suggest filters
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const _ = _failures;
-        return [];
     }
 
     private analyzePerformanceByVolatility(
@@ -1834,12 +1759,10 @@ export class PerformanceAnalyzer {
     }
 
     private generateMarketTimingRecommendations(
-        regimePerformance: Map<string, { successRate: number }>,
-        _volatilityPerformance: Map<string, PerformanceStats>
+        regimePerformance: Map<string, { successRate: number }>
     ): MarketConditionAnalysis["marketTimingRecommendations"] {
         // Simplified implementation
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const _ = _volatilityPerformance;
+
         const recommendations: MarketConditionAnalysis["marketTimingRecommendations"] =
             [];
 
@@ -1864,11 +1787,8 @@ export class PerformanceAnalyzer {
 
     private generateHighPriorityActions(
         overallPerformance: PerformanceReport,
-        failurePatterns: FailurePatternAnalysis,
-        _marketConditionAnalysis: MarketConditionAnalysis
+        failurePatterns: FailurePatternAnalysis
     ): ImprovementRecommendations["highPriorityActions"] {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const _ = _marketConditionAnalysis;
         const actions: ImprovementRecommendations["highPriorityActions"] = [];
 
         if (overallPerformance.overallSuccessRate < 0.5) {
@@ -1892,23 +1812,5 @@ export class PerformanceAnalyzer {
         }
 
         return actions;
-    }
-
-    private generateConfigurationRecommendations(
-        _performance: PerformanceReport
-    ): ImprovementRecommendations["suggestedConfigChanges"] {
-        // Placeholder implementation
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const _ = _performance;
-        return [];
-    }
-
-    private generateMarketConditionAdjustments(
-        _analysis: MarketConditionAnalysis
-    ): ImprovementRecommendations["marketConditionAdjustments"] {
-        // Placeholder implementation
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const _ = _analysis;
-        return [];
     }
 }

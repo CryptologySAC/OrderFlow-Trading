@@ -8,7 +8,6 @@ import { ExhaustionDetectorEnhanced } from "../indicators/exhaustionDetectorEnha
 import { DeltaCVDDetectorEnhanced } from "../indicators/deltaCVDDetectorEnhanced.js";
 
 import type {
-    BaseDetectorSettings,
     DetectorStats,
     IBaseDetector,
 } from "../indicators/interfaces/detectorInterfaces.js";
@@ -18,7 +17,6 @@ import { Config } from "../core/config.js";
 
 import { AccumulationZoneDetectorEnhanced } from "../indicators/accumulationZoneDetectorEnhanced.js";
 import { DistributionDetectorEnhanced } from "../indicators/distributionDetectorEnhanced.js";
-import { ZoneDetectorConfig } from "../types/zoneTypes.js";
 import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
 import { SignalValidationLogger } from "./signalValidationLogger.js";
 
@@ -65,7 +63,6 @@ export class DetectorFactory {
         // Always use enhanced detector - standalone architecture
         const detector = new AbsorptionDetectorEnhanced(
             id,
-            Config.SYMBOL,
             productionSettings,
             dependencies.preprocessor,
             dependencies.logger,
@@ -141,7 +138,6 @@ export class DetectorFactory {
         // Always use enhanced detector - originals are deprecated
         const detector = new AccumulationZoneDetectorEnhanced(
             id,
-            Config.SYMBOL,
             productionSettings,
             dependencies.preprocessor,
             dependencies.logger,
@@ -177,7 +173,6 @@ export class DetectorFactory {
         // Always use enhanced detector - originals are deprecated
         const detector = new DistributionDetectorEnhanced(
             id,
-            Config.SYMBOL,
             productionSettings,
             dependencies.preprocessor,
             dependencies.logger,
@@ -214,7 +209,6 @@ export class DetectorFactory {
         // Always use enhanced detector - originals are deprecated
         const detector = new DeltaCVDDetectorEnhanced(
             id,
-            Config.SYMBOL,
             productionSettings,
             dependencies.preprocessor,
             dependencies.logger,
@@ -560,51 +554,6 @@ export class DetectorFactory {
         if (this.instances.size >= this.globalConfig.maxDetectors) {
             throw new Error(
                 `Maximum detector limit reached (${this.globalConfig.maxDetectors})`
-            );
-        }
-    }
-
-    private static validateProductionConfig(
-        settings: BaseDetectorSettings | ZoneDetectorConfig
-    ): void {
-        const errors: string[] = [];
-
-        if ("symbol" in settings && !settings.symbol) {
-            errors.push("symbol is required in production");
-        }
-
-        if (
-            "windowMs" in settings &&
-            settings.windowMs &&
-            settings.windowMs < 5000 &&
-            Config.NODE_ENV === "production"
-        ) {
-            errors.push("windowMs should be at least 5000ms in production");
-        }
-
-        if (
-            "minAggVolume" in settings &&
-            settings.minAggVolume &&
-            settings.minAggVolume < 50 &&
-            Config.NODE_ENV === "production"
-        ) {
-            errors.push("minAggVolume should be at least 50 in production");
-        }
-
-        if (
-            "eventCooldownMs" in settings &&
-            settings.eventCooldownMs &&
-            settings.eventCooldownMs < 1000 &&
-            Config.NODE_ENV === "production"
-        ) {
-            errors.push(
-                "eventCooldownMs should be at least 1000ms in production"
-            );
-        }
-
-        if (errors.length > 0) {
-            throw new Error(
-                `Production config validation failed: ${errors.join(", ")}`
             );
         }
     }

@@ -358,7 +358,6 @@ export class SignalTracker extends EventEmitter {
 
         // Check if signal should be finalized
         const shouldFinalize = this.shouldFinalizeSignal(
-            signalOutcome,
             timeElapsed,
             returnPct
         );
@@ -383,7 +382,6 @@ export class SignalTracker extends EventEmitter {
     }
 
     private shouldFinalizeSignal(
-        signalOutcome: SignalOutcome,
         timeElapsed: number,
         returnPct: number
     ): "success" | "failure" | "timeout" | null {

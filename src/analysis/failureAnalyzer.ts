@@ -169,7 +169,6 @@ export class FailureAnalyzer {
     >();
 
     // Pattern detection state
-    private knownPatterns: FailurePatterns | null = null;
     private lastPatternUpdate = 0;
 
     constructor(
@@ -229,7 +228,6 @@ export class FailureAnalyzer {
 
             // Calculate avoidability
             const avoidability = this.calculateAvoidability(
-                signalOutcome,
                 failureReason,
                 warningSignals
             );
@@ -356,7 +354,6 @@ export class FailureAnalyzer {
 
             // Cache results
             this.cacheResult(cacheKey, patterns);
-            this.knownPatterns = patterns;
             this.lastPatternUpdate = Date.now();
 
             this.logger.info("Failure pattern detection completed", {
@@ -585,7 +582,6 @@ export class FailureAnalyzer {
     }
 
     private calculateAvoidability(
-        signalOutcome: SignalOutcome,
         failureReason: FailedSignalAnalysis["failureReason"],
         warningSignals: FailedSignalAnalysis["warningSignals"]
     ): FailedSignalAnalysis["avoidability"] {

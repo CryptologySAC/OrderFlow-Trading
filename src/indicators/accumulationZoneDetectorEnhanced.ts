@@ -82,16 +82,11 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     private readonly enhancementConfig: AccumulationEnhancedSettings;
     private readonly enhancementStats: AccumulationEnhancementStats;
     private readonly preprocessor: IOrderflowPreprocessor;
-    private readonly symbol: string;
 
     // CLAUDE.md compliant configuration parameters - NO MAGIC NUMBERS
-    private readonly confluenceMinZones: number;
     private readonly confluenceMaxDistance: number;
-    private readonly confluenceConfidenceBoost: number;
-    private readonly crossTimeframeConfidenceBoost: number;
     private readonly accumulationVolumeThreshold: number;
     private readonly accumulationRatioThreshold: number;
-    private readonly alignmentScoreThreshold: number;
     private readonly eventCooldownMs: number;
 
     // Signal deduplication tracking (CLAUDE.md compliance - no magic cooldown values)
@@ -99,7 +94,6 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
 
     constructor(
         id: string,
-        symbol: string,
         settings: AccumulationEnhancedSettings,
         preprocessor: IOrderflowPreprocessor,
         logger: ILogger,
@@ -111,21 +105,14 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         // Initialize base detector directly (no legacy inheritance)
         super(id, logger, metrics);
 
-        this.symbol = symbol;
-
         // Initialize enhancement configuration
         this.enhancementConfig = settings;
         this.preprocessor = preprocessor;
 
         // CLAUDE.md Compliance: Extract all configurable parameters (NO MAGIC NUMBERS)
-        this.confluenceMinZones = settings.confluenceMinZones;
         this.confluenceMaxDistance = settings.confluenceMaxDistance;
-        this.confluenceConfidenceBoost = settings.confluenceConfidenceBoost;
-        this.crossTimeframeConfidenceBoost =
-            settings.crossTimeframeConfidenceBoost;
         this.accumulationVolumeThreshold = settings.accumulationVolumeThreshold;
         this.accumulationRatioThreshold = settings.accumulationRatioThreshold;
-        this.alignmentScoreThreshold = settings.alignmentScoreThreshold;
         this.eventCooldownMs = settings.eventCooldownMs;
 
         // Initialize enhancement statistics
@@ -608,154 +595,6 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     }
 
     /**
-     * Analyze zone confluence for accumulation pattern validation
-     *
-     * STANDALONE VERSION: Multi-timeframe confluence analysis
-     */
-    private analyzeZoneConfluence(
-        zoneData: StandardZoneData,
-        price: number
-    ): {
-        hasConfluence: boolean;
-        confluenceZones: number;
-        confluenceStrength: number;
-    } {
-        const minConfluenceZones = this.confluenceMinZones;
-        const maxDistance = this.confluenceMaxDistance;
-
-        // Find zones that overlap around the current price
-        const relevantZones: ZoneSnapshot[] = [];
-
-        // CLAUDE.md SIMPLIFIED: Use single zone array (no more triple-counting!)
-        relevantZones.push(
-            ...this.preprocessor.findZonesNearPrice(
-                zoneData.zones,
-                price,
-                maxDistance
-            )
-        );
-
-        const confluenceZones = relevantZones.length;
-        const hasConfluence = confluenceZones >= minConfluenceZones;
-
-        // Calculate confluence strength using FinancialMath (higher = more zones overlapping)
-        const confluenceStrengthDivisor =
-            this.enhancementConfig.confluenceStrengthDivisor;
-        const confluenceStrength = Math.min(
-            1.0,
-            FinancialMath.divideQuantities(
-                confluenceZones,
-                minConfluenceZones * confluenceStrengthDivisor
-            )
-        );
-
-        return {
-            hasConfluence,
-            confluenceZones,
-            confluenceStrength,
-        };
-    }
-
-    /**
-     * Analyze institutional buying pressure across standardized zones
-     *
-     * STANDALONE VERSION: Enhanced buying pressure detection
-     */
-    private analyzeInstitutionalBuyingPressure(
-        zoneData: StandardZoneData,
-        event: EnrichedTradeEvent
-    ): {
-        hasBuyingPressure: boolean;
-        buyingRatio: number;
-        affectedZones: number;
-    } {
-        const buyingThreshold = this.accumulationVolumeThreshold;
-        const minRatio = this.accumulationRatioThreshold;
-
-        // Analyze all zones for institutional buying pressure patterns
-        const allZones = zoneData.zones;
-
-        const relevantZones = this.preprocessor.findZonesNearPrice(
-            allZones,
-            event.price,
-            this.confluenceMaxDistance
-        );
-
-        let totalPassiveVolume = 0;
-        let totalAggressiveVolume = 0;
-        let affectedZones = 0;
-
-        relevantZones.forEach((zone) => {
-            const passiveVolume = zone.passiveVolume;
-            const aggressiveVolume = zone.aggressiveVolume;
-
-            totalPassiveVolume += passiveVolume;
-            totalAggressiveVolume += aggressiveVolume;
-
-            // Check if this zone shows accumulation (high aggressive buying volume)
-            // For accumulation: institutions are aggressively buying (buyerIsMaker = false)
-            const aggressiveBuyVolume = zone.aggressiveBuyVolume;
-            if (
-                aggressiveBuyVolume >= buyingThreshold &&
-                aggressiveVolume >
-                    FinancialMath.multiplyQuantities(
-                        passiveVolume,
-                        this.enhancementConfig.passiveToAggressiveRatio
-                    )
-            ) {
-                affectedZones++;
-            }
-        });
-
-        const totalVolume = totalPassiveVolume + totalAggressiveVolume;
-        const buyingRatio =
-            totalVolume > 0
-                ? FinancialMath.divideQuantities(
-                      totalAggressiveVolume,
-                      totalVolume
-                  )
-                : 0;
-        const hasBuyingPressure = buyingRatio >= minRatio && affectedZones > 0;
-
-        return {
-            hasBuyingPressure,
-            buyingRatio,
-            affectedZones,
-        };
-    }
-
-    /**
-     * Analyze cross-timeframe accumulation patterns
-     *
-     * STANDALONE VERSION: Multi-timeframe alignment analysis
-     */
-    private analyzeCrossTimeframeAccumulation(
-        zoneData: StandardZoneData,
-        event: EnrichedTradeEvent
-    ): {
-        hasAlignment: boolean;
-        alignmentScore: number;
-        accumulationStrength: number;
-    } | null {
-        // CLAUDE.md SIMPLIFIED: Single zone accumulation strength
-        const accumulationStrength =
-            this.calculateTimeframeAccumulationStrength(
-                zoneData.zones,
-                event.price
-            );
-
-        // Single zone means perfect alignment
-        const alignmentScore = accumulationStrength;
-        const hasAlignment = alignmentScore >= this.alignmentScoreThreshold;
-
-        return {
-            hasAlignment,
-            alignmentScore,
-            accumulationStrength,
-        };
-    }
-
-    /**
      * Store enhanced accumulation metrics for monitoring and analysis
      *
      * STANDALONE VERSION: Comprehensive metrics tracking
@@ -799,7 +638,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         if (!event.zoneData) return;
 
         // Determine zone update type based on accumulation strength
-        const updateType = this.determineZoneUpdateType(event, confidenceBoost);
+        const updateType = this.determineZoneUpdateType(confidenceBoost);
         if (!updateType) return;
 
         // Create zone data for visualization (using pre-found zones)
@@ -935,10 +774,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     /**
      * Determine zone update type for visualization
      */
-    private determineZoneUpdateType(
-        event: EnrichedTradeEvent,
-        confidenceBoost: number
-    ): string | null {
+    private determineZoneUpdateType(confidenceBoost: number): string | null {
         // Always create/update zones for visualization
         if (confidenceBoost >= this.enhancementConfig.confidenceThreshold) {
             if (confidenceBoost > 0.15) {

@@ -84,7 +84,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
     private readonly enhancementStats: AbsorptionEnhancementStats;
     private readonly preprocessor: IOrderflowPreprocessor;
     private readonly validationLogger: SignalValidationLogger;
-    private readonly symbol: string;
     private readonly windowMs: number;
 
     // Signal cooldown tracking (CLAUDE.md compliance - no magic cooldown values)
@@ -101,7 +100,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
 
     constructor(
         id: string,
-        symbol: string,
         settings: AbsorptionEnhancedSettings,
         preprocessor: IOrderflowPreprocessor,
         logger: ILogger,
@@ -113,8 +111,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
 
         // Initialize base detector directly (no legacy inheritance)
         super(id, logger, metrics);
-
-        this.symbol = symbol;
 
         // Initialize enhancement configuration
         this.useStandardizedZones = settings.useStandardizedZones;
@@ -980,48 +976,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 },
             } as EnhancedAbsorptionSignalData,
         } as SignalCandidate;
-    }
-
-    /**
-     * Find zones relevant to current trade using FinancialMath distance calculations
-     */
-    private findRelevantZonesForTrade(
-        event: EnrichedTradeEvent
-    ): ZoneSnapshot[] {
-        if (!event.zoneData) return [];
-
-        const maxDistance = FinancialMath.multiplyQuantities(
-            this.enhancementConfig.liquidityGradientRange,
-            event.zoneData.zoneConfig.tickValue
-        );
-
-        const allZones = event.zoneData.zones;
-
-        // CRITICAL FIX: Apply temporal filtering using trade timestamp for core absorption detection
-        const windowStartTime = event.timestamp - this.windowMs;
-        const recentZones = allZones.filter(
-            (zone) => zone.lastUpdate >= windowStartTime
-        );
-
-        // DEBUG: Log temporal filtering for core absorption detection
-        this.logger.info("Absorption temporal filtering", {
-            totalZones: allZones.length,
-            recentZones: recentZones.length,
-            windowMs: this.windowMs,
-            windowStartTime,
-            tradeTimestamp: event.timestamp,
-            zoneLastUpdates: allZones.map((z) => ({
-                zoneId: z.zoneId,
-                lastUpdate: z.lastUpdate,
-                withinWindow: z.lastUpdate >= windowStartTime,
-            })),
-        });
-
-        return this.preprocessor.findZonesNearPrice(
-            recentZones,
-            event.price,
-            maxDistance
-        );
     }
 
     /**

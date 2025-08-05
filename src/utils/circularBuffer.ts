@@ -90,17 +90,6 @@ export class CircularBuffer<T> implements Iterable<T> {
         return this.buffer[realIndex];
     }
 
-    private checkOverflow(): void {
-        if (this.sequence > Number.MAX_SAFE_INTEGER) {
-            // POLICY OVERRIDE: Using console.warn for system-level overflow warning
-            // REASON: CircularBuffer is a low-level utility without logger access
-            // This is a critical system state that requires immediate attention
-            console.warn(
-                "CircularBuffer: Sequence approaching overflow, consider system restart"
-            );
-        }
-    }
-
     cleanup(): void {
         if (this.cleanupCallback) {
             for (let i = 0; i < this.size; i++) {

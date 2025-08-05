@@ -206,27 +206,6 @@ export class SpoofingDetector extends EventEmitter {
     }
 
     /**
-     * 🔧 FIX: Safe mean calculation
-     */
-    private safeMean(values: number[]): number {
-        if (!values || values.length === 0) {
-            return 0;
-        }
-
-        let sum = 0;
-        let validCount = 0;
-
-        for (const value of values) {
-            if (isFinite(value) && !isNaN(value)) {
-                sum += value;
-                validCount++;
-            }
-        }
-
-        return validCount > 0 ? sum / validCount : 0;
-    }
-
-    /**
      * Set the anomaly detector for event forwarding
      */
     public setAnomalyDetector(anomalyDetector: AnomalyDetector): void {
@@ -935,9 +914,11 @@ export class SpoofingDetector extends EventEmitter {
      * Example dynamic band width calculation.
      * For now, just returns config.wallTicks; can use volatility, liquidity, etc.
      */
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     private getDynamicWallTicks(price: number, side: "buy" | "sell"): number {
         // TODO: Use recent liquidity, volatility, or order book stats for adaptive width
+        void side;
+        void price;
         // For now: just return wallTicks from config
         return this.config.wallTicks;
     }

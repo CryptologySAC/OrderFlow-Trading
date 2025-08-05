@@ -113,7 +113,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     private readonly lastSignal = new TimeAwareCache<string, number>(900000);
     constructor(
         id: string,
-        symbol: string,
         settings: DeltaCVDEnhancedSettings,
         preprocessor: IOrderflowPreprocessor,
         logger: ILogger,
@@ -719,85 +718,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     }
 
     /**
-     * Analyze zone confluence for CVD pattern validation
-     *
-     * DELTACVD PHASE 1: Multi-timeframe confluence analysis
-     */
-    private analyzeZoneConfluence(
-        zoneData: StandardZoneData,
-        price: number
-    ): {
-        hasConfluence: boolean;
-        confluenceZones: number;
-        confluenceStrength: number;
-    } {
-        this.logger.debug(
-            "[DeltaCVDDetectorEnhanced DEBUG] analyzeZoneConfluence started",
-            {
-                detectorId: this.getId(),
-                price: price,
-                zonesCount: zoneData.zones.length,
-            }
-        );
-
-        const minConfluenceZones =
-            Config.UNIVERSAL_ZONE_CONFIG.minZoneConfluenceCount;
-        const maxDistance =
-            Config.UNIVERSAL_ZONE_CONFIG.maxZoneConfluenceDistance;
-
-        this.logger.debug(
-            "[DeltaCVDDetectorEnhanced DEBUG] analyzeZoneConfluence config",
-            {
-                detectorId: this.getId(),
-                minConfluenceZones,
-                maxDistance,
-            }
-        );
-
-        // Find zones that overlap around the current price
-        const relevantZones: ZoneSnapshot[] = [];
-
-        // CLAUDE.md SIMPLIFIED: Use single zone array (no more triple-counting!)
-        const zonesNear = this.preprocessor.findZonesNearPrice(
-            zoneData.zones,
-            price,
-            maxDistance
-        );
-        relevantZones.push(...zonesNear);
-
-        const confluenceZones = relevantZones.length;
-        const hasConfluence = confluenceZones >= minConfluenceZones;
-
-        // Calculate confluence strength using FinancialMath (higher = more zones overlapping)
-        const confluenceStrength = Math.min(
-            1.0,
-            FinancialMath.divideQuantities(
-                confluenceZones,
-                minConfluenceZones * 2
-            )
-        );
-
-        this.logger.debug(
-            "[DeltaCVDDetectorEnhanced DEBUG] analyzeZoneConfluence result",
-            {
-                detectorId: this.getId(),
-                price,
-                zonesNear: zonesNear.length,
-                confluenceZones,
-                hasConfluence,
-                confluenceStrength,
-                minConfluenceZones,
-            }
-        );
-
-        return {
-            hasConfluence,
-            confluenceZones,
-            confluenceStrength,
-        };
-    }
-
-    /**
      * Analyze CVD divergence across standardized zones
      *
      * DELTACVD PHASE 1: Enhanced CVD divergence detection
@@ -1026,27 +946,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     }
 
     /**
-     * Store enhanced CVD metrics for monitoring and analysis
-     *
-     * DELTACVD PHASE 1: Comprehensive metrics tracking
-     */
-    private storeEnhancedCVDMetrics(
-        event: EnrichedTradeEvent,
-        confidenceBoost: number
-    ): void {
-        // Store metrics for monitoring (commented out to avoid metrics interface errors)
-        // this.metricsCollector.recordGauge('cvd.enhanced.confidence_boost', confidenceBoost);
-        // this.metricsCollector.recordCounter('cvd.enhanced.analysis_count', 1);
-
-        this.logger.debug("DeltaCVDDetectorEnhanced: Enhanced metrics stored", {
-            detectorId: this.getId(),
-            price: event.price,
-            confidenceBoost,
-            enhancementStats: this.enhancementStats,
-        });
-    }
-
-    /**
      * Determine CVD signal side based on zone volume analysis
      */
     private determineCVDSignalSide(
@@ -1101,33 +1000,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         if (buyRatio < 0.5) return "sell";
         // Note: This return null case (neutral 50/50 split) doesn't need separate logging as it's handled in the calling function
         return null; // No clear signal
-    }
-
-    /**
-     * Calculate total volume across all zones (with temporal filtering)
-     */
-    private calculateZoneVolume(
-        zoneData: StandardZoneData | undefined,
-        tradeTimestamp?: number
-    ): number {
-        if (!zoneData) return 0;
-
-        let allZones = [...zoneData.zones];
-
-        // Apply temporal filtering if timestamp provided
-        if (tradeTimestamp != null) {
-            const windowStartTime =
-                tradeTimestamp -
-                Config.getTimeWindow(this.enhancementConfig.timeWindowIndex);
-            allZones = allZones.filter(
-                (zone) => zone.lastUpdate >= windowStartTime
-            );
-        }
-
-        return allZones.reduce(
-            (total, zone) => total + (zone.aggressiveVolume || 0),
-            0
-        );
     }
 
     /**
@@ -1331,10 +1203,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 : 0;
 
         // Calculate CVD-specific price efficiency using volume delta
-        const priceEfficiency = this.calculateCVDPriceEfficiency(
-            event,
-            recentZones
-        );
+        const priceEfficiency = this.calculateCVDPriceEfficiency(recentZones);
 
         return {
             totalAggressiveVolume: totalAggressive,
@@ -1353,10 +1222,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
      *
      * CLAUDE.md COMPLIANT: Uses FinancialMath for precision, returns null when invalid
      */
-    private calculateCVDPriceEfficiency(
-        event: EnrichedTradeEvent,
-        zones: ZoneSnapshot[]
-    ): number | null {
+    private calculateCVDPriceEfficiency(zones: ZoneSnapshot[]): number | null {
         if (zones.length === 0) return null;
 
         // Calculate volume-weighted CVD imbalance across zones

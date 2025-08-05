@@ -130,12 +130,10 @@ export class AnomalyDetector extends EventEmitter {
     private readonly minHistory: number;
     private readonly anomalyCooldownMs: number;
     private readonly volumeImbalanceThreshold: number;
-    private readonly tickSize: number;
     private readonly volatilityThreshold: number;
     private readonly spreadThresholdBps: number;
     private readonly extremeVolatilityWindowMs: number;
     private readonly liquidityCheckWindowMs: number;
-    private readonly whaleCooldownMs: number;
     private readonly marketHealthWindowMs: number;
 
     private readonly logger: ILogger;
@@ -184,7 +182,6 @@ export class AnomalyDetector extends EventEmitter {
         this.logger = logger;
         this.anomalyCooldownMs = options.anomalyCooldownMs ?? 10000;
         this.volumeImbalanceThreshold = options.volumeImbalanceThreshold ?? 0.7;
-        this.tickSize = options.tickSize ?? 0.01;
         this.flowWindowMs = options.flowWindowMs ?? 900000;
         this.orderSizeWindowMs = options.orderSizeWindowMs ?? 900000;
         this.volatilityThreshold = options.volatilityThreshold ?? 0.005;
@@ -192,7 +189,6 @@ export class AnomalyDetector extends EventEmitter {
         this.extremeVolatilityWindowMs =
             options.extremeVolatilityWindowMs ?? 900000;
         this.liquidityCheckWindowMs = options.liquidityCheckWindowMs ?? 900000;
-        this.whaleCooldownMs = options.whaleCooldownMs ?? 300000;
         this.marketHealthWindowMs = options.marketHealthWindowMs ?? 900000;
 
         this.marketHistory = new RollingWindow<MarketSnapshot>(

@@ -88,10 +88,6 @@ export class OrderBookProcessor implements IOrderBookProcessor {
     private readonly errorWindow: number[] = [];
     private readonly maxErrorRate = 10; // per minute
 
-    // Caching
-    private lastBinConfig?: BinConfig;
-    private cachedBins?: Map<number, PriceLevel>;
-
     constructor(
         config: OrderBookProcessorOptions = {},
         logger: ILogger,

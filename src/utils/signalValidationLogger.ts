@@ -334,7 +334,7 @@ export class SignalValidationLogger {
     private readonly flushInterval = 5000; // Flush every 5 seconds
     private flushTimer?: NodeJS.Timeout;
     private optimizationTimer?: NodeJS.Timeout;
-    private isInitialized = false;
+    //private isInitialized = false;
 
     // Price tracking for validation
     private currentPrice: number | null = null;
@@ -864,9 +864,6 @@ export class SignalValidationLogger {
 
             // ✅ START BACKGROUND FLUSHING for non-blocking performance
             this.startBackgroundFlushing();
-
-            // Mark as initialized
-            this.isInitialized = true;
         } catch (error) {
             this.logger.error(
                 "SignalValidationLogger: Failed to initialize log files",
@@ -1394,12 +1391,7 @@ export class SignalValidationLogger {
         // 5-minute validation
         setTimeout(
             () => {
-                this.validateSuccessfulSignal(
-                    recordId,
-                    signalPrice,
-                    record,
-                    "5min"
-                );
+                this.validateSuccessfulSignal(signalPrice, record, "5min");
             },
             5 * 60 * 1000
         );
@@ -1407,12 +1399,7 @@ export class SignalValidationLogger {
         // 15-minute validation
         setTimeout(
             () => {
-                this.validateSuccessfulSignal(
-                    recordId,
-                    signalPrice,
-                    record,
-                    "15min"
-                );
+                this.validateSuccessfulSignal(signalPrice, record, "15min");
             },
             15 * 60 * 1000
         );
@@ -1420,12 +1407,7 @@ export class SignalValidationLogger {
         // 90-minute validation and final write (for optimization analysis)
         setTimeout(
             () => {
-                this.validateSuccessfulSignal(
-                    recordId,
-                    signalPrice,
-                    record,
-                    "90min"
-                );
+                this.validateSuccessfulSignal(signalPrice, record, "90min");
                 this.writeSuccessfulSignalRecord(
                     record,
                     record.calculatedValues
@@ -1566,7 +1548,6 @@ export class SignalValidationLogger {
      * Validate successful signal to classify as top/bottom or noise
      */
     private validateSuccessfulSignal(
-        recordId: string,
         originalPrice: number,
         record: SuccessfulSignalRecord,
         timeframe: "5min" | "15min" | "90min"

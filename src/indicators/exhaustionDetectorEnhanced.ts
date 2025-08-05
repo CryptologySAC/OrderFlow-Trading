@@ -32,11 +32,7 @@ import type {
     ZoneSnapshot,
 } from "../types/marketEvents.js";
 import type { ExhaustionCalculatedValues } from "../types/calculatedValuesTypes.js";
-import type {
-    SignalCandidate,
-    EnhancedExhaustionSignalData,
-    SignalType,
-} from "../types/signalTypes.js";
+import type { SignalCandidate, SignalType } from "../types/signalTypes.js";
 import { z } from "zod";
 import { ExhaustionDetectorSchema } from "../core/config.js";
 
@@ -91,10 +87,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
     private readonly lastSignal = new Map<string, number>();
 
     // CLAUDE.md compliant configuration parameters - NO MAGIC NUMBERS
-    private readonly confluenceMinZones: number;
     private readonly confluenceMaxDistance: number;
-    private readonly confluenceConfidenceBoost: number;
-    private readonly crossTimeframeConfidenceBoost: number;
     private readonly exhaustionVolumeThreshold: number;
     private readonly exhaustionRatioThreshold: number;
     private readonly exhaustionScoreThreshold: number;
@@ -126,14 +119,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
         this.validationLogger = validationLogger;
 
         // Initialize CLAUDE.md compliant configuration parameters - NO MAGIC NUMBERS
-        this.confluenceMinZones =
-            Config.UNIVERSAL_ZONE_CONFIG.minZoneConfluenceCount;
         this.confluenceMaxDistance =
             Config.UNIVERSAL_ZONE_CONFIG.maxZoneConfluenceDistance;
-        this.confluenceConfidenceBoost =
-            Config.UNIVERSAL_ZONE_CONFIG.confluenceConfidenceBoost;
-        this.crossTimeframeConfidenceBoost =
-            Config.UNIVERSAL_ZONE_CONFIG.crossTimeframeBoost;
         this.exhaustionVolumeThreshold = settings.minAggVolume;
         this.exhaustionRatioThreshold = settings.exhaustionThreshold;
         this.exhaustionScoreThreshold = settings.minEnhancedConfidenceThreshold;
@@ -1051,29 +1038,6 @@ export class ExhaustionDetectorEnhanced extends Detector {
     }
 
     /**
-     * Calculate average passive volume from zone data
-     */
-    private calculateAveragePassiveVolume(
-        zoneData: StandardZoneData | undefined
-    ): number | null {
-        if (!zoneData) return null;
-
-        const allZones = [...zoneData.zones];
-
-        if (allZones.length === 0) return null;
-
-        const totalPassiveVolume = allZones.reduce(
-            (sum, zone) => sum + zone.passiveVolume,
-            0
-        );
-
-        return FinancialMath.divideQuantities(
-            totalPassiveVolume,
-            allZones.length
-        );
-    }
-
-    /**
      * Store enhanced exhaustion metrics for monitoring and analysis
      *
      * EXHAUSTION PHASE 1: Comprehensive metrics tracking
@@ -1093,130 +1057,6 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 price: event.price,
                 confidenceBoost,
                 enhancementStats: this.enhancementStats,
-            }
-        );
-    }
-
-    /**
-     * Emit enhanced exhaustion signal independently of base detector
-     *
-     * EXHAUSTION PHASE 1: Independent signal emission for enhanced exhaustion detection
-     */
-    private emitEnhancedExhaustionSignal(
-        event: EnrichedTradeEvent,
-        depletionResult: {
-            hasDepletion: boolean;
-            depletionRatio: number;
-            affectedZones: number;
-        },
-        confidenceBoost: number
-    ): void {
-        // 🔧 CLAUDE.md COMPLIANCE: Only proceed with valid depletion ratio
-        if (depletionResult.depletionRatio <= 0) {
-            return;
-        }
-
-        // Calculate enhanced confidence without any defaults
-        const enhancedConfidence =
-            depletionResult.depletionRatio + confidenceBoost;
-
-        // Only emit if enhanced confidence meets minimum threshold
-        if (
-            enhancedConfidence <
-            this.enhancementConfig.minEnhancedConfidenceThreshold
-        ) {
-            return;
-        }
-
-        // Determine signal side based on zone exhaustion analysis
-        const signalSide = this.determineExhaustionSignalSide(event);
-        if (signalSide === "neutral") {
-            return;
-        }
-
-        // Calculate zone metrics - return early if any are null
-        const passiveVolumeRatio = this.calculateZonePassiveRatio(
-            event.zoneData,
-            event
-        );
-        const avgSpread = this.calculateZoneSpread(event.zoneData);
-        const volumeImbalance = this.calculateZoneVolumeImbalance(
-            event.zoneData
-        );
-        const averagePassiveVolume = this.calculateAveragePassiveVolume(
-            event.zoneData
-        );
-
-        if (
-            passiveVolumeRatio === null ||
-            avgSpread === null ||
-            volumeImbalance === null ||
-            averagePassiveVolume === null
-        ) {
-            return;
-        }
-
-        // Create enhanced exhaustion result
-        const exhaustionResult: EnhancedExhaustionSignalData = {
-            price: event.price,
-            side: signalSide,
-            aggressive: event.quantity,
-            oppositeQty: this.calculateOppositeQuantity(event),
-            avgLiquidity: averagePassiveVolume,
-            spread: avgSpread,
-            exhaustionScore: depletionResult.depletionRatio,
-            confidence: enhancedConfidence,
-            depletionRatio: depletionResult.depletionRatio,
-            passiveVolumeRatio,
-            avgSpread,
-            volumeImbalance,
-            metadata: {
-                signalType: "exhaustion",
-                timestamp: event.timestamp,
-                affectedZones: depletionResult.affectedZones,
-                enhancementType: "zone_based_exhaustion",
-                qualityMetrics: {
-                    exhaustionStatisticalSignificance: enhancedConfidence,
-                    depletionConfirmation: depletionResult.affectedZones >= 2,
-                    signalPurity:
-                        enhancedConfidence > this.premiumConfidenceThreshold
-                            ? "premium"
-                            : "standard",
-                },
-            },
-        };
-
-        // Create signal candidate
-        const signalCandidate: SignalCandidate = {
-            id: `enhanced-exhaustion-${event.timestamp}-${Math.random().toString(36).substring(7)}`,
-            type: "exhaustion" as SignalType,
-            side: signalSide,
-            confidence: enhancedConfidence,
-            timestamp: event.timestamp,
-            data: exhaustionResult,
-        };
-
-        // Update cooldown tracking before emitting enhanced signal
-        const eventKey = `exhaustion`;
-        this.canEmitSignal(eventKey, true);
-
-        // Log successful signal parameters for 90-minute optimization
-        void this.logSuccessfulSignalParameters(signalCandidate, event);
-
-        // ✅ EMIT ENHANCED EXHAUSTION SIGNAL - Independent of base detector
-        this.emit("signalCandidate", signalCandidate);
-
-        this.logger.info(
-            "ExhaustionDetectorEnhanced: ENHANCED EXHAUSTION SIGNAL EMITTED",
-            {
-                detectorId: this.getId(),
-                price: event.price,
-                side: signalSide,
-                confidence: enhancedConfidence,
-                depletionRatio: depletionResult.depletionRatio,
-                affectedZones: depletionResult.affectedZones,
-                signalId: signalCandidate.id,
-                signalType: "exhaustion",
             }
         );
     }
@@ -1303,71 +1143,6 @@ export class ExhaustionDetectorEnhanced extends Detector {
     }
 
     /**
-     * Calculate momentum-based directional prediction for exhaustion signals
-     *
-     * CLAUDE.md Compliance:
-     * - Uses FinancialMath for all calculations (institutional precision)
-     * - No magic numbers (all thresholds configurable)
-     * - Returns null for insufficient data (calculation integrity)
-     * - No live data caching (fresh calculations only)
-     */
-
-    /**
-     * Calculate zone passive volume ratio for exhaustion analysis
-     */
-    private calculateZonePassiveRatio(
-        zoneData: StandardZoneData | undefined,
-        event?: EnrichedTradeEvent
-    ): number | null {
-        if (!zoneData) return null;
-
-        const allZones = [...zoneData.zones];
-
-        let totalDirectionalPassive = 0;
-        let totalAggressive = 0;
-
-        // If event is provided, use directional passive volume logic
-        if (event) {
-            // CRITICAL FIX: Same directional logic as absorption detector
-            // - Buy trades (buyerIsMaker = false): Only count passiveAskVolume
-            // - Sell trades (buyerIsMaker = true): Only count passiveBidVolume
-            const isBuyTrade = !event.buyerIsMaker;
-
-            allZones.forEach((zone) => {
-                // DIRECTIONAL PASSIVE VOLUME: Only count relevant side
-                const relevantPassiveVolume = isBuyTrade
-                    ? zone.passiveAskVolume // Buy trades affect ask liquidity
-                    : zone.passiveBidVolume; // Sell trades affect bid liquidity
-
-                if (relevantPassiveVolume !== undefined) {
-                    totalDirectionalPassive += relevantPassiveVolume;
-                }
-                if (zone.aggressiveVolume !== undefined) {
-                    totalAggressive += zone.aggressiveVolume;
-                }
-            });
-        } else {
-            // Fallback to total passive volume when no event context available
-            allZones.forEach((zone) => {
-                if (zone.passiveVolume !== undefined) {
-                    totalDirectionalPassive += zone.passiveVolume;
-                }
-                if (zone.aggressiveVolume !== undefined) {
-                    totalAggressive += zone.aggressiveVolume;
-                }
-            });
-        }
-
-        const totalVolume = totalDirectionalPassive + totalAggressive;
-        if (totalVolume === 0) return null;
-
-        return FinancialMath.divideQuantities(
-            totalDirectionalPassive,
-            totalVolume
-        );
-    }
-
-    /**
      * Calculate average spread across zones
      */
     private calculateZoneSpread(
@@ -1395,66 +1170,6 @@ export class ExhaustionDetectorEnhanced extends Detector {
         return spreadCount > 0
             ? FinancialMath.divideQuantities(totalSpread, spreadCount)
             : null;
-    }
-
-    /**
-     * Calculate volume imbalance across zones
-     */
-    private calculateZoneVolumeImbalance(
-        zoneData: StandardZoneData | undefined
-    ): number | null {
-        if (!zoneData) return null;
-
-        const allZones = [...zoneData.zones];
-
-        let totalBuyVolume = 0;
-        let totalSellVolume = 0;
-
-        allZones.forEach((zone) => {
-            if (zone.aggressiveBuyVolume !== undefined) {
-                totalBuyVolume += zone.aggressiveBuyVolume;
-            }
-            if (zone.aggressiveSellVolume !== undefined) {
-                totalSellVolume += zone.aggressiveSellVolume;
-            }
-        });
-
-        const totalVolume = totalBuyVolume + totalSellVolume;
-        if (totalVolume === 0) return null;
-
-        const buyRatio = FinancialMath.divideQuantities(
-            totalBuyVolume,
-            totalVolume
-        );
-        return FinancialMath.calculateAbs(
-            FinancialMath.safeSubtract(buyRatio, this.ratioBalanceCenterPoint)
-        );
-    }
-
-    /**
-     * Calculate opposite side quantity for exhaustion analysis
-     * Returns the passive volume on the opposite side of the aggressive trade
-     */
-    private calculateOppositeQuantity(event: EnrichedTradeEvent): number {
-        if (!event.zoneData) return 0;
-
-        const allZones = [...event.zoneData.zones];
-        let totalOppositeVolume = 0;
-
-        // Determine signal side to find opposite volume
-        const signalSide = this.determineExhaustionSignalSide(event);
-
-        allZones.forEach((zone) => {
-            if (signalSide === "sell") {
-                // Sell signal -> consumed bid liquidity -> opposite is remaining ask volume
-                totalOppositeVolume += zone.passiveAskVolume || 0;
-            } else if (signalSide === "buy") {
-                // Buy signal -> consumed ask liquidity -> opposite is remaining bid volume
-                totalOppositeVolume += zone.passiveBidVolume || 0;
-            }
-        });
-
-        return totalOppositeVolume;
     }
 
     /**

@@ -20,10 +20,7 @@ import { SignalProcessingError } from "./core/errors.js";
 // Infrastructure imports
 import type { IMetricsCollector } from "./infrastructure/metricsCollectorInterface.js";
 
-import {
-    RecoveryManager,
-    type HardReloadEvent,
-} from "./infrastructure/recoveryManager.js";
+import { RecoveryManager } from "./infrastructure/recoveryManager.js";
 import { ThreadManager } from "./multithreading/threadManager.js";
 
 // Service imports
@@ -54,16 +51,10 @@ import { AccumulationZoneDetectorEnhanced } from "./indicators/accumulationZoneD
 import { DistributionDetectorEnhanced } from "./indicators/distributionDetectorEnhanced.js";
 import type {
     TradingZone,
-    ZoneUpdate,
-    ZoneSignal,
-    ZoneAnalysisResult,
     IcebergZoneUpdate,
     HiddenOrderZoneUpdate,
     SpoofingZoneUpdate,
 } from "./types/zoneTypes.js";
-
-// Utils imports
-import { TradeData } from "./utils/interfaces.js";
 
 // Types
 import type { Dependencies } from "./core/dependencies.js";
@@ -71,7 +62,6 @@ import type { Signal, ConfirmedSignal } from "./types/signalTypes.js";
 import type { ZoneUpdateEvent, ZoneSignalEvent } from "./types/zoneTypes.js";
 import type { ConnectivityIssue } from "./infrastructure/apiConnectivityMonitor.js";
 import type {
-    TimeContext,
     DetectorRegisteredEvent,
     SignalQueuedEvent,
     SignalProcessedEvent,
@@ -135,14 +125,6 @@ export class OrderFlowDashboard {
     // Indicators (initialized in initializeDetectors)
     private deltaCVDConfirmation!: DeltaCVDDetectorEnhanced;
 
-    // Time context
-    private timeContext: TimeContext = {
-        wallTime: Date.now(),
-        marketTime: Date.now(),
-        mode: "realtime",
-        speed: 1,
-    };
-
     // State
     private isShuttingDown = false;
     private readonly purgeIntervalMs = 10 * 60 * 1000; // 10 minutes
@@ -152,10 +134,9 @@ export class OrderFlowDashboard {
     private lastTradePrice = 0; // Track last trade price for anomaly context
 
     public static async create(
-        dependencies: Dependencies,
-        delayFn: (cb: () => void, ms: number) => unknown = setTimeout
+        dependencies: Dependencies
     ): Promise<OrderFlowDashboard> {
-        const instance = new OrderFlowDashboard(dependencies, delayFn);
+        const instance = new OrderFlowDashboard(dependencies);
         await instance.initialize(dependencies);
         return instance;
     }
@@ -200,13 +181,7 @@ export class OrderFlowDashboard {
         }
     }
 
-    constructor(
-        private readonly dependencies: Dependencies,
-        private readonly delayFn: (
-            cb: () => void,
-            ms: number
-        ) => unknown = setTimeout
-    ) {
+    constructor(private readonly dependencies: Dependencies) {
         // Validate configuration
         Config.validate();
 
@@ -298,8 +273,7 @@ export class OrderFlowDashboard {
 
             this.marketDataStorage = new MarketDataStorageService(
                 dataStorageConfig,
-                this.logger,
-                this.metricsCollector
+                this.logger
             );
 
             if (dataStorageConfig.enabled) {
@@ -568,10 +542,6 @@ export class OrderFlowDashboard {
             }
         );
     }
-
-    private DeltaCVDConfirmationCallback = (event: unknown): void => {
-        void event; //todo
-    };
 
     private async handleBacklogRequest(
         clientId: string,
@@ -992,118 +962,6 @@ export class OrderFlowDashboard {
     }
 
     /**
-     * Process zone analysis results from zone-based detectors
-     */
-    private processZoneAnalysis(analysis: ZoneAnalysisResult): void {
-        try {
-            // Process zone updates
-            for (const update of analysis.updates) {
-                this.handleZoneUpdate(update);
-            }
-
-            // Process zone signals
-            for (const signal of analysis.signals) {
-                this.handleZoneSignal(signal);
-            }
-        } catch (error) {
-            this.logger.error("Error processing zone analysis", {
-                error: error instanceof Error ? error.message : String(error),
-            });
-        }
-    }
-
-    /**
-     * Handle zone updates (creation, strengthening, completion, etc.)
-     */
-    private handleZoneUpdate(update: ZoneUpdate): void {
-        const zone = update.zone;
-
-        this.logger.info(`Zone ${update.updateType}`, {
-            component: "ZoneProcessor",
-            zoneId: zone.id,
-            type: zone.type,
-            updateType: update.updateType,
-            significance: update.significance,
-            strength: zone.strength.toFixed(3),
-            completion: zone.completion.toFixed(3),
-            priceCenter: zone.priceRange.center,
-            totalVolume: zone.totalVolume,
-        });
-
-        // Broadcast zone update to clients
-        const message: WebSocketMessage = {
-            type: "zoneUpdate",
-            data: {
-                updateType: update.updateType,
-                zone: {
-                    id: zone.id,
-                    type: zone.type,
-                    priceRange: zone.priceRange,
-                    strength: zone.strength,
-                    completion: zone.completion,
-                    confidence: zone.confidence,
-                    significance: zone.significance,
-                    isActive: zone.isActive,
-                    totalVolume: zone.totalVolume,
-                    timeInZone: zone.timeInZone,
-                },
-                significance: update.significance,
-                changeMetrics: update.changeMetrics,
-            },
-            now: Date.now(),
-        };
-
-        this.broadcastMessage(message);
-    }
-
-    /**
-     * Handle zone signals (entry, strength change, completion, etc.)
-     */
-    private handleZoneSignal(signal: ZoneSignal): void {
-        const zone = signal.zone;
-
-        this.logger.info(`Zone signal generated`, {
-            component: "ZoneProcessor",
-            zoneId: zone.id,
-            signalType: signal.signalType,
-            actionType: signal.actionType,
-            confidence: signal.confidence.toFixed(3),
-            urgency: signal.urgency,
-            expectedDirection: signal.expectedDirection,
-            zoneStrength: signal.zoneStrength.toFixed(3),
-        });
-
-        // Broadcast zone signal to clients
-        const message: WebSocketMessage = {
-            type: "zoneSignal",
-            data: {
-                signalType: signal.signalType,
-                actionType: signal.actionType,
-                confidence: signal.confidence,
-                urgency: signal.urgency,
-                timeframe: signal.timeframe,
-                expectedDirection: signal.expectedDirection,
-                zoneStrength: signal.zoneStrength,
-                completionLevel: signal.completionLevel,
-                positionSizing: signal.positionSizing,
-                stopLossLevel: signal.stopLossLevel,
-                takeProfitLevel: signal.takeProfitLevel,
-                zone: {
-                    id: zone.id,
-                    type: zone.type,
-                    priceRange: zone.priceRange,
-                    strength: zone.strength,
-                    completion: zone.completion,
-                    significance: zone.significance,
-                },
-            },
-            now: Date.now(),
-        };
-
-        this.broadcastMessage(message);
-    }
-
-    /**
      * Setup event handlers for zone-based detectors
      */
     private setupZoneEventHandlers(): void {
@@ -1289,6 +1147,7 @@ export class OrderFlowDashboard {
         this.httpServer.use(express.static(publicPath));
 
         this.httpServer.get("/health", (req, res) => {
+            void req;
             const correlationId = randomUUID();
             try {
                 const metrics = this.metricsCollector.getMetrics();
@@ -1326,6 +1185,7 @@ export class OrderFlowDashboard {
         });
 
         this.httpServer.get("/stats", (req, res) => {
+            void req;
             const correlationId = randomUUID();
             try {
                 const stats = {
@@ -1360,6 +1220,7 @@ export class OrderFlowDashboard {
 
         // Market data storage status and control endpoint
         this.httpServer.get("/market-data-storage", (req, res) => {
+            void req;
             const correlationId = randomUUID();
             try {
                 if (!this.marketDataStorage) {
@@ -1396,6 +1257,7 @@ export class OrderFlowDashboard {
 
         // Market data storage control endpoint
         this.httpServer.post("/market-data-storage/log-status", (req, res) => {
+            void req;
             const correlationId = randomUUID();
             try {
                 if (!this.marketDataStorage) {
@@ -1518,21 +1380,6 @@ export class OrderFlowDashboard {
     }
 
     /**
-     * Normalize trade data
-     */
-    private normalizeTradeData(
-        data: SpotWebsocketStreams.AggTradeResponse
-    ): TradeData {
-        return {
-            price: parseFloat(data.p || "0"),
-            quantity: parseFloat(data.q || "0"),
-            timestamp: data.T || Date.now(),
-            buyerIsMaker: data.m || false,
-            originalTrade: data,
-        };
-    }
-
-    /**
      * Broadcast signal to clients
      */
     private async broadcastSignal(signal: Signal): Promise<void> {
@@ -1641,62 +1488,6 @@ export class OrderFlowDashboard {
             errorContext,
             correlationId
         );
-    }
-
-    /**
-     * Handle hard reload requests from components
-     */
-    private handleHardReloadRequest(event: HardReloadEvent): void {
-        this.logger.error("[OrderFlowDashboard] Hard reload requested", {
-            reason: event.reason,
-            component: event.component,
-            attempts: event.attempts,
-            metadata: event.metadata,
-        });
-
-        // Forward to recovery manager
-        const success = this.recoveryManager.requestHardReload(event);
-
-        if (!success) {
-            this.logger.warn(
-                "[OrderFlowDashboard] Hard reload request rejected by recovery manager",
-                {
-                    reason: event.reason,
-                    component: event.component,
-                }
-            );
-        }
-    }
-
-    /**
-     * Graceful shutdown before hard reload
-     */
-    private gracefulShutdown(): void {
-        this.logger.info(
-            "[OrderFlowDashboard] Starting graceful shutdown for hard reload"
-        );
-
-        try {
-            // Stop signal processing
-            if (this.signalCoordinator) {
-                // Signal coordinator doesn't have a stop method, but we can let pending signals finish
-                this.logger.info(
-                    "[OrderFlowDashboard] Allowing signal coordinator to finish pending signals"
-                );
-            }
-
-            this.logger.info(
-                "[OrderFlowDashboard] Graceful shutdown completed"
-            );
-        } catch (error) {
-            this.logger.error(
-                "[OrderFlowDashboard] Error during graceful shutdown",
-                {
-                    error:
-                        error instanceof Error ? error.message : String(error),
-                }
-            );
-        }
     }
 
     /**
@@ -1830,6 +1621,7 @@ export class OrderFlowDashboard {
                             correlationId
                         );
                     }
+                    return Promise.resolve();
                 })
                 .then(() => {
                     // 🔧 FIX: Monitor database size after cleanup

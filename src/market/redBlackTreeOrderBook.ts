@@ -37,13 +37,11 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
     // State management
     private isInitialized = false;
     private snapshotBuffer: SpotWebsocketStreams.DiffBookDepthResponse[] = [];
-    private expectedUpdateId?: number;
     private lastUpdateId: number = 0;
     private lastUpdateTime = Date.now();
 
     // Pruning and maintenance
     private pruneTimer?: NodeJS.Timeout;
-    private lastPruneTime = 0;
 
     // Circuit breaker state
     private errorCount = 0;
@@ -527,7 +525,6 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
             this.pruneStaleeLevels();
             this.pruneDistantLevels();
             this.pruneExcessLevels();
-            this.lastPruneTime = Date.now();
         } catch (error) {
             this.handleError(
                 error as Error,
