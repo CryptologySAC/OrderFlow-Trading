@@ -2,11 +2,11 @@
  * Time-aware cache for automatic cleanup.
  */
 export class TimeAwareCache<K, V> {
-    private cache = new Map<K, { value: V; timestamp: number }>();
+    private readonly cache = new Map<K, { value: V; timestamp: number }>();
     private lastCleanup = Date.now();
     private readonly cleanupInterval = 60000; // 1 minute
 
-    constructor(private ttl: number) {}
+    constructor(private readonly ttl: number) {}
 
     set(key: K, value: V): void {
         this.cache.set(key, { value, timestamp: Date.now() });

@@ -41,12 +41,12 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
     private lastUpdateTime = Date.now();
 
     // Pruning and maintenance
-    private pruneTimer?: NodeJS.Timeout;
+    private pruneTimer?: NodeJS.Timeout | undefined;
 
     // Circuit breaker state
     private errorCount = 0;
     private errorWindow: number[] = [];
-    private errorWindowMs: number = 60000;
+    private readonly errorWindowMs: number = 60000;
     private circuitOpen: boolean = false;
     private circuitOpenUntil: number = 0;
 
@@ -343,7 +343,7 @@ export class RedBlackTreeOrderBook implements IOrderBookState {
     public shutdown(): void {
         if (this.pruneTimer) {
             clearInterval(this.pruneTimer);
-            delete this.pruneTimer;
+            this.pruneTimer = undefined;
         }
 
         this.tree.clear();

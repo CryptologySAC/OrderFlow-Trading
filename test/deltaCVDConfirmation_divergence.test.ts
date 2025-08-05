@@ -11,6 +11,8 @@ import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
 import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
+import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
+import type { ISignalLogger } from "../src/infrastructure/signalLoggerInterface.js";
 // Import mock config for complete settings
 import mockConfig from "../__mocks__/config.json";
 
@@ -28,6 +30,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
     let detector: DeltaCVDDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
+    let mockSignalLogger: ISignalLogger;
 
     const mockPreprocessor: IOrderflowPreprocessor = {
         handleDepth: vi.fn(),
@@ -82,6 +85,7 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
             trace: vi.fn(),
         } as ILogger;
         mockMetrics = new MetricsCollector();
+        mockSignalLogger = createMockSignalLogger();
 
         // Initialize signal validation logger mock
         mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
@@ -91,7 +95,6 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
         it("should correctly configure divergence mode", () => {
             detector = new DeltaCVDDetectorEnhanced(
                 "test_divergence_config",
-                "LTCUSDT",
                 {
                     ...mockConfig.symbols.LTCUSDT.deltaCVD,
                     windowsSec: [60],
@@ -99,7 +102,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Test that detector was created successfully
@@ -110,12 +114,12 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
         it("should default to momentum mode when detectionMode not specified", () => {
             detector = new DeltaCVDDetectorEnhanced(
                 "test_default_mode",
-                "LTCUSDT",
                 mockConfig.symbols.LTCUSDT.deltaCVD,
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // This tests that the default behavior is preserved
@@ -126,12 +130,12 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
         it("should accept hybrid mode configuration", () => {
             detector = new DeltaCVDDetectorEnhanced(
                 "test_hybrid_mode",
-                "LTCUSDT",
                 mockConfig.symbols.LTCUSDT.deltaCVD,
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             expect(detector.getId()).toBe("test_hybrid_mode");
@@ -142,7 +146,6 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
         beforeEach(() => {
             detector = new DeltaCVDDetectorEnhanced(
                 "test_divergence_validation",
-                "LTCUSDT",
                 {
                     ...mockConfig.symbols.LTCUSDT.deltaCVD,
                     windowsSec: [60],
@@ -152,7 +155,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
         });
 
@@ -207,7 +211,6 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
             // Initialize detector for this specific test
             detector = new DeltaCVDDetectorEnhanced(
                 "test_price_cvd_mismatch",
-                "LTCUSDT",
                 {
                     ...mockConfig.symbols.LTCUSDT.deltaCVD,
                     detectionMode: "divergence" as const,
@@ -215,7 +218,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             const baseTime = Date.now();
@@ -279,20 +283,19 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
         beforeEach(() => {
             detector = new DeltaCVDDetectorEnhanced(
                 "test_signal_direction",
-                "LTCUSDT",
                 {
+                    ...mockConfig.symbols.LTCUSDT.deltaCVD,
                     windowsSec: [60],
                     detectionMode: "divergence" as const,
                     divergenceThreshold: 0.2,
                     divergenceLookbackSec: 60,
                     minZ: 1.5,
-                    minTradesPerSec: 0.1,
-                    minVolPerSec: 0.5,
                 },
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
         });
 
@@ -417,22 +420,30 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
 
             momentumDetector = new DeltaCVDDetectorEnhanced(
                 "momentum_detector",
-                "LTCUSDT",
-                { ...sharedConfig, detectionMode: "momentum" as const },
+                {
+                    ...mockConfig.symbols.LTCUSDT.deltaCVD,
+                    ...sharedConfig,
+                    detectionMode: "momentum" as const,
+                },
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             divergenceDetector = new DeltaCVDDetectorEnhanced(
                 "divergence_detector",
-                "LTCUSDT",
-                { ...sharedConfig, detectionMode: "divergence" as const },
+                {
+                    ...mockConfig.symbols.LTCUSDT.deltaCVD,
+                    ...sharedConfig,
+                    detectionMode: "divergence" as const,
+                },
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
         });
 
@@ -493,8 +504,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
         beforeEach(() => {
             hybridDetector = new DeltaCVDDetectorEnhanced(
                 "hybrid_detector",
-                "LTCUSDT",
                 {
+                    ...mockConfig.symbols.LTCUSDT.deltaCVD,
                     windowsSec: [60],
                     detectionMode: "hybrid" as const,
                     divergenceThreshold: 0.3,
@@ -506,7 +517,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
         });
 
@@ -559,8 +571,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
         beforeEach(() => {
             detector = new DeltaCVDDetectorEnhanced(
                 "test_price_direction",
-                "LTCUSDT",
                 {
+                    ...mockConfig.symbols.LTCUSDT.deltaCVD,
                     windowsSec: [60],
                     detectionMode: "divergence" as const,
                     divergenceThreshold: 0.3,
@@ -570,7 +582,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
         });
 
@@ -669,8 +682,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
         beforeEach(() => {
             detector = new DeltaCVDDetectorEnhanced(
                 "test_edge_cases",
-                "LTCUSDT",
                 {
+                    ...mockConfig.symbols.LTCUSDT.deltaCVD,
                     windowsSec: [60],
                     detectionMode: "divergence" as const,
                     divergenceThreshold: 0.3,
@@ -680,7 +693,8 @@ describe("DeltaCVDConfirmation - Divergence Detection Mode", () => {
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
         });
 

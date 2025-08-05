@@ -132,7 +132,7 @@ export class SignalManager extends EventEmitter {
     private readonly recentSignals = new Map<string, ProcessedSignal>();
     private readonly correlations = new Map<string, SignalCorrelation>();
     private readonly signalHistory: ProcessedSignal[] = [];
-    private lastRejectReason?: string;
+    private lastRejectReason?: string | undefined;
 
     // Keep track of signals for correlation analysis - configured values
     private readonly maxHistorySize: number;
@@ -233,7 +233,7 @@ export class SignalManager extends EventEmitter {
      * No complex anomaly enhancement, just health-based allow/block decisions.
      */
     private processSignal(signal: ProcessedSignal): ConfirmedSignal | null {
-        delete this.lastRejectReason;
+        this.lastRejectReason = undefined;
         try {
             // 1. Market health check (infrastructure safety)
             if (!this.checkMarketHealth()) {
@@ -347,7 +347,7 @@ export class SignalManager extends EventEmitter {
                 undefined,
                 confirmedSignal
             );
-            delete this.lastRejectReason;
+            this.lastRejectReason = undefined;
             return confirmedSignal;
         } catch (error) {
             this.logger.error("[SignalManager] Failed to process signal", {
@@ -3150,7 +3150,7 @@ export class SignalManager extends EventEmitter {
     }
 
     // Internal signal type tracking
-    private signalTypeStats: Record<
+    private readonly signalTypeStats: Record<
         string,
         {
             candidates: number;

@@ -274,7 +274,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
 
         let totalConfidenceBoost = 0;
         let enhancementApplied = false;
-        let finalSignal = coreExhaustionResult; // Start with core signal
+        const finalSignal = coreExhaustionResult; // Start with core signal
 
         // Zone confluence analysis for exhaustion validation
         if (Config.UNIVERSAL_ZONE_CONFIG.enableZoneConfluenceFilter) {

@@ -133,7 +133,7 @@ export class WebSocketManager {
             let parsed: unknown;
             try {
                 // Basic protection against JSON bombs
-                if (raw.length > 100000) {
+                if (raw.length > 100 * 1024) {
                     // 100KB JSON limit
                     throw new Error("JSON too large");
                 }
@@ -271,7 +271,7 @@ export class WebSocketManager {
             messageStr = message;
         } else if (Buffer.isBuffer(message)) {
             // Security: Validate buffer size to prevent memory exhaustion
-            if (message.length > 1048576) {
+            if (message.length > 1024 * 1024) {
                 // 1MB limit
                 throw new WebSocketError(
                     "Message too large",
@@ -289,7 +289,7 @@ export class WebSocketManager {
         }
 
         // Security: Validate string length and content
-        if (messageStr.length > 1048576) {
+        if (messageStr.length > 1024 * 1024) {
             // 1MB limit
             throw new WebSocketError(
                 "Message too large",
@@ -395,8 +395,9 @@ export class WebSocketManager {
 
         // Close all active connections with proper cleanup
         this.activeConnections.forEach((ws) => {
+            const _WS_CLOSE_AWAY = 1001; // Going away
             try {
-                ws.close(1001, "Server shutting down");
+                ws.close(_WS_CLOSE_AWAY, "Server shutting down");
             } catch (error) {
                 this.logger.error("Error closing WebSocket connection", {
                     error,

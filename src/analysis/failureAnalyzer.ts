@@ -159,7 +159,7 @@ export class FailureAnalyzer {
     private readonly config: Required<FailureAnalyzerConfig>;
 
     // Analysis cache
-    private analysisCache = new Map<
+    private readonly analysisCache = new Map<
         string,
         {
             result: unknown;
@@ -302,7 +302,7 @@ export class FailureAnalyzer {
             });
 
             // Get failed signals if not provided
-            let failures =
+            const failures =
                 failedSignals ??
                 (await this.storage.getFailedSignalAnalyses(
                     this.config.lookbackPeriodMs

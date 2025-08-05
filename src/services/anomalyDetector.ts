@@ -124,7 +124,7 @@ interface FlowMetrics {
  * It does NOT detect trading signals - use dedicated trading detectors for that.
  */
 export class AnomalyDetector extends EventEmitter {
-    private marketHistory: RollingWindow<MarketSnapshot>;
+    private readonly marketHistory: RollingWindow<MarketSnapshot>;
     private readonly windowSize: number;
     private readonly normalSpreadBps: number;
     private readonly minHistory: number;
@@ -143,26 +143,26 @@ export class AnomalyDetector extends EventEmitter {
     private currentBestBid = 0;
     private currentBestAsk = 0;
 
-    private priceHistory: RollingWindow<number>;
-    private returnStats: RollingStatsWindow;
-    private recentReturnStats: RollingStatsWindow;
+    private readonly priceHistory: RollingWindow<number>;
+    private readonly returnStats: RollingStatsWindow;
+    private readonly recentReturnStats: RollingStatsWindow;
     private lastPrice = 0;
 
     // Flow tracking for market structure analysis
-    private recentFlowWindow: RollingWindow<{
+    private readonly recentFlowWindow: RollingWindow<{
         volume: number;
         side: "buy" | "sell";
         time: number;
     }>;
-    private flowWindowMs: number;
+    private readonly flowWindowMs: number;
 
     // Order size tracking for whale detection
-    private orderSizeHistory: RollingWindow<{
+    private readonly orderSizeHistory: RollingWindow<{
         size: number;
         time: number;
         price: number;
     }>;
-    private orderSizeWindowMs: number;
+    private readonly orderSizeWindowMs: number;
 
     // Anomaly deduplication and history
     private lastEmitted: Record<string, { severity: string; time: number }> =

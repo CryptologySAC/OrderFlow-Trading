@@ -773,10 +773,10 @@ function validateMandatoryConfig(): void {
     console.log("✅ CONFIG VALIDATION PASSED - All mandatory settings present");
 }
 
-let ENV_SYMBOL: string | undefined = process.env["SYMBOL"]?.toUpperCase();
-let CONFIG_SYMBOL: AllowedSymbols = (ENV_SYMBOL ||
+const ENV_SYMBOL: string | undefined = process.env["SYMBOL"]?.toUpperCase();
+const CONFIG_SYMBOL: AllowedSymbols = (ENV_SYMBOL ||
     cfg.symbol) as AllowedSymbols;
-let SYMBOL_CFG = cfg.symbols[CONFIG_SYMBOL as keyof typeof cfg.symbols];
+const SYMBOL_CFG = cfg.symbols[CONFIG_SYMBOL as keyof typeof cfg.symbols];
 if (!SYMBOL_CFG) {
     console.error(
         `🚨 CRITICAL CONFIG ERROR: Symbol ${CONFIG_SYMBOL} configuration missing from config.json`
@@ -787,10 +787,10 @@ if (!SYMBOL_CFG) {
 // Execute validation after SYMBOL_CFG is initialized
 validateMandatoryConfig();
 
-let DATASTREAM_CFG = cfg.dataStream;
+const DATASTREAM_CFG = cfg.dataStream;
 
 // Universal zone config from LTCUSDT symbol configuration
-let UNIVERSAL_ZONE_CFG = SYMBOL_CFG.universalZoneConfig;
+const UNIVERSAL_ZONE_CFG = SYMBOL_CFG.universalZoneConfig;
 if (!UNIVERSAL_ZONE_CFG) {
     console.error(
         `🚨 CRITICAL CONFIG ERROR: universalZoneConfig configuration missing from symbols.LTCUSDT in config.json`

@@ -686,11 +686,12 @@ describe("Detector Config Validation - Universal Test Suite", () => {
 
             const detector = new AbsorptionDetectorEnhanced(
                 "test-absorption",
-                "LTCUSDT",
                 settings,
                 createMockPreprocessor(),
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Verify the detector was created with correct config values
@@ -783,11 +784,12 @@ describe("Detector Config Validation - Universal Test Suite", () => {
 
             const detector = new AbsorptionDetectorEnhanced(
                 "test-absorption",
-                "LTCUSDT",
                 settings,
                 createMockPreprocessor(),
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Verify the detector was created with correct config values
@@ -879,11 +881,12 @@ describe("Detector Config Validation - Universal Test Suite", () => {
 
             const detector = new AbsorptionDetectorEnhanced(
                 "test-absorption",
-                "LTCUSDT",
                 settings,
                 createMockPreprocessor(),
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Verify the detector was created with correct config values
@@ -975,11 +978,12 @@ describe("Detector Config Validation - Universal Test Suite", () => {
 
             const detector = new AbsorptionDetectorEnhanced(
                 "test-absorption",
-                "LTCUSDT",
                 settings,
                 createMockPreprocessor(),
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Verify the detector was created with correct config values
@@ -1063,12 +1067,12 @@ describe("Detector Config Validation - Universal Test Suite", () => {
 
             const detector = new DeltaCVDDetectorEnhanced(
                 "test-deltacvd",
-                "LTCUSDT",
                 settings,
                 createMockPreprocessor(),
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             const actualConfidence = (detector as any).enhancementConfig
@@ -1151,12 +1155,12 @@ describe("Detector Config Validation - Universal Test Suite", () => {
 
             const detector = new DeltaCVDDetectorEnhanced(
                 "test-deltacvd",
-                "LTCUSDT",
                 settings,
                 createMockPreprocessor(),
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             const actualConfidence = (detector as any).enhancementConfig
@@ -1239,12 +1243,12 @@ describe("Detector Config Validation - Universal Test Suite", () => {
 
             const detector = new DeltaCVDDetectorEnhanced(
                 "test-deltacvd",
-                "LTCUSDT",
                 settings,
                 createMockPreprocessor(),
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             const actualFlag = (detector as any).enhancementConfig
@@ -1327,12 +1331,12 @@ describe("Detector Config Validation - Universal Test Suite", () => {
 
             const detector = new DeltaCVDDetectorEnhanced(
                 "test-deltacvd",
-                "LTCUSDT",
                 settings,
                 createMockPreprocessor(),
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             const actualFlag = (detector as any).enhancementConfig

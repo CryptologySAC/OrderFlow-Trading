@@ -120,9 +120,9 @@ const rateLimiter = new WorkerRateLimiterProxy(60000, 100);
 const dataStream = new DataStreamProxy();
 
 // Enhanced monitoring
-let workerStartTime = Date.now();
-let totalRequestsProcessed = 0;
-let errorCount = 0;
+const workerStartTime = Date.now();
+const totalRequestsProcessed = 0;
+const errorCount = 0;
 
 function updateWorkerMetrics(): void {
     metrics.updateMetric("worker_uptime", Date.now() - workerStartTime);
@@ -243,8 +243,8 @@ const wsHandlers = {
 // Use module-scoped singleton instead of global variables
 class CommunicationWorkerState {
     private static instance: CommunicationWorkerState;
-    private connectedClients = new Set<IsolatedWebSocket>();
-    private pendingBacklogRequests = new Map<
+    private readonly connectedClients = new Set<IsolatedWebSocket>();
+    private readonly pendingBacklogRequests = new Map<
         string,
         { ws: IsolatedWebSocket; correlationId?: string }
     >();
@@ -346,8 +346,8 @@ const wsManager = new WorkerWebSocketManager(
 
 // Enhanced stats broadcaster with MQTT and SignalTracker support
 class EnhancedStatsBroadcaster {
-    private timer?: NodeJS.Timeout;
-    private mqttClient?: MqttClient;
+    private timer?: NodeJS.Timeout | undefined;
+    private mqttClient?: MqttClient | undefined;
     private signalTracker?: SignalTracker;
     private mainThreadMetrics: EnhancedMetrics | null = null;
     private signalTypeBreakdown: SignalBreakdownMessage["data"] | null = null;
@@ -547,11 +547,11 @@ class EnhancedStatsBroadcaster {
     public stop(): void {
         if (this.timer) {
             clearInterval(this.timer);
-            delete this.timer;
+            this.timer = undefined;
         }
         if (this.mqttClient) {
             this.mqttClient.end(true);
-            delete this.mqttClient;
+            this.mqttClient = undefined;
         }
     }
 }

@@ -57,6 +57,23 @@ export class SignalValidationLogger {
     public readonly logger: any;
     public readonly outputDir: string;
 
+    // Detector-specific file paths (matching real interface)
+    private absorptionSignalsFilePath: string = "";
+    private absorptionRejectionsFilePath: string = "";
+    private absorptionSuccessfulFilePath: string = "";
+    private exhaustionSignalsFilePath: string = "";
+    private exhaustionRejectionsFilePath: string = "";
+    private exhaustionSuccessfulFilePath: string = "";
+    private deltacvdSignalsFilePath: string = "";
+    private deltacvdRejectionsFilePath: string = "";
+    private deltacvdSuccessfulFilePath: string = "";
+    private currentDateString: string = "";
+
+    // Additional properties to match real interface
+    private readonly pendingValidationSignals = new Map();
+    private readonly validationWindow = 300000;
+    private readonly rejectionValidationWindow = 900000;
+
     // Add all required private methods as mocks
     private initializeLogFiles = vi.fn();
     private startBackgroundFlushing = vi.fn();
@@ -87,6 +104,9 @@ export class SignalValidationLogger {
     private calculateParameterStats = vi.fn();
     private generateOptimizedConfig = vi.fn();
     private saveOptimizedConfig = vi.fn();
+    private updateFilePaths = vi.fn();
+    private getCurrentDateString = vi.fn().mockReturnValue("2024-01-01");
+    private getDetectorFilePath = vi.fn();
 
     constructor(logger: any, outputDir: string = "logs/signal_validation") {
         this.logger = logger;

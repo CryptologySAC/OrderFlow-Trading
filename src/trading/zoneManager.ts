@@ -13,17 +13,17 @@ import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 
 export class ZoneManager extends EventEmitter {
-    private activeZones = new Map<string, TradingZone>();
-    private completedZones: TradingZone[] = [];
-    private zoneHistory = new Map<string, TradingZone[]>();
+    private readonly activeZones = new Map<string, TradingZone>();
+    private readonly completedZones: TradingZone[] = [];
+    private readonly zoneHistory = new Map<string, TradingZone[]>();
 
     // Zone configuration - uses universal zone config
     private readonly config: typeof Config.UNIVERSAL_ZONE_CONFIG;
 
     constructor(
         config: typeof Config.UNIVERSAL_ZONE_CONFIG,
-        private logger: ILogger,
-        private metricsCollector: IMetricsCollector
+        private readonly logger: ILogger,
+        private readonly metricsCollector: IMetricsCollector
     ) {
         super();
 

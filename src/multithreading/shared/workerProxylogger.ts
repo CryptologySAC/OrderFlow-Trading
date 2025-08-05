@@ -8,7 +8,7 @@ import { ProxyLogMessage, ProxyLogMessageSchema } from "./messageSchemas.js";
  */
 
 export class WorkerProxyLogger implements ILogger {
-    private correlationContext = new Map<string, string>();
+    private readonly correlationContext = new Map<string, string>();
 
     constructor(private readonly workerName: string) {}
 

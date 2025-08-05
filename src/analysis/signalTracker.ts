@@ -179,7 +179,7 @@ export class SignalTracker extends EventEmitter {
     private readonly completedSignals: SignalOutcome[] = [];
     private readonly maxCompletedSignals = 10000; // Keep last 10k completed signals in memory
 
-    private priceUpdateInterval?: NodeJS.Timeout;
+    private readonly priceUpdateInterval?: NodeJS.Timeout;
 
     constructor(
         private readonly logger: ILogger,

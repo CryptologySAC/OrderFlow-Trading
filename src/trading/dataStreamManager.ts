@@ -67,20 +67,22 @@ interface StreamHealth {
  * Enhanced DataStreamManager with robust reconnection logic
  */
 export class DataStreamManager extends EventEmitter {
-    private connection?: SpotWebsocketStreams.WebsocketStreamsConnection;
-    private tradeStream?: BinanceAggTradeStream;
-    private depthStream?: BinanceDiffBookDepthStream;
+    private connection?:
+        | SpotWebsocketStreams.WebsocketStreamsConnection
+        | undefined;
+    private tradeStream?: BinanceAggTradeStream | undefined;
+    private depthStream?: BinanceDiffBookDepthStream | undefined;
 
     // Enhanced state management
     private connectionState = ConnectionState.DISCONNECTED;
     private reconnectAttempts = 0n;
-    private connectedAt?: number;
+    private connectedAt?: number | undefined;
     private lastReconnectAttempt = 0;
 
     // Timers
-    private heartbeatTimer?: NodeJS.Timeout;
-    private reconnectTimer?: NodeJS.Timeout;
-    private healthCheckTimer?: NodeJS.Timeout;
+    private heartbeatTimer?: NodeJS.Timeout | undefined;
+    private reconnectTimer?: NodeJS.Timeout | undefined;
+    private healthCheckTimer?: NodeJS.Timeout | undefined;
 
     // Configuration
     private readonly reconnectDelay: number;
@@ -103,7 +105,7 @@ export class DataStreamManager extends EventEmitter {
     };
 
     // API Connectivity Monitor
-    private connectivityMonitor: ApiConnectivityMonitor;
+    private readonly connectivityMonitor: ApiConnectivityMonitor;
 
     constructor(
         private readonly config: DataStreamConfig,
@@ -474,7 +476,7 @@ export class DataStreamManager extends EventEmitter {
         // Clear any existing reconnect timer
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
-            delete this.reconnectTimer;
+            this.reconnectTimer = undefined;
         }
 
         // Check if we've exceeded max attempts
@@ -627,7 +629,7 @@ export class DataStreamManager extends EventEmitter {
     private stopHeartbeat(): void {
         if (this.heartbeatTimer) {
             clearInterval(this.heartbeatTimer);
-            delete this.heartbeatTimer;
+            this.heartbeatTimer = undefined;
         }
     }
 
@@ -641,7 +643,7 @@ export class DataStreamManager extends EventEmitter {
     private stopStreamHealthCheck(): void {
         if (this.healthCheckTimer) {
             clearInterval(this.healthCheckTimer);
-            delete this.healthCheckTimer;
+            this.healthCheckTimer = undefined;
         }
     }
 
@@ -683,7 +685,7 @@ export class DataStreamManager extends EventEmitter {
 
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
-            delete this.reconnectTimer;
+            this.reconnectTimer = undefined;
         }
     }
 
@@ -712,12 +714,12 @@ export class DataStreamManager extends EventEmitter {
             // Clean up streams
             if (this.tradeStream) {
                 this.tradeStream.removeAllListeners?.();
-                delete this.tradeStream;
+                this.tradeStream = undefined;
             }
 
             if (this.depthStream) {
                 this.depthStream.removeAllListeners?.();
-                delete this.depthStream;
+                this.depthStream = undefined;
             }
 
             // Clean up connection
@@ -751,10 +753,10 @@ export class DataStreamManager extends EventEmitter {
                         correlationId
                     );
                 }
-                delete this.connection;
+                this.connection = undefined;
             }
 
-            delete this.connectedAt;
+            this.connectedAt = undefined;
         } catch (error) {
             this.logger.error(
                 "Error during connection cleanup",

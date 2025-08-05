@@ -5,7 +5,7 @@ import { ILogger } from "../infrastructure/loggerInterface.js";
  * WorkerLogger that delegates logging to a worker thread
  */
 export class WorkerLogger implements ILogger {
-    private workerCorrelationContext = new Map<string, string>();
+    private readonly workerCorrelationContext = new Map<string, string>();
 
     constructor(
         private readonly manager: ThreadManager,

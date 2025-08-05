@@ -96,7 +96,7 @@ export class OrderflowPreprocessor
     private readonly significantChangeThreshold: number;
 
     // Dashboard update state
-    private dashboardUpdateTimer?: NodeJS.Timeout;
+    private dashboardUpdateTimer?: NodeJS.Timeout | undefined;
     private lastDashboardUpdate = 0;
     private lastDashboardMidPrice = 0;
 
@@ -616,7 +616,7 @@ export class OrderflowPreprocessor
     public shutdown(): void {
         if (this.dashboardUpdateTimer) {
             clearInterval(this.dashboardUpdateTimer);
-            delete this.dashboardUpdateTimer;
+            this.dashboardUpdateTimer = undefined;
             this.logger.info("[OrderflowPreprocessor] Dashboard timer cleared");
         }
     }

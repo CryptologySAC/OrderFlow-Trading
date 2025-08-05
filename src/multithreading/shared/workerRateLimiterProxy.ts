@@ -8,7 +8,7 @@ import type { IWorkerRateLimiter } from "./workerInterfaces.js";
  */
 export class WorkerRateLimiterProxy implements IWorkerRateLimiter {
     private globalRequests: number[] = [];
-    private clientRequests = new Map<string, number[]>();
+    private readonly clientRequests = new Map<string, number[]>();
     private readonly windowMs: number;
     private readonly maxRequests: number;
     private readonly MAX_REQUESTS_HISTORY = 10000; // Memory leak prevention

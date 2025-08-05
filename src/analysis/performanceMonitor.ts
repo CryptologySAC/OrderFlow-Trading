@@ -89,21 +89,21 @@ export class PerformanceMonitor extends EventEmitter {
     private readonly config: Required<PerformanceMonitorConfig>;
 
     // Monitoring intervals
-    private performanceAnalysisInterval?: NodeJS.Timeout;
-    private quickCheckInterval?: NodeJS.Timeout;
-    private healthCheckInterval?: NodeJS.Timeout;
-    private reportGenerationInterval?: NodeJS.Timeout;
+    private performanceAnalysisInterval?: NodeJS.Timeout | undefined;
+    private quickCheckInterval?: NodeJS.Timeout | undefined;
+    private healthCheckInterval?: NodeJS.Timeout | undefined;
+    private reportGenerationInterval?: NodeJS.Timeout | undefined;
 
     // State tracking
-    private activeAlerts = new Map<string, PerformanceAlert>();
-    private alertHistory: PerformanceAlert[] = [];
+    private readonly activeAlerts = new Map<string, PerformanceAlert>();
+    private readonly alertHistory: PerformanceAlert[] = [];
     private lastPerformanceReport?: PerformanceReport;
     private lastFailurePatterns?: FailurePatterns;
     private recentTrends: PerformanceTrend[] = [];
     private systemHealth: SystemHealthStatus;
 
     // Alert cooldowns
-    private alertCooldowns = new Map<string, number>();
+    private readonly alertCooldowns = new Map<string, number>();
 
     constructor(
         private readonly signalTracker: SignalTracker,
@@ -196,19 +196,19 @@ export class PerformanceMonitor extends EventEmitter {
 
         if (this.performanceAnalysisInterval) {
             clearInterval(this.performanceAnalysisInterval);
-            delete this.performanceAnalysisInterval;
+            this.performanceAnalysisInterval = undefined;
         }
         if (this.quickCheckInterval) {
             clearInterval(this.quickCheckInterval);
-            delete this.quickCheckInterval;
+            this.quickCheckInterval = undefined;
         }
         if (this.healthCheckInterval) {
             clearInterval(this.healthCheckInterval);
-            delete this.healthCheckInterval;
+            this.healthCheckInterval = undefined;
         }
         if (this.reportGenerationInterval) {
             clearInterval(this.reportGenerationInterval);
-            delete this.reportGenerationInterval;
+            this.reportGenerationInterval = undefined;
         }
 
         this.emit("monitoringStopped");

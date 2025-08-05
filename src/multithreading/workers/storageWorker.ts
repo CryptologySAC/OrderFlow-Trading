@@ -56,7 +56,7 @@ const logger = new WorkerProxyLogger("storage");
 const metrics: IWorkerMetricsCollector = new WorkerMetricsProxy("storage");
 
 // Enhanced monitoring
-let workerStartTime = Date.now();
+const workerStartTime = Date.now();
 let totalOperationsProcessed = 0;
 let totalErrorCount = 0;
 

@@ -103,13 +103,13 @@ export class MarketContextCollector extends EventEmitter {
 
     // Current market state
     private currentPrice = 0;
-    private currentBidPrice = 0;
-    private currentAskPrice = 0;
-    private currentBidDepth = 0;
-    private currentAskDepth = 0;
+    private readonly currentBidPrice = 0;
+    private readonly currentAskPrice = 0;
+    private readonly currentBidDepth = 0;
+    private readonly currentAskDepth = 0;
 
     // Support/Resistance tracking
-    private supportResistanceLevels: SupportResistanceLevel[] = [];
+    private readonly supportResistanceLevels: SupportResistanceLevel[] = [];
 
     // Market regime tracking
     private currentRegime: MarketRegime = {

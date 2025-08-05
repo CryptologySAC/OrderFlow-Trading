@@ -77,15 +77,15 @@ export class OrderBookState implements IOrderBookState {
     private snapshotBuffer: SpotWebsocketStreams.DiffBookDepthResponse[] = [];
     private expectedUpdateId?: number;
 
-    private pruneIntervalMs = 30000; // 30 seconds
-    private pruneTimer?: NodeJS.Timeout;
+    private readonly pruneIntervalMs: number = 30000; // 30 seconds
+    private pruneTimer?: NodeJS.Timeout | undefined;
     private lastUpdateTime = Date.now();
 
-    private maxLevels: number = 1000;
-    private maxPriceDistance: number = 0.1; // 10% max price distance for levels
+    private readonly maxLevels: number = 1000;
+    private readonly maxPriceDistance: number = 0.1; // 10% max price distance for levels
     private readonly disableSequenceValidation: boolean;
 
-    private book: SnapShot = new Map();
+    private readonly book: SnapShot = new Map();
     private readonly pricePrecision: number;
     private readonly symbol: string;
 
@@ -96,8 +96,8 @@ export class OrderBookState implements IOrderBookState {
 
     // Circuitbreaker
     private errorWindow: number[] = [];
-    private maxErrorRate: number = 10; // errors per minute
-    private errorWindowMs: number = 60000;
+    private readonly maxErrorRate: number = 10; // errors per minute
+    private readonly errorWindowMs: number = 60000;
     private circuitOpen: boolean = false;
     private circuitOpenUntil: number = 0;
 
@@ -810,7 +810,7 @@ export class OrderBookState implements IOrderBookState {
         // Stop timers
         if (this.pruneTimer) {
             clearInterval(this.pruneTimer);
-            delete this.pruneTimer;
+            this.pruneTimer = undefined;
         }
 
         // Save state

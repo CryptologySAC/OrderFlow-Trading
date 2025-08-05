@@ -142,21 +142,21 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     private lastTradeMonotonicTime = process.hrtime.bigint();
 
     // ✅ DUPLICATE DETECTION: Track processed trade IDs to prevent duplicates during reconnections
-    private processedTradeIds: CircularBuffer<{
+    private readonly processedTradeIds: CircularBuffer<{
         id: number;
         timestamp: number;
     }>;
     private readonly maxTradeIdCacheSize: number;
     private readonly tradeIdCleanupInterval: number;
-    private tradeIdCleanupTimer?: NodeJS.Timeout;
-    private tradeBufferCleanupTimer?: NodeJS.Timeout;
+    private tradeIdCleanupTimer?: NodeJS.Timeout | undefined;
+    private tradeBufferCleanupTimer?: NodeJS.Timeout | undefined;
 
     // Memory cache for recent trades
-    private recentTrades: CircularBuffer<PlotTrade>;
+    private readonly recentTrades: CircularBuffer<PlotTrade>;
 
     // Async save queue
     private saveQueue: SaveQueueItem[] = [];
-    private saveTimer?: NodeJS.Timeout;
+    private saveTimer?: NodeJS.Timeout | undefined;
     private isSaving = false;
 
     // Performance tracking
@@ -164,12 +164,12 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     private savedCount = 0;
     private failedSaves = 0;
     private duplicatesDetected = 0;
-    private processingTimes: CircularBuffer<number>;
-    private errorWindow: CircularBuffer<number>;
+    private readonly processingTimes: CircularBuffer<number>;
+    private readonly errorWindow: CircularBuffer<number>;
     private readonly maxErrorWindowSize: number;
 
     // Health monitoring
-    private healthCheckTimer?: NodeJS.Timeout;
+    private healthCheckTimer?: NodeJS.Timeout | undefined;
     private isStreamConnected = true;
 
     constructor(
@@ -1020,19 +1020,19 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         // ✅ RESOURCE CLEANUP FIX: Properly clear and nullify timers
         if (this.saveTimer) {
             clearInterval(this.saveTimer);
-            delete this.saveTimer;
+            this.saveTimer = undefined;
         }
         if (this.healthCheckTimer) {
             clearInterval(this.healthCheckTimer);
-            delete this.healthCheckTimer;
+            this.healthCheckTimer = undefined;
         }
         if (this.tradeIdCleanupTimer) {
             clearInterval(this.tradeIdCleanupTimer);
-            delete this.tradeIdCleanupTimer;
+            this.tradeIdCleanupTimer = undefined;
         }
         if (this.tradeBufferCleanupTimer) {
             clearInterval(this.tradeBufferCleanupTimer);
-            delete this.tradeBufferCleanupTimer;
+            this.tradeBufferCleanupTimer = undefined;
         }
 
         // ✅ RESOURCE CLEANUP FIX: Remove all EventEmitter listeners to prevent memory leaks

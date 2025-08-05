@@ -76,21 +76,21 @@ export class ApiConnectivityMonitor extends EventEmitter {
     private readonly config: ApiConnectivityConfig;
 
     // Stream tracking
-    private tradeStreamStatus: StreamStatus;
-    private depthStreamStatus: StreamStatus;
+    private readonly tradeStreamStatus: StreamStatus;
+    private readonly depthStreamStatus: StreamStatus;
     private webSocketConnected = false;
 
     // Sync tracking
     private lastTradeTimestamp = 0;
     private lastDepthTimestamp = 0;
-    private syncHistory: Array<{
+    private readonly syncHistory: Array<{
         time: number;
         tradeLag: number;
         depthLag: number;
     }> = [];
 
     // Issue tracking
-    private recentIssues = new Map<ConnectivityIssueType, number>();
+    private readonly recentIssues = new Map<ConnectivityIssueType, number>();
     private currentStatus: ConnectivityStatus;
 
     // Timers

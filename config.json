@@ -16,20 +16,20 @@
     "alertCooldownMs": 300000,
     "maxStorageTime": 5400000,
     "dataStream": {
-        "reconnectDelay": 1000,
-        "maxReconnectAttempts": 5,
+        "reconnectDelay": 5000,
+        "maxReconnectAttempts": 15,
         "depthUpdateSpeed": "100ms",
         "enableHeartbeat": true,
         "heartbeatInterval": 30000,
-        "maxBackoffDelay": 30000,
-        "streamHealthTimeout": 10000,
+        "maxBackoffDelay": 300000,
+        "streamHealthTimeout": 60000,
         "enableStreamHealthCheck": true,
         "reconnectOnHealthFailure": true,
-        "enableHardReload": false,
-        "hardReloadAfterAttempts": 3,
+        "enableHardReload": true,
+        "hardReloadAfterAttempts": 10,
         "hardReloadCooldownMs": 60000,
-        "maxHardReloads": 2,
-        "hardReloadRestartCommand": "pm2 restart orderflow"
+        "maxHardReloads": 5,
+        "hardReloadRestartCommand": "pm2 restart app"
     },
     "marketDataStorage": {
         "enabled": false,

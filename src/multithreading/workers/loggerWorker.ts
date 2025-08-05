@@ -27,8 +27,8 @@ if (!parentPort) {
  * Simple Logger implementation for use within the logger worker
  */
 class Logger implements ILogger {
-    private correlationContext = new Map<string, string>();
-    private pretty: boolean;
+    private readonly correlationContext = new Map<string, string>();
+    private readonly pretty: boolean;
 
     constructor(pretty = false) {
         this.pretty = pretty;
@@ -124,7 +124,7 @@ class Logger implements ILogger {
 
 class SignalLogger implements ISignalLogger {
     private readonly logger: Logger | null;
-    private file: string;
+    private readonly file: string;
     private headerWritten = false;
 
     constructor(filename: string, logger: Logger) {

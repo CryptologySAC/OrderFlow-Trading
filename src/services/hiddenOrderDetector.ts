@@ -91,7 +91,7 @@ export interface HiddenOrderEvent {
  * Hidden order detection using order book depth vs execution volume analysis
  */
 export class HiddenOrderDetector extends Detector {
-    private config: HiddenOrderDetectorConfig;
+    private readonly config: HiddenOrderDetectorConfig;
     private anomalyDetector?: AnomalyDetector;
 
     // Recent hidden order events

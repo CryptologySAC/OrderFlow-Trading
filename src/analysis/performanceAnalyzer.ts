@@ -247,7 +247,7 @@ export class PerformanceAnalyzer {
     private readonly config: Required<PerformanceAnalyzerConfig>;
 
     // Analysis cache
-    private analysisCache = new Map<
+    private readonly analysisCache = new Map<
         string,
         {
             result: unknown;

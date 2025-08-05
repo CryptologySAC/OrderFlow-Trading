@@ -130,7 +130,8 @@ export class OrderFlowDashboard {
     private readonly purgeIntervalMs = 10 * 60 * 1000; // 10 minutes
     private purgeIntervalId?: NodeJS.Timeout;
     // StatsBroadcaster handled by communication worker
-    private broadcastMessage: (msg: WebSocketMessage) => void = () => {};
+    private readonly broadcastMessage: (msg: WebSocketMessage) => void =
+        () => {};
     private lastTradePrice = 0; // Track last trade price for anomaly context
 
     public static async create(
@@ -1961,9 +1962,9 @@ export class OrderFlowDashboard {
 
             // Get current zone information from preprocessor if available
             let activeZones = 0;
-            let completedZones = 0;
+            const completedZones = 0;
             let avgZoneStrength = 0;
-            let avgZoneDuration = 5000; // Default 5 second duration
+            const avgZoneDuration = 5000; // Default 5 second duration
 
             // Basic zone type tracking based on active Enhanced detectors
             const zonesByType: Record<string, number> = {

@@ -294,7 +294,6 @@ describe("DeltaCVDDetectorEnhanced - Standalone Architecture", () => {
 
         enhancedDetector = new DeltaCVDDetectorEnhanced(
             "test-deltacvd-enhanced",
-            "LTCUSDT",
             mockDeltaCVDConfig,
             mockPreprocessor,
             mockLogger,
@@ -343,7 +342,6 @@ describe("DeltaCVDDetectorEnhanced - Standalone Architecture", () => {
             expect(() => {
                 new DeltaCVDDetectorEnhanced(
                     "test-validated-config",
-                    "LTCUSDT",
                     mockDeltaCVDConfig, // Pre-validated settings should work
                     mockPreprocessor,
                     mockLogger,
@@ -381,7 +379,6 @@ describe("DeltaCVDDetectorEnhanced - Standalone Architecture", () => {
             expect(() => {
                 new DeltaCVDDetectorEnhanced(
                     "test-complete",
-                    "LTCUSDT",
                     mockDeltaCVDConfig, // Complete validated configuration
                     mockPreprocessor,
                     mockLogger,
@@ -414,7 +411,6 @@ describe("DeltaCVDDetectorEnhanced - Standalone Architecture", () => {
             expect(() => {
                 new DeltaCVDDetectorEnhanced(
                     "test-valid",
-                    "LTCUSDT",
                     mockDeltaCVDConfig, // Known valid configuration
                     mockPreprocessor,
                     mockLogger,

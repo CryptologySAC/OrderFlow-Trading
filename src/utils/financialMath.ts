@@ -46,7 +46,7 @@ export class FinancialMath {
     ): number {
         const bidInt = this.priceToInt(bid);
         const askInt = this.priceToInt(ask);
-        const midInt = (bidInt + askInt) / 2n;
+        const midInt = (bidInt + askInt) / BigInt(2);
         const result = this.intToPrice(midInt);
 
         // Apply precision rounding as final step
@@ -225,7 +225,7 @@ export class FinancialMath {
         }
 
         // Use BigInt arithmetic to avoid floating-point precision loss
-        let sum = 0n;
+        let sum: bigint = BigInt(0);
         for (const value of validValues) {
             sum += BigInt(Math.round(value * this.QUANTITY_SCALE));
         }
@@ -373,7 +373,7 @@ export class FinancialMath {
             );
 
             // Additional check for BigInt zero division
-            if (denInt === 0n) {
+            if (denInt === BigInt(0)) {
                 return defaultValue;
             }
 

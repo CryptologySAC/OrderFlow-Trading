@@ -11,6 +11,8 @@ import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor
 import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
+import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
+import type { ISignalLogger } from "../src/infrastructure/signalLoggerInterface.js";
 
 // Import mock config for complete settings
 import mockConfig from "../__mocks__/config.json";
@@ -20,6 +22,7 @@ describe("Threshold Configuration Chain", () => {
     let mockMetrics: IMetricsCollector;
     let mockOrderBook: IOrderBookState;
     let mockSpoofingDetector: SpoofingDetector;
+    let mockSignalLogger: ISignalLogger;
 
     const mockPreprocessor: IOrderflowPreprocessor = {
         handleDepth: vi.fn(),
@@ -52,6 +55,7 @@ describe("Threshold Configuration Chain", () => {
             "../__mocks__/src/infrastructure/metricsCollector.js"
         );
         mockMetrics = new MockMetricsCollector() as any;
+        mockSignalLogger = createMockSignalLogger();
         mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
         mockOrderBook = {
@@ -83,12 +87,12 @@ describe("Threshold Configuration Chain", () => {
 
             const detector = new AbsorptionDetectorEnhanced(
                 "test-absorption",
-                "LTCUSDT",
                 completeConfig,
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Enhanced detector uses configuration values directly, no internal defaults
@@ -107,12 +111,12 @@ describe("Threshold Configuration Chain", () => {
 
             const detector = new AbsorptionDetectorEnhanced(
                 "test-absorption",
-                "LTCUSDT",
                 completeConfig,
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Enhanced detector uses configuration values directly
@@ -133,12 +137,12 @@ describe("Threshold Configuration Chain", () => {
 
             const detector = new AbsorptionDetectorEnhanced(
                 "test-absorption",
-                "LTCUSDT",
                 completeConfig,
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Enhanced detector uses standalone configuration-driven analysis
@@ -178,22 +182,22 @@ describe("Threshold Configuration Chain", () => {
 
             const detector1 = new AbsorptionDetectorEnhanced(
                 "test-absorption-1",
-                "LTCUSDT",
                 config1,
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             const detector2 = new AbsorptionDetectorEnhanced(
                 "test-absorption-2",
-                "LTCUSDT",
                 config2,
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             expect(detector1).toBeDefined();
@@ -333,12 +337,12 @@ describe("Threshold Configuration Chain", () => {
 
             const detector = new AbsorptionDetectorEnhanced(
                 "integration-test",
-                "LTCUSDT",
                 absorptionSettings,
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Verify detector was created successfully with complete configuration
@@ -381,12 +385,12 @@ describe("Threshold Configuration Chain", () => {
             expect(() => {
                 new AbsorptionDetectorEnhanced(
                     "test-valid",
-                    "LTCUSDT",
                     validConfig,
                     mockPreprocessor,
                     mockLogger,
                     mockMetrics,
-                    mockSignalValidationLogger
+                    mockSignalValidationLogger,
+                    mockSignalLogger
                 );
             }).not.toThrow(); // Should succeed with valid pre-validated configuration
         });
@@ -404,12 +408,12 @@ describe("Threshold Configuration Chain", () => {
 
             const absorptionDetector = new AbsorptionDetectorEnhanced(
                 "config-test-absorption",
-                "LTCUSDT",
                 configValues,
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             const exhaustionDetector = new ExhaustionDetectorEnhanced(
@@ -444,12 +448,12 @@ describe("Threshold Configuration Chain", () => {
             expect(() => {
                 new AbsorptionDetectorEnhanced(
                     "edge-case-absorption",
-                    "LTCUSDT",
                     edgeCaseSettings,
                     mockPreprocessor,
                     mockLogger,
                     mockMetrics,
-                    mockSignalValidationLogger
+                    mockSignalValidationLogger,
+                    mockSignalLogger
                 );
             }).not.toThrow();
 

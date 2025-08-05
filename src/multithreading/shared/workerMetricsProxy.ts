@@ -29,11 +29,11 @@ export class WorkerMetricsProxy implements IWorkerMetricsCollector {
     private readonly MAX_METRICS = 10000;
     private readonly CLEANUP_INTERVAL = 300000; // 5 minutes
     private lastCleanup = Date.now();
-    private cleanupTimer?: NodeJS.Timeout;
+    private readonly cleanupTimer?: NodeJS.Timeout;
 
     // Batching for performance
     private batchBuffer: MetricUpdate[] = [];
-    private batchTimer?: NodeJS.Timeout;
+    private batchTimer?: NodeJS.Timeout | undefined;
     private readonly batchIntervalMs = 100; // 100ms batching to reduce IPC overhead
 
     constructor(workerName: string) {
@@ -248,7 +248,7 @@ export class WorkerMetricsProxy implements IWorkerMetricsCollector {
             this.batchBuffer = [];
         }
 
-        delete this.batchTimer;
+        this.batchTimer = undefined;
         this.lastRateCalculation = Date.now();
     }
 

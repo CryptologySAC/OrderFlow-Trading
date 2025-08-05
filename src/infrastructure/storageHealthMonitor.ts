@@ -58,18 +58,18 @@ export interface HealthCheckConfig {
  * Implements circuit breaker pattern and automatic recovery
  */
 export class StorageHealthMonitor extends EventEmitter {
-    private db: Database;
-    private config: HealthCheckConfig;
-    private metrics: HealthMetrics;
-    private healthCheckTimer?: NodeJS.Timeout;
+    private readonly db: Database;
+    private readonly config: HealthCheckConfig;
+    private readonly metrics: HealthMetrics;
+    private healthCheckTimer?: NodeJS.Timeout | undefined;
     private isMonitoring = false;
-    private operationHistory: {
+    private readonly operationHistory: {
         timestamp: number;
         duration: number;
         success: boolean;
     }[] = [];
     private readonly historyLimit = 100;
-    private logger: ILogger;
+    private readonly logger: ILogger;
 
     constructor(
         db: Database,
@@ -140,7 +140,7 @@ export class StorageHealthMonitor extends EventEmitter {
         this.isMonitoring = false;
         if (this.healthCheckTimer) {
             clearTimeout(this.healthCheckTimer);
-            delete this.healthCheckTimer;
+            this.healthCheckTimer = undefined;
         }
         this.emit("monitoring_stopped");
         this.log("info", "Storage health monitoring stopped");

@@ -4,8 +4,8 @@
  * Rate limiter for API protection
  */
 export class RateLimiter {
-    private requests = new Map<string, number[]>();
-    private cleanupInterval: NodeJS.Timeout;
+    private readonly requests = new Map<string, number[]>();
+    private readonly cleanupInterval: NodeJS.Timeout;
 
     constructor(
         private readonly windowMs: number = 60000,

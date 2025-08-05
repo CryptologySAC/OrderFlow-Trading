@@ -95,13 +95,13 @@ export interface SpoofingZone {
 }
 
 export class SpoofingDetector extends EventEmitter {
-    private passiveChangeHistory: TimeAwareCache<
+    private readonly passiveChangeHistory: TimeAwareCache<
         number,
         { time: number; bid: number; ask: number }[]
     >;
 
     // Enhanced tracking for real spoofing detection
-    private orderPlacementHistory: TimeAwareCache<
+    private readonly orderPlacementHistory: TimeAwareCache<
         number,
         {
             time: number;
@@ -111,7 +111,7 @@ export class SpoofingDetector extends EventEmitter {
         }[]
     >;
 
-    private cancellationPatterns: TimeAwareCache<
+    private readonly cancellationPatterns: TimeAwareCache<
         string,
         {
             placementTime: number;
@@ -122,8 +122,8 @@ export class SpoofingDetector extends EventEmitter {
         }
     >;
 
-    private config: SpoofingDetectorConfig;
-    private logger: ILogger;
+    private readonly config: SpoofingDetectorConfig;
+    private readonly logger: ILogger;
     private anomalyDetector?: AnomalyDetector;
 
     constructor(config: SpoofingDetectorConfig, logger: ILogger) {

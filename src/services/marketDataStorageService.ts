@@ -35,7 +35,7 @@ export class MarketDataStorageService {
     private readonly logger: ILogger;
     private readonly collector!: MarketDataCollector;
 
-    private monitoringTimer?: NodeJS.Timeout;
+    private monitoringTimer?: NodeJS.Timeout | undefined;
     private isRunning = false;
 
     constructor(config: DataStorageConfig, logger: ILogger) {
@@ -310,7 +310,7 @@ export class MarketDataStorageService {
     private stopMonitoring(): void {
         if (this.monitoringTimer) {
             clearInterval(this.monitoringTimer);
-            delete this.monitoringTimer;
+            this.monitoringTimer = undefined;
         }
     }
 

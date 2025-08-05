@@ -90,11 +90,11 @@ interface IcebergPattern {
  * Simple iceberg order detection using exact-size pattern matching
  */
 export class SimpleIcebergDetector extends Detector {
-    private config: SimpleIcebergConfig;
+    private readonly config: SimpleIcebergConfig;
     private anomalyDetector?: AnomalyDetector;
 
     // Single pattern tracking with unique keys: "type_side_exactValue"
-    private activePatterns = new Map<string, IcebergPattern>();
+    private readonly activePatterns = new Map<string, IcebergPattern>();
 
     // Completed icebergs for monitoring
     private completedIcebergs: SimpleIcebergEvent[] = [];
@@ -408,7 +408,7 @@ export class SimpleIcebergDetector extends Detector {
             now - Config.getTimeWindow(this.config.timeWindowIndex);
 
         // Filter by time window
-        let validTrades = trades.filter(
+        const validTrades = trades.filter(
             (trade) => trade.timestamp >= windowStart
         );
 

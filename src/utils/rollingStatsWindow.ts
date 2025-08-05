@@ -1,7 +1,7 @@
 import { FinancialMath } from "./financialMath.js";
 
 export class RollingStatsWindow {
-    private entries: { value: number; time: number }[] = [];
+    private readonly entries: { value: number; time: number }[] = [];
     private sum = 0;
     private sumSquares = 0;
 

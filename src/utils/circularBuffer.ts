@@ -10,7 +10,7 @@ export class CircularBuffer<T> implements Iterable<T> {
     private readonly cleanupCallback: (item: T) => void;
 
     constructor(
-        private capacity: number,
+        private readonly capacity: number,
         cleanupCallback: (item: T) => void = () => {} // Default no-op cleanup
     ) {
         this.buffer = new Array(capacity) as T[];
@@ -38,7 +38,7 @@ export class CircularBuffer<T> implements Iterable<T> {
     getAll(): T[] {
         if (this.size === 0) return [];
         const result: T[] = [];
-        let start = this.size < this.capacity ? 0 : this.head;
+        const start = this.size < this.capacity ? 0 : this.head;
         for (let i = 0; i < this.size; i++) {
             const index = (start + i) % this.capacity;
             if (index > 0 && index < this.capacity) {
@@ -81,7 +81,7 @@ export class CircularBuffer<T> implements Iterable<T> {
      */
     at(index: number): T | undefined {
         if (index < 0 || index >= this.size) return undefined;
-        let start = this.size < this.capacity ? 0 : this.head;
+        const start = this.size < this.capacity ? 0 : this.head;
         return this.buffer[(start + index) % this.capacity];
     }
 

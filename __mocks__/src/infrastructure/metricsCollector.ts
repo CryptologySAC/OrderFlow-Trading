@@ -46,6 +46,16 @@ export class MetricsCollector {
     getMetricNames = vi.fn().mockReturnValue([]);
     deleteMetric = vi.fn();
 
+    // Missing methods from IMetricsCollector interface
+    decrementCounter = vi.fn();
+    getCounterRate = vi.fn().mockReturnValue(0);
+    getAverageLatency = vi.fn().mockReturnValue(0);
+    getLatencyPercentiles = vi.fn().mockReturnValue({ p50: 0, p95: 0, p99: 0 });
+    exportPrometheus = vi.fn().mockReturnValue("");
+    exportJSON = vi.fn().mockReturnValue("{}");
+    reset = vi.fn();
+    cleanup = vi.fn();
+
     // Health monitoring methods
     getHealthStatus = vi.fn().mockReturnValue("healthy");
     getCriticalMetrics = vi.fn().mockReturnValue([]);

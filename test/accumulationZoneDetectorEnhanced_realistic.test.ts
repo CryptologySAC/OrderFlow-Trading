@@ -42,6 +42,8 @@ const ACCUMULATION_BUY_RATIO = 0.65; // 65%+ buy ratio = accumulation per market
 // Real market configuration
 const REAL_ACCUMULATION_CONFIG = {
     useStandardizedZones: true,
+    enhancementMode: "production" as const,
+    eventCooldownMs: 15000, // Required parameter
     confidenceThreshold: 0.4, // Real config.json value
     confluenceMinZones: 1,
     confluenceMaxDistance: 0.1, // 10-cent confluence range
@@ -66,7 +68,6 @@ const REAL_ACCUMULATION_CONFIG = {
     enableZoneConfluenceFilter: true,
     enableBuyingPressureAnalysis: true,
     enableCrossTimeframeAnalysis: true,
-    enhancementMode: "production" as const,
 };
 
 // Mock implementations - simplified
@@ -164,19 +165,25 @@ describe("AccumulationZoneDetectorEnhanced - Realistic Market Scenarios", () => 
     let mockPreprocessor: IOrderflowPreprocessor;
     let emittedEvents: Array<{ event: string; data: any }>;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         mockLogger = createMockLogger();
         mockMetrics = createMockMetrics();
         mockPreprocessor = createMockPreprocessor();
         emittedEvents = [];
 
+        // Import and create mockSignalLogger
+        const { createMockSignalLogger } = await import(
+            "../__mocks__/src/infrastructure/signalLoggerInterface.js"
+        );
+        const mockSignalLogger = createMockSignalLogger();
+
         detector = new AccumulationZoneDetectorEnhanced(
             "realistic-accumulation",
-            "LTCUSDT",
             REAL_ACCUMULATION_CONFIG,
             mockPreprocessor,
             mockLogger,
-            mockMetrics
+            mockMetrics,
+            mockSignalLogger
         );
 
         // Capture emitted events

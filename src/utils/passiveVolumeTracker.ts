@@ -6,17 +6,19 @@ import { FinancialMath } from "./financialMath.js";
  * Tracks passive orderbook volume over time for refill logic.
  */
 export class PassiveVolumeTracker {
-    private passiveVolumeHistory = new TimeAwareCache<
+    private readonly passiveVolumeHistory = new TimeAwareCache<
         number,
         { time: number; bid: number; ask: number }[]
     >(900000); // 15 minutes TTL
-    private lastSeenPassive = new TimeAwareCache<number, DepthLevel>(300000); // 5 minutes TTL
+    private readonly lastSeenPassive = new TimeAwareCache<number, DepthLevel>(
+        300000
+    ); // 5 minutes TTL
 
     /**
      * Update historical passive volume at price level.
      */
     updatePassiveVolume(price: number, bid: number, ask: number): void {
-        let history = this.passiveVolumeHistory.get(price) || [];
+        const history = this.passiveVolumeHistory.get(price) || [];
         history.push({ time: Date.now(), bid, ask });
         if (history.length > 30) {
             history.shift(); // Remove oldest item instead of creating new array

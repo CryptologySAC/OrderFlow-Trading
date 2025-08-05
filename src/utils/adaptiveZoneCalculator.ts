@@ -4,7 +4,7 @@ import { FinancialMath } from "./financialMath.js";
  * Adaptive zone size calculation (ATR-based).
  */
 export class AdaptiveZoneCalculator {
-    private priceWindow: number[] = [];
+    private readonly priceWindow: number[] = [];
     private rollingATR = 0;
     private readonly atrLookback: number;
 

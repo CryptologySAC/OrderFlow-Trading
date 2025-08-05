@@ -242,10 +242,10 @@ export interface HealthSummary {
  */
 export class MetricsCollector implements IMetricsCollector {
     private metrics: Metrics;
-    private histograms = new Map<string, HistogramBucket>();
-    private gauges = new Map<string, GaugeMetric>();
-    private counters = new Map<string, CounterMetric>();
-    private metadata = new Map<string, MetricMetadata>();
+    private readonly histograms = new Map<string, HistogramBucket>();
+    private readonly gauges = new Map<string, GaugeMetric>();
+    private readonly counters = new Map<string, CounterMetric>();
+    private readonly metadata = new Map<string, MetricMetadata>();
     private startTime = Date.now();
     private lastRateCalculation = Date.now();
 

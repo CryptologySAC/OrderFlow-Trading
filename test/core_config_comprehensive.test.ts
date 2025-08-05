@@ -40,7 +40,7 @@ describe("Config.ts - Comprehensive Test Suite", () => {
             expect(Config.SYMBOL).toBe("LTCUSDT");
             expect(Config.HTTP_PORT).toBe(3000);
             expect(Config.WS_PORT).toBe(3001);
-            expect(Config.NODE_ENV).toBe("development");
+            expect(Config.NODE_ENV).toBe("production");
         });
 
         it("should calculate TICK_SIZE correctly based on PRICE_PRECISION", () => {
