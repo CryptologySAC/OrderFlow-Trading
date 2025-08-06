@@ -29,13 +29,15 @@ import type {
     StandardZoneData,
     ZoneSnapshot,
 } from "../types/marketEvents.js";
+import type { AbsorptionCalculatedValues } from "../types/calculatedValuesTypes.js";
 import type {
     SignalCandidate,
     EnhancedAbsorptionSignalData,
     SignalType,
 } from "../types/signalTypes.js";
 import { z } from "zod";
-import { AbsorptionDetectorSchema } from "../core/config.js";
+import { AbsorptionDetectorSchema, Config } from "../core/config.js";
+import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 
 /**
  * Enhanced configuration interface for absorption detection - ONLY absorption-specific parameters
@@ -83,7 +85,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
     private readonly enhancementStats: AbsorptionEnhancementStats;
     private readonly preprocessor: IOrderflowPreprocessor;
     private readonly validationLogger: SignalValidationLogger;
-    private readonly symbol: string;
     private readonly windowMs: number;
 
     // Signal cooldown tracking (CLAUDE.md compliance - no magic cooldown values)
@@ -100,35 +101,31 @@ export class AbsorptionDetectorEnhanced extends Detector {
 
     constructor(
         id: string,
-        symbol: string,
         settings: AbsorptionEnhancedSettings,
         preprocessor: IOrderflowPreprocessor,
         logger: ILogger,
-        metrics: IMetricsCollector
+        metrics: IMetricsCollector,
+        validationLogger: SignalValidationLogger,
+        signalLogger: ISignalLogger
     ) {
         // Settings are pre-validated by Config.ABSORPTION_DETECTOR getter
         // No validation needed here - trust that settings are correct
 
         // Initialize base detector directly (no legacy inheritance)
-        super(id, logger, metrics);
-
-        this.symbol = symbol;
+        super(id, logger, metrics, signalLogger);
 
         // Initialize enhancement configuration
         this.useStandardizedZones = settings.useStandardizedZones;
         this.enhancementConfig = settings;
         this.preprocessor = preprocessor;
-        this.windowMs = settings.windowMs;
+        this.windowMs = Config.getTimeWindow(settings.timeWindowIndex);
 
-        // Initialize signal validation logger
-        this.validationLogger = new SignalValidationLogger(
-            logger,
-            "logs/signal_validation"
-        );
+        // ✅ SHARED SIGNAL VALIDATION LOGGER: Use dependency-injected shared instance
+        this.validationLogger = validationLogger;
 
         // CLAUDE.md Compliance: Extract all configurable parameters (NO MAGIC NUMBERS)
-        this.confluenceMinZones = settings.liquidityGradientRange; // Use existing config parameter
-        this.confluenceMaxDistance = settings.liquidityGradientRange; // Use existing config parameter
+        this.confluenceMinZones = settings.confluenceMinZones; // Dedicated parameter for minimum confluence zones
+        this.confluenceMaxDistance = settings.confluenceMaxDistance; // Dedicated parameter for maximum confluence distance
         this.confluenceConfidenceBoost = settings.institutionalVolumeBoost;
         this.crossTimeframeConfidenceBoost =
             settings.contextConfidenceBoostMultiplier;
@@ -163,6 +160,8 @@ export class AbsorptionDetectorEnhanced extends Detector {
      * STANDALONE VERSION: Processes trades directly without legacy detector dependency
      */
     public onEnrichedTrade(event: EnrichedTradeEvent): void {
+        // Update current price for signal validation
+        this.validationLogger.updateCurrentPrice(event.price);
         // 🔍 DEBUG: Add comprehensive logging to diagnose signal issues
         const debugInfo = {
             useStandardizedZones: this.useStandardizedZones,
@@ -174,7 +173,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
             callCount: this.enhancementStats.callCount,
         };
 
-        this.logger.debug(
+        this.logger.info(
             "AbsorptionDetectorEnhanced: Processing trade",
             debugInfo
         );
@@ -185,7 +184,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
             this.enhancementConfig.enhancementMode === "disabled" ||
             !event.zoneData
         ) {
-            this.logger.warn(
+            this.logger.info(
                 "AbsorptionDetectorEnhanced: Skipping trade processing",
                 {
                     reason: !this.useStandardizedZones
@@ -259,7 +258,49 @@ export class AbsorptionDetectorEnhanced extends Detector {
      * STANDALONE VERSION: Complete absorption detection with enhancement analysis
      */
     private analyzeAbsorptionPattern(event: EnrichedTradeEvent): void {
-        if (!event.zoneData) return;
+        if (!event.zoneData) {
+            this.logSignalRejection(
+                event,
+                "no_zone_data",
+                {
+                    type: "zone_data_availability",
+                    threshold: 1,
+                    actual: 0,
+                },
+                {
+                    calculatedMinAggVolume: 0,
+                    calculatedTimeWindowIndex:
+                        this.enhancementConfig.timeWindowIndex,
+                    calculatedEventCooldownMs:
+                        Date.now() - (this.lastSignal.get("last") || 0),
+                    calculatedPriceEfficiencyThreshold: 0,
+                    calculatedMaxAbsorptionRatio: 0,
+                    calculatedMinPassiveMultiplier: 0,
+                    calculatedPassiveAbsorptionThreshold: 0,
+                    calculatedExpectedMovementScalingFactor: 0,
+                    calculatedContextConfidenceBoostMultiplier: 0,
+                    calculatedLiquidityGradientRange: 0,
+                    calculatedInstitutionalVolumeThreshold: 0,
+                    calculatedInstitutionalVolumeRatioThreshold: 0,
+                    calculatedEnableInstitutionalVolumeFilter:
+                        this.enhancementConfig.enableInstitutionalVolumeFilter,
+                    calculatedInstitutionalVolumeBoost: 0,
+                    calculatedMinAbsorptionScore: 0,
+                    calculatedFinalConfidenceRequired: 0,
+                    calculatedConfidenceBoostReduction: 0,
+                    calculatedMaxZoneCountForScoring: 0,
+                    calculatedMinEnhancedConfidenceThreshold: 0,
+                    calculatedUseStandardizedZones:
+                        this.enhancementConfig.useStandardizedZones,
+                    calculatedEnhancementMode:
+                        this.enhancementConfig.enhancementMode,
+                    calculatedBalanceThreshold: 0,
+                    calculatedConfluenceMinZones: 0,
+                    calculatedConfluenceMaxDistance: 0,
+                } as AbsorptionCalculatedValues
+            );
+            return;
+        }
 
         // STEP 1: CORE ABSORPTION DETECTION (Required for any signals)
         const coreAbsorptionResult = this.detectCoreAbsorption(event);
@@ -346,10 +387,15 @@ export class AbsorptionDetectorEnhanced extends Detector {
         }
 
         // Cross-timeframe absorption analysis (CLAUDE.md compliant)
-        const crossTimeframeResult = this.analyzeCrossTimeframeAbsorption(
-            event.zoneData,
-            event
-        );
+        const crossTimeframeResult: {
+            hasAlignment: boolean;
+            alignmentScore: number;
+            timeframeBreakdown: {
+                tick5: number;
+                tick10: number;
+                tick20: number;
+            };
+        } = this.analyzeCrossTimeframeAbsorption(event.zoneData, event);
         if (crossTimeframeResult.hasAlignment) {
             this.enhancementStats.crossTimeframeAnalysisCount++;
             totalConfidenceBoost += this.crossTimeframeConfidenceBoost;
@@ -412,6 +458,9 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 signalZones
             );
 
+            // Log successful signal parameters for 90-minute optimization
+            void this.logSuccessfulSignalParameters(enhancedSignal, event);
+
             this.emit("signalCandidate", enhancedSignal);
 
             this.logger.info(
@@ -448,6 +497,12 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 signalZones
             );
 
+            // Log successful signal parameters for 90-minute optimization
+            void this.logSuccessfulSignalParameters(
+                coreAbsorptionResult,
+                event
+            );
+
             this.emit("signalCandidate", coreAbsorptionResult);
 
             this.logger.info(
@@ -471,6 +526,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
      * Core absorption detection logic with FinancialMath compliance
      *
      * INSTITUTIONAL GRADE: Complete absorption detection using standardized zones
+     * ARCHITECTURAL PATTERN: Follows successful exhaustion detector restructuring
      */
     private detectCoreAbsorption(
         event: EnrichedTradeEvent
@@ -486,82 +542,175 @@ export class AbsorptionDetectorEnhanced extends Detector {
             }
         );
 
+        // EARLY VALIDATION: Only check for missing/malformed data - no signal validation logging
         if (!event.zoneData) {
-            this.logger.info(
-                "AbsorptionDetectorEnhanced: No zone data available",
-                {
-                    hasZoneData: !!event.zoneData,
-                    quantity: event.quantity,
-                }
+            this.logger.debug(
+                "AbsorptionDetectorEnhanced: No zone data available"
             );
             return null;
         }
 
-        // ARCHITECTURAL FIX: Remove individual trade filtering
-        // All trades contribute to volume accumulation analysis over time window
-        // Individual trade size filtering prevented detection of cumulative patterns
-
-        // Find relevant zones for this trade using FinancialMath distance calculations
-        const relevantZones = this.findRelevantZonesForTrade(event);
-        this.logger.info("AbsorptionDetectorEnhanced: Found relevant zones", {
-            relevantZoneCount: relevantZones.length,
-            totalZones: event.zoneData.zones.length,
-        });
-
-        if (relevantZones.length === 0) {
+        const allZones = [...event.zoneData.zones];
+        if (allZones.length === 0) {
+            this.logSignalRejection(
+                event,
+                "no_zones_available",
+                {
+                    type: "zones_count",
+                    threshold: 1,
+                    actual: 0,
+                },
+                {
+                    calculatedMinAggVolume: 0,
+                    calculatedTimeWindowIndex:
+                        this.enhancementConfig.timeWindowIndex,
+                    calculatedEventCooldownMs:
+                        Date.now() - (this.lastSignal.get("last") || 0),
+                    calculatedPriceEfficiencyThreshold: 0,
+                    calculatedMaxAbsorptionRatio: 0,
+                    calculatedMinPassiveMultiplier: 0,
+                    calculatedPassiveAbsorptionThreshold: 0,
+                    calculatedExpectedMovementScalingFactor: 0,
+                    calculatedContextConfidenceBoostMultiplier: 0,
+                    calculatedLiquidityGradientRange: 0,
+                    calculatedInstitutionalVolumeThreshold: 0,
+                    calculatedInstitutionalVolumeRatioThreshold: 0,
+                    calculatedEnableInstitutionalVolumeFilter:
+                        this.enhancementConfig.enableInstitutionalVolumeFilter,
+                    calculatedInstitutionalVolumeBoost: 0,
+                    calculatedMinAbsorptionScore: 0,
+                    calculatedFinalConfidenceRequired: 0,
+                    calculatedConfidenceBoostReduction: 0,
+                    calculatedMaxZoneCountForScoring: 0,
+                    calculatedMinEnhancedConfidenceThreshold: 0,
+                    calculatedUseStandardizedZones:
+                        this.enhancementConfig.useStandardizedZones,
+                    calculatedEnhancementMode:
+                        this.enhancementConfig.enhancementMode,
+                    calculatedBalanceThreshold: 0,
+                    calculatedConfluenceMinZones: 0,
+                    calculatedConfluenceMaxDistance: 0,
+                } as AbsorptionCalculatedValues
+            );
             return null;
         }
+
+        this.logger.debug(
+            "AbsorptionDetectorEnhanced: Starting core absorption detection",
+            {
+                price: event.price,
+                quantity: event.quantity,
+                minAggVolume: this.enhancementConfig.minAggVolume,
+                absorptionRatioThreshold: this.absorptionRatioThreshold,
+                priceEfficiencyThreshold:
+                    this.enhancementConfig.priceEfficiencyThreshold,
+            }
+        );
+
+        // FULL CALCULATION SECTION: Calculate ALL thresholds regardless of outcome
+
+        // Filter zones by time window using trade timestamp
+        const windowStartTime = event.timestamp - this.windowMs;
+        const recentZones = allZones.filter(
+            (zone) => zone.lastUpdate >= windowStartTime
+        );
+
+        this.logger.debug("AbsorptionDetectorEnhanced: Time-window filtering", {
+            totalZones: allZones.length,
+            recentZones: recentZones.length,
+            windowMs: this.windowMs,
+            windowStartTime,
+            tradeTimestamp: event.timestamp,
+        });
+
+        // Find zones near the current price from recent zones only
+        let relevantZones = this.preprocessor.findZonesNearPrice(
+            recentZones,
+            event.price,
+            this.confluenceMaxDistance
+        );
+
+        // If no zones found with primary method, find nearest zone with volume from recent zones
+        if (relevantZones.length === 0) {
+            this.logger.debug(
+                "AbsorptionDetectorEnhanced: No zones found with primary method, using fallback",
+                {
+                    price: event.price,
+                    maxDistance: this.confluenceMaxDistance,
+                    totalZones: allZones.length,
+                    recentZones: recentZones.length,
+                }
+            );
+
+            const zonesWithVolume = recentZones.filter(
+                (z) => z.aggressiveVolume > 0 || z.passiveVolume > 0
+            );
+
+            if (zonesWithVolume.length > 0) {
+                const nearestZone = zonesWithVolume.reduce((closest, zone) =>
+                    Math.abs(zone.priceLevel - event.price) <
+                    Math.abs(closest.priceLevel - event.price)
+                        ? zone
+                        : closest
+                );
+                relevantZones = [nearestZone];
+
+                this.logger.debug(
+                    "AbsorptionDetectorEnhanced: Using fallback zone",
+                    {
+                        price: event.price,
+                        zonePrice: nearestZone.priceLevel,
+                        distance: Math.abs(
+                            nearestZone.priceLevel - event.price
+                        ),
+                        aggressiveVolume: nearestZone.aggressiveVolume,
+                    }
+                );
+            }
+        }
+
+        this.logger.debug("AbsorptionDetectorEnhanced: Found relevant zones", {
+            relevantZones: relevantZones.length,
+            maxDistance: this.confluenceMaxDistance,
+        });
+
+        // Calculate accumulated absorption metrics over time window
+        let totalAggressiveVolume = 0;
+        let totalPassiveVolume = 0;
+
+        for (const zone of relevantZones) {
+            totalAggressiveVolume += zone.aggressiveVolume;
+            totalPassiveVolume += zone.passiveVolume;
+        }
+
+        const totalAccumulatedVolume =
+            totalAggressiveVolume + totalPassiveVolume;
+
+        this.logger.debug(
+            "AbsorptionDetectorEnhanced: Accumulated volume analysis",
+            {
+                totalAggressiveVolume,
+                totalPassiveVolume,
+                totalAccumulatedVolume,
+                absorptionVolumeThreshold: this.absorptionVolumeThreshold,
+                windowMs: this.windowMs,
+                zonesAnalyzed: relevantZones.length,
+            }
+        );
 
         // Calculate volume pressure using FinancialMath (CLAUDE.md compliant)
         const volumePressure = this.calculateVolumePressure(
             event,
             relevantZones
         );
-        this.logger.info(
-            "AbsorptionDetectorEnhanced: Volume pressure calculated",
-            {
-                hasVolumePressure: !!volumePressure,
-                passivePressure: volumePressure?.passivePressure,
-                totalPressure: volumePressure?.totalPressure,
-            }
-        );
 
-        if (!volumePressure) {
-            return null;
-        }
-
-        // Check institutional volume ratio threshold (passive volume dominance)
-        const passiveVolumeRatio = FinancialMath.divideQuantities(
-            volumePressure.passivePressure,
-            volumePressure.totalPressure
-        );
-
-        // DEBUG: Log passive volume ratio check
-        this.logger.info(
-            "AbsorptionDetectorEnhanced: Passive volume ratio check",
-            {
-                passiveVolumeRatio,
-                threshold: this.absorptionRatioThreshold,
-                passiveVolume: volumePressure.passivePressure,
-                totalVolume: volumePressure.totalPressure,
-                ratioAboveThreshold:
-                    passiveVolumeRatio >= this.absorptionRatioThreshold,
-            }
-        );
-
-        // Use standard threshold for institutional absorption
-        if (passiveVolumeRatio < this.absorptionRatioThreshold) {
-            this.logger.info(
-                "AbsorptionDetectorEnhanced: Passive volume ratio below threshold - REJECTED",
-                {
-                    passiveVolumeRatio,
-                    threshold: this.absorptionRatioThreshold,
-                    passiveVolume: volumePressure.passivePressure,
-                    totalVolume: volumePressure.totalPressure,
-                }
-            );
-            return null; // Not enough institutional absorption
-        }
+        // Calculate passive volume ratio for institutional absorption
+        const passiveVolumeRatio = volumePressure
+            ? FinancialMath.divideQuantities(
+                  volumePressure.passivePressure,
+                  volumePressure.totalPressure
+              )
+            : 0;
 
         // Calculate price efficiency using FinancialMath (institutional precision)
         const priceEfficiency = this.calculatePriceEfficiency(
@@ -569,126 +718,218 @@ export class AbsorptionDetectorEnhanced extends Detector {
             relevantZones
         );
 
-        // DEBUG: Log price efficiency calculation
-        this.logger.info(
-            "AbsorptionDetectorEnhanced: Price efficiency calculated",
-            {
-                priceEfficiency,
-                threshold: this.enhancementConfig.priceEfficiencyThreshold,
-                isNull: priceEfficiency === null,
-                aboveThreshold:
-                    priceEfficiency !== null &&
-                    priceEfficiency >
-                        this.enhancementConfig.priceEfficiencyThreshold,
-            }
-        );
-
-        // Price efficiency calculation completed
-
-        if (
-            priceEfficiency === null ||
-            priceEfficiency > this.enhancementConfig.priceEfficiencyThreshold
-        ) {
-            this.logger.info(
-                "AbsorptionDetectorEnhanced: Price efficiency check failed - REJECTED",
-                {
-                    priceEfficiency,
-                    threshold: this.enhancementConfig.priceEfficiencyThreshold,
-                    isNull: priceEfficiency === null,
-                }
-            );
-            return null; // Not efficient enough for absorption
-        }
-
         // Calculate absorption ratio using FinancialMath
-        const absorptionRatio = this.calculateAbsorptionRatio(
-            event,
-            volumePressure
-        );
+        const absorptionRatio = volumePressure
+            ? this.calculateAbsorptionRatio(event, volumePressure)
+            : null;
 
-        // Absorption ratio calculation completed
-
-        if (
-            absorptionRatio === null ||
-            absorptionRatio > this.enhancementConfig.maxAbsorptionRatio
-        ) {
-            return null; // Not strong enough absorption
-        }
-
-        // Check for balanced institutional flow (should return neutral)
-        const isBalancedInstitutional =
+        // Check for balanced institutional flow
+        const balanceScore =
             this.detectBalancedInstitutionalFlow(relevantZones);
-        if (isBalancedInstitutional) {
-            this.logger.debug(
-                "AbsorptionDetectorEnhanced: Balanced institutional flow detected - returning neutral",
-                {
-                    detectorId: this.getId(),
-                    price: event.price,
-                    passiveRatio: passiveVolumeRatio,
-                    balanceScore: isBalancedInstitutional,
-                }
-            );
-            return null; // No directional signal for balanced institutional scenarios
-        }
-
-        // Check for edge case: very low aggressive volume (less than institutional threshold)
-        if (
-            volumePressure.aggressivePressure <
-            this.enhancementConfig.institutionalVolumeThreshold
-        ) {
-            this.logger.debug(
-                "AbsorptionDetectorEnhanced: Insufficient aggressive volume for institutional signal",
-                {
-                    aggressiveVolume: volumePressure.aggressivePressure,
-                    threshold:
-                        this.enhancementConfig.institutionalVolumeThreshold,
-                    passiveRatio: passiveVolumeRatio,
-                }
-            );
-            return null; // No institutional pattern without sufficient aggressive flow
-        }
+        const isBalancedInstitutional = balanceScore !== null;
 
         // Determine dominant side and signal direction
-        const dominantSide = this.calculateDominantSide(relevantZones);
+        const dominantSide = this.calculateDominantSide(relevantZones, event);
 
-        // Dominant side calculation completed
+        // Calculate final confidence using statistical analysis
+        const confidence =
+            priceEfficiency !== null &&
+            absorptionRatio !== null &&
+            volumePressure !== null
+                ? this.calculateAbsorptionConfidence(
+                      priceEfficiency,
+                      absorptionRatio,
+                      volumePressure,
+                      relevantZones
+                  )
+                : null;
 
-        if (!dominantSide) {
-            this.logger.info(
-                "AbsorptionDetectorEnhanced: No dominant side - REJECTED",
-                {
-                    relevantZoneCount: relevantZones.length,
-                    dominantSide,
-                }
-            );
-            return null;
-        }
-
-        this.logger.info(
-            "AbsorptionDetectorEnhanced: Dominant side determined",
+        this.logger.debug(
+            "AbsorptionDetectorEnhanced: All calculations completed",
             {
+                totalAggressiveVolume,
+                totalPassiveVolume,
+                passiveVolumeRatio,
+                priceEfficiency,
+                absorptionRatio,
+                confidence,
                 dominantSide,
-                relevantZoneCount: relevantZones.length,
+                isBalancedInstitutional,
+                balanceScore,
             }
         );
 
-        // Calculate final confidence using statistical analysis
-        const confidence = this.calculateAbsorptionConfidence(
-            priceEfficiency,
-            absorptionRatio,
-            volumePressure,
-            relevantZones
-        );
+        // SINGLE EVALUATION SECTION: One decision point with complete threshold data
+        const hasRecentZones = recentZones.length > 0;
+        const hasRelevantZones = relevantZones.length > 0;
+        const hasVolumePressure = volumePressure !== null;
+        const passesVolumeThreshold =
+            totalAggressiveVolume >= this.enhancementConfig.minAggVolume;
+        const passesPassiveRatioThreshold =
+            passiveVolumeRatio >= this.absorptionRatioThreshold;
+        const passesEfficiencyThreshold =
+            priceEfficiency !== null &&
+            priceEfficiency <= this.enhancementConfig.priceEfficiencyThreshold;
+        const passesAbsorptionRatioThreshold =
+            absorptionRatio !== null &&
+            absorptionRatio <= this.enhancementConfig.maxAbsorptionRatio;
+        const passesConfidenceThreshold =
+            confidence !== null &&
+            confidence >= this.enhancementConfig.minEnhancedConfidenceThreshold;
+        const hasValidSignalSide = dominantSide !== null;
+        const isNotBalanced = !isBalancedInstitutional;
 
-        // Confidence calculation completed
+        // ✅ CAPTURE ALL CALCULATED VALUES: Using TypeScript interface for type safety
+        const allCalculatedValues: AbsorptionCalculatedValues = {
+            calculatedMinAggVolume: totalAggressiveVolume,
+            calculatedTimeWindowIndex: this.enhancementConfig.timeWindowIndex,
+            calculatedEventCooldownMs:
+                Date.now() - (this.lastSignal.get("last") || 0),
+            calculatedPriceEfficiencyThreshold: priceEfficiency ?? 0,
+            calculatedMaxAbsorptionRatio: absorptionRatio ?? 0,
+            calculatedMinPassiveMultiplier:
+                totalPassiveVolume / Math.max(totalAggressiveVolume, 1),
+            calculatedPassiveAbsorptionThreshold: passiveVolumeRatio,
+            calculatedExpectedMovementScalingFactor:
+                FinancialMath.divideQuantities(
+                    FinancialMath.multiplyQuantities(
+                        event.quantity,
+                        this.enhancementConfig.expectedMovementScalingFactor
+                    ),
+                    event.quantity
+                ),
+            calculatedContextConfidenceBoostMultiplier:
+                this.crossTimeframeConfidenceBoost,
+            calculatedLiquidityGradientRange: FinancialMath.multiplyQuantities(
+                this.enhancementConfig.liquidityGradientRange,
+                event.zoneData?.zoneConfig.tickValue ?? 0
+            ),
+            calculatedInstitutionalVolumeThreshold:
+                volumePressure?.totalPressure ?? 0,
+            calculatedInstitutionalVolumeRatioThreshold:
+                totalPassiveVolume / Math.max(totalAggressiveVolume, 1),
+            calculatedEnableInstitutionalVolumeFilter:
+                this.enhancementConfig.enableInstitutionalVolumeFilter,
+            calculatedInstitutionalVolumeBoost:
+                this.enhancementConfig.institutionalVolumeBoost,
+            calculatedMinAbsorptionScore:
+                totalPassiveVolume > 0
+                    ? totalPassiveVolume /
+                      (totalAggressiveVolume + totalPassiveVolume)
+                    : 0,
+            calculatedFinalConfidenceRequired: confidence ?? 0,
+            calculatedConfidenceBoostReduction:
+                this.enhancementConfig.confidenceBoostReduction,
+            calculatedMaxZoneCountForScoring: relevantZones.length,
+            calculatedMinEnhancedConfidenceThreshold: confidence ?? 0,
+            calculatedUseStandardizedZones:
+                this.enhancementConfig.useStandardizedZones,
+            calculatedEnhancementMode: this.enhancementConfig.enhancementMode,
+            calculatedBalanceThreshold: Math.max(
+                Math.abs(
+                    totalAggressiveVolume /
+                        Math.max(
+                            totalAggressiveVolume + totalPassiveVolume,
+                            1
+                        ) -
+                        0.5
+                ),
+                Math.abs(
+                    totalPassiveVolume /
+                        Math.max(
+                            totalAggressiveVolume + totalPassiveVolume,
+                            1
+                        ) -
+                        0.5
+                )
+            ),
+            calculatedConfluenceMinZones: relevantZones.length,
+            calculatedConfluenceMaxDistance: this.confluenceMaxDistance,
+        };
 
-        if (confidence === null) {
-            return null; // Cannot proceed without valid confidence calculation
-        }
-
+        // Comprehensive rejection with complete threshold data
         if (
-            confidence < this.enhancementConfig.minEnhancedConfidenceThreshold
+            !hasRecentZones ||
+            !hasRelevantZones ||
+            !hasVolumePressure ||
+            !passesVolumeThreshold ||
+            !passesPassiveRatioThreshold ||
+            !passesEfficiencyThreshold ||
+            !passesAbsorptionRatioThreshold ||
+            !passesConfidenceThreshold ||
+            !hasValidSignalSide ||
+            !isNotBalanced
         ) {
+            // Determine primary rejection reason for logging
+            let rejectionReason = "comprehensive_rejection";
+            let thresholdType = "multiple_thresholds";
+            let thresholdValue = 0;
+            let actualValue = 0;
+
+            if (!hasRecentZones) {
+                rejectionReason = "no_recent_zones_in_time_window";
+                thresholdType = "time_window_zones";
+                thresholdValue = 1;
+                actualValue = recentZones.length;
+            } else if (!hasRelevantZones) {
+                rejectionReason = "no_relevant_zones";
+                thresholdType = "zone_count";
+                thresholdValue = 1;
+                actualValue = 0;
+            } else if (!hasVolumePressure) {
+                rejectionReason = "insufficient_volume_pressure";
+                thresholdType = "volume_pressure";
+                thresholdValue = 1;
+                actualValue = 0;
+            } else if (!passesVolumeThreshold) {
+                rejectionReason = "insufficient_aggressive_volume";
+                thresholdType = "aggressive_volume";
+                thresholdValue = this.enhancementConfig.minAggVolume;
+                actualValue = totalAggressiveVolume;
+            } else if (!passesPassiveRatioThreshold) {
+                rejectionReason = "passive_volume_ratio_too_low";
+                thresholdType = "passive_volume_ratio";
+                thresholdValue = this.absorptionRatioThreshold;
+                actualValue = passiveVolumeRatio;
+            } else if (!passesEfficiencyThreshold) {
+                rejectionReason = "price_efficiency_too_high";
+                thresholdType = "price_efficiency";
+                thresholdValue =
+                    this.enhancementConfig.priceEfficiencyThreshold;
+                actualValue = priceEfficiency ?? -1;
+            } else if (!passesAbsorptionRatioThreshold) {
+                rejectionReason = "absorption_ratio_too_high";
+                thresholdType = "absorption_ratio";
+                thresholdValue = this.enhancementConfig.maxAbsorptionRatio;
+                actualValue = absorptionRatio ?? -1;
+            } else if (!passesConfidenceThreshold) {
+                rejectionReason = "confidence_below_threshold";
+                thresholdType = "confidence_threshold";
+                thresholdValue =
+                    this.enhancementConfig.minEnhancedConfidenceThreshold;
+                actualValue = confidence ?? 0;
+            } else if (!hasValidSignalSide) {
+                rejectionReason = "no_dominant_side";
+                thresholdType = "side_determination";
+                thresholdValue = 1;
+                actualValue = 0;
+            } else if (!isNotBalanced) {
+                rejectionReason = "balanced_institutional_flow";
+                thresholdType = "institutional_balance";
+                thresholdValue = this.enhancementConfig.balanceThreshold;
+                actualValue = balanceScore ?? 0;
+            }
+
+            this.logSignalRejection(
+                event,
+                rejectionReason,
+                {
+                    type: thresholdType,
+                    threshold: thresholdValue,
+                    actual: actualValue,
+                },
+                allCalculatedValues
+            );
             return null;
         }
 
@@ -712,7 +953,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 priceEfficiency,
                 spreadImpact:
                     event.bestAsk !== undefined && event.bestBid !== undefined
-                        ? Math.abs(event.bestAsk - event.bestBid)
+                        ? FinancialMath.calculateSpread(
+                              event.bestAsk,
+                              event.bestBid,
+                              2
+                          )
                         : 0,
                 volumeProfile: {
                     totalVolume: volumePressure.totalPressure,
@@ -736,44 +981,8 @@ export class AbsorptionDetectorEnhanced extends Detector {
     }
 
     /**
-     * Find zones relevant to current trade using FinancialMath distance calculations
-     */
-    private findRelevantZonesForTrade(
-        event: EnrichedTradeEvent
-    ): ZoneSnapshot[] {
-        if (!event.zoneData) return [];
-
-        const maxDistance = FinancialMath.multiplyQuantities(
-            this.enhancementConfig.liquidityGradientRange,
-            event.zoneData.zoneConfig.tickValue
-        );
-
-        const allZones = [...event.zoneData.zones];
-
-        // CRITICAL FIX: Apply temporal filtering using trade timestamp for core absorption detection
-        const windowStartTime = event.timestamp - this.windowMs;
-        const recentZones = allZones.filter(
-            (zone) => zone.lastUpdate >= windowStartTime
-        );
-
-        // DEBUG: Log temporal filtering for core absorption detection
-        this.logger.debug("Absorption temporal filtering", {
-            totalZones: allZones.length,
-            recentZones: recentZones.length,
-            windowMs: this.windowMs,
-            windowStartTime,
-            tradeTimestamp: event.timestamp,
-        });
-
-        return this.preprocessor.findZonesNearPrice(
-            recentZones,
-            event.price,
-            maxDistance
-        );
-    }
-
-    /**
      * Calculate volume pressure using FinancialMath for institutional precision
+     * DIRECTIONAL FIX: Only count passive volume relevant to trade direction
      */
     private calculateVolumePressure(
         event: EnrichedTradeEvent,
@@ -790,9 +999,18 @@ export class AbsorptionDetectorEnhanced extends Detector {
         let totalAggressive = 0;
         let totalPassive = 0;
 
+        // CRITICAL FIX: Determine which passive volume is relevant based on trade direction
+        // - Buy trades (buyerIsMaker = false): Only count passiveAskVolume (hitting asks)
+        // - Sell trades (buyerIsMaker = true): Only count passiveBidVolume (hitting bids)
+        const isBuyTrade = !event.buyerIsMaker;
+
         for (const zone of zones) {
             // Validate inputs before FinancialMath calls to prevent NaN BigInt errors
-            if (isNaN(zone.aggressiveVolume) || isNaN(zone.passiveVolume)) {
+            if (
+                isNaN(zone.aggressiveVolume) ||
+                isNaN(zone.passiveBidVolume) ||
+                isNaN(zone.passiveAskVolume)
+            ) {
                 return null; // Skip this calculation if any zone has NaN values
             }
 
@@ -800,9 +1018,15 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 totalAggressive,
                 zone.aggressiveVolume
             );
+
+            // DIRECTIONAL PASSIVE VOLUME: Only count relevant side
+            const relevantPassiveVolume = isBuyTrade
+                ? zone.passiveAskVolume // Buy trades absorb ask liquidity
+                : zone.passiveBidVolume; // Sell trades absorb bid liquidity
+
             totalPassive = FinancialMath.safeAdd(
                 totalPassive,
-                zone.passiveVolume
+                relevantPassiveVolume
             );
         }
 
@@ -858,11 +1082,23 @@ export class AbsorptionDetectorEnhanced extends Detector {
         let totalVolume = 0;
 
         for (const zone of zones) {
-            if (zone.volumeWeightedPrice === null) continue;
+            // CRITICAL: Check for both null and undefined, and skip zones with invalid data
+            if (
+                zone.volumeWeightedPrice == null ||
+                isNaN(zone.volumeWeightedPrice)
+            )
+                continue;
+            if (zone.aggressiveVolume == null || isNaN(zone.aggressiveVolume))
+                continue;
+
             const zoneWeight = FinancialMath.multiplyQuantities(
                 zone.volumeWeightedPrice,
                 zone.aggressiveVolume
             );
+
+            // Skip zones where calculation fails
+            if (isNaN(zoneWeight)) continue;
+
             totalVolumeWeightedPrice = FinancialMath.safeAdd(
                 totalVolumeWeightedPrice,
                 zoneWeight
@@ -889,7 +1125,9 @@ export class AbsorptionDetectorEnhanced extends Detector {
             totalVolumeWeightedPrice,
             totalVolume
         );
-        const priceDiff = Math.abs(event.price - vwap);
+        const priceDiff = FinancialMath.calculateAbs(
+            FinancialMath.safeSubtract(event.price, vwap)
+        );
 
         // Calculate efficiency as percentage using FinancialMath
         return FinancialMath.divideQuantities(priceDiff, event.price);
@@ -916,7 +1154,9 @@ export class AbsorptionDetectorEnhanced extends Detector {
 
         // Calculate absorption using volume pressure and price impact
         if (event.bestBid === undefined) return null; // Cannot calculate without bid price
-        const actualImpact = Math.abs(event.price - event.bestBid);
+        const actualImpact = FinancialMath.calculateAbs(
+            FinancialMath.safeSubtract(event.price, event.bestBid)
+        );
 
         // Factor in volume pressure for more accurate absorption calculation
         const pressureAdjustedImpact = FinancialMath.multiplyQuantities(
@@ -931,75 +1171,71 @@ export class AbsorptionDetectorEnhanced extends Detector {
     }
 
     /**
-     * Calculate dominant side based on which passive side is absorbing
+     * Calculate dominant side based on directional passive volume absorption
+     * CRITICAL: Determines signal direction based on institutional flow
+     * FIXED: Now uses same directional logic as calculateVolumePressure
      */
     private calculateDominantSide(
-        zones: ZoneSnapshot[]
+        zones: ZoneSnapshot[],
+        event: EnrichedTradeEvent
     ): "buy" | "sell" | null {
         if (zones.length === 0) return null;
 
-        let totalPassiveBidAbsorption = 0;
-        let totalPassiveAskAbsorption = 0;
+        // CRITICAL FIX: Use same directional logic as calculateVolumePressure
+        // - Buy trades (buyerIsMaker = false): Only count passiveAskVolume (hitting asks)
+        // - Sell trades (buyerIsMaker = true): Only count passiveBidVolume (hitting bids)
+        const isBuyTrade = !event.buyerIsMaker;
+
+        let relevantPassiveVolume = 0;
 
         for (const zone of zones) {
-            totalPassiveBidAbsorption = FinancialMath.safeAdd(
-                totalPassiveBidAbsorption,
-                zone.passiveBidVolume || 0
-            );
-            totalPassiveAskAbsorption = FinancialMath.safeAdd(
-                totalPassiveAskAbsorption,
-                zone.passiveAskVolume || 0
+            // DIRECTIONAL PASSIVE VOLUME: Only count relevant side matching the trade
+            const zoneRelevantVolume = isBuyTrade
+                ? zone.passiveAskVolume || 0 // Buy trades absorb ask liquidity
+                : zone.passiveBidVolume || 0; // Sell trades absorb bid liquidity
+
+            relevantPassiveVolume = FinancialMath.safeAdd(
+                relevantPassiveVolume,
+                zoneRelevantVolume
             );
         }
 
-        // DEBUG: Log passive side calculations
+        // DEBUG: Log directional passive volume calculations
         this.logger.info(
-            "AbsorptionDetectorEnhanced: calculateDominantSide DEBUG",
+            "AbsorptionDetectorEnhanced: calculateDominantSide DIRECTIONAL DEBUG",
             {
-                totalPassiveBidAbsorption,
-                totalPassiveAskAbsorption,
+                isBuyTrade,
+                buyerIsMaker: event.buyerIsMaker,
+                relevantPassiveVolume,
                 zoneCount: zones.length,
-                zones: zones.map((z) => ({
-                    zoneId: z.zoneId,
-                    passiveBidVolume: z.passiveBidVolume,
-                    passiveAskVolume: z.passiveAskVolume,
-                })),
+                tradeDirection: isBuyTrade ? "BUY" : "SELL",
+                passiveSideUsed: isBuyTrade ? "ask" : "bid",
             }
         );
 
-        // Original absorption logic (CLAUDE.md compliance - simple and reliable)
-
-        // Signal based on which passive side is absorbing more
-        if (totalPassiveBidAbsorption > totalPassiveAskAbsorption) {
-            // More bid absorption → support level → BUY signal
+        // DIRECTIONAL SIGNAL LOGIC: Signal follows the trade direction that shows absorption
+        // This aligns with calculateVolumePressure which also uses directional passive volume
+        if (relevantPassiveVolume > 0) {
+            const signalSide = isBuyTrade ? "buy" : "sell";
             this.logger.info(
-                "AbsorptionDetectorEnhanced: Returning BUY signal",
+                `AbsorptionDetectorEnhanced: Returning ${signalSide.toUpperCase()} signal (directional absorption detected)`,
                 {
-                    totalPassiveBidAbsorption,
-                    totalPassiveAskAbsorption,
+                    relevantPassiveVolume,
+                    tradeDirection: isBuyTrade ? "BUY" : "SELL",
+                    signalSide,
                 }
             );
-            return "buy";
-        } else if (totalPassiveAskAbsorption > totalPassiveBidAbsorption) {
-            // More ask absorption → resistance level → SELL signal
-            this.logger.info(
-                "AbsorptionDetectorEnhanced: Returning SELL signal",
-                {
-                    totalPassiveBidAbsorption,
-                    totalPassiveAskAbsorption,
-                }
-            );
-            return "sell";
+            return signalSide;
         }
 
         this.logger.info(
-            "AbsorptionDetectorEnhanced: Returning NULL (equal absorption)",
+            "AbsorptionDetectorEnhanced: Returning NULL (no directional absorption)",
             {
-                totalPassiveBidAbsorption,
-                totalPassiveAskAbsorption,
+                relevantPassiveVolume,
+                tradeDirection: isBuyTrade ? "BUY" : "SELL",
             }
         );
-        return null; // Equal absorption = no clear direction
+        return null; // No directional absorption
     }
 
     /**
@@ -1020,18 +1256,37 @@ export class AbsorptionDetectorEnhanced extends Detector {
             return null; // Cannot calculate confidence with invalid inputs
         }
 
-        // Collect confidence factors for statistical analysis with proper bounds
+        // Calculate confidence factors using FinancialMath (CLAUDE.md compliance - no bounds forcing)
+        const efficiencyFactor = 1 - priceEfficiency; // Higher efficiency = higher confidence
+        const absorptionFactor = 1 - absorptionRatio; // Lower absorption ratio = higher confidence
+        const pressureFactor = FinancialMath.divideQuantities(
+            volumePressure.pressureRatio,
+            2
+        ); // Pressure component
+        const zoneFactor = FinancialMath.divideQuantities(
+            zones.length,
+            this.enhancementConfig.maxZoneCountForScoring
+        ); // Zone count component
+
+        // Validate all factors before proceeding (CLAUDE.md compliance - return null for invalid calculations)
+        if (
+            !FinancialMath.isValidFinancialNumber(efficiencyFactor) ||
+            !FinancialMath.isValidFinancialNumber(absorptionFactor) ||
+            !FinancialMath.isValidFinancialNumber(pressureFactor) ||
+            !FinancialMath.isValidFinancialNumber(zoneFactor) ||
+            efficiencyFactor < 0 ||
+            absorptionFactor < 0 ||
+            pressureFactor < 0 ||
+            zoneFactor < 0
+        ) {
+            return null; // Cannot calculate confidence with invalid factor inputs
+        }
+
         const confidenceFactors = [
-            Math.max(0, Math.min(1, 1 - priceEfficiency)), // Higher efficiency = higher confidence, bounded [0,1]
-            Math.max(0, Math.min(1, 1 - absorptionRatio)), // Lower absorption ratio = higher confidence, bounded [0,1]
-            Math.max(0, Math.min(1, volumePressure.pressureRatio / 2)), // Pressure component, bounded [0,1]
-            Math.max(
-                0,
-                Math.min(
-                    1,
-                    zones.length / this.enhancementConfig.maxZoneCountForScoring
-                )
-            ), // Zone count component, bounded [0,1]
+            efficiencyFactor,
+            absorptionFactor,
+            pressureFactor,
+            zoneFactor,
         ];
 
         // Use FinancialMath.calculateMean for statistical precision
@@ -1125,7 +1380,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
         const minRatio = this.absorptionRatioThreshold;
 
         // Analyze all zones for institutional absorption patterns
-        const allZones = [...zoneData.zones];
+        const allZones = zoneData.zones;
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,
@@ -1141,8 +1396,14 @@ export class AbsorptionDetectorEnhanced extends Detector {
             const passiveVolume = zone.passiveVolume;
             const aggressiveVolume = zone.aggressiveVolume;
 
-            totalPassiveVolume += passiveVolume;
-            totalAggressiveVolume += aggressiveVolume;
+            totalPassiveVolume = FinancialMath.safeAdd(
+                totalPassiveVolume,
+                passiveVolume
+            );
+            totalAggressiveVolume = FinancialMath.safeAdd(
+                totalAggressiveVolume,
+                aggressiveVolume
+            );
 
             // Check if this zone shows absorption (high passive volume absorbing aggressive flow)
             if (
@@ -1157,7 +1418,10 @@ export class AbsorptionDetectorEnhanced extends Detector {
             }
         });
 
-        const totalVolume = totalPassiveVolume + totalAggressiveVolume;
+        const totalVolume = FinancialMath.safeAdd(
+            totalPassiveVolume,
+            totalAggressiveVolume
+        );
         const absorptionRatio =
             totalVolume > 0
                 ? FinancialMath.divideQuantities(
@@ -1277,7 +1541,10 @@ export class AbsorptionDetectorEnhanced extends Detector {
         let totalAbsorptionScore = 0;
 
         for (const zone of relevantZones) {
-            const totalVolume = zone.aggressiveVolume + zone.passiveVolume;
+            const totalVolume = FinancialMath.safeAdd(
+                zone.aggressiveVolume,
+                zone.passiveVolume
+            );
             if (totalVolume === 0) continue;
 
             // For absorption, we want high passive volume absorbing aggressive flow using FinancialMath
@@ -1293,7 +1560,10 @@ export class AbsorptionDetectorEnhanced extends Detector {
                           this.enhancementConfig.confidenceBoostReduction
                       );
 
-            totalAbsorptionScore += absorptionScore;
+            totalAbsorptionScore = FinancialMath.safeAdd(
+                totalAbsorptionScore,
+                absorptionScore
+            );
         }
 
         return FinancialMath.divideQuantities(
@@ -1352,8 +1622,14 @@ export class AbsorptionDetectorEnhanced extends Detector {
             totalPassiveSell += zone.passiveAskVolume || 0;
         }
 
-        const totalAggressive = totalAggressiveBuy + totalAggressiveSell;
-        const totalPassive = totalPassiveBuy + totalPassiveSell;
+        const totalAggressive = FinancialMath.safeAdd(
+            totalAggressiveBuy,
+            totalAggressiveSell
+        );
+        const totalPassive = FinancialMath.safeAdd(
+            totalPassiveBuy,
+            totalPassiveSell
+        );
 
         if (totalAggressive === 0 || totalPassive === 0) return null;
 
@@ -1371,20 +1647,25 @@ export class AbsorptionDetectorEnhanced extends Detector {
             return null;
 
         // Check for balanced flow (both ratios close to 0.5)
-        const aggressiveBalance = Math.abs(aggressiveBuyRatio - 0.5);
-        const passiveBalance = Math.abs(passiveBuyRatio - 0.5);
+        const aggressiveBalance = FinancialMath.calculateAbs(
+            FinancialMath.safeSubtract(aggressiveBuyRatio, 0.5)
+        );
+        const passiveBalance = FinancialMath.calculateAbs(
+            FinancialMath.safeSubtract(passiveBuyRatio, 0.5)
+        );
 
-        // Balanced threshold: within 5% of perfect balance (0.45-0.55 range)
-        const balanceThreshold = 0.05;
+        // Balanced threshold: within configurable % of perfect balance using FinancialMath
+        const balanceThreshold = this.enhancementConfig.balanceThreshold;
 
         const isBalanced =
             aggressiveBalance <= balanceThreshold &&
             passiveBalance <= balanceThreshold;
 
         if (isBalanced) {
-            // Return balance score (higher = more balanced, 0.05 = perfectly balanced)
-            return (
-                balanceThreshold - Math.max(aggressiveBalance, passiveBalance)
+            // Return balance score (higher = more balanced) using FinancialMath
+            return FinancialMath.safeSubtract(
+                balanceThreshold,
+                FinancialMath.calculateMax([aggressiveBalance, passiveBalance])
             );
         }
 
@@ -1421,11 +1702,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
     /**
      * Log signal for validation tracking
      */
-    private async logSignalForValidation(
+    private logSignalForValidation(
         signal: SignalCandidate,
         event: EnrichedTradeEvent,
         relevantZones: ZoneSnapshot[]
-    ): Promise<void> {
+    ): void {
         try {
             // Calculate market context for validation logging
             const marketContext = this.calculateMarketContext(
@@ -1447,10 +1728,100 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 extendedContext.absorptionRatio = signal.data.absorptionScore;
             }
 
-            await this.validationLogger.logSignal(
+            // Get calculated values for signal logging (same as successful/rejection logging)
+            const totalAggVol: number = relevantZones.reduce(
+                (sum: number, zone) => sum + zone.aggressiveVolume,
+                0
+            );
+            const totalPassiveVolume: number = relevantZones.reduce(
+                (sum: number, zone) => sum + zone.passiveVolume,
+                0
+            );
+            const priceEfficiency = this.calculatePriceEfficiency(
+                event,
+                relevantZones
+            );
+            const absorptionRatio =
+                totalPassiveVolume > 0
+                    ? totalPassiveVolume / (totalAggVol + totalPassiveVolume)
+                    : 0;
+            const passiveVolumeRatio =
+                totalAggVol > 0 ? totalPassiveVolume / totalAggVol : 0;
+            const confluenceCount = relevantZones.length;
+            const volumePressure = this.calculateVolumePressure(
+                event,
+                relevantZones
+            );
+
+            const calculatedValues: AbsorptionCalculatedValues = {
+                calculatedMinAggVolume: totalAggVol,
+                calculatedTimeWindowIndex:
+                    this.enhancementConfig.timeWindowIndex,
+                calculatedEventCooldownMs:
+                    Date.now() - (this.lastSignal.get("last") || 0),
+                calculatedPriceEfficiencyThreshold: priceEfficiency ?? 0,
+                calculatedMaxAbsorptionRatio: absorptionRatio,
+                calculatedMinPassiveMultiplier:
+                    totalPassiveVolume / Math.max(totalAggVol, 1),
+                calculatedPassiveAbsorptionThreshold: passiveVolumeRatio,
+                calculatedExpectedMovementScalingFactor:
+                    FinancialMath.divideQuantities(
+                        FinancialMath.multiplyQuantities(
+                            event.quantity,
+                            this.enhancementConfig.expectedMovementScalingFactor
+                        ),
+                        event.quantity
+                    ),
+                calculatedContextConfidenceBoostMultiplier:
+                    this.crossTimeframeConfidenceBoost,
+                calculatedLiquidityGradientRange:
+                    FinancialMath.multiplyQuantities(
+                        this.enhancementConfig.liquidityGradientRange,
+                        event.zoneData?.zoneConfig.tickValue ?? 0
+                    ),
+                calculatedInstitutionalVolumeThreshold:
+                    volumePressure?.totalPressure ?? 0,
+                calculatedInstitutionalVolumeRatioThreshold:
+                    totalPassiveVolume / Math.max(totalAggVol, 1),
+                calculatedEnableInstitutionalVolumeFilter:
+                    this.enhancementConfig.enableInstitutionalVolumeFilter,
+                calculatedInstitutionalVolumeBoost:
+                    this.enhancementConfig.institutionalVolumeBoost,
+                calculatedMinAbsorptionScore:
+                    totalPassiveVolume > 0
+                        ? totalPassiveVolume /
+                          (totalAggVol + totalPassiveVolume)
+                        : 0,
+                calculatedFinalConfidenceRequired: signal.confidence,
+                calculatedConfidenceBoostReduction:
+                    this.enhancementConfig.confidenceBoostReduction,
+                calculatedMaxZoneCountForScoring: confluenceCount,
+                calculatedMinEnhancedConfidenceThreshold: signal.confidence,
+                calculatedUseStandardizedZones:
+                    this.enhancementConfig.useStandardizedZones,
+                calculatedEnhancementMode:
+                    this.enhancementConfig.enhancementMode,
+                calculatedBalanceThreshold: Math.max(
+                    Math.abs(
+                        totalAggVol /
+                            Math.max(totalAggVol + totalPassiveVolume, 1) -
+                            0.5
+                    ),
+                    Math.abs(
+                        totalPassiveVolume /
+                            Math.max(totalAggVol + totalPassiveVolume, 1) -
+                            0.5
+                    )
+                ),
+                calculatedConfluenceMinZones: confluenceCount,
+                calculatedConfluenceMaxDistance: this.confluenceMaxDistance,
+            };
+
+            this.validationLogger.logSignal(
                 signal,
                 event,
-                extendedContext
+                calculatedValues,
+                marketContext
             );
         } catch (error) {
             this.logger.error(
@@ -1475,12 +1846,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
             threshold: number;
             actual: number;
         },
-        marketContext: {
-            aggressiveVolume: number;
-            passiveVolume: number;
-            priceEfficiency: number | null;
-            confidence: number;
-        }
+        allCalculatedValues: AbsorptionCalculatedValues
     ): void {
         try {
             this.validationLogger.logRejection(
@@ -1488,7 +1854,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 rejectionReason,
                 event,
                 thresholdDetails,
-                marketContext
+                allCalculatedValues
             );
         } catch (error) {
             this.logger.error(
@@ -1500,6 +1866,154 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 }
             );
         }
+    }
+
+    /**
+     * Log successful signal parameters for 90-minute optimization
+     */
+    private logSuccessfulSignalParameters(
+        signal: SignalCandidate,
+        event: EnrichedTradeEvent
+    ): void {
+        try {
+            // Collect ACTUAL VALUES that each parameter was checked against when signal passed
+            const totalAggVol: number =
+                event.zoneData?.zones.reduce(
+                    (sum: number, zone) => sum + zone.aggressiveVolume,
+                    0
+                ) || 0;
+
+            // Market context at time of successful signal
+            const marketContext = {
+                marketVolume:
+                    event.zoneData?.zones.reduce(
+                        (sum, zone) =>
+                            sum + zone.aggressiveVolume + zone.passiveVolume,
+                        0
+                    ) || 0,
+                marketSpread:
+                    event.bestAsk && event.bestBid
+                        ? event.bestAsk - event.bestBid
+                        : 0,
+                marketVolatility: this.calculateMarketVolatility(event),
+            };
+
+            // Use exact same calculated values as rejection logging
+            const volumePressure = this.calculateVolumePressure(
+                event,
+                event.zoneData?.zones || []
+            );
+
+            // Calculate the same values used in rejection logging
+            const relevantZones = event.zoneData?.zones || [];
+            const confluenceCount = relevantZones.length;
+            const totalPassiveVolume: number = relevantZones.reduce(
+                (sum: number, zone) => sum + zone.passiveVolume,
+                0
+            );
+            const priceEfficiency =
+                this.calculatePriceEfficiency(event, relevantZones) ?? 0;
+            const absorptionRatio =
+                totalPassiveVolume > 0
+                    ? totalPassiveVolume / (totalAggVol + totalPassiveVolume)
+                    : 0;
+            const passiveVolumeRatio =
+                totalAggVol > 0 ? totalPassiveVolume / totalAggVol : 0;
+
+            const calculatedValues: AbsorptionCalculatedValues = {
+                calculatedMinAggVolume: totalAggVol,
+                calculatedTimeWindowIndex:
+                    this.enhancementConfig.timeWindowIndex,
+                calculatedEventCooldownMs:
+                    Date.now() - (this.lastSignal.get("last") || 0),
+                calculatedPriceEfficiencyThreshold: priceEfficiency ?? 0,
+                calculatedMaxAbsorptionRatio: absorptionRatio ?? 0,
+                calculatedMinPassiveMultiplier:
+                    totalPassiveVolume / Math.max(totalAggVol, 1),
+                calculatedPassiveAbsorptionThreshold: passiveVolumeRatio,
+                calculatedExpectedMovementScalingFactor:
+                    FinancialMath.divideQuantities(
+                        FinancialMath.multiplyQuantities(
+                            event.quantity,
+                            this.enhancementConfig.expectedMovementScalingFactor
+                        ),
+                        event.quantity
+                    ),
+                calculatedContextConfidenceBoostMultiplier:
+                    this.crossTimeframeConfidenceBoost,
+                calculatedLiquidityGradientRange:
+                    FinancialMath.multiplyQuantities(
+                        this.enhancementConfig.liquidityGradientRange,
+                        event.zoneData?.zoneConfig.tickValue ?? 0
+                    ),
+                calculatedInstitutionalVolumeThreshold:
+                    volumePressure?.totalPressure ?? 0,
+                calculatedInstitutionalVolumeRatioThreshold:
+                    totalPassiveVolume / Math.max(totalAggVol, 1),
+                calculatedEnableInstitutionalVolumeFilter:
+                    this.enhancementConfig.enableInstitutionalVolumeFilter,
+                calculatedInstitutionalVolumeBoost:
+                    this.enhancementConfig.institutionalVolumeBoost,
+                calculatedMinAbsorptionScore:
+                    totalPassiveVolume > 0
+                        ? totalPassiveVolume /
+                          (totalAggVol + totalPassiveVolume)
+                        : 0,
+                calculatedFinalConfidenceRequired: signal.confidence,
+                calculatedConfidenceBoostReduction:
+                    this.enhancementConfig.confidenceBoostReduction,
+                calculatedMaxZoneCountForScoring: confluenceCount,
+                calculatedMinEnhancedConfidenceThreshold: signal.confidence,
+                calculatedUseStandardizedZones:
+                    this.enhancementConfig.useStandardizedZones,
+                calculatedEnhancementMode:
+                    this.enhancementConfig.enhancementMode,
+                calculatedBalanceThreshold: Math.max(
+                    Math.abs(
+                        totalAggVol /
+                            Math.max(totalAggVol + totalPassiveVolume, 1) -
+                            0.5
+                    ),
+                    Math.abs(
+                        totalPassiveVolume /
+                            Math.max(totalAggVol + totalPassiveVolume, 1) -
+                            0.5
+                    )
+                ),
+                calculatedConfluenceMinZones: confluenceCount,
+                calculatedConfluenceMaxDistance: this.confluenceMaxDistance,
+            };
+
+            this.validationLogger.logSuccessfulSignal(
+                "absorption",
+                event,
+                calculatedValues,
+                marketContext
+            );
+        } catch (error) {
+            this.logger.error(
+                "AbsorptionDetectorEnhanced: Failed to log successful signal parameters",
+                {
+                    signalId: signal.id,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
+        }
+    }
+
+    /**
+     * Calculate market volatility estimate
+     */
+    private calculateMarketVolatility(event: EnrichedTradeEvent): number {
+        // Simple volatility estimate based on spread and recent price action
+        if (!event.bestAsk || !event.bestBid) return 0;
+
+        const spread = event.bestAsk - event.bestBid;
+        const midPrice = (event.bestAsk + event.bestBid) / 2;
+
+        // Return spread as percentage of mid price
+        return FinancialMath.divideQuantities(spread, midPrice);
     }
 
     /**
@@ -1527,15 +2041,36 @@ export class AbsorptionDetectorEnhanced extends Detector {
 
         // Aggregate volume data from relevant zones
         for (const zone of relevantZones) {
-            totalAggressive += zone.aggressiveVolume;
-            totalPassive += zone.passiveVolume;
-            aggressiveBuy += zone.aggressiveBuyVolume || 0;
-            aggressiveSell += zone.aggressiveSellVolume || 0;
-            passiveBid += zone.passiveBidVolume || 0;
-            passiveAsk += zone.passiveAskVolume || 0;
+            totalAggressive = FinancialMath.safeAdd(
+                totalAggressive,
+                zone.aggressiveVolume
+            );
+            totalPassive = FinancialMath.safeAdd(
+                totalPassive,
+                zone.passiveVolume
+            );
+            aggressiveBuy = FinancialMath.safeAdd(
+                aggressiveBuy,
+                zone.aggressiveBuyVolume || 0
+            );
+            aggressiveSell = FinancialMath.safeAdd(
+                aggressiveSell,
+                zone.aggressiveSellVolume || 0
+            );
+            passiveBid = FinancialMath.safeAdd(
+                passiveBid,
+                zone.passiveBidVolume || 0
+            );
+            passiveAsk = FinancialMath.safeAdd(
+                passiveAsk,
+                zone.passiveAskVolume || 0
+            );
         }
 
-        const totalVolume = totalAggressive + totalPassive;
+        const totalVolume = FinancialMath.safeAdd(
+            totalAggressive,
+            totalPassive
+        );
         const institutionalVolumeRatio =
             totalVolume > 0
                 ? FinancialMath.divideQuantities(totalPassive, totalVolume)

@@ -3,7 +3,6 @@
 import { EventEmitter } from "events";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
-import { AlertManager } from "../alerts/alertManager.js";
 import type { SignalTracker } from "./signalTracker.js";
 import type {
     PerformanceAnalyzer,
@@ -90,27 +89,26 @@ export class PerformanceMonitor extends EventEmitter {
     private readonly config: Required<PerformanceMonitorConfig>;
 
     // Monitoring intervals
-    private performanceAnalysisInterval?: NodeJS.Timeout;
-    private quickCheckInterval?: NodeJS.Timeout;
-    private healthCheckInterval?: NodeJS.Timeout;
-    private reportGenerationInterval?: NodeJS.Timeout;
+    private performanceAnalysisInterval?: NodeJS.Timeout | undefined;
+    private quickCheckInterval?: NodeJS.Timeout | undefined;
+    private healthCheckInterval?: NodeJS.Timeout | undefined;
+    private reportGenerationInterval?: NodeJS.Timeout | undefined;
 
     // State tracking
-    private activeAlerts = new Map<string, PerformanceAlert>();
-    private alertHistory: PerformanceAlert[] = [];
+    private readonly activeAlerts = new Map<string, PerformanceAlert>();
+    private readonly alertHistory: PerformanceAlert[] = [];
     private lastPerformanceReport?: PerformanceReport;
     private lastFailurePatterns?: FailurePatterns;
     private recentTrends: PerformanceTrend[] = [];
     private systemHealth: SystemHealthStatus;
 
     // Alert cooldowns
-    private alertCooldowns = new Map<string, number>();
+    private readonly alertCooldowns = new Map<string, number>();
 
     constructor(
         private readonly signalTracker: SignalTracker,
         private readonly performanceAnalyzer: PerformanceAnalyzer,
         private readonly failureAnalyzer: FailureAnalyzer,
-        private readonly alertManager: AlertManager,
         private readonly logger: ILogger,
         private readonly metricsCollector: IMetricsCollector,
         config: Partial<PerformanceMonitorConfig> = {}
@@ -856,17 +854,28 @@ export class PerformanceMonitor extends EventEmitter {
     ): "healthy" | "warning" | "critical" | "unknown" {
         switch (componentName) {
             case "signalTracker":
-                if (metrics.activeSignals > 1000) return "warning"; // Too many active signals
-                if (metrics.finalizedSignals === 0) return "critical"; // No finalized signals
+                if (
+                    metrics["activeSignals"] !== undefined &&
+                    metrics["activeSignals"] > 1000
+                )
+                    return "warning"; // Too many active signals
+                if (metrics["finalizedSignals"] === 0) return "critical"; // No finalized signals
                 return "healthy";
 
             case "signalGeneration":
-                if (metrics.recentSignals === 0) return "critical"; // No recent signals
-                if (metrics.successRate < 0.3) return "warning"; // Low success rate
+                if (metrics["recentSignals"] === 0) return "critical"; // No recent signals
+                if (
+                    metrics["successRate"] !== undefined &&
+                    metrics["successRate"] < 0.3
+                )
+                    return "warning"; // Low success rate
                 return "healthy";
 
             case "alertSystem":
-                if (metrics.activeAlerts > this.config.maxActiveAlerts * 0.8)
+                if (
+                    metrics["activeAlerts"] !== undefined &&
+                    metrics["activeAlerts"] > this.config.maxActiveAlerts * 0.8
+                )
                     return "warning";
                 return "healthy";
 
@@ -1020,7 +1029,7 @@ export class PerformanceMonitor extends EventEmitter {
             isMonitoring: !!this.performanceAnalysisInterval,
             activeAlerts: this.activeAlerts.size,
             systemHealth: this.systemHealth.overall,
-            lastAnalysis: this.lastPerformanceReport?.generatedAt,
+            lastAnalysis: this.lastPerformanceReport?.generatedAt ?? -1,
             recentTrends: this.recentTrends.length,
             config: this.config,
         };

@@ -115,8 +115,8 @@ export const StandardZoneConfigSchema = z.object({
 // EXHAUSTION detector - CLEANED UP - Only used settings remain (16 core parameters)
 export const ExhaustionDetectorSchema = z.object({
     // Core detection
-    minAggVolume: z.number().int().min(1).max(10000),
-    windowMs: z.number().int().min(5000).max(300000),
+    minAggVolume: z.number().int().min(1).max(100000),
+    timeWindowIndex: z.number().int().min(0).max(5),
     exhaustionThreshold: z.number().min(0.01).max(1.0),
     eventCooldownMs: z.number().int().min(1000).max(300000),
 
@@ -126,31 +126,37 @@ export const ExhaustionDetectorSchema = z.object({
     minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
 
     // Enhanced depletion analysis
-    depletionVolumeThreshold: z.number().min(10).max(1000),
-    depletionRatioThreshold: z.number().min(0.1).max(0.9),
+    depletionVolumeThreshold: z.number().min(10).max(100000),
+    depletionRatioThreshold: z.number().min(-1.0).max(0),
     enableDepletionAnalysis: z.boolean(),
     depletionConfidenceBoost: z.number().min(0.05).max(0.3),
 
     // Cross-timeframe calculations
     varianceReductionFactor: z.number().min(0.5).max(3.0),
     alignmentNormalizationFactor: z.number().min(0.2).max(3.0),
-    passiveVolumeExhaustionRatio: z.number().min(0.3).max(0.8),
-    aggressiveVolumeExhaustionThreshold: z.number().min(0.5).max(1.0),
+    passiveVolumeExhaustionRatio: z.number().min(0.3).max(2.0),
+    aggressiveVolumeExhaustionThreshold: z.number().min(0.001).max(0.5),
     aggressiveVolumeReductionFactor: z.number().min(0.3).max(0.8),
+
+    // Additional configurable thresholds to replace magic numbers
+    passiveRatioBalanceThreshold: z.number().min(0.3).max(0.7), // Replace hardcoded 0.5
+    premiumConfidenceThreshold: z.number().min(0.6).max(0.9), // Replace hardcoded 0.7
+    variancePenaltyFactor: z.number().min(0.5).max(1.5), // Replace hardcoded variance calculation
+    ratioBalanceCenterPoint: z.number().min(0.4).max(0.6), // Replace hardcoded 0.5 center points
 });
 
 // ABSORPTION detector - CLEANED UP - Only used settings remain
 export const AbsorptionDetectorSchema = z.object({
     // Core detection
-    minAggVolume: z.number().int().min(1).max(10000),
-    windowMs: z.number().int().min(5000).max(300000), // 5s to 5min absorption analysis window
+    minAggVolume: z.number().int().min(1).max(100000),
+    timeWindowIndex: z.number().int().min(0).max(5), // Index into preprocessor timeWindows array
     eventCooldownMs: z.number().int().min(1000).max(60000),
 
     // Absorption thresholds
     priceEfficiencyThreshold: z.number().min(0.0001).max(0.1),
     maxAbsorptionRatio: z.number().min(0.1).max(1.0),
     minPassiveMultiplier: z.number().min(0.5).max(5.0),
-    passiveAbsorptionThreshold: z.number().min(0.3).max(0.8),
+    passiveAbsorptionThreshold: z.number().min(10).max(50),
 
     // Calculation parameters
     expectedMovementScalingFactor: z.number().int().min(1).max(100),
@@ -158,13 +164,13 @@ export const AbsorptionDetectorSchema = z.object({
     liquidityGradientRange: z.number().int().min(1).max(20),
 
     // Institutional analysis
-    institutionalVolumeThreshold: z.number().min(1).max(20000),
-    institutionalVolumeRatioThreshold: z.number().min(0.3).max(0.8),
+    institutionalVolumeThreshold: z.number().min(10000).max(100000),
+    institutionalVolumeRatioThreshold: z.number().min(1).max(50),
     enableInstitutionalVolumeFilter: z.boolean(),
     institutionalVolumeBoost: z.number().min(0.05).max(0.3),
 
     // Confidence and scoring
-    minAbsorptionScore: z.number().min(0.3).max(0.9),
+    minAbsorptionScore: z.number().min(0.3).max(0.99),
     finalConfidenceRequired: z.number().min(0.1).max(3.0),
     confidenceBoostReduction: z.number().min(0.3).max(0.8),
     maxZoneCountForScoring: z.number().int().min(1).max(10),
@@ -173,6 +179,13 @@ export const AbsorptionDetectorSchema = z.object({
     // Enhancement control
     useStandardizedZones: z.boolean(),
     enhancementMode: z.enum(["disabled", "testing", "production"]),
+
+    // Balance detection threshold
+    balanceThreshold: z.number().min(0.01).max(0.75),
+
+    // Zone confluence parameters (CLAUDE.md compliance - no magic numbers)
+    confluenceMinZones: z.number().int().min(1).max(10),
+    confluenceMaxDistance: z.number().int().min(1).max(20),
 });
 
 // DELTACVD detector - CLEANED UP - Only used settings remain
@@ -180,14 +193,20 @@ export const DeltaCVDDetectorSchema = z.object({
     // Core CVD analysis parameters (actually used by detector)
     minTradesPerSec: z.number().min(0.001).max(5.0),
     minVolPerSec: z.number().min(0.01).max(2000.0),
-    signalThreshold: z.number().min(0.01).max(1.8),
-    eventCooldownMs: z.number().int().min(1000).max(90000),
+    signalThreshold: z.number().min(0.01).max(8.0),
+    eventCooldownMs: z.number().int().min(1000).max(1800000),
+
+    // Zone time window configuration
+    timeWindowIndex: z.number().int().min(0).max(5),
 
     // Zone enhancement control
     enhancementMode: z.enum(["disabled", "monitoring", "production"]),
 
     // CVD divergence analysis parameters
     cvdImbalanceThreshold: z.number().min(0.05).max(0.4), // CVD imbalance ratio for detection (lower than signalThreshold)
+
+    // Institutional trade threshold (replace hardcoded 17.8 LTC)
+    institutionalThreshold: z.number().min(0.001).max(5.0), // LTC threshold for institutional trade detection
 });
 
 // ACCUMULATION detector - CLEANED UP - Only used settings remain
@@ -256,7 +275,7 @@ export const DistributionDetectorSchema = z.object({
     defaultBaselineVolatility: z.number().min(0.01).max(0.3),
 });
 
-// SIMPLE ICEBERG detector - Minimal, correct iceberg pattern detection
+// SIMPLE ICEBERG detector - CLAUDE.md COMPLIANT - Zero tolerance for magic numbers
 export const SimpleIcebergDetectorSchema = z.object({
     // Core parameters
     enhancementMode: z.enum(["disabled", "testing", "production"]),
@@ -266,8 +285,8 @@ export const SimpleIcebergDetectorSchema = z.object({
     minTotalSize: z.number().min(10).max(100000000), // Min total volume for significance (starts at 10 LTC)
 
     // Timing parameters
+    timeWindowIndex: z.number().int().min(0).max(5), // Index into preprocessor timeWindows array
     maxOrderGapMs: z.number().int().min(100).max(3600000), // Max gap between orders
-    trackingWindowMs: z.number().int().min(60000).max(86400000), // Pattern tracking window
 
     // Performance parameters
     maxActivePatterns: z.number().int().min(5).max(10000), // Memory management
@@ -283,6 +302,54 @@ const ExhaustionEnhancedSettingsSchema = ExhaustionDetectorSchema;
 const AbsorptionEnhancedSettingsSchema = AbsorptionDetectorSchema;
 
 // Remove duplicate schema - use DeltaCVDDetectorSchema directly
+
+// ============================================================================
+// MICROSTRUCTURE ANALYZER CONFIG - Algorithmic trading pattern detection
+// ============================================================================
+export const MicrostructureAnalyzerSchema = z.object({
+    // Timing analysis thresholds
+    burstThresholdMs: z.number().int().min(10).max(1000), // 10ms-1s coordinated trades
+    uniformityThreshold: z.number().min(0.1).max(0.5), // CV threshold for uniform timing
+
+    // Fragmentation analysis
+    sizingConsistencyThreshold: z.number().min(0.05).max(0.3), // CV threshold for consistent sizing
+
+    // Toxicity analysis
+    persistenceWindowSize: z.number().int().min(3).max(20), // Number of trades for persistence
+
+    // Algorithmic pattern detection
+    marketMakingSpreadThreshold: z.number().min(0.001).max(0.1), // Price spread threshold
+    icebergSizeRatio: z.number().min(0.5).max(0.95), // Ratio threshold for iceberg detection
+    arbitrageTimeThreshold: z.number().int().min(10).max(500), // Max time for arbitrage detection
+});
+
+// ============================================================================
+// INDIVIDUAL TRADES MANAGER CONFIG - High-value trade individual data fetching
+// ============================================================================
+export const IndividualTradesManagerSchema = z.object({
+    // Feature enablement
+    enabled: z.boolean(),
+
+    // Selective fetching criteria
+    criteria: z.object({
+        minOrderSizePercentile: z.number().int().min(50).max(99), // 50-99th percentile
+        keyLevelsEnabled: z.boolean(), // Fetch at support/resistance levels
+        anomalyPeriodsEnabled: z.boolean(), // Fetch during anomaly detection
+        highVolumePeriodsEnabled: z.boolean(), // Fetch during high activity periods
+    }),
+
+    // Performance tuning
+    cache: z.object({
+        maxSize: z.number().int().min(1000).max(100000), // 1K-100K cached trades
+        ttlMs: z.number().int().min(60000).max(3600000), // 1min-1hour TTL
+    }),
+
+    // API rate limiting
+    rateLimit: z.object({
+        maxRequestsPerSecond: z.number().int().min(1).max(10), // 1-10 req/sec (Binance limits)
+        batchSize: z.number().int().min(10).max(1000), // 10-1000 trades per API call
+    }),
+});
 
 const MarketDataStorageConfigSchema = z.object({
     enabled: z.boolean(),
@@ -333,6 +400,18 @@ const BasicSymbolConfigSchema = z
             maxMemoryTrades: z.number().int().positive(),
             saveQueueSize: z.number().int().positive(),
             healthCheckInterval: z.number().int().positive(),
+        }),
+        preprocessor: z.object({
+            defaultZoneMultipliers: z.array(z.number().int().positive()),
+            defaultTimeWindows: z.array(z.number().int().positive()),
+            defaultMinZoneWidthMultiplier: z.number().int().positive(),
+            defaultMaxZoneWidthMultiplier: z.number().int().positive(),
+            defaultMaxZoneHistory: z.number().int().positive(),
+            defaultMaxMemoryMB: z.number().int().positive(),
+            defaultAggressiveVolumeAbsolute: z.number().positive(),
+            defaultPassiveVolumeAbsolute: z.number().positive(),
+            defaultInstitutionalVolumeAbsolute: z.number().positive(),
+            maxTradesPerZone: z.number().int().positive(),
         }),
         signalManager: z.object({
             confidenceThreshold: z.number().positive(),
@@ -412,7 +491,7 @@ const BasicSymbolConfigSchema = z
             anomalyCooldownMs: z.number().int().positive(),
             volumeImbalanceThreshold: z.number().positive(),
             normalSpreadBps: z.number().positive(),
-            minHistory: z.number().int().positive(),
+            minHistory: z.number().int().min(2).positive(),
             flowWindowMs: z.number().int().positive(),
             orderSizeWindowMs: z.number().int().positive(),
             volatilityThreshold: z.number().positive(),
@@ -510,12 +589,12 @@ function validateMandatoryConfig(): void {
     }
 
     // Validate symbols configuration
-    if (!cfg.symbols || !cfg.symbols.LTCUSDT) {
+    if (!cfg.symbols || !cfg.symbols["LTCUSDT"]) {
         errors.push("MISSING: cfg.symbols.LTCUSDT configuration is required");
     }
 
-    if (cfg.symbols && cfg.symbols.LTCUSDT) {
-        const symbolCfg = cfg.symbols.LTCUSDT;
+    if (cfg.symbols && cfg.symbols["LTCUSDT"]) {
+        const symbolCfg = cfg.symbols["LTCUSDT"];
 
         // Mandatory enhanced detector configurations - simplified validation
         if (!symbolCfg.exhaustion) {
@@ -631,9 +710,37 @@ function validateMandatoryConfig(): void {
             process.exit(1);
         }
 
+        try {
+            MicrostructureAnalyzerSchema.parse(
+                SYMBOL_CFG["microstructureAnalyzer"]
+            );
+        } catch (error) {
+            console.error("🚨 CRITICAL CONFIG ERROR - MicrostructureAnalyzer");
+            console.error("Missing mandatory configuration properties:");
+            console.error(error);
+            console.error(
+                "Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT"
+            );
+            process.exit(1);
+        }
+
+        try {
+            IndividualTradesManagerSchema.parse(
+                SYMBOL_CFG["individualTradesManager"]
+            );
+        } catch (error) {
+            console.error("🚨 CRITICAL CONFIG ERROR - IndividualTradesManager");
+            console.error("Missing mandatory configuration properties:");
+            console.error(error);
+            console.error(
+                "Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT"
+            );
+            process.exit(1);
+        }
+
         // CRITICAL: StandardZoneConfig validation for CVD signal generation
         try {
-            StandardZoneConfigSchema.parse(SYMBOL_CFG.standardZoneConfig);
+            StandardZoneConfigSchema.parse(SYMBOL_CFG["standardZoneConfig"]);
         } catch (error) {
             console.error(
                 "🚨 CRITICAL CONFIG ERROR - StandardZoneConfig (CVD signals)"
@@ -666,10 +773,10 @@ function validateMandatoryConfig(): void {
     console.log("✅ CONFIG VALIDATION PASSED - All mandatory settings present");
 }
 
-let ENV_SYMBOL: string | undefined = process.env.SYMBOL?.toUpperCase();
-let CONFIG_SYMBOL: AllowedSymbols = (ENV_SYMBOL ||
+const ENV_SYMBOL: string | undefined = process.env["SYMBOL"]?.toUpperCase();
+const CONFIG_SYMBOL: AllowedSymbols = (ENV_SYMBOL ||
     cfg.symbol) as AllowedSymbols;
-let SYMBOL_CFG = cfg.symbols[CONFIG_SYMBOL as keyof typeof cfg.symbols];
+const SYMBOL_CFG = cfg.symbols[CONFIG_SYMBOL as keyof typeof cfg.symbols];
 if (!SYMBOL_CFG) {
     console.error(
         `🚨 CRITICAL CONFIG ERROR: Symbol ${CONFIG_SYMBOL} configuration missing from config.json`
@@ -680,10 +787,10 @@ if (!SYMBOL_CFG) {
 // Execute validation after SYMBOL_CFG is initialized
 validateMandatoryConfig();
 
-let DATASTREAM_CFG = cfg.dataStream;
+const DATASTREAM_CFG = cfg.dataStream;
 
 // Universal zone config from LTCUSDT symbol configuration
-let UNIVERSAL_ZONE_CFG = SYMBOL_CFG.universalZoneConfig;
+const UNIVERSAL_ZONE_CFG = SYMBOL_CFG.universalZoneConfig;
 if (!UNIVERSAL_ZONE_CFG) {
     console.error(
         `🚨 CRITICAL CONFIG ERROR: universalZoneConfig configuration missing from symbols.LTCUSDT in config.json`
@@ -701,7 +808,7 @@ export class Config {
         return CONFIG_SYMBOL;
     }
     static get PRICE_PRECISION(): number {
-        return Number(SYMBOL_CFG.pricePrecision);
+        return Number(SYMBOL_CFG!.pricePrecision);
     }
     static get TICK_SIZE(): number {
         return 1 / Math.pow(10, Config.PRICE_PRECISION);
@@ -709,8 +816,8 @@ export class Config {
     static get MAX_STORAGE_TIME(): number {
         return Number(cfg.maxStorageTime);
     }
-    static get WINDOW_MS(): number {
-        return Number(SYMBOL_CFG.windowMs);
+    static getTimeWindow(timeWindowIndex: number): number {
+        return Config.STANDARD_ZONE_CONFIG.timeWindows[timeWindowIndex]!;
     }
 
     // Server configuration
@@ -724,16 +831,16 @@ export class Config {
         return cfg.mqtt;
     }
     static get API_KEY(): string | undefined {
-        return process.env.API_KEY;
+        return process.env["API_KEY"];
     }
     static get API_SECRET(): string | undefined {
-        return process.env.API_SECRET;
+        return process.env["API_SECRET"];
     }
     static get LLM_API_KEY(): string | undefined {
-        return process.env.LLM_API_KEY;
+        return process.env["LLM_API_KEY"];
     }
     static get LLM_MODEL(): string {
-        return process.env.LLM_MODEL!;
+        return process.env["LLM_MODEL"]!;
     }
     static get NODE_ENV(): string {
         return cfg.nodeEnv;
@@ -749,14 +856,14 @@ export class Config {
         return {
             symbol: Config.SYMBOL,
             pricePrecision: Config.PRICE_PRECISION,
-            quantityPrecision: SYMBOL_CFG.quantityPrecision,
-            bandTicks: SYMBOL_CFG.bandTicks,
+            quantityPrecision: SYMBOL_CFG!.quantityPrecision,
+            bandTicks: SYMBOL_CFG!.bandTicks,
             tickSize: Config.TICK_SIZE,
-            largeTradeThreshold: SYMBOL_CFG.largeTradeThreshold,
-            maxEventListeners: SYMBOL_CFG.maxEventListeners,
-            dashboardUpdateInterval: SYMBOL_CFG.dashboardUpdateInterval,
-            maxDashboardInterval: SYMBOL_CFG.maxDashboardInterval,
-            significantChangeThreshold: SYMBOL_CFG.significantChangeThreshold,
+            largeTradeThreshold: SYMBOL_CFG!.largeTradeThreshold,
+            maxEventListeners: SYMBOL_CFG!.maxEventListeners,
+            dashboardUpdateInterval: SYMBOL_CFG!.dashboardUpdateInterval,
+            maxDashboardInterval: SYMBOL_CFG!.maxDashboardInterval,
+            significantChangeThreshold: SYMBOL_CFG!.significantChangeThreshold,
             standardZoneConfig: Config.STANDARD_ZONE_CONFIG,
 
             enableIndividualTrades: true,
@@ -764,17 +871,23 @@ export class Config {
             adaptiveZoneLookbackTrades: 500, // 500 trades ≈ meaningful zone formation over 12-15 min
             zoneCalculationRange: 12, // ±12 zones for broader price action coverage
             zoneCacheSize: 375, // Pre-allocated cache size for 90-minute analysis
-            defaultZoneMultipliers: [1, 2, 4],
-            defaultTimeWindows: [300000, 900000, 1800000, 3600000, 5400000],
-            defaultMinZoneWidthMultiplier: 2, // Based on LTCUSDT: 2 ticks minimum
-            defaultMaxZoneWidthMultiplier: 10, // Based on LTCUSDT: 10 ticks maximum
-            defaultMaxZoneHistory: 2000, // 2000 zones ≈ 90+ minutes comprehensive coverage
-            defaultMaxMemoryMB: 50, // 50MB for 90-minute zone structures and history
-            defaultAggressiveVolumeAbsolute: 10.0, // LTCUSDT: 10+ LTC (top 5% of trades)
-            defaultPassiveVolumeAbsolute: 5.0, // LTCUSDT: 5+ LTC (top 15% of trades)
-            defaultInstitutionalVolumeAbsolute: 50.0,
-            maxTradesPerZone: 1500, // Maximum individual trades stored per zone for VWAP calculation
-            // TODO: Move all these hardcoded preprocessor configurations to config.json
+            defaultZoneMultipliers:
+                SYMBOL_CFG!.preprocessor.defaultZoneMultipliers,
+            defaultTimeWindows: SYMBOL_CFG!.preprocessor.defaultTimeWindows,
+            defaultMinZoneWidthMultiplier:
+                SYMBOL_CFG!.preprocessor.defaultMinZoneWidthMultiplier,
+            defaultMaxZoneWidthMultiplier:
+                SYMBOL_CFG!.preprocessor.defaultMaxZoneWidthMultiplier,
+            defaultMaxZoneHistory:
+                SYMBOL_CFG!.preprocessor.defaultMaxZoneHistory,
+            defaultMaxMemoryMB: SYMBOL_CFG!.preprocessor.defaultMaxMemoryMB,
+            defaultAggressiveVolumeAbsolute:
+                SYMBOL_CFG!.preprocessor.defaultAggressiveVolumeAbsolute,
+            defaultPassiveVolumeAbsolute:
+                SYMBOL_CFG!.preprocessor.defaultPassiveVolumeAbsolute,
+            defaultInstitutionalVolumeAbsolute:
+                SYMBOL_CFG!.preprocessor.defaultInstitutionalVolumeAbsolute,
+            maxTradesPerZone: SYMBOL_CFG!.preprocessor.maxTradesPerZone,
         };
     }
 
@@ -802,18 +915,20 @@ export class Config {
         return {
             symbol: Config.SYMBOL,
             pricePrecision: Config.PRICE_PRECISION,
-            maxLevels: Number(cfg.symbols[cfg.symbol].orderBookState.maxLevels),
+            maxLevels: Number(
+                cfg.symbols[cfg.symbol]!.orderBookState.maxLevels
+            ),
             maxPriceDistance: Number(
-                cfg.symbols[cfg.symbol].orderBookState.maxPriceDistance
+                cfg.symbols[cfg.symbol]!.orderBookState.maxPriceDistance
             ),
             pruneIntervalMs: Number(
-                cfg.symbols[cfg.symbol].orderBookState.pruneIntervalMs
+                cfg.symbols[cfg.symbol]!.orderBookState.pruneIntervalMs
             ),
             maxErrorRate: Number(
-                cfg.symbols[cfg.symbol].orderBookState.maxErrorRate
+                cfg.symbols[cfg.symbol]!.orderBookState.maxErrorRate
             ),
             staleThresholdMs: Number(
-                cfg.symbols[cfg.symbol].orderBookState.staleThresholdMs
+                cfg.symbols[cfg.symbol]!.orderBookState.staleThresholdMs
             ),
         };
     }
@@ -822,28 +937,28 @@ export class Config {
         return {
             symbol: Config.SYMBOL,
             storageTime: Number(
-                cfg.symbols[cfg.symbol].tradesProcessor.storageTime
+                cfg.symbols[cfg.symbol]!.tradesProcessor.storageTime
             ),
             maxBacklogRetries: Number(
-                cfg.symbols[cfg.symbol].tradesProcessor.maxBacklogRetries
+                cfg.symbols[cfg.symbol]!.tradesProcessor.maxBacklogRetries
             ),
             backlogBatchSize: Number(
-                cfg.symbols[cfg.symbol].tradesProcessor.backlogBatchSize
+                cfg.symbols[cfg.symbol]!.tradesProcessor.backlogBatchSize
             ),
             maxMemoryTrades: Number(
-                cfg.symbols[cfg.symbol].tradesProcessor.maxMemoryTrades
+                cfg.symbols[cfg.symbol]!.tradesProcessor.maxMemoryTrades
             ),
             saveQueueSize: Number(
-                cfg.symbols[cfg.symbol].tradesProcessor.saveQueueSize
+                cfg.symbols[cfg.symbol]!.tradesProcessor.saveQueueSize
             ),
             healthCheckInterval: Number(
-                cfg.symbols[cfg.symbol].tradesProcessor.healthCheckInterval
+                cfg.symbols[cfg.symbol]!.tradesProcessor.healthCheckInterval
             ),
         };
     }
 
     static get SIGNAL_MANAGER(): SignalManagerConfig {
-        const smConfig = cfg.symbols[cfg.symbol].signalManager;
+        const smConfig = cfg.symbols[cfg.symbol]!.signalManager;
         return {
             confidenceThreshold: Number(smConfig.confidenceThreshold),
             signalTimeout: Number(smConfig.signalTimeout),
@@ -889,31 +1004,31 @@ export class Config {
     }
 
     static get DETECTOR_CONFIDENCE_THRESHOLDS(): Record<string, number> {
-        return cfg.symbols[cfg.symbol].signalManager.detectorThresholds;
+        return cfg.symbols[cfg.symbol]!.signalManager.detectorThresholds;
     }
 
     static get DETECTOR_POSITION_SIZING(): Record<string, number> {
-        return cfg.symbols[cfg.symbol].signalManager.positionSizing;
+        return cfg.symbols[cfg.symbol]!.signalManager.positionSizing;
     }
 
     static get SIGNAL_COORDINATOR(): SignalCoordinatorConfig {
         return {
             maxConcurrentProcessing: Number(
-                cfg.symbols[cfg.symbol].signalCoordinator
+                cfg.symbols[cfg.symbol]!.signalCoordinator
                     .maxConcurrentProcessing
             ),
             processingTimeoutMs: Number(
-                cfg.symbols[cfg.symbol].signalCoordinator.processingTimeoutMs
+                cfg.symbols[cfg.symbol]!.signalCoordinator.processingTimeoutMs
             ),
             retryAttempts: Number(
-                cfg.symbols[cfg.symbol].signalCoordinator.retryAttempts
+                cfg.symbols[cfg.symbol]!.signalCoordinator.retryAttempts
             ),
             retryDelayMs: Number(
-                cfg.symbols[cfg.symbol].signalCoordinator.retryDelayMs
+                cfg.symbols[cfg.symbol]!.signalCoordinator.retryDelayMs
             ),
             enableMetrics:
-                cfg.symbols[cfg.symbol].signalCoordinator.enableMetrics,
-            logLevel: cfg.symbols[cfg.symbol].signalCoordinator.logLevel,
+                cfg.symbols[cfg.symbol]!.signalCoordinator.enableMetrics,
+            logLevel: cfg.symbols[cfg.symbol]!.signalCoordinator.logLevel,
         };
     }
 
@@ -921,12 +1036,14 @@ export class Config {
         const precision = Config.PRICE_PRECISION;
         const tickSize = 1 / Math.pow(10, precision);
         return {
-            binSize: Number(cfg.symbols[cfg.symbol].orderBookProcessor.binSize),
+            binSize: Number(
+                cfg.symbols[cfg.symbol]!.orderBookProcessor.binSize
+            ),
             numLevels: Number(
-                cfg.symbols[cfg.symbol].orderBookProcessor.numLevels
+                cfg.symbols[cfg.symbol]!.orderBookProcessor.numLevels
             ),
             maxBufferSize: Number(
-                cfg.symbols[cfg.symbol].orderBookProcessor.maxBufferSize
+                cfg.symbols[cfg.symbol]!.orderBookProcessor.maxBufferSize
             ),
             tickSize: tickSize,
             precision: precision,
@@ -940,26 +1057,26 @@ export class Config {
 
     // Individual detector configurations
     static get EXHAUSTION_CONFIG() {
-        return SYMBOL_CFG.exhaustion;
+        return SYMBOL_CFG!.exhaustion;
     }
     static get ABSORPTION_CONFIG() {
-        return SYMBOL_CFG.absorption;
+        return SYMBOL_CFG!.absorption;
     }
     static get DELTACVD_CONFIG() {
-        return SYMBOL_CFG.deltaCVD;
+        return SYMBOL_CFG!.deltaCVD;
     }
     static get ACCUMULATION_CONFIG() {
-        return SYMBOL_CFG.accumulation;
+        return SYMBOL_CFG!.accumulation;
     }
     static get DISTRIBUTION_CONFIG() {
-        return SYMBOL_CFG.distribution;
+        return SYMBOL_CFG!.distribution;
     }
 
     // Distribution detector with schema validation
     static get DISTRIBUTION_DETECTOR() {
         return this.validateDetectorConfig(
             DistributionDetectorSchema,
-            SYMBOL_CFG.distribution
+            SYMBOL_CFG!.distribution
         );
     }
 
@@ -978,41 +1095,41 @@ export class Config {
     static get ABSORPTION_DETECTOR() {
         return this.validateDetectorConfig(
             AbsorptionDetectorSchema,
-            SYMBOL_CFG.absorption
+            SYMBOL_CFG!.absorption
         );
     }
 
     static get EXHAUSTION_DETECTOR() {
         return this.validateDetectorConfig(
             ExhaustionDetectorSchema,
-            SYMBOL_CFG.exhaustion
+            SYMBOL_CFG!.exhaustion
         );
     }
 
     static get DELTACVD_DETECTOR() {
         return this.validateDetectorConfig(
             DeltaCVDDetectorSchema,
-            SYMBOL_CFG.deltaCVD
+            SYMBOL_CFG!.deltaCVD
         );
     }
 
     static get ACCUMULATION_DETECTOR() {
         return this.validateDetectorConfig(
             AccumulationDetectorSchema,
-            SYMBOL_CFG.accumulation
+            SYMBOL_CFG!.accumulation
         );
     }
 
     static get DISTRIBUTION_ZONE_DETECTOR() {
         return this.validateDetectorConfig(
             DistributionDetectorSchema,
-            SYMBOL_CFG.distribution
+            SYMBOL_CFG!.distribution
         );
     }
 
     static get SIMPLE_ICEBERG_DETECTOR() {
         try {
-            return SimpleIcebergDetectorSchema.parse(SYMBOL_CFG.simpleIceberg);
+            return SimpleIcebergDetectorSchema.parse(SYMBOL_CFG!.simpleIceberg);
         } catch (error) {
             console.error("🚨 CRITICAL CONFIG ERROR - SimpleIcebergDetector");
             console.error("Missing mandatory configuration properties:");
@@ -1031,87 +1148,36 @@ export class Config {
 
     // CRITICAL: Zone configuration with Zod validation for CVD signal generation
     static get STANDARD_ZONE_CONFIG() {
-        return StandardZoneConfigSchema.parse(SYMBOL_CFG.standardZoneConfig);
+        return StandardZoneConfigSchema.parse(
+            SYMBOL_CFG!["standardZoneConfig"]
+        );
     }
 
     static get INDIVIDUAL_TRADES_MANAGER(): IndividualTradesManagerConfig {
-        return {
-            enabled: process.env.INDIVIDUAL_TRADES_ENABLED === "true" || false,
-
-            criteria: {
-                minOrderSizePercentile: Number(
-                    process.env.INDIVIDUAL_TRADES_SIZE_PERCENTILE ?? 95
-                ),
-                keyLevelsEnabled:
-                    process.env.INDIVIDUAL_TRADES_KEY_LEVELS === "true" ||
-                    false,
-                anomalyPeriodsEnabled:
-                    process.env.INDIVIDUAL_TRADES_ANOMALY_PERIODS === "true" ||
-                    true,
-                highVolumePeriodsEnabled:
-                    process.env.INDIVIDUAL_TRADES_HIGH_VOLUME === "true" ||
-                    true,
-            },
-
-            cache: {
-                maxSize: Number(
-                    process.env.INDIVIDUAL_TRADES_CACHE_SIZE ?? 10000
-                ),
-                ttlMs: Number(
-                    process.env.INDIVIDUAL_TRADES_CACHE_TTL ?? 300000
-                ), // 5 minutes
-            },
-
-            rateLimit: {
-                maxRequestsPerSecond: Number(
-                    process.env.INDIVIDUAL_TRADES_RATE_LIMIT ?? 5
-                ),
-                batchSize: Number(
-                    process.env.INDIVIDUAL_TRADES_BATCH_SIZE ?? 100
-                ),
-            },
-        };
+        return IndividualTradesManagerSchema.parse(
+            SYMBOL_CFG!["individualTradesManager"]
+        );
     }
 
     static get MICROSTRUCTURE_ANALYZER(): MicrostructureAnalyzerConfig {
-        return {
-            burstThresholdMs: Number(
-                process.env.MICROSTRUCTURE_BURST_THRESHOLD ?? 100
-            ),
-            uniformityThreshold: Number(
-                process.env.MICROSTRUCTURE_UNIFORMITY_THRESHOLD ?? 0.2
-            ),
-            sizingConsistencyThreshold: Number(
-                process.env.MICROSTRUCTURE_SIZING_THRESHOLD ?? 0.15
-            ),
-            persistenceWindowSize: Number(
-                process.env.MICROSTRUCTURE_PERSISTENCE_WINDOW ?? 5
-            ),
-            marketMakingSpreadThreshold: Number(
-                process.env.MICROSTRUCTURE_MM_SPREAD_THRESHOLD ?? 0.01
-            ),
-            icebergSizeRatio: Number(
-                process.env.MICROSTRUCTURE_ICEBERG_RATIO ?? 0.8
-            ),
-            arbitrageTimeThreshold: Number(
-                process.env.MICROSTRUCTURE_ARBITRAGE_TIME ?? 50
-            ),
-        };
+        return MicrostructureAnalyzerSchema.parse(
+            SYMBOL_CFG!["microstructureAnalyzer"]
+        );
     }
 
     static get SPOOFING_DETECTOR(): SpoofingDetectorConfig {
         return {
             tickSize: this.TICK_SIZE,
             wallTicks: Number(
-                cfg.symbols[cfg.symbol].spoofingDetector.wallTicks
+                cfg.symbols[cfg.symbol]!.spoofingDetector.wallTicks
             ),
             minWallSize: Number(
-                cfg.symbols[cfg.symbol].spoofingDetector.minWallSize
+                cfg.symbols[cfg.symbol]!.spoofingDetector.minWallSize
             ),
             dynamicWallWidth:
-                cfg.symbols[cfg.symbol].spoofingDetector.dynamicWallWidth,
+                cfg.symbols[cfg.symbol]!.spoofingDetector.dynamicWallWidth,
             testLogMinSpoof: Number(
-                cfg.symbols[cfg.symbol].spoofingDetector.testLogMinSpoof
+                cfg.symbols[cfg.symbol]!.spoofingDetector.testLogMinSpoof
             ),
         };
     }
@@ -1119,51 +1185,52 @@ export class Config {
     static get ANOMALY_DETECTOR(): AnomalyDetectorOptions {
         return {
             windowSize: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.windowSize
+                cfg.symbols[cfg.symbol]!.anomalyDetector.windowSize
             ),
             anomalyCooldownMs: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.anomalyCooldownMs
+                cfg.symbols[cfg.symbol]!.anomalyDetector.anomalyCooldownMs
             ),
             volumeImbalanceThreshold: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.volumeImbalanceThreshold
+                cfg.symbols[cfg.symbol]!.anomalyDetector
+                    .volumeImbalanceThreshold
             ),
             normalSpreadBps: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.normalSpreadBps
+                cfg.symbols[cfg.symbol]!.anomalyDetector.normalSpreadBps
             ),
             minHistory: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.minHistory
+                cfg.symbols[cfg.symbol]!.anomalyDetector.minHistory
             ),
             tickSize: this.TICK_SIZE,
             flowWindowMs: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.flowWindowMs
+                cfg.symbols[cfg.symbol]!.anomalyDetector.flowWindowMs
             ),
             orderSizeWindowMs: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.orderSizeWindowMs
+                cfg.symbols[cfg.symbol]!.anomalyDetector.orderSizeWindowMs
             ),
             volatilityThreshold: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.volatilityThreshold
+                cfg.symbols[cfg.symbol]!.anomalyDetector.volatilityThreshold
             ),
             spreadThresholdBps: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.spreadThresholdBps
+                cfg.symbols[cfg.symbol]!.anomalyDetector.spreadThresholdBps
             ),
             extremeVolatilityWindowMs: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector
+                cfg.symbols[cfg.symbol]!.anomalyDetector
                     .extremeVolatilityWindowMs
             ),
             liquidityCheckWindowMs: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.liquidityCheckWindowMs
+                cfg.symbols[cfg.symbol]!.anomalyDetector.liquidityCheckWindowMs
             ),
             whaleCooldownMs: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.whaleCooldownMs
+                cfg.symbols[cfg.symbol]!.anomalyDetector.whaleCooldownMs
             ),
             marketHealthWindowMs: Number(
-                cfg.symbols[cfg.symbol].anomalyDetector.marketHealthWindowMs
+                cfg.symbols[cfg.symbol]!.anomalyDetector.marketHealthWindowMs
             ),
         };
     }
 
     static get HIDDEN_ORDER_DETECTOR(): Partial<HiddenOrderDetectorConfig> {
-        const hiddenOrderConfig = cfg.symbols[cfg.symbol].hiddenOrderDetector;
+        const hiddenOrderConfig = cfg.symbols[cfg.symbol]!.hiddenOrderDetector;
         return {
             minHiddenVolume: Number(hiddenOrderConfig.minHiddenVolume),
             minTradeSize: Number(hiddenOrderConfig.minTradeSize),

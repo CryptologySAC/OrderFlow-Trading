@@ -17,6 +17,7 @@ import {
     type ExhaustionEnhancedSettings,
 } from "../src/indicators/exhaustionDetectorEnhanced.js";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import {
     AbsorptionDetectorEnhanced,
     type AbsorptionEnhancedSettings,
@@ -371,6 +372,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
     let mockSignalLogger: ISignalLogger;
     let mockOrderBook: IOrderBookState;
     let mockPreprocessor: IOrderflowPreprocessor;
+    let mockSignalValidationLogger: SignalValidationLogger;
     let realConfig: any;
     let realMarketData: AggressiveTrade[];
 
@@ -381,6 +383,7 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
         mockSignalLogger = createMockSignalLogger();
         mockOrderBook = createMockOrderBookState();
         mockPreprocessor = createMockPreprocessor();
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
         realConfig = loadRealConfig();
         realMarketData = createRealMarketData();
 
@@ -504,11 +507,12 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             const detector = new AbsorptionDetectorEnhanced(
                 "debug-absorption",
-                "LTCUSDT",
                 settings,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Verify actual parameters match config (from settings)
@@ -536,11 +540,12 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             const detector = new AbsorptionDetectorEnhanced(
                 "debug-absorption",
-                "LTCUSDT",
                 settings,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             let signalCount = 0;
@@ -659,11 +664,11 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             const detector = new DeltaCVDDetectorEnhanced(
                 "debug-deltacvd",
-                "LTCUSDT",
                 completeDeltaCVDSettings,
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
+                mockSignalValidationLogger,
                 mockSignalLogger
             );
 
@@ -768,11 +773,11 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             const detector = new DeltaCVDDetectorEnhanced(
                 "debug-deltacvd",
-                "LTCUSDT",
                 completeDeltaCVDSettings,
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
+                mockSignalValidationLogger,
                 mockSignalLogger
             );
 
@@ -917,10 +922,9 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 "compare-absorption",
                 { symbol: "LTCUSDT", ...config.absorption },
                 mockPreprocessor,
-                mockOrderBook,
                 mockLogger,
-                mockSpoofing,
                 mockMetrics,
+                mockSignalValidationLogger,
                 mockSignalLogger
             );
 
@@ -999,11 +1003,11 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             const deltaCVDDetector = new DeltaCVDDetectorEnhanced(
                 "compare-deltacvd",
-                "LTCUSDT",
                 completeDeltaCVDSettings,
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
+                mockSignalValidationLogger,
                 mockSignalLogger
             );
 

@@ -26,6 +26,8 @@ import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { SpotWebsocketStreams } from "@binance/spot";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
+import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
 import "../test/vitest.setup.ts";
 
 // Real LTCUSDT market parameters
@@ -149,14 +151,33 @@ describe("AccumulationZoneDetectorEnhanced - REAL Integration Tests", () => {
             updateMetric: vi.fn(),
             incrementMetric: vi.fn(),
             incrementCounter: vi.fn(),
-            decrementMetric: vi.fn(),
+            decrementCounter: vi.fn(),
             recordGauge: vi.fn(),
             recordHistogram: vi.fn(),
             recordTimer: vi.fn(() => ({ stop: vi.fn() })),
             startTimer: vi.fn(() => ({ stop: vi.fn() })),
             getMetrics: vi.fn(() => ({}) as any),
+            // Complete IMetricsCollector interface
+            registerMetric: vi.fn(),
+            getHistogramPercentiles: vi.fn(() => ({ p50: 0, p95: 0, p99: 0 })),
+            getHistogramSummary: vi.fn(() => null),
+            createGauge: vi.fn(),
+            setGauge: vi.fn(),
+            getCounterRate: vi.fn(() => 0),
+            createCounter: vi.fn(),
+            createHistogram: vi.fn(),
+            getGaugeValue: vi.fn(() => 0),
+            getAverageLatency: vi.fn(() => 0),
+            getLatencyPercentiles: vi.fn(() => ({ p50: 0, p95: 0, p99: 0 })),
+            exportPrometheus: vi.fn(() => ""),
+            exportJSON: vi.fn(() => "{}"),
+            getHealthSummary: vi.fn(() => ({ status: "healthy" } as any)),
+            reset: vi.fn(),
+            cleanup: vi.fn(),
             shutdown: vi.fn(),
         };
+
+        const mockSignalLogger = createMockSignalLogger();
 
         // Create ThreadManager mock (required for OrderBookState)
         const mockThreadManager = {
@@ -189,11 +210,11 @@ describe("AccumulationZoneDetectorEnhanced - REAL Integration Tests", () => {
         // Create detector with real configuration
         detector = new AccumulationZoneDetectorEnhanced(
             "test-accumulation",
-            "LTCUSDT",
             ACCUMULATION_CONFIG,
             preprocessor,
             mockLogger,
-            mockMetrics
+            mockMetrics,
+            mockSignalLogger
         );
 
         // Initialize OrderBookState (required after constructor changes)

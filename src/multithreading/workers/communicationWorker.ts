@@ -120,9 +120,9 @@ const rateLimiter = new WorkerRateLimiterProxy(60000, 100);
 const dataStream = new DataStreamProxy();
 
 // Enhanced monitoring
-let workerStartTime = Date.now();
-let totalRequestsProcessed = 0;
-let errorCount = 0;
+const workerStartTime = Date.now();
+const totalRequestsProcessed = 0;
+const errorCount = 0;
 
 function updateWorkerMetrics(): void {
     metrics.updateMetric("worker_uptime", Date.now() - workerStartTime);
@@ -136,7 +136,7 @@ function updateWorkerMetrics(): void {
 
 // WebSocket handlers for client connections with isolation
 const wsHandlers = {
-    ping: (ws: IsolatedWebSocket, _: unknown, correlationId?: string) => {
+    ping: (ws: IsolatedWebSocket, _: unknown, correlationId: string = "") => {
         // Update client activity tracking
         if (ws.clientState) {
             ws.clientState.lastActivity = Date.now();
@@ -159,7 +159,11 @@ const wsHandlers = {
             });
         }
     },
-    backlog: (ws: IsolatedWebSocket, data: unknown, correlationId?: string) => {
+    backlog: (
+        ws: IsolatedWebSocket,
+        data: unknown,
+        correlationId: string = ""
+    ) => {
         const startTime = Date.now();
         try {
             let amount = 1000;
@@ -239,8 +243,8 @@ const wsHandlers = {
 // Use module-scoped singleton instead of global variables
 class CommunicationWorkerState {
     private static instance: CommunicationWorkerState;
-    private connectedClients = new Set<IsolatedWebSocket>();
-    private pendingBacklogRequests = new Map<
+    private readonly connectedClients = new Set<IsolatedWebSocket>();
+    private readonly pendingBacklogRequests = new Map<
         string,
         { ws: IsolatedWebSocket; correlationId?: string }
     >();
@@ -342,10 +346,13 @@ const wsManager = new WorkerWebSocketManager(
 
 // Enhanced stats broadcaster with MQTT and SignalTracker support
 class EnhancedStatsBroadcaster {
-    private timer?: NodeJS.Timeout;
-    private mqttClient?: MqttClient;
+    private timer?: NodeJS.Timeout | undefined;
+    private mqttClient?: MqttClient | undefined;
     private signalTracker?: SignalTracker;
     private mainThreadMetrics: EnhancedMetrics | null = null;
+    private signalTypeBreakdown: SignalBreakdownMessage["data"] | null = null;
+    private signalTotals: SignalTotalsMessage["data"] | null = null;
+    private zoneAnalytics: ZoneAnalyticsMessage["data"] | null = null;
 
     constructor(
         private readonly metrics: IWorkerMetricsCollector,
@@ -361,6 +368,20 @@ class EnhancedStatsBroadcaster {
 
     public setSignalTracker(signalTracker: SignalTracker): void {
         this.signalTracker = signalTracker;
+    }
+
+    public setSignalTypeBreakdown(
+        breakdown: SignalBreakdownMessage["data"]
+    ): void {
+        this.signalTypeBreakdown = breakdown;
+    }
+
+    public setSignalTotals(totals: SignalTotalsMessage["data"]): void {
+        this.signalTotals = totals;
+    }
+
+    public setZoneAnalytics(analytics: ZoneAnalyticsMessage["data"]): void {
+        this.zoneAnalytics = analytics;
     }
 
     public start(): void {
@@ -409,6 +430,20 @@ class EnhancedStatsBroadcaster {
                     signalPerformance:
                         this.signalTracker?.getPerformanceMetrics(86400000), // 24h window
                     signalTrackerStatus: this.signalTracker?.getStatus(),
+                    signalTypeBreakdown: this.signalTypeBreakdown || {},
+                    signalTotals: this.signalTotals || {
+                        candidates: 0,
+                        confirmed: 0,
+                        rejected: 0,
+                    },
+                    zoneAnalytics: this.zoneAnalytics || {
+                        activeZones: 0,
+                        completedZones: 0,
+                        avgZoneStrength: 0,
+                        avgZoneDuration: 0,
+                        zonesByType: {},
+                        zonesBySignificance: {},
+                    },
                     workers: {
                         loggerWorker: "Running",
                         binanceWorker: "Running",
@@ -564,6 +599,63 @@ interface MainMetricsMessage {
     data: EnhancedMetrics;
 }
 
+interface SignalBreakdownMessage {
+    type: "signal_breakdown";
+    data: {
+        absorption: {
+            candidates: number;
+            confirmed: number;
+            rejected: number;
+            successRate: string;
+        };
+        exhaustion: {
+            candidates: number;
+            confirmed: number;
+            rejected: number;
+            successRate: string;
+        };
+        accumulation: {
+            candidates: number;
+            confirmed: number;
+            rejected: number;
+            successRate: string;
+        };
+        distribution: {
+            candidates: number;
+            confirmed: number;
+            rejected: number;
+            successRate: string;
+        };
+        deltacvd: {
+            candidates: number;
+            confirmed: number;
+            rejected: number;
+            successRate: string;
+        };
+    };
+}
+
+interface SignalTotalsMessage {
+    type: "signal_totals";
+    data: {
+        candidates: number;
+        confirmed: number;
+        rejected: number;
+    };
+}
+
+interface ZoneAnalyticsMessage {
+    type: "zone_analytics";
+    data: {
+        activeZones: number;
+        completedZones: number;
+        avgZoneStrength: number;
+        avgZoneDuration: number;
+        zonesByType: Record<string, number>;
+        zonesBySignificance: Record<string, number>;
+    };
+}
+
 // Add global error handlers
 process.on("uncaughtException", (error: Error) => {
     logger.error("Uncaught exception in communication worker", {
@@ -671,6 +763,9 @@ parentPort?.on(
             | BacklogMessage
             | SignalTrackerMessage
             | MainMetricsMessage
+            | SignalBreakdownMessage
+            | SignalTotalsMessage
+            | ZoneAnalyticsMessage
             | { type: "shutdown" }
     ) => {
         try {
@@ -936,6 +1031,45 @@ parentPort?.on(
                     // Main thread metrics updated successfully - no logging needed to avoid spam
                 } catch (error) {
                     logger.error("Error setting main thread metrics", {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
+                }
+            } else if (msg.type === "signal_breakdown") {
+                try {
+                    // Set signal type breakdown for stats broadcasting
+                    statsBroadcaster.setSignalTypeBreakdown(msg.data);
+                    // Signal breakdown updated successfully - no logging needed to avoid spam
+                } catch (error) {
+                    logger.error("Error setting signal type breakdown", {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
+                }
+            } else if (msg.type === "signal_totals") {
+                try {
+                    // Set signal totals for stats broadcasting
+                    statsBroadcaster.setSignalTotals(msg.data);
+                    // Signal totals updated successfully - no logging needed to avoid spam
+                } catch (error) {
+                    logger.error("Error setting signal totals", {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
+                }
+            } else if (msg.type === "zone_analytics") {
+                try {
+                    // Set zone analytics for stats broadcasting
+                    statsBroadcaster.setZoneAnalytics(msg.data);
+                    // Zone analytics updated successfully - no logging needed to avoid spam
+                } catch (error) {
+                    logger.error("Error setting zone analytics", {
                         error:
                             error instanceof Error
                                 ? error.message

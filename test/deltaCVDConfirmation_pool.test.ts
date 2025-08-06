@@ -5,6 +5,8 @@ vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
 
 import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
+import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
@@ -76,6 +78,7 @@ describe("DeltaCVD Standalone Detector - Core Functionality", () => {
     let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
     let mockPreprocessor: IOrderflowPreprocessor;
+    let mockSignalValidationLogger: SignalValidationLogger;
     let signalSpy: vi.Mock;
 
     beforeEach(() => {
@@ -88,15 +91,19 @@ describe("DeltaCVD Standalone Detector - Core Functionality", () => {
         } as ILogger;
         mockMetrics = new MetricsCollector();
         mockPreprocessor = createMockPreprocessor();
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
         // 🚫 NUCLEAR CLEANUP: Use complete mock config settings instead of empty object
+        const mockSignalLogger = createMockSignalLogger();
+        
         detector = new DeltaCVDDetectorEnhanced(
             "test-cvd",
-            "LTCUSDT",
             mockConfig.symbols.LTCUSDT.deltaCVD,
             mockPreprocessor,
             mockLogger,
-            mockMetrics
+            mockMetrics,
+            mockSignalValidationLogger,
+            mockSignalLogger
         );
 
         // Set up signal emission spy

@@ -26,6 +26,7 @@ import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { SpotWebsocketStreams } from "@binance/spot";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import "../test/vitest.setup.ts";
 
 // Real LTCUSDT market parameters
@@ -182,14 +183,20 @@ describe("DistributionDetectorEnhanced - REAL Integration Tests", () => {
             mockMetrics
         );
 
+        // Import and create mockSignalLogger
+        const { createMockSignalLogger } = await import(
+            "../__mocks__/src/infrastructure/signalLoggerInterface.js"
+        );
+        const mockSignalLogger = createMockSignalLogger();
+
         // Create detector with real configuration
         detector = new DistributionDetectorEnhanced(
             "test-distribution",
-            "LTCUSDT",
             DISTRIBUTION_CONFIG,
             preprocessor,
             mockLogger,
-            mockMetrics
+            mockMetrics,
+            mockSignalLogger
         );
 
         // Initialize OrderBookState (required after constructor changes)

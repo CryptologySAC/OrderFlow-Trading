@@ -7,11 +7,11 @@ export class CircularBuffer<T> implements Iterable<T> {
     private tail = 0;
     private size = 0;
     private sequence = 0n;
-    private readonly cleanupCallback?: (item: T) => void;
+    private readonly cleanupCallback: (item: T) => void;
 
     constructor(
-        private capacity: number,
-        cleanupCallback?: (item: T) => void
+        private readonly capacity: number,
+        cleanupCallback: (item: T) => void = () => {} // Default no-op cleanup
     ) {
         this.buffer = new Array(capacity) as T[];
         this.capacity = capacity;
@@ -38,9 +38,12 @@ export class CircularBuffer<T> implements Iterable<T> {
     getAll(): T[] {
         if (this.size === 0) return [];
         const result: T[] = [];
-        let start = this.size < this.capacity ? 0 : this.head;
+        const start = this.size < this.capacity ? 0 : this.head;
         for (let i = 0; i < this.size; i++) {
-            result.push(this.buffer[(start + i) % this.capacity]);
+            const index = (start + i) % this.capacity;
+            if (index > 0 && index < this.capacity) {
+                result.push(this.buffer[index]!);
+            }
         }
         return result;
     }
@@ -78,7 +81,7 @@ export class CircularBuffer<T> implements Iterable<T> {
      */
     at(index: number): T | undefined {
         if (index < 0 || index >= this.size) return undefined;
-        let start = this.size < this.capacity ? 0 : this.head;
+        const start = this.size < this.capacity ? 0 : this.head;
         return this.buffer[(start + index) % this.capacity];
     }
 
@@ -88,17 +91,6 @@ export class CircularBuffer<T> implements Iterable<T> {
         }
         const realIndex = (this.head + index) % this.capacity;
         return this.buffer[realIndex];
-    }
-
-    private checkOverflow(): void {
-        if (this.sequence > Number.MAX_SAFE_INTEGER) {
-            // POLICY OVERRIDE: Using console.warn for system-level overflow warning
-            // REASON: CircularBuffer is a low-level utility without logger access
-            // This is a critical system state that requires immediate attention
-            console.warn(
-                "CircularBuffer: Sequence approaching overflow, consider system restart"
-            );
-        }
     }
 
     cleanup(): void {

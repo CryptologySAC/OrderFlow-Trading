@@ -76,21 +76,21 @@ export class ApiConnectivityMonitor extends EventEmitter {
     private readonly config: ApiConnectivityConfig;
 
     // Stream tracking
-    private tradeStreamStatus: StreamStatus;
-    private depthStreamStatus: StreamStatus;
+    private readonly tradeStreamStatus: StreamStatus;
+    private readonly depthStreamStatus: StreamStatus;
     private webSocketConnected = false;
 
     // Sync tracking
     private lastTradeTimestamp = 0;
     private lastDepthTimestamp = 0;
-    private syncHistory: Array<{
+    private readonly syncHistory: Array<{
         time: number;
         tradeLag: number;
         depthLag: number;
     }> = [];
 
     // Issue tracking
-    private recentIssues = new Map<ConnectivityIssueType, number>();
+    private readonly recentIssues = new Map<ConnectivityIssueType, number>();
     private currentStatus: ConnectivityStatus;
 
     // Timers
@@ -206,7 +206,7 @@ export class ApiConnectivityMonitor extends EventEmitter {
 
             if (intervals.length > 1) {
                 const totalInterval =
-                    intervals[intervals.length - 1] - intervals[0];
+                    intervals[intervals.length - 1]! - intervals[0]!;
                 status.averageInterval = totalInterval / (intervals.length - 1);
             }
         }
@@ -306,8 +306,13 @@ export class ApiConnectivityMonitor extends EventEmitter {
             depthStreamHealth: { ...this.depthStreamStatus },
             apiSyncHealth,
             connectivityScore,
-            lastIssueDetected: this.currentStatus.lastIssueDetected,
         };
+
+        if (this.currentStatus.lastIssueDetected) {
+            this.currentStatus.lastIssueDetected = {
+                ...this.currentStatus.lastIssueDetected,
+            };
+        }
 
         // Emit status change if health changed
         const wasHealthy = this.currentStatus.isHealthy;
@@ -414,6 +419,9 @@ export class ApiConnectivityMonitor extends EventEmitter {
         } else if (!tradeRecent && depthRecent) {
             asymmetricDetected = true;
             asymmetricType = "depth_only";
+        } else {
+            asymmetricDetected = false;
+            asymmetricType = "neither";
         }
 
         // Calculate sync score (0-1)

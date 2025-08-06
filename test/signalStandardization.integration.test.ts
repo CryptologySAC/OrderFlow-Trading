@@ -14,6 +14,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { SignalCandidate } from "../src/types/signalTypes.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
 import { ExhaustionDetectorEnhanced } from "../src/indicators/exhaustionDetectorEnhanced.js";
 import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
@@ -24,6 +25,7 @@ import { Config } from "../src/core/config.js";
 // Import mocks
 import { createMockLogger } from "../__mocks__/src/infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../__mocks__/src/infrastructure/metricsCollector.js";
+import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
 
 describe("Signal Type Standardization Integration Tests", () => {
     // Track all emitted signals with their types
@@ -36,9 +38,21 @@ describe("Signal Type Standardization Integration Tests", () => {
     // Create mock instances
     const mockLogger = createMockLogger();
     const mockMetrics = new MetricsCollector();
+    const mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
+    const mockSignalLogger = createMockSignalLogger();
 
     // Simple mock preprocessor
     const mockPreprocessor = {
+        handleDepth: vi.fn(),
+        handleAggTrade: vi.fn(),
+        getStats: vi.fn(() => ({
+            processedTrades: 0,
+            processedDepthUpdates: 0,
+            bookMetrics: {} as any,
+        })),
+        findZonesNearPrice: vi.fn(() => []),
+        calculateZoneRelevanceScore: vi.fn(() => 0.5),
+        findMostRelevantZone: vi.fn(() => null),
         getUniversalZones: vi.fn(() => ({
             "5T": [],
             "10T": [],
@@ -62,43 +76,45 @@ describe("Signal Type Standardization Integration Tests", () => {
         quantity: number,
         isBuyerMaker: boolean
     ): EnrichedTradeEvent => ({
-        symbol: "LTCUSDT",
         price,
         quantity,
-        isBuyerMaker,
         timestamp: Date.now(),
-        aggTradeId: Math.floor(Math.random() * 1000000),
-        firstTradeId: 1,
-        lastTradeId: 1,
-        orderBookSnapshot: {
-            lastUpdateId: 1,
-            bids: [[price - 0.01, 100]],
-            asks: [[price + 0.01, 100]],
-        },
-        metadata: {
-            side: isBuyerMaker ? "sell" : "buy",
-            tradeType: "aggressive",
-            priceLevel: "maker",
-        },
-        zones: {
-            "5T": [
+        buyerIsMaker: isBuyerMaker,
+        pair: "LTCUSDT",
+        tradeId: Math.floor(Math.random() * 1000000).toString(),
+        originalTrade: {} as any,
+        passiveBidVolume: 50,
+        passiveAskVolume: 50,
+        zonePassiveBidVolume: 100,
+        zonePassiveAskVolume: 100,
+        depthSnapshot: new Map(),
+        bestBid: price - 0.01,
+        bestAsk: price + 0.01,
+        zoneData: {
+            zones: [
                 {
-                    id: "zone-5T-1",
-                    center: price,
-                    minPrice: price - 0.025,
-                    maxPrice: price + 0.025,
+                    zoneId: "zone-1",
+                    priceLevel: price - 0.025,
+                    tickSize: 0.005,
                     aggressiveVolume: quantity,
                     passiveVolume: quantity * 0.5,
-                    tradeCount: 1,
-                    timestamp: Date.now(),
-                    strength: 0.8,
-                    dominantSide: isBuyerMaker ? "sell" : "buy",
                     aggressiveBuyVolume: isBuyerMaker ? 0 : quantity,
                     aggressiveSellVolume: isBuyerMaker ? quantity : 0,
+                    passiveBidVolume: quantity * 0.25,
+                    passiveAskVolume: quantity * 0.25,
+                    tradeCount: 1,
+                    timespan: 5000,
+                    boundaries: { min: price - 0.025, max: price + 0.025 },
+                    lastUpdate: Date.now(),
+                    volumeWeightedPrice: price,
+                    tradeHistory: {} as any,
                 },
             ],
-            "10T": [],
-            "20T": [],
+            zoneConfig: {
+                zoneTicks: 5,
+                tickValue: 0.005,
+                timeWindow: 5000,
+            },
         },
     });
 
@@ -110,11 +126,12 @@ describe("Signal Type Standardization Integration Tests", () => {
             expect(() => {
                 const detector = new AbsorptionDetectorEnhanced(
                     "test-absorption",
-                    "LTCUSDT",
                     settings,
                     mockPreprocessor,
                     mockLogger,
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalValidationLogger,
+                    mockSignalLogger
                 );
             }).not.toThrow();
 
@@ -135,7 +152,9 @@ describe("Signal Type Standardization Integration Tests", () => {
                     settings,
                     mockPreprocessor,
                     mockLogger,
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalLogger,
+                    mockSignalValidationLogger
                 );
             }).not.toThrow();
 
@@ -153,11 +172,12 @@ describe("Signal Type Standardization Integration Tests", () => {
             expect(() => {
                 const detector = new DeltaCVDDetectorEnhanced(
                     "test-deltacvd",
-                    "LTCUSDT",
                     settings,
                     mockPreprocessor,
                     mockLogger,
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalValidationLogger,
+                    mockSignalLogger
                 );
             }).not.toThrow();
 
@@ -175,11 +195,11 @@ describe("Signal Type Standardization Integration Tests", () => {
             expect(() => {
                 const detector = new AccumulationZoneDetectorEnhanced(
                     "test-accumulation",
-                    "LTCUSDT",
                     settings,
                     mockPreprocessor,
                     mockLogger,
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalLogger
                 );
             }).not.toThrow();
 
@@ -197,11 +217,11 @@ describe("Signal Type Standardization Integration Tests", () => {
             expect(() => {
                 const detector = new DistributionDetectorEnhanced(
                     "test-distribution",
-                    "LTCUSDT",
                     settings,
                     mockPreprocessor,
                     mockLogger,
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalLogger
                 );
             }).not.toThrow();
 
@@ -225,11 +245,12 @@ describe("Signal Type Standardization Integration Tests", () => {
             // Create all 5 detectors
             const absorptionDetector = new AbsorptionDetectorEnhanced(
                 "test-absorption-std",
-                "LTCUSDT",
                 Config.ABSORPTION_DETECTOR,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             const exhaustionDetector = new ExhaustionDetectorEnhanced(
@@ -237,34 +258,37 @@ describe("Signal Type Standardization Integration Tests", () => {
                 Config.EXHAUSTION_DETECTOR,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalLogger,
+                mockSignalValidationLogger
             );
 
             const deltacvdDetector = new DeltaCVDDetectorEnhanced(
                 "test-deltacvd-std",
-                "LTCUSDT",
                 Config.DELTACVD_DETECTOR,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             const accumulationDetector = new AccumulationZoneDetectorEnhanced(
                 "test-accumulation-std",
-                "LTCUSDT",
                 Config.ACCUMULATION_CONFIG,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalLogger
             );
 
             const distributionDetector = new DistributionDetectorEnhanced(
                 "test-distribution-std",
-                "LTCUSDT",
                 Config.DISTRIBUTION_CONFIG,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalLogger
             );
 
             // Collect all emitted signal types

@@ -3,25 +3,19 @@ import { vi } from "vitest";
 import type { ILogger } from "../../../src/infrastructure/loggerInterface.js";
 
 export const createMockLogger = (): ILogger => {
-    // Create actual bindable functions for AccumulationZoneDetectorEnhanced compatibility
-    const info = vi.fn();
-    const warn = vi.fn();
-    const error = vi.fn();
-    const debug = vi.fn();
-    const setCorrelationId = vi.fn();
-    const removeCorrelationId = vi.fn();
-    const isDebugEnabled = vi.fn().mockReturnValue(false);
-
-    return {
-        info,
-        warn,
-        error,
-        debug,
-        isDebugEnabled,
-        setCorrelationId,
-        removeCorrelationId,
+    // Create proper mock logger object that can be bound with 'this'
+    const mockLogger: ILogger = {
+        info: vi.fn(() => {}),
+        warn: vi.fn(() => {}),
+        error: vi.fn(() => {}),
+        debug: vi.fn(() => {}),
+        isDebugEnabled: vi.fn(() => false),
+        setCorrelationId: vi.fn(() => {}),
+        removeCorrelationId: vi.fn(() => {}),
     };
+
+    return mockLogger;
 };
 
-// Default mock export
+// Default mock export - create a fresh instance each time
 export default createMockLogger();

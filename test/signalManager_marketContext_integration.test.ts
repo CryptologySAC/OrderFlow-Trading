@@ -154,11 +154,17 @@ const createMockAnomalyDetector = (
     ({
         getMarketHealth: vi.fn().mockReturnValue({
             isHealthy,
+            recentAnomalies: anomalyTypes.length,
+            highestSeverity: severity,
             recommendation,
             criticalIssues: isHealthy ? [] : ["market_stress"],
             recentAnomalyTypes: anomalyTypes,
-            highestSeverity: severity,
-            metrics: { volatility },
+            metrics: {
+                volatility,
+                spreadBps: 1.0,
+                flowImbalance: 0.0,
+                lastUpdateAge: 0,
+            },
         }),
     }) as unknown as AnomalyDetector;
 
@@ -776,9 +782,18 @@ describe("SignalManager Market Context Integration", () => {
             const partialAnomalyDetector = {
                 getMarketHealth: vi.fn().mockReturnValue({
                     isHealthy: true,
+                    recentAnomalies: 0,
+                    highestSeverity: "low",
                     recommendation: "continue",
-                    // Missing some fields
-                    metrics: {},
+                    criticalIssues: [],
+                    recentAnomalyTypes: [],
+                    // Minimal metrics for partial data test
+                    metrics: {
+                        volatility: 0.02,
+                        spreadBps: 0,
+                        flowImbalance: 0,
+                        lastUpdateAge: 0,
+                    },
                 }),
             } as unknown as AnomalyDetector;
 

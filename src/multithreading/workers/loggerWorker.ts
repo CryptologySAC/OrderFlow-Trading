@@ -27,8 +27,8 @@ if (!parentPort) {
  * Simple Logger implementation for use within the logger worker
  */
 class Logger implements ILogger {
-    private correlationContext = new Map<string, string>();
-    private pretty: boolean;
+    private readonly correlationContext = new Map<string, string>();
+    private readonly pretty: boolean;
 
     constructor(pretty = false) {
         this.pretty = pretty;
@@ -67,7 +67,7 @@ class Logger implements ILogger {
     }
 
     public isDebugEnabled(): boolean {
-        return process.env.NODE_ENV === "development";
+        return process.env["NODE_ENV"] === "development";
     }
 
     public setCorrelationId(id: string, context: string): void {
@@ -124,7 +124,7 @@ class Logger implements ILogger {
 
 class SignalLogger implements ISignalLogger {
     private readonly logger: Logger | null;
-    private file: string;
+    private readonly file: string;
     private headerWritten = false;
 
     constructor(filename: string, logger: Logger) {
@@ -195,7 +195,7 @@ class SignalLogger implements ISignalLogger {
     }
 }
 
-const logger = new Logger(process.env.NODE_ENV === "development");
+const logger = new Logger(process.env["NODE_ENV"] === "development");
 const signalLogger = new SignalLogger("./storage/signals.csv", logger);
 
 type LogLevel = "info" | "error" | "warn" | "debug";

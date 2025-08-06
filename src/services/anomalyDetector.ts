@@ -124,18 +124,16 @@ interface FlowMetrics {
  * It does NOT detect trading signals - use dedicated trading detectors for that.
  */
 export class AnomalyDetector extends EventEmitter {
-    private marketHistory: RollingWindow<MarketSnapshot>;
+    private readonly marketHistory: RollingWindow<MarketSnapshot>;
     private readonly windowSize: number;
     private readonly normalSpreadBps: number;
     private readonly minHistory: number;
     private readonly anomalyCooldownMs: number;
     private readonly volumeImbalanceThreshold: number;
-    private readonly tickSize: number;
     private readonly volatilityThreshold: number;
     private readonly spreadThresholdBps: number;
     private readonly extremeVolatilityWindowMs: number;
     private readonly liquidityCheckWindowMs: number;
-    private readonly whaleCooldownMs: number;
     private readonly marketHealthWindowMs: number;
 
     private readonly logger: ILogger;
@@ -145,26 +143,26 @@ export class AnomalyDetector extends EventEmitter {
     private currentBestBid = 0;
     private currentBestAsk = 0;
 
-    private priceHistory: RollingWindow<number>;
-    private returnStats: RollingStatsWindow;
-    private recentReturnStats: RollingStatsWindow;
+    private readonly priceHistory: RollingWindow<number>;
+    private readonly returnStats: RollingStatsWindow;
+    private readonly recentReturnStats: RollingStatsWindow;
     private lastPrice = 0;
 
     // Flow tracking for market structure analysis
-    private recentFlowWindow: RollingWindow<{
+    private readonly recentFlowWindow: RollingWindow<{
         volume: number;
         side: "buy" | "sell";
         time: number;
     }>;
-    private flowWindowMs: number;
+    private readonly flowWindowMs: number;
 
     // Order size tracking for whale detection
-    private orderSizeHistory: RollingWindow<{
+    private readonly orderSizeHistory: RollingWindow<{
         size: number;
         time: number;
         price: number;
     }>;
-    private orderSizeWindowMs: number;
+    private readonly orderSizeWindowMs: number;
 
     // Anomaly deduplication and history
     private lastEmitted: Record<string, { severity: string; time: number }> =
@@ -184,7 +182,6 @@ export class AnomalyDetector extends EventEmitter {
         this.logger = logger;
         this.anomalyCooldownMs = options.anomalyCooldownMs ?? 10000;
         this.volumeImbalanceThreshold = options.volumeImbalanceThreshold ?? 0.7;
-        this.tickSize = options.tickSize ?? 0.01;
         this.flowWindowMs = options.flowWindowMs ?? 900000;
         this.orderSizeWindowMs = options.orderSizeWindowMs ?? 900000;
         this.volatilityThreshold = options.volatilityThreshold ?? 0.005;
@@ -192,7 +189,6 @@ export class AnomalyDetector extends EventEmitter {
         this.extremeVolatilityWindowMs =
             options.extremeVolatilityWindowMs ?? 900000;
         this.liquidityCheckWindowMs = options.liquidityCheckWindowMs ?? 900000;
-        this.whaleCooldownMs = options.whaleCooldownMs ?? 300000;
         this.marketHealthWindowMs = options.marketHealthWindowMs ?? 900000;
 
         this.marketHistory = new RollingWindow<MarketSnapshot>(
@@ -276,7 +272,7 @@ export class AnomalyDetector extends EventEmitter {
             this.priceHistory.push(trade.price);
 
             // Compute spread if we have valid quotes
-            let spreadBps: number | undefined;
+            let spreadBps: number = -1;
             if (this.currentBestBid && this.currentBestAsk && trade.price > 0) {
                 const spread = this.currentBestAsk - this.currentBestBid;
                 spreadBps = (spread / trade.price) * 10000;
@@ -940,7 +936,7 @@ export class AnomalyDetector extends EventEmitter {
         const prices = recentSnapshots.map((s) => s.price);
         const returns: number[] = [];
         for (let i = 1; i < prices.length; i++) {
-            returns.push((prices[i] - prices[i - 1]) / prices[i - 1]);
+            returns.push((prices[i]! - prices[i - 1]!) / prices[i - 1]!);
         }
         const volatility = this.calculateStdDev(
             returns,
@@ -950,7 +946,7 @@ export class AnomalyDetector extends EventEmitter {
         const flowMetrics = this.calculateFlowMetrics();
         const currentSpreadBps =
             ((this.currentBestAsk - this.currentBestBid) /
-                prices[prices.length - 1]) *
+                prices[prices.length - 1]!) *
             10000;
 
         // Analyze recent anomalies

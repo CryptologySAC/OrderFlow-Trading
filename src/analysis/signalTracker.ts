@@ -179,7 +179,7 @@ export class SignalTracker extends EventEmitter {
     private readonly completedSignals: SignalOutcome[] = [];
     private readonly maxCompletedSignals = 10000; // Keep last 10k completed signals in memory
 
-    private priceUpdateInterval?: NodeJS.Timeout;
+    private readonly priceUpdateInterval?: NodeJS.Timeout;
 
     constructor(
         private readonly logger: ILogger,
@@ -358,7 +358,6 @@ export class SignalTracker extends EventEmitter {
 
         // Check if signal should be finalized
         const shouldFinalize = this.shouldFinalizeSignal(
-            signalOutcome,
             timeElapsed,
             returnPct
         );
@@ -383,7 +382,6 @@ export class SignalTracker extends EventEmitter {
     }
 
     private shouldFinalizeSignal(
-        signalOutcome: SignalOutcome,
         timeElapsed: number,
         returnPct: number
     ): "success" | "failure" | "timeout" | null {
@@ -794,7 +792,7 @@ export class SignalTracker extends EventEmitter {
 
         // Remove old completed signals
         for (let i = this.completedSignals.length - 1; i >= 0; i--) {
-            if (this.completedSignals[i].entryTime < cutoffTime) {
+            if (this.completedSignals[i]!.entryTime < cutoffTime) {
                 this.completedSignals.splice(i, 1);
                 removedCount++;
             }

@@ -5,7 +5,10 @@ import type { OrderBookStateOptions } from "../src/market/orderBookState";
 import type { SpotWebsocketStreams } from "@binance/spot";
 import type { ILogger } from "../src/infrastructure/loggerInterface";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface";
-import type { ThreadManager } from "../src/multithreading/threadManager";
+
+// Mock ThreadManager before importing
+vi.mock("../src/multithreading/threadManager");
+import { ThreadManager } from "../src/multithreading/threadManager";
 
 // Mock dependencies
 const mockLogger: ILogger = {
@@ -24,13 +27,8 @@ const mockMetrics: IMetricsCollector = {
     getHealthSummary: vi.fn().mockReturnValue("healthy"),
 };
 
-const mockThreadManager: ThreadManager = {
-    requestDepthSnapshot: vi.fn().mockResolvedValue({
-        lastUpdateId: 1000,
-        bids: [], // Start with empty orderbook for clean testing
-        asks: [],
-    }),
-} as any;
+// Create a ThreadManager instance (will use the mock)
+const mockThreadManager = new ThreadManager();
 
 describe("RedBlackTreeOrderBook - Logic Validation Tests", () => {
     let rbtOrderBook: RedBlackTreeOrderBook;
@@ -44,6 +42,7 @@ describe("RedBlackTreeOrderBook - Logic Validation Tests", () => {
         pruneIntervalMs: 30000,
         maxErrorRate: 10,
         staleThresholdMs: 300000,
+        disableSequenceValidation: true, // Enable backtesting mode to avoid fetching live data
     };
 
     beforeEach(async () => {

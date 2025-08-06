@@ -8,7 +8,7 @@ import { ProxyLogMessage, ProxyLogMessageSchema } from "./messageSchemas.js";
  */
 
 export class WorkerProxyLogger implements ILogger {
-    private correlationContext = new Map<string, string>();
+    private readonly correlationContext = new Map<string, string>();
 
     constructor(private readonly workerName: string) {}
 
@@ -68,8 +68,8 @@ export class WorkerProxyLogger implements ILogger {
     public isDebugEnabled(): boolean {
         // For worker proxy logger, check environment variables for debug level
         return (
-            process.env.NODE_ENV === "development" ||
-            process.env.LOG_LEVEL === "debug"
+            process.env["NODE_ENV"] === "development" ||
+            process.env["LOG_LEVEL"] === "debug"
         );
     }
 

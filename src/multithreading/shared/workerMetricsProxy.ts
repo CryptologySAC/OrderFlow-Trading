@@ -29,11 +29,11 @@ export class WorkerMetricsProxy implements IWorkerMetricsCollector {
     private readonly MAX_METRICS = 10000;
     private readonly CLEANUP_INTERVAL = 300000; // 5 minutes
     private lastCleanup = Date.now();
-    private cleanupTimer?: NodeJS.Timeout;
+    private readonly cleanupTimer?: NodeJS.Timeout;
 
     // Batching for performance
     private batchBuffer: MetricUpdate[] = [];
-    private batchTimer?: NodeJS.Timeout;
+    private batchTimer?: NodeJS.Timeout | undefined;
     private readonly batchIntervalMs = 100; // 100ms batching to reduce IPC overhead
 
     constructor(workerName: string) {
@@ -91,7 +91,7 @@ export class WorkerMetricsProxy implements IWorkerMetricsCollector {
     incrementCounter(
         name: string,
         increment: number = 1,
-        labels?: Record<string, string>
+        labels: Record<string, string> = {}
     ): void {
         try {
             const current = this.localMetrics.get(name) || 0;
@@ -119,7 +119,7 @@ export class WorkerMetricsProxy implements IWorkerMetricsCollector {
     recordGauge(
         name: string,
         value: number,
-        labels?: Record<string, string>
+        labels: Record<string, string> = {}
     ): void {
         try {
             this.localMetrics.set(name, value);
@@ -317,7 +317,7 @@ export class WorkerMetricsProxy implements IWorkerMetricsCollector {
     recordHistogram(
         name: string,
         value: number,
-        labels?: Record<string, string>
+        labels: Record<string, string> = {}
     ): void {
         try {
             this.localMetrics.set(`${name}_histogram`, value);

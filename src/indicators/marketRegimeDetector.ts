@@ -157,7 +157,7 @@ class MarketRegimeDetector {
         if (this.priceWindow.count() >= 2) {
             const prices = this.priceWindow.toArray();
             const atr = Math.abs(
-                prices[prices.length - 1] - prices[prices.length - 2]
+                prices[prices.length - 1]! - prices[prices.length - 2]!
             );
             this.atrWindow.push(atr);
         }
@@ -337,7 +337,7 @@ export class AdaptiveThresholdCalculator {
     } {
         let depletionFactor = 1.0;
         let scoringFactor = 1.0;
-        let passiveFactor = 1.0;
+        const passiveFactor = 1.0;
         let confidenceFactor = 1.0;
         let absorptionFactor = 1.0;
         let volumeFactor = 1.0;

@@ -27,6 +27,8 @@ import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorIn
 import type { ISignalLogger } from "../src/infrastructure/signalLoggerInterface.js";
 import type { SpotWebsocketStreams } from "@binance/spot";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
+import { SignalValidationLogger } from "../src/utils/signalValidationLogger.js";
+import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
 import "../test/vitest.setup.ts";
 
 // Real LTCUSDT market parameters
@@ -168,6 +170,7 @@ describe("DeltaCVDDetectorEnhanced - REAL Integration Tests", () => {
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
     let mockSignalLogger: ISignalLogger;
+    let mockSignalValidationLogger: SignalValidationLogger;
     let detectedSignals: any[];
 
     beforeEach(async () => {
@@ -203,6 +206,8 @@ describe("DeltaCVDDetectorEnhanced - REAL Integration Tests", () => {
             getHistory: vi.fn(() => []),
         };
 
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
+
         // Create ThreadManager mock (required for OrderBookState)
         const mockThreadManager = {
             callStorage: vi.fn().mockResolvedValue(undefined),
@@ -234,11 +239,11 @@ describe("DeltaCVDDetectorEnhanced - REAL Integration Tests", () => {
         // Create detector with real configuration
         detector = new DeltaCVDDetectorEnhanced(
             "test-deltacvd",
-            "LTCUSDT",
             DELTACVD_CONFIG,
             preprocessor,
             mockLogger,
             mockMetrics,
+            mockSignalValidationLogger,
             mockSignalLogger
         );
 

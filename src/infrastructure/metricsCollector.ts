@@ -242,10 +242,10 @@ export interface HealthSummary {
  */
 export class MetricsCollector implements IMetricsCollector {
     private metrics: Metrics;
-    private histograms = new Map<string, HistogramBucket>();
-    private gauges = new Map<string, GaugeMetric>();
-    private counters = new Map<string, CounterMetric>();
-    private metadata = new Map<string, MetricMetadata>();
+    private readonly histograms = new Map<string, HistogramBucket>();
+    private readonly gauges = new Map<string, GaugeMetric>();
+    private readonly counters = new Map<string, CounterMetric>();
+    private readonly metadata = new Map<string, MetricMetadata>();
     private startTime = Date.now();
     private lastRateCalculation = Date.now();
 
@@ -341,8 +341,8 @@ export class MetricsCollector implements IMetricsCollector {
         name: string,
         type: "counter" | "gauge" | "histogram",
         description: string,
-        unit?: string,
-        labels?: string[]
+        unit: string = "",
+        labels: string[] = []
     ): void {
         this.metadata.set(name, { name, type, description, unit, labels });
     }
@@ -406,7 +406,7 @@ export class MetricsCollector implements IMetricsCollector {
     public recordGauge(
         name: string,
         value: number,
-        labels?: Record<string, string>
+        labels: Record<string, string> = {}
     ): void {
         this.gauges.set(name, {
             value,
@@ -479,7 +479,7 @@ export class MetricsCollector implements IMetricsCollector {
 
         for (const p of percentiles) {
             const index = Math.ceil((p / 100) * sorted.length) - 1;
-            result[`p${p}`] = sorted[Math.max(0, index)];
+            result[`p${p}`] = sorted[Math.max(0, index)]!;
         }
 
         return result;
@@ -743,9 +743,11 @@ export class MetricsCollector implements IMetricsCollector {
 
             if (validIndices.length < histogram.timestamps.length) {
                 histogram.timestamps = validIndices.map(
-                    (i) => histogram.timestamps[i]
+                    (i) => histogram.timestamps[i]!
                 );
-                histogram.values = validIndices.map((i) => histogram.values[i]);
+                histogram.values = validIndices.map(
+                    (i) => histogram.values[i]!
+                );
                 histogram.count = BigInt(histogram.values.length);
                 histogram.sum = histogram.values.reduce((a, b) => a + b, 0);
             }
@@ -841,8 +843,8 @@ export class MetricsCollector implements IMetricsCollector {
     public createHistogram(
         name: string,
         description?: string,
-        labels?: string[],
-        buckets?: number[]
+        labels: string[] = [],
+        buckets: number[] = []
     ): void {
         this.registerMetric(
             name,
@@ -862,7 +864,7 @@ export class MetricsCollector implements IMetricsCollector {
                 bounds:
                     buckets && buckets.length > 0
                         ? [...buckets].sort((a, b) => a - b)
-                        : undefined,
+                        : [],
             });
         }
     }

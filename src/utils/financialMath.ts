@@ -46,7 +46,7 @@ export class FinancialMath {
     ): number {
         const bidInt = this.priceToInt(bid);
         const askInt = this.priceToInt(ask);
-        const midInt = (bidInt + askInt) / 2n;
+        const midInt = (bidInt + askInt) / BigInt(2);
         const result = this.intToPrice(midInt);
 
         // Apply precision rounding as final step
@@ -76,6 +76,16 @@ export class FinancialMath {
      * Safe quantity multiplication avoiding floating point errors
      */
     static multiplyQuantities(qty1: number, qty2: number): number {
+        // CRITICAL: Return NaN for invalid inputs to maintain calculation integrity
+        if (
+            isNaN(qty1) ||
+            isNaN(qty2) ||
+            qty1 === undefined ||
+            qty2 === undefined
+        ) {
+            return NaN;
+        }
+
         const qty1Int = BigInt(Math.round(qty1 * this.QUANTITY_SCALE));
         const qty2Int = BigInt(Math.round(qty2 * this.QUANTITY_SCALE));
         const resultInt = (qty1Int * qty2Int) / BigInt(this.QUANTITY_SCALE);
@@ -89,10 +99,8 @@ export class FinancialMath {
         if (qty2 === 0 || isNaN(qty1) || isNaN(qty2)) {
             return 0;
         }
-        const qty1Int = BigInt(Math.round(qty1 * this.QUANTITY_SCALE));
-        const qty2Int = BigInt(Math.round(qty2 * this.QUANTITY_SCALE));
-        const resultInt = (qty1Int * BigInt(this.QUANTITY_SCALE)) / qty2Int;
-        return Number(resultInt) / this.QUANTITY_SCALE;
+        // Use direct floating-point division for ratios - BigInt division truncates to integer
+        return qty1 / qty2;
     }
 
     /**
@@ -217,7 +225,7 @@ export class FinancialMath {
         }
 
         // Use BigInt arithmetic to avoid floating-point precision loss
-        let sum = 0n;
+        let sum: bigint = BigInt(0);
         for (const value of validValues) {
             sum += BigInt(Math.round(value * this.QUANTITY_SCALE));
         }
@@ -292,25 +300,35 @@ export class FinancialMath {
 
         const sorted = [...validValues].sort((a, b) => a - b);
 
-        if (percentile === 0) {
+        if (
+            (percentile === 0 || sorted.length === 1) &&
+            sorted[0] !== undefined
+        ) {
             return sorted[0];
         }
         if (percentile === 100) {
-            return sorted[sorted.length - 1];
+            return sorted[sorted.length - 1]!;
         }
 
         // Use precise percentile calculation with interpolation
         const index = (percentile / 100) * (sorted.length - 1);
-        const lower = Math.floor(index);
-        const upper = Math.ceil(index);
+        let lower = Math.floor(index);
+        let upper = Math.ceil(index);
 
-        if (lower === upper) {
-            return sorted[lower];
+        if (lower < 0) {
+            lower = 0;
+        }
+        if (upper >= sorted.length) {
+            upper = sorted.length - 1;
+        }
+
+        if (lower === upper || upper < lower) {
+            return sorted[lower]!;
         }
 
         // Linear interpolation between adjacent values
         const weight = index - lower;
-        const result = sorted[lower] * (1 - weight) + sorted[upper] * weight;
+        const result = sorted[lower]! * (1 - weight) + sorted[upper]! * weight;
 
         return result;
     }
@@ -355,7 +373,7 @@ export class FinancialMath {
             );
 
             // Additional check for BigInt zero division
-            if (denInt === 0n) {
+            if (denInt === BigInt(0)) {
                 return defaultValue;
             }
 

@@ -77,18 +77,16 @@ export class OrderBookState implements IOrderBookState {
     private snapshotBuffer: SpotWebsocketStreams.DiffBookDepthResponse[] = [];
     private expectedUpdateId?: number;
 
-    private pruneIntervalMs = 30000; // 30 seconds
-    private pruneTimer?: NodeJS.Timeout;
-    private lastPruneTime = 0;
+    private readonly pruneIntervalMs: number = 30000; // 30 seconds
+    private pruneTimer?: NodeJS.Timeout | undefined;
     private lastUpdateTime = Date.now();
 
-    private maxLevels: number = 1000;
-    private maxPriceDistance: number = 0.1; // 10% max price distance for levels
+    private readonly maxLevels: number = 1000;
+    private readonly maxPriceDistance: number = 0.1; // 10% max price distance for levels
     private readonly disableSequenceValidation: boolean;
 
-    private book: SnapShot = new Map();
+    private readonly book: SnapShot = new Map();
     private readonly pricePrecision: number;
-    private readonly tickSize: number;
     private readonly symbol: string;
 
     // Track best quotes for efficiency
@@ -97,10 +95,9 @@ export class OrderBookState implements IOrderBookState {
     private lastUpdateId: number = 0;
 
     // Circuitbreaker
-    private errorCount = 0;
     private errorWindow: number[] = [];
-    private maxErrorRate: number = 10; // errors per minute
-    private errorWindowMs: number = 60000;
+    private readonly maxErrorRate: number = 10; // errors per minute
+    private readonly errorWindowMs: number = 60000;
     private circuitOpen: boolean = false;
     private circuitOpenUntil: number = 0;
 
@@ -115,7 +112,6 @@ export class OrderBookState implements IOrderBookState {
         threadManager: ThreadManager
     ) {
         this.pricePrecision = options.pricePrecision;
-        this.tickSize = Math.pow(10, -this.pricePrecision);
         this.symbol = options.symbol;
         this.logger = logger;
         this.metricsCollector = metricsCollector;
@@ -234,7 +230,7 @@ export class OrderBookState implements IOrderBookState {
                 );
             }
         }
-        this.expectedUpdateId = update.u ? update.u + 1 : undefined;
+        this.expectedUpdateId = update.u ? update.u + 1 : 0;
 
         if (!this.isInitialized) {
             // Buffer updates until initialized
@@ -453,7 +449,6 @@ export class OrderBookState implements IOrderBookState {
             this.enforceMaxLevels();
 
             const duration = Date.now() - startTime;
-            this.lastPruneTime = Date.now();
 
             this.metricsCollector.updateMetric(
                 "orderbookPruneDuration",

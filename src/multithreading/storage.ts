@@ -330,27 +330,36 @@ export class Storage implements IStorage {
                 }
 
                 validatedTrades.push({
-                    s: validateString(validatedRow.symbol, "symbol", symbol),
+                    s: validateString(validatedRow["symbol"], "symbol", symbol),
                     a: validateInteger(
-                        validatedRow.aggregatedTradeId,
+                        validatedRow["aggregatedTradeId"],
                         "aggregatedTradeId"
                     ),
-                    p: validateNumeric(validatedRow.price, "price").toString(),
+                    p: validateNumeric(
+                        validatedRow["price"],
+                        "price"
+                    ).toString(),
                     q: validateNumeric(
-                        validatedRow.quantity,
+                        validatedRow["quantity"],
                         "quantity"
                     ).toString(),
                     f: validateInteger(
-                        validatedRow.firstTradeId,
+                        validatedRow["firstTradeId"],
                         "firstTradeId"
                     ),
-                    l: validateInteger(validatedRow.lastTradeId, "lastTradeId"),
-                    T: validateTimestamp(validatedRow.tradeTime, "tradeTime"),
+                    l: validateInteger(
+                        validatedRow["lastTradeId"],
+                        "lastTradeId"
+                    ),
+                    T: validateTimestamp(
+                        validatedRow["tradeTime"],
+                        "tradeTime"
+                    ),
                     m: validateBoolean(
-                        validatedRow.isBuyerMaker,
+                        validatedRow["isBuyerMaker"],
                         "isBuyerMaker"
                     ),
-                    M: validateBoolean(validatedRow.bestMatch, "bestMatch"),
+                    M: validateBoolean(validatedRow["bestMatch"], "bestMatch"),
                 } as SpotWebsocketAPI.TradesAggregateResponseResultInner);
             }
 
@@ -666,13 +675,13 @@ export class Storage implements IStorage {
 
             // Handle null case - if no trades exist, lastTime will be null
             if (
-                validatedRow.lastTime === null ||
-                validatedRow.lastTime === undefined
+                validatedRow["lastTime"] === null ||
+                validatedRow["lastTime"] === undefined
             ) {
                 return null;
             }
 
-            return validateTimestamp(validatedRow.lastTime, "lastTime");
+            return validateTimestamp(validatedRow["lastTime"], "lastTime");
         } catch (error) {
             this.logger.error("Error getting last trade timestamp", {
                 error,

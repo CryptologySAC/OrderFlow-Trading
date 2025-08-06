@@ -10,6 +10,7 @@ import { SpoofingDetector } from "../src/services/spoofingDetector.js";
 import { HiddenOrderDetector } from "../src/services/hiddenOrderDetector.js";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
+// Simple mock for SignalValidationLogger - no import needed
 import type { SignalCandidate } from "../src/types/signalTypes.js";
 
 describe("Mathematical Property Testing for All Detectors", () => {
@@ -18,6 +19,8 @@ describe("Mathematical Property Testing for All Detectors", () => {
     let mockMetrics: any;
     let mockOrderBook: any;
     let mockSpoofingDetector: any;
+    let mockSignalValidationLogger: any;
+    let mockSignalLogger: any;
 
     const mockPreprocessor: IOrderflowPreprocessor = {
         handleDepth: vi.fn(),
@@ -46,12 +49,30 @@ describe("Mathematical Property Testing for All Detectors", () => {
         );
         mockMetrics = new MockMetricsCollector() as any;
 
-        mockLogger = {
-            info: vi.fn(),
-            warn: vi.fn(),
-            error: vi.fn(),
-            debug: vi.fn(),
+        // Use proper mock from __mocks__/ directory per CLAUDE.md
+        const { createMockLogger } = await import(
+            "../__mocks__/src/infrastructure/loggerInterface.js"
+        );
+        mockLogger = createMockLogger();
+
+        // Create a simple SignalValidationLogger mock
+        mockSignalValidationLogger = {
+            logSignal: vi.fn(),
+            logRejection: vi.fn(),
+            logSuccessfulSignal: vi.fn(),
+            updateCurrentPrice: vi.fn(),
+            cleanup: vi.fn(),
+            getValidationStats: vi.fn(() => ({
+                pendingValidations: 0,
+                totalLogged: 0,
+            })),
         } as any;
+
+        // Create proper signalLogger mock for ISignalLogger interface
+        const { createMockSignalLogger } = await import(
+            "../__mocks__/src/infrastructure/signalLoggerInterface.js"
+        );
+        mockSignalLogger = createMockSignalLogger();
 
         mockOrderBook = {
             getBestBid: vi.fn().mockReturnValue(100.5),
@@ -76,89 +97,41 @@ describe("Mathematical Property Testing for All Detectors", () => {
                 const detector = new AbsorptionDetectorEnhanced(
                     "test-absorption",
                     {
-                        // Base detector settings (from config.json)
+                        // Enhanced detector settings from config schema
                         minAggVolume: 175,
-                        windowMs: 60000,
-                        pricePrecision: 2,
-                        zoneTicks: 5,
+                        timeWindowIndex: 1, // Instead of windowMs
                         eventCooldownMs: 15000,
-                        minInitialMoveTicks: 4,
-                        confirmationTimeoutMs: 60000,
-                        maxRevisitTicks: 5,
-
-                        // Absorption-specific thresholds
-                        absorptionThreshold: 0.6,
-                        minPassiveMultiplier: 1.2,
-                        maxAbsorptionRatio: 0.4,
-                        strongAbsorptionRatio: 0.6,
-                        moderateAbsorptionRatio: 0.8,
-                        weakAbsorptionRatio: 1.0,
                         priceEfficiencyThreshold: 0.02,
-                        spreadImpactThreshold: 0.003,
-                        velocityIncreaseThreshold: 1.5,
-                        significantChangeThreshold: 0.1,
-
-                        // Dominant side analysis
-                        dominantSideAnalysisWindowMs: 45000,
-                        dominantSideFallbackTradeCount: 10,
-                        dominantSideMinTradesRequired: 3,
-                        dominantSideTemporalWeighting: true,
-                        dominantSideWeightDecayFactor: 0.3,
-
-                        // Features configuration
-                        features: {
-                            adaptiveZone: true,
-                            passiveHistory: true,
-                            multiZone: false,
-                            liquidityGradient: true,
-                            absorptionVelocity: true,
-                            layeredAbsorption: true,
-                            spreadImpact: true,
-                        },
+                        maxAbsorptionRatio: 0.4,
+                        minPassiveMultiplier: 1.2,
+                        passiveAbsorptionThreshold: 20, // Must be 10-50 range per schema
 
                         // Enhancement control
                         useStandardizedZones: true,
                         enhancementMode: "production" as const,
                         minEnhancedConfidenceThreshold: 0.3,
 
-                        // Institutional volume detection (enhanced)
-                        institutionalVolumeThreshold: 50,
-                        institutionalVolumeRatioThreshold: 0.3,
+                        // Required parameters from AbsorptionDetectorSchema
+                        expectedMovementScalingFactor: 10,
+                        contextConfidenceBoostMultiplier: 0.15,
+                        liquidityGradientRange: 5,
+                        institutionalVolumeThreshold: 50000,
+                        institutionalVolumeRatioThreshold: 2.0,
                         enableInstitutionalVolumeFilter: true,
                         institutionalVolumeBoost: 0.1,
-
-                        // Enhanced calculation parameters
-                        volumeNormalizationThreshold: 200,
-                        absorptionRatioNormalization: 3,
-                        minAbsorptionScore: 0.8,
-                        patternVarianceReduction: 2,
-                        whaleActivityMultiplier: 2,
-                        maxZoneCountForScoring: 3,
-
-                        // Enhanced thresholds
-                        highConfidenceThreshold: 0.7,
-                        lowConfidenceReduction: 0.7,
+                        minAbsorptionScore: 0.6,
+                        finalConfidenceRequired: 0.5,
                         confidenceBoostReduction: 0.5,
-                        passiveAbsorptionThreshold: 0.6,
-                        aggressiveDistributionThreshold: 0.6,
-                        patternDifferenceThreshold: 0.1,
-                        minVolumeForRatio: 1,
-
-                        // Enhanced scoring weights
-                        distanceWeight: 0.4,
-                        volumeWeight: 0.35,
-                        absorptionWeight: 0.25,
-                        minConfluenceScore: 0.6,
-                        volumeConcentrationWeight: 0.15,
-                        patternConsistencyWeight: 0.1,
-                        volumeBoostCap: 0.25,
-                        volumeBoostMultiplier: 0.25,
+                        maxZoneCountForScoring: 3,
+                        balanceThreshold: 0.1,
+                        confluenceMinZones: 1,
+                        confluenceMaxDistance: 5,
                     },
                     mockPreprocessor,
-                    mockOrderBook,
                     mockLogger,
-                    mockSpoofingDetector,
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalValidationLogger,
+                    mockSignalLogger // Using proper signalLogger mock
                 );
 
                 detector.on("signalCandidate", (signal: SignalCandidate) => {
@@ -169,7 +142,7 @@ describe("Mathematical Property Testing for All Detectors", () => {
             };
 
             const detectorProcessor = (
-                detector: AbsorptionDetector,
+                detector: AbsorptionDetectorEnhanced,
                 trade: EnrichedTradeEvent
             ) => {
                 detector.onEnrichedTrade(trade);
@@ -189,89 +162,41 @@ describe("Mathematical Property Testing for All Detectors", () => {
             const detector = new AbsorptionDetectorEnhanced(
                 "test-efficiency",
                 {
-                    // Base detector settings (from config.json)
+                    // Enhanced detector settings from config schema
                     minAggVolume: 175,
-                    windowMs: 60000,
-                    pricePrecision: 2,
-                    zoneTicks: 5,
+                    timeWindowIndex: 1, // Instead of windowMs
                     eventCooldownMs: 15000,
-                    minInitialMoveTicks: 4,
-                    confirmationTimeoutMs: 60000,
-                    maxRevisitTicks: 5,
-
-                    // Absorption-specific thresholds
-                    absorptionThreshold: 0.6,
-                    minPassiveMultiplier: 1.2,
-                    maxAbsorptionRatio: 0.4,
-                    strongAbsorptionRatio: 0.6,
-                    moderateAbsorptionRatio: 0.8,
-                    weakAbsorptionRatio: 1.0,
                     priceEfficiencyThreshold: 0.02,
-                    spreadImpactThreshold: 0.003,
-                    velocityIncreaseThreshold: 1.5,
-                    significantChangeThreshold: 0.1,
-
-                    // Dominant side analysis
-                    dominantSideAnalysisWindowMs: 45000,
-                    dominantSideFallbackTradeCount: 10,
-                    dominantSideMinTradesRequired: 3,
-                    dominantSideTemporalWeighting: true,
-                    dominantSideWeightDecayFactor: 0.3,
-
-                    // Features configuration
-                    features: {
-                        adaptiveZone: true,
-                        passiveHistory: true,
-                        multiZone: false,
-                        liquidityGradient: true,
-                        absorptionVelocity: true,
-                        layeredAbsorption: true,
-                        spreadImpact: true,
-                    },
+                    maxAbsorptionRatio: 0.4,
+                    minPassiveMultiplier: 1.2,
+                    passiveAbsorptionThreshold: 20, // Must be 10-50 range per schema
 
                     // Enhancement control
                     useStandardizedZones: true,
                     enhancementMode: "production" as const,
                     minEnhancedConfidenceThreshold: 0.3,
 
-                    // Institutional volume detection (enhanced)
-                    institutionalVolumeThreshold: 50,
-                    institutionalVolumeRatioThreshold: 0.3,
+                    // Required parameters from AbsorptionDetectorSchema
+                    expectedMovementScalingFactor: 10,
+                    contextConfidenceBoostMultiplier: 0.15,
+                    liquidityGradientRange: 5,
+                    institutionalVolumeThreshold: 50000,
+                    institutionalVolumeRatioThreshold: 2.0,
                     enableInstitutionalVolumeFilter: true,
                     institutionalVolumeBoost: 0.1,
-
-                    // Enhanced calculation parameters
-                    volumeNormalizationThreshold: 200,
-                    absorptionRatioNormalization: 3,
-                    minAbsorptionScore: 0.8,
-                    patternVarianceReduction: 2,
-                    whaleActivityMultiplier: 2,
-                    maxZoneCountForScoring: 3,
-
-                    // Enhanced thresholds
-                    highConfidenceThreshold: 0.7,
-                    lowConfidenceReduction: 0.7,
+                    minAbsorptionScore: 0.6,
+                    finalConfidenceRequired: 0.5,
                     confidenceBoostReduction: 0.5,
-                    passiveAbsorptionThreshold: 0.6,
-                    aggressiveDistributionThreshold: 0.6,
-                    patternDifferenceThreshold: 0.1,
-                    minVolumeForRatio: 1,
-
-                    // Enhanced scoring weights
-                    distanceWeight: 0.4,
-                    volumeWeight: 0.35,
-                    absorptionWeight: 0.25,
-                    minConfluenceScore: 0.6,
-                    volumeConcentrationWeight: 0.15,
-                    patternConsistencyWeight: 0.1,
-                    volumeBoostCap: 0.25,
-                    volumeBoostMultiplier: 0.25,
+                    maxZoneCountForScoring: 3,
+                    balanceThreshold: 0.1,
+                    confluenceMinZones: 1,
+                    confluenceMaxDistance: 5,
                 },
                 mockPreprocessor,
-                mockOrderBook,
                 mockLogger,
-                mockSpoofingDetector,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalValidationLogger // Using same mock for signalLogger
             );
 
             // Test monotonicity: larger volume pressure should generally decrease efficiency
@@ -308,96 +233,35 @@ describe("Mathematical Property Testing for All Detectors", () => {
                 const detector = new ExhaustionDetectorEnhanced(
                     "test-exhaustion",
                     {
-                        // Base detector settings
+                        // Enhanced detector settings from config schema
                         minAggVolume: 40,
-                        windowMs: 90000,
-                        pricePrecision: 2,
-                        zoneTicks: 3,
+                        timeWindowIndex: 2, // Instead of windowMs
                         eventCooldownMs: 10000,
-                        minInitialMoveTicks: 1,
-                        confirmationTimeoutMs: 40000,
-                        maxRevisitTicks: 8,
-
-                        // Exhaustion-specific thresholds
-                        volumeSurgeMultiplier: 2.5,
-                        imbalanceThreshold: 0.25,
-                        institutionalThreshold: 17.8,
-                        burstDetectionMs: 1000,
-                        sustainedVolumeMs: 30000,
-                        medianTradeSize: 0.6,
-                        exhaustionThreshold: 0.6,
-                        maxPassiveRatio: 0.2,
-                        minDepletionFactor: 0.3,
-                        imbalanceHighThreshold: 0.8,
-                        imbalanceMediumThreshold: 0.6,
-                        spreadHighThreshold: 0.005,
-                        spreadMediumThreshold: 0.002,
-
-                        // Scoring weights
-                        scoringWeights: {
-                            depletion: 0.45,
-                            passive: 0.3,
-                            continuity: 0.12,
-                            imbalance: 0.08,
-                            spread: 0.04,
-                            velocity: 0.01,
-                        },
-
-                        // Quality and performance settings
-                        depletionThresholdRatio: 0.15,
-                        significantChangeThreshold: 0.08,
-                        highQualitySampleCount: 6,
-                        highQualityDataAge: 35000,
-                        mediumQualitySampleCount: 3,
-                        mediumQualityDataAge: 70000,
-                        circuitBreakerMaxErrors: 8,
-                        circuitBreakerWindowMs: 90000,
-
-                        // Confidence adjustments
-                        lowScoreConfidenceAdjustment: 0.7,
-                        lowVolumeConfidenceAdjustment: 0.8,
-                        invalidSurgeConfidenceAdjustment: 0.8,
-                        passiveConsistencyThreshold: 0.7,
-                        imbalanceNeutralThreshold: 0.1,
-                        velocityMinBound: 0.1,
-                        velocityMaxBound: 10,
-
-                        // Zone management
-                        maxZones: 75,
-                        zoneAgeLimit: 1200000,
-
-                        // Features configuration
-                        features: {
-                            depletionTracking: true,
-                            spreadAdjustment: true,
-                            volumeVelocity: false,
-                            spoofingDetection: true,
-                            adaptiveZone: true,
-                            multiZone: false,
-                            passiveHistory: true,
-                        },
-
-                        // Enhancement control
+                        minEnhancedConfidenceThreshold: 0.3,
                         useStandardizedZones: true,
                         enhancementMode: "production" as const,
-                        minEnhancedConfidenceThreshold: 0.3,
 
-                        // Enhanced depletion analysis
+                        // Required parameters from ExhaustionDetectorSchema
+                        exhaustionThreshold: 0.6,
                         depletionVolumeThreshold: 30,
-                        depletionRatioThreshold: 0.6,
-                        varianceReductionFactor: 1,
-                        alignmentNormalizationFactor: 1,
-                        distanceNormalizationDivisor: 2,
-                        passiveVolumeExhaustionRatio: 0.5,
-                        aggressiveVolumeExhaustionThreshold: 0.7,
-                        aggressiveVolumeReductionFactor: 0.5,
+                        depletionRatioThreshold: -0.3,
                         enableDepletionAnalysis: true,
                         depletionConfidenceBoost: 0.1,
+                        varianceReductionFactor: 1.0,
+                        alignmentNormalizationFactor: 1.0,
+                        passiveVolumeExhaustionRatio: 0.5,
+                        aggressiveVolumeExhaustionThreshold: 0.1,
+                        aggressiveVolumeReductionFactor: 0.5,
+                        passiveRatioBalanceThreshold: 0.5,
+                        premiumConfidenceThreshold: 0.7,
+                        variancePenaltyFactor: 1.0,
+                        ratioBalanceCenterPoint: 0.5,
                     },
                     mockPreprocessor,
                     mockLogger,
-                    mockSpoofingDetector,
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalLogger, // signalLogger parameter
+                    mockSignalValidationLogger // validationLogger parameter
                 );
 
                 detector.on("signalCandidate", (signal: SignalCandidate) => {
@@ -408,7 +272,7 @@ describe("Mathematical Property Testing for All Detectors", () => {
             };
 
             const detectorProcessor = (
-                detector: ExhaustionDetector,
+                detector: ExhaustionDetectorEnhanced,
                 trade: EnrichedTradeEvent
             ) => {
                 detector.onEnrichedTrade(trade);
@@ -457,81 +321,24 @@ describe("Mathematical Property Testing for All Detectors", () => {
             const detectorFactory = () => {
                 signals.length = 0;
                 const completeDeltaCVDSettings = {
-                    // Core CVD analysis (12 properties)
-                    windowsSec: [60, 300],
-                    minZ: 0.4,
-                    priceCorrelationWeight: 0.3,
-                    volumeConcentrationWeight: 0.2,
-                    adaptiveThresholdMultiplier: 0.7,
+                    // Enhanced detector settings from config schema
+                    timeWindowIndex: 1, // Instead of windowsSec
                     eventCooldownMs: 15000,
+                    enhancementMode: "production" as const,
+                    institutionalThreshold: 17.8,
                     minTradesPerSec: 0.1,
                     minVolPerSec: 0.5,
-                    minSamplesForStats: 15,
-                    pricePrecision: 2,
-                    volatilityLookbackSec: 3600,
-                    maxDivergenceAllowed: 0.5,
-                    stateCleanupIntervalSec: 300,
-                    dynamicThresholds: true,
-                    logDebug: true,
-
-                    // Volume and detection parameters (15 properties)
-                    volumeSurgeMultiplier: 2.5,
-                    imbalanceThreshold: 0.15,
-                    institutionalThreshold: 17.8,
-                    burstDetectionMs: 1000,
-                    sustainedVolumeMs: 30000,
-                    medianTradeSize: 0.6,
-                    detectionMode: "momentum" as const,
-                    divergenceThreshold: 0.3,
-                    divergenceLookbackSec: 60,
-                    enableDepthAnalysis: false,
-                    usePassiveVolume: true,
-                    maxOrderbookAge: 5000,
-                    absorptionCVDThreshold: 75,
-                    absorptionPriceThreshold: 0.1,
-                    imbalanceWeight: 0.2,
-                    icebergMinRefills: 3,
-                    icebergMinSize: 20,
-                    baseConfidenceRequired: 0.2,
-                    finalConfidenceRequired: 0.35,
-                    strongCorrelationThreshold: 0.7,
-                    weakCorrelationThreshold: 0.3,
-                    depthImbalanceThreshold: 0.2,
-
-                    // Enhancement control (3 properties)
-                    useStandardizedZones: true,
-                    enhancementMode: "production" as const,
-                    minEnhancedConfidenceThreshold: 0.3,
-
-                    // Enhanced CVD analysis (6 properties)
-                    cvdDivergenceVolumeThreshold: 50,
-                    cvdDivergenceStrengthThreshold: 0.7,
-                    cvdSignificantImbalanceThreshold: 0.3,
-                    cvdDivergenceScoreMultiplier: 1.5,
-                    alignmentMinimumThreshold: 0.5,
-                    momentumScoreMultiplier: 2,
-                    enableCVDDivergenceAnalysis: true,
-                    enableMomentumAlignment: false,
-                    divergenceConfidenceBoost: 0.12,
-                    momentumAlignmentBoost: 0.08,
-
-                    // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
-                    minTradesForAnalysis: 20,
-                    minVolumeRatio: 0.1,
-                    maxVolumeRatio: 5.0,
-                    priceChangeThreshold: 0.001,
-                    minZScoreBound: -20,
-                    maxZScoreBound: 20,
-                    minCorrelationBound: -0.999,
-                    maxCorrelationBound: 0.999,
+                    signalThreshold: 0.4,
+                    cvdImbalanceThreshold: 0.3,
                 };
                 const detector = new DeltaCVDDetectorEnhanced(
                     "test-deltacvd",
-                    "LTCUSDT",
                     completeDeltaCVDSettings,
                     mockPreprocessor,
                     mockLogger,
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalValidationLogger,
+                    mockSignalLogger // Using proper signalLogger mock
                 );
 
                 detector.on("signal", (signal: SignalCandidate) => {
@@ -592,7 +399,8 @@ describe("Mathematical Property Testing for All Detectors", () => {
                 const detector = new IcebergDetector(
                     "test-iceberg",
                     mockLogger,
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalLogger // Adding missing signalLogger parameter
                 );
 
                 detector.on("signalCandidate", (signal: SignalCandidate) => {
@@ -603,7 +411,7 @@ describe("Mathematical Property Testing for All Detectors", () => {
             };
 
             const detectorProcessor = (
-                detector: IcebergDetector,
+                detector: InstanceType<typeof IcebergDetector>,
                 trade: EnrichedTradeEvent
             ) => {
                 detector.onEnrichedTrade(trade);
@@ -671,7 +479,8 @@ describe("Mathematical Property Testing for All Detectors", () => {
                         zoneHeightPercentage: 0.002,
                     },
                     mockLogger,
-                    mockMetrics
+                    mockMetrics,
+                    mockSignalLogger // Adding missing signalLogger parameter
                 );
 
                 detector.on("signalCandidate", (signal: SignalCandidate) => {
@@ -698,15 +507,8 @@ describe("Mathematical Property Testing for All Detectors", () => {
                     ],
                 };
 
-                // Check if methods exist before calling
-                if (typeof detector.onDepthUpdate === "function") {
-                    detector.onDepthUpdate(mockDepth, Date.now());
-                }
-                if (typeof detector.onTrade === "function") {
-                    detector.onTrade(trade);
-                } else if (typeof detector.onEnrichedTrade === "function") {
-                    detector.onEnrichedTrade(trade);
-                }
+                // HiddenOrderDetector only has onEnrichedTrade method
+                detector.onEnrichedTrade(trade);
             };
 
             const signalCollector = () => [...signals];
@@ -764,13 +566,14 @@ describe("Mathematical Property Testing for All Detectors", () => {
                 const conf1 = testConfidences[i];
                 const conf2 = testConfidences[i + 1];
 
-                // Higher individual confidences should produce higher combined confidence
-                const combined1 = conf1 * conf2; // Simple multiplication
-                const combined2 =
-                    testConfidences[i + 1] * testConfidences[i + 1];
+                if (conf1 !== undefined && conf2 !== undefined) {
+                    // Higher individual confidences should produce higher combined confidence
+                    const combined1 = conf1 * conf2; // Simple multiplication
+                    const combined2 = conf2 * conf2;
 
-                if (conf2 > conf1) {
-                    expect(combined2).toBeGreaterThanOrEqual(combined1);
+                    if (conf2 > conf1) {
+                        expect(combined2).toBeGreaterThanOrEqual(combined1);
+                    }
                 }
             }
         });

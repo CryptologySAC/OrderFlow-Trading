@@ -1,7 +1,7 @@
 import { FinancialMath } from "./financialMath.js";
 
 export class RollingStatsWindow {
-    private entries: { value: number; time: number }[] = [];
+    private readonly entries: { value: number; time: number }[] = [];
     private sum = 0;
     private sumSquares = 0;
 
@@ -19,8 +19,8 @@ export class RollingStatsWindow {
 
     private trim(now: number): void {
         while (
-            this.entries.length &&
-            now - this.entries[0].time > this.windowMs
+            this.entries.length > 0 &&
+            now - this.entries[0]!.time > this.windowMs
         ) {
             const old = this.entries.shift()!;
             this.sum -= old.value;

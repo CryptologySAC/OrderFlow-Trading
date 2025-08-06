@@ -10,6 +10,7 @@ import type {
     ZoneSnapshot,
     StandardZoneData,
     ZoneTradeRecord,
+    PassiveLevel,
 } from "../types/marketEvents.js";
 import { IOrderBookState } from "./orderBookState.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
@@ -95,7 +96,7 @@ export class OrderflowPreprocessor
     private readonly significantChangeThreshold: number;
 
     // Dashboard update state
-    private dashboardUpdateTimer?: NodeJS.Timeout;
+    private dashboardUpdateTimer?: NodeJS.Timeout | undefined;
     private lastDashboardUpdate = 0;
     private lastDashboardMidPrice = 0;
 
@@ -115,16 +116,7 @@ export class OrderflowPreprocessor
     private readonly adaptiveZoneLookbackTrades: number;
     private readonly zoneCalculationRange: number;
     // Zone configuration parameters (CLAUDE.md compliance - LTCUSDT data-driven)
-    private readonly defaultZoneMultipliers: number[];
-    private readonly defaultTimeWindows: number[];
-    private readonly defaultMinZoneWidthMultiplier: number;
-    private readonly defaultMaxZoneWidthMultiplier: number;
-    private readonly defaultMaxZoneHistory: number;
-    private readonly defaultMaxMemoryMB: number;
     // LTCUSDT volume analysis - absolute thresholds instead of ratios
-    private readonly defaultAggressiveVolumeAbsolute: number;
-    private readonly defaultPassiveVolumeAbsolute: number;
-    private readonly defaultInstitutionalVolumeAbsolute: number;
     private readonly maxTradesPerZone: number;
 
     // Track processing stats
@@ -136,8 +128,8 @@ export class OrderflowPreprocessor
         orderBook: IOrderBookState,
         logger: ILogger,
         metricsCollector: IMetricsCollector,
-        individualTradesManager?: IndividualTradesManager,
-        microstructureAnalyzer?: MicrostructureAnalyzer
+        individualTradesManager: IndividualTradesManager,
+        microstructureAnalyzer: MicrostructureAnalyzer
     ) {
         super();
         this.logger = logger;
@@ -156,20 +148,7 @@ export class OrderflowPreprocessor
         this.maxDashboardInterval = opts.maxDashboardInterval; // Max 1 second between updates
         this.significantChangeThreshold = opts.significantChangeThreshold; // 0.1% price change
 
-        // LTCUSDT trade distribution analysis defaults (NO arbitrary ratios) - INITIALIZE FIRST
-        this.defaultZoneMultipliers = opts.defaultZoneMultipliers; // Standard progressive sizing
-        this.defaultTimeWindows = opts.defaultTimeWindows; // 5min, 15min, 30min, 60min, 90min (cross-detector zone analysis)
-        this.defaultMinZoneWidthMultiplier = opts.defaultMinZoneWidthMultiplier; // 2 ticks minimum (LTCUSDT analysis)
-        this.defaultMaxZoneWidthMultiplier = opts.defaultMaxZoneWidthMultiplier; // 10 ticks maximum (LTCUSDT analysis)
-        this.defaultMaxZoneHistory = opts.defaultMaxZoneHistory; // 2000 zones ≈ 90+ minutes comprehensive coverage
-        this.defaultMaxMemoryMB = opts.defaultMaxMemoryMB; // 50MB for 90-minute zone structures and history
-
         // LTCUSDT volume thresholds - absolute values from trade distribution analysis
-        this.defaultAggressiveVolumeAbsolute =
-            opts.defaultAggressiveVolumeAbsolute; // Top 5% of trades
-        this.defaultPassiveVolumeAbsolute = opts.defaultPassiveVolumeAbsolute; // Top 15% of trades
-        this.defaultInstitutionalVolumeAbsolute =
-            opts.defaultInstitutionalVolumeAbsolute; // <1% whale trades
         this.maxTradesPerZone = opts.maxTradesPerZone; // Maximum individual trades stored per zone
 
         // NEW: Initialize standardized zone configuration (LTCUSDT data-driven defaults) - AFTER defaults set
@@ -336,7 +315,7 @@ export class OrderflowPreprocessor
                 depthSnapshot:
                     aggressive.quantity > this.getLargeTradeThreshold()
                         ? this.bookState.snapshot()
-                        : undefined,
+                        : new Map<number, PassiveLevel>(),
                 // Zone data will be populated after trade aggregation
                 zoneData: zoneData,
             };
@@ -736,12 +715,12 @@ export class OrderflowPreprocessor
         }
 
         const result = {
-            zones,
-            adaptiveZones,
+            zones: zones ?? [],
+            adaptiveZones: adaptiveZones ?? [],
             zoneConfig: {
                 zoneTicks: this.standardZoneConfig.zoneTicks,
                 tickValue: this.tickSize,
-                timeWindow: this.standardZoneConfig.timeWindows[0], // Use shortest time window
+                timeWindow: this.standardZoneConfig.timeWindows[0]!, // Use shortest time window
             },
         };
 
@@ -836,7 +815,7 @@ export class OrderflowPreprocessor
         }
 
         // Select the zone with the highest relevance score
-        let bestZone = relevantZones[0];
+        let bestZone = relevantZones[0]!;
         let bestScore = this.calculateZoneRelevanceScore(bestZone, price);
 
         for (const zone of relevantZones.slice(1)) {
@@ -977,7 +956,7 @@ export class OrderflowPreprocessor
                 passiveBidVolume: band.bid,
                 passiveAskVolume: band.ask,
                 tradeCount: 0, // Will be updated with trade aggregation
-                timespan: this.standardZoneConfig.timeWindows[0], // Default to shortest window
+                timespan: this.standardZoneConfig.timeWindows[0]!, // Default to shortest window
                 boundaries: { min: minPrice, max: maxPrice },
                 lastUpdate: timestamp,
                 volumeWeightedPrice,
@@ -1430,44 +1409,52 @@ export class OrderflowPreprocessor
                 return null; // Trade outside zone boundaries
             }
 
-            // Update aggressive volume using FinancialMath
-            const newAggressiveVolume = FinancialMath.safeAdd(
-                zone.aggressiveVolume,
-                quantity
-            );
+            // 🔄 CRITICAL FIX: Calculate time-windowed volumes from tradeHistory instead of cumulative
+            // Add current trade to history first
+            const currentTradeRecord: ZoneTradeRecord = {
+                price,
+                quantity,
+                timestamp,
+                tradeId: trade.tradeId,
+                buyerIsMaker,
+            };
+            zone.tradeHistory.add(currentTradeRecord);
 
-            // Update buy/sell volumes based on trade direction
-            let newBuyVolume = zone.aggressiveBuyVolume;
-            let newSellVolume = zone.aggressiveSellVolume;
+            // Calculate volumes from trades within active time window
+            const timeWindowMs = zone.timespan; // Use zone's configured time window
+            const cutoffTime = timestamp - timeWindowMs;
 
-            if (buyerIsMaker) {
-                // Buyer is maker = sell side trade (seller is taker)
-                newSellVolume = FinancialMath.safeAdd(newSellVolume, quantity);
-            } else {
-                // Buyer is taker = buy side trade
-                newBuyVolume = FinancialMath.safeAdd(newBuyVolume, quantity);
-            }
+            let newAggressiveVolume = 0;
+            let newBuyVolume = 0;
+            let newSellVolume = 0;
+            let newTradeCount = 0;
 
-            // Update trade count
-            const newTradeCount = zone.tradeCount + 1;
+            // Sum volumes from all trades within time window
+            for (const tradeRecord of zone.tradeHistory.getAll()) {
+                if (tradeRecord.timestamp >= cutoffTime) {
+                    newAggressiveVolume = FinancialMath.safeAdd(
+                        newAggressiveVolume,
+                        tradeRecord.quantity
+                    );
+                    newTradeCount++;
 
-            // Extract individual trades for precise VWAP calculation
-            // Handles both aggregated trades and HybridTradeEvent with individual trade data
-            const individualTrades = this.extractIndividualTrades(
-                trade,
-                trade.tradeId
-            );
-
-            // Add all individual trades to zone's trade history
-            for (const tradeRecord of individualTrades) {
-                // Verify trade is within zone boundaries before storing
-                if (
-                    tradeRecord.price >= zone.boundaries.min &&
-                    tradeRecord.price <= zone.boundaries.max
-                ) {
-                    zone.tradeHistory.add(tradeRecord);
+                    if (tradeRecord.buyerIsMaker) {
+                        // Buyer is maker = sell side trade
+                        newSellVolume = FinancialMath.safeAdd(
+                            newSellVolume,
+                            tradeRecord.quantity
+                        );
+                    } else {
+                        // Buyer is taker = buy side trade
+                        newBuyVolume = FinancialMath.safeAdd(
+                            newBuyVolume,
+                            tradeRecord.quantity
+                        );
+                    }
                 }
             }
+
+            // Note: Trade already added to history above for time-windowed calculation
 
             // Calculate live VWAP from individual trades with time-based expiration
             const newVolumeWeightedPrice = this.calculateLiveVWAP(
@@ -1564,47 +1551,6 @@ export class OrderflowPreprocessor
     }
 
     /**
-     * Extract individual trades from HybridTradeEvent for zone processing
-     * Uses individual trades for large agg trades, treats small agg trades as single trades
-     */
-    private extractIndividualTrades(
-        trade: EnrichedTradeEvent | HybridTradeEvent,
-        tradeId: string
-    ): ZoneTradeRecord[] {
-        const trades: ZoneTradeRecord[] = [];
-
-        // Check if this is a HybridTradeEvent with individual trades
-        if (
-            "hasIndividualData" in trade &&
-            trade.hasIndividualData &&
-            trade.individualTrades
-        ) {
-            // Use the actual individual trades for maximum precision
-            for (let i = 0; i < trade.individualTrades.length; i++) {
-                const individualTrade = trade.individualTrades[i];
-                trades.push({
-                    price: individualTrade.price,
-                    quantity: individualTrade.quantity,
-                    timestamp: individualTrade.timestamp,
-                    tradeId: `${tradeId}_${i}`, // Unique ID for each individual trade
-                    buyerIsMaker: individualTrade.isBuyerMaker,
-                });
-            }
-        } else {
-            // Treat aggregated trade as single individual trade
-            trades.push({
-                price: trade.price,
-                quantity: trade.quantity,
-                timestamp: trade.timestamp,
-                tradeId: tradeId,
-                buyerIsMaker: trade.buyerIsMaker,
-            });
-        }
-
-        return trades;
-    }
-
-    /**
      * Get current zone data for all zone sizes near the specified price
      * Returns StandardZoneData with populated zone arrays for CVD detectors
      *
@@ -1680,9 +1626,8 @@ export class OrderflowPreprocessor
 
             // Return populated StandardZoneData with single zone array
             return {
-                zones,
-                adaptiveZones:
-                    adaptiveZones.length > 0 ? adaptiveZones : undefined,
+                zones: zones ?? [],
+                adaptiveZones: adaptiveZones.length > 0 ? adaptiveZones : [],
                 zoneConfig: {
                     zoneTicks: this.standardZoneConfig.zoneTicks,
                     tickValue: this.tickSize,

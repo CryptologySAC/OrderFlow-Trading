@@ -112,6 +112,8 @@ import type { ISignalLogger } from "../src/infrastructure/signalLoggerInterface.
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
+import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
 // Mock dependencies
 const mockLogger: ILogger = {
     debug: vi.fn(),
@@ -121,6 +123,7 @@ const mockLogger: ILogger = {
     trace: vi.fn(),
 };
 
+const mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 const mockMetricsCollector: IMetricsCollector = {
     recordGauge: vi.fn(),
     recordCounter: vi.fn(),
@@ -239,11 +242,11 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
 
         enhancedDetector = new AccumulationZoneDetectorEnhanced(
             "test-accumulation-enhanced",
-            "LTCUSDT",
             mockAccumulationConfig,
             mockPreprocessor,
             mockLogger,
-            mockMetricsCollector
+            mockMetricsCollector,
+            mockSignalLogger
         );
     });
 
@@ -278,11 +281,11 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
             expect(() => {
                 new AccumulationZoneDetectorEnhanced(
                     "test-validated-config",
-                    "LTCUSDT",
                     mockAccumulationConfig, // Pre-validated settings should work
                     mockPreprocessor,
                     mockLogger,
-                    mockMetricsCollector
+                    mockMetricsCollector,
+                    mockSignalLogger
                 );
             }).not.toThrow();
         });
@@ -311,11 +314,11 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
             expect(() => {
                 new AccumulationZoneDetectorEnhanced(
                     "test-complete",
-                    "LTCUSDT",
                     mockAccumulationConfig, // Complete validated configuration
                     mockPreprocessor,
                     mockLogger,
-                    mockMetricsCollector
+                    mockMetricsCollector,
+                    mockSignalLogger
                 );
             }).not.toThrow();
         });
@@ -339,11 +342,11 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
             expect(() => {
                 new AccumulationZoneDetectorEnhanced(
                     "test-valid",
-                    "LTCUSDT",
                     mockAccumulationConfig, // Known valid configuration
                     mockPreprocessor,
                     mockLogger,
-                    mockMetricsCollector
+                    mockMetricsCollector,
+                    mockSignalLogger
                 );
             }).not.toThrow();
         });

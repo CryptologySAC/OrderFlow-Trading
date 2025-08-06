@@ -32,45 +32,45 @@ export class ConfigurationValidator {
 
         switch (detectorType) {
             case "absorption":
-                thresholds.absorptionThreshold =
-                    typeof config.absorptionThreshold === "number"
-                        ? config.absorptionThreshold
+                thresholds["absorptionThreshold"] =
+                    typeof config["absorptionThreshold"] === "number"
+                        ? config["absorptionThreshold"]
                         : 0.6;
-                thresholds.priceEfficiencyThreshold =
-                    typeof config.priceEfficiencyThreshold === "number"
-                        ? config.priceEfficiencyThreshold
+                thresholds["priceEfficiencyThreshold"] =
+                    typeof config["priceEfficiencyThreshold"] === "number"
+                        ? config["priceEfficiencyThreshold"]
                         : 0.85;
-                thresholds.detectorThreshold =
-                    typeof config.detectorThreshold === "number"
-                        ? config.detectorThreshold
+                thresholds["detectorThreshold"] =
+                    typeof config["detectorThreshold"] === "number"
+                        ? config["detectorThreshold"]
                         : 0.85;
                 break;
             case "exhaustion":
-                thresholds.exhaustionThreshold =
-                    typeof config.exhaustionThreshold === "number"
-                        ? config.exhaustionThreshold
+                thresholds["exhaustionThreshold"] =
+                    typeof config["exhaustionThreshold"] === "number"
+                        ? config["exhaustionThreshold"]
                         : 0.7;
-                thresholds.imbalanceHighThreshold =
-                    typeof config.imbalanceHighThreshold === "number"
-                        ? config.imbalanceHighThreshold
+                thresholds["imbalanceHighThreshold"] =
+                    typeof config["imbalanceHighThreshold"] === "number"
+                        ? config["imbalanceHighThreshold"]
                         : 0.8;
-                thresholds.detectorThreshold =
-                    typeof config.detectorThreshold === "number"
-                        ? config.detectorThreshold
+                thresholds["detectorThreshold"] =
+                    typeof config["detectorThreshold"] === "number"
+                        ? config["detectorThreshold"]
                         : 0.85;
                 break;
             case "deltaCVD":
-                thresholds.baseConfidenceRequired =
-                    typeof config.baseConfidenceRequired === "number"
-                        ? config.baseConfidenceRequired
+                thresholds["baseConfidenceRequired"] =
+                    typeof config["baseConfidenceRequired"] === "number"
+                        ? config["baseConfidenceRequired"]
                         : 0.3;
-                thresholds.finalConfidenceRequired =
-                    typeof config.finalConfidenceRequired === "number"
-                        ? config.finalConfidenceRequired
+                thresholds["finalConfidenceRequired"] =
+                    typeof config["finalConfidenceRequired"] === "number"
+                        ? config["finalConfidenceRequired"]
                         : 0.5;
-                thresholds.detectorThreshold =
-                    typeof config.detectorThreshold === "number"
-                        ? config.detectorThreshold
+                thresholds["detectorThreshold"] =
+                    typeof config["detectorThreshold"] === "number"
+                        ? config["detectorThreshold"]
                         : 0.85;
                 break;
         }
@@ -149,7 +149,7 @@ export class ConfigurationValidator {
 
         for (const detectorType of detectorTypes) {
             const baseConfig = config[detectorType];
-            const signalManager = config.signalManager;
+            const signalManager = config["signalManager"];
 
             let detectorThreshold: number | undefined;
 
@@ -158,7 +158,7 @@ export class ConfigurationValidator {
                     string,
                     Record<string, number> | number | string | boolean
                 >;
-                const detectorThresholds = smAny.detectorThresholds;
+                const detectorThresholds = smAny["detectorThreshold"];
                 if (
                     typeof detectorThresholds === "object" &&
                     detectorThresholds !== null
@@ -175,7 +175,7 @@ export class ConfigurationValidator {
             };
 
             if (detectorThreshold !== undefined) {
-                detectorConfig.detectorThreshold = detectorThreshold;
+                detectorConfig["detectorThreshold"] = detectorThreshold;
             }
 
             const result = this.validateDetectorConfig(

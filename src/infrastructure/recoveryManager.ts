@@ -1,7 +1,7 @@
 // src/infrastructure/recoveryManager.ts
 
 import { EventEmitter } from "events";
-import { spawn } from "child_process";
+import { spawn, type ChildProcess } from "child_process";
 import type { ILogger } from "./loggerInterface.js";
 import type { IMetricsCollector } from "./metricsCollectorInterface.js";
 import { ProductionUtils } from "../utils/productionUtils.js";
@@ -181,7 +181,7 @@ export class RecoveryManager extends EventEmitter {
         });
 
         return new Promise((resolve, reject) => {
-            const child = spawn(cmd, args, {
+            const child: ChildProcess = spawn(cmd!, args, {
                 stdio: "pipe",
                 detached: true,
             });
@@ -189,23 +189,23 @@ export class RecoveryManager extends EventEmitter {
             let output = "";
             let errorOutput = "";
 
-            child.stdout?.on("data", (data: unknown) => {
-                output += String(data);
+            child.stdout?.on("data", (data: Buffer) => {
+                output += data.toString();
             });
 
-            child.stderr?.on("data", (data: unknown) => {
-                errorOutput += String(data);
+            child.stderr?.on("data", (data: Buffer) => {
+                errorOutput += data.toString();
             });
 
-            child.on("error", (error) => {
+            child.on("error", (error: Error) => {
                 this.logger.error("[RecoveryManager] Restart command error", {
                     error: error.message,
                     command,
                 });
-                reject(error);
+                reject(new Error(`Restart command failed: ${error.message}`));
             });
 
-            child.on("exit", (code) => {
+            child.on("exit", (code: number | null) => {
                 if (code === 0) {
                     this.logger.info(
                         "[RecoveryManager] Restart command completed",

@@ -272,7 +272,7 @@ function formatUptime(uptimeMs) {
     }
 }
 
-function updateSignalMetrics(metrics) {
+function updateSignalMetrics(metrics, webSocketSignalTotals) {
     const counters = metrics.counters || {};
     const histograms = metrics.histograms || {};
 
@@ -289,19 +289,19 @@ function updateSignalMetrics(metrics) {
         return (count / 60).toFixed(1); // per minute estimate
     };
 
-    // Signal Processing Overview
-    const signalCandidates = getCounterValue(
-        "signal_coordinator_signals_received_total"
-    );
+    // Signal Processing Overview - Use WebSocket signalTotals for real-time updates
+    const signalTotals = webSocketSignalTotals ||
+        metrics.signalTotals || {
+            candidates: 0,
+            confirmed: 0,
+            rejected: 0,
+        };
+    const signalCandidates = signalTotals.candidates;
     const signalsProcessed = getCounterValue(
         "signal_manager_signals_processed_total"
     );
-    const signalsConfirmed = getCounterValue(
-        "signal_manager_signals_confirmed_total"
-    );
-    const signalsRejected = getCounterValue(
-        "signal_manager_rejections_detailed_total"
-    );
+    const signalsConfirmed = signalTotals.confirmed;
+    const signalsRejected = signalTotals.rejected;
 
     updateElement("signalCandidates", formatNumber(signalCandidates));
     updateElement("signalCandidatesRate", getRate(signalCandidates));
@@ -312,39 +312,11 @@ function updateSignalMetrics(metrics) {
     updateElement("signalsRejected", formatNumber(signalsRejected));
     updateElement("signalsRejectedRate", getRate(signalsRejected));
 
-    // Signal Types Breakdown
-    const signalTypes = [
-        "absorption",
-        "exhaustion",
-        "accumulation",
-        "distribution",
-        "deltacvd",
-    ];
-
-    signalTypes.forEach((type) => {
-        const candidates =
-            getCounterValue(
-                `signal_coordinator_signals_received_total_${type}`
-            ) || 0;
-        const confirmed =
-            getCounterValue(`signal_manager_signals_confirmed_total_${type}`) ||
-            0;
-        const rejected =
-            getCounterValue(
-                `signal_manager_rejections_detailed_total_${type}`
-            ) || 0;
-        const total = confirmed + rejected;
-        const successRate =
-            total > 0 ? ((confirmed / total) * 100).toFixed(1) + "%" : "--";
-
-        // Use standardized signal types as prefixes
-        let typePrefix = type;
-
-        updateElement(`${typePrefix}Candidates`, formatNumber(candidates));
-        updateElement(`${typePrefix}Confirmed`, formatNumber(confirmed));
-        updateElement(`${typePrefix}Rejected`, formatNumber(rejected));
-        updateElement(`${typePrefix}SuccessRate`, successRate);
-    });
+    // NOTE: Signal Types Breakdown is now handled by updateSignalTypeBreakdown()
+    // using the signalTypeBreakdown data from the WebSocket message.
+    // This section was causing the "all zeros" issue because it was trying to
+    // reconstruct data from individual metrics counters instead of using the
+    // aggregated data from SignalManager.getSignalTypeBreakdown().
 
     // Rejection Reasons
     const rejectionReasons = [
@@ -418,6 +390,33 @@ function updateSignalMetrics(metrics) {
     updateElement("queueDepth", formatNumber(queueDepth));
 }
 
+function updateSignalTypeBreakdown(breakdown) {
+    console.log("Updating signal type breakdown:", breakdown);
+
+    // Update each signal type
+    const signalTypes = {
+        absorption: "absorption",
+        exhaustion: "exhaustion",
+        accumulation: "accumulation",
+        distribution: "distribution",
+        deltacvd: "deltacvd", // Backend and frontend now use same ID
+    };
+
+    for (const [backendType, frontendId] of Object.entries(signalTypes)) {
+        const stats = breakdown[backendType] || {
+            candidates: 0,
+            confirmed: 0,
+            rejected: 0,
+            successRate: "--",
+        };
+
+        updateElement(`${frontendId}Candidates`, stats.candidates);
+        updateElement(`${frontendId}Confirmed`, stats.confirmed);
+        updateElement(`${frontendId}Rejected`, stats.rejected);
+        updateElement(`${frontendId}SuccessRate`, stats.successRate);
+    }
+}
+
 function updateElement(id, value) {
     const element = document.getElementById(id);
     if (element) {
@@ -461,7 +460,10 @@ function updateVisuals(data) {
     updateTables(metrics);
 
     // Update signal metrics sections
-    updateSignalMetrics(metrics);
+    updateSignalMetrics(metrics, data.signalTotals);
+
+    // Update signal type breakdown
+    updateSignalTypeBreakdown(data.signalTypeBreakdown || {});
 
     // Update worker information
     updateWorkerInfo(data);

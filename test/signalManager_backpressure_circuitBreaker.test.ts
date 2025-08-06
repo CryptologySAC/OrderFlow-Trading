@@ -144,14 +144,7 @@ const mockLogger: ILogger = {
 };
 
 const mockAnomalyDetector = {
-    getMarketHealth: vi.fn().mockReturnValue({
-        isHealthy: true,
-        recommendation: "continue",
-        criticalIssues: [],
-        recentAnomalyTypes: [],
-        highestSeverity: "low",
-        metrics: { volatility: 0.02 },
-    }),
+    getMarketHealth: vi.fn(),
 } as unknown as AnomalyDetector;
 
 const mockAlertManager = {
@@ -169,6 +162,23 @@ describe("SignalManager Backpressure & Circuit Breaker", () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+
+        // Restore mock implementations after clearAllMocks
+        (mockAnomalyDetector.getMarketHealth as any).mockReturnValue({
+            isHealthy: true,
+            recentAnomalies: 0,
+            highestSeverity: "low",
+            recommendation: "continue",
+            criticalIssues: [],
+            recentAnomalyTypes: [],
+            metrics: {
+                volatility: 0.02,
+                spreadBps: 1.0,
+                flowImbalance: 0.0,
+                lastUpdateAge: 0,
+            },
+        });
+
         signalManager = new SignalManager(
             mockAnomalyDetector,
             mockAlertManager,

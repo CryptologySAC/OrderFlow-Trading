@@ -127,13 +127,14 @@ vi.mock("../src/core/config.js", async (importOriginal) => {
 });
 
 import { DistributionDetectorEnhanced } from "../src/indicators/distributionDetectorEnhanced.js";
-import { Config } from "../src/core/config.js";
+import { Config, DistributionDetectorSchema } from "../src/core/config.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ISignalLogger } from "../src/infrastructure/signalLoggerInterface.js";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 // Mock dependencies
 const mockLogger: ILogger = {
     debug: vi.fn(),
@@ -143,6 +144,7 @@ const mockLogger: ILogger = {
     trace: vi.fn(),
 };
 
+const mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 const mockMetricsCollector: IMetricsCollector = {
     recordGauge: vi.fn(),
     recordCounter: vi.fn(),
@@ -234,19 +236,40 @@ describe("DistributionDetectorEnhanced - Nuclear Cleanup Reality", () => {
         aggressiveSellingReductionFactor: 0.5,
         useStandardizedZones: true,
         enhancementMode: "production" as const,
+        eventCooldownMs: 15000, // Required parameter
+        confidenceThreshold: 0.4, // Required parameter
+        confluenceMinZones: 1, // Required parameter
+        confluenceMaxDistance: 0.1, // Required parameter
+        confluenceConfidenceBoost: 0.1, // Required parameter
+        crossTimeframeConfidenceBoost: 0.15, // Required parameter
+        distributionVolumeThreshold: 15, // Required parameter
+        distributionRatioThreshold: 0.5, // Required parameter
+        alignmentScoreThreshold: 0.5, // Required parameter
+        defaultDurationMs: 120000, // Required parameter
+        maxPriceResistance: 2.0, // Required parameter
+        priceResistanceMultiplier: 1.5, // Required parameter
+        minPassiveVolumeForEfficiency: 5, // Required parameter
+        defaultVolatility: 0.1, // Required parameter
+        defaultBaselineVolatility: 0.05, // Required parameter
         minEnhancedConfidenceThreshold: 0.25,
     };
 
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.clearAllMocks();
+
+        // Import and create mockSignalLogger
+        const { createMockSignalLogger } = await import(
+            "../__mocks__/src/infrastructure/signalLoggerInterface.js"
+        );
+        const mockSignalLogger = createMockSignalLogger();
 
         enhancedDetector = new DistributionDetectorEnhanced(
             "test-distribution-enhanced",
-            "LTCUSDT",
             mockDistributionConfig,
             mockPreprocessor,
             mockLogger,
-            mockMetricsCollector
+            mockMetricsCollector,
+            mockSignalLogger
         );
     });
 

@@ -6,6 +6,7 @@
 // philosophy with zero tolerance for missing configuration.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 
 // MOCK Config BEFORE any imports to prevent constructor issues
 vi.mock("../src/core/config.js", async (importOriginal) => {
@@ -135,6 +136,8 @@ const mockSignalLogger: ISignalLogger = {
     logSignal: vi.fn(),
     getHistory: vi.fn(() => []),
 };
+
+const mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
 const mockPreprocessor: IOrderflowPreprocessor = {
     handleDepth: vi.fn(),
@@ -291,11 +294,11 @@ describe("DeltaCVDDetectorEnhanced - Standalone Architecture", () => {
 
         enhancedDetector = new DeltaCVDDetectorEnhanced(
             "test-deltacvd-enhanced",
-            "LTCUSDT",
             mockDeltaCVDConfig,
             mockPreprocessor,
             mockLogger,
             mockMetricsCollector,
+            mockSignalValidationLogger,
             mockSignalLogger
         );
     });
@@ -339,11 +342,11 @@ describe("DeltaCVDDetectorEnhanced - Standalone Architecture", () => {
             expect(() => {
                 new DeltaCVDDetectorEnhanced(
                     "test-validated-config",
-                    "LTCUSDT",
                     mockDeltaCVDConfig, // Pre-validated settings should work
                     mockPreprocessor,
                     mockLogger,
                     mockMetricsCollector,
+                    mockSignalValidationLogger,
                     mockSignalLogger
                 );
             }).not.toThrow();
@@ -376,11 +379,11 @@ describe("DeltaCVDDetectorEnhanced - Standalone Architecture", () => {
             expect(() => {
                 new DeltaCVDDetectorEnhanced(
                     "test-complete",
-                    "LTCUSDT",
                     mockDeltaCVDConfig, // Complete validated configuration
                     mockPreprocessor,
                     mockLogger,
                     mockMetricsCollector,
+                    mockSignalValidationLogger,
                     mockSignalLogger
                 );
             }).not.toThrow();
@@ -408,11 +411,11 @@ describe("DeltaCVDDetectorEnhanced - Standalone Architecture", () => {
             expect(() => {
                 new DeltaCVDDetectorEnhanced(
                     "test-valid",
-                    "LTCUSDT",
                     mockDeltaCVDConfig, // Known valid configuration
                     mockPreprocessor,
                     mockLogger,
                     mockMetricsCollector,
+                    mockSignalValidationLogger,
                     mockSignalLogger
                 );
             }).not.toThrow();

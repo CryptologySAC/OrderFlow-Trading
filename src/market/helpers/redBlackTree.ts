@@ -26,7 +26,7 @@ const SideSchema = z.enum(["bid", "ask"]);
 // Red-Black Tree Implementation for O(log n) OrderBook operations
 export class RedBlackTree {
     private root: RBNode;
-    private nil: RBNode;
+    private readonly nil: RBNode;
 
     constructor() {
         // Create NIL node (sentinel) - temporarily create with placeholder

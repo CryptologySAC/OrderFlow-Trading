@@ -10,6 +10,8 @@ import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
+import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
 // Import mock config for complete settings
 import mockConfig from "../__mocks__/config.json";
 
@@ -28,6 +30,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
     let detector: DeltaCVDDetectorEnhanced;
     let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
+    let mockSignalValidationLogger: SignalValidationLogger;
 
     const mockPreprocessor: IOrderflowPreprocessor = {
         handleDepth: vi.fn(),
@@ -44,6 +47,75 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
 
     // Track emitted signals for validation
     const emittedSignals: any[] = [];
+    const mockSignalLogger = createMockSignalLogger();
+    
+    // Complete configuration helper - all required properties for DeltaCVDDetectorEnhanced
+    const createCompleteConfig = (overrides: any = {}) => ({
+        // Core CVD analysis
+        windowsSec: [60, 300],
+        minZ: 0.4,
+        priceCorrelationWeight: 0.3,
+        volumeConcentrationWeight: 0.2,
+        adaptiveThresholdMultiplier: 0.7,
+        eventCooldownMs: 15000,
+        minTradesPerSec: 0.1,
+        minVolPerSec: 0.5,
+        minSamplesForStats: 15,
+        pricePrecision: 2,
+        volatilityLookbackSec: 3600,
+        maxDivergenceAllowed: 0.5,
+        stateCleanupIntervalSec: 300,
+        dynamicThresholds: true,
+        logDebug: true,
+        // Volume and detection parameters
+        volumeSurgeMultiplier: 2.5,
+        imbalanceThreshold: 0.15,
+        institutionalThreshold: 17.8,
+        burstDetectionMs: 1000,
+        sustainedVolumeMs: 30000,
+        medianTradeSize: 0.6,
+        detectionMode: "momentum" as const,
+        divergenceThreshold: 0.3,
+        divergenceLookbackSec: 60,
+        enableDepthAnalysis: false,
+        usePassiveVolume: true,
+        maxOrderbookAge: 5000,
+        absorptionCVDThreshold: 75,
+        absorptionPriceThreshold: 0.1,
+        imbalanceWeight: 0.2,
+        icebergMinRefills: 3,
+        icebergMinSize: 20,
+        baseConfidenceRequired: 0.2,
+        finalConfidenceRequired: 0.35,
+        strongCorrelationThreshold: 0.7,
+        weakCorrelationThreshold: 0.3,
+        depthImbalanceThreshold: 0.2,
+        // Enhancement control
+        useStandardizedZones: true,
+        enhancementMode: "production" as const,
+        minEnhancedConfidenceThreshold: 0.3,
+        // Enhanced CVD analysis
+        cvdDivergenceVolumeThreshold: 50,
+        cvdDivergenceStrengthThreshold: 0.7,
+        cvdSignificantImbalanceThreshold: 0.3,
+        cvdDivergenceScoreMultiplier: 1.5,
+        alignmentMinimumThreshold: 0.5,
+        momentumScoreMultiplier: 2,
+        enableCVDDivergenceAnalysis: true,
+        enableMomentumAlignment: false,
+        divergenceConfidenceBoost: 0.12,
+        momentumAlignmentBoost: 0.08,
+        // Essential configurable parameters
+        minTradesForAnalysis: 20,
+        minVolumeRatio: 0.1,
+        maxVolumeRatio: 5.0,
+        priceChangeThreshold: 0.001,
+        minZScoreBound: -20,
+        maxZScoreBound: 20,
+        minCorrelationBound: -0.999,
+        maxCorrelationBound: 0.999,
+        ...overrides // Apply any overrides
+    });
 
     // Helper to create standard volume surge configuration
     const createVolumeConfig = (overrides: any = {}) => ({
@@ -92,6 +164,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
             trace: vi.fn(),
         } as ILogger;
         mockMetrics = new MetricsCollector();
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
         // Clear signal tracking
         emittedSignals.length = 0;
@@ -101,16 +174,16 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
         it("should GENERATE BUY signal for strong institutional buying with correct CVD", () => {
             detector = new DeltaCVDDetectorEnhanced(
                 "precise_buy_test",
-                "LTCUSDT",
-                {
-                    ...mockConfig.symbols.LTCUSDT.deltaCVD,
+                createCompleteConfig({
                     windowsSec: [60],
                     minTradesPerSec: 0.5,
                     minVolPerSec: 1.0,
-                },
+                }),
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Set up signal capture
@@ -150,8 +223,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
         it("should GENERATE SELL signal for institutional distribution with correct CVD", () => {
             detector = new DeltaCVDDetectorEnhanced(
                 "precise_sell_test",
-                "LTCUSDT",
-                {
+                createCompleteConfig({
                     windowsSec: [60],
                     minZ: 1.0, // EXACT same as working test
                     minTradesPerSec: 0.1, // EXACT same as working test
@@ -162,10 +234,12 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                     usePassiveVolume: true,
                     maxDivergenceAllowed: 0.8, // Allow more divergence for SELL signals
                     ...createVolumeConfig(),
-                },
+                }),
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Set up signal capture for this detector instance
@@ -351,7 +425,6 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
         it("should REJECT signals when CVD is insufficient (z-score < threshold)", () => {
             detector = new DeltaCVDDetectorEnhanced(
                 "rejection_test",
-                "LTCUSDT",
                 {
                     windowsSec: [60],
                     minZ: 3.0, // High threshold that should reject weak signals
@@ -363,7 +436,9 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Set up signal capture for this detector instance
@@ -499,7 +574,6 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
         it("should calculate correct CVD values and z-scores", () => {
             const lowThresholdDetector = new DeltaCVDDetectorEnhanced(
                 "cvd_calculation_test",
-                "LTCUSDT",
                 {
                     windowsSec: [60],
                     minZ: 0.5, // Very low to capture CVD calculations
@@ -511,7 +585,9 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Set up signal capture for this detector instance
@@ -651,7 +727,6 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
             // Test that divergence mode is properly configured and behaves differently from momentum mode
             const divergenceDetector = new DeltaCVDDetectorEnhanced(
                 "divergence_mode_test",
-                "LTCUSDT",
                 {
                     windowsSec: [60],
                     detectionMode: "divergence" as const,
@@ -667,12 +742,13 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             const momentumDetector = new DeltaCVDDetectorEnhanced(
                 "momentum_mode_test",
-                "LTCUSDT",
                 {
                     windowsSec: [60],
                     detectionMode: "momentum" as const,
@@ -686,7 +762,9 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Both detectors should be properly initialized
@@ -701,7 +779,6 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
         it("should REJECT divergence when correlation is too high", () => {
             const strictDivergenceDetector = new DeltaCVDDetectorEnhanced(
                 "strict_divergence_test",
-                "LTCUSDT",
                 {
                     windowsSec: [60],
                     detectionMode: "divergence" as const,
@@ -715,7 +792,9 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Set up signal capture for this detector instance
@@ -846,7 +925,6 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
             // Test detector properly validates minimum requirements
             const detector = new DeltaCVDDetectorEnhanced(
                 "threshold_validation_test",
-                "LTCUSDT",
                 {
                     windowsSec: [60],
                     minZ: 2.0, // High threshold
@@ -860,7 +938,9 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             detector.on("signalCandidate", (signal) => {
@@ -905,7 +985,6 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
         it("should NOT emit signal when z-score is just below threshold", () => {
             const strictDetector = new DeltaCVDDetectorEnhanced(
                 "strict_threshold_test",
-                "LTCUSDT",
                 {
                     windowsSec: [60],
                     minZ: 5.0, // Very high threshold
@@ -917,7 +996,9 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Set up signal capture for this detector instance
@@ -1056,7 +1137,6 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
         it("should REJECT signals when volume rate is insufficient", () => {
             const volumeDetector = new DeltaCVDDetectorEnhanced(
                 "volume_rate_test",
-                "LTCUSDT",
                 {
                     windowsSec: [60],
                     minZ: 1.0, // Low z-score threshold
@@ -1068,7 +1148,9 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Set up signal capture for this detector instance
@@ -1188,7 +1270,6 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
         it("should REJECT signals when trade rate is insufficient", () => {
             const tradeRateDetector = new DeltaCVDDetectorEnhanced(
                 "trade_rate_test",
-                "LTCUSDT",
                 {
                     windowsSec: [60],
                     minZ: 1.0,
@@ -1200,7 +1281,9 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Set up signal capture for this detector instance
@@ -1339,7 +1422,6 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
             // Test that detector properly rejects signals when there's insufficient data
             const detector = new DeltaCVDDetectorEnhanced(
                 "insufficient_data_test",
-                "LTCUSDT",
                 {
                     windowsSec: [60],
                     minZ: 1.0,
@@ -1353,7 +1435,9 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Set up signal capture
@@ -1397,7 +1481,6 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
             // Test that detector can be created with various confidence requirements
             const lowConfidenceDetector = new DeltaCVDDetectorEnhanced(
                 "low_confidence_test",
-                "LTCUSDT",
                 {
                     windowsSec: [60],
                     minZ: 0.8,
@@ -1413,7 +1496,9 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Should be properly initialized
@@ -1422,7 +1507,6 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
             // Create high confidence detector for comparison
             const highConfidenceDetector = new DeltaCVDDetectorEnhanced(
                 "high_confidence_test",
-                "LTCUSDT",
                 {
                     windowsSec: [60],
                     minZ: 2.5,
@@ -1436,7 +1520,9 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Both should be properly initialized with different thresholds
@@ -1448,7 +1534,6 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
             // Simple test to validate production configuration can be initialized properly
             const productionDetector = new DeltaCVDDetectorEnhanced(
                 "production_validation_test",
-                "LTCUSDT",
                 {
                     windowsSec: [60, 300], // Production windows
                     minZ: 1.2, // Production z-score
@@ -1464,7 +1549,9 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
                 },
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Validate detector was created successfully

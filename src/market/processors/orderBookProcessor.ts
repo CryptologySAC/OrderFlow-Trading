@@ -88,10 +88,6 @@ export class OrderBookProcessor implements IOrderBookProcessor {
     private readonly errorWindow: number[] = [];
     private readonly maxErrorRate = 10; // per minute
 
-    // Caching
-    private lastBinConfig?: BinConfig;
-    private cachedBins?: Map<number, PriceLevel>;
-
     constructor(
         config: OrderBookProcessorOptions = {},
         logger: ILogger,
@@ -405,7 +401,7 @@ export class OrderBookProcessor implements IOrderBookProcessor {
 
         const p99Time =
             times.length > 0
-                ? times.sort((a, b) => a - b)[Math.floor(times.length * 0.99)]
+                ? times.sort((a, b) => a - b)[Math.floor(times.length * 0.99)]!
                 : 0;
 
         return {
@@ -413,7 +409,7 @@ export class OrderBookProcessor implements IOrderBookProcessor {
             avgProcessingTimeMs: avgTime,
             p99ProcessingTimeMs: p99Time,
             errorCount: this.errorCount.toString(), // Convert BigInt to string for JSON serialization
-            lastError: this.lastError,
+            lastError: this.lastError ?? "",
         };
     }
 

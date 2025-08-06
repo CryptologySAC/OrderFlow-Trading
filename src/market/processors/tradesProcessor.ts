@@ -125,7 +125,6 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     private readonly symbol: string;
     private readonly storageTime: number;
     private readonly maxBacklogRetries: number;
-    private readonly backlogBatchSize: number;
     private readonly maxMemoryTrades: number;
     private readonly saveQueueSize: number;
     private readonly healthCheckInterval: number;
@@ -138,29 +137,26 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     private thresholdTime: number;
     private backlogComplete = false;
     private isShuttingDown = false;
-    private lastTradeTime = Date.now();
-    private latestTradeTimestamp = Date.now();
 
     // ✅ TIMING FIX: Monotonic timing for health checks resistant to clock changes
-    private processStartTime = process.hrtime.bigint();
     private lastTradeMonotonicTime = process.hrtime.bigint();
 
     // ✅ DUPLICATE DETECTION: Track processed trade IDs to prevent duplicates during reconnections
-    private processedTradeIds: CircularBuffer<{
+    private readonly processedTradeIds: CircularBuffer<{
         id: number;
         timestamp: number;
     }>;
     private readonly maxTradeIdCacheSize: number;
     private readonly tradeIdCleanupInterval: number;
-    private tradeIdCleanupTimer?: NodeJS.Timeout;
-    private tradeBufferCleanupTimer?: NodeJS.Timeout;
+    private tradeIdCleanupTimer?: NodeJS.Timeout | undefined;
+    private tradeBufferCleanupTimer?: NodeJS.Timeout | undefined;
 
     // Memory cache for recent trades
-    private recentTrades: CircularBuffer<PlotTrade>;
+    private readonly recentTrades: CircularBuffer<PlotTrade>;
 
     // Async save queue
     private saveQueue: SaveQueueItem[] = [];
-    private saveTimer?: NodeJS.Timeout;
+    private saveTimer?: NodeJS.Timeout | undefined;
     private isSaving = false;
 
     // Performance tracking
@@ -168,14 +164,12 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     private savedCount = 0;
     private failedSaves = 0;
     private duplicatesDetected = 0;
-    private processingTimes: CircularBuffer<number>;
-    private errorWindow: CircularBuffer<number>;
+    private readonly processingTimes: CircularBuffer<number>;
+    private readonly errorWindow: CircularBuffer<number>;
     private readonly maxErrorWindowSize: number;
-    private readonly maxWindowIterations: number;
-    private readonly dynamicRateLimit: boolean;
 
     // Health monitoring
-    private healthCheckTimer?: NodeJS.Timeout;
+    private healthCheckTimer?: NodeJS.Timeout | undefined;
     private isStreamConnected = true;
 
     constructor(
@@ -206,10 +200,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         }
         this.storageTime = options.storageTime ?? 1000 * 60 * 90; // 90 minutes
         this.maxBacklogRetries = options.maxBacklogRetries ?? 3;
-        this.backlogBatchSize = Math.min(
-            Math.max(100, options.backlogBatchSize ?? 1000),
-            1000
-        ); // Binance max
+
         // Large buffer size to handle high-volume periods, cleaned by time not size
         this.maxMemoryTrades = options.maxMemoryTrades ?? 200000;
         this.saveQueueSize = options.saveQueueSize ?? 5000;
@@ -219,11 +210,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             10,
             options.maxErrorWindowSize ?? 1000
         ); // Min 10, default 1000
-        this.maxWindowIterations = Math.max(
-            10,
-            options.maxWindowIterations ?? 1000
-        ); // Min 10, default 1000 iterations per window
-        this.dynamicRateLimit = options.dynamicRateLimit ?? true;
+
         this.maxTradeIdCacheSize = Math.max(
             1000,
             options.maxTradeIdCacheSize ?? 10000
@@ -233,7 +220,6 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         // Initialize state - use last stored timestamp to prevent data gaps
 
         this.thresholdTime = Date.now() - this.storageTime;
-        this.latestTradeTimestamp = this.thresholdTime;
         this.recentTrades = new CircularBuffer<PlotTrade>(this.maxMemoryTrades);
         this.processingTimes = new CircularBuffer<number>(1000);
         this.errorWindow = new CircularBuffer<number>(this.maxErrorWindowSize);
@@ -319,20 +305,6 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                     "Invalid trade array received from external API",
                     error
                 );
-            }
-            throw error;
-        }
-    }
-
-    /**
-     * Validate symbol parameter
-     */
-    private validateSymbol(symbol: string): string {
-        try {
-            return SymbolSchema.parse(symbol);
-        } catch (error) {
-            if (error instanceof z.ZodError) {
-                throw new TradeValidationError("Invalid symbol format", error);
             }
             throw error;
         }
@@ -576,11 +548,11 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                         [];
 
                     for (let i = 1; i < allTradeIds.length; i++) {
-                        const gap = allTradeIds[i] - allTradeIds[i - 1] - 1;
+                        const gap = allTradeIds[i]! - allTradeIds[i - 1]! - 1;
                         if (gap > 0) {
                             gaps.push({
-                                start: allTradeIds[i - 1],
-                                end: allTradeIds[i],
+                                start: allTradeIds[i - 1]!,
+                                end: allTradeIds[i]!,
                                 size: gap,
                             });
                         }
@@ -860,37 +832,6 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     }
 
     /**
-     * ✅ PERFORMANCE FIX: Dynamic rate limiting based on API efficiency
-     */
-    private async handleRateLimit(
-        windowIterations: number,
-        maxIterations: number
-    ): Promise<void> {
-        if (!this.dynamicRateLimit) {
-            // Use fixed rate limit if dynamic is disabled
-            await ProductionUtils.sleep(120);
-            return;
-        }
-
-        // Calculate dynamic delay based on iteration efficiency
-        const iterationRatio = windowIterations / maxIterations;
-        let delay = 120; // Base delay (max 10 req/s)
-
-        if (iterationRatio > 0.8) {
-            // High iteration count suggests dense data or API throttling
-            delay = 200; // Slower rate (5 req/s)
-        } else if (iterationRatio > 0.5) {
-            // Medium iteration count
-            delay = 150; // Medium rate (6.7 req/s)
-        } else if (iterationRatio < 0.1) {
-            // Very low iteration count suggests sparse data
-            delay = 100; // Faster rate (10 req/s)
-        }
-
-        await ProductionUtils.sleep(delay);
-    }
-
-    /**
      * ✅ SECURITY FIX: Atomic state update to prevent race conditions
      */
     private updateTradeTimestamps(
@@ -898,11 +839,8 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         thresholdOverride?: number
     ): void {
         // Atomic update of all timestamp-related state to prevent race conditions
-        const now = Date.now();
         const monotonicNow = process.hrtime.bigint();
-        this.latestTradeTimestamp = latestTimestamp;
         this.thresholdTime = thresholdOverride ?? latestTimestamp + 1;
-        this.lastTradeTime = now;
         this.lastTradeMonotonicTime = monotonicNow;
     }
 
@@ -973,7 +911,6 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         this.on("stream_connected", () => {
             this.logger.info("[TradesProcessor] Stream reconnected");
             this.isStreamConnected = true;
-            this.lastTradeTime = Date.now();
 
             // ✅ DUPLICATE DETECTION: On reconnection, we keep the trade ID cache to prevent
             // processing duplicates that might arrive during the gap coverage process
@@ -1052,7 +989,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
 
         const p99Time =
             times.length > 0
-                ? times.sort((a, b) => a - b)[Math.floor(times.length * 0.99)]
+                ? times.sort((a, b) => a - b)[Math.floor(times.length * 0.99)]!
                 : 0;
 
         const backlogProgress = this.backlogComplete

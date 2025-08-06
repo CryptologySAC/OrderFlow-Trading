@@ -91,7 +91,8 @@ export type FetchReason =
     | "key_level"
     | "anomaly_period"
     | "high_volume_period"
-    | "detector_request";
+    | "detector_request"
+    | "none";
 
 export interface CoordinationSignal {
     type: "time_coordination" | "size_coordination" | "price_coordination";

@@ -8,33 +8,36 @@ import { SignalCoordinator } from "../src/services/signalCoordinator";
 import { WorkerLogger } from "../src/multithreading/workerLogger";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector";
 
-const storage = {
-    enqueueJob: vi.fn(),
-    dequeueJobs: vi.fn().mockReturnValue([]),
-    markJobCompleted: vi.fn(),
-    restoreQueuedJobs: vi.fn().mockReturnValue([]),
-    saveActiveAnomaly: vi.fn(),
-    removeActiveAnomaly: vi.fn(),
-    getActiveAnomalies: vi.fn().mockReturnValue([]),
-    saveSignalHistory: vi.fn(),
-    saveConfirmedSignal: vi.fn(),
-    getRecentSignals: vi.fn().mockReturnValue([]),
-    purgeSignalHistory: vi.fn(),
-    purgeConfirmedSignals: vi.fn(),
-    close: vi.fn(),
-};
-
 const mockThreadManager = {
-    callStorage: vi
-        .fn()
-        .mockImplementation((method: string, ...args: any[]) => {
-            // Handle the actual storage method calls
-            if (storage[method as keyof typeof storage]) {
-                const result = (storage as any)[method](...args);
-                return Promise.resolve(result);
-            }
+    callStorage: vi.fn((method: string, ...args: any[]) => {
+        // Directly return arrays for the specific methods we need
+        if (method === "restoreQueuedJobs") {
             return Promise.resolve([]);
-        }),
+        }
+        if (method === "dequeueJobs") {
+            return Promise.resolve([]);
+        }
+        if (method === "getActiveAnomalies") {
+            return Promise.resolve([]);
+        }
+        if (method === "getRecentSignals") {
+            return Promise.resolve([]);
+        }
+        if (
+            method === "enqueueJob" ||
+            method === "markJobCompleted" ||
+            method === "saveActiveAnomaly" ||
+            method === "removeActiveAnomaly" ||
+            method === "saveSignalHistory" ||
+            method === "saveConfirmedSignal" ||
+            method === "purgeSignalHistory" ||
+            method === "purgeConfirmedSignals" ||
+            method === "close"
+        ) {
+            return Promise.resolve();
+        }
+        return Promise.resolve([]);
+    }),
     broadcast: vi.fn(),
     shutdown: vi.fn(),
 };

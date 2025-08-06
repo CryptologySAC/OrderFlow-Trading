@@ -58,6 +58,7 @@ export class VolumeAnalyzer implements IVolumeAnalyzer {
         trades: AggressiveTrade[],
         now: number
     ): VolumeSurgeResult {
+        void trades; //TODO
         if (this.volumeHistory.length < 10) {
             return {
                 hasVolumeSurge: false,

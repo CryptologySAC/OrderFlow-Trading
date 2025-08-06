@@ -967,31 +967,31 @@ export class PipelineStorage implements IPipelineStorage {
             if (!row) return null;
 
             return {
-                timestamp: row.timestamp as number,
-                price: row.price as number,
-                currentVolume: row.currentVolume as number,
-                avgVolume24h: row.avgVolume24h as number,
-                volumeRatio: row.volumeRatio as number,
-                recentVolatility: row.recentVolatility as number,
-                normalizedVolatility: row.normalizedVolatility as number,
-                bidAskSpread: row.bidAskSpread as number,
-                bidDepth: row.bidDepth as number,
-                askDepth: row.askDepth as number,
-                liquidityRatio: row.liquidityRatio as number,
-                trend5min: row.trend5min as "up" | "down" | "sideways",
-                trend15min: row.trend15min as "up" | "down" | "sideways",
-                trend1hour: row.trend1hour as "up" | "down" | "sideways",
-                trendAlignment: row.trendAlignment as number,
-                distanceFromSupport: row.distanceFromSupport as number,
-                distanceFromResistance: row.distanceFromResistance as number,
-                nearKeyLevel: row.nearKeyLevel === 1,
-                regime: row.regime as
+                timestamp: row["timestamp"] as number,
+                price: row["price"] as number,
+                currentVolume: row["currentVolume"] as number,
+                avgVolume24h: row["avgVolume24h"] as number,
+                volumeRatio: row["volumeRatio"] as number,
+                recentVolatility: row["recentVolatility"] as number,
+                normalizedVolatility: row["normalizedVolatility"] as number,
+                bidAskSpread: row["bidAskSpread"] as number,
+                bidDepth: row["bidDepth"] as number,
+                askDepth: row["askDepth"] as number,
+                liquidityRatio: row["liquidityRatio"] as number,
+                trend5min: row["trend5min"] as "up" | "down" | "sideways",
+                trend15min: row["trend15min"] as "up" | "down" | "sideways",
+                trend1hour: row["trend1hour"] as "up" | "down" | "sideways",
+                trendAlignment: row["trendAlignment"] as number,
+                distanceFromSupport: row["distanceFromSupport"] as number,
+                distanceFromResistance: row["distanceFromResistance"] as number,
+                nearKeyLevel: row["nearKeyLevel"] === 1,
+                regime: row["regime"] as
                     | "bull_trending"
                     | "bear_trending"
                     | "ranging"
                     | "breakout"
                     | "volatile",
-                regimeConfidence: row.regimeConfidence as number,
+                regimeConfidence: row["regimeConfidence"] as number,
             };
         } catch (error) {
             throw new Error(
@@ -1072,45 +1072,47 @@ export class PipelineStorage implements IPipelineStorage {
             return Promise.resolve(
                 rows.map((row) => {
                     const marketContexts = JSON.parse(
-                        row.marketContextJson as string
+                        row["marketContextJson"] as string
                     ) as {
                         entry: MarketContext;
                         failure: MarketContext;
                     };
 
                     return {
-                        signalId: row.signalId as string,
-                        signalType: row.signalType as SignalType,
-                        detectorId: row.detectorId as string,
-                        failureReason: row.failureReason as string,
+                        signalId: row["signalId"] as string,
+                        signalType: row["signalType"] as SignalType,
+                        detectorId: row["detectorId"] as string,
+                        failureReason: row["failureReason"] as string,
                         warningSignals: {
-                            lowVolume: row.warningLowVolume === 1,
-                            weakConfirmation: row.warningWeakConfirmation === 1,
+                            lowVolume: row["warningLowVolume"] === 1,
+                            weakConfirmation:
+                                row["warningWeakConfirmation"] === 1,
                             conflictingSignals:
-                                row.warningConflictingSignals === 1,
+                                row["warningConflictingSignals"] === 1,
                             poorMarketConditions:
-                                row.warningPoorMarketConditions === 1,
+                                row["warningPoorMarketConditions"] === 1,
                             recentFailuresNearby:
-                                row.warningRecentFailures === 1,
+                                row["warningRecentFailures"] === 1,
                             extremeConfidence:
-                                row.warningExtremeConfidence === 1,
-                            unusualSpread: row.warningUnusualSpread === 1,
+                                row["warningExtremeConfidence"] === 1,
+                            unusualSpread: row["warningUnusualSpread"] === 1,
                         },
                         actualPriceAction: {
-                            direction: row.actualDirection as
+                            direction: row["actualDirection"] as
                                 | "opposite"
                                 | "sideways"
                                 | "choppy",
-                            magnitude: row.actualMagnitude as number,
-                            timeToFailure: row.timeToFailure as number,
-                            maxDrawdown: row.maxDrawdown as number,
+                            magnitude: row["actualMagnitude"] as number,
+                            timeToFailure: row["timeToFailure"] as number,
+                            maxDrawdown: row["maxDrawdown"] as number,
                         },
                         avoidability: {
-                            score: row.avoidabilityScore as number,
-                            preventionMethod: row.preventionMethod as string,
-                            confidenceReduction:
-                                row.confidenceReduction as number,
-                            filterSuggestion: row.filterSuggestion as string,
+                            score: row["avoidabilityScore"] as number,
+                            preventionMethod: row["preventionMethod"] as string,
+                            confidenceReduction: row[
+                                "confidenceReduction"
+                            ] as number,
+                            filterSuggestion: row["filterSuggestion"] as string,
                         },
                         marketContextAtEntry: marketContexts.entry,
                         marketContextAtFailure: marketContexts.failure,
@@ -1154,8 +1156,8 @@ export class PipelineStorage implements IPipelineStorage {
         // Create a minimal MarketContext for the outcome
         // In practice, this would be fetched from the market context table
         const marketContext: MarketContext = {
-            timestamp: row.entryTime as number,
-            price: row.entryPrice as number,
+            timestamp: row["entryTime"] as number,
+            price: row["entryPrice"] as number,
             currentVolume: 0,
             avgVolume24h: 0,
             volumeRatio: 1,
@@ -1177,31 +1179,31 @@ export class PipelineStorage implements IPipelineStorage {
         };
 
         return {
-            signalId: row.signalId as string,
-            signalType: row.signalType as string,
-            detectorId: row.detectorId as string,
-            entryPrice: row.entryPrice as number,
-            entryTime: row.entryTime as number,
-            originalConfidence: row.originalConfidence as number,
-            priceAfter1min: row.priceAfter1min as number | undefined,
-            priceAfter5min: row.priceAfter5min as number | undefined,
-            priceAfter15min: row.priceAfter15min as number | undefined,
-            priceAfter1hour: row.priceAfter1hour as number | undefined,
-            maxFavorableMove: row.maxFavorableMove as number,
-            maxAdverseMove: row.maxAdverseMove as number,
-            timeToMaxFavorable: row.timeToMaxFavorable as number | undefined,
-            timeToMaxAdverse: row.timeToMaxAdverse as number | undefined,
-            outcome: row.outcome as
+            signalId: (row["signalId"] as string) ?? "",
+            signalType: (row["signalType"] as string) ?? "",
+            detectorId: (row["detectorId"] as string) ?? "",
+            entryPrice: (row["entryPrice"] as number) ?? 0,
+            entryTime: (row["entryTime"] as number) ?? 0,
+            originalConfidence: (row["originalConfidence"] as number) ?? 0,
+            priceAfter1min: (row["priceAfter1min"] as number) ?? 0,
+            priceAfter5min: (row["priceAfter5min"] as number) ?? 0,
+            priceAfter15min: (row["priceAfter15min"] as number) ?? 0,
+            priceAfter1hour: (row["priceAfter1hour"] as number) ?? 0,
+            maxFavorableMove: (row["maxFavorableMove"] as number) ?? 0,
+            maxAdverseMove: (row["maxAdverseMove"] as number) ?? 0,
+            timeToMaxFavorable: (row["timeToMaxFavorable"] as number) ?? 0,
+            timeToMaxAdverse: (row["timeToMaxAdverse"] as number) ?? 0,
+            outcome: row["outcome"] as
                 | "success"
                 | "failure"
                 | "mixed"
                 | "timeout"
                 | "pending",
-            finalizedAt: row.finalizedAt as number | undefined,
+            finalizedAt: (row["finalizedAt"] as number) ?? 0,
             marketContext,
-            currentPrice: row.currentPrice as number | undefined,
-            lastUpdated: row.lastUpdateTime as number,
-            isActive: row.isActive === 1,
+            currentPrice: (row["currentPrice"] as number) ?? 0,
+            lastUpdated: (row["lastUpdateTime"] as number) ?? 0,
+            isActive: row["isActive"] === 1,
         };
     }
 

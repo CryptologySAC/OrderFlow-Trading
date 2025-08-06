@@ -278,10 +278,10 @@ export function isWorkerCallMessage(msg: unknown): msg is {
 } {
     return (
         isDatabaseRow(msg) &&
-        msg.type === "call" &&
-        typeof msg.method === "string" &&
-        Array.isArray(msg.args) &&
-        typeof msg.requestId === "string"
+        msg["type"] === "call" &&
+        typeof msg["method"] === "string" &&
+        Array.isArray(msg["args"]) &&
+        typeof msg["requestId"] === "string"
     );
 }
 
@@ -297,9 +297,9 @@ export function isWorkerReplyMessage(msg: unknown): msg is {
 } {
     return (
         isDatabaseRow(msg) &&
-        msg.type === "reply" &&
-        typeof msg.requestId === "string" &&
-        typeof msg.ok === "boolean"
+        msg["type"] === "reply" &&
+        typeof msg["requestId"] === "string" &&
+        typeof msg["ok"] === "boolean"
     );
 }
 
@@ -309,7 +309,7 @@ export function isWorkerReplyMessage(msg: unknown): msg is {
 export function isWorkerShutdownMessage(msg: unknown): msg is {
     type: "shutdown";
 } {
-    return isDatabaseRow(msg) && msg.type === "shutdown";
+    return isDatabaseRow(msg) && msg["type"] === "shutdown";
 }
 
 /**

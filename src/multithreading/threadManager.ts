@@ -693,6 +693,69 @@ export class ThreadManager {
         });
     }
 
+    public updateSignalTypeBreakdown(breakdown: {
+        absorption: {
+            candidates: number;
+            confirmed: number;
+            rejected: number;
+            successRate: string;
+        };
+        exhaustion: {
+            candidates: number;
+            confirmed: number;
+            rejected: number;
+            successRate: string;
+        };
+        accumulation: {
+            candidates: number;
+            confirmed: number;
+            rejected: number;
+            successRate: string;
+        };
+        distribution: {
+            candidates: number;
+            confirmed: number;
+            rejected: number;
+            successRate: string;
+        };
+        deltacvd: {
+            candidates: number;
+            confirmed: number;
+            rejected: number;
+            successRate: string;
+        };
+    }): void {
+        this.commWorker.postMessage({
+            type: "signal_breakdown",
+            data: breakdown,
+        });
+    }
+
+    public updateSignalTotals(totals: {
+        candidates: number;
+        confirmed: number;
+        rejected: number;
+    }): void {
+        this.commWorker.postMessage({
+            type: "signal_totals",
+            data: totals,
+        });
+    }
+
+    public updateZoneAnalytics(analytics: {
+        activeZones: number;
+        completedZones: number;
+        avgZoneStrength: number;
+        avgZoneDuration: number;
+        zonesByType: Record<string, number>;
+        zonesBySignificance: Record<string, number>;
+    }): void {
+        this.commWorker.postMessage({
+            type: "zone_analytics",
+            data: analytics,
+        });
+    }
+
     /**
      * Get current connection status from cache (fast, no worker communication)
      */

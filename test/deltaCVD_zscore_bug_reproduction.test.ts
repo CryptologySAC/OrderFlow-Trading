@@ -5,6 +5,8 @@ vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
 
 import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
+import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
@@ -99,6 +101,7 @@ describe("DeltaCVD Standalone Validation - Mathematical Stability", () => {
     let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
     let mockPreprocessor: IOrderflowPreprocessor;
+    let mockSignalValidationLogger: SignalValidationLogger;
     let signalSpy: vi.Mock;
 
     const createTradeEvent = (
@@ -134,10 +137,12 @@ describe("DeltaCVD Standalone Validation - Mathematical Stability", () => {
         } as ILogger;
         mockMetrics = new MetricsCollector();
         mockPreprocessor = createMockPreprocessor();
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
+        const mockSignalLogger = createMockSignalLogger();
+        
         detector = new DeltaCVDDetectorEnhanced(
             "standalone_validation_test",
-            "LTCUSDT",
             {
                 ...mockConfig.symbols.LTCUSDT.deltaCVD,
                 windowsSec: [60],
@@ -145,7 +150,9 @@ describe("DeltaCVD Standalone Validation - Mathematical Stability", () => {
             },
             mockPreprocessor,
             mockLogger,
-            mockMetrics
+            mockMetrics,
+            mockSignalValidationLogger,
+            mockSignalLogger
         );
 
         signalSpy = vi.fn();

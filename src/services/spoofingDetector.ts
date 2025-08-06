@@ -95,13 +95,13 @@ export interface SpoofingZone {
 }
 
 export class SpoofingDetector extends EventEmitter {
-    private passiveChangeHistory: TimeAwareCache<
+    private readonly passiveChangeHistory: TimeAwareCache<
         number,
         { time: number; bid: number; ask: number }[]
     >;
 
     // Enhanced tracking for real spoofing detection
-    private orderPlacementHistory: TimeAwareCache<
+    private readonly orderPlacementHistory: TimeAwareCache<
         number,
         {
             time: number;
@@ -111,7 +111,7 @@ export class SpoofingDetector extends EventEmitter {
         }[]
     >;
 
-    private cancellationPatterns: TimeAwareCache<
+    private readonly cancellationPatterns: TimeAwareCache<
         string,
         {
             placementTime: number;
@@ -122,11 +122,11 @@ export class SpoofingDetector extends EventEmitter {
         }
     >;
 
-    private config: SpoofingDetectorConfig;
-    private logger?: ILogger;
+    private readonly config: SpoofingDetectorConfig;
+    private readonly logger: ILogger;
     private anomalyDetector?: AnomalyDetector;
 
-    constructor(config: SpoofingDetectorConfig, logger?: ILogger) {
+    constructor(config: SpoofingDetectorConfig, logger: ILogger) {
         super();
         this.config = config;
         this.logger = logger;
@@ -203,27 +203,6 @@ export class SpoofingDetector extends EventEmitter {
         return isFinite(result) && result >= 0
             ? Math.min(result, 1.0)
             : fallback;
-    }
-
-    /**
-     * 🔧 FIX: Safe mean calculation
-     */
-    private safeMean(values: number[]): number {
-        if (!values || values.length === 0) {
-            return 0;
-        }
-
-        let sum = 0;
-        let validCount = 0;
-
-        for (const value of values) {
-            if (isFinite(value) && !isNaN(value)) {
-                sum += value;
-                validCount++;
-            }
-        }
-
-        return validCount > 0 ? sum / validCount : 0;
     }
 
     /**
@@ -467,8 +446,8 @@ export class SpoofingDetector extends EventEmitter {
 
             // Scan history from newest back, looking for rapid drops
             for (let i = hist.length - 2; i >= 0; i--) {
-                const curr = hist[i + 1];
-                const prev = hist[i];
+                const curr = hist[i + 1]!;
+                const prev = hist[i]!;
                 if (curr.time > tradeTime) continue;
 
                 // PERFORMANCE OPTIMIZATION: Early exit when we've gone too far back in time
@@ -718,8 +697,8 @@ export class SpoofingDetector extends EventEmitter {
 
         // Look for recent large walls that disappeared rapidly
         for (let i = hist.length - 2; i >= 0; i--) {
-            const curr = hist[i + 1];
-            const prev = hist[i];
+            const curr = hist[i + 1]!;
+            const prev = hist[i]!;
             if (curr.time > tradeTime) continue;
 
             const prevQty = side === "buy" ? prev.bid : prev.ask;
@@ -839,9 +818,9 @@ export class SpoofingDetector extends EventEmitter {
 
         // Look for patterns where liquidity appears and disappears very quickly
         for (let i = hist.length - 3; i >= 0; i--) {
-            const latest = hist[i + 2];
-            const middle = hist[i + 1];
-            const earliest = hist[i];
+            const latest = hist[i + 2]!;
+            const middle = hist[i + 1]!;
+            const earliest = hist[i]!;
 
             if (latest.time > tradeTime) continue;
 
@@ -935,9 +914,11 @@ export class SpoofingDetector extends EventEmitter {
      * Example dynamic band width calculation.
      * For now, just returns config.wallTicks; can use volatility, liquidity, etc.
      */
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     private getDynamicWallTicks(price: number, side: "buy" | "sell"): number {
         // TODO: Use recent liquidity, volatility, or order book stats for adaptive width
+        void side;
+        void price;
         // For now: just return wallTicks from config
         return this.config.wallTicks;
     }

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
+import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
 // ✅ CLAUDE.md COMPLIANCE: Use ONLY __mocks__/ directory - NO inline mocks
 vi.mock("../src/multithreading/workerLogger");
 vi.mock("../src/infrastructure/metricsCollector");
@@ -32,16 +34,19 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
     let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
     let mockPreprocessor: IOrderflowPreprocessor;
+    let mockSignalValidationLogger: SignalValidationLogger;
 
     beforeEach(() => {
         // ✅ CLAUDE.md COMPLIANCE: Use mocks from __mocks__/ directory only
         mockLogger = new WorkerLogger({} as any); // ThreadManager mock
         mockMetrics = new MetricsCollector();
         mockPreprocessor = createMockPreprocessor();
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
+        
+        const mockSignalLogger = createMockSignalLogger();
 
         detector = new DeltaCVDDetectorEnhanced(
             "test_cvd_surge",
-            "LTCUSDT",
             {
                 ...mockConfig.symbols.LTCUSDT.deltaCVD,
                 windowsSec: [60],
@@ -49,7 +54,9 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
             },
             mockPreprocessor,
             mockLogger,
-            mockMetrics
+            mockMetrics,
+            mockSignalValidationLogger,
+            mockSignalLogger
         );
     });
 

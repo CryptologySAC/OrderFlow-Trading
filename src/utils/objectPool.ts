@@ -216,7 +216,6 @@ export class SharedPools {
                 imbalance: 0,
                 sampleCount: 0,
                 dominantSide: "neutral",
-                microstructure: undefined,
                 consistency: 0,
                 velocityIncrease: 0,
                 spread: 0,
@@ -236,7 +235,6 @@ export class SharedPools {
                 obj.imbalance = 0;
                 obj.sampleCount = 0;
                 obj.dominantSide = "neutral";
-                obj.microstructure = undefined;
                 obj.consistency = 0;
                 obj.velocityIncrease = 0;
                 obj.spread = 0;

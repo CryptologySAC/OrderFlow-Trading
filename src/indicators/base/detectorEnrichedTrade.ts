@@ -19,7 +19,7 @@ export abstract class Detector extends EventEmitter {
         id: string,
         logger: ILogger,
         metricsCollector: IMetricsCollector,
-        signalLogger?: ISignalLogger
+        signalLogger: ISignalLogger
     ) {
         super();
         this.id = id;

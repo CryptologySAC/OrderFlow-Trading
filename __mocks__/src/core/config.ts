@@ -99,11 +99,15 @@ const mockDeltaCVDConfig = {
     signalThreshold: 0.4,
     eventCooldownMs: 5000,
 
+    // CRITICAL: Add missing timeWindowIndex for Config.getTimeWindow() calls
+    timeWindowIndex: 0,
+
     // Zone enhancement control
     enhancementMode: "production" as const,
 
     // CVD divergence analysis (pure divergence mode only)
     cvdImbalanceThreshold: 0.3,
+    institutionalThreshold: 17.8, // Add institutional threshold parameter
 };
 
 // Mock Universal Zone Configuration (CRITICAL for DeltaCVD tests)
@@ -136,7 +140,7 @@ const mockUniversalZoneConfig = {
 // Mock Absorption detector configuration (very permissive for testing)
 const mockAbsorptionConfig = {
     minAggVolume: 10, // Very low threshold for testing
-    windowMs: 10000,
+    timeWindowIndex: 0, // Use first time window (matches current schema)
     eventCooldownMs: 0, // Disable cooldown for testing
     priceEfficiencyThreshold: 0.001, // Very permissive for testing
     maxAbsorptionRatio: 0.95,
@@ -156,13 +160,15 @@ const mockAbsorptionConfig = {
     expectedMovementScalingFactor: 8,
     confidenceBoostReduction: 0.4,
     maxZoneCountForScoring: 3,
+    balanceThreshold: 0.05, // Add new balance threshold parameter
 };
 
 // Mock Exhaustion detector configuration (test-friendly thresholds)
 const mockExhaustionConfig = {
     minAggVolume: 10, // Very low threshold for testing
     exhaustionThreshold: 0.05, // Very low threshold for testing (5% aggressive volume indicates exhaustion)
-    windowMs: 60000, // Longer window to capture more trades
+    timeWindowIndex: 0, // Use first time window (matches current schema)
+    eventCooldownMs: 0, // Disable cooldown for testing
     useStandardizedZones: true,
     enhancementMode: "production" as const,
     minEnhancedConfidenceThreshold: 0.01, // Very low threshold for testing
@@ -173,16 +179,61 @@ const mockExhaustionConfig = {
     passiveVolumeExhaustionRatio: 0.4,
     varianceReductionFactor: 1.0,
     alignmentNormalizationFactor: 0.4,
+    passiveRatioBalanceThreshold: 0.5,
+    premiumConfidenceThreshold: 0.7,
+    variancePenaltyFactor: 1.0,
+    ratioBalanceCenterPoint: 0.5,
     aggressiveVolumeExhaustionThreshold: 0.05, // Very low threshold for testing
     aggressiveVolumeReductionFactor: 0.5,
 };
 
+// Mock preprocessor configuration (test-friendly values)
+const mockPreprocessorConfig = {
+    defaultZoneMultipliers: [1, 2, 4],
+    defaultTimeWindows: [300000, 900000, 1800000, 3600000, 5400000],
+    defaultMinZoneWidthMultiplier: 2,
+    defaultMaxZoneWidthMultiplier: 10,
+    defaultMaxZoneHistory: 2000,
+    defaultMaxMemoryMB: 50,
+    defaultAggressiveVolumeAbsolute: 10.0,
+    defaultPassiveVolumeAbsolute: 5.0,
+    defaultInstitutionalVolumeAbsolute: 50.0,
+    maxTradesPerZone: 1500,
+};
+
+// CRITICAL: Mock StandardZone configuration matching production schema
+const mockStandardZoneConfig = {
+    zoneTicks: 10,
+    timeWindows: [180000, 300000, 600000, 1200000, 2700000, 5400000],
+    adaptiveMode: false,
+    volumeThresholds: {
+        aggressive: 8.0,
+        passive: 4.0,
+        institutional: 50.0,
+    },
+    priceThresholds: {
+        tickValue: 0.01,
+        minZoneWidth: 0.02,
+        maxZoneWidth: 0.1,
+    },
+    performanceConfig: {
+        maxZones: 500,
+        maxMemoryMB: 100,
+        cleanupInterval: 5400000,
+    },
+};
+
 export const Config = {
+    // CRITICAL: Add missing SYMBOL for IndividualTradesManager
+    SYMBOL: "LTCUSDT",
+
     SIGNAL_MANAGER: mockSignalManagerConfig,
     DELTACVD_DETECTOR: mockDeltaCVDConfig,
     ABSORPTION_DETECTOR: mockAbsorptionConfig, // Add missing absorption config
     EXHAUSTION_DETECTOR: mockExhaustionConfig, // Add missing exhaustion config
     UNIVERSAL_ZONE_CONFIG: mockUniversalZoneConfig, // CRITICAL: Missing config added
+    STANDARD_ZONE_CONFIG: mockStandardZoneConfig, // CRITICAL: Add missing StandardZone config
+    PREPROCESSOR: mockPreprocessorConfig, // Add preprocessor configuration for tests
     DETECTOR_CONFIDENCE_THRESHOLDS: {
         absorption: 0.3,
         deltacvd: 0.3,
@@ -196,6 +247,11 @@ export const Config = {
         exhaustion: 1.0,
         accumulation: 0.6,
         distribution: 0.7,
+    },
+
+    // CRITICAL: Add missing getTimeWindow method for DeltaCVD detector
+    getTimeWindow: (timeWindowIndex: number): number => {
+        return mockStandardZoneConfig.timeWindows[timeWindowIndex];
     },
 };
 

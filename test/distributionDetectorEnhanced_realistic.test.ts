@@ -20,6 +20,7 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { DistributionDetectorEnhanced } from "../src/indicators/distributionDetectorEnhanced.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import { FinancialMath } from "../src/utils/financialMath.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
@@ -41,6 +42,8 @@ const DISTRIBUTION_SELL_RATIO = 0.5; // 50%+ sell ratio = distribution per marke
 // Real market configuration
 const REAL_DISTRIBUTION_CONFIG = {
     useStandardizedZones: true,
+    enhancementMode: "production" as const,
+    eventCooldownMs: 15000, // Required parameter
     confidenceThreshold: 0.4, // Real config.json value
     confluenceMinZones: 1,
     confluenceMaxDistance: 0.1, // 10-cent confluence range
@@ -68,7 +71,6 @@ const REAL_DISTRIBUTION_CONFIG = {
     aggressiveSellingReductionFactor: 0.5,
     enableZoneConfluenceFilter: true,
     enableCrossTimeframeAnalysis: true,
-    enhancementMode: "production" as const,
 };
 
 // Mock implementations - simplified
@@ -175,19 +177,25 @@ describe("DistributionDetectorEnhanced - Realistic Market Scenarios", () => {
     let mockPreprocessor: IOrderflowPreprocessor;
     let emittedEvents: Array<{ event: string; data: any }>;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         mockLogger = createMockLogger();
         mockMetrics = createMockMetrics();
         mockPreprocessor = createMockPreprocessor();
         emittedEvents = [];
 
+        // Import and create mockSignalLogger
+        const { createMockSignalLogger } = await import(
+            "../__mocks__/src/infrastructure/signalLoggerInterface.js"
+        );
+        const mockSignalLogger = createMockSignalLogger();
+
         detector = new DistributionDetectorEnhanced(
             "realistic-distribution",
-            "LTCUSDT",
             REAL_DISTRIBUTION_CONFIG,
             mockPreprocessor,
             mockLogger,
-            mockMetrics
+            mockMetrics,
+            mockSignalLogger
         );
 
         // Capture emitted events

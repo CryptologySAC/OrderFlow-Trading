@@ -12,10 +12,17 @@ vi.mock("../src/core/config.js", () => ({
             minOrderCount: 3,
             minTotalSize: 50, // Test configuration - much lower than production 500
             maxOrderGapMs: 30000,
+            timeWindowIndex: 1, // Use timeWindow 300000ms (5 minutes)
             trackingWindowMs: 300000,
             maxActivePatterns: 50,
             maxRecentTrades: 100,
         },
+        // Mock getTimeWindow method for time filtering
+        getTimeWindow: vi.fn(
+            (index: number) =>
+                [180000, 300000, 600000, 1200000, 2700000, 5400000][index] ||
+                300000
+        ),
     },
 }));
 

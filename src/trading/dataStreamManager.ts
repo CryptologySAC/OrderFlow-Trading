@@ -67,20 +67,22 @@ interface StreamHealth {
  * Enhanced DataStreamManager with robust reconnection logic
  */
 export class DataStreamManager extends EventEmitter {
-    private connection?: SpotWebsocketStreams.WebsocketStreamsConnection;
-    private tradeStream?: BinanceAggTradeStream;
-    private depthStream?: BinanceDiffBookDepthStream;
+    private connection?:
+        | SpotWebsocketStreams.WebsocketStreamsConnection
+        | undefined;
+    private tradeStream?: BinanceAggTradeStream | undefined;
+    private depthStream?: BinanceDiffBookDepthStream | undefined;
 
     // Enhanced state management
     private connectionState = ConnectionState.DISCONNECTED;
     private reconnectAttempts = 0n;
-    private connectedAt?: number;
+    private connectedAt?: number | undefined;
     private lastReconnectAttempt = 0;
 
     // Timers
-    private heartbeatTimer?: NodeJS.Timeout;
-    private reconnectTimer?: NodeJS.Timeout;
-    private healthCheckTimer?: NodeJS.Timeout;
+    private heartbeatTimer?: NodeJS.Timeout | undefined;
+    private reconnectTimer?: NodeJS.Timeout | undefined;
+    private healthCheckTimer?: NodeJS.Timeout | undefined;
 
     // Configuration
     private readonly reconnectDelay: number;
@@ -103,7 +105,7 @@ export class DataStreamManager extends EventEmitter {
     };
 
     // API Connectivity Monitor
-    private connectivityMonitor: ApiConnectivityMonitor;
+    private readonly connectivityMonitor: ApiConnectivityMonitor;
 
     constructor(
         private readonly config: DataStreamConfig,
@@ -830,7 +832,7 @@ export class DataStreamManager extends EventEmitter {
         isConnected: boolean;
         reconnectAttempts: number;
         symbol: string;
-        uptime?: number;
+        uptime: number;
         streamHealth: StreamHealth;
         lastReconnectAttempt: number;
     } {
@@ -839,7 +841,7 @@ export class DataStreamManager extends EventEmitter {
             isConnected: this.connectionState === ConnectionState.CONNECTED,
             reconnectAttempts: Number(this.reconnectAttempts),
             symbol: this.config.symbol,
-            uptime: this.getUptime(),
+            uptime: this.getUptime() ?? 0,
             streamHealth: { ...this.streamHealth },
             lastReconnectAttempt: this.lastReconnectAttempt,
         };

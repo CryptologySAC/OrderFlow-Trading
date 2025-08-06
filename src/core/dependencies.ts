@@ -23,6 +23,7 @@ import { SignalTracker } from "../analysis/signalTracker.js";
 import { MarketContextCollector } from "../analysis/marketContextCollector.js";
 import type { ThreadManager } from "../multithreading/threadManager.js";
 import { WorkerSignalLogger } from "../multithreading/workerSignalLogger.js";
+import { SignalValidationLogger } from "../utils/signalValidationLogger.js";
 import { getDB } from "../infrastructure/db.js";
 import { runMigrations } from "../infrastructure/migrate.js";
 import { BinanceDataFeed } from "../utils/binance.js";
@@ -54,12 +55,15 @@ export interface Dependencies {
     spoofingDetector: SpoofingDetector;
     icebergDetector: SimpleIcebergDetector;
     hiddenOrderDetector: HiddenOrderDetector;
-    individualTradesManager?: IndividualTradesManager;
-    microstructureAnalyzer?: MicrostructureAnalyzer;
+    individualTradesManager: IndividualTradesManager;
+    microstructureAnalyzer: MicrostructureAnalyzer;
 
     // Performance Analysis (optional)
     signalTracker?: SignalTracker;
     marketContextCollector?: MarketContextCollector;
+
+    // Signal Validation (shared across detectors)
+    signalValidationLogger: SignalValidationLogger;
 
     /** Thread manager for worker offloading */
     threadManager: ThreadManager;
@@ -73,7 +77,7 @@ export function createDependencies(threadManager: ThreadManager): Dependencies {
     try {
         const logger = new WorkerLogger(
             threadManager,
-            process.env.NODE_ENV === "development"
+            process.env["NODE_ENV"] === "development"
         );
         const metricsCollector = new MetricsCollector();
         const signalLogger = new WorkerSignalLogger(threadManager);
@@ -164,6 +168,9 @@ export function createDependencies(threadManager: ThreadManager): Dependencies {
             metricsCollector
         );
 
+        // ✅ SHARED SIGNAL VALIDATION LOGGER: Single instance prevents file corruption
+        const signalValidationLogger = new SignalValidationLogger(logger);
+
         const signalManager = new SignalManager(
             anomalyDetector,
             alertManager,
@@ -204,6 +211,7 @@ export function createDependencies(threadManager: ThreadManager): Dependencies {
             mainThreadBinanceFeed,
             signalTracker,
             marketContextCollector,
+            signalValidationLogger,
             threadManager,
         };
     } catch (error) {

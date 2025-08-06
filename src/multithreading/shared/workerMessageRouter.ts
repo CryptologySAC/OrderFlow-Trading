@@ -22,7 +22,7 @@ interface RoutingStats {
  * Handles message routing and queue management
  */
 export class WorkerMessageRouter {
-    private handlers = new Map<string, MessageHandler>();
+    private readonly handlers = new Map<string, MessageHandler>();
     private stats: RoutingStats = {
         totalMessages: 0,
         messagesByType: {},
@@ -36,7 +36,7 @@ export class WorkerMessageRouter {
         worker: Worker;
         timestamp: number;
     }> = [];
-    private queueTimer?: NodeJS.Timeout;
+    private queueTimer?: NodeJS.Timeout | undefined;
     private readonly maxQueueSize = 1000;
     private readonly queueFlushInterval = 10; // 10ms for low latency
 

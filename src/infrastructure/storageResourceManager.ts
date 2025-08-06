@@ -49,7 +49,7 @@ interface ResourceCleanupHandler {
  */
 export class StorageResourceManager {
     private static instance: StorageResourceManager | null = null;
-    private handlers: Map<string, ResourceCleanupHandler> = new Map();
+    private readonly handlers: Map<string, ResourceCleanupHandler> = new Map();
     private isShuttingDown = false;
     private cleanupPromise: Promise<void> | null = null;
     private signalHandlersRegistered = false;
