@@ -140,7 +140,7 @@ describe("DeltaCVD Standalone Validation - Mathematical Stability", () => {
         mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
         const mockSignalLogger = createMockSignalLogger();
-        
+
         detector = new DeltaCVDDetectorEnhanced(
             "standalone_validation_test",
             {

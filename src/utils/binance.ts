@@ -308,7 +308,9 @@ export class BinanceDataFeed implements IBinanceDataFeed {
                     []) as unknown as WebsocketApiRateLimit[],
                 contextLabel
             );
-            return this.validateHistoricalTradeData(response.data.result);
+            const responseData =
+                response.data as SpotWebsocketAPI.TradesHistoricalResponse;
+            return this.validateHistoricalTradeData(responseData.result || []);
         } catch (error) {
             this.logger.error(
                 `[${contextLabel}] API error: ${JSON.stringify(error)}`
@@ -329,9 +331,7 @@ export class BinanceDataFeed implements IBinanceDataFeed {
                     []) as unknown as WebsocketApiRateLimit[],
                 contextLabel
             );
-            return this.validateDepthSnapshot(
-                response.data as SpotWebsocketAPI.DepthResponseResult
-            );
+            return this.validateDepthSnapshot(response.data);
         } catch (error) {
             this.logger.error(
                 `[${contextLabel}] API error: ${JSON.stringify(error)}`

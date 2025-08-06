@@ -58,7 +58,7 @@ const mockMetrics: IMetricsCollector = {
     getLatencyPercentiles: vi.fn(() => ({ p50: 0, p95: 0, p99: 0 })),
     exportPrometheus: vi.fn(() => ""),
     exportJSON: vi.fn(() => "{}"),
-    getHealthSummary: vi.fn(() => ({ status: "healthy" } as any)),
+    getHealthSummary: vi.fn(() => ({ status: "healthy" }) as any),
     reset: vi.fn(),
     cleanup: vi.fn(),
 };

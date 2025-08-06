@@ -42,7 +42,7 @@ describe("DeltaCVDConfirmation - Volume Surge Detection", () => {
         mockMetrics = new MetricsCollector();
         mockPreprocessor = createMockPreprocessor();
         mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
-        
+
         const mockSignalLogger = createMockSignalLogger();
 
         detector = new DeltaCVDDetectorEnhanced(

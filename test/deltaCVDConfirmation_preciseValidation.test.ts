@@ -48,7 +48,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
     // Track emitted signals for validation
     const emittedSignals: any[] = [];
     const mockSignalLogger = createMockSignalLogger();
-    
+
     // Complete configuration helper - all required properties for DeltaCVDDetectorEnhanced
     const createCompleteConfig = (overrides: any = {}) => ({
         // Core CVD analysis
@@ -114,7 +114,7 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
         maxZScoreBound: 20,
         minCorrelationBound: -0.999,
         maxCorrelationBound: 0.999,
-        ...overrides // Apply any overrides
+        ...overrides, // Apply any overrides
     });
 
     // Helper to create standard volume surge configuration

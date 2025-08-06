@@ -86,12 +86,10 @@ Created comprehensive test suite: `test/absorptionDetector_passiveSideLogic.test
 The logic correctly implements these microstructure principles:
 
 1. **Aggressive Flow Direction**:
-
     - `buyerIsMaker = false` → Aggressive buying hits ASK liquidity
     - `buyerIsMaker = true` → Aggressive selling hits BID liquidity
 
 2. **Liquidity Consumption Patterns**:
-
     - Buy absorption tests ASK depletion/refill patterns
     - Sell absorption tests BID depletion/refill patterns
 

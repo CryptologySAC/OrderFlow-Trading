@@ -126,7 +126,6 @@ Binance WebSocket → OrderFlowPreprocessor → Pattern Detectors → SignalCoor
 **CRITICAL UNDERSTANDING**: The system has TWO parallel data paths that MUST run simultaneously:
 
 1. **BinanceWorker (WebSocket Stream)**: Handles real-time live data from WebSocket
-
     - Processes live trade/depth data from Binance WebSocket API
     - **MUST store stream data to database** to prevent gaps on client reload
     - Runs in dedicated worker thread for isolation
@@ -278,13 +277,11 @@ All detectors extend `BaseDetector` and process `EnrichedTradeEvent` objects.
 Focus on the parameters with highest impact on turning point detection:
 
 1. **Zone Size (`zoneTicks`)**:
-
     - Range: 1-10 ticks
     - Impact: Granularity of absorption detection
     - Smaller zones = more precise, larger zones = broader institutional patterns
 
 2. **Time Window (`windowMs`)**:
-
     - Range: 30-180 seconds
     - Impact: Pattern formation timeframe
     - Shorter windows = faster signals, longer windows = more context
@@ -308,13 +305,11 @@ minAggVolume: [20, 30, 40],     // Sensitive to moderate volume
 After identifying best Phase 1 combinations, refine with quality filters:
 
 1. **Absorption Quality**:
-
     - `absorptionThreshold`: 0.45-0.75 (lower = more signals)
     - `minPassiveMultiplier`: 1.1-1.8 (higher = stricter absorption)
     - `maxAbsorptionRatio`: 0.4-0.7 (higher = allow more aggressive)
 
 2. **Price Movement Validation**:
-
     - `priceEfficiencyThreshold`: 0.01-0.025 (lower = more price impact sensitive)
     - `velocityIncreaseThreshold`: 1.2-2.0 (higher = require stronger acceleration)
 

@@ -154,7 +154,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
         maxZScoreBound: 20,
         minCorrelationBound: -0.999,
         maxCorrelationBound: 0.999,
-        ...overrides // Apply any overrides
+        ...overrides, // Apply any overrides
     });
 
     describe("🚀 Institutional Volume Surge Scenarios", () => {
