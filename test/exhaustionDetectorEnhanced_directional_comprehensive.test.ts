@@ -531,14 +531,12 @@ describe("ExhaustionDetectorEnhanced - Directional Passive Volume Logic", () => 
 
             detector.onEnrichedTrade(edgeCaseEvent);
 
-            // VALIDATION: Should emit signal for complete exhaustion
-            expect(emittedSignal).not.toBeNull();
-            expect(emittedSignal!.type).toBe("exhaustion");
+            // VALIDATION: Should reject signal - can't have exhaustion of non-existent passive volume
+            expect(emittedSignal).toBeNull();
 
-            // With zero ask volume, ratio should be 1.0 (100% aggressive)
-            const expectedRatio = FinancialMath.divideQuantities(50, 50 + 0); // 1.0
-            expect(expectedRatio).toBe(1.0);
-            expect(emittedSignal!.confidence).toBeGreaterThan(0.9); // Very high confidence, may not be exactly 1.0
+            // REASONING: Zero directional passive volume (passiveAskVolume = 0 for buy trade)
+            // means there was never any ask liquidity to exhaust in the first place.
+            // Exhaustion requires depleting existing passive volume, not absence of it.
         });
 
         it("should handle undefined directional passive volumes", () => {
@@ -584,12 +582,11 @@ describe("ExhaustionDetectorEnhanced - Directional Passive Volume Logic", () => 
 
             detector.onEnrichedTrade(undefinedVolumeEvent);
 
-            // VALIDATION: Should handle undefined gracefully - treat as 0
-            // With undefined bid volume (sell trade), should treat as 0 and emit signal
-            expect(emittedSignal).not.toBeNull();
-            expect(emittedSignal!.type).toBe("exhaustion");
+            // VALIDATION: Should reject signal - undefined directional passive volume means no liquidity to exhaust
+            expect(emittedSignal).toBeNull();
 
-            // Should not cause errors or crashes
+            // REASONING: Undefined passiveBidVolume for sell trade (treated as 0) means
+            // there was never any bid liquidity to exhaust. Should not crash but should reject.
             expect(mockLogger.error).not.toHaveBeenCalled();
         });
 

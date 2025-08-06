@@ -375,7 +375,7 @@ describe("DistributionDetectorEnhanced - Nuclear Cleanup Reality", () => {
         it("should crash immediately on invalid configuration values", () => {
             const invalidConfig = {
                 ...mockDistributionConfig,
-                sellingPressureRatioThreshold: -1, // Invalid negative value
+                distributionRatioThreshold: -1, // Invalid negative value (schema requires min: 0.3)
             };
 
             // ARCHITECTURE: Test Zod validation directly for invalid values
