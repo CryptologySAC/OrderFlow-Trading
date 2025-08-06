@@ -763,8 +763,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
         const hasRecentZones = recentZones.length > 0;
         const hasRelevantZones = relevantZones.length > 0;
         const hasVolumePressure = volumePressure !== null;
-        const passesVolumeThreshold =
-            totalAggressiveVolume >= this.enhancementConfig.minAggVolume;
+        // Use institutional threshold when institutional filtering is enabled, otherwise use regular threshold
+        const volumeThreshold = this.enhancementConfig.enableInstitutionalVolumeFilter 
+            ? this.enhancementConfig.institutionalVolumeThreshold
+            : this.enhancementConfig.minAggVolume;
+        const passesVolumeThreshold = totalAggressiveVolume >= volumeThreshold;
         const passesPassiveRatioThreshold =
             passiveVolumeRatio >= this.absorptionRatioThreshold;
         const passesEfficiencyThreshold =
@@ -883,8 +886,10 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 actualValue = 0;
             } else if (!passesVolumeThreshold) {
                 rejectionReason = "insufficient_aggressive_volume";
-                thresholdType = "aggressive_volume";
-                thresholdValue = this.enhancementConfig.minAggVolume;
+                thresholdType = this.enhancementConfig.enableInstitutionalVolumeFilter 
+                    ? "institutional_volume" 
+                    : "aggressive_volume";
+                thresholdValue = volumeThreshold;
                 actualValue = totalAggressiveVolume;
             } else if (!passesPassiveRatioThreshold) {
                 rejectionReason = "passive_volume_ratio_too_low";
