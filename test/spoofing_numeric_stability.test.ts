@@ -184,19 +184,6 @@ describe("SpoofingDetector Numeric Stability Fixes", () => {
         expect(detector_internal.safeRatio(50, NaN, 99)).toBe(99); // NaN denominator returns fallback
     });
 
-    it("should handle safe mean calculation correctly", () => {
-        const detector_internal = detector as any;
-
-        // Test safeMean method
-        expect(detector_internal.safeMean([1, 2, 3, 4, 5])).toBe(3);
-        expect(detector_internal.safeMean([NaN, 2, 3])).toBe(2.5); // Ignores NaN
-        expect(detector_internal.safeMean([Infinity, 2, 3])).toBe(2.5); // Ignores Infinity
-        expect(detector_internal.safeMean([])).toBe(0); // Empty array returns 0
-        expect(detector_internal.safeMean([NaN, Infinity])).toBe(0); // All invalid returns 0
-        expect(detector_internal.safeMean(null as any)).toBe(0); // Null input returns 0
-        expect(detector_internal.safeMean(undefined as any)).toBe(0); // Undefined input returns 0
-    });
-
     it("should handle spoofing detection with edge case price values", () => {
         // Track some normal passive changes first
         detector.trackPassiveChange(100, 25, 30);

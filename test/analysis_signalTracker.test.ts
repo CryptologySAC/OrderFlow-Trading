@@ -23,31 +23,26 @@ describe("analysis/SignalTracker", () => {
     });
 
     it("should finalize based on thresholds", () => {
-        const outcome: any = {
-            signalId: "1",
-            entryPrice: 100,
-            entryTime: 0,
-            maxFavorableMove: 0,
-            maxAdverseMove: 0,
-        };
+        // Test success threshold (0.02 return > 0.01 successThreshold)
         const finalize = (tracker as any).shouldFinalizeSignal(
-            outcome,
-            0,
-            0.02
+            0, // timeElapsed
+            0.02 // returnPct
         );
         expect(finalize).toBe("success");
+
+        // Test failure threshold (-0.02 return < -0.01 failureThreshold)
         const finalizeFail = (tracker as any).shouldFinalizeSignal(
-            outcome,
-            0,
-            -0.02
+            0, // timeElapsed
+            -0.02 // returnPct
         );
         expect(finalizeFail).toBe("failure");
-        const finalizeNone = (tracker as any).shouldFinalizeSignal(
-            outcome,
-            1000000,
-            0
+
+        // Test timeout (1000000ms > 500000ms signalTimeoutMs)
+        const finalizeTimeout = (tracker as any).shouldFinalizeSignal(
+            1000000, // timeElapsed
+            0 // returnPct
         );
-        expect(finalizeNone).toBe("timeout");
+        expect(finalizeTimeout).toBe("timeout");
     });
 
     it("returns empty metrics when no data", () => {

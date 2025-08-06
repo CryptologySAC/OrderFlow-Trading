@@ -764,7 +764,8 @@ export class AbsorptionDetectorEnhanced extends Detector {
         const hasRelevantZones = relevantZones.length > 0;
         const hasVolumePressure = volumePressure !== null;
         // Use institutional threshold when institutional filtering is enabled, otherwise use regular threshold
-        const volumeThreshold = this.enhancementConfig.enableInstitutionalVolumeFilter 
+        const volumeThreshold = this.enhancementConfig
+            .enableInstitutionalVolumeFilter
             ? this.enhancementConfig.institutionalVolumeThreshold
             : this.enhancementConfig.minAggVolume;
         const passesVolumeThreshold = totalAggressiveVolume >= volumeThreshold;
@@ -886,8 +887,9 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 actualValue = 0;
             } else if (!passesVolumeThreshold) {
                 rejectionReason = "insufficient_aggressive_volume";
-                thresholdType = this.enhancementConfig.enableInstitutionalVolumeFilter 
-                    ? "institutional_volume" 
+                thresholdType = this.enhancementConfig
+                    .enableInstitutionalVolumeFilter
+                    ? "institutional_volume"
                     : "aggressive_volume";
                 thresholdValue = volumeThreshold;
                 actualValue = totalAggressiveVolume;

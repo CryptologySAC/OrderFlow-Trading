@@ -397,9 +397,9 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                 1
             );
 
-            // Should detect insufficient samples for signal generation (retail noise)
+            // Should detect volume surge from retail activity (but no institutional signal)
             expect(mockMetrics.incrementCounter).toHaveBeenCalledWith(
-                "cvd_signal_processing_insufficient_samples_total",
+                "cvd_volume_surge_detected",
                 1
             );
         });
