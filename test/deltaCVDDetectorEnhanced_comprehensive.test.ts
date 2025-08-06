@@ -20,7 +20,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
-import { SignalValidationLogger } from "../src/utils/signalValidationLogger.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
+import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
 import type {
     ZoneSnapshot,
     ZoneTradeRecord,

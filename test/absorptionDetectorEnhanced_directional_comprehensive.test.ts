@@ -24,6 +24,7 @@ import type {
 } from "../src/types/marketEvents.js";
 import type { SignalCandidate } from "../src/types/signalTypes.js";
 import { CircularBuffer } from "../src/utils/circularBuffer.js";
+import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
 
 // Mock implementations using vi.fn() for proper Vitest integration
 const mockLogger: ILogger = {
@@ -39,7 +40,30 @@ const mockMetrics: IMetricsCollector = {
     recordHistogram: vi.fn(),
     recordTiming: vi.fn(),
     getMetrics: vi.fn().mockReturnValue({}),
+    // Complete IMetricsCollector interface
+    registerMetric: vi.fn(),
+    getHistogramPercentiles: vi.fn(() => ({ p50: 0, p95: 0, p99: 0 })),
+    getHistogramSummary: vi.fn(() => null),
+    createGauge: vi.fn(),
+    setGauge: vi.fn(),
+    incrementCounter: vi.fn(),
+    decrementCounter: vi.fn(),
+    getCounterRate: vi.fn(() => 0),
+    createCounter: vi.fn(),
+    createHistogram: vi.fn(),
+    getGaugeValue: vi.fn(() => 0),
+    incrementMetric: vi.fn(),
+    updateMetric: vi.fn(),
+    getAverageLatency: vi.fn(() => 0),
+    getLatencyPercentiles: vi.fn(() => ({ p50: 0, p95: 0, p99: 0 })),
+    exportPrometheus: vi.fn(() => ""),
+    exportJSON: vi.fn(() => "{}"),
+    getHealthSummary: vi.fn(() => ({ status: "healthy" } as any)),
+    reset: vi.fn(),
+    cleanup: vi.fn(),
 };
+
+const mockSignalLogger = createMockSignalLogger();
 
 const mockPreprocessor: IOrderflowPreprocessor = {
     findZonesNearPrice: vi.fn((zones, price, maxDistance) => {
@@ -49,9 +73,15 @@ const mockPreprocessor: IOrderflowPreprocessor = {
             return distance <= maxDistance;
         });
     }),
-    processTradeForZones: vi.fn(),
-    getZoneData: vi.fn(),
-    cleanup: vi.fn(),
+    calculateZoneRelevanceScore: vi.fn(() => 0.5),
+    findMostRelevantZone: vi.fn(() => null),
+    handleDepth: vi.fn(),
+    handleAggTrade: vi.fn(),
+    getStats: vi.fn(() => ({
+        processedTrades: 0,
+        processedDepthUpdates: 0,
+        bookMetrics: {} as any,
+    })),
 };
 
 // Configuration constants - using realistic LTCUSDT values
@@ -110,12 +140,12 @@ describe("AbsorptionDetectorEnhanced - Directional Passive Volume Tests", () => 
 
         detector = new AbsorptionDetectorEnhanced(
             "test-absorption-detector",
-            "LTCUSDT",
             Config.ABSORPTION_DETECTOR,
             mockPreprocessor,
             mockLogger,
             mockMetrics,
-            mockValidationLogger
+            mockValidationLogger,
+            mockSignalLogger
         );
 
         // Capture emitted signals

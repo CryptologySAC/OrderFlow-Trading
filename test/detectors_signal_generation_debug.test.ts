@@ -17,7 +17,7 @@ import {
     type ExhaustionEnhancedSettings,
 } from "../src/indicators/exhaustionDetectorEnhanced.js";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
-import { SignalValidationLogger } from "../src/utils/signalValidationLogger.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import {
     AbsorptionDetectorEnhanced,
     type AbsorptionEnhancedSettings,
@@ -507,12 +507,12 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             const detector = new AbsorptionDetectorEnhanced(
                 "debug-absorption",
-                "LTCUSDT",
                 settings,
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Verify actual parameters match config (from settings)
@@ -540,12 +540,12 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             const detector = new AbsorptionDetectorEnhanced(
                 "debug-absorption",
-                "LTCUSDT",
                 settings,
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             let signalCount = 0;
@@ -664,7 +664,6 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             const detector = new DeltaCVDDetectorEnhanced(
                 "debug-deltacvd",
-                "LTCUSDT",
                 completeDeltaCVDSettings,
                 mockPreprocessor,
                 mockLogger,
@@ -774,7 +773,6 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             const detector = new DeltaCVDDetectorEnhanced(
                 "debug-deltacvd",
-                "LTCUSDT",
                 completeDeltaCVDSettings,
                 mockPreprocessor,
                 mockLogger,
@@ -924,10 +922,9 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 "compare-absorption",
                 { symbol: "LTCUSDT", ...config.absorption },
                 mockPreprocessor,
-                mockOrderBook,
                 mockLogger,
-                mockSpoofing,
                 mockMetrics,
+                mockSignalValidationLogger,
                 mockSignalLogger
             );
 
@@ -1006,7 +1003,6 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
 
             const deltaCVDDetector = new DeltaCVDDetectorEnhanced(
                 "compare-deltacvd",
-                "LTCUSDT",
                 completeDeltaCVDSettings,
                 mockPreprocessor,
                 mockLogger,

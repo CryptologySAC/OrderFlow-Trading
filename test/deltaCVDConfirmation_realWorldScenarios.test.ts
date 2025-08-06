@@ -11,6 +11,7 @@ import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
 import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
+import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
 /**
  * REAL-WORLD DELTACVD DETECTOR SCENARIOS
  *
@@ -86,12 +87,81 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
         mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
     });
 
+    const mockSignalLogger = createMockSignalLogger();
+
+    // Complete configuration helper - all required properties for DeltaCVDDetectorEnhanced
+    const createCompleteConfig = (overrides: any = {}) => ({
+        // Core CVD analysis
+        windowsSec: [60, 300],
+        minZ: 0.4,
+        priceCorrelationWeight: 0.3,
+        volumeConcentrationWeight: 0.2,
+        adaptiveThresholdMultiplier: 0.7,
+        eventCooldownMs: 15000,
+        minTradesPerSec: 0.1,
+        minVolPerSec: 0.5,
+        minSamplesForStats: 15,
+        pricePrecision: 2,
+        volatilityLookbackSec: 3600,
+        maxDivergenceAllowed: 0.5,
+        stateCleanupIntervalSec: 300,
+        dynamicThresholds: true,
+        logDebug: true,
+        // Volume and detection parameters
+        volumeSurgeMultiplier: 2.5,
+        imbalanceThreshold: 0.15,
+        institutionalThreshold: 17.8,
+        burstDetectionMs: 1000,
+        sustainedVolumeMs: 30000,
+        medianTradeSize: 0.6,
+        detectionMode: "momentum" as const,
+        divergenceThreshold: 0.3,
+        divergenceLookbackSec: 60,
+        enableDepthAnalysis: false,
+        usePassiveVolume: true,
+        maxOrderbookAge: 5000,
+        absorptionCVDThreshold: 75,
+        absorptionPriceThreshold: 0.1,
+        imbalanceWeight: 0.2,
+        icebergMinRefills: 3,
+        icebergMinSize: 20,
+        baseConfidenceRequired: 0.2,
+        finalConfidenceRequired: 0.35,
+        strongCorrelationThreshold: 0.7,
+        weakCorrelationThreshold: 0.3,
+        depthImbalanceThreshold: 0.2,
+        // Enhancement control
+        useStandardizedZones: true,
+        enhancementMode: "production" as const,
+        minEnhancedConfidenceThreshold: 0.3,
+        // Enhanced CVD analysis
+        cvdDivergenceVolumeThreshold: 50,
+        cvdDivergenceStrengthThreshold: 0.7,
+        cvdSignificantImbalanceThreshold: 0.3,
+        cvdDivergenceScoreMultiplier: 1.5,
+        alignmentMinimumThreshold: 0.5,
+        momentumScoreMultiplier: 2,
+        enableCVDDivergenceAnalysis: true,
+        enableMomentumAlignment: false,
+        divergenceConfidenceBoost: 0.12,
+        momentumAlignmentBoost: 0.08,
+        // Essential configurable parameters
+        minTradesForAnalysis: 20,
+        minVolumeRatio: 0.1,
+        maxVolumeRatio: 5.0,
+        priceChangeThreshold: 0.001,
+        minZScoreBound: -20,
+        maxZScoreBound: 20,
+        minCorrelationBound: -0.999,
+        maxCorrelationBound: 0.999,
+        ...overrides // Apply any overrides
+    });
+
     describe("🚀 Institutional Volume Surge Scenarios", () => {
         beforeEach(() => {
             detector = new DeltaCVDDetectorEnhanced(
                 "institutional_volume_test",
-                "LTCUSDT",
-                {
+                createCompleteConfig({
                     windowsSec: [60],
                     minZ: 2.0,
                     minTradesPerSec: 0.5,
@@ -101,11 +171,12 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                     institutionalThreshold: 15.0, // 15 LTC threshold
                     enableDepthAnalysis: true,
                     usePassiveVolume: true,
-                },
+                }),
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
         });
 
@@ -338,19 +409,19 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
         it("should detect momentum continuation pattern", () => {
             const momentumDetector = new DeltaCVDDetectorEnhanced(
                 "momentum_test",
-                "LTCUSDT",
-                {
+                createCompleteConfig({
                     windowsSec: [60],
                     detectionMode: "momentum" as const,
                     minZ: 2.0,
                     minTradesPerSec: 0.3,
                     minVolPerSec: 0.3,
                     usePassiveVolume: true,
-                },
+                }),
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             const baseTime = Date.now();
@@ -456,8 +527,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
         it("should detect bearish divergence pattern", () => {
             const divergenceDetector = new DeltaCVDDetectorEnhanced(
                 "divergence_test",
-                "LTCUSDT",
-                {
+                createCompleteConfig({
                     windowsSec: [60],
                     detectionMode: "divergence" as const,
                     divergenceThreshold: 0.25,
@@ -466,11 +536,12 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                     minTradesPerSec: 0.3,
                     minVolPerSec: 0.2,
                     usePassiveVolume: true,
-                },
+                }),
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             const baseTime = Date.now();
@@ -591,8 +662,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
         it("should detect bullish divergence (price down, CVD up)", () => {
             const divergenceDetector = new DeltaCVDDetectorEnhanced(
                 "bullish_divergence_test",
-                "LTCUSDT",
-                {
+                createCompleteConfig({
                     windowsSec: [60],
                     detectionMode: "divergence" as const,
                     divergenceThreshold: 0.2,
@@ -601,11 +671,12 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                     minTradesPerSec: 0.4,
                     minVolPerSec: 0.2,
                     usePassiveVolume: true,
-                },
+                }),
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             const baseTime = Date.now();
@@ -736,8 +807,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
         beforeEach(() => {
             detector = new DeltaCVDDetectorEnhanced(
                 "microstructure_test",
-                "LTCUSDT",
-                {
+                createCompleteConfig({
                     windowsSec: [30, 60], // Multi-timeframe
                     minZ: 2.5,
                     minTradesPerSec: 0.5, // Higher frequency requirement
@@ -746,11 +816,12 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                     volumeSurgeMultiplier: 4.0,
                     enableDepthAnalysis: true,
                     usePassiveVolume: true,
-                },
+                }),
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
         });
 
@@ -971,19 +1042,19 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
         beforeEach(() => {
             detector = new DeltaCVDDetectorEnhanced(
                 "edge_case_test",
-                "LTCUSDT",
-                {
+                createCompleteConfig({
                     windowsSec: [60],
                     minZ: 2.0,
                     minTradesPerSec: 0.1,
                     minVolPerSec: 0.1,
                     usePassiveVolume: true,
                     enableDepthAnalysis: true,
-                },
+                }),
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
         });
 
@@ -1216,8 +1287,7 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
         beforeEach(() => {
             detector = new DeltaCVDDetectorEnhanced(
                 "multi_timeframe_test",
-                "LTCUSDT",
-                {
+                createCompleteConfig({
                     windowsSec: [30, 60, 120], // 30s, 1m, 2m analysis
                     minZ: 2.0,
                     minTradesPerSec: 0.5,
@@ -1225,11 +1295,12 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
                     detectionMode: "hybrid" as const,
                     usePassiveVolume: true,
                     enableDepthAnalysis: true,
-                },
+                }),
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
         });
 

@@ -1,0 +1,84 @@
+{
+  "timestamp": "2025-08-06T09:53:56.760907",
+  "swing_threshold": 0.007,
+  "analysis": {
+    "deltacvd": {
+      "total_signals": 605262,
+      "successful_count": 16,
+      "unsuccessful_count": 605246,
+      "success_rate": 0.0026434833179680866,
+      "parameters": {
+        "eventCooldownMs": {
+          "successful_mean": 0.0,
+          "unsuccessful_mean": 1754043470235.954,
+          "successful_median": 0.0,
+          "unsuccessful_median": 1754396228780.5,
+          "successful_std": 0.0,
+          "unsuccessful_std": 25007577799.39213,
+          "difference": -1754043470235.954,
+          "pct_difference": -100.0,
+          "p_value": 0.0,
+          "is_significant": true
+        }
+      }
+    },
+    "exhaustion": {
+      "total_signals": 498560,
+      "successful_count": 36,
+      "unsuccessful_count": 498524,
+      "success_rate": 0.007220795892169449,
+      "parameters": {
+        "minAggVolume": {
+          "successful_mean": 9077.559444444445,
+          "unsuccessful_mean": 3996.4901934731324,
+          "successful_median": 9083.962500000001,
+          "unsuccessful_median": 2277.307,
+          "successful_std": 3073.152587889218,
+          "unsuccessful_std": 6027.677986512539,
+          "difference": 5081.069250971313,
+          "pct_difference": 127.13828897339621,
+          "p_value": 4.2452288363798243e-07,
+          "is_significant": true
+        },
+        "eventCooldownMs": {
+          "successful_mean": 0.0,
+          "unsuccessful_mean": 557095621538.4784,
+          "successful_median": 0.0,
+          "unsuccessful_median": 1046570.0,
+          "successful_std": 0.0,
+          "unsuccessful_std": 816709546809.0033,
+          "difference": -557095621538.4784,
+          "pct_difference": -100.0,
+          "p_value": 4.2639393060064656e-05,
+          "is_significant": true
+        }
+      }
+    }
+  },
+  "recommendations": {
+    "deltacvd": {
+      "eventCooldownMs": {
+        "current_typical": 1754043470235.954,
+        "recommended": 0.0,
+        "change_required": -100.0,
+        "confidence": 1.0
+      }
+    },
+    "exhaustion": {
+      "minAggVolume": {
+        "current_typical": 3996.4901934731324,
+        "recommended": 9077.559444444445,
+        "change_required": 127.13828897339621,
+        "confidence": 0.9999995754771164
+      },
+      "eventCooldownMs": {
+        "current_typical": 557095621538.4784,
+        "recommended": 0.0,
+        "change_required": -100.0,
+        "confidence": 0.99995736060694
+      }
+    }
+  },
+  "swings_detected": 12,
+  "signals_analyzed": 1616610
+}

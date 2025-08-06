@@ -13,7 +13,8 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { AbsorptionDetectorEnhanced } from "../../src/indicators/absorptionDetectorEnhanced.js";
-import { SignalValidationLogger } from "../../src/utils/signalValidationLogger.js";
+import { SignalValidationLogger } from "../../__mocks__/src/utils/signalValidationLogger.js";
+import { createMockSignalLogger } from "../../__mocks__/src/infrastructure/signalLoggerInterface.js";
 import { ExhaustionDetectorEnhanced } from "../../src/indicators/exhaustionDetectorEnhanced.js";
 import { AccumulationZoneDetectorEnhanced } from "../../src/indicators/accumulationZoneDetectorEnhanced.js";
 import { DistributionDetectorEnhanced } from "../../src/indicators/distributionDetectorEnhanced.js";
@@ -172,30 +173,32 @@ describe("Enhanced Detector Signal Flow Integration", () => {
             // Create all 5 enhanced detectors using realistic configurations from mock config
             const absorptionDetector = new AbsorptionDetectorEnhanced(
                 "test-absorption",
-                "LTCUSDT",
                 mockConfig.symbols.LTCUSDT.absorption as any,
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalValidationLogger
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             const accumulationDetector = new AccumulationZoneDetectorEnhanced(
                 "test-accumulation",
-                "LTCUSDT",
                 mockConfig.symbols.LTCUSDT.accumulation as any,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             const distributionDetector = new DistributionDetectorEnhanced(
                 "test-distribution",
-                "LTCUSDT",
                 mockConfig.symbols.LTCUSDT.distribution as any,
                 mockPreprocessor,
                 mockLogger,
-                mockMetrics
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
             );
 
             // Set up signal capture for each detector

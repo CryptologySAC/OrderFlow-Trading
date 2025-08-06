@@ -5,37 +5,19 @@ import type { SignalCandidate } from "../../../src/types/signalTypes.js";
 import type { EnrichedTradeEvent } from "../../../src/types/marketEvents.js";
 
 export class SignalValidationLogger {
-    public logSignal = vi.fn();
-    public logRejection = vi.fn(
-        (
-            detectorType: "exhaustion" | "absorption" | "deltacvd",
-            rejectionReason: string,
-            event: EnrichedTradeEvent,
-            thresholdDetails: {
-                type: string;
-                threshold: number;
-                actual: number;
-            },
-            marketContext: {
-                aggressiveVolume: number;
-                passiveVolume: number;
-                priceEfficiency: number | null;
-                confidence: number;
-            }
-        ) => {
-            // Mock implementation that matches the real interface
-        }
-    );
-    public logSuccessfulSignal = vi.fn();
-    public updateCurrentPrice = vi.fn();
-    public cleanup = vi.fn();
-    public getValidationStats = vi.fn().mockReturnValue({
+    // Public method properties
+    logSignal = vi.fn();
+    logRejection = vi.fn();
+    logSuccessfulSignal = vi.fn();
+    updateCurrentPrice = vi.fn();
+    cleanup = vi.fn();
+    getValidationStats = vi.fn().mockReturnValue({
         pendingValidations: 0,
         totalLogged: 0,
     });
-    public run90MinuteOptimization = vi.fn();
-    public setupSuccessfulSignalValidationTimers = vi.fn();
-    public validateSuccessfulSignal = vi.fn();
+    run90MinuteOptimization = vi.fn();
+    setupSuccessfulSignalValidationTimers = vi.fn();
+    validateSuccessfulSignal = vi.fn();
 
     // Add all required properties to match the real interface
     public readonly signalsFilePath = "mock-signals.csv";

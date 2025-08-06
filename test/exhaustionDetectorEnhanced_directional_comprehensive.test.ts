@@ -36,7 +36,7 @@ import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorInterface.js";
 import type { ISignalLogger } from "../src/infrastructure/signalLoggerInterface.js";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
-import { SignalValidationLogger } from "../src/utils/signalValidationLogger.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 
 // Mock implementations - using proper __mocks__ structure
 vi.mock("../src/infrastructure/loggerInterface.js");
@@ -143,13 +143,10 @@ describe("ExhaustionDetectorEnhanced - Directional Passive Volume Logic", () => 
             getCurrentZoneData: vi.fn(),
         };
 
-        mockValidationLogger = {
-            logSignal: vi.fn(),
-            logRejection: vi.fn(),
-            logSuccessfulSignal: vi.fn(),
-            updateCurrentPrice: vi.fn(),
-            cleanup: vi.fn(),
-        } as unknown as SignalValidationLogger;
+        mockValidationLogger = new SignalValidationLogger(
+            mockLogger,
+            "test-logs"
+        );
 
         testSettings = { ...REALISTIC_CONFIG };
 

@@ -28,6 +28,7 @@ import type { ISignalLogger } from "../src/infrastructure/signalLoggerInterface.
 import type { SpotWebsocketStreams } from "@binance/spot";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import { SignalValidationLogger } from "../src/utils/signalValidationLogger.js";
+import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
 import "../test/vitest.setup.ts";
 
 // Real LTCUSDT market parameters
@@ -238,7 +239,6 @@ describe("DeltaCVDDetectorEnhanced - REAL Integration Tests", () => {
         // Create detector with real configuration
         detector = new DeltaCVDDetectorEnhanced(
             "test-deltacvd",
-            "LTCUSDT",
             DELTACVD_CONFIG,
             preprocessor,
             mockLogger,

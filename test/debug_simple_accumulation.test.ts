@@ -9,6 +9,7 @@ import type { IMetricsCollector } from "../src/infrastructure/metricsCollectorIn
 import type { SpotWebsocketStreams } from "@binance/spot";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
+import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
 import "../test/vitest.setup.ts";
 
 const TICK_SIZE = 0.01;
@@ -131,6 +132,8 @@ describe("Accumulation Detector DEBUG", () => {
     let orderBook: OrderBookState;
     let mockLogger: ILogger;
     let mockMetrics: IMetricsCollector;
+    let mockSignalValidationLogger: SignalValidationLogger;
+    let mockSignalLogger: any;
     let detectedSignals: any[];
 
     beforeEach(async () => {
@@ -183,13 +186,17 @@ describe("Accumulation Detector DEBUG", () => {
             mockMetrics
         );
 
+        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
+        mockSignalLogger = createMockSignalLogger();
+
         detector = new AccumulationZoneDetectorEnhanced(
             "debug-accumulation",
-            "LTCUSDT",
             ACCUMULATION_CONFIG,
             preprocessor,
             mockLogger,
-            mockMetrics
+            mockMetrics,
+            mockSignalValidationLogger,
+            mockSignalLogger
         );
 
         await orderBook.recover();
