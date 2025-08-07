@@ -170,7 +170,7 @@ export const AbsorptionDetectorSchema = z.object({
     liquidityGradientRange: z.number().int().min(1).max(20),
 
     // Institutional analysis
-    institutionalVolumeThreshold: z.number().min(10000).max(100000),
+    institutionalVolumeThreshold: z.number().min(100).max(100000),
     institutionalVolumeRatioThreshold: z.number().min(1).max(50),
     enableInstitutionalVolumeFilter: z.boolean(),
     institutionalVolumeBoost: z.number().min(0.05).max(0.3),

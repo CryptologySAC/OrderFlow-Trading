@@ -458,8 +458,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             calculatedEventCooldownMs:
                 event.timestamp - (this.lastSignal.get("last") || 0), // vs config eventCooldownMs (1000)
             calculatedEnhancementMode: this.enhancementConfig.enhancementMode, // vs config enhancementMode ("production")
-            calculatedCvdImbalanceThreshold:
-                divergenceResult.divergenceStrength, // vs config cvdImbalanceThreshold (0.18) - actual volumeRatio checked
+            calculatedCvdImbalanceThreshold: divergenceResult.maxVolumeRatio, // vs config cvdImbalanceThreshold (0.18) - actual volumeRatio checked
             calculatedTimeWindowIndex: this.enhancementConfig.timeWindowIndex, // vs config timeWindowIndex (0)
             calculatedInstitutionalThreshold: event.quantity, // vs config institutionalThreshold (25.0) - actual trade quantity checked
         };
@@ -729,6 +728,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         hasDivergence: boolean;
         divergenceStrength: number;
         affectedZones: number;
+        maxVolumeRatio: number;
     } {
         this.logger.debug(
             "DeltaCVDDetectorEnhanced: All zones have zero volume - no divergence possible",
@@ -814,6 +814,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         let affectedZones = 0;
         let zonesTooSmall = 0;
         let zonesProcessed = 0;
+        let maxVolumeRatio = 0; // Track the highest volume ratio encountered
 
         relevantZones.forEach((zone, index) => {
             zonesProcessed++;
@@ -846,6 +847,9 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                     Math.abs(cvdDelta),
                     aggressiveVolume
                 );
+
+                // Track the maximum volume ratio encountered for logging
+                maxVolumeRatio = Math.max(maxVolumeRatio, volumeRatio);
 
                 // Use configurable CVD imbalance threshold for detection
                 const cvdSignificantImbalanceThreshold =
@@ -912,6 +916,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 hasDivergence: false,
                 divergenceStrength: 0, // No divergence detected
                 affectedZones: 0,
+                maxVolumeRatio: maxVolumeRatio,
             };
         }
 
@@ -942,6 +947,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             hasDivergence,
             divergenceStrength: preciseAverageDivergence,
             affectedZones,
+            maxVolumeRatio: maxVolumeRatio,
         };
     }
 

@@ -296,6 +296,10 @@ export class DataStreamManager extends EventEmitter {
     private setupConnectionHandlers(): void {
         if (!this.connection) return;
 
+        // CRITICAL FIX: Remove existing listeners before adding new ones to prevent memory leaks
+        this.connection.removeAllListeners("close");
+        this.connection.removeAllListeners("error");
+
         this.connection.on("close", () => this.handleConnectionClose());
         this.connection.on("error", (error: Error) =>
             this.handleConnectionError(error)
