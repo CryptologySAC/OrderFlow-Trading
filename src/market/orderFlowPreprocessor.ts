@@ -910,29 +910,24 @@ export class OrderflowPreprocessor
         tradePrice: number
     ): ZoneSnapshot | undefined {
         try {
-            // Zone boundaries: CRITICAL FIX - Use expanded boundaries for trade capture
-            // Original zones were too restrictive, causing trades to fall outside boundaries
-            // Solution: Expand zone boundaries by 50% to ensure proper trade capture
+            // Zone boundaries: Use exact tick-aligned boundaries for precision
+            // Zones must maintain exact tick alignment for institutional-grade accuracy
 
-            const baseZoneSize = FinancialMath.safeMultiply(
+            const zoneSize = FinancialMath.safeMultiply(
                 zoneTicks,
                 this.tickSize
             );
-            // CRITICAL: Expand zone boundaries by 50% to ensure trade capture
-            const expandedZoneSize = FinancialMath.safeMultiply(
-                baseZoneSize,
-                1.5
+
+            // Exact tick-aligned boundaries - no expansion
+            const minPrice = lowerBoundary;
+            // For a 10-tick zone starting at 89.00, the max should be 89.09 (inclusive)
+            // This is lowerBoundary + zoneSize - 1 tick
+            const maxPrice = FinancialMath.safeAdd(lowerBoundary, zoneSize);
+            // Subtract one tick to make the boundary inclusive
+            const adjustedMaxPrice = FinancialMath.safeSubtract(
+                maxPrice,
+                this.tickSize
             );
-
-            const minPrice = FinancialMath.safeSubtract(
-                lowerBoundary,
-                FinancialMath.safeMultiply(expandedZoneSize - baseZoneSize, 0.5)
-            ); // Expand downward
-
-            const maxPrice = FinancialMath.safeAdd(
-                lowerBoundary,
-                FinancialMath.safeSubtract(expandedZoneSize, this.tickSize)
-            ); // Expand upward
 
             this.logger.debug(
                 "[OrderflowPreprocessor] Zone boundary calculation",
@@ -941,9 +936,9 @@ export class OrderflowPreprocessor
                     zoneTicks,
                     tickSize: this.tickSize,
                     minPrice,
-                    maxPrice,
+                    maxPrice: adjustedMaxPrice,
                     tradePrice,
-                    zoneWidth: maxPrice - minPrice,
+                    zoneWidth: adjustedMaxPrice - minPrice,
                     expectedTicks: zoneTicks,
                 }
             );
@@ -971,7 +966,7 @@ export class OrderflowPreprocessor
                 passiveAskVolume: band.ask,
                 tradeCount: 0, // Will be updated with trade aggregation
                 timespan: this.standardZoneConfig.timeWindows[0]!, // Default to shortest window
-                boundaries: { min: minPrice, max: maxPrice },
+                boundaries: { min: minPrice, max: adjustedMaxPrice },
                 lastUpdate: timestamp,
                 volumeWeightedPrice,
                 tradeHistory: new CircularBuffer<ZoneTradeRecord>(

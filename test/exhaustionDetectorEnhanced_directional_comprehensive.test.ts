@@ -590,14 +590,15 @@ describe("ExhaustionDetectorEnhanced - Directional Passive Volume Logic", () => 
             expect(mockLogger.error).not.toHaveBeenCalled();
         });
 
-        it("should validate trade quantity against minAggVolume threshold", () => {
-            // SCENARIO: Trade below minimum aggregation volume
+        it("should validate accumulated aggressive volume against minAggVolume threshold", () => {
+            // SCENARIO: Zone with insufficient accumulated aggressive volume
+            // CORRECTED: minAggVolume is about zone volume, not individual trade size
 
             const currentTime = Date.now();
-            const smallTradeEvent: EnrichedTradeEvent = {
+            const lowZoneVolumeEvent: EnrichedTradeEvent = {
                 symbol: "LTCUSDT",
                 price: BASE_PRICE,
-                quantity: 15, // Below minAggVolume (25)
+                quantity: 50, // Trade size doesn't matter for exhaustion
                 timestamp: currentTime,
                 buyerIsMaker: false,
                 tradeId: 12351,
@@ -608,12 +609,12 @@ describe("ExhaustionDetectorEnhanced - Directional Passive Volume Logic", () => 
                         {
                             zoneId: "zone1",
                             priceLevel: BASE_PRICE,
-                            aggressiveVolume: 60, // High exhaustion
+                            aggressiveVolume: 20, // Below minAggVolume (25) - insufficient to indicate exhaustion
                             passiveVolume: 8,
-                            passiveAskVolume: 3, // Very low
+                            passiveAskVolume: 3, // Low ask liquidity
                             passiveBidVolume: 25,
-                            aggressiveBuyVolume: 35,
-                            aggressiveSellVolume: 25,
+                            aggressiveBuyVolume: 12,
+                            aggressiveSellVolume: 8,
                             lastUpdate: currentTime - 20000,
                             tradeCount: 4,
                         },
@@ -623,26 +624,26 @@ describe("ExhaustionDetectorEnhanced - Directional Passive Volume Logic", () => 
 
             mockPreprocessor.findZonesNearPrice = vi
                 .fn()
-                .mockReturnValue([smallTradeEvent.zoneData!.zones[0]]);
+                .mockReturnValue([lowZoneVolumeEvent.zoneData!.zones[0]]);
 
             let emittedSignal: SignalCandidate | null = null;
             detector.on("signalCandidate", (signal: SignalCandidate) => {
                 emittedSignal = signal;
             });
 
-            detector.onEnrichedTrade(smallTradeEvent);
+            detector.onEnrichedTrade(lowZoneVolumeEvent);
 
-            // VALIDATION: Should reject due to insufficient trade size
+            // VALIDATION: Should reject due to insufficient accumulated aggressive volume in zones
             expect(emittedSignal).toBeNull();
 
             // Verify rejection logged with correct reason
             expect(mockValidationLogger.logRejection).toHaveBeenCalledWith(
                 "exhaustion",
-                "trade_quantity_too_small",
-                smallTradeEvent,
+                "accumulated_aggressive_volume_too_low",
+                lowZoneVolumeEvent,
                 expect.objectContaining({
                     threshold: testSettings.minAggVolume,
-                    actual: 15,
+                    actual: 20, // Matches the zone's aggressive volume
                 }),
                 expect.any(Object)
             );
