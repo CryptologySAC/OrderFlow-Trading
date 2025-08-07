@@ -22,6 +22,10 @@ import { Detector } from "./base/detectorEnrichedTrade.js";
 import { FinancialMath } from "../utils/financialMath.js";
 import { Config } from "../core/config.js";
 import { SignalValidationLogger } from "../utils/signalValidationLogger.js";
+import {
+    ExhaustionZoneTracker,
+    type ZoneTrackerConfig,
+} from "./helpers/exhaustionZoneTracker.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
@@ -98,6 +102,10 @@ export class ExhaustionDetectorEnhanced extends Detector {
     private readonly variancePenaltyFactor: number;
     private readonly ratioBalanceCenterPoint: number;
 
+    // Dynamic zone tracking for true exhaustion detection
+    private readonly zoneTracker: ExhaustionZoneTracker;
+    private readonly enableDynamicZoneTracking: boolean;
+
     constructor(
         id: string,
         settings: ExhaustionEnhancedSettings,
@@ -144,6 +152,20 @@ export class ExhaustionDetectorEnhanced extends Detector {
             totalConfidenceBoost: 0,
             enhancementSuccessRate: 0,
         };
+
+        // Initialize dynamic zone tracker for true exhaustion detection
+        this.enableDynamicZoneTracking = settings.enableDynamicZoneTracking;
+        const zoneTrackerConfig: ZoneTrackerConfig = {
+            maxZonesPerSide: settings.maxZonesPerSide,
+            historyWindowMs: Config.getTimeWindow(settings.timeWindowIndex),
+            depletionThreshold: settings.zoneDepletionThreshold,
+            minPeakVolume: settings.minAggVolume,
+            gapDetectionTicks: settings.gapDetectionTicks,
+        };
+        this.zoneTracker = new ExhaustionZoneTracker(
+            zoneTrackerConfig,
+            Config.TICK_SIZE
+        );
 
         this.logger.info("ExhaustionDetectorEnhanced initialized", {
             detectorId: this.getId(),
@@ -862,6 +884,45 @@ export class ExhaustionDetectorEnhanced extends Detector {
         depletionRatio: number;
         affectedZones: number;
     } {
+        // If dynamic zone tracking is enabled, use the new tracker
+        if (this.enableDynamicZoneTracking) {
+            // Update zone tracker with current zones
+            if (event.bestBid && event.bestAsk) {
+                this.zoneTracker.updateSpread(event.bestBid, event.bestAsk);
+            }
+
+            // Update zones in tracker
+            for (const zone of zoneData.zones) {
+                this.zoneTracker.updateZone(zone, event.timestamp);
+            }
+
+            // Analyze exhaustion pattern
+            const isBuyTrade = !event.buyerIsMaker;
+            const exhaustionPattern =
+                this.zoneTracker.analyzeExhaustion(isBuyTrade);
+
+            // Log detailed exhaustion analysis if significant pattern detected
+            if (exhaustionPattern.hasExhaustion) {
+                this.logger.info("Dynamic zone tracking detected exhaustion", {
+                    exhaustionType: exhaustionPattern.exhaustionType,
+                    depletionRatio: exhaustionPattern.depletionRatio,
+                    depletionVelocity: exhaustionPattern.depletionVelocity,
+                    affectedZones: exhaustionPattern.affectedZones,
+                    confidence: exhaustionPattern.confidence,
+                    gapCreated: exhaustionPattern.gapCreated,
+                    price: event.price,
+                    timestamp: event.timestamp,
+                });
+            }
+
+            return {
+                hasDepletion: exhaustionPattern.hasExhaustion,
+                depletionRatio: exhaustionPattern.depletionRatio,
+                affectedZones: exhaustionPattern.affectedZones,
+            };
+        }
+
+        // Fallback to original logic if dynamic tracking is disabled
         const depletionThreshold =
             this.enhancementConfig.depletionVolumeThreshold;
         const minRatio = this.enhancementConfig.depletionRatioThreshold;
@@ -910,6 +971,15 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 affectedZones++;
             }
         });
+
+        // VALIDATION: Check if directional passive volume exists (cannot exhaust non-existent liquidity)
+        if (totalDirectionalPassiveVolume === 0) {
+            return {
+                hasDepletion: false,
+                depletionRatio: 0,
+                affectedZones: 0,
+            };
+        }
 
         const totalVolume =
             totalDirectionalPassiveVolume + totalAggressiveVolume;
@@ -1673,11 +1743,15 @@ export class ExhaustionDetectorEnhanced extends Detector {
         // Clean up validation logger
         this.validationLogger.cleanup();
 
+        // Clear zone tracker
+        this.zoneTracker.clear();
+
         this.logger.info(
             "ExhaustionDetectorEnhanced: Enhanced cleanup completed",
             {
                 detectorId: this.getId(),
                 enhancementStats: this.enhancementStats,
+                zoneTrackerStats: this.zoneTracker.getStats(),
             }
         );
     }

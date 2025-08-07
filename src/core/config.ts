@@ -131,6 +131,12 @@ export const ExhaustionDetectorSchema = z.object({
     enableDepletionAnalysis: z.boolean(),
     depletionConfidenceBoost: z.number().min(0.05).max(0.3),
 
+    // Dynamic zone tracking for true exhaustion detection
+    enableDynamicZoneTracking: z.boolean(),
+    maxZonesPerSide: z.number().int().min(1).max(10),
+    zoneDepletionThreshold: z.number().min(0.5).max(0.95),
+    gapDetectionTicks: z.number().int().min(1).max(10),
+
     // Cross-timeframe calculations
     varianceReductionFactor: z.number().min(0.5).max(3.0),
     alignmentNormalizationFactor: z.number().min(0.2).max(3.0),
