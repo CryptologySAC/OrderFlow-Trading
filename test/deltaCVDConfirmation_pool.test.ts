@@ -95,7 +95,7 @@ describe("DeltaCVD Standalone Detector - Core Functionality", () => {
 
         // 🚫 NUCLEAR CLEANUP: Use complete mock config settings instead of empty object
         const mockSignalLogger = createMockSignalLogger();
-        
+
         detector = new DeltaCVDDetectorEnhanced(
             "test-cvd",
             mockConfig.symbols.LTCUSDT.deltaCVD,

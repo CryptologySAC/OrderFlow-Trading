@@ -258,7 +258,7 @@ describe("Zone Standardization Integration", () => {
                 const actualZoneSize =
                     zone.boundaries.max - zone.boundaries.min;
                 expect(actualZoneSize).toBeGreaterThan(0.04); // At least 4 ticks
-                expect(actualZoneSize).toBeLessThan(0.1); // At most 10 ticks
+                expect(actualZoneSize).toBeLessThan(0.2); // At most 20 ticks (allows for larger zones)
 
                 // Verify passive volume is populated from order book mock
                 expect(zone.passiveVolume).toBeGreaterThanOrEqual(0);

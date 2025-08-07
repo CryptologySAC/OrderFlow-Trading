@@ -146,7 +146,6 @@ This strategy combines 5 institutional-grade order flow detectors to identify lo
 #### 🔴 Strongest Combinations (90%+ confidence)
 
 1. **Distribution + Exhaustion + Absorption + Negative CVD**
-
     - All 4 bearish signals align
     - Institutional distribution confirmed
     - Immediate reversal expected
@@ -159,12 +158,10 @@ This strategy combines 5 institutional-grade order flow detectors to identify lo
 #### 🟡 Strong Combinations (75-85% confidence)
 
 1. **Distribution + Exhaustion**
-
     - Selling pressure building
     - Buyer momentum depleting
 
 2. **Absorption + Negative CVD**
-
     - Resistance holding firm
     - Hidden selling confirmed
 
@@ -176,7 +173,6 @@ This strategy combines 5 institutional-grade order flow detectors to identify lo
 #### 🟢 Strongest Combinations (90%+ confidence)
 
 1. **Accumulation + Exhaustion + Absorption + Positive CVD**
-
     - All 4 bullish signals align
     - Institutional accumulation confirmed
     - Immediate reversal expected
@@ -189,12 +185,10 @@ This strategy combines 5 institutional-grade order flow detectors to identify lo
 #### 🟡 Strong Combinations (75-85% confidence)
 
 1. **Accumulation + Exhaustion**
-
     - Buying pressure building
     - Seller momentum depleting
 
 2. **Absorption + Positive CVD**
-
     - Support holding firm
     - Hidden buying confirmed
 
@@ -326,13 +320,11 @@ This strategy combines 5 institutional-grade order flow detectors to identify lo
 Track these metrics to optimize strategy:
 
 1. **Hit Rate by Detector Count**
-
     - 2 detectors: 65-70%
     - 3 detectors: 75-80%
     - 4 detectors: 85-90%
 
 2. **Average Time to Target**
-
     - Local highs: 35-40 minutes
     - Local lows: 40-45 minutes
 
@@ -427,13 +419,11 @@ Avoid trades when:
 ### Common Issues
 
 1. **Too Many False Signals**
-
     - Increase minimum detector count to 3
     - Tighten confidence thresholds
     - Extend cooldown periods
 
 2. **Missing Good Trades**
-
     - Review detector sensitivity
     - Check zone configuration
     - Analyze missed confluences

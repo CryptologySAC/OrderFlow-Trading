@@ -102,7 +102,7 @@ describe("DeltaCVDDetectorEnhanced single window CVD analysis", () => {
         mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
         const mockSignalLogger = createMockSignalLogger();
-        
+
         detector = new DeltaCVDDetectorEnhanced(
             "cvd_single_window",
             {

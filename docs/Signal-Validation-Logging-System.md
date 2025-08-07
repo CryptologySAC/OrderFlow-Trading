@@ -27,14 +27,12 @@ The Signal Validation Logging System is a comprehensive performance tracking and
 ### Core Components
 
 1. **SignalValidationLogger** (`src/utils/signalValidationLogger.ts`)
-
     - Central logging coordinator for all signal validation activities
     - CSV file output for analysis and ML training
     - Time-based validation tracking (5min, 15min, 1hr windows)
     - Automatic cleanup and memory management
 
 2. **Enhanced Detector Integration**
-
     - **AbsorptionDetectorEnhanced**: Comprehensive absorption signal validation
     - **ExhaustionDetectorEnhanced**: Exhaustion pattern validation tracking
     - Real-time rejection logging with detailed context

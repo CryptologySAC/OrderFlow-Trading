@@ -77,6 +77,15 @@ vi.mock("../src/core/config.js", async (importOriginal) => {
                     maxCorrelationBound: 0.999,
                 };
             },
+            get STANDARD_ZONE_CONFIG() {
+                return {
+                    timeWindows: [300000, 900000, 1800000], // 5min, 15min, 30min
+                };
+            },
+            getTimeWindow(timeWindowIndex: number): number {
+                const timeWindows = [300000, 900000, 1800000]; // 5min, 15min, 30min
+                return timeWindows[timeWindowIndex] || 300000; // Default to 5min
+            },
         },
     };
 });

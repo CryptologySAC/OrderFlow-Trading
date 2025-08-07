@@ -241,6 +241,11 @@
                 "depletionRatioThreshold": -0.6,
                 "depletionConfidenceBoost": 0.2,
 
+                "enableDynamicZoneTracking": true,
+                "maxZonesPerSide": 5,
+                "zoneDepletionThreshold": 0.7,
+                "gapDetectionTicks": 3,
+
                 "passiveVolumeExhaustionRatio": 1.0,
 
                 "varianceReductionFactor": 1.0,

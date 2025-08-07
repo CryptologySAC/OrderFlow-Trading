@@ -41,7 +41,8 @@ export class CircularBuffer<T> implements Iterable<T> {
         const start = this.size < this.capacity ? 0 : this.head;
         for (let i = 0; i < this.size; i++) {
             const index = (start + i) % this.capacity;
-            if (index > 0 && index < this.capacity) {
+            // CRITICAL FIX: Include index 0 - was excluding first element!
+            if (index >= 0 && index < this.capacity) {
                 result.push(this.buffer[index]!);
             }
         }

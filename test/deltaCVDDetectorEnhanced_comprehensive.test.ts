@@ -47,7 +47,7 @@ const mockSignalLogger = createMockSignalLogger();
 const BASE_PRICE = 85.0;
 const TICK_SIZE = 0.01; // $10-$100 range tick size
 
-// Valid DeltaCVD settings for simplified detector (7 parameters only)
+// Valid DeltaCVD settings for simplified detector (8 parameters total)
 function createValidDeltaCVDSettings(overrides: any = {}) {
     return {
         // Core CVD analysis parameters (match DeltaCVDDetectorSchema exactly)
@@ -64,6 +64,9 @@ function createValidDeltaCVDSettings(overrides: any = {}) {
 
         // CVD divergence analysis
         cvdImbalanceThreshold: 0.3,
+
+        // Institutional trade threshold - set high to allow small test trades
+        institutionalThreshold: 50.0, // 50 LTC allows test trades (0.5-2.5 LTC) to pass
         ...overrides,
     };
 }
@@ -1683,6 +1686,7 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
                 setupDetector({
                     cvdDivergenceVolumeThreshold: 15, // Reduced threshold
                     signalThreshold: 0.25, // Reduced threshold
+                    institutionalThreshold: 500.0, // High threshold to allow large rapid movement trades
                 });
 
                 // Generate MUCH stronger rapid price movement pattern
@@ -1791,6 +1795,7 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
                 setupDetector({
                     minVolPerSec: 30,
                     cvdDivergenceScoreMultiplier: 2.5,
+                    institutionalThreshold: 2000.0, // Very high threshold to allow whale order testing
                 });
 
                 // Generate large order impact pattern with massive volume
@@ -1900,6 +1905,7 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
                 setupDetector({
                     minTradesPerSec: 2.0, // Reduced for realistic signal generation
                     minVolPerSec: 12, // Reduced for realistic signal generation
+                    institutionalThreshold: 300.0, // High threshold for high-frequency large trades
                 });
 
                 // Generate extreme high-frequency pattern with massive volume

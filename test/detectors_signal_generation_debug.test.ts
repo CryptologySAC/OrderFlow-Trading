@@ -383,7 +383,10 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
         mockSignalLogger = createMockSignalLogger();
         mockOrderBook = createMockOrderBookState();
         mockPreprocessor = createMockPreprocessor();
-        mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
+        mockSignalValidationLogger = new SignalValidationLogger(
+            mockLogger,
+            "test-logs"
+        );
         realConfig = loadRealConfig();
         realMarketData = createRealMarketData();
 
@@ -407,9 +410,9 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 settings,
                 mockPreprocessor,
                 mockLogger,
-                mockSpoofing,
                 mockMetrics,
-                mockSignalLogger
+                mockSignalLogger,
+                mockSignalValidationLogger
             );
 
             // Verify actual parameters match config
@@ -451,9 +454,9 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 settings,
                 mockPreprocessor,
                 mockLogger,
-                mockSpoofing,
                 mockMetrics,
-                mockSignalLogger
+                mockSignalLogger,
+                mockSignalValidationLogger
             );
 
             let signalCount = 0;
@@ -913,9 +916,9 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 completeExhaustionSettings,
                 mockPreprocessor,
                 mockLogger,
-                mockSpoofing,
                 mockMetrics,
-                mockSignalLogger
+                mockSignalLogger,
+                mockSignalValidationLogger
             );
 
             const absorptionDetector = new AbsorptionDetectorEnhanced(

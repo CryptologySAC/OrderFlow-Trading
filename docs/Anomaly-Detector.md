@@ -36,7 +36,6 @@ Examples include:
 - **Processes every enriched trade and best quote update.**
 - **Maintains rolling histories of trades, order sizes, and depth.**
 - **Runs multi-factor statistical and microstructure anomaly checks:**
-
     - Flash crash
     - Liquidity void
     - API gap/data loss
@@ -172,13 +171,11 @@ Each parameter directly tunes the detector’s statistical or microstructure fil
 1. **Every trade and order book update is pushed into rolling windows.**
 2. **Statistical and microstructure features (mean, stddev, quantiles, imbalance, etc.) are computed.**
 3. **Each new event runs the anomaly check pipeline, in order:**
-
     - Flash crash, liquidity void, API gap, volatility spike
     - Book/flow imbalance, absorption, exhaustion
     - Whale activity, iceberg detection, spoofing, order size anomaly, momentum ignition
 
 4. **If an anomaly is detected:**
-
     - Emits `"anomaly"` event (global and symbol-specific).
     - Includes severity, affected price range, recommended action, and rationale.
     - Deduplicates events (per type) within the cooldown interval.

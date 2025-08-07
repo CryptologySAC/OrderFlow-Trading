@@ -1,7 +1,7 @@
 {
     "name": "orderflow-trading",
     "type": "module",
-    "version": "0.5",
+    "version": "0.2",
     "license": "MIT",
     "author": "Cryptology",
     "description": "Cryptology OrderFlow Trading",
@@ -18,18 +18,29 @@
     "scripts": {
         "start": "bin/app",
         "start:dev": "NODE_ENV=development bin/app",
+        "rebuild": "yarn build && yarn start:dev",
+        "build:watch": "yarn clean && yarn compile -w",
+        "check": "yarn lint && yarn build && yarn test",
         "clean": "rm -r dist",
+        "compile": "yarn format && tsc --noEmit",
         "format": "yarn prettier && yarn lint",
+        "format:check": "prettier --check './**/*.{ts,tsx,js,json,css,html,md}'",
         "lint": "eslint \"src/**/*.{ts,tsx}\" --fix",
-        "prettier": "npx prettier --write './**/*.{ts,tsx,js,json,css,html,md}'",
+        "prettier": "prettier --write './**/*.{ts,tsx,js,json,css,html,md}'",
+        "setup": "yarn && yarn clean && yarn build",
+        "deps:missing": "node ./scripts/deps/missing.js",
         "updates": "npx npm-check-updates",
         "update": "npx npm-check-updates -u",
-        "build": "yarn format && tsc -p tsconfig.build.json",
+        "prepare": "husky",
+        "build": "yarn check && yarn format && tsc -p tsconfig.build.json",
         "test": "vitest --run",
         "test:coverage": "vitest run --coverage",
-        "check:deps": "yarn install --check-cache",
-        "typecheck": "tsc --noEmit",
-        "build:watch": "tsc -p tsconfig.build.json --watch"
+        "test:deltacvd-ab": "tsx scripts/runDeltaCVDABTest.ts",
+        "test:deltacvd-ab:all": "tsx scripts/runDeltaCVDABTest.ts --profile all --parallel",
+        "dev": "ts-node --transpile-only src/index.ts",
+        "backtest": "node --max-old-space-size=8192 --expose-gc --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"));' scripts/runBacktest.ts",
+        "protect-production": "echo 'Files protected from automated modification'",
+        "validate-protection": "grep -l 'PRODUCTION-READY' src/indicators/*.ts"
     },
     "devDependencies": {
         "@types/better-sqlite3": "7.6.13",
@@ -50,6 +61,8 @@
         "ts-node": "^10.9.2",
         "typescript": "^5.9.2",
         "vitest": "^3.2.4"
+    },
+    "resolutions": {
     },
     "lint-staged": {
         "*.{ts,tsx,js,json,css,html,md}": "prettier --write"
@@ -81,6 +94,5 @@
         "ulid": "^3.0.1",
         "ws": "^8.18.3",
         "zod": "^3.25.57"
-    },
-    "packageManager": "yarn@4.9.2"
+    }
 }

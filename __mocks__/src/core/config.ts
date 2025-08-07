@@ -177,6 +177,10 @@ const mockExhaustionConfig = {
     depletionRatioThreshold: 0.05, // Very low threshold for testing (5%)
     depletionConfidenceBoost: 0.15,
     passiveVolumeExhaustionRatio: 0.4,
+    enableDynamicZoneTracking: true,
+    maxZonesPerSide: 5,
+    zoneDepletionThreshold: 0.7,
+    gapDetectionTicks: 3,
     varianceReductionFactor: 1.0,
     alignmentNormalizationFactor: 0.4,
     passiveRatioBalanceThreshold: 0.5,

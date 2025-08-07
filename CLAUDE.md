@@ -136,7 +136,6 @@ Binance WebSocket → OrderFlowPreprocessor → Pattern Detectors → SignalCoor
 **TWO PATHS MUST RUN SIMULTANEOUSLY:**
 
 1. **BinanceWorker (WebSocket Stream)**: Real-time live data
-
     - Processes live trade/depth data from WebSocket API
     - **MUST store stream data to database** to prevent gaps
     - Runs in dedicated worker thread

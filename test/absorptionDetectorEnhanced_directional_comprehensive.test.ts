@@ -58,7 +58,7 @@ const mockMetrics: IMetricsCollector = {
     getLatencyPercentiles: vi.fn(() => ({ p50: 0, p95: 0, p99: 0 })),
     exportPrometheus: vi.fn(() => ""),
     exportJSON: vi.fn(() => "{}"),
-    getHealthSummary: vi.fn(() => ({ status: "healthy" } as any)),
+    getHealthSummary: vi.fn(() => ({ status: "healthy" }) as any),
     reset: vi.fn(),
     cleanup: vi.fn(),
 };
@@ -799,6 +799,14 @@ describe("AbsorptionDetectorEnhanced - Directional Passive Volume Tests", () => 
                 emittedSignals[0],
                 trade,
                 expect.objectContaining({
+                    // AbsorptionCalculatedValues - all calculated thresholds and parameters
+                    calculatedMinAggVolume: expect.any(Number),
+                    calculatedMinPassiveMultiplier: expect.any(Number),
+                    calculatedFinalConfidenceRequired: expect.any(Number),
+                    calculatedPriceEfficiencyThreshold: expect.any(Number),
+                }),
+                expect.objectContaining({
+                    // Market context object
                     totalAggressiveVolume: expect.any(Number),
                     totalPassiveVolume: expect.any(Number),
                     institutionalVolumeRatio: expect.any(Number),

@@ -436,17 +436,14 @@ const wsManager = new WebSocketManager(
 ### Common Issues
 
 1. **Worker Thread Isolation Violations**
-
     - **Symptom**: Direct infrastructure imports in workers
     - **Solution**: Use shared proxy implementations only
 
 2. **Message Routing Failures**
-
     - **Symptom**: Messages not reaching intended handlers
     - **Solution**: Verify message type registration in ThreadManager
 
 3. **Performance Degradation**
-
     - **Symptom**: High IPC overhead
     - **Solution**: Check batching intervals and queue sizes
 

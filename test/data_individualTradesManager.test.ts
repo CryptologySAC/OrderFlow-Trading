@@ -126,8 +126,8 @@ describe("data/IndividualTradesManager", () => {
         });
 
         it("should return true for large orders above percentile", () => {
-            // Build up trade size history
-            for (let i = 0; i < 100; i++) {
+            // Build up trade size history (need at least 500 for statistical significance)
+            for (let i = 0; i < 600; i++) {
                 const trade: AggTradeEvent = {
                     price: 100,
                     quantity: 10 + i * 0.1, // Gradually increasing sizes
