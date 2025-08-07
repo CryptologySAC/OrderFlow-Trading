@@ -1,0 +1,5 @@
+---
+description: read CLAUDE.md
+globs: before changing code read the CLAUDE.md in the current folder; or nearest folder in the tree above current folder
+alwaysApply: true
+---
