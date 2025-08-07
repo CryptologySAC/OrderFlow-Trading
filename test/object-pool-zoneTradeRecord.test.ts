@@ -51,7 +51,7 @@ describe("ZoneTradeRecord Object Pooling", () => {
 
     it("should integrate with CircularBuffer cleanup callback", () => {
         const initialPoolSize = pools.getStats().zoneTradeRecords;
-        
+
         // Create circular buffer with cleanup callback
         const buffer = new CircularBuffer<ZoneTradeRecord>(
             3, // Small capacity to trigger eviction
@@ -89,7 +89,7 @@ describe("ZoneTradeRecord Object Pooling", () => {
             record.timestamp = Date.now() + i;
             record.tradeId = `hf_trade_${i}`;
             record.buyerIsMaker = i % 2 === 0;
-            
+
             records.push(record);
         }
 
@@ -97,7 +97,7 @@ describe("ZoneTradeRecord Object Pooling", () => {
         expect(pools.getStats().zoneTradeRecords).toBeLessThanOrEqual(100);
 
         // Release all records back
-        records.forEach(record => pools.zoneTradeRecords.release(record));
+        records.forEach((record) => pools.zoneTradeRecords.release(record));
 
         // Pool should be at maximum capacity (1000 from config)
         expect(pools.getStats().zoneTradeRecords).toBe(1000);
@@ -105,7 +105,7 @@ describe("ZoneTradeRecord Object Pooling", () => {
 
     it("should prevent pool overflow beyond max capacity", () => {
         const maxCapacity = 1000;
-        
+
         // Fill pool beyond capacity
         const records: ZoneTradeRecord[] = [];
         for (let i = 0; i < maxCapacity + 500; i++) {
@@ -114,7 +114,7 @@ describe("ZoneTradeRecord Object Pooling", () => {
         }
 
         // Release all back to pool
-        records.forEach(record => pools.zoneTradeRecords.release(record));
+        records.forEach((record) => pools.zoneTradeRecords.release(record));
 
         // Pool should not exceed max capacity
         const finalPoolSize = pools.getStats().zoneTradeRecords;

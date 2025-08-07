@@ -51,6 +51,7 @@ const subTickMovement = 0.0001; // Sub-tick for wrong price range
 ```
 
 **Why This Exception Exists:**
+
 - **Test Clarity**: Explicit values make test expectations clear
 - **Determinism**: Hardcoded values ensure consistent test results
 - **Debugging**: Known values easier to debug when tests fail
@@ -78,8 +79,8 @@ const subTickMovement = 0.0001; // Sub-tick for wrong price range
 
 ```typescript
 // ✅ CORRECT: Use structured mocks
-import { mockLogger } from '../__mocks__/infrastructure/logger.js';
-import { mockStorage } from '../__mocks__/storage/storage.js';
+import { mockLogger } from "../__mocks__/infrastructure/logger.js";
+import { mockStorage } from "../__mocks__/storage/storage.js";
 
 // ❌ WRONG: Inline mocks
 const mockLogger = vi.fn();
@@ -128,10 +129,10 @@ const expectedMidPrice = (89.42 + 89.44) / 2; // Can cause precision errors
 // ✅ CORRECT: Tick-compliant test data
 const basePrice = 89.0; // Price ~$89 (in $10-$100 range)
 const validTick = 0.01; // Correct tick size
-const testPrices = [89.00, 89.01, 89.02]; // Valid price sequence
+const testPrices = [89.0, 89.01, 89.02]; // Valid price sequence
 
 // ❌ PROHIBITED: Invalid tick movements in tests
-const invalidPrices = [89.000, 89.0005, 89.001]; // Sub-tick movements
+const invalidPrices = [89.0, 89.0005, 89.001]; // Sub-tick movements
 ```
 
 ## 🧵 WORKER THREAD TESTING (CRITICAL)
@@ -193,7 +194,7 @@ const mockLogger = vi.mocked(Logger);
 
 ```typescript
 // ✅ CORRECT: Test Buffer message handling
-const testMessage = Buffer.from(JSON.stringify({ type: 'test' }), 'utf8');
+const testMessage = Buffer.from(JSON.stringify({ type: "test" }), "utf8");
 await websocketHandler.handleMessage(mockWs, testMessage);
 ```
 
@@ -235,11 +236,11 @@ await websocketHandler.handleMessage(mockWs, testMessage);
 // ✅ CORRECT: Realistic test trade data
 const createTestTrade = (price: number, quantity: number): TradeEvent => ({
     id: generateTradeId(),
-    symbol: 'BTCUSDT',
+    symbol: "BTCUSDT",
     price: FinancialMath.roundToTick(price, 0.01),
     quantity: FinancialMath.roundToTick(quantity, 0.001),
     timestamp: Date.now(),
-    isBuyerMaker: Math.random() > 0.5
+    isBuyerMaker: Math.random() > 0.5,
 });
 ```
 
@@ -298,15 +299,15 @@ const createTestTrade = (price: number, quantity: number): TradeEvent => ({
 
 ```typescript
 // ✅ CORRECT: Add debugging information
-test('should calculate absorption correctly', () => {
+test("should calculate absorption correctly", () => {
     const trades = createTestTrades();
     const result = detector.calculate(trades);
-    
+
     // Add debugging context
-    console.log('Test trades:', trades.length);
-    console.log('Calculated result:', result);
-    console.log('Expected result:', expectedResult);
-    
+    console.log("Test trades:", trades.length);
+    console.log("Calculated result:", result);
+    console.log("Expected result:", expectedResult);
+
     expect(result).toBeCloseTo(expectedResult, 6);
 });
 ```
@@ -352,7 +353,7 @@ test('should calculate absorption correctly', () => {
 
 1. **ASSESS REQUIREMENTS**: "Testing [X] behavior with [Y] test scenarios"
 2. **VALIDATE TEST APPROACH**: "Tests will verify correct behavior by [method]"
-3. **CHECK MOCK USAGE**: "Using structured mocks from __mocks__/ directory"
+3. **CHECK MOCK USAGE**: "Using structured mocks from **mocks**/ directory"
 4. **CONFIRM COVERAGE**: "Tests cover [scenarios] with >95% coverage"
 5. **VERIFY REALISM**: "Test data uses realistic market conditions"
 
@@ -360,7 +361,7 @@ test('should calculate absorption correctly', () => {
 
 - [ ] Tests detect bugs in implementation
 - [ ] Test data is realistic and market-compliant
-- [ ] Mocks are properly structured in __mocks__/
+- [ ] Mocks are properly structured in **mocks**/
 - [ ] All async operations properly handled
 - [ ] Performance requirements met (<100ms per test)
 - [ ] No flaky or non-deterministic behavior

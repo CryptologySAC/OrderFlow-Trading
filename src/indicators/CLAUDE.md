@@ -15,7 +15,7 @@ Do not guess, NEVER guess; all calculations are based on mathematical logic; if 
 All files in `src/indicators/*/` are **PRODUCTION-CRITICAL** pattern detection algorithms that directly impact trading decisions. Any modification requires:
 
 1. **Risk Assessment**: Evaluate trading operation impact
-2. **Signal Quality Analysis**: Impact on false positive/negative rates  
+2. **Signal Quality Analysis**: Impact on false positive/negative rates
 3. **Performance Benchmarking**: Sub-millisecond latency maintenance
 4. **Comprehensive Testing**: >95% coverage, all tests MUST pass
 5. **User Approval**: Explicit approval for any detector changes
@@ -97,7 +97,7 @@ const windowMs = this.config.windowMs;
 ### Why FinancialMath is Required for Detectors
 
 - **Signal Accuracy**: Eliminates floating-point errors in price/volume calculations
-- **Trading Precision**: Ensures accurate signal threshold calculations  
+- **Trading Precision**: Ensures accurate signal threshold calculations
 - **Regulatory Compliance**: Meets institutional-grade calculation precision
 - **Data Integrity**: Prevents calculation error accumulation in real-time processing
 - **Signal Reliability**: Consistent calculations across all detector implementations
@@ -108,8 +108,16 @@ const windowMs = this.config.windowMs;
 // ✅ REQUIRED: Use FinancialMath for all detector calculations
 const midPrice = FinancialMath.calculateMidPrice(bid, ask, this.precision);
 const spread = FinancialMath.calculateSpread(ask, bid, this.precision);
-const volumeRatio = FinancialMath.calculateRatio(aggressiveVol, passiveVol, this.precision);
-const priceEfficiency = FinancialMath.calculateRatio(priceMove, expectedMove, this.precision);
+const volumeRatio = FinancialMath.calculateRatio(
+    aggressiveVol,
+    passiveVol,
+    this.precision
+);
+const priceEfficiency = FinancialMath.calculateRatio(
+    priceMove,
+    expectedMove,
+    this.precision
+);
 const imbalanceMetric = FinancialMath.calculateMean(imbalanceValues);
 const confidence = FinancialMath.calculateStdDev(confidenceValues);
 
@@ -127,7 +135,7 @@ const mean = values.reduce((a, b) => a + b) / values.length; // ACCUMULATION ERR
 **TICK SIZE RULES FOR DETECTORS:**
 
 - **Price < $1**: Minimum tick = 0.0001
-- **$1 ≤ Price < $10**: Minimum tick = 0.001  
+- **$1 ≤ Price < $10**: Minimum tick = 0.001
 - **$10 ≤ Price < $100**: Minimum tick = 0.01
 - **$100 ≤ Price < $1000**: Minimum tick = 0.1
 - **Price ≥ $1000**: Minimum tick = 1.0
@@ -136,7 +144,7 @@ const mean = values.reduce((a, b) => a + b) / values.length; // ACCUMULATION ERR
 // ✅ CORRECT: Tick-compliant detector logic
 const basePrice = 89.0; // Price ~$89
 const tickSize = 0.01; // Correct tick for $10-$100 range
-const priceLevel = basePrice + (tickSize * this.config.zoneTicks); // Valid level
+const priceLevel = basePrice + tickSize * this.config.zoneTicks; // Valid level
 const supportLevel = FinancialMath.roundToTickSize(calculatedLevel, tickSize);
 
 // ❌ PROHIBITED: Sub-tick movements in detector calculations
@@ -182,8 +190,8 @@ export class ExampleEventDetector extends BaseDetector {
 
         // ✅ CORRECT: All calculations use FinancialMath
         const priceMove = FinancialMath.calculateSpread(
-            trade.price, 
-            this.previousPrice, 
+            trade.price,
+            this.previousPrice,
             this.precision
         );
 
@@ -194,15 +202,15 @@ export class ExampleEventDetector extends BaseDetector {
 
         // ✅ CORRECT: Tick-compliant price calculations
         const signalLevel = FinancialMath.roundToTickSize(
-            trade.price, 
+            trade.price,
             this.tickSize
         );
 
         return {
-            type: 'example_signal',
+            type: "example_signal",
             price: signalLevel,
             confidence: this.calculateConfidence(trade),
-            timestamp: trade.timestamp
+            timestamp: trade.timestamp,
         };
     }
 
@@ -235,7 +243,7 @@ For evolving processes across price ranges and time:
 ```typescript
 export class ExampleZoneDetector extends EventEmitter {
     private readonly zoneManager: ZoneManager;
-    
+
     constructor(
         private readonly config: ExampleZoneDetectorConfig,
         private readonly logger: ILogger,
@@ -250,15 +258,15 @@ export class ExampleZoneDetector extends EventEmitter {
         // ✅ CORRECT: All zone calculations use expanded boundaries
         const baseZoneSize = this.config.zoneTicks * this.tickSize;
         const expandedZoneSize = baseZoneSize * 1.5; // 50% expansion for trade capture
-        
+
         const zoneBounds = {
             minPrice: trade.price - expandedZoneSize / 2,
-            maxPrice: trade.price + expandedZoneSize / 2
+            maxPrice: trade.price + expandedZoneSize / 2,
         };
 
         // ✅ CORRECT: Use FinancialMath for volume calculations
         const volumeMetrics = this.calculateZoneVolume(trade, zoneBounds);
-        
+
         if (volumeMetrics === null) {
             return null; // Cannot analyze without valid volume data
         }
@@ -267,30 +275,32 @@ export class ExampleZoneDetector extends EventEmitter {
             zoneId: this.generateZoneId(trade.price),
             bounds: zoneBounds,
             metrics: volumeMetrics,
-            evolution: this.trackZoneEvolution(trade)
+            evolution: this.trackZoneEvolution(trade),
         };
     }
 
     private calculateZoneVolume(
-        trade: EnrichedTradeEvent, 
+        trade: EnrichedTradeEvent,
         bounds: ZoneBounds
     ): ZoneVolumeMetrics | null {
         // Filter trades within expanded zone boundaries
         const zoneTrades = this.getTradesInZone(bounds);
-        
+
         if (zoneTrades.length === 0) {
             return null; // No trades in zone
         }
 
         // ✅ CORRECT: All volume calculations use FinancialMath
-        const totalVolume = FinancialMath.sum(zoneTrades.map(t => t.volume));
-        const avgPrice = FinancialMath.calculateMean(zoneTrades.map(t => t.price));
-        
+        const totalVolume = FinancialMath.sum(zoneTrades.map((t) => t.volume));
+        const avgPrice = FinancialMath.calculateMean(
+            zoneTrades.map((t) => t.price)
+        );
+
         return {
             totalVolume,
             avgPrice,
             tradeCount: zoneTrades.length,
-            aggressiveRatio: this.calculateAggressiveRatio(zoneTrades)
+            aggressiveRatio: this.calculateAggressiveRatio(zoneTrades),
         };
     }
 }
@@ -315,6 +325,7 @@ export class ExampleZoneDetector extends EventEmitter {
 #### 2-Phase Hierarchical Optimization:
 
 **Phase 1: Core Parameters (Most Influential)**
+
 ```javascript
 // High sensitivity configuration for 0.7%+ detection
 {
@@ -325,8 +336,9 @@ export class ExampleZoneDetector extends EventEmitter {
 ```
 
 **Phase 2: Refinement Parameters (False Signal Filtering)**
+
 - **Absorption Quality**: `absorptionThreshold` (0.45-0.75), `minPassiveMultiplier` (1.1-1.8)
-- **Price Movement**: `priceEfficiencyThreshold` (0.01-0.025), `velocityIncreaseThreshold` (1.2-2.0)  
+- **Price Movement**: `priceEfficiencyThreshold` (0.01-0.025), `velocityIncreaseThreshold` (1.2-2.0)
 - **Signal Timing**: `eventCooldownMs` (5000-20000), `spreadImpactThreshold` (0.002-0.005)
 
 ### Zone Volume Aggregation Architecture (MANDATORY)
@@ -343,12 +355,15 @@ const maxPrice = zoneCenter + expandedZoneSize / 2;
 // ✅ VALIDATION: Zone must capture trades effectively
 const tradesInZone = this.filterTradesByPrice(trades, minPrice, maxPrice);
 if (tradesInZone.length === 0) {
-    this.logger.warn(`Zone at ${zoneCenter} captured no trades - boundaries may be too restrictive`);
+    this.logger.warn(
+        `Zone at ${zoneCenter} captured no trades - boundaries may be too restrictive`
+    );
     return null;
 }
 ```
 
 **VALIDATION METRICS:**
+
 - **Target**: `aggressiveVolume > 0, tradeCount > 0` (zone capturing trades)
 - **Anti-Pattern**: `aggressiveVolume: 0, tradeCount: 0` (empty zones indicate boundary issues)
 
@@ -368,7 +383,7 @@ if (efficiency === null) {
     return null; // Cannot proceed without valid calculation
 }
 
-// ✅ CORRECT: Early return when insufficient data  
+// ✅ CORRECT: Early return when insufficient data
 if (trades.length < this.config.minTradeCount) {
     return null; // Honest: cannot calculate with insufficient data
 }
@@ -393,7 +408,7 @@ if (!this.isDataQualitySufficient(marketData)) {
 
 - **ZERO `any` types** - Use precise detector-specific interfaces
 - **NEVER `unknown`** without type guards and validation
-- **ALL detector methods must have explicit return types** 
+- **ALL detector methods must have explicit return types**
 - **ALL parameters must have explicit types**
 - **Strict null checking enabled** - embrace `| null` return types
 - **No implicit returns** - always explicit signal/null returns
@@ -424,15 +439,15 @@ interface DetectorConfig {
     readonly minAggVolume: number;
     readonly absorptionThreshold: number;
     readonly windowMs: number;
-    
+
     // Performance parameters
     readonly maxProcessingTimeMs: number;
     readonly maxMemoryUsageMB: number;
-    
+
     // Quality parameters
     readonly minConfidenceLevel: number;
     readonly maxFalsePositiveRate: number;
-    
+
     // Market parameters
     readonly tickSize: number;
     readonly minSpreadBps: number;
@@ -459,7 +474,7 @@ const cachedVolumeData = this.volumeCache.get(timestamp);
 
 // ✅ CORRECT: Always use fresh data for signal generation
 const currentBid = this.orderBook.getBestBid();
-const currentSpread = this.orderBook.getSpread(); 
+const currentSpread = this.orderBook.getSpread();
 const realtimeVolume = this.tradeStream.getCurrentVolume();
 ```
 
@@ -476,7 +491,7 @@ const realtimeVolume = this.tradeStream.getCurrentVolume();
 ### Prohibited Detector Test Practices
 
 - ❌ Adjusting signal expectations to match broken detector logic
-- ❌ Adding randomness workarounds to mask detection failures  
+- ❌ Adding randomness workarounds to mask detection failures
 - ❌ Lowering confidence thresholds to hide calculation bugs
 - ❌ Using hardcoded test signals instead of validating real detector calculations
 - ❌ Writing tests that validate current detector behavior vs correct detector behavior
@@ -484,27 +499,27 @@ const realtimeVolume = this.tradeStream.getCurrentVolume();
 ### Required Detector Test Coverage
 
 ```typescript
-describe('ExampleDetector', () => {
+describe("ExampleDetector", () => {
     // ✅ REQUIRED: Configuration validation tests
-    it('should throw on invalid configuration', () => {
+    it("should throw on invalid configuration", () => {
         expect(() => new ExampleDetector(invalidConfig)).toThrow();
     });
 
-    // ✅ REQUIRED: Edge case handling tests  
-    it('should return null for insufficient data', () => {
+    // ✅ REQUIRED: Edge case handling tests
+    it("should return null for insufficient data", () => {
         const result = detector.detect(insufficientDataTrade);
         expect(result).toBeNull();
     });
 
     // ✅ REQUIRED: Signal quality tests
-    it('should generate valid signals for strong patterns', () => {
+    it("should generate valid signals for strong patterns", () => {
         const result = detector.detect(strongPatternTrade);
         expect(result).not.toBeNull();
         expect(result.confidence).toBeGreaterThan(0.7);
     });
 
     // ✅ REQUIRED: Performance tests
-    it('should process trades under 1ms', () => {
+    it("should process trades under 1ms", () => {
         const start = performance.now();
         detector.detect(testTrade);
         const duration = performance.now() - start;
@@ -512,9 +527,9 @@ describe('ExampleDetector', () => {
     });
 
     // ✅ REQUIRED: FinancialMath usage tests
-    it('should use FinancialMath for all calculations', () => {
+    it("should use FinancialMath for all calculations", () => {
         // Verify no direct floating-point arithmetic
-        const spy = jest.spyOn(FinancialMath, 'calculateRatio');
+        const spy = jest.spyOn(FinancialMath, "calculateRatio");
         detector.detect(testTrade);
         expect(spy).toHaveBeenCalled();
     });
@@ -536,7 +551,7 @@ export class DetectorWorker {
         // Use proxy implementations - never direct infrastructure
         this.logger = new WorkerProxyLogger("detector-worker");
         this.metrics = new WorkerMetricsProxy("detector-worker");
-        
+
         // Initialize detector with injected dependencies
         this.detector = new ExampleDetector(
             Config.EXAMPLE_DETECTOR,
@@ -548,27 +563,26 @@ export class DetectorWorker {
     public async processTradeEvent(trade: EnrichedTradeEvent): Promise<void> {
         try {
             const signal = this.detector.detect(trade);
-            
+
             if (signal !== null) {
                 // Emit signal via worker message passing
                 parentPort?.postMessage({
-                    type: 'detector_signal',
+                    type: "detector_signal",
                     data: signal,
-                    worker: 'detector-worker',
-                    correlationId: generateCorrelationId()
+                    worker: "detector-worker",
+                    correlationId: generateCorrelationId(),
                 });
-                
-                this.metrics.incrementMetric('signals_generated');
+
+                this.metrics.incrementMetric("signals_generated");
             }
-            
-            this.metrics.incrementMetric('trades_processed');
-            
+
+            this.metrics.incrementMetric("trades_processed");
         } catch (error) {
-            this.logger.error('Detector processing failed', { 
+            this.logger.error("Detector processing failed", {
                 error: error.message,
-                trade: trade.id 
+                trade: trade.id,
             });
-            this.metrics.incrementMetric('processing_errors');
+            this.metrics.incrementMetric("processing_errors");
         }
     }
 }
@@ -638,12 +652,12 @@ public emitSignal(signal: DetectorSignal): void {
 // ✅ REQUIRED: Configuration loading with validation
 export class DetectorConfigManager {
     public static loadDetectorConfig<T>(
-        detectorName: string, 
+        detectorName: string,
         schema: z.ZodSchema<T>
     ): T {
         const configPath = `symbols.LTCUSDT.detectors.${detectorName}`;
         const configData = get(CONFIG, configPath);
-        
+
         if (!configData) {
             console.error(`Missing detector configuration: ${configPath}`);
             process.exit(1); // MANDATORY: Exit on missing config
@@ -652,7 +666,10 @@ export class DetectorConfigManager {
         try {
             return schema.parse(configData);
         } catch (error) {
-            console.error(`Invalid detector configuration: ${configPath}`, error);
+            console.error(
+                `Invalid detector configuration: ${configPath}`,
+                error
+            );
             process.exit(1); // MANDATORY: Exit on invalid config
         }
     }
@@ -660,7 +677,7 @@ export class DetectorConfigManager {
 
 // ✅ USAGE: Load configuration with mandatory validation
 const config = DetectorConfigManager.loadDetectorConfig(
-    'absorption',
+    "absorption",
     AbsorptionDetectorSchema
 );
 ```
@@ -669,7 +686,7 @@ const config = DetectorConfigManager.loadDetectorConfig(
 
 - **ALL detector configs MUST use Zod schemas**
 - **Missing configuration MUST cause `process.exit(1)`**
-- **Invalid configuration MUST cause `process.exit(1)`**  
+- **Invalid configuration MUST cause `process.exit(1)`**
 - **NO optional configuration parameters** - all must be explicitly provided
 - **Configuration changes MUST be validated before deployment**
 
@@ -707,7 +724,7 @@ public collectPerformanceMetrics(): DetectorMetrics {
 ### Performance Monitoring Requirements
 
 - **Processing time MUST be tracked per trade**
-- **Memory usage MUST be monitored continuously**  
+- **Memory usage MUST be monitored continuously**
 - **Signal quality metrics MUST be collected**
 - **Error rates MUST be tracked and alerted**
 - **Performance degradation MUST trigger alerts**
@@ -729,14 +746,14 @@ public collectPerformanceMetrics(): DetectorMetrics {
 
 ### Detector Change Control Matrix
 
-| Change Type | Approval Required | Testing Required | Monitoring Period |
-|-------------|-------------------|------------------|-------------------|
-| Algorithm Logic | YES | Full Suite + Performance + Backtesting | 48 hours |
-| Configuration Schema | YES | Validation + Compatibility + Integration | 24 hours |
-| Signal Processing | YES | Unit + Integration + Stress | 24 hours |
-| Performance Optimization | NO | Unit + Performance Benchmarks | 12 hours |
-| Documentation | NO | None | None |
-| Tests | NO | Self-validation | None |
+| Change Type              | Approval Required | Testing Required                         | Monitoring Period |
+| ------------------------ | ----------------- | ---------------------------------------- | ----------------- |
+| Algorithm Logic          | YES               | Full Suite + Performance + Backtesting   | 48 hours          |
+| Configuration Schema     | YES               | Validation + Compatibility + Integration | 24 hours          |
+| Signal Processing        | YES               | Unit + Integration + Stress              | 24 hours          |
+| Performance Optimization | NO                | Unit + Performance Benchmarks            | 12 hours          |
+| Documentation            | NO                | None                                     | None              |
+| Tests                    | NO                | Self-validation                          | None              |
 
 ## 🎯 DETECTOR DEVELOPMENT CHECKLIST
 

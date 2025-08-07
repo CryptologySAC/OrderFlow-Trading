@@ -15,7 +15,7 @@
 **🔒 PRODUCTION-CRITICAL FILES (NO MODIFICATIONS WITHOUT APPROVAL):**
 
 - `src/trading/dataStreamManager.ts` - Market data connectivity
-- `src/market/orderFlowPreprocessor.ts` - Core trade processing  
+- `src/market/orderFlowPreprocessor.ts` - Core trade processing
 - `src/indicators/*/` - Pattern detection algorithms
 - `src/services/signalCoordinator.ts` - Signal processing pipeline
 - `src/trading/signalManager.ts` - Trading signal validation
@@ -647,6 +647,7 @@ Request explicit approval to modify this protected file.
 ## 📖 REFERENCE
 
 **For complete project context including:**
+
 - Architecture overview
 - Core data flow patterns
 - Signal processing pipeline

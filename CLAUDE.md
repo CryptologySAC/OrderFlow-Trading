@@ -11,8 +11,9 @@ Production trading system guidance for Claude Code with **ZERO TOLERANCE** for t
 ### 📋 SPECIALIZED DOCUMENTATION STRUCTURE
 
 **For specialized guidance, see:**
+
 - **General Development Standards**: `src/CLAUDE.md` - Development patterns, coding standards, and architectural principles
-- **Testing Standards**: `test/CLAUDE.md` - Test integrity, mock requirements, and validation standards  
+- **Testing Standards**: `test/CLAUDE.md` - Test integrity, mock requirements, and validation standards
 - **Detector Development Standards**: `src/indicators/CLAUDE.md` - Pattern detection, signal processing, and optimization
 
 ### 🚨 CRITICAL PROTECTION PROTOCOLS
@@ -41,7 +42,7 @@ Production trading system guidance for Claude Code with **ZERO TOLERANCE** for t
 **✅ DEVELOPMENT-SAFE FILES:**
 
 - Test files (`test/**/*.test.ts`)
-- Documentation (`docs/**/*.md`) 
+- Documentation (`docs/**/*.md`)
 - Build scripts (`package.json`, `tsconfig.json`)
 
 ### 🛡️ MANDATORY CHANGE CONTROL PROCESS
@@ -49,7 +50,7 @@ Production trading system guidance for Claude Code with **ZERO TOLERANCE** for t
 **For ANY modification to production-critical files:**
 
 1. **STOP** - Identify change impact level
-2. **ASSESS** - Document all affected components  
+2. **ASSESS** - Document all affected components
 3. **PLAN** - Create implementation and rollback plan
 4. **REQUEST** - Get explicit user approval with risk assessment
 5. **IMPLEMENT** - Make changes with comprehensive logging
@@ -89,6 +90,7 @@ Binance WebSocket → OrderFlowPreprocessor → Pattern Detectors → SignalCoor
 #### Real-Time Data Processing (MANDATORY)
 
 **BinanceWorker (WebSocket Stream)**: Real-time live data processing
+
 - Processes live trade/depth data from WebSocket API
 - **MUST store stream data to database** to prevent data loss
 - Runs in dedicated worker thread with proper isolation
@@ -114,7 +116,7 @@ Binance WebSocket → OrderFlowPreprocessor → Pattern Detectors → SignalCoor
 #### Event-Based Detectors (Traditional)
 
 - AbsorptionDetector - Large order absorption at key levels
-- ExhaustionDetector - Liquidity exhaustion patterns 
+- ExhaustionDetector - Liquidity exhaustion patterns
 - DeltaCVDConfirmation - Volume delta confirmation
 - SupportResistanceDetector - Key price levels
 
@@ -124,13 +126,14 @@ Binance WebSocket → OrderFlowPreprocessor → Pattern Detectors → SignalCoor
 - **DistributionZoneDetector** - Evolving distribution zones
 
 **Key Differences:**
+
 - Event-based: Point-in-time signals at specific prices
 - Zone-based: Evolving processes across price ranges and time
 
 ### 🔄 SIGNAL PROCESSING PIPELINE
 
 1. **SignalCoordinator** - Manages detector registration and signal queuing
-2. **SignalManager** - Validates, correlates, and filters signals  
+2. **SignalManager** - Validates, correlates, and filters signals
 3. **AnomalyDetector** - Integrates market anomaly detection
 4. **AlertManager** - Handles webhook notifications
 
@@ -163,6 +166,7 @@ Binance WebSocket → OrderFlowPreprocessor → Pattern Detectors → SignalCoor
 ### 🚫 CRITICAL PROHIBITIONS (ZERO TOLERANCE)
 
 **NEVER:**
+
 - **Modify `.env` file** - Contains irreplaceable production API keys
 - **Cache live market data** - Causes financial risk through stale data
 - **Use magic numbers** - All values configurable via `config.json`
@@ -182,11 +186,13 @@ Binance WebSocket → OrderFlowPreprocessor → Pattern Detectors → SignalCoor
 ### 🚨 CRITICAL PROTECTIONS
 
 **WebSocket URL Protection:**
+
 - **NEVER modify** `/public/scripts/dashboard.js` WebSocket URL
 - `wss://api.cryptology.pe/ltcusdt_trades` is PRODUCTION-CRITICAL
 - Disconnects dashboard from live data - requires explicit approval
 
 **Database Operations:**
+
 - Create migrations in `src/infrastructure/migrate.ts`
 - Test forward/rollback scenarios
 - Validate data integrity during migrations
@@ -196,12 +202,14 @@ Binance WebSocket → OrderFlowPreprocessor → Pattern Detectors → SignalCoor
 **For complete standards, see `src/CLAUDE.md`**
 
 **STRICT ISOLATION**: Dedicated workers with absolute separation
+
 - **Logger Worker**: ALL logging operations
 - **Binance Worker**: ALL API communication
 - **Communication Worker**: ALL WebSocket/MQTT
 - **Storage Worker**: ALL database operations
 
 **MANDATORY RULES:**
+
 - NO fallback implementations
 - Use WorkerProxy classes ONLY
 - Message-based communication via ThreadManager
@@ -209,21 +217,22 @@ Binance WebSocket → OrderFlowPreprocessor → Pattern Detectors → SignalCoor
 
 ### 📋 CHANGE CONTROL MATRIX
 
-| Change Type | Approval Required | Testing Required | Monitoring Period |
-|-------------|-------------------|------------------|-----------------|
-| Algorithm Logic | YES | Full Suite + Performance | 48 hours |
-| Data Processing | YES | Integration + Stress | 24 hours |
-| Configuration | YES | Validation + Compatibility | 12 hours |
-| UI/Dashboard | NO | Unit + E2E | 4 hours |
-| Documentation | NO | None | None |
-| Tests | NO | Self-validation | None |
+| Change Type     | Approval Required | Testing Required           | Monitoring Period |
+| --------------- | ----------------- | -------------------------- | ----------------- |
+| Algorithm Logic | YES               | Full Suite + Performance   | 48 hours          |
+| Data Processing | YES               | Integration + Stress       | 24 hours          |
+| Configuration   | YES               | Validation + Compatibility | 12 hours          |
+| UI/Dashboard    | NO                | Unit + E2E                 | 4 hours           |
+| Documentation   | NO                | None                       | None              |
+| Tests           | NO                | Self-validation            | None              |
 
 ### 🚨 EMERGENCY OVERRIDE PROTOCOL
 
 **ONLY in system-down scenarios:**
+
 1. Document the emergency situation
 2. Make minimal necessary changes
-3. Log all modifications with timestamps  
+3. Log all modifications with timestamps
 4. Schedule immediate post-emergency review
 5. Create comprehensive rollback plan
 
@@ -232,6 +241,7 @@ Binance WebSocket → OrderFlowPreprocessor → Pattern Detectors → SignalCoor
 **For complete patterns, see `src/CLAUDE.md`**
 
 **Critical Message Handling:**
+
 - Node.js `ws` delivers messages as `Buffer` objects, not strings
 - Always validate with Zod schemas
 - Rate limit clients with cleanup
@@ -266,7 +276,7 @@ This modification affects: [components]
 Risk level: [HIGH/MEDIUM/LOW]
 Required before proceeding:
 - [ ] User approval confirmation
-- [ ] Test suite validation  
+- [ ] Test suite validation
 - [ ] Performance impact assessment
 - [ ] Rollback plan preparation
 ```
@@ -284,6 +294,7 @@ Request explicit approval to modify this protected file.
 ## 📚 INSTITUTIONAL REQUIREMENTS
 
 **TRADING SYSTEM STANDARDS:**
+
 - Assess financial impact of all changes
 - Never compromise data integrity
 - Maintain comprehensive audit trails
@@ -291,11 +302,13 @@ Request explicit approval to modify this protected file.
 - Always have rollback plans ready
 
 **DEVELOPMENT PRINCIPLES:**
+
 - Do what's asked - nothing more, nothing less
 - Prefer editing existing files over creating new ones
 - Never proactively create documentation unless requested
 
 **SPECIALIZED GUIDANCE:**
+
 - **General Development**: `src/CLAUDE.md`
 - **Testing Standards**: `test/CLAUDE.md`
 - **Detector Development**: `src/indicators/CLAUDE.md`

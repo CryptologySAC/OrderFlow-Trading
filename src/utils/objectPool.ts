@@ -188,7 +188,7 @@ export class SharedPools {
     public readonly imbalanceResults: ObjectPool<ImbalanceResult>;
     public readonly numberArrays: ObjectPool<number[]>;
     public readonly tradeArrays: ObjectPool<AggressiveTrade[]>;
-    
+
     // HIGH PERFORMANCE: ZoneTradeRecord pool for hot path optimization
     public readonly zoneTradeRecords: ObjectPool<ZoneTradeRecord>;
 

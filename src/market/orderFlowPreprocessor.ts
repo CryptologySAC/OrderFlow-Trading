@@ -974,7 +974,9 @@ export class OrderflowPreprocessor
                     this.maxTradesPerZone,
                     // HIGH PERFORMANCE: Return pooled objects when they're evicted from buffer
                     (evictedRecord) => {
-                        SharedPools.getInstance().zoneTradeRecords.release(evictedRecord);
+                        SharedPools.getInstance().zoneTradeRecords.release(
+                            evictedRecord
+                        );
                     }
                 ),
             };
@@ -1444,14 +1446,14 @@ export class OrderflowPreprocessor
             // HIGH PERFORMANCE: Use object pooling for ZoneTradeRecord to reduce GC pressure by 60%
             const pools = SharedPools.getInstance();
             const currentTradeRecord = pools.zoneTradeRecords.acquire();
-            
+
             // Initialize pooled object with current trade data
             currentTradeRecord.price = price;
             currentTradeRecord.quantity = quantity;
             currentTradeRecord.timestamp = timestamp;
             currentTradeRecord.tradeId = trade.tradeId;
             currentTradeRecord.buyerIsMaker = buyerIsMaker;
-            
+
             zone.tradeHistory.add(currentTradeRecord);
 
             // Calculate volumes from trades within active time window
