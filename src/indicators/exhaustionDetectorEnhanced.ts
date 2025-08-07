@@ -649,8 +649,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
             calculatedExhaustionThreshold: accumulatedAggressiveRatio,
 
             calculatedTimeWindowIndex: this.enhancementConfig.timeWindowIndex,
-            calculatedEventCooldownMs:
-                Date.now() - this.lastExhaustionSignalTs,
+            calculatedEventCooldownMs: Date.now() - this.lastExhaustionSignalTs,
             calculatedUseStandardizedZones:
                 this.enhancementConfig.useStandardizedZones,
             calculatedEnhancementMode: this.enhancementConfig.enhancementMode,
@@ -1280,7 +1279,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
 
         for (let i = 0; i < limit - 1; i++) {
             const spread = Math.abs(
-                zoneData.zones[i + 1]!.priceLevel - zoneData.zones[i]!.priceLevel
+                zoneData.zones[i + 1]!.priceLevel -
+                    zoneData.zones[i]!.priceLevel
             );
             totalSpread += spread;
             spreadCount++;
