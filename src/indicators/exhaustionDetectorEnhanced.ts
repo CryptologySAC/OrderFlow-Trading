@@ -88,7 +88,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
     private readonly validationLogger: SignalValidationLogger;
 
     // Signal cooldown tracking (CLAUDE.md compliance - no magic cooldown values)
-    private readonly lastSignal = new Map<string, number>();
+    private lastExhaustionSignalTs = 0;
 
     // CLAUDE.md compliant configuration parameters - NO MAGIC NUMBERS
     private readonly confluenceMaxDistance: number;
@@ -105,6 +105,13 @@ export class ExhaustionDetectorEnhanced extends Detector {
     // Dynamic zone tracking for true exhaustion detection
     private readonly zoneTracker: ExhaustionZoneTracker;
     private readonly enableDynamicZoneTracking: boolean;
+
+    // Cached time window and hot-path flags
+    private readonly timeWindowMs: number;
+    private readonly hotPathDebugEnabled: boolean;
+
+    // Cheap, monotonic signal id counter
+    private signalCounter = 0;
 
     constructor(
         id: string,
@@ -140,6 +147,14 @@ export class ExhaustionDetectorEnhanced extends Detector {
         this.variancePenaltyFactor = settings.variancePenaltyFactor;
         this.ratioBalanceCenterPoint = settings.ratioBalanceCenterPoint;
 
+        // Cache time window to avoid repeated Config lookups
+        this.timeWindowMs = Config.getTimeWindow(settings.timeWindowIndex);
+
+        // Gate hot-path debug logging (off in production by default)
+        this.hotPathDebugEnabled =
+            this.enhancementConfig.enhancementMode !== "production" &&
+            process.env["NODE_ENV"] !== "production";
+
         // Initialize enhancement statistics
         this.enhancementStats = {
             callCount: 0,
@@ -157,7 +172,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
         this.enableDynamicZoneTracking = settings.enableDynamicZoneTracking;
         const zoneTrackerConfig: ZoneTrackerConfig = {
             maxZonesPerSide: settings.maxZonesPerSide,
-            historyWindowMs: Config.getTimeWindow(settings.timeWindowIndex),
+            historyWindowMs: this.timeWindowMs,
             depletionThreshold: settings.zoneDepletionThreshold,
             minPeakVolume: settings.minAggVolume,
             gapDetectionTicks: settings.gapDetectionTicks,
@@ -178,40 +193,21 @@ export class ExhaustionDetectorEnhanced extends Detector {
      * Check if we can emit a signal for this detector (respects cooldown)
      * CLAUDE.md MEMORY LEAK FIX: Automatically cleans up old cooldown entries
      */
-    private canEmitSignal(eventKey: string, update: boolean = false): boolean {
+    private canEmitSignal(_eventKey: string, update: boolean = false): boolean {
         // Note: For signal cooldown, we still use Date.now() since it's system time management
         // not market data timing. This is acceptable as per architectural guidelines.
         const now = Date.now();
-
-        // MEMORY LEAK FIX: Clean up expired cooldown entries to prevent memory growth
-        this.cleanupExpiredCooldowns(now);
-
-        const lastSignalTime = this.lastSignal.get(eventKey) || 0;
+        const lastSignalTime = this.lastExhaustionSignalTs || 0;
 
         if (now - lastSignalTime <= this.enhancementConfig.eventCooldownMs) {
             return false;
         }
 
         if (update) {
-            this.lastSignal.set(eventKey, now);
+            this.lastExhaustionSignalTs = now;
         }
 
         return true;
-    }
-
-    /**
-     * Clean up expired cooldown entries to prevent memory leak
-     * CLAUDE.md COMPLIANCE: Memory management without magic numbers
-     */
-    private cleanupExpiredCooldowns(currentTime: number): void {
-        const expirationTime =
-            currentTime - this.enhancementConfig.eventCooldownMs * 2; // Keep entries for 2x cooldown period
-
-        for (const [key, timestamp] of this.lastSignal.entries()) {
-            if (timestamp < expirationTime) {
-                this.lastSignal.delete(key);
-            }
-        }
     }
 
     /**
@@ -233,10 +229,12 @@ export class ExhaustionDetectorEnhanced extends Detector {
             callCount: this.enhancementStats.callCount,
         };
 
-        this.logger.debug(
-            "ExhaustionDetectorEnhanced: Processing trade",
-            debugInfo
-        );
+        if (this.hotPathDebugEnabled) {
+            this.logger.debug(
+                "ExhaustionDetectorEnhanced: Processing trade",
+                debugInfo
+            );
+        }
 
         this.enhancementStats.callCount++;
 
@@ -266,6 +264,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
             // Check signal cooldown to prevent too many signals
             const eventKey = `exhaustion`; // Single cooldown for all exhaustion signals
             if (!this.canEmitSignal(eventKey)) {
+                // Always log cooldown blocking for auditability and tests
                 this.logger.debug(
                     "ExhaustionDetectorEnhanced: Signal blocked by cooldown",
                     {
@@ -447,7 +446,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
         }
 
         // CLAUDE.md SIMPLIFIED: Use single zone array (no more triple-counting!)
-        const allZones = [...event.zoneData.zones];
+        const allZones = event.zoneData.zones;
 
         if (allZones.length === 0) {
             this.logger.debug(
@@ -459,36 +458,39 @@ export class ExhaustionDetectorEnhanced extends Detector {
             return null;
         }
 
-        this.logger.debug(
-            "ExhaustionDetectorEnhanced: Starting core exhaustion detection",
-            {
-                price: event.price,
-                quantity: event.quantity,
-                minAggVolume: this.enhancementConfig.minAggVolume,
-                exhaustionVolumeThreshold: this.exhaustionVolumeThreshold,
-                exhaustionRatioThreshold: this.exhaustionRatioThreshold,
-            }
-        );
+        if (this.hotPathDebugEnabled) {
+            this.logger.debug(
+                "ExhaustionDetectorEnhanced: Starting core exhaustion detection",
+                {
+                    price: event.price,
+                    quantity: event.quantity,
+                    minAggVolume: this.enhancementConfig.minAggVolume,
+                    exhaustionVolumeThreshold: this.exhaustionVolumeThreshold,
+                    exhaustionRatioThreshold: this.exhaustionRatioThreshold,
+                }
+            );
+        }
 
         // FULL CALCULATION SECTION: Calculate ALL thresholds regardless of outcome
 
         // ARCHITECTURAL FIX: Filter zones by time window using trade timestamp
-        const windowStartTime =
-            event.timestamp -
-            Config.getTimeWindow(this.enhancementConfig.timeWindowIndex);
+        const windowStartTime = event.timestamp - this.timeWindowMs;
         const recentZones = allZones.filter(
             (zone) => zone.lastUpdate >= windowStartTime
         );
 
-        this.logger.debug("ExhaustionDetectorEnhanced: Time-window filtering", {
-            totalZones: allZones.length,
-            recentZones: recentZones.length,
-            windowMs: Config.getTimeWindow(
-                this.enhancementConfig.timeWindowIndex
-            ),
-            windowStartTime,
-            tradeTimestamp: event.timestamp,
-        });
+        if (this.hotPathDebugEnabled) {
+            this.logger.debug(
+                "ExhaustionDetectorEnhanced: Time-window filtering",
+                {
+                    totalZones: allZones.length,
+                    recentZones: recentZones.length,
+                    windowMs: this.timeWindowMs,
+                    windowStartTime,
+                    tradeTimestamp: event.timestamp,
+                }
+            );
+        }
 
         // Find zones near the current price from recent zones only
         let relevantZones = this.preprocessor.findZonesNearPrice(
@@ -499,15 +501,17 @@ export class ExhaustionDetectorEnhanced extends Detector {
 
         // STRUCTURAL FIX: If no zones found with primary method, find nearest zone with volume from recent zones
         if (relevantZones.length === 0) {
-            this.logger.debug(
-                "ExhaustionDetectorEnhanced: No zones found with primary method, using fallback",
-                {
-                    price: event.price,
-                    maxDistance: this.confluenceMaxDistance,
-                    totalZones: allZones.length,
-                    recentZones: recentZones.length,
-                }
-            );
+            if (this.hotPathDebugEnabled) {
+                this.logger.debug(
+                    "ExhaustionDetectorEnhanced: No zones found with primary method, using fallback",
+                    {
+                        price: event.price,
+                        maxDistance: this.confluenceMaxDistance,
+                        totalZones: allZones.length,
+                        recentZones: recentZones.length,
+                    }
+                );
+            }
 
             // Find the zone with the smallest distance to the trade price that has volume from recent zones
             const zonesWithVolume = recentZones.filter(
@@ -523,24 +527,31 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 );
                 relevantZones = [nearestZone];
 
-                this.logger.debug(
-                    "ExhaustionDetectorEnhanced: Using fallback zone",
-                    {
-                        price: event.price,
-                        zonePrice: nearestZone.priceLevel,
-                        distance: Math.abs(
-                            nearestZone.priceLevel - event.price
-                        ),
-                        aggressiveVolume: nearestZone.aggressiveVolume,
-                    }
-                );
+                if (this.hotPathDebugEnabled) {
+                    this.logger.debug(
+                        "ExhaustionDetectorEnhanced: Using fallback zone",
+                        {
+                            price: event.price,
+                            zonePrice: nearestZone.priceLevel,
+                            distance: Math.abs(
+                                nearestZone.priceLevel - event.price
+                            ),
+                            aggressiveVolume: nearestZone.aggressiveVolume,
+                        }
+                    );
+                }
             }
         }
 
-        this.logger.debug("ExhaustionDetectorEnhanced: Found relevant zones", {
-            relevantZones: relevantZones.length,
-            maxDistance: this.confluenceMaxDistance,
-        });
+        if (this.hotPathDebugEnabled) {
+            this.logger.debug(
+                "ExhaustionDetectorEnhanced: Found relevant zones",
+                {
+                    relevantZones: relevantZones.length,
+                    maxDistance: this.confluenceMaxDistance,
+                }
+            );
+        }
 
         // ARCHITECTURAL FIX: Calculate accumulated exhaustion metrics over time window
         // CRITICAL: Use only DIRECTIONAL passive volume for exhaustion
@@ -588,20 +599,20 @@ export class ExhaustionDetectorEnhanced extends Detector {
         const totalAccumulatedVolume =
             totalAggressiveVolume + totalDirectionalPassiveVolume;
 
-        this.logger.debug(
-            "ExhaustionDetectorEnhanced: Directional volume analysis",
-            {
-                totalAggressiveVolume,
-                totalDirectionalPassiveVolume,
-                totalAccumulatedVolume,
-                exhaustionVolumeThreshold: this.exhaustionVolumeThreshold,
-                isBuyTrade,
-                windowMs: Config.getTimeWindow(
-                    this.enhancementConfig.timeWindowIndex
-                ),
-                zonesAnalyzed: relevantZones.length,
-            }
-        );
+        if (this.hotPathDebugEnabled) {
+            this.logger.debug(
+                "ExhaustionDetectorEnhanced: Directional volume analysis",
+                {
+                    totalAggressiveVolume,
+                    totalDirectionalPassiveVolume,
+                    totalAccumulatedVolume,
+                    exhaustionVolumeThreshold: this.exhaustionVolumeThreshold,
+                    isBuyTrade,
+                    windowMs: this.timeWindowMs,
+                    zonesAnalyzed: relevantZones.length,
+                }
+            );
+        }
 
         // Calculate exhaustion ratio using directional volumes
         const accumulatedAggressiveRatio = FinancialMath.divideQuantities(
@@ -639,7 +650,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
 
             calculatedTimeWindowIndex: this.enhancementConfig.timeWindowIndex,
             calculatedEventCooldownMs:
-                Date.now() - (this.lastSignal.get("exhaustion") || 0),
+                Date.now() - this.lastExhaustionSignalTs,
             calculatedUseStandardizedZones:
                 this.enhancementConfig.useStandardizedZones,
             calculatedEnhancementMode: this.enhancementConfig.enhancementMode,
@@ -743,22 +754,24 @@ export class ExhaustionDetectorEnhanced extends Detector {
         }
 
         if (!passesExhaustionRatios) {
-            this.logger.debug(
-                "ExhaustionDetectorEnhanced: Exhaustion conditions not met",
-                {
-                    accumulatedAggressiveRatio,
-                    accumulatedPassiveRatio,
-                    exhaustionRatioThreshold: this.exhaustionRatioThreshold,
-                    passiveRatioBalanceThreshold:
-                        this.passiveRatioBalanceThreshold,
-                    firstCondition:
-                        accumulatedAggressiveRatio >=
-                        this.exhaustionRatioThreshold,
-                    secondCondition:
-                        accumulatedPassiveRatio <
-                        this.passiveRatioBalanceThreshold,
-                }
-            );
+            if (this.hotPathDebugEnabled) {
+                this.logger.debug(
+                    "ExhaustionDetectorEnhanced: Exhaustion conditions not met",
+                    {
+                        accumulatedAggressiveRatio,
+                        accumulatedPassiveRatio,
+                        exhaustionRatioThreshold: this.exhaustionRatioThreshold,
+                        passiveRatioBalanceThreshold:
+                            this.passiveRatioBalanceThreshold,
+                        firstCondition:
+                            accumulatedAggressiveRatio >=
+                            this.exhaustionRatioThreshold,
+                        secondCondition:
+                            accumulatedPassiveRatio <
+                            this.passiveRatioBalanceThreshold,
+                    }
+                );
+            }
             this.logSignalRejection(
                 event,
                 "exhaustion_conditions_not_met",
@@ -801,18 +814,20 @@ export class ExhaustionDetectorEnhanced extends Detector {
         }
 
         // All thresholds passed - create signal candidate
-        this.logger.debug(
-            "ExhaustionDetectorEnhanced: Exhaustion conditions met",
-            {
-                accumulatedAggressiveRatio,
-                accumulatedPassiveRatio,
-                exhaustionRatioThreshold: this.exhaustionRatioThreshold,
-            }
-        );
+        if (this.hotPathDebugEnabled) {
+            this.logger.debug(
+                "ExhaustionDetectorEnhanced: Exhaustion conditions met",
+                {
+                    accumulatedAggressiveRatio,
+                    accumulatedPassiveRatio,
+                    exhaustionRatioThreshold: this.exhaustionRatioThreshold,
+                }
+            );
+        }
 
         // Create core exhaustion signal using accumulated metrics
         const signalCandidate: SignalCandidate = {
-            id: `core-exhaustion-${event.timestamp}-${Math.random().toString(36).substring(7)}`,
+            id: `core-exhaustion-${event.timestamp}-${++this.signalCounter}`,
             type: "exhaustion" as SignalType,
             side: signalSide,
             confidence: Math.min(1.0, confidence),
@@ -835,9 +850,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     timestamp: event.timestamp,
                     totalZones: relevantZones.length,
                     accumulatedVolume: totalAccumulatedVolume,
-                    timeWindowMs: Config.getTimeWindow(
-                        this.enhancementConfig.timeWindowIndex
-                    ),
+                    timeWindowMs: this.timeWindowMs,
                     enhancementType: "time_window_exhaustion",
                     qualityMetrics: {
                         exhaustionStatisticalSignificance: confidence,
@@ -1261,13 +1274,13 @@ export class ExhaustionDetectorEnhanced extends Detector {
 
         if (zoneData.zones.length < 2) return null;
 
-        const zones = zoneData.zones.slice(0, 10);
+        const limit = Math.min(zoneData.zones.length, 10);
         let totalSpread = 0;
         let spreadCount = 0;
 
-        for (let i = 0; i < zones.length - 1; i++) {
+        for (let i = 0; i < limit - 1; i++) {
             const spread = Math.abs(
-                zones[i + 1]!.priceLevel - zones[i]!.priceLevel
+                zoneData.zones[i + 1]!.priceLevel - zoneData.zones[i]!.priceLevel
             );
             totalSpread += spread;
             spreadCount++;
@@ -1403,7 +1416,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 calculatedTimeWindowIndex:
                     this.enhancementConfig.timeWindowIndex,
                 calculatedEventCooldownMs:
-                    Date.now() - (this.lastSignal.get("exhaustion") || 0),
+                    Date.now() - this.lastExhaustionSignalTs,
                 calculatedUseStandardizedZones: relevantZones.length > 0,
                 calculatedEnhancementMode:
                     this.enhancementConfig.enhancementMode,
@@ -1623,7 +1636,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 calculatedTimeWindowIndex:
                     this.enhancementConfig.timeWindowIndex,
                 calculatedEventCooldownMs:
-                    Date.now() - (this.lastSignal.get("exhaustion") || 0),
+                    Date.now() - this.lastExhaustionSignalTs,
                 calculatedUseStandardizedZones:
                     event.zoneData?.zones.length > 0,
                 calculatedEnhancementMode:

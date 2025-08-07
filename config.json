@@ -234,7 +234,7 @@
 
                 "useStandardizedZones": true,
                 "enhancementMode": "production",
-                "minEnhancedConfidenceThreshold": 0.21,
+                "minEnhancedConfidenceThreshold": 0.65,
 
                 "enableDepletionAnalysis": true,
                 "depletionVolumeThreshold": 1600,
