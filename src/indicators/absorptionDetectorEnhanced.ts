@@ -71,6 +71,8 @@ export interface AbsorptionEnhancementStats {
     enhancementSuccessRate: number;
 }
 
+const _BALANCE_CENTER_POINT = 0.5;
+
 /**
  * AbsorptionDetectorEnhanced - Standalone enhanced absorption detector
  *
@@ -836,7 +838,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                             totalAggressiveVolume + totalPassiveVolume,
                             1
                         ) -
-                        0.5
+                        _BALANCE_CENTER_POINT
                 ),
                 Math.abs(
                     totalPassiveVolume /
@@ -844,7 +846,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                             totalAggressiveVolume + totalPassiveVolume,
                             1
                         ) -
-                        0.5
+                        _BALANCE_CENTER_POINT
                 )
             ),
             calculatedConfluenceMinZones: relevantZones.length,
@@ -1469,6 +1471,19 @@ export class AbsorptionDetectorEnhanced extends Detector {
             event.timestamp
         );
 
+        // CLAUDE.md compliance: return early if calculation fails
+        if (absorptionStrength === null) {
+            return {
+                hasAlignment: false,
+                alignmentScore: 0,
+                timeframeBreakdown: {
+                    tick5: 0,
+                    tick10: 0,
+                    tick20: 0,
+                },
+            }; // CLAUDE.md compliance: return default when calculation cannot be performed
+        }
+
         const timeframeBreakdown = {
             tick5: absorptionStrength,
             tick10: absorptionStrength,
@@ -1483,7 +1498,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 hasAlignment: false,
                 alignmentScore: 0,
                 timeframeBreakdown,
-            }; // CLAUDE.md compliance: return null when calculation cannot be performed
+            }; // CLAUDE.md compliance: return default when calculation cannot be performed
         }
 
         const stdDev = FinancialMath.calculateStdDev(absorptionValues);
@@ -1492,7 +1507,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 hasAlignment: false,
                 alignmentScore: 0,
                 timeframeBreakdown,
-            }; // CLAUDE.md compliance: return null when calculation cannot be performed
+            }; // CLAUDE.md compliance: return default when calculation cannot be performed
         }
 
         const variance = FinancialMath.multiplyQuantities(stdDev, stdDev); // Variance = stdDev^2
@@ -1518,8 +1533,8 @@ export class AbsorptionDetectorEnhanced extends Detector {
         zones: ZoneSnapshot[],
         price: number,
         tradeTimestamp: number
-    ): number {
-        if (zones.length === 0) return 0;
+    ): number | null {
+        if (zones.length === 0) return null;
 
         // CRITICAL FIX: Filter zones by time window using trade timestamp for temporal absorption analysis
         const windowStartTime = tradeTimestamp - this.windowMs;
@@ -1536,14 +1551,14 @@ export class AbsorptionDetectorEnhanced extends Detector {
             tradeTimestamp,
         });
 
-        if (recentZones.length === 0) return 0;
+        if (recentZones.length === 0) return null;
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             recentZones,
             price,
             this.confluenceMaxDistance
         );
-        if (relevantZones.length === 0) return 0;
+        if (relevantZones.length === 0) return null;
 
         let totalAbsorptionScore = 0;
 
@@ -1655,10 +1670,13 @@ export class AbsorptionDetectorEnhanced extends Detector {
 
         // Check for balanced flow (both ratios close to 0.5)
         const aggressiveBalance = FinancialMath.calculateAbs(
-            FinancialMath.safeSubtract(aggressiveBuyRatio, 0.5)
+            FinancialMath.safeSubtract(
+                aggressiveBuyRatio,
+                _BALANCE_CENTER_POINT
+            )
         );
         const passiveBalance = FinancialMath.calculateAbs(
-            FinancialMath.safeSubtract(passiveBuyRatio, 0.5)
+            FinancialMath.safeSubtract(passiveBuyRatio, _BALANCE_CENTER_POINT)
         );
 
         // Balanced threshold: within configurable % of perfect balance using FinancialMath
@@ -1812,12 +1830,12 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     Math.abs(
                         totalAggVol /
                             Math.max(totalAggVol + totalPassiveVolume, 1) -
-                            0.5
+                            _BALANCE_CENTER_POINT
                     ),
                     Math.abs(
                         totalPassiveVolume /
                             Math.max(totalAggVol + totalPassiveVolume, 1) -
-                            0.5
+                            _BALANCE_CENTER_POINT
                     )
                 ),
                 calculatedConfluenceMinZones: confluenceCount,
@@ -1979,12 +1997,12 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     Math.abs(
                         totalAggVol /
                             Math.max(totalAggVol + totalPassiveVolume, 1) -
-                            0.5
+                            _BALANCE_CENTER_POINT
                     ),
                     Math.abs(
                         totalPassiveVolume /
                             Math.max(totalAggVol + totalPassiveVolume, 1) -
-                            0.5
+                            _BALANCE_CENTER_POINT
                     )
                 ),
                 calculatedConfluenceMinZones: confluenceCount,

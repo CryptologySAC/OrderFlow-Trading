@@ -101,6 +101,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
     private readonly premiumConfidenceThreshold: number;
     private readonly variancePenaltyFactor: number;
     private readonly ratioBalanceCenterPoint: number;
+    private readonly gapDetectionTicks: number;
 
     // Dynamic zone tracking for true exhaustion detection
     private readonly zoneTracker: ExhaustionZoneTracker;
@@ -146,6 +147,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
         this.premiumConfidenceThreshold = settings.premiumConfidenceThreshold;
         this.variancePenaltyFactor = settings.variancePenaltyFactor;
         this.ratioBalanceCenterPoint = settings.ratioBalanceCenterPoint;
+        this.gapDetectionTicks = settings.gapDetectionTicks;
 
         // Cache time window to avoid repeated Config lookups
         this.timeWindowMs = Config.getTimeWindow(settings.timeWindowIndex);
@@ -981,7 +983,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,
             event.price,
-            5
+            this.gapDetectionTicks
         );
 
         let totalDirectionalPassiveVolume = 0;
@@ -1066,6 +1068,11 @@ export class ExhaustionDetectorEnhanced extends Detector {
             event.price
         );
 
+        // CLAUDE.md compliance: return early if calculation fails
+        if (exhaustionStrength === null) {
+            return null; // CLAUDE.md compliance: return null when calculation cannot be performed
+        }
+
         // CLAUDE.md SIMPLIFIED: Single zone alignment (perfect alignment by definition)
         const exhaustionValues = [exhaustionStrength];
         const avgExhaustion = FinancialMath.calculateMean(exhaustionValues);
@@ -1102,7 +1109,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
         return {
             hasAlignment,
             alignmentScore,
-            exhaustionStrength,
+            exhaustionStrength: exhaustionStrength,
         };
     }
 
@@ -1114,15 +1121,15 @@ export class ExhaustionDetectorEnhanced extends Detector {
     private calculateTimeframeExhaustionStrength(
         zones: ZoneSnapshot[],
         price: number
-    ): number {
-        if (zones.length === 0) return 0;
+    ): number | null {
+        if (zones.length === 0) return null;
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             zones,
             price,
-            3
+            this.gapDetectionTicks
         );
-        if (relevantZones.length === 0) return 0;
+        if (relevantZones.length === 0) return null;
 
         let totalExhaustionScore = 0;
 
@@ -1268,8 +1275,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
     ): number | null {
         if (!zoneData) return null;
 
-        // For single zones, spread is 0 (no spread between zones)
-        if (zoneData.zones.length === 1) return 0;
+        // For single zones, spread is null (cannot calculate spread between zones)
+        if (zoneData.zones.length === 1) return null;
 
         if (zoneData.zones.length < 2) return null;
 
@@ -1402,12 +1409,12 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 totalAggVol * accumulatedAggressiveRatio;
             const actualVariancePenalty = Math.abs(
                 totalAggVol / Math.max(totalAggVol + totalPassiveVolume, 1) -
-                    0.5
+                    this.ratioBalanceCenterPoint
             );
             const actualRatioBalanceCenter = Math.abs(
                 totalDirectionalPassiveVolume /
                     Math.max(totalAggVol + totalDirectionalPassiveVolume, 1) -
-                    0.5
+                    this.ratioBalanceCenterPoint
             );
 
             const calculatedValues: ExhaustionCalculatedValues = {
@@ -1618,7 +1625,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
             const actualVariancePenalty = Math.abs(
                 totalAggVolForValidation /
                     Math.max(totalAggVolForValidation + totalPassiveVolume, 1) -
-                    0.5
+                    this.ratioBalanceCenterPoint
             );
             const actualRatioBalanceCenter = Math.abs(
                 totalDirectionalPassiveVolume /
@@ -1627,7 +1634,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                             totalDirectionalPassiveVolume,
                         1
                     ) -
-                    0.5
+                    this.ratioBalanceCenterPoint
             );
 
             const calculatedValues: ExhaustionCalculatedValues = {
