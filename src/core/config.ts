@@ -162,7 +162,7 @@ export const AbsorptionDetectorSchema = z.object({
     priceEfficiencyThreshold: z.number().min(0.0001).max(0.1),
     maxAbsorptionRatio: z.number().min(0.1).max(1.0),
     minPassiveMultiplier: z.number().min(0.5).max(5.0),
-    passiveAbsorptionThreshold: z.number().min(10).max(50),
+    passiveAbsorptionThreshold: z.number().min(0.1).max(50),
 
     // Calculation parameters
     expectedMovementScalingFactor: z.number().int().min(1).max(100),
