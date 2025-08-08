@@ -299,14 +299,10 @@ export interface ZoneDetectorConfig {
         enableZoneConfluenceFilter: boolean; // Filter signals by zone confluence
         enableInstitutionalVolumeFilter: boolean; // Filter by institutional volume presence
         enableCrossTimeframeAnalysis: boolean; // Analyze across multiple zone timeframes
-        confluenceConfidenceBoost: number; // Confidence boost for zone confluence
-        institutionalVolumeBoost: number; // Confidence boost for institutional volume
-        crossTimeframeBoost: number; // Confidence boost for cross-timeframe confirmation
     };
 
     // Enhancement control parameters
     minEnhancedConfidenceThreshold: number; // Minimum confidence for enhanced signals
-    enhancementSignificanceBoost: boolean; // Whether to boost signal significance
     enhancementMode: "disabled" | "testing" | "production"; // Enhancement mode control
 
     // CLAUDE.md compliant AccumulationZoneDetectorEnhanced parameters

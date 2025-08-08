@@ -295,11 +295,9 @@ export class ExhaustionDetectorEnhanced extends Detector {
             // This prevents signal spam by ensuring ALL signals go through quality gates
         }
 
-        let totalConfidenceBoost = 0;
-        let enhancementApplied = false;
         const finalSignal = coreExhaustionResult; // Start with core signal
 
-        // Zone confluence analysis for exhaustion validation
+        // Zone confluence analysis for exhaustion validation (logging only)
         if (Config.UNIVERSAL_ZONE_CONFIG.enableZoneConfluenceFilter) {
             const confluenceResult = this.analyzeZoneConfluence(
                 event.zoneData,
@@ -307,9 +305,6 @@ export class ExhaustionDetectorEnhanced extends Detector {
             );
             if (confluenceResult.hasConfluence) {
                 this.enhancementStats.confluenceDetectionCount++;
-                totalConfidenceBoost +=
-                    Config.UNIVERSAL_ZONE_CONFIG.confluenceConfidenceBoost;
-                enhancementApplied = true;
 
                 this.logger.debug(
                     "ExhaustionDetectorEnhanced: Zone confluence detected for exhaustion validation",
@@ -318,15 +313,12 @@ export class ExhaustionDetectorEnhanced extends Detector {
                         price: event.price,
                         confluenceZones: confluenceResult.confluenceZones,
                         confluenceStrength: confluenceResult.confluenceStrength,
-                        confidenceBoost:
-                            Config.UNIVERSAL_ZONE_CONFIG
-                                .confluenceConfidenceBoost,
                     }
                 );
             }
         }
 
-        // Liquidity depletion analysis across zones
+        // Liquidity depletion analysis across zones (logging only)
         if (this.enhancementConfig.enableDepletionAnalysis) {
             const depletionResult = this.analyzeLiquidityDepletion(
                 event.zoneData,
@@ -334,9 +326,6 @@ export class ExhaustionDetectorEnhanced extends Detector {
             );
             if (depletionResult.hasDepletion) {
                 this.enhancementStats.depletionDetectionCount++;
-                totalConfidenceBoost +=
-                    this.enhancementConfig.depletionConfidenceBoost;
-                enhancementApplied = true;
 
                 this.logger.debug(
                     "ExhaustionDetectorEnhanced: Liquidity depletion detected",
@@ -345,26 +334,21 @@ export class ExhaustionDetectorEnhanced extends Detector {
                         price: event.price,
                         depletionRatio: depletionResult.depletionRatio,
                         affectedZones: depletionResult.affectedZones,
-                        confidenceBoost:
-                            this.enhancementConfig.depletionConfidenceBoost,
                     }
                 );
-
-                // Enhanced signal will be processed through unified emission logic
             }
         }
 
-        // Cross-timeframe exhaustion analysis
+        // Cross-timeframe exhaustion analysis - set quality flag instead of boost
+        let hasCrossTimeframeAlignment = false;
         if (Config.UNIVERSAL_ZONE_CONFIG.enableCrossTimeframeAnalysis) {
             const crossTimeframeResult = this.analyzeCrossTimeframeExhaustion(
                 event.zoneData,
                 event
             );
             if (crossTimeframeResult && crossTimeframeResult.hasAlignment) {
+                hasCrossTimeframeAlignment = true;
                 this.enhancementStats.crossTimeframeAnalysisCount++;
-                totalConfidenceBoost +=
-                    Config.UNIVERSAL_ZONE_CONFIG.crossTimeframeBoost;
-                enhancementApplied = true;
 
                 this.logger.debug(
                     "ExhaustionDetectorEnhanced: Cross-timeframe exhaustion alignment",
@@ -374,36 +358,19 @@ export class ExhaustionDetectorEnhanced extends Detector {
                         alignmentScore: crossTimeframeResult.alignmentScore,
                         exhaustionStrength:
                             crossTimeframeResult.exhaustionStrength,
-                        confidenceBoost:
-                            Config.UNIVERSAL_ZONE_CONFIG.crossTimeframeBoost,
                     }
                 );
             }
         }
 
-        // Update enhancement statistics
-        if (enhancementApplied) {
-            this.enhancementStats.enhancementCount++;
-            this.enhancementStats.totalConfidenceBoost += totalConfidenceBoost;
-            this.enhancementStats.averageConfidenceBoost =
-                this.enhancementStats.totalConfidenceBoost /
-                this.enhancementStats.enhancementCount;
-            this.enhancementStats.enhancementSuccessRate =
-                this.enhancementStats.enhancementCount /
-                this.enhancementStats.callCount;
-
-            // Store enhanced exhaustion metrics for monitoring
-            this.storeEnhancedExhaustionMetrics(event, totalConfidenceBoost);
-        }
-
         // SIMPLIFIED: Unified signal emission path
         if (finalSignal && this.canEmitSignal(`exhaustion`)) {
-            // Apply enhancement confidence boost if applicable
-            if (enhancementApplied && totalConfidenceBoost > 0) {
-                finalSignal.confidence = Math.min(
-                    1.0,
-                    finalSignal.confidence + totalConfidenceBoost
-                );
+            // Add quality flags instead of confidence boosts
+            if (hasCrossTimeframeAlignment || finalSignal.qualityFlags) {
+                finalSignal.qualityFlags = {
+                    ...finalSignal.qualityFlags,
+                    crossTimeframe: hasCrossTimeframeAlignment,
+                };
             }
 
             // Update cooldown and emit signal
@@ -424,8 +391,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 price: event.price,
                 side: finalSignal.side,
                 confidence: finalSignal.confidence,
-                enhancementApplied,
-                confidenceBoost: totalConfidenceBoost,
+                qualityFlags: finalSignal.qualityFlags,
             });
         }
     }
@@ -664,8 +630,6 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     ? (totalAggressiveVolume - totalDirectionalPassiveVolume) /
                       totalDirectionalPassiveVolume
                     : 0,
-            calculatedDepletionConfidenceBoost:
-                this.enhancementConfig.depletionConfidenceBoost,
             calculatedPassiveVolumeExhaustionRatio: accumulatedPassiveRatio,
             calculatedVarianceReductionFactor:
                 this.enhancementConfig.varianceReductionFactor,
@@ -831,7 +795,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
             id: `core-exhaustion-${event.timestamp}-${++this.signalCounter}`,
             type: "exhaustion" as SignalType,
             side: signalSide,
-            confidence: Math.min(1.0, confidence),
+            confidence: confidence, // Raw confidence, no capping
             timestamp: event.timestamp,
             data: {
                 price: event.price,
@@ -842,7 +806,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     totalDirectionalPassiveVolume / relevantZones.length,
                 spread: this.calculateZoneSpread(event.zoneData) ?? 0,
                 exhaustionScore: accumulatedAggressiveRatio,
-                confidence: Math.min(1.0, confidence),
+                confidence: confidence, // Raw confidence, no capping
                 depletionRatio: accumulatedAggressiveRatio,
                 passiveVolumeRatio: accumulatedPassiveRatio,
                 volumeImbalance,
@@ -1163,30 +1127,6 @@ export class ExhaustionDetectorEnhanced extends Detector {
     }
 
     /**
-     * Store enhanced exhaustion metrics for monitoring and analysis
-     *
-     * EXHAUSTION PHASE 1: Comprehensive metrics tracking
-     */
-    private storeEnhancedExhaustionMetrics(
-        event: EnrichedTradeEvent,
-        confidenceBoost: number
-    ): void {
-        // Store metrics for monitoring (commented out to avoid metrics interface errors)
-        // this.metricsCollector.recordGauge('exhaustion.enhanced.confidence_boost', confidenceBoost);
-        // this.metricsCollector.recordCounter('exhaustion.enhanced.analysis_count', 1);
-
-        this.logger.debug(
-            "ExhaustionDetectorEnhanced: Enhanced metrics stored",
-            {
-                detectorId: this.getId(),
-                price: event.price,
-                confidenceBoost,
-                enhancementStats: this.enhancementStats,
-            }
-        );
-    }
-
-    /**
      * Determine exhaustion signal side based on directional passive liquidity exhaustion
      * FIXED: Now uses same directional logic as calculateZonePassiveRatio
      */
@@ -1434,9 +1374,6 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 calculatedDepletionVolumeThreshold:
                     totalDirectionalPassiveVolume,
                 calculatedDepletionRatioThreshold: depletionRatio,
-                calculatedDepletionConfidenceBoost:
-                    signal.confidence *
-                    this.enhancementConfig.depletionConfidenceBoost,
                 calculatedPassiveVolumeExhaustionRatio: accumulatedPassiveRatio,
                 calculatedVarianceReductionFactor: actualVarianceReduction,
                 calculatedAlignmentNormalizationFactor:
@@ -1514,8 +1451,6 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     this.enhancementConfig.enableDepletionAnalysis, // Static config
                 depletionVolumeThreshold: totalPassVol, // What depletion volume actually was
                 depletionRatioThreshold: actualDepletionRatio, // What depletion ratio actually was
-                depletionConfidenceBoost:
-                    this.enhancementConfig.depletionConfidenceBoost, // Static config
                 passiveVolumeExhaustionRatio: actualPassiveExhaustionRatio, // What passive exhaustion ratio actually was
                 varianceReductionFactor:
                     this.enhancementConfig.varianceReductionFactor, // Static config
@@ -1545,10 +1480,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 institutionalVolumeThreshold: undefined, // N/A for exhaustion
                 institutionalVolumeRatioThreshold: undefined, // N/A for exhaustion
                 enableInstitutionalVolumeFilter: undefined, // N/A for exhaustion
-                institutionalVolumeBoost: undefined, // N/A for exhaustion
                 minAbsorptionScore: undefined, // N/A for exhaustion
                 finalConfidenceRequired: undefined, // N/A for exhaustion
-                confidenceBoostReduction: undefined, // N/A for exhaustion
                 maxZoneCountForScoring: undefined, // N/A for exhaustion
                 balanceThreshold: undefined, // N/A for exhaustion
                 confluenceMinZones: undefined, // N/A for exhaustion
@@ -1655,9 +1588,6 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 calculatedDepletionVolumeThreshold:
                     totalDirectionalPassiveVolume,
                 calculatedDepletionRatioThreshold: depletionRatio,
-                calculatedDepletionConfidenceBoost:
-                    signal.confidence *
-                    this.enhancementConfig.depletionConfidenceBoost,
                 calculatedPassiveVolumeExhaustionRatio: accumulatedPassiveRatio,
                 calculatedVarianceReductionFactor: actualVarianceReduction,
                 calculatedAlignmentNormalizationFactor:

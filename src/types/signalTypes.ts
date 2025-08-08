@@ -265,6 +265,14 @@ export interface ConfidenceFactors {
     divergencePenalty: number; // 0-1, penalty for price/CVD divergence
 }
 
+export interface SignalQualityFlags {
+    crossTimeframe?: boolean; // Pattern confirmed across multiple timeframes
+    institutionalVolume?: boolean; // Institutional-size volume detected
+    zoneConfluence?: boolean; // Multiple zones align
+    exhaustionGap?: boolean; // Gap created from exhaustion
+    priceEfficiency?: boolean; // High price efficiency in absorption
+}
+
 export interface SignalCandidate {
     id: string;
     type: SignalType;
@@ -272,6 +280,7 @@ export interface SignalCandidate {
     confidence: number;
     timestamp: number;
     data: DetectorResultType;
+    qualityFlags?: SignalQualityFlags; // Optional quality indicators
 }
 
 export interface ProcessedSignal {

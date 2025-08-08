@@ -743,10 +743,7 @@ export class DistributionDetectorEnhanced extends Detector {
                 max: event.price + this.confluenceMaxDistance,
             },
             strength: distributionMetrics.strength,
-            confidence: Math.min(
-                1.0,
-                distributionMetrics.strength + confidenceBoost
-            ),
+            confidence: distributionMetrics.strength + confidenceBoost,
             volume: distributionMetrics.volumeConcentration,
             timespan: distributionMetrics.duration,
             startTime: Date.now() - distributionMetrics.duration,

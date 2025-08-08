@@ -719,11 +719,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             zone: zoneData,
             actionType: signalType,
             confidence: calculatedConfidence,
-            urgency:
-                confidenceBoost >
-                this.enhancementConfig.crossTimeframeConfidenceBoost
-                    ? "high"
-                    : "medium",
+            urgency: "medium", // TODO: Implement quality flags for urgency
             expectedDirection: signalSide === "buy" ? "up" : "down",
             detectorId: this.getId(),
             timestamp: Date.now(),
@@ -771,10 +767,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
                 max: event.price + this.confluenceMaxDistance,
             },
             strength: accumulationMetrics.strength,
-            confidence: Math.min(
-                1.0,
-                accumulationMetrics.strength + confidenceBoost
-            ),
+            confidence: accumulationMetrics.strength + confidenceBoost,
             volume: accumulationMetrics.volumeConcentration,
             timespan: accumulationMetrics.duration,
             startTime: Date.now() - accumulationMetrics.duration,
@@ -793,14 +786,8 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     private determineZoneUpdateType(confidenceBoost: number): string | null {
         // Always create/update zones for visualization
         if (confidenceBoost >= this.enhancementConfig.confidenceThreshold) {
-            if (
-                confidenceBoost >
-                this.enhancementConfig.crossTimeframeConfidenceBoost
-            ) {
-                return "zone_strengthened";
-            } else {
-                return "zone_updated";
-            }
+            // TODO: Use quality flags to determine zone strength
+            return "zone_updated";
         }
         return "zone_created"; // Default for new zones
     }

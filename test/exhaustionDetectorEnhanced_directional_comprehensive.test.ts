@@ -79,7 +79,6 @@ describe("ExhaustionDetectorEnhanced - Directional Passive Volume Logic", () => 
         // Depletion analysis
         depletionVolumeThreshold: 20,
         depletionRatioThreshold: 0.65,
-        depletionConfidenceBoost: 0.1,
 
         // Cross-timeframe analysis
         varianceReductionFactor: 0.1,
@@ -103,7 +102,6 @@ describe("ExhaustionDetectorEnhanced - Directional Passive Volume Logic", () => 
             enableCrossTimeframeAnalysis: true,
             minZoneConfluenceCount: 2,
             maxZoneConfluenceDistance: 3,
-            confluenceConfidenceBoost: 0.15,
             crossTimeframeBoost: 0.12,
         });
 

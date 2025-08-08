@@ -25,8 +25,6 @@ const REAL_ACCUMULATION_CONFIG = {
     confidenceThreshold: 0.4, // 40% confidence threshold
     confluenceMinZones: 1,
     confluenceMaxDistance: 0.1,
-    confluenceConfidenceBoost: 0.1,
-    crossTimeframeConfidenceBoost: 0.15,
     accumulationVolumeThreshold: 15, // 15 LTC minimum
     accumulationRatioThreshold: 0.55, // 55% buy ratio threshold
     alignmentScoreThreshold: 0.5,
@@ -54,8 +52,6 @@ const REAL_DISTRIBUTION_CONFIG = {
     confidenceThreshold: 0.4, // 40% confidence threshold
     confluenceMinZones: 1,
     confluenceMaxDistance: 0.1,
-    confluenceConfidenceBoost: 0.1,
-    crossTimeframeConfidenceBoost: 0.15,
     distributionVolumeThreshold: 15, // 15 LTC minimum
     distributionRatioThreshold: 0.5, // 50% sell ratio threshold
     alignmentScoreThreshold: 0.5,

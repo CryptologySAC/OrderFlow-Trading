@@ -380,7 +380,7 @@ export class ExhaustionZoneTracker {
             confidence += 0.2;
         }
 
-        return Math.min(1, confidence);
+        return confidence;
     }
 
     /**

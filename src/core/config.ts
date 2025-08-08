@@ -213,6 +213,9 @@ export const DeltaCVDDetectorSchema = z.object({
 
     // Institutional trade threshold (replace hardcoded 17.8 LTC)
     institutionalThreshold: z.number().min(0.001).max(5.0), // LTC threshold for institutional trade detection
+
+    // Volume efficiency threshold for quality flag
+    volumeEfficiencyThreshold: z.number().min(0.1).max(0.5),
 });
 
 // ACCUMULATION detector - CLEANED UP - Only used settings remain
@@ -989,7 +992,6 @@ export class Config {
             conflictResolution: smConfig.conflictResolution,
             signalPriorityMatrix: smConfig.signalPriorityMatrix,
             // 🔧 Configurable parameters to eliminate magic numbers (REQUIRED)
-            correlationBoostFactor: Number(smConfig.correlationBoostFactor),
             priceTolerancePercent: Number(smConfig.priceTolerancePercent),
             signalThrottleMs: Number(smConfig.signalThrottleMs),
             correlationWindowMs: Number(smConfig.correlationWindowMs),
@@ -999,8 +1001,6 @@ export class Config {
             volatilityLowThreshold: Number(smConfig.volatilityLowThreshold),
             defaultLowVolatility: Number(smConfig.defaultLowVolatility),
             defaultVolatilityError: Number(smConfig.defaultVolatilityError),
-            contextBoostHigh: Number(smConfig.contextBoostHigh),
-            contextBoostLow: Number(smConfig.contextBoostLow),
             priorityQueueHighThreshold: Number(
                 smConfig.priorityQueueHighThreshold
             ),

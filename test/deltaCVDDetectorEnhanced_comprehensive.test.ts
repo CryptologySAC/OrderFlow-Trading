@@ -453,7 +453,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
 
             it("Test 3: Bullish Divergence - Enhanced Confidence", () => {
                 setupDetector({
-                    divergenceConfidenceBoost: 0.25, // Higher confidence boost
                     cvdDivergenceScoreMultiplier: 2.2, // Higher score multiplier
                 });
 
@@ -613,7 +612,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
 
             it("Test 9: Bullish Divergence - Confidence Boost Effect", () => {
                 setupDetector({
-                    divergenceConfidenceBoost: 0.2, // Significant boost
                     enableCVDDivergenceAnalysis: true,
                 });
 
@@ -710,7 +708,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
 
             it("Test 13: Bearish Divergence - Enhanced Confidence", () => {
                 setupDetector({
-                    divergenceConfidenceBoost: 0.25,
                     cvdDivergenceScoreMultiplier: 2.2,
                 });
 
@@ -870,7 +867,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
 
             it("Test 19: Bearish Divergence - Confidence Boost Effect", () => {
                 setupDetector({
-                    divergenceConfidenceBoost: 0.2,
                     enableCVDDivergenceAnalysis: true,
                 });
 
@@ -1173,7 +1169,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
             it("Test 33: Cross-Timeframe Zone Analysis", () => {
                 setupDetector({
                     windowsSec: [60, 180, 300],
-                    divergenceConfidenceBoost: 0.18,
                 });
 
                 const trades = generateRealisticCVDPattern(
@@ -1243,7 +1238,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
             it("Test 36: Zone Aggregation Impact", () => {
                 setupDetector({
                     cvdDivergenceScoreMultiplier: 2.5,
-                    divergenceConfidenceBoost: 0.2,
                 });
 
                 const trades = generateRealisticCVDPattern(
@@ -1335,7 +1329,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
             it("Test 40: Zone Enhancement Integration", () => {
                 setupDetector({
                     enhancementMode: "production",
-                    divergenceConfidenceBoost: 0.15,
                     useStandardizedZones: true,
                 });
 
@@ -1410,7 +1403,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
 
             it("Test 43: Signal Quality Metrics", () => {
                 setupDetector({
-                    divergenceConfidenceBoost: 0.2,
                     cvdDivergenceVolumeThreshold: 30,
                 });
 
@@ -1501,7 +1493,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
                     // Create fresh detector for each iteration to reset cooldown state
                     setupDetector({
                         cvdDivergenceVolumeThreshold: 25,
-                        divergenceConfidenceBoost: 0.15,
                     });
                     emittedEvents = []; // Reset events
                     const trades = generateRealisticCVDPattern(
@@ -1599,7 +1590,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
                     enhancementMode: "production",
                     signalThreshold: 0.4,
                     cvdDivergenceVolumeThreshold: 50,
-                    divergenceConfidenceBoost: 0.15,
                 });
 
                 const trades = generateRealisticCVDPattern(
@@ -1722,7 +1712,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
             it("Test 54: Mixed Signal Environment", () => {
                 setupDetector({
                     signalThreshold: 0.4,
-                    divergenceConfidenceBoost: 0.1,
                 });
 
                 // Mix bullish and bearish patterns
@@ -1838,7 +1827,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
 
             it("Test 58: Cross-Asset Correlation", () => {
                 setupDetector({
-                    divergenceConfidenceBoost: 0.2,
                     signalThreshold: 0.45,
                 });
 
@@ -1964,7 +1952,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
             it("Test 63: CPU Intensive Processing", () => {
                 setupDetector({
                     cvdDivergenceScoreMultiplier: 3.0,
-                    divergenceConfidenceBoost: 0.25,
                 });
 
                 const trades = generateRealisticCVDPattern(
@@ -2080,7 +2067,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
                     cvdDivergenceVolumeThreshold: 50,
                     cvdDivergenceScoreMultiplier: 1.8,
                     enableCVDDivergenceAnalysis: true,
-                    divergenceConfidenceBoost: 0.15,
                 });
 
                 const trades = generateRealisticCVDPattern(
@@ -2100,7 +2086,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
 
             it("Test 68: Signal Quality Consistency", () => {
                 setupDetector({
-                    divergenceConfidenceBoost: 0.18,
                     cvdDivergenceVolumeThreshold: 40,
                 });
 
@@ -2194,7 +2179,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
             it("Test 72: Signal Quality Over Quantity", () => {
                 setupDetector({
                     signalThreshold: 0.6, // High threshold for quality
-                    divergenceConfidenceBoost: 0.2,
                 });
 
                 const trades = generateRealisticCVDPattern(
@@ -2279,7 +2263,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
             it("Test 76: Signal Validation Pipeline", () => {
                 setupDetector({
                     signalThreshold: 0.4,
-                    divergenceConfidenceBoost: 0.15,
                 });
 
                 const trades = generateRealisticCVDPattern(
@@ -2373,7 +2356,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
                     cvdDivergenceVolumeThreshold: 50,
                     cvdDivergenceScoreMultiplier: 1.8,
                     enableCVDDivergenceAnalysis: true,
-                    divergenceConfidenceBoost: 0.15,
                     useStandardizedZones: true,
                 });
 
@@ -2409,7 +2391,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
                     cvdDivergenceVolumeThreshold: 50,
                     cvdDivergenceScoreMultiplier: 1.8,
                     enableCVDDivergenceAnalysis: true,
-                    divergenceConfidenceBoost: 0.15,
                 });
 
                 const trades = generateRealisticCVDPattern(
@@ -2444,7 +2425,6 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
                     signalThreshold: 0.4,
                     cvdDivergenceVolumeThreshold: 50,
                     cvdDivergenceScoreMultiplier: 1.8,
-                    divergenceConfidenceBoost: 0.15,
                     windowsSec: [60, 300],
                     minTradesPerSec: 0.75,
                     minVolPerSec: 10,

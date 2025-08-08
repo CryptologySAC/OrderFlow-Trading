@@ -22,8 +22,6 @@ const ACCUMULATION_CONFIG = {
     confidenceThreshold: 0.01, // Extremely low for debugging
     confluenceMinZones: 1,
     confluenceMaxDistance: 0.5, // Larger distance
-    confluenceConfidenceBoost: 0.1,
-    crossTimeframeConfidenceBoost: 0.15,
     accumulationVolumeThreshold: 1, // Just 1 LTC
     accumulationRatioThreshold: 0.1, // Just 10% buy ratio
     alignmentScoreThreshold: 0.1,

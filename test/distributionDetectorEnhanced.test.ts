@@ -82,11 +82,9 @@ vi.mock("../src/core/config.js", async (importOriginal) => {
                     enableZoneConfluenceFilter: true,
                     minZoneConfluenceCount: 2,
                     maxZoneConfluenceDistance: 3,
-                    confluenceConfidenceBoost: 0.1,
 
                     // Cross-timeframe analysis
                     enableCrossTimeframeAnalysis: false,
-                    crossTimeframeBoost: 0.05,
                 };
             },
             get ENHANCED_ZONE_FORMATION() {
@@ -240,8 +238,6 @@ describe("DistributionDetectorEnhanced - Nuclear Cleanup Reality", () => {
         confidenceThreshold: 0.4, // Required parameter
         confluenceMinZones: 1, // Required parameter
         confluenceMaxDistance: 0.1, // Required parameter
-        confluenceConfidenceBoost: 0.1, // Required parameter
-        crossTimeframeConfidenceBoost: 0.15, // Required parameter
         distributionVolumeThreshold: 15, // Required parameter
         distributionRatioThreshold: 0.5, // Required parameter
         alignmentScoreThreshold: 0.5, // Required parameter

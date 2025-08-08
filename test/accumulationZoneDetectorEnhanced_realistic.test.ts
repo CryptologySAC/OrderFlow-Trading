@@ -47,8 +47,6 @@ const REAL_ACCUMULATION_CONFIG = {
     confidenceThreshold: 0.4, // Real config.json value
     confluenceMinZones: 1,
     confluenceMaxDistance: 0.1, // 10-cent confluence range
-    confluenceConfidenceBoost: 0.1,
-    crossTimeframeConfidenceBoost: 0.15,
     accumulationVolumeThreshold: 15, // 15 LTC minimum volume
     accumulationRatioThreshold: 0.55, // 55% buy ratio threshold
     alignmentScoreThreshold: 0.5,

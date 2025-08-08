@@ -648,8 +648,6 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 momentumScoreMultiplier: 2,
                 enableCVDDivergenceAnalysis: true,
                 enableMomentumAlignment: false,
-                divergenceConfidenceBoost: 0.12,
-                momentumAlignmentBoost: 0.08,
 
                 // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
                 minTradesForAnalysis: 20,
@@ -757,8 +755,6 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 momentumScoreMultiplier: 2,
                 enableCVDDivergenceAnalysis: true,
                 enableMomentumAlignment: false,
-                divergenceConfidenceBoost: 0.12,
-                momentumAlignmentBoost: 0.08,
 
                 // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
                 minTradesForAnalysis: 20,
@@ -905,7 +901,6 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 aggressiveVolumeExhaustionThreshold: 0.7,
                 aggressiveVolumeReductionFactor: 0.5,
                 enableDepletionAnalysis: true,
-                depletionConfidenceBoost: 0.1,
 
                 // Override with actual config if available
                 ...config.exhaustion,
@@ -987,8 +982,6 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
                 momentumScoreMultiplier: 2,
                 enableCVDDivergenceAnalysis: true,
                 enableMomentumAlignment: false,
-                divergenceConfidenceBoost: 0.12,
-                momentumAlignmentBoost: 0.08,
 
                 // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
                 minTradesForAnalysis: 20,

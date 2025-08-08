@@ -254,7 +254,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 aggressiveVolumeExhaustionThreshold: 0.7,
                 aggressiveVolumeReductionFactor: 0.5,
                 enableDepletionAnalysis: true,
-                depletionConfidenceBoost: 0.1,
             };
 
             const detector = new ExhaustionDetectorEnhanced(
@@ -364,7 +363,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 aggressiveVolumeExhaustionThreshold: 0.7,
                 aggressiveVolumeReductionFactor: 0.5,
                 enableDepletionAnalysis: true,
-                depletionConfidenceBoost: 0.1,
             };
 
             const detector = new ExhaustionDetectorEnhanced(
@@ -470,7 +468,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 aggressiveVolumeExhaustionThreshold: 0.7,
                 aggressiveVolumeReductionFactor: 0.5,
                 enableDepletionAnalysis: true,
-                depletionConfidenceBoost: 0.1,
             };
 
             const detector = new ExhaustionDetectorEnhanced(
@@ -576,7 +573,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 aggressiveVolumeExhaustionThreshold: 0.7,
                 aggressiveVolumeReductionFactor: 0.5,
                 enableDepletionAnalysis: true,
-                depletionConfidenceBoost: 0.1,
             };
 
             const detector = new ExhaustionDetectorEnhanced(
@@ -654,7 +650,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 institutionalVolumeThreshold: 50,
                 institutionalVolumeRatioThreshold: 0.3,
                 enableInstitutionalVolumeFilter: true,
-                institutionalVolumeBoost: 0.1,
 
                 // Enhanced calculation parameters
                 volumeNormalizationThreshold: 200,
@@ -667,7 +662,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 // Enhanced thresholds
                 highConfidenceThreshold: 0.7,
                 lowConfidenceReduction: 0.7,
-                confidenceBoostReduction: 0.5,
                 passiveAbsorptionThreshold: 0.6,
                 aggressiveDistributionThreshold: 0.6,
                 patternDifferenceThreshold: 0.1,
@@ -752,7 +746,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 institutionalVolumeThreshold: 50,
                 institutionalVolumeRatioThreshold: 0.3,
                 enableInstitutionalVolumeFilter: true,
-                institutionalVolumeBoost: 0.1,
 
                 // Enhanced calculation parameters
                 volumeNormalizationThreshold: 200,
@@ -765,7 +758,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 // Enhanced thresholds
                 highConfidenceThreshold: 0.7,
                 lowConfidenceReduction: 0.7,
-                confidenceBoostReduction: 0.5,
                 passiveAbsorptionThreshold: 0.6,
                 aggressiveDistributionThreshold: 0.6,
                 patternDifferenceThreshold: 0.1,
@@ -849,7 +841,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 institutionalVolumeThreshold: 50,
                 institutionalVolumeRatioThreshold: 0.3,
                 enableInstitutionalVolumeFilter: true,
-                institutionalVolumeBoost: 0.1,
 
                 // Enhanced calculation parameters
                 volumeNormalizationThreshold: 200,
@@ -862,7 +853,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 // Enhanced thresholds
                 highConfidenceThreshold: 0.7,
                 lowConfidenceReduction: 0.7,
-                confidenceBoostReduction: 0.5,
                 passiveAbsorptionThreshold: 0.6,
                 aggressiveDistributionThreshold: 0.6,
                 patternDifferenceThreshold: 0.1,
@@ -946,7 +936,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 institutionalVolumeThreshold: 50,
                 institutionalVolumeRatioThreshold: 0.3,
                 enableInstitutionalVolumeFilter: true,
-                institutionalVolumeBoost: 0.1,
 
                 // Enhanced calculation parameters
                 volumeNormalizationThreshold: 200,
@@ -959,7 +948,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 // Enhanced thresholds
                 highConfidenceThreshold: 0.7,
                 lowConfidenceReduction: 0.7,
-                confidenceBoostReduction: 0.5,
                 passiveAbsorptionThreshold: 0.6,
                 aggressiveDistributionThreshold: 0.6,
                 patternDifferenceThreshold: 0.1,
@@ -1051,8 +1039,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 momentumScoreMultiplier: 2,
                 enableCVDDivergenceAnalysis: true,
                 enableMomentumAlignment: false,
-                divergenceConfidenceBoost: 0.12,
-                momentumAlignmentBoost: 0.08,
 
                 // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
                 minTradesForAnalysis: 20,
@@ -1139,8 +1125,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 momentumScoreMultiplier: 2,
                 enableCVDDivergenceAnalysis: true,
                 enableMomentumAlignment: false,
-                divergenceConfidenceBoost: 0.12,
-                momentumAlignmentBoost: 0.08,
 
                 // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
                 minTradesForAnalysis: 20,
@@ -1227,8 +1211,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 momentumScoreMultiplier: 2,
                 enableCVDDivergenceAnalysis: true,
                 enableMomentumAlignment: false,
-                divergenceConfidenceBoost: 0.12,
-                momentumAlignmentBoost: 0.08,
 
                 // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
                 minTradesForAnalysis: 20,
@@ -1315,8 +1297,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 momentumScoreMultiplier: 2,
                 enableCVDDivergenceAnalysis: true,
                 enableMomentumAlignment: false,
-                divergenceConfidenceBoost: 0.12,
-                momentumAlignmentBoost: 0.08,
 
                 // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
                 minTradesForAnalysis: 20,
@@ -1433,7 +1413,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 aggressiveVolumeExhaustionThreshold: 0.7,
                 aggressiveVolumeReductionFactor: 0.5,
                 enableDepletionAnalysis: true,
-                depletionConfidenceBoost: 0.1,
             };
 
             const detector = new ExhaustionDetectorEnhanced(
@@ -1551,7 +1530,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 aggressiveVolumeExhaustionThreshold: 0.7,
                 aggressiveVolumeReductionFactor: 0.5,
                 enableDepletionAnalysis: true,
-                depletionConfidenceBoost: 0.1,
             };
 
             const detector = new ExhaustionDetectorEnhanced(
@@ -1672,7 +1650,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 aggressiveVolumeExhaustionThreshold: 0.7,
                 aggressiveVolumeReductionFactor: 0.5,
                 enableDepletionAnalysis: true,
-                depletionConfidenceBoost: 0.1,
             };
 
             const mockExhaustionSettings: ExhaustionEnhancedSettings = {
@@ -1760,7 +1737,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 aggressiveVolumeExhaustionThreshold: 0.7,
                 aggressiveVolumeReductionFactor: 0.5,
                 enableDepletionAnalysis: true,
-                depletionConfidenceBoost: 0.1,
             };
 
             // ARCHITECTURE: Validation moved to config.ts - detectors trust pre-validated settings
@@ -1866,7 +1842,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 aggressiveVolumeExhaustionThreshold: 0.7,
                 aggressiveVolumeReductionFactor: 0.5,
                 enableDepletionAnalysis: true,
-                depletionConfidenceBoost: 0.1,
             };
 
             const detector = new ExhaustionDetectorEnhanced(

@@ -67,7 +67,6 @@ vi.mock("../src/core/config.js", () => {
             accumulation: 0.6,
             distribution: 0.7,
         },
-        correlationBoostFactor: 0.7,
         priceTolerancePercent: 0.3,
         signalThrottleMs: 10000,
         correlationWindowMs: 300000,
@@ -77,8 +76,6 @@ vi.mock("../src/core/config.js", () => {
         volatilityLowThreshold: 0.02,
         defaultLowVolatility: 0.02,
         defaultVolatilityError: 0.03,
-        contextBoostHigh: 0.15,
-        contextBoostLow: 0.1,
         priorityQueueHighThreshold: 8.0,
         backpressureYieldMs: 1,
         marketVolatilityWeight: 0.6,
@@ -245,40 +242,33 @@ describe("SignalManager Core Processing - Institutional Grade", () => {
             );
         });
 
-        test("should reject signal below confidence threshold", () => {
+        test("should accept signal regardless of confidence (Option B architecture)", () => {
+            // Option B: Detectors handle their own thresholds, signal manager accepts all
             const signal = createTestSignal(
                 "test2",
                 "absorption",
                 "buy",
                 89.5,
                 0.1
-            ); // Below 0.3 threshold
+            ); // Low confidence but should still be accepted
 
             const result = signalManager.handleProcessedSignal(signal);
 
-            expect(result).toBeNull();
-            expect(signalManager.getLastRejectReason()).toBe("low_confidence");
-            expect(mockLogger.debug).toHaveBeenCalledWith(
-                expect.stringContaining(
-                    "Signal rejected due to detector-specific confidence threshold"
-                ),
-                expect.objectContaining({
-                    signalId: signal.id,
-                    confidence: 0.1,
-                })
-            );
+            expect(result).toBeTruthy();
+            expect(result!.confidence).toBe(0.1);
         });
 
-        test("should handle different signal types with appropriate thresholds", () => {
+        test("should accept all signal types regardless of confidence (Option B architecture)", () => {
+            // Option B: No confidence filtering in signal manager
             const testCases = [
-                { type: "absorption", confidence: 0.35, shouldPass: true },
-                { type: "deltacvd", confidence: 0.2, shouldPass: true },
-                { type: "exhaustion", confidence: 0.25, shouldPass: true },
-                { type: "accumulation", confidence: 0.2, shouldPass: false }, // Below 0.3 threshold
-                { type: "distribution", confidence: 0.5, shouldPass: true },
+                { type: "absorption", confidence: 0.35 },
+                { type: "deltacvd", confidence: 0.2 },
+                { type: "exhaustion", confidence: 0.25 },
+                { type: "accumulation", confidence: 0.2 }, // Previously rejected, now accepted
+                { type: "distribution", confidence: 0.5 },
             ];
 
-            testCases.forEach(({ type, confidence, shouldPass }, index) => {
+            testCases.forEach(({ type, confidence }, index) => {
                 const signal = createTestSignal(
                     `test_${index}`,
                     type,
@@ -288,14 +278,9 @@ describe("SignalManager Core Processing - Institutional Grade", () => {
                 );
                 const result = signalManager.handleProcessedSignal(signal);
 
-                if (shouldPass) {
-                    expect(result).toBeTruthy();
-                } else {
-                    expect(result).toBeNull();
-                    expect(signalManager.getLastRejectReason()).toBe(
-                        "low_confidence"
-                    );
-                }
+                // All signals should be accepted regardless of confidence
+                expect(result).toBeTruthy();
+                expect(result!.confidence).toBe(confidence);
             });
         });
     });
@@ -413,7 +398,8 @@ describe("SignalManager Core Processing - Institutional Grade", () => {
             expect(result!.confidence).toBeGreaterThanOrEqual(0.3);
         });
 
-        test("should handle zero confidence signal", () => {
+        test("should accept zero confidence signal (Option B architecture)", () => {
+            // Option B: Signal manager doesn't filter by confidence
             const signal = createTestSignal(
                 "test7",
                 "absorption",
@@ -424,8 +410,8 @@ describe("SignalManager Core Processing - Institutional Grade", () => {
 
             const result = signalManager.handleProcessedSignal(signal);
 
-            expect(result).toBeNull();
-            expect(signalManager.getLastRejectReason()).toBe("low_confidence");
+            expect(result).toBeTruthy();
+            expect(result!.confidence).toBe(0);
         });
 
         test("should handle maximum confidence signal", () => {
@@ -460,7 +446,8 @@ describe("SignalManager Core Processing - Institutional Grade", () => {
             expect(result!.confidence).toBeGreaterThanOrEqual(1.5);
         });
 
-        test("should handle negative confidence", () => {
+        test("should accept negative confidence (Option B architecture)", () => {
+            // Option B: Even negative confidence accepted (detectors should prevent this)
             const signal = createTestSignal(
                 "test10",
                 "absorption",
@@ -471,8 +458,8 @@ describe("SignalManager Core Processing - Institutional Grade", () => {
 
             const result = signalManager.handleProcessedSignal(signal);
 
-            expect(result).toBeNull();
-            expect(signalManager.getLastRejectReason()).toBe("low_confidence");
+            expect(result).toBeTruthy();
+            expect(result!.confidence).toBe(-0.1);
         });
     });
 

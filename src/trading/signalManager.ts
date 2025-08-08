@@ -64,7 +64,7 @@ export interface SignalManagerConfig {
     };
 
     // 🔧 Configurable parameters to eliminate magic numbers (REQUIRED)
-    correlationBoostFactor: number;
+    // Option B: Removed boost factors - detectors handle confidence internally
     priceTolerancePercent: number;
     signalThrottleMs: number;
     correlationWindowMs: number;
@@ -74,8 +74,6 @@ export interface SignalManagerConfig {
     volatilityLowThreshold: number;
     defaultLowVolatility: number;
     defaultVolatilityError: number;
-    contextBoostHigh: number;
-    contextBoostLow: number;
     priorityQueueHighThreshold: number;
     backpressureYieldMs: number;
     marketVolatilityWeight: number;
@@ -144,12 +142,13 @@ export class SignalManager extends EventEmitter {
     private readonly priceTolerancePercent: number;
 
     // Configurable parameters to eliminate magic numbers
-    private readonly correlationBoostFactor: number;
+    // Option B: Removed boost factors - detectors handle confidence internally
+    // private readonly correlationBoostFactor: number;
     private readonly defaultPriority: number;
     private readonly volatilityHighThreshold: number;
     private readonly volatilityLowThreshold: number;
-    private readonly contextBoostHigh: number;
-    private readonly contextBoostLow: number;
+    // private readonly contextBoostHigh: number;
+    // private readonly contextBoostLow: number;
     private readonly priorityQueueHighThreshold: number;
 
     // Enhanced backpressure management for high-frequency signal processing
@@ -185,7 +184,8 @@ export class SignalManager extends EventEmitter {
         this.config = Config.SIGNAL_MANAGER;
 
         // Initialize configurable parameters from config
-        this.correlationBoostFactor = this.config.correlationBoostFactor;
+        // Option B: Removed boost factors - detectors handle confidence internally
+        // this.correlationBoostFactor = this.config.correlationBoostFactor;
         this.priceTolerancePercent = this.config.priceTolerancePercent;
         this.signalThrottleMs = this.config.signalThrottleMs;
         this.correlationWindowMs = this.config.correlationWindowMs;
@@ -193,8 +193,8 @@ export class SignalManager extends EventEmitter {
         this.defaultPriority = this.config.defaultPriority;
         this.volatilityHighThreshold = this.config.volatilityHighThreshold;
         this.volatilityLowThreshold = this.config.volatilityLowThreshold;
-        this.contextBoostHigh = this.config.contextBoostHigh;
-        this.contextBoostLow = this.config.contextBoostLow;
+        // this.contextBoostHigh = this.config.contextBoostHigh;
+        // this.contextBoostLow = this.config.contextBoostLow;
         this.priorityQueueHighThreshold =
             this.config.priorityQueueHighThreshold;
 
@@ -260,35 +260,10 @@ export class SignalManager extends EventEmitter {
                 return null;
             }
 
-            // 2. Detector-specific confidence threshold check
-            if (!this.filterSignalByConfidence(signal)) {
-                this.logger.debug(
-                    "[SignalManager] Signal rejected due to detector-specific confidence threshold",
-                    {
-                        signalId: signal.id,
-                        signalType: signal.type,
-                        confidence: signal.confidence,
-                        requiredThreshold:
-                            Config.DETECTOR_CONFIDENCE_THRESHOLDS[signal.type],
-                    }
-                );
-
-                this.recordMetric(
-                    "signal_rejected_low_confidence",
-                    signal.type
-                );
-                this.recordDetailedSignalMetrics(
-                    signal,
-                    "rejected",
-                    "low_confidence"
-                );
-                this.lastRejectReason = "low_confidence";
-                // Track rejected signals by type
-                if (this.signalTypeStats[signal.type]) {
-                    this.signalTypeStats[signal.type]!.rejected++;
-                }
-                return null;
-            }
+            // 2. [REMOVED] Detector-specific confidence threshold check
+            // Detectors now handle their own confidence thresholds internally
+            // and only emit signals that meet their criteria (Option B)
+            // This eliminates redundant filtering and simplifies the system
 
             // 3. Check for conflicting signals if enabled
             if (this.config.conflictResolution.enabled) {
@@ -365,20 +340,9 @@ export class SignalManager extends EventEmitter {
     }
 
     /**
-     * Filter signal by detector-specific confidence threshold.
+     * [REMOVED] Filter signal by detector-specific confidence threshold.
+     * Detectors now handle their own confidence thresholds internally.
      */
-    private filterSignalByConfidence(signal: ProcessedSignal): boolean {
-        const thresholds = Config.DETECTOR_CONFIDENCE_THRESHOLDS;
-        const minConfidence = thresholds[signal.type];
-
-        if (minConfidence === undefined) {
-            throw new Error(
-                `Missing confidence threshold for signal type: ${signal.type}. Expected one of: ${Object.keys(thresholds).join(", ")}`
-            );
-        }
-
-        return signal.confidence >= minConfidence;
-    }
 
     /**
      * Calculate position size based on detector type.
@@ -434,45 +398,12 @@ export class SignalManager extends EventEmitter {
         signal: ProcessedSignal,
         correlation: SignalCorrelation
     ): ConfirmedSignal {
-        // Enhanced confidence calculation with volatility-based context enhancement
-        let finalConfidence = signal.confidence;
+        // Option B Architecture: No confidence modification in signal manager
+        // Detectors handle their own confidence calculations
+        const finalConfidence = signal.confidence;
 
-        // Get market health for context AND enhancement
+        // Get market health for context only (no enhancement)
         const health = this.anomalyDetector.getMarketHealth();
-
-        // 1. Apply volatility-based context enhancement using AnomalyDetector data
-        const marketVolatility = this.getMarketVolatility();
-        const volatilityRegime =
-            this.determineVolatilityRegime(marketVolatility);
-
-        // Apply context boost based on volatility regime
-        let contextBoost = 0;
-        if (volatilityRegime === "highVolatility") {
-            contextBoost = this.contextBoostHigh;
-        } else if (volatilityRegime === "lowVolatility") {
-            contextBoost = this.contextBoostLow;
-        }
-
-        if (contextBoost > 0) {
-            finalConfidence = FinancialMath.multiplyQuantities(
-                finalConfidence,
-                FinancialMath.safeAdd(1, contextBoost)
-            );
-        }
-
-        // 2. Apply correlation boost
-        if (correlation.strength > 0) {
-            finalConfidence = FinancialMath.multiplyQuantities(
-                finalConfidence,
-                FinancialMath.safeAdd(
-                    1,
-                    FinancialMath.multiplyQuantities(
-                        correlation.strength,
-                        this.correlationBoostFactor
-                    )
-                )
-            );
-        }
 
         const confirmedSignal: ConfirmedSignal = {
             id: `confirmed_${signal.id}`,
@@ -501,30 +432,7 @@ export class SignalManager extends EventEmitter {
                 healthRecommendation: health.recommendation,
                 criticalIssues: health.criticalIssues,
                 recentAnomalyTypes: health.recentAnomalyTypes,
-                confidenceAdjustment: {
-                    originalConfidence: signal.confidence,
-                    adjustedConfidence: finalConfidence,
-                    finalConfidence,
-                    correlationBoost:
-                        correlation.strength * this.correlationBoostFactor,
-                    contextBoost: contextBoost,
-                    volatilityRegime: volatilityRegime,
-                    marketVolatility: marketVolatility,
-                    healthImpact:
-                        contextBoost > 0 ? "volatility_enhancement" : "none",
-                    impactFactors:
-                        contextBoost > 0
-                            ? [
-                                  {
-                                      anomalyType: `volatility_${volatilityRegime}`,
-                                      impact: "positive",
-                                      multiplier: 1 + contextBoost,
-                                      decayedMultiplier: 1 + contextBoost,
-                                      reasoning: `Confidence enhanced due to ${volatilityRegime} volatility regime`,
-                                  },
-                              ]
-                            : [],
-                },
+                // Option B: No confidence adjustment in signal manager
             },
         };
 
