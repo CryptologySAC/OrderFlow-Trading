@@ -21,6 +21,10 @@
 import { Detector } from "./base/detectorEnrichedTrade.js";
 import { FinancialMath } from "../utils/financialMath.js";
 import { SignalValidationLogger } from "../utils/signalValidationLogger.js";
+import {
+    AbsorptionZoneTracker,
+    type AbsorptionTrackerConfig,
+} from "./helpers/absorptionZoneTracker.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
@@ -99,6 +103,10 @@ export class AbsorptionDetectorEnhanced extends Detector {
     private readonly absorptionRatioThreshold: number;
     private readonly absorptionScoreThreshold: number;
 
+    // Dynamic zone tracking for true absorption detection
+    private readonly zoneTracker: AbsorptionZoneTracker;
+    private readonly enableDynamicZoneTracking: boolean;
+
     constructor(
         id: string,
         settings: AbsorptionEnhancedSettings,
@@ -142,6 +150,21 @@ export class AbsorptionDetectorEnhanced extends Detector {
             totalConfidenceBoost: 0,
             enhancementSuccessRate: 0,
         };
+
+        // Initialize dynamic zone tracking
+        this.enableDynamicZoneTracking = settings.enableDynamicZoneTracking;
+        const zoneTrackerConfig: AbsorptionTrackerConfig = {
+            maxZonesPerSide: settings.maxZonesPerSide,
+            historyWindowMs: settings.zoneHistoryWindowMs,
+            absorptionThreshold: settings.absorptionZoneThreshold,
+            minPassiveVolume: settings.minPassiveVolumeForZone,
+            priceStabilityTicks: settings.priceStabilityTicks,
+            minAbsorptionEvents: settings.minAbsorptionEvents,
+        };
+        this.zoneTracker = new AbsorptionZoneTracker(
+            zoneTrackerConfig,
+            Config.TICK_SIZE
+        );
 
         this.logger.info("AbsorptionDetectorEnhanced initialized", {
             detectorId: id,
@@ -296,6 +319,22 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 } as AbsorptionCalculatedValues
             );
             return;
+        }
+
+        // Update zone tracker with current market data
+        if (this.enableDynamicZoneTracking) {
+            // Update spread if available
+            if (event.bestBid && event.bestAsk) {
+                this.zoneTracker.updateSpread(event.bestBid, event.bestAsk);
+            }
+
+            // Update price history for stability tracking
+            this.zoneTracker.updatePrice(event.price, event.timestamp);
+
+            // Update zones in tracker
+            for (const zone of event.zoneData.zones) {
+                this.zoneTracker.updateZone(zone, event.timestamp);
+            }
         }
 
         // STEP 1: CORE ABSORPTION DETECTION (Required for any signals)
@@ -490,29 +529,76 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 },
             };
 
+            // Analyze absorption pattern with zone tracking if enabled
+            let finalSignal = signalWithFlags;
+            if (this.enableDynamicZoneTracking) {
+                const isBuyTrade = !event.buyerIsMaker;
+                const absorptionPattern =
+                    this.zoneTracker.analyzeAbsorption(isBuyTrade);
+
+                if (
+                    absorptionPattern.hasAbsorption &&
+                    absorptionPattern.direction
+                ) {
+                    // Zone tracking detected strong absorption - update signal
+                    const enhancedData =
+                        signalWithFlags.data as EnhancedAbsorptionSignalData;
+                    finalSignal = {
+                        ...signalWithFlags,
+                        side: absorptionPattern.direction,
+                        confidence: Math.max(
+                            signalWithFlags.confidence,
+                            absorptionPattern.confidence
+                        ),
+                        data: {
+                            ...enhancedData,
+                            metadata: {
+                                ...enhancedData.metadata,
+                                absorptionPattern: {
+                                    type: absorptionPattern.absorptionType,
+                                    ratio: absorptionPattern.absorptionRatio,
+                                    strength:
+                                        absorptionPattern.absorptionStrength,
+                                    affectedZones:
+                                        absorptionPattern.affectedZones,
+                                    priceStability:
+                                        absorptionPattern.priceStability,
+                                },
+                            },
+                        } as EnhancedAbsorptionSignalData,
+                    };
+
+                    this.logger.info(
+                        "Zone tracking enhanced absorption signal",
+                        {
+                            absorptionType: absorptionPattern.absorptionType,
+                            direction: absorptionPattern.direction,
+                            ratio: absorptionPattern.absorptionRatio,
+                            confidence: absorptionPattern.confidence,
+                        }
+                    );
+                }
+            }
+
             // Update cooldown tracking before emitting signal
             this.canEmitSignal(eventKey, true);
 
-            // Log core signal for validation tracking BEFORE checking thresholds
+            // Log final signal for validation tracking BEFORE checking thresholds
             const signalZones = event.zoneData ? event.zoneData.zones : [];
-            void this.logSignalForValidation(
-                signalWithFlags,
-                event,
-                signalZones
-            );
+            void this.logSignalForValidation(finalSignal, event, signalZones);
 
             // Log successful signal parameters for 90-minute optimization
-            void this.logSuccessfulSignalParameters(signalWithFlags, event);
+            void this.logSuccessfulSignalParameters(finalSignal, event);
 
             // Only check threshold AFTER logging
             if (
-                coreAbsorptionResult.confidence <
+                finalSignal.confidence <
                 this.enhancementConfig.finalConfidenceRequired
             ) {
-                return; // Core signal doesn't meet final confidence threshold but was logged
+                return; // Signal doesn't meet final confidence threshold but was logged
             }
 
-            this.emit("signalCandidate", signalWithFlags);
+            this.emit("signalCandidate", finalSignal);
 
             this.logger.info(
                 "🎯 AbsorptionDetectorEnhanced: CORE ABSORPTION SIGNAL GENERATED!",

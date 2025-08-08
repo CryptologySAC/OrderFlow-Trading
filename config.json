@@ -275,7 +275,14 @@
                 "enhancementMode": "production",
                 "balanceThreshold": 0.44,
                 "confluenceMinZones": 2,
-                "confluenceMaxDistance": 5
+                "confluenceMaxDistance": 5,
+                "enableDynamicZoneTracking": true,
+                "maxZonesPerSide": 5,
+                "zoneHistoryWindowMs": 60000,
+                "absorptionZoneThreshold": 1.5,
+                "minPassiveVolumeForZone": 50,
+                "priceStabilityTicks": 2,
+                "minAbsorptionEvents": 2
             },
 
             "spoofingDetector": {

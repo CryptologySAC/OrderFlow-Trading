@@ -188,6 +188,15 @@ export const AbsorptionDetectorSchema = z.object({
     // Zone confluence parameters (CLAUDE.md compliance - no magic numbers)
     confluenceMinZones: z.number().int().min(1).max(10),
     confluenceMaxDistance: z.number().int().min(1).max(20),
+
+    // Zone tracking configuration for dynamic absorption detection
+    enableDynamicZoneTracking: z.boolean(),
+    maxZonesPerSide: z.number().int().min(3).max(10),
+    zoneHistoryWindowMs: z.number().int().min(30000).max(300000),
+    absorptionZoneThreshold: z.number().min(1.2).max(3.0), // Passive/aggressive ratio
+    minPassiveVolumeForZone: z.number().min(10).max(10000),
+    priceStabilityTicks: z.number().int().min(1).max(5),
+    minAbsorptionEvents: z.number().int().min(1).max(10),
 });
 
 // DELTACVD detector - CLEANED UP - Only used settings remain
