@@ -162,7 +162,7 @@ export class AbsorptionZoneTracker {
         tracked.lastUpdate = timestamp;
 
         // Check for absorption event
-        this.detectAbsorptionEvent(tracked, isNearBid ? "bid" : "ask");
+        this.detectAbsorptionEvent(tracked);
 
         // Clean old history
         this.cleanOldHistory(tracked, timestamp);
@@ -185,8 +185,9 @@ export class AbsorptionZoneTracker {
      * Analyze zones for absorption patterns
      */
     public analyzeAbsorption(isBuyTrade: boolean): AbsorptionPattern {
-        // For buy trades, look at ask absorption (resistance being absorbed)
-        // For sell trades, look at bid absorption (support being absorbed)
+        // ABSORPTION LOGIC (CORRECTED):
+        // - Buy trades hit asks: If asks absorb buying → resistance holds → SELL signal (reversal down)
+        // - Sell trades hit bids: If bids absorb selling → support holds → BUY signal (reversal up)
         const relevantZones = isBuyTrade ? this.askZones : this.bidZones;
         const absorptionType = isBuyTrade ? "ask" : "bid";
 
@@ -243,13 +244,13 @@ export class AbsorptionZoneTracker {
             priceStability
         );
 
-        // Determine signal direction
-        // If ask absorption (resistance absorbed), expect upward move → buy signal
-        // If bid absorption (support absorbed), expect downward move → sell signal
+        // Determine signal direction (CORRECTED - absorption signals reversal):
+        // - Ask absorption = resistance holding against buying = SELL signal (reversal down)
+        // - Bid absorption = support holding against selling = BUY signal (reversal up)
         const direction = hasSignificantAbsorption
             ? absorptionType === "ask"
-                ? "buy"
-                : "sell"
+                ? "sell" // Ask absorption = resistance holds = bearish reversal
+                : "buy" // Bid absorption = support holds = bullish reversal
             : null;
 
         return {
@@ -314,7 +315,9 @@ export class AbsorptionZoneTracker {
 
         // Look at consistency of absorption over time
         let consistentAbsorption = 0;
-        const recentHistory = zone.history.slice(-10); // Last 10 entries
+        const recentHistory = zone.history.slice(
+            -this.config.maxZonesPerSide * 2
+        ); // Use double max zones as lookback
 
         for (const entry of recentHistory) {
             if (entry.absorptionRatio >= this.config.absorptionThreshold) {
@@ -324,14 +327,12 @@ export class AbsorptionZoneTracker {
 
         const consistencyRatio = consistentAbsorption / recentHistory.length;
 
-        // Strength is combination of consistency and max absorption ratio
-        const strength =
-            consistencyRatio * 0.6 +
-            Math.min(
-                1,
-                zone.maxAbsorptionRatio / (this.config.absorptionThreshold * 2)
-            ) *
-                0.4;
+        // Strength is average of consistency and normalized max absorption ratio
+        const normalizedMaxRatio = Math.min(
+            1,
+            zone.maxAbsorptionRatio / (this.config.absorptionThreshold * 2)
+        );
+        const strength = (consistencyRatio + normalizedMaxRatio) / 2; // Simple average, no magic weights
 
         return strength;
     }
@@ -368,42 +369,33 @@ export class AbsorptionZoneTracker {
         maxAbsorption: number,
         priceStability: boolean
     ): number {
-        let confidence = 0;
+        // Simple average of normalized factors - NO BONUSES, NO MAGIC WEIGHTS
+        const factors: number[] = [];
 
-        // Base confidence from absorption ratio (0-40%)
-        confidence += Math.min(
-            0.4,
-            (avgAbsorptionRatio / this.config.absorptionThreshold) * 0.3
+        // Normalized absorption ratio
+        factors.push(
+            Math.min(1, avgAbsorptionRatio / this.config.absorptionThreshold)
         );
 
-        // Affected zones contribution (0-20%)
-        const zoneScore = Math.min(
-            1,
-            affectedZones / this.config.maxZonesPerSide
-        );
-        confidence += zoneScore * 0.2;
+        // Normalized zone count
+        factors.push(Math.min(1, affectedZones / this.config.maxZonesPerSide));
 
-        // Max absorption contribution (0-20%)
-        confidence += Math.min(
-            0.2,
-            (maxAbsorption / (this.config.absorptionThreshold * 2)) * 0.2
+        // Normalized max absorption
+        factors.push(
+            Math.min(1, maxAbsorption / (this.config.absorptionThreshold * 2))
         );
 
-        // Price stability bonus (0-20%)
-        if (priceStability) {
-            confidence += 0.2;
-        }
+        // Price stability as binary factor (1 or 0)
+        factors.push(priceStability ? 1 : 0);
 
-        return Math.min(1, confidence);
+        // Return simple average of all factors
+        return factors.reduce((sum, f) => sum + f, 0) / factors.length;
     }
 
     /**
      * Detect significant absorption events
      */
-    private detectAbsorptionEvent(
-        zone: TrackedAbsorptionZone,
-        side: "bid" | "ask"
-    ): void {
+    private detectAbsorptionEvent(zone: TrackedAbsorptionZone): void {
         if (zone.history.length < 2) {
             return;
         }

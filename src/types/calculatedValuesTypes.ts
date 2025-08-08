@@ -31,6 +31,15 @@ export interface AbsorptionCalculatedValues {
     calculatedBalanceThreshold: number; // vs config balanceThreshold (0.017)
     calculatedConfluenceMinZones: number; // vs config confluenceMinZones (2)
     calculatedConfluenceMaxDistance: number; // vs config confluenceMaxDistance (5)
+
+    // Zone tracking parameters
+    calculatedEnableDynamicZoneTracking: boolean; // vs config enableDynamicZoneTracking (true)
+    calculatedMaxZonesPerSide: number; // vs config maxZonesPerSide (5)
+    calculatedZoneHistoryWindowMs: number; // vs config zoneHistoryWindowMs (60000)
+    calculatedAbsorptionZoneThreshold: number; // vs config absorptionZoneThreshold (1.5)
+    calculatedMinPassiveVolumeForZone: number; // vs config minPassiveVolumeForZone (50)
+    calculatedPriceStabilityTicks: number; // vs config priceStabilityTicks (2)
+    calculatedMinAbsorptionEvents: number; // vs config minAbsorptionEvents (2)
 }
 
 /**

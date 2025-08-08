@@ -316,6 +316,14 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     calculatedBalanceThreshold: 0,
                     calculatedConfluenceMinZones: 0,
                     calculatedConfluenceMaxDistance: 0,
+                    calculatedEnableDynamicZoneTracking:
+                        this.enhancementConfig.enableDynamicZoneTracking,
+                    calculatedMaxZonesPerSide: 0,
+                    calculatedZoneHistoryWindowMs: 0,
+                    calculatedAbsorptionZoneThreshold: 0,
+                    calculatedMinPassiveVolumeForZone: 0,
+                    calculatedPriceStabilityTicks: 0,
+                    calculatedMinAbsorptionEvents: 0,
                 } as AbsorptionCalculatedValues
             );
             return;
@@ -684,6 +692,14 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     calculatedBalanceThreshold: 0,
                     calculatedConfluenceMinZones: 0,
                     calculatedConfluenceMaxDistance: 0,
+                    calculatedEnableDynamicZoneTracking:
+                        this.enhancementConfig.enableDynamicZoneTracking,
+                    calculatedMaxZonesPerSide: 0,
+                    calculatedZoneHistoryWindowMs: 0,
+                    calculatedAbsorptionZoneThreshold: 0,
+                    calculatedMinPassiveVolumeForZone: 0,
+                    calculatedPriceStabilityTicks: 0,
+                    calculatedMinAbsorptionEvents: 0,
                 } as AbsorptionCalculatedValues
             );
             return null;
@@ -812,6 +828,13 @@ export class AbsorptionDetectorEnhanced extends Detector {
             relevantZones
         );
 
+        // Calculate actual price movement in ticks from zones
+        const priceMovementTicks =
+            relevantZones.length > 0 && relevantZones[0]
+                ? Math.abs(event.price - relevantZones[0].priceLevel) /
+                  Config.TICK_SIZE
+                : 0;
+
         // Calculate absorption ratio using FinancialMath
         const absorptionRatio = volumePressure
             ? this.calculateAbsorptionRatio(event, volumePressure)
@@ -937,6 +960,23 @@ export class AbsorptionDetectorEnhanced extends Detector {
             ),
             calculatedConfluenceMinZones: relevantZones.length,
             calculatedConfluenceMaxDistance: this.confluenceMaxDistance,
+            // Zone tracking ACTUAL market values (what we're comparing against thresholds)
+            calculatedEnableDynamicZoneTracking: this.enableDynamicZoneTracking,
+            calculatedMaxZonesPerSide: this.enableDynamicZoneTracking
+                ? this.zoneTracker.getStats().bidZonesTracked +
+                  this.zoneTracker.getStats().askZonesTracked
+                : 0,
+            calculatedZoneHistoryWindowMs: this.enableDynamicZoneTracking
+                ? this.zoneTracker.getStats().totalHistoryEntries
+                : 0,
+            calculatedAbsorptionZoneThreshold: absorptionRatio ?? 0, // Actual absorption ratio observed
+            calculatedMinPassiveVolumeForZone: totalPassiveVolume, // Actual passive volume observed
+            calculatedPriceStabilityTicks: priceMovementTicks, // Actual price movement in ticks
+            calculatedMinAbsorptionEvents: this.enableDynamicZoneTracking
+                ? Math.round(
+                      this.zoneTracker.getStats().averageAbsorptionEvents
+                  )
+                : 0,
         };
 
         // Comprehensive rejection with complete threshold data
@@ -1823,6 +1863,13 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 (sum: number, zone) => sum + zone.passiveVolume,
                 0
             );
+
+            // Calculate actual price movement in ticks from zones
+            const priceMovementTicks =
+                relevantZones.length > 0 && relevantZones[0]
+                    ? Math.abs(event.price - relevantZones[0].priceLevel) /
+                      Config.TICK_SIZE
+                    : 0;
             const priceEfficiency = this.calculatePriceEfficiency(
                 event,
                 relevantZones
@@ -1895,6 +1942,24 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 ),
                 calculatedConfluenceMinZones: confluenceCount,
                 calculatedConfluenceMaxDistance: this.confluenceMaxDistance,
+                // Zone tracking parameters with ACTUAL values from tracking
+                calculatedEnableDynamicZoneTracking:
+                    this.enableDynamicZoneTracking,
+                calculatedMaxZonesPerSide: this.enableDynamicZoneTracking
+                    ? this.zoneTracker.getStats().bidZonesTracked +
+                      this.zoneTracker.getStats().askZonesTracked
+                    : 0,
+                calculatedZoneHistoryWindowMs: this.enableDynamicZoneTracking
+                    ? this.zoneTracker.getStats().totalHistoryEntries
+                    : 0,
+                calculatedAbsorptionZoneThreshold: absorptionRatio ?? 0, // Actual absorption ratio
+                calculatedMinPassiveVolumeForZone: totalPassiveVolume, // Actual passive volume
+                calculatedPriceStabilityTicks: priceMovementTicks, // Actual price movement in ticks
+                calculatedMinAbsorptionEvents: this.enableDynamicZoneTracking
+                    ? Math.round(
+                          this.zoneTracker.getStats().averageAbsorptionEvents
+                      )
+                    : 0,
             };
 
             this.validationLogger.logSignal(
@@ -1962,6 +2027,16 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     (sum: number, zone) => sum + zone.aggressiveVolume,
                     0
                 ) || 0;
+
+            // Calculate actual price movement in ticks from zones
+            const priceMovementTicks =
+                event.zoneData?.zones &&
+                event.zoneData.zones.length > 0 &&
+                event.zoneData.zones[0]
+                    ? Math.abs(
+                          event.price - event.zoneData.zones[0].priceLevel
+                      ) / Config.TICK_SIZE
+                    : 0;
 
             // Market context at time of successful signal
             const marketContext = {
@@ -2056,6 +2131,24 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 ),
                 calculatedConfluenceMinZones: confluenceCount,
                 calculatedConfluenceMaxDistance: this.confluenceMaxDistance,
+                // Zone tracking parameters with ACTUAL values from tracking
+                calculatedEnableDynamicZoneTracking:
+                    this.enableDynamicZoneTracking,
+                calculatedMaxZonesPerSide: this.enableDynamicZoneTracking
+                    ? this.zoneTracker.getStats().bidZonesTracked +
+                      this.zoneTracker.getStats().askZonesTracked
+                    : 0,
+                calculatedZoneHistoryWindowMs: this.enableDynamicZoneTracking
+                    ? this.zoneTracker.getStats().totalHistoryEntries
+                    : 0,
+                calculatedAbsorptionZoneThreshold: absorptionRatio ?? 0, // Actual absorption ratio
+                calculatedMinPassiveVolumeForZone: totalPassiveVolume, // Actual passive volume
+                calculatedPriceStabilityTicks: priceMovementTicks, // Actual price movement in ticks
+                calculatedMinAbsorptionEvents: this.enableDynamicZoneTracking
+                    ? Math.round(
+                          this.zoneTracker.getStats().averageAbsorptionEvents
+                      )
+                    : 0,
             };
 
             this.validationLogger.logSuccessfulSignal(
