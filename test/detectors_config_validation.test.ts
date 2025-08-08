@@ -11,6 +11,10 @@ import {
     vi,
     type MockedFunction,
 } from "vitest";
+
+// Mock config before importing
+vi.mock("../src/core/config.js");
+
 import { Config } from "../src/core/config.js";
 import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import {

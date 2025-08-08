@@ -10,6 +10,10 @@
 // by only considering the relevant passive volume side for each trade direction.
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
+
+// Mock config before importing anything that uses it
+vi.mock("../src/core/config.js");
+
 import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
 import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import { FinancialMath } from "../src/utils/financialMath.js";

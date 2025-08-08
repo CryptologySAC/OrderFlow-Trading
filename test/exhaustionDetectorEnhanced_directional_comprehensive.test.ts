@@ -39,6 +39,7 @@ import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor
 import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 
 // Mock implementations - using proper __mocks__ structure
+vi.mock("../src/core/config.js");
 vi.mock("../src/infrastructure/loggerInterface.js");
 vi.mock("../src/infrastructure/metricsCollectorInterface.js");
 vi.mock("../src/infrastructure/signalLoggerInterface.js");

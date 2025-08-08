@@ -129,7 +129,6 @@ export const ExhaustionDetectorSchema = z.object({
     depletionVolumeThreshold: z.number().min(10).max(100000),
     depletionRatioThreshold: z.number().min(-1.0).max(0),
     enableDepletionAnalysis: z.boolean(),
-    depletionConfidenceBoost: z.number().min(0.05).max(0.3),
 
     // Dynamic zone tracking for true exhaustion detection
     enableDynamicZoneTracking: z.boolean(),
@@ -166,19 +165,16 @@ export const AbsorptionDetectorSchema = z.object({
 
     // Calculation parameters
     expectedMovementScalingFactor: z.number().int().min(1).max(100),
-    contextConfidenceBoostMultiplier: z.number().min(0.1).max(1.0),
     liquidityGradientRange: z.number().int().min(1).max(20),
 
     // Institutional analysis
     institutionalVolumeThreshold: z.number().min(100).max(100000),
     institutionalVolumeRatioThreshold: z.number().min(1).max(50),
     enableInstitutionalVolumeFilter: z.boolean(),
-    institutionalVolumeBoost: z.number().min(0.05).max(0.3),
 
     // Confidence and scoring
     minAbsorptionScore: z.number().min(0.3).max(0.99),
     finalConfidenceRequired: z.number().min(0.1).max(3.0),
-    confidenceBoostReduction: z.number().min(0.3).max(0.8),
     maxZoneCountForScoring: z.number().int().min(1).max(10),
     minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
 
@@ -459,7 +455,6 @@ const BasicSymbolConfigSchema = z
                 balanced: z.record(z.number().min(0).max(1)),
             }),
             // 🔧 Configurable parameters to eliminate magic numbers (REQUIRED)
-            correlationBoostFactor: z.number().min(0.1).max(2.0),
             priceTolerancePercent: z.number().min(0.01).max(10.0),
             signalThrottleMs: z.number().int().min(1000).max(60000),
             correlationWindowMs: z.number().int().min(60000).max(3600000),
@@ -469,8 +464,6 @@ const BasicSymbolConfigSchema = z
             volatilityLowThreshold: z.number().min(0.001).max(0.1),
             defaultLowVolatility: z.number().min(0.001).max(0.1),
             defaultVolatilityError: z.number().min(0.01).max(0.2),
-            contextBoostHigh: z.number().min(0.05).max(0.5),
-            contextBoostLow: z.number().min(0.05).max(0.3),
             priorityQueueHighThreshold: z.number().min(5.0).max(10.0),
             backpressureYieldMs: z.number().int().min(1).max(100),
             marketVolatilityWeight: z.number().min(0.1).max(1.0),
