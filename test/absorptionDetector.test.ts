@@ -69,7 +69,8 @@ class MockSignalValidationLogger {
     deltacvdSuccessfulFilePath = "";
 }
 
-const mockValidationLogger = new MockSignalValidationLogger() as unknown as SignalValidationLogger;
+const mockValidationLogger =
+    new MockSignalValidationLogger() as unknown as SignalValidationLogger;
 
 // Mock Config
 vi.mock("../src/core/config.js", () => ({
@@ -245,9 +246,9 @@ describe("AbsorptionDetectorEnhanced", () => {
             scenarios.forEach(({ trades, expectedSide }) => {
                 vi.clearAllMocks();
                 emittedSignals = [];
-                
+
                 trades.forEach((trade) => detector.onEnrichedTrade(trade));
-                
+
                 if (emittedSignals.length > 0) {
                     const signal = emittedSignals[0];
                     // Verify signal is correct direction
@@ -481,11 +482,11 @@ describe("AbsorptionDetectorEnhanced", () => {
     describe("Performance Requirements", () => {
         it("should process trades within 1ms", () => {
             const trade = createAbsorptionTrade({});
-            
+
             const start = performance.now();
             detector.onEnrichedTrade(trade);
             const duration = performance.now() - start;
-            
+
             expect(duration).toBeLessThan(1);
         });
 
@@ -565,7 +566,7 @@ function createAbsorptionTrade(params: {
 
     const base = createBaseTrade();
     const isBuy = side === "ask"; // Buying into ask absorption
-    
+
     return {
         ...base,
         price,
@@ -573,26 +574,26 @@ function createAbsorptionTrade(params: {
         quantity: aggressiveVolume,
         isBuyerMaker: isBuy,
         delta: isBuy ? aggressiveVolume : -aggressiveVolume,
-        imbalance: isAbsorption ? 0.1 : (isBuy ? 0.7 : -0.7),
+        imbalance: isAbsorption ? 0.1 : isBuy ? 0.7 : -0.7,
         bestBid: price - 0.01,
         bestAsk: price + 0.01,
         midPrice: price,
         bidDepth: side === "bid" ? passiveVolume : 5000,
         askDepth: side === "ask" ? passiveVolume : 5000,
-        bidRatio: isAbsorption ? 0.5 : (isBuy ? 0.2 : 0.8),
+        bidRatio: isAbsorption ? 0.5 : isBuy ? 0.2 : 0.8,
         totalBidVolume: side === "bid" ? passiveVolume : 5000,
         totalAskVolume: side === "ask" ? passiveVolume : 5000,
-        imbalanceRatio: isAbsorption ? 0 : (isBuy ? 0.5 : -0.5),
+        imbalanceRatio: isAbsorption ? 0 : isBuy ? 0.5 : -0.5,
         aggressor: isBuy ? "buyer" : "seller",
         liquidityTaken: aggressiveVolume,
         liquidityProvided: isAbsorption ? passiveVolume : 0,
         accumulatedDelta: isBuy ? aggressiveVolume : -aggressiveVolume,
-        orderBookImbalance: isAbsorption ? 0 : (isBuy ? 0.5 : -0.5),
+        orderBookImbalance: isAbsorption ? 0 : isBuy ? 0.5 : -0.5,
         bidPressure: isBuy ? 2 : 8,
         askPressure: isBuy ? 8 : 2,
-        netPressure: isAbsorption ? 0 : (isBuy ? -6 : 6),
-        depthImbalance: isAbsorption ? 0 : (isBuy ? -0.3 : 0.3),
-        marketMood: isAbsorption ? "neutral" : (isBuy ? "bullish" : "bearish"),
-        priceMovement: isAbsorption ? 0 : (isBuy ? 0.02 : -0.02),
+        netPressure: isAbsorption ? 0 : isBuy ? -6 : 6,
+        depthImbalance: isAbsorption ? 0 : isBuy ? -0.3 : 0.3,
+        marketMood: isAbsorption ? "neutral" : isBuy ? "bullish" : "bearish",
+        priceMovement: isAbsorption ? 0 : isBuy ? 0.02 : -0.02,
     };
 }

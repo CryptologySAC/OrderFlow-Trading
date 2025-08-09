@@ -537,55 +537,81 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 },
             };
 
-            // Analyze absorption pattern with zone tracking if enabled
+            // MANDATORY: Zone tracking validation when enabled
             let finalSignal = signalWithFlags;
             if (this.enableDynamicZoneTracking) {
                 const isBuyTrade = !event.buyerIsMaker;
                 const absorptionPattern =
                     this.zoneTracker.analyzeAbsorption(isBuyTrade);
 
+                // MANDATORY: Zone tracking MUST confirm absorption
                 if (
-                    absorptionPattern.hasAbsorption &&
-                    absorptionPattern.direction
+                    !absorptionPattern.hasAbsorption ||
+                    !absorptionPattern.direction
                 ) {
-                    // Zone tracking detected strong absorption - update signal
-                    const enhancedData =
-                        signalWithFlags.data as EnhancedAbsorptionSignalData;
-                    finalSignal = {
-                        ...signalWithFlags,
-                        side: absorptionPattern.direction,
-                        confidence: Math.max(
-                            signalWithFlags.confidence,
-                            absorptionPattern.confidence
-                        ),
-                        data: {
-                            ...enhancedData,
-                            metadata: {
-                                ...enhancedData.metadata,
-                                absorptionPattern: {
-                                    type: absorptionPattern.absorptionType,
-                                    ratio: absorptionPattern.absorptionRatio,
-                                    strength:
-                                        absorptionPattern.absorptionStrength,
-                                    affectedZones:
-                                        absorptionPattern.affectedZones,
-                                    priceStability:
-                                        absorptionPattern.priceStability,
-                                },
-                            },
-                        } as EnhancedAbsorptionSignalData,
-                    };
-
                     this.logger.info(
-                        "Zone tracking enhanced absorption signal",
+                        "Signal BLOCKED: Zone tracking did not confirm absorption",
                         {
-                            absorptionType: absorptionPattern.absorptionType,
+                            hasAbsorption: absorptionPattern.hasAbsorption,
                             direction: absorptionPattern.direction,
-                            ratio: absorptionPattern.absorptionRatio,
-                            confidence: absorptionPattern.confidence,
+                            priceStability: absorptionPattern.priceStability,
+                            absorptionRatio: absorptionPattern.absorptionRatio,
+                            affectedZones: absorptionPattern.affectedZones,
+                            minEvents:
+                                this.zoneTracker.getConfig()
+                                    .minAbsorptionEvents,
                         }
                     );
+                    return; // BLOCK signal if zone tracking doesn't confirm
                 }
+
+                // MANDATORY: Price stability check
+                if (!absorptionPattern.priceStability) {
+                    this.logger.info(
+                        "Signal BLOCKED: Price not stable during absorption",
+                        {
+                            priceStability: absorptionPattern.priceStability,
+                            priceStabilityTicks:
+                                this.zoneTracker.getConfig()
+                                    .priceStabilityTicks,
+                        }
+                    );
+                    return; // BLOCK signal if price isn't stable
+                }
+
+                // Zone tracking confirmed - use its direction and confidence
+                const enhancedData =
+                    signalWithFlags.data as EnhancedAbsorptionSignalData;
+                finalSignal = {
+                    ...signalWithFlags,
+                    side: absorptionPattern.direction,
+                    confidence: Math.max(
+                        signalWithFlags.confidence,
+                        absorptionPattern.confidence
+                    ),
+                    data: {
+                        ...enhancedData,
+                        metadata: {
+                            ...enhancedData.metadata,
+                            absorptionPattern: {
+                                type: absorptionPattern.absorptionType,
+                                ratio: absorptionPattern.absorptionRatio,
+                                strength: absorptionPattern.absorptionStrength,
+                                affectedZones: absorptionPattern.affectedZones,
+                                priceStability:
+                                    absorptionPattern.priceStability,
+                            },
+                        },
+                    } as EnhancedAbsorptionSignalData,
+                };
+
+                this.logger.info("Zone tracking CONFIRMED absorption signal", {
+                    absorptionType: absorptionPattern.absorptionType,
+                    direction: absorptionPattern.direction,
+                    ratio: absorptionPattern.absorptionRatio,
+                    confidence: absorptionPattern.confidence,
+                    priceStability: absorptionPattern.priceStability,
+                });
             }
 
             // Update cooldown tracking before emitting signal
@@ -894,6 +920,18 @@ export class AbsorptionDetectorEnhanced extends Detector {
         const passesAbsorptionRatioThreshold =
             absorptionRatio !== null &&
             absorptionRatio <= this.enhancementConfig.maxAbsorptionRatio;
+        // MANDATORY: Check passive multiplier (passive must be X times aggressive)
+        const actualPassiveMultiplier =
+            totalAggressiveVolume > 0
+                ? FinancialMath.divideQuantities(
+                      totalPassiveVolume,
+                      totalAggressiveVolume
+                  )
+                : null;
+        const passesPassiveMultiplierThreshold =
+            actualPassiveMultiplier !== null &&
+            actualPassiveMultiplier >=
+                this.enhancementConfig.minPassiveMultiplier;
         const passesConfidenceThreshold =
             confidence !== null &&
             confidence >= this.enhancementConfig.finalConfidenceRequired;
@@ -908,8 +946,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 Date.now() - (this.lastSignal.get("last") || 0),
             calculatedPriceEfficiencyThreshold: priceEfficiency ?? 0,
             calculatedMaxAbsorptionRatio: absorptionRatio ?? 0,
-            calculatedMinPassiveMultiplier:
-                totalPassiveVolume / Math.max(totalAggressiveVolume, 1),
+            calculatedMinPassiveMultiplier: actualPassiveMultiplier ?? 0,
             calculatedPassiveAbsorptionThreshold: passiveVolumeRatio,
             calculatedExpectedMovementScalingFactor:
                 FinancialMath.divideQuantities(
@@ -1037,6 +1074,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 thresholdType = "absorption_ratio";
                 thresholdValue = this.enhancementConfig.maxAbsorptionRatio;
                 actualValue = absorptionRatio ?? -1;
+            } else if (!passesPassiveMultiplierThreshold) {
+                rejectionReason = "passive_multiplier_too_low";
+                thresholdType = "passive_multiplier";
+                thresholdValue = this.enhancementConfig.minPassiveMultiplier;
+                actualValue = actualPassiveMultiplier ?? -1;
             } else if (!passesConfidenceThreshold) {
                 rejectionReason = "confidence_below_threshold";
                 thresholdType = "confidence_threshold";

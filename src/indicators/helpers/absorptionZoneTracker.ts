@@ -86,6 +86,13 @@ export class AbsorptionZoneTracker {
     }
 
     /**
+     * Get tracker configuration
+     */
+    public getConfig(): AbsorptionTrackerConfig {
+        return this.config;
+    }
+
+    /**
      * Update spread and determine which zones to track
      */
     public updateSpread(bestBid: number, bestAsk: number): void {

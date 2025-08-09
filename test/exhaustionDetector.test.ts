@@ -258,9 +258,9 @@ describe("ExhaustionDetectorEnhanced", () => {
             trades.forEach((trade) => {
                 vi.clearAllMocks();
                 emittedSignals = [];
-                
+
                 detector.onEnrichedTrade(trade as EnrichedTradeEvent);
-                
+
                 if (emittedSignals.length > 0) {
                     const signal = emittedSignals[0];
                     // Verify signal is reversal, not continuation
@@ -382,11 +382,11 @@ describe("ExhaustionDetectorEnhanced", () => {
     describe("Performance Requirements", () => {
         it("should process trades within 1ms", () => {
             const trade = createExhaustionTrade({});
-            
+
             const start = performance.now();
             detector.onEnrichedTrade(trade);
             const duration = performance.now() - start;
-            
+
             expect(duration).toBeLessThan(1);
         });
 
@@ -463,7 +463,7 @@ function createExhaustionTrade(params: {
     } = params;
 
     const base = createBaseTrade();
-    
+
     return {
         ...base,
         timestamp,
