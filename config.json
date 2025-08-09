@@ -224,7 +224,7 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-                "minAggVolume": 1600,
+                "minAggVolume": 100,
                 "exhaustionThreshold": 0.2,
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 1000,
@@ -268,7 +268,7 @@
                 "institutionalVolumeRatioThreshold": 12,
                 "enableInstitutionalVolumeFilter": true,
                 "minAbsorptionScore": 0.92,
-                "finalConfidenceRequired": 1.0,
+                "finalConfidenceRequired": 0.5,
                 "maxZoneCountForScoring": 5,
                 "minEnhancedConfidenceThreshold": 0.5,
                 "useStandardizedZones": true,
@@ -343,7 +343,7 @@
             "deltaCVD": {
                 "minTradesPerSec": 3.0,
                 "minVolPerSec": 13.0,
-                "signalThreshold": 0.94,
+                "signalThreshold": 0.5,
                 "eventCooldownMs": 1200000,
                 "enhancementMode": "production",
                 "cvdImbalanceThreshold": 0.18,
