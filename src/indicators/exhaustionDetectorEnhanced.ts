@@ -1128,7 +1128,9 @@ export class ExhaustionDetectorEnhanced extends Detector {
 
     /**
      * Determine exhaustion signal side based on directional passive liquidity exhaustion
-     * FIXED: Now uses same directional logic as calculateZonePassiveRatio
+     * FIXED: Exhaustion signals are REVERSALS, not continuations
+     * - Ask exhaustion (aggressive buying depletes asks) → SELL signal (reversal down)
+     * - Bid exhaustion (aggressive selling depletes bids) → BUY signal (reversal up)
      */
     private determineExhaustionSignalSide(
         event: EnrichedTradeEvent
@@ -1143,21 +1145,24 @@ export class ExhaustionDetectorEnhanced extends Detector {
             (zone) => zone.lastUpdate >= windowStartTime
         );
 
-        // CRITICAL FIX: Use same directional logic as calculateZonePassiveRatio
-        // - Buy trades (buyerIsMaker = false): Check passiveAskVolume exhaustion
-        // - Sell trades (buyerIsMaker = true): Check passiveBidVolume exhaustion
+        // EXHAUSTION REVERSAL LOGIC:
+        // - Buy trades (buyerIsMaker = false): Check if asks are being exhausted
+        // - Sell trades (buyerIsMaker = true): Check if bids are being exhausted
+        // When exhaustion detected → Signal REVERSAL (opposite direction)
         const isBuyTrade = !event.buyerIsMaker;
 
-        let relevantPassiveVolume = 0;
-        let oppositePassiveVolume = 0;
+        let relevantPassiveVolume = 0; // Volume being exhausted
+        let oppositePassiveVolume = 0; // Remaining volume on opposite side
 
         recentZones.forEach((zone) => {
             if (isBuyTrade) {
-                // Buy trade: Check ask exhaustion vs available bid liquidity
+                // Buy trade: Exhausting asks (supply)
+                // If asks depleted → Resistance exhausted → Price reverses down
                 relevantPassiveVolume += zone.passiveAskVolume || 0;
                 oppositePassiveVolume += zone.passiveBidVolume || 0;
             } else {
-                // Sell trade: Check bid exhaustion vs available ask liquidity
+                // Sell trade: Exhausting bids (demand)
+                // If bids depleted → Support exhausted → Price reverses up
                 relevantPassiveVolume += zone.passiveBidVolume || 0;
                 oppositePassiveVolume += zone.passiveAskVolume || 0;
             }
@@ -1180,12 +1185,16 @@ export class ExhaustionDetectorEnhanced extends Detector {
         );
 
         // DIRECTIONAL EXHAUSTION LOGIC:
-        // - If opposite side has more liquidity, relevant side is exhausted → signal in trade direction
+        // - If opposite side has more liquidity, relevant side is exhausted → signal REVERSAL
         // - If relevant side has more liquidity, no exhaustion → neutral
+        // FIXED: Exhaustion signals are reversals, not continuations
         if (oppositePassiveVolume > relevantPassiveVolume) {
-            const signalSide = isBuyTrade ? "buy" : "sell";
+            // CORRECTED: Exhaustion causes reversal
+            // - Ask exhaustion (from buying) → Price reverses DOWN → SELL signal
+            // - Bid exhaustion (from selling) → Price reverses UP → BUY signal
+            const signalSide = isBuyTrade ? "sell" : "buy"; // REVERSAL signal
             this.logger.info(
-                `ExhaustionDetectorEnhanced: Returning ${signalSide.toUpperCase()} signal (directional exhaustion detected)`,
+                `ExhaustionDetectorEnhanced: Returning ${signalSide.toUpperCase()} signal (exhaustion reversal detected)`,
                 {
                     relevantPassiveVolume,
                     oppositePassiveVolume,

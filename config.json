@@ -224,43 +224,40 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-                "minAggVolume": 100,
-                "exhaustionThreshold": 0.2,
+                "minAggVolume": 1000,
+                "exhaustionThreshold": 0.6,
+                "minEnhancedConfidenceThreshold": 0.67,
+
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 1000,
-
                 "useStandardizedZones": true,
                 "enhancementMode": "production",
-                "minEnhancedConfidenceThreshold": 0.65,
-
                 "enableDepletionAnalysis": true,
                 "depletionVolumeThreshold": 1600,
                 "depletionRatioThreshold": -0.6,
-
                 "enableDynamicZoneTracking": true,
                 "maxZonesPerSide": 5,
                 "zoneDepletionThreshold": 0.7,
                 "gapDetectionTicks": 3,
-
                 "passiveVolumeExhaustionRatio": 1.0,
-
                 "varianceReductionFactor": 1.0,
                 "alignmentNormalizationFactor": 0.4,
                 "aggressiveVolumeExhaustionThreshold": 0.24,
                 "aggressiveVolumeReductionFactor": 0.5,
-
                 "passiveRatioBalanceThreshold": 0.5,
                 "premiumConfidenceThreshold": 0.8,
                 "variancePenaltyFactor": 1.0,
                 "ratioBalanceCenterPoint": 0.5
             },
             "absorption": {
-                "minAggVolume": 100,
+                "minAggVolume": 8250,
+                "finalConfidenceRequired": 0.62,
+                "priceEfficiencyThreshold": 0.0037,
+                "minPassiveMultiplier": 25.0,
+
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 1000,
-                "priceEfficiencyThreshold": 0.04,
                 "maxAbsorptionRatio": 0.98,
-                "minPassiveMultiplier": 2.2,
                 "passiveAbsorptionThreshold": 0.5,
                 "expectedMovementScalingFactor": 10,
                 "liquidityGradientRange": 5,
@@ -268,7 +265,6 @@
                 "institutionalVolumeRatioThreshold": 12,
                 "enableInstitutionalVolumeFilter": true,
                 "minAbsorptionScore": 0.92,
-                "finalConfidenceRequired": 0.5,
                 "maxZoneCountForScoring": 5,
                 "minEnhancedConfidenceThreshold": 0.5,
                 "useStandardizedZones": true,
