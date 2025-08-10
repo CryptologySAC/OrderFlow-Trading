@@ -32,8 +32,14 @@ const mockLogger: ILogger = {
 const mockMetrics: IMetricsCollector = {
     updateMetric: vi.fn(),
     incrementMetric: vi.fn(),
-    getMetrics: vi.fn(),
-    getHealthSummary: vi.fn(),
+    incrementCounter: vi.fn(),
+    recordHistogram: vi.fn(),
+    recordGauge: vi.fn(),
+    createCounter: vi.fn(),
+    createHistogram: vi.fn(),
+    createGauge: vi.fn(),
+    getMetrics: vi.fn(() => ({})),
+    getHealthSummary: vi.fn(() => "healthy"),
 };
 
 const mockSignalLogger: ISignalLogger = {
@@ -349,8 +355,9 @@ describe("AbsorptionDetectorEnhanced", () => {
 
             trades.forEach((trade) => detector.onEnrichedTrade(trade));
 
-            // Verify zone tracking is working
-            expect(mockMetrics.updateMetric).toHaveBeenCalled();
+            // Verify zone tracking is working by checking validation logger was called
+            expect(mockValidationLogger.updateCurrentPrice).toHaveBeenCalledWith(100.0);
+            expect(mockValidationLogger.updateCurrentPrice).toHaveBeenCalledWith(100.01);
         });
 
         it("should use zone data for signal generation", () => {
